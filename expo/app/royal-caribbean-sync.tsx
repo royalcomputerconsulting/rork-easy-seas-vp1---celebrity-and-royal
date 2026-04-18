@@ -37,6 +37,7 @@ function RoyalCaribbeanSyncScreen() {
     cancelSync,
     handleWebViewMessage,
     addLog,
+    exportLog,
     extendedLoyaltyData,
     staySignedIn: _staySignedIn,
     toggleStaySignedIn: _toggleStaySignedIn,
@@ -50,6 +51,7 @@ function RoyalCaribbeanSyncScreen() {
   const [webSyncError, setWebSyncError] = useState<string | null>(null);
   const [cookieSyncError, setCookieSyncError] = useState<string | null>(null);
   const [syncingPricing, setSyncingPricing] = useState(false);
+  const [isExportingLog, setIsExportingLog] = useState(false);
   const [syncStarted, setSyncStarted] = useState(false);
   const syncPulse = useState(() => new Animated.Value(1))[0];
   const [_pricingSyncResults, setPricingSyncResults] = useState<{ updated: number; total: number } | null>(null);
@@ -294,6 +296,19 @@ function RoyalCaribbeanSyncScreen() {
         return <AlertCircle size={size} color={color} />;
       default:
         return null;
+    }
+  };
+
+  const handleExportSyncLog = async () => {
+    if (isExportingLog) {
+      return;
+    }
+
+    try {
+      setIsExportingLog(true);
+      await exportLog();
+    } finally {
+      setIsExportingLog(false);
     }
   };
 
@@ -559,138 +574,163 @@ function RoyalCaribbeanSyncScreen() {
 
             </View>
           ) : (
-            <View style={styles.quickActionsGrid}>
-              <Pressable 
-                style={styles.quickActionButton}
-                onPress={openLogin}
-              >
-                <ExternalLink size={20} color="#60a5fa" />
-                <Text style={styles.quickActionLabel}>LOGIN</Text>
-              </Pressable>
+            <View style={styles.quickActionsColumn}>
+              <View style={styles.quickActionsGrid}>
+                <Pressable 
+                  style={styles.quickActionButton}
+                  onPress={openLogin}
+                  testID="royal-sync-login-button"
+                >
+                  <ExternalLink size={20} color="#60a5fa" />
+                  <Text style={styles.quickActionLabel}>LOGIN</Text>
+                </Pressable>
 
-              <Pressable 
-                style={[styles.quickActionButton, (!canRunIngestion || isRunning) && styles.buttonDisabled, isRunning && styles.syncActiveButton]}
-                onPress={runIngestion}
-                disabled={!canRunIngestion || isRunning}
-              >
-                {isRunning ? (
-                  <Animated.View style={{ opacity: syncPulse }}>
-                    <ActivityIndicator size="small" color="#34d399" />
-                  </Animated.View>
-                ) : (
-                  <RefreshCcw size={20} color={!canRunIngestion ? '#475569' : '#34d399'} />
-                )}
-                <Text style={[styles.quickActionLabel, isRunning && styles.syncActiveLabel]}>
-                  {isRunning ? 'SYNCING...' : 'SYNC NOW'}
-                </Text>
-                {isRunning && (
-                  <Text style={styles.syncHintText}>This may take 1-2 min</Text>
-                )}
-              </Pressable>
+                <Pressable 
+                  style={[styles.quickActionButton, (!canRunIngestion || isRunning) && styles.buttonDisabled, isRunning && styles.syncActiveButton]}
+                  onPress={runIngestion}
+                  disabled={!canRunIngestion || isRunning}
+                  testID="royal-sync-now-button"
+                >
+                  {isRunning ? (
+                    <Animated.View style={{ opacity: syncPulse }}>
+                      <ActivityIndicator size="small" color="#34d399" />
+                    </Animated.View>
+                  ) : (
+                    <RefreshCcw size={20} color={!canRunIngestion ? '#475569' : '#34d399'} />
+                  )}
+                  <Text style={[styles.quickActionLabel, isRunning && styles.syncActiveLabel]}>
+                    {isRunning ? 'SYNCING...' : 'SYNC NOW'}
+                  </Text>
+                  {isRunning && (
+                    <Text style={styles.syncHintText}>This may take 1-2 min</Text>
+                  )}
+                </Pressable>
+              </View>
 
-              <Pressable 
-                style={[styles.quickActionButton, syncingPricing && styles.buttonDisabled]}
-                onPress={async () => {
-                  if (syncingPricing) return;
-                  
-                  const upcomingCruises = coreData.bookedCruises.filter(c => {
-                    const sailDate = new Date(c.sailDate);
-                    const today = new Date();
-                    today.setHours(0, 0, 0, 0);
-                    return sailDate >= today && c.completionState !== 'completed';
-                  });
-
-                  if (upcomingCruises.length === 0) {
-                    addLog('No upcoming cruises to sync pricing for', 'warning');
-                    return;
-                  }
-
-                  setSyncingPricing(true);
-                  addLog(`Starting pricing sync for ${upcomingCruises.length} upcoming cruises...`, 'info');
-
-                  try {
-                    const cruiseParams = upcomingCruises.map(cruise => ({
-                      id: cruise.id,
-                      shipName: cruise.shipName,
-                      sailDate: cruise.sailDate,
-                      nights: cruise.nights,
-                      departurePort: cruise.departurePort,
-                    }));
-
-                    addLog('Connecting to web search service...', 'info');
-                    const result = await syncCruisePricing(cruiseParams);
-
-                    addLog(`Pricing sync complete! Retrieved ${result.pricing.length} pricing records`, 'success');
-
-                    const pricingByBookingId = new Map<string, typeof result.pricing>();
-                    result.pricing.forEach(p => {
-                      if (!pricingByBookingId.has(p.bookingId)) {
-                        pricingByBookingId.set(p.bookingId, []);
-                      }
-                      pricingByBookingId.get(p.bookingId)!.push(p);
+              <View style={styles.secondaryActionsRow}>
+                <Pressable 
+                  style={[styles.quickActionButton, styles.secondaryActionButton, syncingPricing && styles.buttonDisabled]}
+                  onPress={async () => {
+                    if (syncingPricing) return;
+                    
+                    const upcomingCruises = coreData.bookedCruises.filter(c => {
+                      const sailDate = new Date(c.sailDate);
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      return sailDate >= today && c.completionState !== 'completed';
                     });
 
-                    let updatedCount = 0;
-                    for (const cruise of upcomingCruises) {
-                      const cruisePricing = pricingByBookingId.get(cruise.id);
-                      if (!cruisePricing || cruisePricing.length === 0) continue;
+                    if (upcomingCruises.length === 0) {
+                      addLog('No upcoming cruises to sync pricing for', 'warning');
+                      return;
+                    }
 
-                      const avgPricing = {
-                        interiorPrice: 0,
-                        oceanviewPrice: 0,
-                        balconyPrice: 0,
-                        suitePrice: 0,
-                      };
+                    setSyncingPricing(true);
+                    addLog(`Starting pricing sync for ${upcomingCruises.length} upcoming cruises...`, 'info');
 
-                      cruisePricing.forEach(p => {
-                        if (p.interiorPrice) avgPricing.interiorPrice += p.interiorPrice;
-                        if (p.oceanviewPrice) avgPricing.oceanviewPrice += p.oceanviewPrice;
-                        if (p.balconyPrice) avgPricing.balconyPrice += p.balconyPrice;
-                        if (p.suitePrice) avgPricing.suitePrice += p.suitePrice;
+                    try {
+                      const cruiseParams = upcomingCruises.map(cruise => ({
+                        id: cruise.id,
+                        shipName: cruise.shipName,
+                        sailDate: cruise.sailDate,
+                        nights: cruise.nights,
+                        departurePort: cruise.departurePort,
+                      }));
+
+                      addLog('Connecting to web search service...', 'info');
+                      const result = await syncCruisePricing(cruiseParams);
+
+                      addLog(`Pricing sync complete! Retrieved ${result.pricing.length} pricing records`, 'success');
+
+                      const pricingByBookingId = new Map<string, typeof result.pricing>();
+                      result.pricing.forEach(p => {
+                        if (!pricingByBookingId.has(p.bookingId)) {
+                          pricingByBookingId.set(p.bookingId, []);
+                        }
+                        pricingByBookingId.get(p.bookingId)!.push(p);
                       });
 
-                      const count = cruisePricing.length;
-                      avgPricing.interiorPrice = Math.round(avgPricing.interiorPrice / count);
-                      avgPricing.oceanviewPrice = Math.round(avgPricing.oceanviewPrice / count);
-                      avgPricing.balconyPrice = Math.round(avgPricing.balconyPrice / count);
-                      avgPricing.suitePrice = Math.round(avgPricing.suitePrice / count);
+                      let updatedCount = 0;
+                      for (const cruise of upcomingCruises) {
+                        const cruisePricing = pricingByBookingId.get(cruise.id);
+                        if (!cruisePricing || cruisePricing.length === 0) continue;
 
-                      coreData.updateBookedCruise(cruise.id, avgPricing);
-                      updatedCount++;
-                      addLog(`Updated pricing for ${cruise.shipName}`, 'info');
+                        const avgPricing = {
+                          interiorPrice: 0,
+                          oceanviewPrice: 0,
+                          balconyPrice: 0,
+                          suitePrice: 0,
+                        };
+
+                        cruisePricing.forEach(p => {
+                          if (p.interiorPrice) avgPricing.interiorPrice += p.interiorPrice;
+                          if (p.oceanviewPrice) avgPricing.oceanviewPrice += p.oceanviewPrice;
+                          if (p.balconyPrice) avgPricing.balconyPrice += p.balconyPrice;
+                          if (p.suitePrice) avgPricing.suitePrice += p.suitePrice;
+                        });
+
+                        const count = cruisePricing.length;
+                        avgPricing.interiorPrice = Math.round(avgPricing.interiorPrice / count);
+                        avgPricing.oceanviewPrice = Math.round(avgPricing.oceanviewPrice / count);
+                        avgPricing.balconyPrice = Math.round(avgPricing.balconyPrice / count);
+                        avgPricing.suitePrice = Math.round(avgPricing.suitePrice / count);
+
+                        coreData.updateBookedCruise(cruise.id, avgPricing);
+                        updatedCount++;
+                        addLog(`Updated pricing for ${cruise.shipName}`, 'info');
+                      }
+
+                      setPricingSyncResults({ updated: updatedCount, total: upcomingCruises.length });
+                      addLog(`Successfully updated pricing for ${updatedCount} of ${upcomingCruises.length} cruises`, 'success');
+
+                    } catch (error: any) {
+                      console.error('[PricingSync] Error:', error);
+                      const errorMsg = error.message || 'Unknown error';
+                      
+                      if (errorMsg.includes('not available') || errorMsg.includes('not configured')) {
+                        addLog('Pricing sync is not available on this deployment', 'error');
+                        addLog('Please manually update prices or contact support', 'warning');
+                      } else if (errorMsg.includes('Failed to fetch') || errorMsg.includes('NetworkError')) {
+                        addLog('Network error: Unable to reach pricing service', 'error');
+                        addLog('Check your internet connection and try again', 'warning');
+                      } else {
+                        addLog(`Pricing sync failed: ${errorMsg}`, 'error');
+                      }
+                    } finally {
+                      setSyncingPricing(false);
                     }
+                  }}
+                  disabled={syncingPricing}
+                  testID="royal-sync-pricing-button"
+                >
+                  {syncingPricing ? (
+                    <LoaderCircle size={20} color="#f59e0b" />
+                  ) : (
+                    <DollarSign size={20} color="#f59e0b" />
+                  )}
+                  <Text style={styles.quickActionLabel}>
+                    {syncingPricing ? 'SYNCING...' : 'SYNC PRICING'}
+                  </Text>
+                </Pressable>
 
-                    setPricingSyncResults({ updated: updatedCount, total: upcomingCruises.length });
-                    addLog(`Successfully updated pricing for ${updatedCount} of ${upcomingCruises.length} cruises`, 'success');
-
-                  } catch (error: any) {
-                    console.error('[PricingSync] Error:', error);
-                    const errorMsg = error.message || 'Unknown error';
-                    
-                    if (errorMsg.includes('not available') || errorMsg.includes('not configured')) {
-                      addLog('Pricing sync is not available on this deployment', 'error');
-                      addLog('Please manually update prices or contact support', 'warning');
-                    } else if (errorMsg.includes('Failed to fetch') || errorMsg.includes('NetworkError')) {
-                      addLog('Network error: Unable to reach pricing service', 'error');
-                      addLog('Check your internet connection and try again', 'warning');
-                    } else {
-                      addLog(`Pricing sync failed: ${errorMsg}`, 'error');
-                    }
-                  } finally {
-                    setSyncingPricing(false);
-                  }
-                }}
-                disabled={syncingPricing}
-              >
-                {syncingPricing ? (
-                  <LoaderCircle size={20} color="#f59e0b" />
-                ) : (
-                  <DollarSign size={20} color="#f59e0b" />
-                )}
-                <Text style={styles.quickActionLabel}>
-                  {syncingPricing ? 'SYNCING...' : 'SYNC PRICING'}
-                </Text>
-              </Pressable>
+                <Pressable
+                  style={[styles.quickActionButton, styles.logExportButton, isExportingLog && styles.buttonDisabled]}
+                  onPress={() => {
+                    void handleExportSyncLog();
+                  }}
+                  disabled={isExportingLog}
+                  testID="royal-sync-export-log-button"
+                >
+                  {isExportingLog ? (
+                    <LoaderCircle size={18} color="#38bdf8" />
+                  ) : (
+                    <Download size={18} color="#38bdf8" />
+                  )}
+                  <Text style={styles.quickActionLabelCompact}>
+                    {isExportingLog ? '...' : 'LOG'}
+                  </Text>
+                </Pressable>
+              </View>
             </View>
           )}
         </View>
@@ -1281,9 +1321,17 @@ const styles = StyleSheet.create({
   actionsContainer: {
     padding: 12
   },
+  quickActionsColumn: {
+    gap: 10,
+  },
   quickActionsGrid: {
     flexDirection: 'row' as const,
     gap: 12
+  },
+  secondaryActionsRow: {
+    flexDirection: 'row' as const,
+    gap: 10,
+    alignItems: 'stretch' as const,
   },
   quickActionButton: {
     flex: 1,
@@ -1303,6 +1351,25 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600' as const,
     textAlign: 'center' as const
+  },
+  quickActionLabelCompact: {
+    color: '#cbd5e1',
+    fontSize: 11,
+    fontWeight: '700' as const,
+    textAlign: 'center' as const,
+    letterSpacing: 0.4,
+  },
+  secondaryActionButton: {
+    flex: 1,
+  },
+  logExportButton: {
+    flex: 0,
+    width: 72,
+    height: 72,
+    paddingHorizontal: 8,
+    gap: 6,
+    borderColor: '#0f3b57',
+    backgroundColor: '#102133',
   },
   buttonDisabled: {
     opacity: 0.5

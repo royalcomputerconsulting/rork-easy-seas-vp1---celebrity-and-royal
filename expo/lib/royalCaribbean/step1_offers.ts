@@ -2,20 +2,67 @@ export const STEP1_OFFERS_SCRIPT = `
 (function() {
   const BATCH_SIZE = 150;
   const PRICING_BATCH_SIZE = 10;
+  const MAX_BATCH_CHARS = 120000;
   
   function wait(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
+  function postOfferMessage(payload) {
+    window.ReactNativeWebView.postMessage(JSON.stringify(payload));
+  }
+
   function sendOfferBatch(offers, isFinal = false, totalCount = 0, offerCount = 0) {
-    window.ReactNativeWebView.postMessage(JSON.stringify({
+    postOfferMessage({
       type: isFinal ? 'step_complete' : 'offers_batch',
       step: 1,
       data: offers,
       isFinal: isFinal,
       totalCount: totalCount,
       offerCount: offerCount
-    }));
+    });
+  }
+
+  function sendOfferRowsInChunks(offerRows, offerCount) {
+    if (!Array.isArray(offerRows) || offerRows.length === 0) {
+      sendOfferBatch([], true, 0, offerCount);
+      return;
+    }
+
+    let chunk = [];
+    let chunkChars = 0;
+    let sentCount = 0;
+    let batchIndex = 0;
+
+    for (const row of offerRows) {
+      let rowChars = 0;
+      try {
+        rowChars = JSON.stringify(row).length;
+      } catch (e) {
+        rowChars = 2500;
+      }
+
+      if (chunk.length > 0 && (chunk.length >= BATCH_SIZE || chunkChars + rowChars > MAX_BATCH_CHARS)) {
+        batchIndex += 1;
+        sendOfferBatch(chunk, false);
+        sentCount += chunk.length;
+        log('📤 Sent batch ' + batchIndex + ' with ' + chunk.length + ' sailings (total: ' + sentCount + '/' + offerRows.length + ')', 'info');
+        chunk = [];
+        chunkChars = 0;
+      }
+
+      chunk.push(row);
+      chunkChars += rowChars;
+    }
+
+    if (chunk.length > 0) {
+      batchIndex += 1;
+      sendOfferBatch(chunk, false);
+      sentCount += chunk.length;
+      log('📤 Sent batch ' + batchIndex + ' with ' + chunk.length + ' sailings (total: ' + sentCount + '/' + offerRows.length + ')', 'info');
+    }
+
+    sendOfferBatch([], true, offerRows.length, offerCount);
   }
   
   function sendOfferProgress(offerIndex, totalOffers, offerName, sailingsCount, status) {
@@ -124,6 +171,22 @@ export const STEP1_OFFERS_SCRIPT = `
     if (!parts) return dateStr;
 
     return parts.year + '-' + pad2(parts.month) + '-' + pad2(parts.day);
+  }
+
+  function extractOffersArray(data) {
+    if (Array.isArray(data?.offers)) return data.offers;
+    if (Array.isArray(data?.payload?.casinoOffers)) return data.payload.casinoOffers;
+    if (Array.isArray(data?.casinoOffers)) return data.casinoOffers;
+    if (Array.isArray(data?.payload?.offers)) return data.payload.offers;
+    return [];
+  }
+
+  function normalizeOffersApiResponse(data) {
+    const base = data && typeof data === 'object' && !Array.isArray(data) ? data : {};
+    return {
+      ...base,
+      offers: extractOffersArray(data)
+    };
   }
 
   async function extractClubRoyaleStatus() {
@@ -379,10 +442,15 @@ export const STEP1_OFFERS_SCRIPT = `
         throw new Error('API error: ' + response.status + ' - ' + errorText);
       }
       
-      const data = await response.json();
+      const rawData = await response.json();
+      const data = normalizeOffersApiResponse(rawData);
       
-      if (!data || !Array.isArray(data.offers)) {
+      if (!Array.isArray(data.offers)) {
         throw new Error('Invalid API response format');
+      }
+
+      if (!Array.isArray(rawData?.offers) && Array.isArray(data.offers)) {
+        log('ℹ️ Normalized casino offers from nested API payload', 'info');
       }
       
       log('✅ API returned ' + data.offers.length + ' offers', 'success');
@@ -410,7 +478,8 @@ export const STEP1_OFFERS_SCRIPT = `
             });
             
             if (refetchResponse.ok) {
-              const refetchData = await refetchResponse.json();
+              const refetchRawData = await refetchResponse.json();
+              const refetchData = normalizeOffersApiResponse(refetchRawData);
               const refreshedOffer = refetchData.offers?.find(o => o?.campaignOffer?.offerCode === code);
               
               if (refreshedOffer?.campaignOffer?.sailings?.length > 0) {
@@ -756,14 +825,7 @@ export const STEP1_OFFERS_SCRIPT = `
         offerRows = await enrichWithPricingData(offerRows, authContext.baseUrl);
       }
       
-      const batchSize = BATCH_SIZE;
-      for (let i = 0; i < offerRows.length; i += batchSize) {
-        const batch = offerRows.slice(i, i + batchSize);
-        sendOfferBatch(batch, false);
-        log('📤 Sent batch of ' + batch.length + ' sailings (total: ' + Math.min(i + batchSize, offerRows.length) + '/' + offerRows.length + ')');
-      }
-      
-      sendOfferBatch([], true, offerRows.length, offerCount);
+      sendOfferRowsInChunks(offerRows, offerCount);
       
       log('✓ Extracted ' + offerRows.length + ' offer rows from ' + offerCount + ' offer(s)', 'success');
       
