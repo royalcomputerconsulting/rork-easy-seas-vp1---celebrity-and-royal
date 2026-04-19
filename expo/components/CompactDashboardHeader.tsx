@@ -562,7 +562,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         <View style={[styles.statDivider, progressDividerStyle]} />
         <View style={styles.statItem}>
           <Text style={[styles.statValue, progressLabelStyle]}>{celebrityCaptainsClubPoints}</Text>
-          <Text style={[styles.statLabel, progressMetaStyle]}>Capt's Club</Text>
+          <Text style={[styles.statLabel, progressMetaStyle]}>{"Capt's Club"}</Text>
         </View>
         <View style={[styles.statDivider, progressDividerStyle]} />
         <View style={styles.statItem}>

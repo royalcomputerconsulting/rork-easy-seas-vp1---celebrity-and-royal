@@ -1345,7 +1345,7 @@ export default function AnalyticsScreen() {
               </View>
               <View style={styles.pointsBreakdownLegendItem}>
                 <View style={[styles.pointsBreakdownLegendDot, { backgroundColor: '#3B82F6' }]} />
-                <Text style={styles.pointsBreakdownLegendText}>Cruise Loyalty (Crown & Anchor / Captain's Club)</Text>
+                <Text style={styles.pointsBreakdownLegendText}>{"Cruise Loyalty (Crown & Anchor / Captain's Club)"}</Text>
               </View>
             </View>
             {perCruisePointsBreakdown.slice(0, showAllCruises ? 50 : 10).map((entry) => {

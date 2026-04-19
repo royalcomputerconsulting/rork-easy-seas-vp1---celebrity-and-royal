@@ -1049,7 +1049,7 @@ function RoyalCaribbeanSyncScreen() {
                   {extendedLoyaltyData?.captainsClubTier ? (
                     <View style={styles.successLoyaltyRow}>
                       <Star size={12} color="#10b981" />
-                      <Text style={styles.successLoyaltyText}>Captain's Club:</Text>
+                      <Text style={styles.successLoyaltyText}>{"Captain's Club:"}</Text>
                       <LoyaltyPill
                         label={extendedLoyaltyData.captainsClubTier}
                         color={getCelebrityCaptainsClubLevelColor(extendedLoyaltyData.captainsClubTier)}
