@@ -24,6 +24,7 @@ import {
 } from "./coreData/storageLoaders";
 import { clearUserSpecificData } from "@/lib/storage/storageOperations";
 import { ALL_STORAGE_KEYS, getUserScopedKey } from "@/lib/storage/storageKeys";
+import { updateAllCruiseLifecycles } from "@/lib/lifecycleManager";
 
 const getMockCruises = (): { BOOKED_CRUISES_DATA: BookedCruise[]; COMPLETED_CRUISES_DATA: BookedCruise[] } => {
   try {
@@ -339,6 +340,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   const [userPoints, setUserPointsState] = useState(0);
   const [clubRoyaleProfile, setClubRoyaleProfileState] = useState<ClubRoyaleProfile>(SAMPLE_CLUB_ROYALE_PROFILE);
   const isSyncingRef = useRef(false);
+  const pendingBackendSyncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInitialLoadRef = useRef(true);
   const foregroundRefreshAttemptRef = useRef(0);
 
@@ -399,6 +401,11 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   }, [persistLastSyncDate]);
 
   const syncToBackend = useCallback(async () => {
+    if (pendingBackendSyncTimeoutRef.current) {
+      clearTimeout(pendingBackendSyncTimeoutRef.current);
+      pendingBackendSyncTimeoutRef.current = null;
+    }
+
     if (!authenticatedEmail) {
       console.log('[CoreData] Backend sync skipped - no authenticated email');
       return;
@@ -489,6 +496,34 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       }
     }
   }, [saveAllUserDataMutateAsync, authenticatedEmail]);
+
+  const scheduleSyncToBackend = useCallback((reason: string) => {
+    if (!authenticatedEmail) {
+      console.log('[CoreData] Skipping scheduled backend sync - no authenticated email', { reason });
+      return;
+    }
+
+    if (pendingBackendSyncTimeoutRef.current) {
+      clearTimeout(pendingBackendSyncTimeoutRef.current);
+    }
+
+    pendingBackendSyncTimeoutRef.current = setTimeout(() => {
+      pendingBackendSyncTimeoutRef.current = null;
+
+      if (isSyncingRef.current) {
+        console.log('[CoreData] Scheduled backend sync skipped because another sync is already running', { reason });
+        return;
+      }
+
+      isSyncingRef.current = true;
+      console.log('[CoreData] Executing scheduled backend sync', { reason });
+      void syncToBackend().finally(() => {
+        isSyncingRef.current = false;
+      });
+    }, 400);
+
+    console.log('[CoreData] Scheduled backend sync', { reason });
+  }, [authenticatedEmail, syncToBackend]);
 
   const loadFromBackend = useCallback(async () => {
     if (!isBackendAvailable() || !authenticatedEmail) {
@@ -934,7 +969,8 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     await persistData(skRef.current.CRUISES, newCruises);
     await AsyncStorage.setItem(skRef.current.HAS_IMPORTED_DATA, 'true').catch(console.error);
     console.log('[CoreData] Cruises state updated and persisted:', newCruises.length);
-  }, [persistData]);
+    scheduleSyncToBackend('setCruises');
+  }, [persistData, scheduleSyncToBackend]);
 
   const addCruise = useCallback((cruise: Cruise) => {
     setCruisesState(prev => {
@@ -981,13 +1017,21 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     const withKnownRetail = applyKnownRetailValues(withItineraries);
     const withFreeplayOBC = applyFreeplayOBCData(withKnownRetail);
     const enrichedCruises = enrichCruisesWithReceiptData(withFreeplayOBC);
-    setBookedCruisesState(enrichedCruises);
-    await persistData(skRef.current.BOOKED_CRUISES, enrichedCruises);
+    const lifecycleResult = updateAllCruiseLifecycles(enrichedCruises);
+    const normalizedCruises = lifecycleResult.updatedCruises;
+    console.log('[CoreData] Normalized booked cruise lifecycle before persist:', {
+      total: normalizedCruises.length,
+      upcoming: lifecycleResult.report.upcomingCount,
+      inProgress: lifecycleResult.report.inProgressCount,
+      completed: lifecycleResult.report.completedCount,
+    });
+    setBookedCruisesState(normalizedCruises);
+    await persistData(skRef.current.BOOKED_CRUISES, normalizedCruises);
     await AsyncStorage.setItem(skRef.current.HAS_IMPORTED_DATA, 'true').catch(console.error);
     
     // Auto-generate calendar events from booked cruises
-    console.log('[CoreData] Auto-generating calendar events from', enrichedCruises.length, 'booked cruises');
-    const newCalendarEvents: CalendarEvent[] = enrichedCruises.map(cruise => ({
+    console.log('[CoreData] Auto-generating calendar events from', normalizedCruises.length, 'booked cruises');
+    const newCalendarEvents: CalendarEvent[] = normalizedCruises.map(cruise => ({
       id: `cruise-${cruise.id}`,
       title: `${cruise.shipName}`,
       description: cruise.itineraryName || `${cruise.nights} Night Cruise`,
@@ -1009,15 +1053,9 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     console.log('[CoreData] Generated', newCalendarEvents.length, 'calendar events from cruises');
     setCalendarEventsState(newCalendarEvents);
     await persistData(skRef.current.CALENDAR_EVENTS, newCalendarEvents);
-    console.log('[CoreData] Booked cruises state updated and persisted:', enrichedCruises.length);
-    
-    if (!isSyncingRef.current) {
-      isSyncingRef.current = true;
-      void syncToBackend().finally(() => {
-        isSyncingRef.current = false;
-      });
-    }
-  }, [persistData, syncToBackend]);
+    console.log('[CoreData] Booked cruises state updated and persisted:', normalizedCruises.length);
+    scheduleSyncToBackend('setBookedCruises');
+  }, [persistData, scheduleSyncToBackend]);
 
   const buildCalendarEventFromCruise = useCallback((cruise: BookedCruise): CalendarEvent => ({
     id: `cruise-${cruise.id}`,
@@ -1130,14 +1168,8 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     await persistData(skRef.current.CASINO_OFFERS, nonMockOffers);
     await AsyncStorage.setItem(skRef.current.HAS_IMPORTED_DATA, 'true').catch(console.error);
     console.log('[CoreData] Casino offers state updated and persisted:', nonMockOffers.length);
-    
-    if (!isSyncingRef.current) {
-      isSyncingRef.current = true;
-      void syncToBackend().finally(() => {
-        isSyncingRef.current = false;
-      });
-    }
-  }, [persistData, syncToBackend]);
+    scheduleSyncToBackend('setCasinoOffers');
+  }, [persistData, scheduleSyncToBackend]);
 
   const addCasinoOffer = useCallback((offer: CasinoOffer) => {
     setCasinoOffersState(prev => {

@@ -1,4 +1,5 @@
 import { CasinoOffer, BookedCruise, Cruise } from '@/types/models';
+import { createDateFromString } from '@/lib/date';
 import { OfferRow, BookedCruiseRow, LoyaltyData } from './types';
 import { transformOfferRowsToCruisesAndOffers, transformBookedCruisesToAppFormat, type SyncDataSource } from './dataTransformers';
 
@@ -13,6 +14,26 @@ function isManagedOfferSource(offer: CasinoOffer, syncSource: SyncDataSource): b
 
 function isManagedCruiseSource(cruise: Cruise | BookedCruise, syncSource: SyncDataSource): boolean {
   return cruise.cruiseSource === syncSource;
+}
+
+function isInProgressBookedCruise(cruise: BookedCruise, today: Date): boolean {
+  if (cruise.completionState === 'in-progress') {
+    return true;
+  }
+
+  if (!cruise.sailDate || !cruise.returnDate) {
+    return false;
+  }
+
+  try {
+    const sailDate = createDateFromString(cruise.sailDate);
+    const returnDate = createDateFromString(cruise.returnDate);
+    sailDate.setHours(0, 0, 0, 0);
+    returnDate.setHours(0, 0, 0, 0);
+    return today >= sailDate && today <= returnDate;
+  } catch {
+    return false;
+  }
 }
 
 export interface SyncPreview {
@@ -637,21 +658,19 @@ export function applySyncPreview(
       .filter(c => {
         if (isManagedCruiseSource(c, syncSource) && !updatedBookedCruiseIds.has(c.id)) {
           const isCompleted = c.completionState === 'completed' || c.status === 'completed';
+          const isInProgress = isInProgressBookedCruise(c, today);
           let isPastReturnDate = false;
           if (c.returnDate) {
             try {
-              const parts = c.returnDate.match(/(\d{1,2})-(\d{1,2})-(\d{4})/);
-              const returnDate = parts
-                ? new Date(parseInt(parts[3], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10))
-                : new Date(c.returnDate);
+              const returnDate = createDateFromString(c.returnDate);
               returnDate.setHours(0, 0, 0, 0);
               isPastReturnDate = returnDate < today;
             } catch {
               isPastReturnDate = false;
             }
           }
-          if (isCompleted || isPastReturnDate) {
-            console.log(`[SyncLogic] Preserving completed ${syncSource}-source booked cruise: ${c.shipName} on ${c.sailDate}`);
+          if (isCompleted || isPastReturnDate || isInProgress) {
+            console.log(`[SyncLogic] Preserving ${isInProgress ? 'in-progress' : 'completed'} ${syncSource}-source booked cruise: ${c.shipName} on ${c.sailDate}`);
             return true;
           }
 

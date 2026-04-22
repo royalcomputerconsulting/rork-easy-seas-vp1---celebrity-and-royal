@@ -7,6 +7,7 @@ import {
   enrichCruisesWithMockItineraries,
   applyFreeplayOBCData,
 } from "./dataEnrichment";
+import { updateAllCruiseLifecycles } from "@/lib/lifecycleManager";
 import { STORAGE_KEYS, DEFAULT_SETTINGS, CURRENT_CRUISE_DATA_VERSION, getScopedStorageKeys, type AppSettings } from "./storageConfig";
 
 export interface StorageSnapshot {
@@ -59,22 +60,16 @@ export function filterDemoCruises(cruises: BookedCruise[]): BookedCruise[] {
   );
 }
 
-function transitionCruisesToCompleted(cruises: BookedCruise[]): BookedCruise[] {
-  const today = new Date();
-  return cruises.map((cruise: BookedCruise) => {
-    if (cruise.returnDate) {
-      const returnDate = new Date(cruise.returnDate);
-      if (returnDate < today && cruise.completionState !== 'completed') {
-        console.log('[CoreData] Auto-transitioning cruise to completed:', cruise.id, cruise.shipName, cruise.returnDate);
-        return {
-          ...cruise,
-          status: 'completed' as const,
-          completionState: 'completed' as const,
-        };
-      }
-    }
-    return cruise;
+function normalizeCruiseLifecycle(cruises: BookedCruise[]): BookedCruise[] {
+  const { updatedCruises, report } = updateAllCruiseLifecycles(cruises);
+  console.log('[CoreData] Lifecycle normalization completed:', {
+    total: cruises.length,
+    upcoming: report.upcomingCount,
+    inProgress: report.inProgressCount,
+    completed: report.completedCount,
+    updated: report.updates.filter((update) => update.updated).length,
   });
+  return updatedCruises;
 }
 
 export function enrichCruisePipeline(cruises: BookedCruise[]): BookedCruise[] {
@@ -192,8 +187,8 @@ export async function processBookedCruises(
       afterMerge: mergedCruises.length,
     });
 
-    const withTransition = transitionCruisesToCompleted(mergedCruises);
-    const enrichedBooked = enrichCruisePipeline(withTransition);
+    const withNormalizedLifecycle = normalizeCruiseLifecycle(mergedCruises);
+    const enrichedBooked = enrichCruisePipeline(withNormalizedLifecycle);
 
     return {
       bookedCruises: enrichedBooked,

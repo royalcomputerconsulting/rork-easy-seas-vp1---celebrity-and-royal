@@ -724,10 +724,10 @@ function RoyalCaribbeanSyncScreen() {
                   {isExportingLog ? (
                     <LoaderCircle size={18} color="#38bdf8" />
                   ) : (
-                    <Download size={18} color="#38bdf8" />
+                    <FileDown size={18} color="#38bdf8" />
                   )}
                   <Text style={styles.quickActionLabelCompact}>
-                    {isExportingLog ? '...' : 'LOG'}
+                    {isExportingLog ? 'EXPORTING…' : 'EXPORT LOG'}
                   </Text>
                 </Pressable>
               </View>
@@ -1358,15 +1358,15 @@ const styles = StyleSheet.create({
     fontWeight: '700' as const,
     textAlign: 'center' as const,
     letterSpacing: 0.4,
+    lineHeight: 14,
   },
   secondaryActionButton: {
     flex: 1,
   },
   logExportButton: {
-    flex: 0,
-    width: 72,
-    height: 72,
-    paddingHorizontal: 8,
+    flex: 1,
+    minHeight: 80,
+    paddingHorizontal: 12,
     gap: 6,
     borderColor: '#0f3b57',
     backgroundColor: '#102133',
