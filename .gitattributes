@@ -1,0 +1,8 @@
+.rork export-ignore
+.rork/** export-ignore
+expo/.expo export-ignore
+expo/.expo/** export-ignore
+expo/dist-export-check export-ignore
+expo/dist-export-check/** export-ignore
+expo/dist-export-web-check export-ignore
+expo/dist-export-web-check/** export-ignore

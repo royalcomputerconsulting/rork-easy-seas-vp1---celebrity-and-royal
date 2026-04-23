@@ -1,0 +1,16 @@
+node_modules
+.env
+.expo
+.rork
+.git
+dist
+web-build
+
+/expo/node_modules
+/expo/.expo
+/expo/dist
+/expo/web-build
+/expo/dist-export-check
+/expo/dist-export-check/**
+/expo/dist-export-web-check
+/expo/dist-export-web-check/**
