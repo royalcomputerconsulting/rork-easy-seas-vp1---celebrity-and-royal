@@ -780,27 +780,38 @@ export function calculateSyncCounts(preview: SyncPreview): SyncPreviewCounts {
   };
 }
 
+export interface ApplySyncPreviewOptions {
+  allowOfferRemoval?: boolean;
+  allowCruiseRemoval?: boolean;
+  allowBookedCruiseRemoval?: boolean;
+}
+
 export function applySyncPreview(
   preview: SyncPreview,
   existingOffers: CasinoOffer[],
   existingCruises: Cruise[],
   existingBookedCruises: BookedCruise[],
-  syncSource: SyncDataSource = 'royal'
+  syncSource: SyncDataSource = 'royal',
+  options?: ApplySyncPreviewOptions
 ): { offers: CasinoOffer[]; cruises: Cruise[]; bookedCruises: BookedCruise[] } {
   const normalizedExistingOffers = normalizeOfferSources(existingOffers);
   const normalizedExistingCruises = normalizeCruiseSources(existingCruises);
   const normalizedExistingBookedCruises = normalizeBookedCruiseSources(existingBookedCruises);
+  const allowOfferRemoval = options?.allowOfferRemoval ?? true;
+  const allowCruiseRemoval = options?.allowCruiseRemoval ?? true;
+  const allowBookedCruiseRemoval = options?.allowBookedCruiseRemoval ?? true;
 
   // STRATEGY: Synced data is the SOURCE OF TRUTH for the active sync source.
-  // Items from that source NOT present in the sync are REMOVED.
-  // Other sources are always preserved.
+  // Items from that source NOT present in the sync are REMOVED only when we captured
+  // authoritative data for that section in the current sync. Other sources are always preserved.
+  // When a section failed to capture any rows, preserve the existing data to avoid destructive overwrites.
 
   const updatedOfferIds = new Set(preview.offers.updates.map(u => u.existing.id));
   const finalOffers = [
     // Keep offers from other sources; drop active-source offers not present in this sync
     ...normalizedExistingOffers
       .filter(o => {
-        if (isManagedOfferSource(o, syncSource) && !updatedOfferIds.has(o.id)) {
+        if (allowOfferRemoval && isManagedOfferSource(o, syncSource) && !updatedOfferIds.has(o.id)) {
           const isBeingReplaced = preview.offers.new.some(newOffer => 
             findMatchingOffer(newOffer, [o])
           );
@@ -827,7 +838,7 @@ export function applySyncPreview(
     // Keep cruises from other sources; drop active-source cruises not in sync
     ...normalizedExistingCruises
       .filter(c => {
-        if (isManagedCruiseSource(c, syncSource) && !updatedCruiseIds.has(c.id)) {
+        if (allowCruiseRemoval && isManagedCruiseSource(c, syncSource) && !updatedCruiseIds.has(c.id)) {
           const isBeingReplaced = preview.cruises.new.some(newCruise => 
             findMatchingCruise(newCruise, [c])
           );
@@ -857,7 +868,7 @@ export function applySyncPreview(
     // ALWAYS preserve completed cruises — sync only captures currently visible website bookings
     ...normalizedExistingBookedCruises
       .filter(c => {
-        if (isManagedCruiseSource(c, syncSource) && !updatedBookedCruiseIds.has(c.id)) {
+        if (allowBookedCruiseRemoval && isManagedCruiseSource(c, syncSource) && !updatedBookedCruiseIds.has(c.id)) {
           const isCompleted = c.completionState === 'completed' || c.status === 'completed';
           const isInProgress = isInProgressBookedCruise(c, today);
           let isPastReturnDate = false;
@@ -898,6 +909,9 @@ export function applySyncPreview(
 
   console.log('[SyncLogic] applySyncPreview final counts:', {
     syncSource,
+    allowOfferRemoval,
+    allowCruiseRemoval,
+    allowBookedCruiseRemoval,
     existingOffers: normalizedExistingOffers.length,
     finalOffers: finalOffers.length,
     existingCruises: normalizedExistingCruises.length,

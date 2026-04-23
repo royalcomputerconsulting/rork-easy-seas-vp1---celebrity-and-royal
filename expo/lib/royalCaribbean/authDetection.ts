@@ -25,7 +25,7 @@ export const AUTH_DETECTION_SCRIPT = `
         const url = (typeof args[0] === 'string') ? args[0] : (args[0] && args[0].url ? args[0].url : '');
         
         if (typeof url === 'string' && url) {
-          if (url.includes('/api/casino/casino-offers')) {
+          if (url.includes('/api/casino/casino-offers') || url.includes('/casino-offers')) {
             if (response.ok && response.status === 200) {
               clonedResponse.json().then(data => {
                 window.capturedPayloads.offers = data;
@@ -37,7 +37,7 @@ export const AUTH_DETECTION_SCRIPT = `
                 }));
                 window.ReactNativeWebView.postMessage(JSON.stringify({
                   type: 'log',
-                  message: '📦 Captured Casino Offers API payload with ' + (data?.offers?.length || 0) + ' offers',
+                  message: '📦 Captured Casino Offers API payload with ' + (data?.offers?.length || data?.payload?.casinoOffers?.length || data?.casinoOffers?.length || 0) + ' offers',
                   logType: 'success'
                 }));
               }).catch(() => {});
@@ -263,7 +263,7 @@ export const AUTH_DETECTION_SCRIPT = `
           try {
             const data = JSON.parse(this.responseText);
             
-            if (this._url.includes('/api/casino/casino-offers')) {
+            if (this._url.includes('/api/casino/casino-offers') || this._url.includes('/casino-offers')) {
               window.capturedPayloads.offers = data;
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'network_payload',
@@ -273,7 +273,7 @@ export const AUTH_DETECTION_SCRIPT = `
               }));
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'log',
-                message: '📦 [XHR] Captured Casino Offers API payload',
+                message: '📦 [XHR] Captured Casino Offers API payload with ' + (data?.offers?.length || data?.payload?.casinoOffers?.length || data?.casinoOffers?.length || 0) + ' offers',
                 logType: 'success'
               }));
             }

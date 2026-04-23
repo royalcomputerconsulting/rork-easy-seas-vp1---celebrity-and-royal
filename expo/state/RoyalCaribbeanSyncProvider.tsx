@@ -103,6 +103,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   const navigationRequestIdRef = useRef<number>(0);
   const pendingNavigationTargetRef = useRef<string | null>(null);
   const syncToAppInFlightRef = useRef<boolean>(false);
+  const ingestionInFlightRef = useRef<boolean>(false);
   const logFlushScheduledRef = useRef<boolean>(false);
   const providerMountedRef = useRef<boolean>(true);
   
@@ -798,6 +799,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         break;
       }
 
+      case 'network_capture':
       case 'network_payload': {
         const { endpoint, data, url } = msg;
         const dataKeys = getObjectKeys(data);
@@ -1265,6 +1267,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   }, [addLog, config]);
 
   const runIngestion = useCallback(async () => {
+    if (ingestionInFlightRef.current) {
+      addLog('Sync ingestion is already running...', 'warning');
+      return;
+    }
+
     if (state.status !== 'logged_in' && state.status !== 'complete') {
       addLog('Cannot run ingestion: user not logged in', 'error');
       return;
@@ -1274,6 +1281,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       addLog('WebView not available', 'error');
       return;
     }
+
+    ingestionInFlightRef.current = true;
 
     processedPayloads.current.clear();
     hasReceivedApiLoyaltyDataRef.current = false;
@@ -1431,7 +1440,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       await waitForStepComplete(1, isCarnivalMode ? 180000 : 900000);
       capturedSections.current.offers = extractedOffersRef.current.length > 0;
       if (!capturedSections.current.offers) {
-        addLog('⚠️ Step 1 finished without any Carnival offer rows - existing Carnival offers will be preserved during sync', 'warning');
+        addLog(`⚠️ Step 1 finished without any ${config.loyaltyClubName} offer rows - existing ${config.loyaltyClubName} data will be preserved during sync`, 'warning');
       }
       
       setState(prev => {
@@ -2001,6 +2010,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     } catch (error) {
       addLog(`Ingestion failed: ${String(error)}`, 'error');
       setState(prev => ({ ...prev, status: 'error', error: String(error) }));
+    } finally {
+      ingestionInFlightRef.current = false;
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.status, state.scrapePricingAndItinerary, addLog, config, cruiseLine]);
@@ -2211,13 +2222,29 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
       setState(prev => ({ ...prev, syncPreview: preview }));
 
+      const allowOfferRemoval = normalizedOffers.length > 0;
+      const allowCruiseRemoval = normalizedOffers.length > 0;
+      const allowBookedCruiseRemoval = normalizedBookedCruises.length > 0;
+
+      if (!allowOfferRemoval) {
+        addLog(`⚠️ No ${config.loyaltyClubName} offer rows were captured, so existing offers and available sailings will be preserved`, 'warning');
+      }
+      if (!allowBookedCruiseRemoval) {
+        addLog(`⚠️ No booked cruise rows were captured for ${config.name}, so existing booked cruises will be preserved`, 'warning');
+      }
+
       addLog('Applying sync...', 'info');
       const { offers: rawOffers, cruises: rawCruises, bookedCruises: finalBookedCruises } = applySyncPreview(
         preview,
         coreDataContext.casinoOffers,
         coreDataContext.cruises,
         coreDataContext.bookedCruises,
-        syncSource
+        syncSource,
+        {
+          allowOfferRemoval,
+          allowCruiseRemoval,
+          allowBookedCruiseRemoval,
+        }
       );
 
       console.log('[RoyalCaribbeanSync] Running data healing pass...');
@@ -2508,6 +2535,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   }, [state.extractedOffers, state.extractedBookedCruises, state.loyaltyData, extendedLoyaltyData, addLog, cruiseLine, authenticatedEmail, currentUser, updateUserProfile, normalizeBookedCruiseRows, normalizeOfferRows]);
 
   const cancelSync = useCallback(() => {
+    ingestionInFlightRef.current = false;
     setState(prev => ({ ...prev, status: 'logged_in', syncCounts: null }));
     addLog('Sync cancelled', 'warning');
   }, [addLog]);
