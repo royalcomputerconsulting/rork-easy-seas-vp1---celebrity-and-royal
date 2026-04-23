@@ -23,6 +23,7 @@ import { generateOffersCSV, generateBookedCruisesCSV } from '@/lib/royalCaribbea
 import { injectOffersExtraction } from '@/lib/royalCaribbean/step1_offers';
 import { injectCarnivalOffersExtraction, injectCarnivalBookingsScrape, injectCarnivalCruiseSearchScrape, injectCarnivalTgoExtract } from '@/lib/carnival/carnivalOffersExtraction';
 import { createSyncPreview, calculateSyncCounts, applySyncPreview } from '@/lib/royalCaribbean/syncLogic';
+import { parseCasinoOffersPayload } from '@/lib/royalCaribbean/offerPayloadParser';
 import { healImportedData } from '@/lib/dataHealing';
 
 export type CruiseLine = 'royal_caribbean' | 'celebrity' | 'carnival';
@@ -202,6 +203,10 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
     return normalizedRows;
   }, [stringifyValue]);
+
+  const mergeOfferRows = useCallback((existingRows: OfferRow[], incomingRows: OfferRow[]): OfferRow[] => {
+    return normalizeOfferRows([...existingRows, ...incomingRows]);
+  }, [normalizeOfferRows]);
 
   const normalizeBookedCruiseRows = useCallback((value: unknown): BookedCruiseRow[] => {
     if (!Array.isArray(value)) {
@@ -507,7 +512,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         const batch = normalizeOfferRows(msg.data);
         if (batch.length > 0) {
           setState(prev => {
-            const newOffers = [...prev.extractedOffers, ...batch];
+            const newOffers = mergeOfferRows(prev.extractedOffers, batch);
             extractedOffersRef.current = newOffers;
             const offerName = batch[0]?.offerName || 'Unknown Offer';
             const offerCode = batch[0]?.offerCode || 'N/A';
@@ -517,7 +522,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
               addLog(`✅ Captured casino offer "${offerName}" (Code: ${offerCode})`, 'success');
               addLog(`   📊 Captured ${batch.length} sailing(s) for this offer`, 'success');
               
-              // Show first few sailings as examples
               const sampleSailings = batch.slice(0, Math.min(3, batch.length));
               sampleSailings.forEach((sailing, idx) => {
                 if (sailing.shipName && sailing.sailingDate) {
@@ -815,6 +819,40 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           payloadKeys,
         });
         
+        if (endpoint === 'offers' && data && cruiseLine !== 'carnival') {
+          addLog('📦 Processing captured casino offers API payload...', 'info');
+          const parsedOffers = parseCasinoOffersPayload(
+            data,
+            cruiseLine === 'celebrity' ? 'Blue Chip Club Offers' : 'Club Royale Offers',
+            cruiseLine === 'celebrity' ? 'Blue Chip Club' : 'Club Royale'
+          );
+
+          if (parsedOffers.offerRows.length > 0) {
+            setState(prev => {
+              const mergedOffers = mergeOfferRows(prev.extractedOffers, parsedOffers.offerRows);
+              extractedOffersRef.current = mergedOffers;
+              return {
+                ...prev,
+                extractedOffers: mergedOffers,
+              };
+            });
+
+            capturedSections.current.offers = true;
+            addLog(`✅ Captured ${parsedOffers.offerCount} casino offer(s) with ${parsedOffers.totalSailings} sailing(s) from network capture`, 'success');
+
+            if (stepCompleteResolvers.current[1]) {
+              addLog('✅ Step 1 auto-completing with offers from network monitor', 'success');
+              stepCompleteResolvers.current[1]();
+              delete stepCompleteResolvers.current[1];
+            }
+          } else {
+            addLog(`⚠️ Captured offers payload but no offer rows were parsed. Keys: ${dataKeys.join(', ')}`, 'warning');
+            if (payloadKeys.length > 0) {
+              addLog(`📦 Offer payload keys: ${payloadKeys.join(', ')}`, 'info');
+            }
+          }
+        }
+
         if ((endpoint === 'bookings' || endpoint === 'upcomingCruises' || endpoint === 'courtesyHolds') && data) {
           addLog(`📦 Processing captured ${endpoint} API payload...`, 'info');
           if (dataKeys.length > 0) {
@@ -1219,7 +1257,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         addLog(`Message handler error: ${String(handlerError)}`, 'error');
       } catch { /* ignore logging errors */ }
     }
-  }, [addLog, setProgress, cruiseLine, config.name, createPayloadSignature, getObjectKeys, normalizeBookedCruiseRows, normalizeOfferRows, stringifyValue]);
+  }, [addLog, setProgress, cruiseLine, config.name, createPayloadSignature, getObjectKeys, mergeOfferRows, normalizeBookedCruiseRows, normalizeOfferRows, stringifyValue]);
 
   const openLogin = useCallback(() => {
     setWebViewUrl(config.loginUrl);
@@ -1256,37 +1294,46 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     const waitForStepComplete = (step: number, baseTimeoutMs: number = 600000): Promise<void> => {
       return new Promise((resolve) => {
         let lastProgressTime = Date.now();
+        let isSettled = false;
         const progressTimeoutMs = 90000;
+
+        const finishStep = (timeoutMessage?: string) => {
+          if (isSettled) {
+            return;
+          }
+
+          isSettled = true;
+          clearTimeout(maxTimeout);
+          clearInterval(progressInterval);
+          delete stepCompleteResolvers.current[step];
+          delete progressCallbacks.current.onProgress;
+          if (timeoutMessage) {
+            addLog(timeoutMessage, 'warning');
+          }
+          resolve();
+        };
         
         const checkProgress = () => {
           const timeSinceProgress = Date.now() - lastProgressTime;
           if (timeSinceProgress > progressTimeoutMs) {
-            delete stepCompleteResolvers.current[step];
-            delete progressCallbacks.current.onProgress;
-            addLog(`Step ${step} timed out (no progress for ${progressTimeoutMs / 1000}s) - continuing with collected data`, 'warning');
-            resolve();
+            finishStep(`Step ${step} timed out (no progress for ${progressTimeoutMs / 1000}s) - continuing with collected data`);
           }
         };
         
         const progressInterval = setInterval(checkProgress, 5000);
         
         const maxTimeout = setTimeout(() => {
-          clearInterval(progressInterval);
-          delete stepCompleteResolvers.current[step];
-          delete progressCallbacks.current.onProgress;
-          addLog(`Step ${step} reached max timeout (${baseTimeoutMs / 1000}s) - continuing with collected data`, 'warning');
-          resolve();
+          finishStep(`Step ${step} reached max timeout (${baseTimeoutMs / 1000}s) - continuing with collected data`);
         }, baseTimeoutMs);
         
         progressCallbacks.current.onProgress = () => {
-          lastProgressTime = Date.now();
+          if (!isSettled) {
+            lastProgressTime = Date.now();
+          }
         };
         
         stepCompleteResolvers.current[step] = () => {
-          clearTimeout(maxTimeout);
-          clearInterval(progressInterval);
-          delete progressCallbacks.current.onProgress;
-          resolve();
+          finishStep();
         };
       });
     };
