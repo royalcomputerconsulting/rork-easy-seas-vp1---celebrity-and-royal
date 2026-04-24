@@ -268,6 +268,9 @@ export interface CasinoOffer {
   validUntil?: string;
   
   status?: 'active' | 'expired' | 'used' | 'booked';
+  offerStatus?: string;
+  isInProgress?: boolean;
+  sourcePage?: string;
   has2025Badge?: boolean;
   
   termsConditions?: string;

@@ -239,13 +239,17 @@ export function transformOfferRowsToCruisesAndOffers(
   const cruiseIdsByOfferKey = new Map<string, string[]>();
 
   for (const offer of offerRows) {
-    if (!offer.shipName?.trim() && !offer.sailingDate?.trim() && source !== 'carnival') {
-      console.log(`[DataTransformer] Skipping offer-level row without sailings: ${offer.offerCode || offer.offerName || 'unknown'}`);
-      continue;
+    const hasAvailableSailing = Boolean(offer.shipName?.trim() || offer.sailingDate?.trim());
+    const normalizedOfferStatus = (offer.offerStatus || '').toLowerCase().replace(/[\s_-]+/g, ' ');
+    const isInProgressOfferRow = offer.isInProgress === true || normalizedOfferStatus.includes('in progress') || normalizedOfferStatus.includes('pending') || normalizedOfferStatus.includes('processing') || normalizedOfferStatus.includes('earning');
+    const shouldCreateCruise = source === 'carnival' || (hasAvailableSailing && !isInProgressOfferRow);
+
+    if (!shouldCreateCruise) {
+      console.log(`[DataTransformer] Creating offer-only record without available cruise rows: ${offer.offerCode || offer.offerName || 'unknown'} (${isInProgressOfferRow ? 'in progress' : 'no sailings'})`);
     }
 
-    const cruiseId = generateId();
-    const sailDate = parseDate(offer.sailingDate);
+    const cruiseId = shouldCreateCruise ? generateId() : undefined;
+    const sailDate = shouldCreateCruise ? parseDate(offer.sailingDate) : '';
     const offerExpiryDate = parseDate(offer.offerExpirationDate);
     const safePerks = typeof offer.perks === 'string' ? offer.perks.trim() : '';
     const guests = parseGuestCount(offer.numberOfGuests);
@@ -268,48 +272,50 @@ export function transformOfferRowsToCruisesAndOffers(
       { interiorPrice, oceanviewPrice, balconyPrice, suitePrice, taxes, nights }
     );
 
-    const cruise: Cruise = {
-      id: cruiseId,
-      shipName: offer.shipName,
-      sailDate,
-      returnDate,
-      departurePort: offer.departurePort,
-      destination: offer.itinerary,
-      nights,
-      price: lowestPrice,
-      interiorPrice,
-      oceanviewPrice,
-      balconyPrice,
-      suitePrice,
-      taxes,
-      totalPrice: typeof lowestPrice === 'number' ? lowestPrice + (taxes ?? 0) : undefined,
-      cabinType: offer.cabinType || 'Balcony',
-      offerCode: offer.offerCode,
-      offerName: offer.offerName,
-      offerExpiry: offerExpiryDate,
-      itineraryName: offer.itinerary,
-      itineraryRaw: offer.itinerary ? [offer.itinerary] : [],
-      ports,
-      guestsInfo: offer.numberOfGuests,
-      guests,
-      status: 'available',
-      freePlay: extractFreePlay(safePerks),
-      freeOBC: extractOBC(safePerks),
-      tradeInValue: extractTradeInValue(safePerks),
-      perks: safePerks ? [safePerks] : [],
-      cruiseSource: source,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+    if (shouldCreateCruise && cruiseId) {
+      const cruise: Cruise = {
+        id: cruiseId,
+        shipName: offer.shipName,
+        sailDate,
+        returnDate,
+        departurePort: offer.departurePort,
+        destination: offer.itinerary,
+        nights,
+        price: lowestPrice,
+        interiorPrice,
+        oceanviewPrice,
+        balconyPrice,
+        suitePrice,
+        taxes,
+        totalPrice: typeof lowestPrice === 'number' ? lowestPrice + (taxes ?? 0) : undefined,
+        cabinType: offer.cabinType || 'Balcony',
+        offerCode: offer.offerCode,
+        offerName: offer.offerName,
+        offerExpiry: offerExpiryDate,
+        itineraryName: offer.itinerary,
+        itineraryRaw: offer.itinerary ? [offer.itinerary] : [],
+        ports,
+        guestsInfo: offer.numberOfGuests,
+        guests,
+        status: 'available',
+        freePlay: extractFreePlay(safePerks),
+        freeOBC: extractOBC(safePerks),
+        tradeInValue: extractTradeInValue(safePerks),
+        perks: safePerks ? [safePerks] : [],
+        cruiseSource: source,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
 
-    cruises.push(cruise);
+      cruises.push(cruise);
+    }
 
     const offerCodeKey = (offer.offerCode || '').trim().toUpperCase();
     const offerNameKey = (offer.offerName || '').trim().toLowerCase().replace(/\s+/g, ' ');
     const offerExpiryKey = (offerExpiryDate || offer.offerExpirationDate || '').trim();
     const offerKey = [
       source,
-      offerCodeKey || offerNameKey || `${offer.shipName || 'unknown'}|${sailDate || 'unknown'}|${offer.itinerary || 'unknown'}`,
+      offerCodeKey || offerNameKey || `${offer.sourcePage || 'offer'}|${offer.shipName || 'unknown'}|${sailDate || 'unknown'}|${offer.itinerary || 'unknown'}`,
       offerExpiryKey,
     ].join('|');
 
@@ -320,18 +326,18 @@ export function transformOfferRowsToCruisesAndOffers(
 
       const casinoOffer: CasinoOffer = {
         id: `offer_${offerKey.replace(/\s+/g, '_')}_${Date.now()}`,
-        cruiseId: cruiseId,
+        cruiseId,
         cruiseIds: [],
         offerCode: offer.offerCode || '',
         offerName: displayName,
         offerType: determineOfferType(safePerks),
         title: displayName,
-        description: safePerks || offer.itinerary || offer.departurePort || displayName,
-        category: offer.offerType,
+        description: safePerks || offer.itinerary || offer.departurePort || (isInProgressOfferRow ? 'In Progress' : displayName),
+        category: isInProgressOfferRow ? `${offer.offerType} (In Progress)` : offer.offerType,
         perks: safePerks ? [safePerks] : [],
-        shipName: offer.shipName || undefined,
-        sailingDate: sailDate || undefined,
-        itineraryName: offer.itinerary || undefined,
+        shipName: shouldCreateCruise ? (offer.shipName || undefined) : undefined,
+        sailingDate: shouldCreateCruise ? (sailDate || undefined) : undefined,
+        itineraryName: shouldCreateCruise ? (offer.itinerary || undefined) : undefined,
         nights,
         ports,
         roomType: offer.cabinType || undefined,
@@ -353,7 +359,10 @@ export function transformOfferRowsToCruisesAndOffers(
         expires: offerExpiryDate,
         expiryDate: offerExpiryDate,
         offerExpiryDate: offerExpiryDate,
-        status: 'active',
+        status: isInProgressOfferRow ? 'booked' : 'active',
+        offerStatus: offer.offerStatus || (isInProgressOfferRow ? 'In Progress' : undefined),
+        isInProgress: isInProgressOfferRow,
+        sourcePage: offer.sourcePage,
         offerSource: source,
         bookingLink: offer.bookingLink || undefined,
         createdAt: new Date().toISOString(),
@@ -366,48 +375,54 @@ export function transformOfferRowsToCruisesAndOffers(
 
     const aggregatedOffer = offerMap.get(offerKey);
     if (aggregatedOffer) {
-      aggregatedOffer.shipName = aggregatedOffer.shipName || offer.shipName || undefined;
-      aggregatedOffer.sailingDate = aggregatedOffer.sailingDate || sailDate || undefined;
-      aggregatedOffer.itineraryName = aggregatedOffer.itineraryName || offer.itinerary || undefined;
-      aggregatedOffer.nights = aggregatedOffer.nights || nights;
-      aggregatedOffer.roomType = aggregatedOffer.roomType || offer.cabinType || undefined;
-      aggregatedOffer.guestsInfo = aggregatedOffer.guestsInfo || offer.numberOfGuests || undefined;
-      aggregatedOffer.guests = aggregatedOffer.guests ?? guests;
-      aggregatedOffer.ports = aggregatedOffer.ports ?? ports;
+      if (shouldCreateCruise) {
+        aggregatedOffer.shipName = aggregatedOffer.shipName || offer.shipName || undefined;
+        aggregatedOffer.sailingDate = aggregatedOffer.sailingDate || sailDate || undefined;
+        aggregatedOffer.itineraryName = aggregatedOffer.itineraryName || offer.itinerary || undefined;
+        aggregatedOffer.nights = aggregatedOffer.nights || nights;
+        aggregatedOffer.roomType = aggregatedOffer.roomType || offer.cabinType || undefined;
+        aggregatedOffer.guestsInfo = aggregatedOffer.guestsInfo || offer.numberOfGuests || undefined;
+        aggregatedOffer.guests = aggregatedOffer.guests ?? guests;
+        aggregatedOffer.ports = aggregatedOffer.ports ?? ports;
+      }
       aggregatedOffer.description = aggregatedOffer.description || safePerks || offer.itinerary || undefined;
       if (!aggregatedOffer.bookingLink && offer.bookingLink) {
         aggregatedOffer.bookingLink = offer.bookingLink;
       }
 
-      if (interiorPrice !== undefined) {
-        aggregatedOffer.interiorPrice = getLowestPositivePrice([aggregatedOffer.interiorPrice, interiorPrice]);
-      }
-      if (oceanviewPrice !== undefined) {
-        aggregatedOffer.oceanviewPrice = getLowestPositivePrice([aggregatedOffer.oceanviewPrice, oceanviewPrice]);
-      }
-      if (balconyPrice !== undefined) {
-        aggregatedOffer.balconyPrice = getLowestPositivePrice([aggregatedOffer.balconyPrice, balconyPrice]);
-      }
-      if (suitePrice !== undefined) {
-        aggregatedOffer.suitePrice = getLowestPositivePrice([aggregatedOffer.suitePrice, suitePrice]);
-      }
-      if (taxes !== undefined) {
-        aggregatedOffer.taxesFees = getLowestPositivePrice([aggregatedOffer.taxesFees, taxes]);
-        aggregatedOffer.portCharges = getLowestPositivePrice([aggregatedOffer.portCharges, taxes]);
-      }
+      if (shouldCreateCruise) {
+        if (interiorPrice !== undefined) {
+          aggregatedOffer.interiorPrice = getLowestPositivePrice([aggregatedOffer.interiorPrice, interiorPrice]);
+        }
+        if (oceanviewPrice !== undefined) {
+          aggregatedOffer.oceanviewPrice = getLowestPositivePrice([aggregatedOffer.oceanviewPrice, oceanviewPrice]);
+        }
+        if (balconyPrice !== undefined) {
+          aggregatedOffer.balconyPrice = getLowestPositivePrice([aggregatedOffer.balconyPrice, balconyPrice]);
+        }
+        if (suitePrice !== undefined) {
+          aggregatedOffer.suitePrice = getLowestPositivePrice([aggregatedOffer.suitePrice, suitePrice]);
+        }
+        if (taxes !== undefined) {
+          aggregatedOffer.taxesFees = getLowestPositivePrice([aggregatedOffer.taxesFees, taxes]);
+          aggregatedOffer.portCharges = getLowestPositivePrice([aggregatedOffer.portCharges, taxes]);
+        }
 
-      const aggregatedBestPrice = getLowestPositivePrice([
-        aggregatedOffer.interiorPrice,
-        aggregatedOffer.oceanviewPrice,
-        aggregatedOffer.balconyPrice,
-        aggregatedOffer.suitePrice,
-      ]);
-      aggregatedOffer.value = aggregatedBestPrice;
-      aggregatedOffer.offerValue = aggregatedBestPrice;
+        const aggregatedBestPrice = getLowestPositivePrice([
+          aggregatedOffer.interiorPrice,
+          aggregatedOffer.oceanviewPrice,
+          aggregatedOffer.balconyPrice,
+          aggregatedOffer.suitePrice,
+        ]);
+        aggregatedOffer.value = aggregatedBestPrice;
+        aggregatedOffer.offerValue = aggregatedBestPrice;
+      }
       aggregatedOffer.updatedAt = new Date().toISOString();
     }
 
-    cruiseIdsByOfferKey.get(offerKey)?.push(cruiseId);
+    if (cruiseId) {
+      cruiseIdsByOfferKey.get(offerKey)?.push(cruiseId);
+    }
   }
 
   offerMap.forEach((offer, key) => {

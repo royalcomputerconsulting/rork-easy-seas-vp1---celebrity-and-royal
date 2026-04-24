@@ -203,7 +203,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
     const getOfferIdentityKey = (row: OfferRow): string => {
       return [
-        row.sourcePage,
         row.offerCode || row.offerName,
         row.offerName,
         row.offerExpirationDate,
@@ -216,7 +215,9 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         return;
       }
 
-      const row = item as Partial<OfferRow>;
+      const row = item as Partial<OfferRow> & { inProgress?: unknown; isPending?: unknown };
+      const rawInProgress = stringifyValue(row.isInProgress).toLowerCase();
+      const rawAltInProgress = stringifyValue(row.inProgress ?? row.isPending).toLowerCase();
       const normalizedRow: OfferRow = {
         sourcePage: stringifyValue(row.sourcePage) || 'Offers',
         offerName: stringifyValue(row.offerName) || stringifyValue(row.offerCode) || 'Carnival Offer',
@@ -244,11 +245,10 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         totalNights: typeof row.totalNights === 'number' && Number.isFinite(row.totalNights) ? row.totalNights : undefined,
         bookingLink: stringifyValue(row.bookingLink) || undefined,
         offerStatus: stringifyValue(row.offerStatus) || undefined,
-        isInProgress: row.isInProgress === true,
+        isInProgress: row.isInProgress === true || rawInProgress === 'true' || rawInProgress === '1' || rawInProgress === 'yes' || rawAltInProgress === 'true' || rawAltInProgress === '1' || rawAltInProgress === 'yes',
       };
 
       const dedupeKey = [
-        normalizedRow.sourcePage,
         normalizedRow.offerCode,
         normalizedRow.offerName,
         normalizedRow.offerExpirationDate,
@@ -1519,27 +1519,29 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       }
       
       setState(prev => {
-        const offersByName = new Map<string, number>();
+        const allOffersByKey = new Set<string>();
+        const activeOffersByKey = new Set<string>();
+        const inProgressOffersByKey = new Set<string>();
         let totalSailings = 0;
         prev.extractedOffers.forEach(offer => {
           const status = (offer.offerStatus || '').toLowerCase().replace(/[\s_-]+/g, ' ');
-          const isInProgress = offer.isInProgress === true || status.includes('in progress') || status.includes('pending') || status.includes('processing') || status.includes('earning');
+          const isInProgress = offer.isInProgress === true || status.includes('in progress') || status.includes('pending') || status.includes('processing') || status.includes('earning') || (!offer.shipName && !offer.sailingDate);
           const hasSailing = Boolean(offer.shipName || offer.sailingDate);
-          if (!isInProgress && hasSailing) {
-            const key = [offer.offerCode || offer.offerName || 'Unknown', offer.offerExpirationDate || ''].join('|');
-            offersByName.set(key, (offersByName.get(key) || 0) + 1);
+          const key = [offer.offerCode || offer.offerName || 'Unknown', offer.offerExpirationDate || ''].join('|');
+          allOffersByKey.add(key);
+          if (isInProgress) {
+            inProgressOffersByKey.add(key);
+            return;
+          }
+          activeOffersByKey.add(key);
+          if (hasSailing) {
             totalSailings += 1;
           }
         });
-        const uniqueOffers = offersByName.size;
-        const hiddenInProgress = prev.extractedOffers.filter(offer => {
-          const status = (offer.offerStatus || '').toLowerCase().replace(/[\s_-]+/g, ' ');
-          return offer.isInProgress === true || status.includes('in progress') || status.includes('pending') || status.includes('processing') || status.includes('earning') || (!offer.shipName && !offer.sailingDate);
-        }).length;
         
-        addLog(`✅ STEP 1 COMPLETE: Captured ${uniqueOffers} active casino offer(s) with ${totalSailings} total sailing(s)`, 'success');
-        if (hiddenInProgress > 0) {
-          addLog(`ℹ️ Excluded ${hiddenInProgress} in-progress/empty offer row(s) from active offer counts`, 'info');
+        addLog(`✅ STEP 1 COMPLETE: Captured ${allOffersByKey.size} casino offer(s): ${activeOffersByKey.size} active, ${inProgressOffersByKey.size} in progress, ${totalSailings} active sailing(s)`, 'success');
+        if (inProgressOffersByKey.size > 0) {
+          addLog(`ℹ️ In-progress offers are saved as offers but their sailings are excluded from available cruises`, 'info');
         }
         
         return prev;

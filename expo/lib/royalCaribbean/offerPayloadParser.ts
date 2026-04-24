@@ -546,10 +546,9 @@ export function parseCasinoOffersPayload(
         destinationName: undefined,
         totalNights: undefined,
         bookingLink: bookingLink || undefined,
-        offerStatus: offerStatus || undefined,
-        isInProgress,
+        offerStatus: offerStatus || 'No sailings available',
+        isInProgress: true,
       });
-      totalSailings += 1;
       return;
     }
 

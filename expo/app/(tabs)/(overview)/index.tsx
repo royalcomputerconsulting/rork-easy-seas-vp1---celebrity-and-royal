@@ -150,6 +150,11 @@ function getOfferExpiryDate(offer: CasinoOffer): string | undefined {
   return offer.expiryDate || offer.expires || offer.offerExpiryDate || undefined;
 }
 
+function isCasinoOfferInProgress(offer: CasinoOffer): boolean {
+  const normalizedStatus = (offer.offerStatus || offer.status || '').trim().toLowerCase().replace(/[\s_-]+/g, ' ');
+  return offer.isInProgress === true || normalizedStatus.includes('in progress') || normalizedStatus.includes('pending') || normalizedStatus.includes('processing') || normalizedStatus === 'booked';
+}
+
 function isOfferLinkedCruiseInProgress(cruise: BookedCruise, today: Date): boolean {
   if (cruise.completionState === 'in-progress') {
     return true;
@@ -267,8 +272,9 @@ function OverviewScreenContent() {
       const normalizedStatus = offer.status?.trim().toLowerCase();
       const hasBlockedStatus = normalizedStatus === 'used' || normalizedStatus === 'booked' || normalizedStatus === 'expired';
       const isLinkedToInProgressCruise = !!offer.offerCode && inProgressOfferKeys.has(normalizeOfferKey(offer.offerCode));
+      const isSyncedInProgressOffer = isCasinoOfferInProgress(offer);
 
-      if (hasBlockedStatus || isLinkedToInProgressCruise) {
+      if (hasBlockedStatus || isLinkedToInProgressCruise || isSyncedInProgressOffer) {
         keys.add(lookupKey);
       }
     });
@@ -376,6 +382,10 @@ function OverviewScreenContent() {
       }
       
       const offerCode = cruise.offerCode;
+      const cruiseOfferKey = normalizeOfferKey(offerCode);
+      if (cruiseOfferKey && blockedOfferKeys.has(cruiseOfferKey)) {
+        return;
+      }
       if (offerCode && offersMap.has(offerCode)) {
         const offerCard = offersMap.get(offerCode);
         if (offerCard) {
@@ -405,8 +415,14 @@ function OverviewScreenContent() {
   }, [groupedOffers, cruisesData]);
 
   const availableCruisesCount = useMemo(() => {
-    return cruisesData.filter((c: Cruise) => !isDateInPast(c.sailDate)).length;
-  }, [cruisesData]);
+    return cruisesData.filter((c: Cruise) => {
+      if (isDateInPast(c.sailDate)) {
+        return false;
+      }
+      const offerKey = normalizeOfferKey(c.offerCode);
+      return !offerKey || !blockedOfferKeys.has(offerKey);
+    }).length;
+  }, [cruisesData, blockedOfferKeys]);
 
   const certificateSummary = useMemo(() => {
     const fppCerts = getCertificatesByType('fpp').filter(c => c.status === 'available');
