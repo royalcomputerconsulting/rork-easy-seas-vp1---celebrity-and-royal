@@ -47,7 +47,7 @@ import { CasinoOfferCard, OfferSummaryCard } from '@/components/CasinoOfferCard'
 import { AlertsManagerModal } from '@/components/AlertsManagerModal';
 import { AgentXAnalysisCard } from '@/components/AgentXAnalysisCard';
 import { QuickActionsFAB } from '@/components/ui/QuickActionsFAB';
-import { getDaysUntil, isDateInPast, formatDate } from '@/lib/date';
+import { createDateFromString, getDaysUntil, isDateInPast, formatDate } from '@/lib/date';
 import { MachineStrategyCard } from '@/components/MachineStrategyCard';
 import { CertificateExplorerModal } from '@/components/CertificateExplorerModal';
 
@@ -137,6 +137,39 @@ interface CasinoOfferCardData {
   cruises: Cruise[];
 }
 
+function normalizeOfferKey(value: string | undefined): string {
+  return value?.trim().toUpperCase() ?? '';
+}
+
+function getOfferLookupKey(offer: CasinoOffer): string {
+  return normalizeOfferKey(offer.offerCode || offer.id);
+}
+
+function getOfferExpiryDate(offer: CasinoOffer): string | undefined {
+  return offer.expiryDate || offer.expires || offer.offerExpiryDate || undefined;
+}
+
+function isOfferLinkedCruiseInProgress(cruise: BookedCruise, today: Date): boolean {
+  if (cruise.completionState === 'in-progress') {
+    return true;
+  }
+
+  if (!cruise.sailDate || !cruise.returnDate) {
+    return false;
+  }
+
+  try {
+    const sailDate = createDateFromString(cruise.sailDate);
+    const returnDate = createDateFromString(cruise.returnDate);
+    sailDate.setHours(0, 0, 0, 0);
+    returnDate.setHours(0, 0, 0, 0);
+    return today >= sailDate && today <= returnDate;
+  } catch (error) {
+    console.error('[Overview] Failed to evaluate in-progress cruise window:', error);
+    return false;
+  }
+}
+
 function OverviewScreenContent() {
   const router = useRouter();
   const { cruises, bookedCruises: allBookedCruises, casinoOffers, clubRoyaleProfile } = useCoreData();
@@ -197,15 +230,85 @@ function OverviewScreenContent() {
     return new Set(bookedCruises.map((b: BookedCruise) => b.id));
   }, [bookedCruises]);
 
+  const inProgressOfferKeys = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const keys = new Set<string>();
+    bookedCruises.forEach((cruise: BookedCruise) => {
+      const offerKey = normalizeOfferKey(cruise.offerCode);
+      if (!offerKey) {
+        return;
+      }
+
+      if (isOfferLinkedCruiseInProgress(cruise, today)) {
+        keys.add(offerKey);
+      }
+    });
+
+    console.log('[Overview] In-progress offer keys:', Array.from(keys));
+    return keys;
+  }, [bookedCruises]);
+
+  const blockedOfferKeys = useMemo(() => {
+    const keys = new Set<string>();
+
+    offersData.forEach((offer: CasinoOffer) => {
+      const lookupKey = getOfferLookupKey(offer);
+      if (!lookupKey) {
+        return;
+      }
+
+      const normalizedStatus = offer.status?.trim().toLowerCase();
+      const hasBlockedStatus = normalizedStatus === 'used' || normalizedStatus === 'booked' || normalizedStatus === 'expired';
+      const isLinkedToInProgressCruise = !!offer.offerCode && inProgressOfferKeys.has(normalizeOfferKey(offer.offerCode));
+
+      if (hasBlockedStatus || isLinkedToInProgressCruise) {
+        keys.add(lookupKey);
+      }
+    });
+
+    console.log('[Overview] Blocked offer keys:', Array.from(keys));
+    return keys;
+  }, [offersData, inProgressOfferKeys]);
+
+  const realActiveOffersCount = useMemo(() => {
+    const activeKeys = new Set<string>();
+
+    offersData.forEach((offer: CasinoOffer) => {
+      const lookupKey = getOfferLookupKey(offer);
+      if (!lookupKey || blockedOfferKeys.has(lookupKey)) {
+        return;
+      }
+
+      const expiryDate = getOfferExpiryDate(offer);
+      if (expiryDate && getDaysUntil(expiryDate) < 0) {
+        return;
+      }
+
+      activeKeys.add(lookupKey);
+    });
+
+    console.log('[Overview] Real active offers count:', {
+      totalOffers: offersData.length,
+      blockedOffers: blockedOfferKeys.size,
+      realActiveOffers: activeKeys.size,
+    });
+
+    return activeKeys.size;
+  }, [offersData, blockedOfferKeys]);
+
   const groupedOffers = useMemo(() => {
     const offersMap = new Map<string, CasinoOfferCardData>();
     
     offersData.forEach((offer: CasinoOffer) => {
-      if (offer.expiryDate && getDaysUntil(offer.expiryDate) < 0) {
+      const lookupKey = getOfferLookupKey(offer);
+      if (!lookupKey || blockedOfferKeys.has(lookupKey)) {
         return;
       }
-      
-      if (offer.status === 'used' || offer.status === 'booked') {
+
+      const expiryDate = getOfferExpiryDate(offer);
+      if (expiryDate && getDaysUntil(expiryDate) < 0) {
         return;
       }
 
@@ -219,7 +322,6 @@ function OverviewScreenContent() {
         offer.tradeInValue ?? offer.value ?? offer.offerValue ?? offer.totalValue ?? undefined;
 
       const obc = offer.obcAmount ?? offer.OBC ?? undefined;
-      const expiryDate = offer.expiryDate || offer.expires || offer.offerExpiryDate || undefined;
 
       if (!existing) {
         offersMap.set(key, {
@@ -277,8 +379,13 @@ function OverviewScreenContent() {
       }
     });
 
-    return Array.from(offersMap.values()).filter(offer => offer.cruises.length > 0);
-  }, [offersData, cruisesData]);
+    const grouped = Array.from(offersMap.values()).filter((offer) => offer.cruises.length > 0);
+    console.log('[Overview] Grouped active offers:', {
+      groupedOffers: grouped.length,
+      realActiveOffers: realActiveOffersCount,
+    });
+    return grouped;
+  }, [offersData, cruisesData, blockedOfferKeys, realActiveOffersCount]);
 
   const nonExpiredOffers = useMemo(() => {
     if (groupedOffers.length === 0) {
@@ -540,7 +647,7 @@ function OverviewScreenContent() {
           alertCount={summary.totalActive}
           availableCruises={availableCruisesCount}
           bookedCruises={bookedCruises.length}
-          activeOffers={groupedOffers.length || offersData.length}
+          activeOffers={realActiveOffersCount}
           onCruisesPress={handleCruisesPress}
           onBookedPress={handleBookedPress}
           onOffersPress={() => console.log('Active offers pressed')}
