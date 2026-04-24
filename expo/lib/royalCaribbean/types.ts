@@ -149,6 +149,8 @@ export interface OfferRow {
   destinationName?: string;
   totalNights?: number;
   bookingLink?: string;
+  offerStatus?: string;
+  isInProgress?: boolean;
 }
 
 export interface DayByDayPort {

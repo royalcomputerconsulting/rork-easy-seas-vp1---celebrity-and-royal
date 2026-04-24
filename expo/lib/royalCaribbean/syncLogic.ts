@@ -2,6 +2,7 @@ import { CasinoOffer, BookedCruise, Cruise } from '@/types/models';
 import { createDateFromString } from '@/lib/date';
 import { OfferRow, BookedCruiseRow, LoyaltyData } from './types';
 import { transformOfferRowsToCruisesAndOffers, transformBookedCruisesToAppFormat, type SyncDataSource } from './dataTransformers';
+import { isActiveBookedCruise, isCourtesyHoldCruise } from '@/lib/bookedCruiseStatus';
 
 const CELEBRITY_SHIP_NAMES = new Set([
   'ascent',
@@ -280,47 +281,91 @@ function isInstantRewardOrCertificate(offerCode: string | undefined, offerName: 
   return false;
 }
 
-// Offer codes that represent "IN PROGRESS" offers that should not be synced
 const IN_PROGRESS_OFFER_CODES = ['2601C05', '2601A05'];
 
-function isInProgressOffer(offerCode: string | undefined, offerName: string | undefined): boolean {
-  if (!offerCode && !offerName) return false;
-  
+function normalizeComparableText(value: string | undefined): string {
+  return (value || '').toLowerCase().trim().replace(/[\s_-]+/g, ' ');
+}
+
+function isInProgressOffer(
+  offerCode: string | undefined,
+  offerName: string | undefined,
+  offerStatus?: string,
+  isInProgress?: boolean
+): boolean {
+  if (isInProgress === true) {
+    console.log(`[SyncLogic] Detected IN PROGRESS offer flag: ${offerCode || offerName || 'unknown'}`);
+    return true;
+  }
+
   const normalizedCode = (offerCode || '').toUpperCase().trim();
-  
-  // Check against known IN PROGRESS offer codes
-  if (IN_PROGRESS_OFFER_CODES.some(code => normalizedCode.includes(code.toUpperCase()))) {
-    console.log(`[SyncLogic] Detected IN PROGRESS offer: ${offerCode}`);
+  const normalizedStatus = normalizeComparableText(offerStatus);
+  const normalizedName = normalizeComparableText(offerName);
+
+  if (IN_PROGRESS_OFFER_CODES.some(code => normalizedCode === code.toUpperCase())) {
+    console.log(`[SyncLogic] Detected IN PROGRESS offer code: ${offerCode}`);
+    return true;
+  }
+
+  const statusIndicatesInProgress =
+    normalizedStatus.includes('in progress') ||
+    normalizedStatus.includes('pending') ||
+    normalizedStatus.includes('processing') ||
+    normalizedStatus.includes('earning') ||
+    normalizedStatus.includes('not yet available');
+
+  if (statusIndicatesInProgress) {
+    console.log(`[SyncLogic] Detected IN PROGRESS offer status: ${offerCode || offerName || 'unknown'} (${offerStatus})`);
+    return true;
+  }
+
+  if (normalizedName.includes('in progress') && !normalizedName.includes('cruise reward')) {
+    console.log(`[SyncLogic] Detected IN PROGRESS offer name: ${offerCode || offerName || 'unknown'}`);
     return true;
   }
   
   return false;
 }
 
+function isEmptyOfferRow(row: OfferRow): boolean {
+  return !row.shipName?.trim() && !row.sailingDate?.trim();
+}
+
+function getOfferExpiry(offer: CasinoOffer): string {
+  return normalizeSailDate(offer.offerExpiryDate || offer.expiryDate || offer.expires || offer.offerExpiry || '');
+}
+
+function getOfferNameKey(offer: CasinoOffer): string {
+  return normalizeComparableText(offer.offerName || offer.title || offer.description || '');
+}
+
 function findMatchingOffer(
   offer: CasinoOffer,
   existingOffers: CasinoOffer[]
 ): CasinoOffer | null {
-  if (isInstantRewardOrCertificate(offer.offerCode, offer.offerName)) {
-    return null;
-  }
-
   const offerSource = resolveOfferSource(offer);
+  const offerCode = (offer.offerCode || '').trim().toUpperCase();
+  const offerExpiry = getOfferExpiry(offer);
+  const offerName = getOfferNameKey(offer);
   
   return existingOffers.find(existing => {
-    if (isInstantRewardOrCertificate(existing.offerCode, existing.offerName)) {
-      return false;
-    }
-
     const existingSource = resolveOfferSource(existing);
     if (!areSourcesCompatible(offerSource, existingSource)) {
       return false;
     }
+
+    const existingCode = (existing.offerCode || '').trim().toUpperCase();
+    const existingExpiry = getOfferExpiry(existing);
+    const existingName = getOfferNameKey(existing);
     
-    if (offer.offerCode && existing.offerCode && offer.offerCode === existing.offerCode) {
-      if (offer.shipName === existing.shipName && offer.sailingDate === existing.sailingDate) {
-        return true;
+    if (offerCode && existingCode && offerCode === existingCode) {
+      if (offerExpiry || existingExpiry) {
+        return offerExpiry === existingExpiry;
       }
+      if (offerName && existingName) {
+        return offerName === existingName;
+      }
+      return !isInstantRewardOrCertificate(offer.offerCode, offer.offerName) && !isInstantRewardOrCertificate(existing.offerCode, existing.offerName);
     }
     
     if (
@@ -371,6 +416,7 @@ function findMatchingCruise(
   const cruiseDate = normalizeSailDate(cruise.sailDate);
   const cruiseCabin = normalizeCabinType(cruise.cabinType);
   const cruiseOfferCode = (cruise.offerCode || '').trim().toUpperCase();
+  const cruiseOfferExpiry = normalizeSailDate(cruise.offerExpiry);
   const cruiseSource = resolveCruiseSource(cruise);
   
   return existingCruises.find(existing => {
@@ -383,6 +429,16 @@ function findMatchingCruise(
     const existingDate = normalizeSailDate(existing.sailDate);
     const existingCabin = normalizeCabinType(existing.cabinType);
     const existingOfferCode = (existing.offerCode || '').trim().toUpperCase();
+    const existingOfferExpiry = normalizeSailDate(existing.offerExpiry);
+    if (
+      cruiseOfferCode &&
+      existingOfferCode &&
+      cruiseOfferCode === existingOfferCode &&
+      (cruiseOfferExpiry || existingOfferExpiry) &&
+      cruiseOfferExpiry !== existingOfferExpiry
+    ) {
+      return false;
+    }
     
     // IMPORTANT: Two sailings on the same ship/date but with DIFFERENT offer codes are NOT duplicates
     // Each offer should create its own cruise entry
@@ -589,10 +645,13 @@ export function createSyncPreview(
   const dedupedBookedCruises = deduplicateExtractedCruises(extractedBookedCruises);
   console.log(`[SyncLogic] After dedup: ${dedupedBookedCruises.length} unique cruises from ${extractedBookedCruises.length} raw`);
 
-  // Filter out IN PROGRESS offers before transformation
   const filteredOffers = extractedOffers.filter(offer => {
-    if (isInProgressOffer(offer.offerCode, offer.offerName)) {
+    if (isInProgressOffer(offer.offerCode, offer.offerName, offer.offerStatus, offer.isInProgress)) {
       console.log(`[SyncLogic] Skipping IN PROGRESS offer: ${offer.offerCode} - ${offer.offerName}`);
+      return false;
+    }
+    if (syncSource !== 'carnival' && isEmptyOfferRow(offer)) {
+      console.log(`[SyncLogic] Skipping offer without available sailings: ${offer.offerCode} - ${offer.offerName}`);
       return false;
     }
     return true;
@@ -613,12 +672,6 @@ export function createSyncPreview(
   const offersUnchanged: CasinoOffer[] = [];
 
   for (const offer of transformedOffers) {
-    // Skip IN PROGRESS offers during sync
-    if (isInProgressOffer(offer.offerCode, offer.offerName)) {
-      console.log(`[SyncLogic] Skipping IN PROGRESS offer in sync: ${offer.offerCode}`);
-      continue;
-    }
-    
     const match = findMatchingOffer(offer, normalizedExistingOffers);
     if (match) {
       const merged = mergeOffer(match, offer);
@@ -743,15 +796,14 @@ export function createSyncPreview(
 }
 
 export function calculateSyncCounts(preview: SyncPreview): SyncPreviewCounts {
-  // Count upcoming cruises - include new, updated, AND unchanged that are NOT courtesy holds
   const allBookedCruises = [
     ...preview.bookedCruises.new,
     ...preview.bookedCruises.updates.map(u => u.updated),
     ...preview.bookedCruises.unchanged,
   ];
 
-  const upcomingCruises = allBookedCruises.filter(c => !c.isCourtesyHold).length;
-  const courtesyHolds = allBookedCruises.filter(c => c.isCourtesyHold === true).length;
+  const upcomingCruises = allBookedCruises.filter(c => isActiveBookedCruise(c)).length;
+  const courtesyHolds = allBookedCruises.filter(c => isCourtesyHoldCruise(c)).length;
   
   console.log('[SyncLogic] calculateSyncCounts:', {
     newCruises: preview.bookedCruises.new.length,

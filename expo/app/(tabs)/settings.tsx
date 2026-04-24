@@ -52,6 +52,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME, SHADOW } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { isDateInPast } from '@/lib/date';
+import { isActiveBookedCruise, isCompletedBookedCruise } from '@/lib/bookedCruiseStatus';
 import { useAppState } from '@/state/AppStateProvider';
 import { useUser } from '@/state/UserProvider';
 import { 
@@ -358,8 +359,8 @@ export default function SettingsScreen() {
     });
     
     const allBooked = bookedCruises.length > 0 ? bookedCruises : (localData.booked || []);
-    const upcoming = allBooked.filter(c => !isDateInPast(c.returnDate)).length;
-    const completed = allBooked.filter(c => isDateInPast(c.returnDate)).length;
+    const upcoming = allBooked.filter(c => isActiveBookedCruise(c)).length;
+    const completed = allBooked.filter(c => isCompletedBookedCruise(c)).length;
     const generatedCalendarEvents = getCalendarEventsWithGeneratedCruiseEvents(
       allBooked,
       [...(localData.calendar || []), ...(localData.tripit || [])]
@@ -367,7 +368,7 @@ export default function SettingsScreen() {
 
     return {
       cruises: cruises.length || localData.cruises?.length || 0,
-      booked: allBooked.length,
+      booked: upcoming,
       upcoming,
       completed,
       sailings: allOffers.length,

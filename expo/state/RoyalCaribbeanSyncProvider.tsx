@@ -25,6 +25,7 @@ import { injectCarnivalOffersExtraction, injectCarnivalBookingsScrape, injectCar
 import { createSyncPreview, calculateSyncCounts, applySyncPreview } from '@/lib/royalCaribbean/syncLogic';
 import { parseCasinoOffersPayload } from '@/lib/royalCaribbean/offerPayloadParser';
 import { healImportedData } from '@/lib/dataHealing';
+import { isActiveBookedCruise, isCourtesyHoldCruise } from '@/lib/bookedCruiseStatus';
 
 export type CruiseLine = 'royal_caribbean' | 'celebrity' | 'carnival';
 
@@ -242,6 +243,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         destinationName: stringifyValue(row.destinationName) || undefined,
         totalNights: typeof row.totalNights === 'number' && Number.isFinite(row.totalNights) ? row.totalNights : undefined,
         bookingLink: stringifyValue(row.bookingLink) || undefined,
+        offerStatus: stringifyValue(row.offerStatus) || undefined,
+        isInProgress: row.isInProgress === true,
       };
 
       const dedupeKey = [
@@ -1517,14 +1520,27 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       setState(prev => {
         const offersByName = new Map<string, number>();
+        let totalSailings = 0;
         prev.extractedOffers.forEach(offer => {
-          const key = offer.offerCode || offer.offerName || 'Unknown';
-          offersByName.set(key, (offersByName.get(key) || 0) + 1);
+          const status = (offer.offerStatus || '').toLowerCase().replace(/[\s_-]+/g, ' ');
+          const isInProgress = offer.isInProgress === true || status.includes('in progress') || status.includes('pending') || status.includes('processing') || status.includes('earning');
+          const hasSailing = Boolean(offer.shipName || offer.sailingDate);
+          if (!isInProgress && hasSailing) {
+            const key = [offer.offerCode || offer.offerName || 'Unknown', offer.offerExpirationDate || ''].join('|');
+            offersByName.set(key, (offersByName.get(key) || 0) + 1);
+            totalSailings += 1;
+          }
         });
         const uniqueOffers = offersByName.size;
-        const totalSailings = prev.extractedOffers.length;
+        const hiddenInProgress = prev.extractedOffers.filter(offer => {
+          const status = (offer.offerStatus || '').toLowerCase().replace(/[\s_-]+/g, ' ');
+          return offer.isInProgress === true || status.includes('in progress') || status.includes('pending') || status.includes('processing') || status.includes('earning') || (!offer.shipName && !offer.sailingDate);
+        }).length;
         
-        addLog(`✅ STEP 1 COMPLETE: Captured ${uniqueOffers} casino offer(s) with ${totalSailings} total sailing(s)`, 'success');
+        addLog(`✅ STEP 1 COMPLETE: Captured ${uniqueOffers} active casino offer(s) with ${totalSailings} total sailing(s)`, 'success');
+        if (hiddenInProgress > 0) {
+          addLog(`ℹ️ Excluded ${hiddenInProgress} in-progress/empty offer row(s) from active offer counts`, 'info');
+        }
         
         return prev;
       });
@@ -2330,10 +2346,15 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         addLog(`Data healing fixed ${healingReport.fieldsFixed.length} field(s)`, 'info');
       }
 
+      const finalActiveBookedCruises = finalBookedCruises.filter(cruise => isActiveBookedCruise(cruise));
+      const finalCourtesyHolds = finalBookedCruises.filter(cruise => isCourtesyHoldCruise(cruise));
+
       console.log('[RoyalCaribbeanSync] Sync applied. Final counts:', {
         offers: finalOffers.length,
         cruises: finalCruises.length,
-        bookedCruises: finalBookedCruises.length
+        bookedCruises: finalBookedCruises.length,
+        activeBookedCruises: finalActiveBookedCruises.length,
+        courtesyHolds: finalCourtesyHolds.length,
       });
 
       console.log('[RoyalCaribbeanSync] Step: Persisting offers...');
@@ -2365,7 +2386,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       }
 
       console.log('[RoyalCaribbeanSync] Step: Persisting booked cruises...');
-      addLog(`Setting ${finalBookedCruises.length} total booked cruises in app`, 'info');
+      addLog(`Setting ${finalActiveBookedCruises.length} active booked cruise(s) in app (${finalBookedCruises.length} total including history)`, 'info');
       try {
         console.log('[RoyalCaribbeanSync] Calling setBookedCruises()...');
         await coreDataContext.setBookedCruises(finalBookedCruises);
@@ -2570,8 +2591,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         syncCounts: {
           offerCount: prev.syncCounts?.offerCount ?? 0,
           offerRows: prev.syncCounts?.offerRows ?? 0,
-          upcomingCruises: counts.upcomingCruises,
-          courtesyHolds: counts.courtesyHolds
+          upcomingCruises: finalActiveBookedCruises.length,
+          courtesyHolds: finalCourtesyHolds.length
         }
       }));
       

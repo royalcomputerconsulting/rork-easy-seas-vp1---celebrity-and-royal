@@ -239,6 +239,11 @@ export function transformOfferRowsToCruisesAndOffers(
   const cruiseIdsByOfferKey = new Map<string, string[]>();
 
   for (const offer of offerRows) {
+    if (!offer.shipName?.trim() && !offer.sailingDate?.trim() && source !== 'carnival') {
+      console.log(`[DataTransformer] Skipping offer-level row without sailings: ${offer.offerCode || offer.offerName || 'unknown'}`);
+      continue;
+    }
+
     const cruiseId = generateId();
     const sailDate = parseDate(offer.sailingDate);
     const offerExpiryDate = parseDate(offer.offerExpirationDate);
@@ -299,11 +304,14 @@ export function transformOfferRowsToCruisesAndOffers(
 
     cruises.push(cruise);
 
-    const offerKey = (
-      offer.offerCode ||
-      offer.offerName ||
-      `${offer.shipName || 'unknown'}|${sailDate || 'unknown'}|${offer.itinerary || 'unknown'}`
-    ).trim();
+    const offerCodeKey = (offer.offerCode || '').trim().toUpperCase();
+    const offerNameKey = (offer.offerName || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    const offerExpiryKey = (offerExpiryDate || offer.offerExpirationDate || '').trim();
+    const offerKey = [
+      source,
+      offerCodeKey || offerNameKey || `${offer.shipName || 'unknown'}|${sailDate || 'unknown'}|${offer.itinerary || 'unknown'}`,
+      offerExpiryKey,
+    ].join('|');
 
     if (!offerMap.has(offerKey)) {
       const displayName = offer.offerName && offer.offerName.trim() && offer.offerName !== offer.offerCode

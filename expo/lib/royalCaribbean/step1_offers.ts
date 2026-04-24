@@ -1,7 +1,6 @@
 export const STEP1_OFFERS_SCRIPT = String.raw`
 (function() {
   const BATCH_SIZE = 150;
-  const PRICING_BATCH_SIZE = 10;
   const MAX_BATCH_CHARS = 120000;
   
   function wait(ms) {
@@ -88,7 +87,7 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
     if (val === null || val === undefined) return '';
     if (typeof val === 'string') return val;
     if (typeof val === 'object') {
-      return val.name || val.description || val.code || val.text || '';
+      return val.name || val.description || val.code || val.text || val.title || val.value || '';
     }
     return String(val);
   }
@@ -99,77 +98,48 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
 
   function getDateParts(dateStr) {
     if (!dateStr) return null;
-
     const normalized = String(dateStr).trim();
-
     let match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s].*)?$/);
     if (match) {
-      return {
-        year: parseInt(match[1], 10),
-        month: parseInt(match[2], 10),
-        day: parseInt(match[3], 10),
-      };
+      return { year: parseInt(match[1], 10), month: parseInt(match[2], 10), day: parseInt(match[3], 10) };
     }
-
     match = normalized.match(/^(\d{4})(\d{2})(\d{2})$/);
     if (match) {
-      return {
-        year: parseInt(match[1], 10),
-        month: parseInt(match[2], 10),
-        day: parseInt(match[3], 10),
-      };
+      return { year: parseInt(match[1], 10), month: parseInt(match[2], 10), day: parseInt(match[3], 10) };
     }
-
     match = normalized.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
     if (match) {
       const year = match[3].length === 2 ? 2000 + parseInt(match[3], 10) : parseInt(match[3], 10);
-      return {
-        year: year,
-        month: parseInt(match[1], 10),
-        day: parseInt(match[2], 10),
-      };
+      return { year: year, month: parseInt(match[1], 10), day: parseInt(match[2], 10) };
     }
-
     try {
       const date = new Date(normalized);
       if (!isNaN(date.getTime())) {
-        return {
-          year: date.getFullYear(),
-          month: date.getMonth() + 1,
-          day: date.getDate(),
-        };
+        return { year: date.getFullYear(), month: date.getMonth() + 1, day: date.getDate() };
       }
-    } catch (e) {
-    }
-
+    } catch (e) {}
     return null;
   }
 
   function formatDate(dateStr) {
     if (!dateStr) return '';
-
     const parts = getDateParts(dateStr);
     if (!parts) return dateStr;
-
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return months[parts.month - 1] + ' ' + parts.day + ', ' + parts.year;
   }
 
   function formatSailDate(dateStr) {
     if (!dateStr) return '';
-
     const parts = getDateParts(dateStr);
     if (!parts) return dateStr;
-
     return pad2(parts.month) + '/' + pad2(parts.day) + '/' + parts.year;
   }
 
   function toISODate(dateStr) {
     if (!dateStr) return '';
-
     const parts = getDateParts(dateStr);
     if (!parts) return dateStr;
-
     return parts.year + '-' + pad2(parts.month) + '-' + pad2(parts.day);
   }
 
@@ -183,10 +153,35 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
 
   function normalizeOffersApiResponse(data) {
     const base = data && typeof data === 'object' && !Array.isArray(data) ? data : {};
-    return {
-      ...base,
-      offers: extractOffersArray(data)
-    };
+    return { ...base, offers: extractOffersArray(data) };
+  }
+
+  function getOfferStatus(co, offer) {
+    return safeStr(
+      co?.status ||
+      co?.offerStatus ||
+      co?.redemptionStatus ||
+      co?.progressStatus ||
+      co?.state ||
+      offer?.status ||
+      offer?.offerStatus ||
+      offer?.redemptionStatus ||
+      offer?.progressStatus ||
+      offer?.state ||
+      ''
+    );
+  }
+
+  function isOfferInProgress(co, offer) {
+    if (co?.isInProgress || co?.inProgress || co?.isPending || offer?.isInProgress || offer?.inProgress || offer?.isPending) {
+      return true;
+    }
+    const status = getOfferStatus(co, offer).toLowerCase().replace(/[\s_-]+/g, ' ').trim();
+    if (status.includes('in progress') || status.includes('pending') || status.includes('processing') || status.includes('earning')) {
+      return true;
+    }
+    const code = String(co?.offerCode || '').trim().toUpperCase();
+    return code === '2601C05' || code === '2601A05';
   }
 
   async function extractClubRoyaleStatus() {
@@ -225,32 +220,25 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
           log('Found Carnival session data in localStorage', 'success');
         }
       }
-      
       if (!sessionData) {
         throw new Error('No session data found. Please log in again.');
       }
-      
       const parsedData = JSON.parse(sessionData);
       const authToken = parsedData.token ? JSON.parse(parsedData.token) : null;
       const tokenExpiration = parsedData.tokenExpiration ? parseInt(parsedData.tokenExpiration) * 1000 : null;
       const user = parsedData.user ? JSON.parse(parsedData.user) : null;
       const accountId = user && user.accountId ? user.accountId : null;
       const loyaltyId = user && user.cruiseLoyaltyId ? user.cruiseLoyaltyId : null;
-      
       if (!authToken || !accountId) {
         throw new Error('Invalid session data. Please log in again.');
       }
-      
       const currentTime = Date.now();
       if (tokenExpiration && tokenExpiration < currentTime) {
         throw new Error('Session expired. Please log in again.');
       }
-      
       log('Session data parsed successfully', 'success');
-      
       const rawAuth = authToken && authToken.toString ? authToken.toString() : '';
       const networkAuth = rawAuth ? (rawAuth.startsWith('Bearer ') ? rawAuth : 'Bearer ' + rawAuth) : '';
-      
       const headers = {
         'accept': 'application/json',
         'accept-language': 'en-US,en;q=0.9',
@@ -258,11 +246,8 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
         'authorization': networkAuth,
         'content-type': 'application/json',
       };
-      
-      const host2 = location && location.hostname ? location.hostname : '';
-      const brandCode = host2.includes('celebritycruises.com') ? 'C' : (host2.includes('carnival.com') ? 'N' : 'R');
+      const brandCode = host.includes('celebritycruises.com') ? 'C' : (host.includes('carnival.com') ? 'N' : 'R');
       const baseUrl = brandCode === 'C' ? 'https://www.celebritycruises.com' : (brandCode === 'N' ? 'https://www.carnival.com' : 'https://www.royalcaribbean.com');
-      
       return { headers, accountId, loyaltyId, brandCode, baseUrl, user };
     } catch (error) {
       log('Failed to get auth context: ' + error.message, 'error');
@@ -273,9 +258,7 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
   async function fetchPricingAndItinerary(baseUrl, shipCode, minDate, maxDate, count) {
     const endpoint = baseUrl + '/graph';
     const query = 'query cruiseSearch_Cruises($filters:String,$qualifiers:String,$sort:CruiseSearchSort,$pagination:CruiseSearchPagination,$nlSearch:String){cruiseSearch(filters:$filters,qualifiers:$qualifiers,sort:$sort,pagination:$pagination,nlSearch:$nlSearch){results{cruises{id productViewLink masterSailing{itinerary{name code days{number type ports{activity arrivalTime departureTime port{code name region}}}departurePort{code name region}destination{code name}portSequence sailingNights ship{code name}totalNights type}}sailings{bookingLink id itinerary{code}sailDate startDate endDate taxesAndFees{value}taxesAndFeesIncluded stateroomClassPricing{price{value currency{code}}stateroomClass{id content{code}}}}}cruiseRecommendationId total}}}';
-    
     const filtersValue = 'startDate:' + minDate + '~' + maxDate + '|ship:' + shipCode;
-    
     try {
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -286,19 +269,11 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
           'apollographql-query-name': 'cruiseSearch_Cruises',
           'skip_authentication': 'true'
         },
-        body: JSON.stringify({
-          query: query,
-          variables: {
-            filters: filtersValue,
-            pagination: { count: count, skip: 0 }
-          }
-        })
+        body: JSON.stringify({ query: query, variables: { filters: filtersValue, pagination: { count: count, skip: 0 } } })
       });
-      
       if (!response.ok) {
         return null;
       }
-      
       const data = await response.json();
       return data?.data?.cruiseSearch?.results?.cruises || [];
     } catch (error) {
@@ -319,12 +294,10 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
       bookingLink: '',
       portList: ''
     };
-    
     try {
       const itin = cruise?.masterSailing?.itinerary || {};
       result.destinationName = itin?.destination?.name || '';
       result.totalNights = itin?.totalNights || itin?.sailingNights || null;
-      
       if (Array.isArray(itin?.days)) {
         result.dayByDayItinerary = itin.days.map(day => ({
           day: day.number || 0,
@@ -334,24 +307,20 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
           arrivalTime: day.ports?.[0]?.arrivalTime || '',
           departureTime: day.ports?.[0]?.departureTime || ''
         }));
-        
         const portNames = itin.days
           .filter(d => d.ports && d.ports.length > 0)
           .map(d => d.ports[0]?.port?.name)
           .filter(n => n);
         result.portList = [...new Set(portNames)].join(', ');
       }
-      
       const sailings = cruise?.sailings || [];
       const targetDate = toISODate(sailDate);
       const matchingSailing = sailings.find(s => {
         const sSailDate = (s.sailDate || '').toString().trim().slice(0, 10);
         return sSailDate === targetDate;
       }) || sailings[0];
-      
       if (matchingSailing) {
         result.bookingLink = matchingSailing.bookingLink || '';
-        
         const taxVal = matchingSailing.taxesAndFees?.value;
         if (taxVal !== undefined && taxVal !== null) {
           const taxNum = Number(taxVal);
@@ -359,22 +328,18 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
             result.taxesAndFees = '$' + (taxNum * 2).toFixed(2);
           }
         }
-        
         const categoryMap = {
           'I': 'interior', 'IN': 'interior', 'INT': 'interior', 'INSIDE': 'interior', 'INTERIOR': 'interior',
-          'O': 'oceanview', 'OV': 'oceanview', 'OB': 'oceanview', 'E': 'oceanview', 'OCEAN': 'oceanview', 
+          'O': 'oceanview', 'OV': 'oceanview', 'OB': 'oceanview', 'E': 'oceanview', 'OCEAN': 'oceanview',
           'OCEANVIEW': 'oceanview', 'OUTSIDE': 'oceanview',
           'B': 'balcony', 'BAL': 'balcony', 'BK': 'balcony', 'BALCONY': 'balcony',
           'D': 'suite', 'DLX': 'suite', 'DELUXE': 'suite', 'JS': 'suite', 'SU': 'suite', 'SUITE': 'suite'
         };
-        
         const categoryPrices = { interior: null, oceanview: null, balcony: null, suite: null };
-        
         if (Array.isArray(matchingSailing.stateroomClassPricing)) {
           for (const pricing of matchingSailing.stateroomClassPricing) {
             const code = (pricing?.stateroomClass?.content?.code || pricing?.stateroomClass?.id || '').toString().trim().toUpperCase();
             const priceVal = pricing?.price?.value;
-            
             if (code && priceVal !== undefined && priceVal !== null) {
               const category = categoryMap[code];
               if (category) {
@@ -386,115 +351,69 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
             }
           }
         }
-        
         if (categoryPrices.interior !== null) result.interiorPrice = '$' + categoryPrices.interior.toFixed(2);
         if (categoryPrices.oceanview !== null) result.oceanviewPrice = '$' + categoryPrices.oceanview.toFixed(2);
         if (categoryPrices.balcony !== null) result.balconyPrice = '$' + categoryPrices.balcony.toFixed(2);
         if (categoryPrices.suite !== null) result.suitePrice = '$' + categoryPrices.suite.toFixed(2);
       }
-    } catch (e) {
-    }
-    
+    } catch (e) {}
     return result;
   }
 
   async function fetchOffersFromAPI(authContext) {
     try {
       log('🔌 Using API-based offer extraction (more reliable)...');
-      
       const { headers, loyaltyId, brandCode, baseUrl } = authContext;
-      
       const endpoint = baseUrl + (brandCode === 'C' ? '/api/casino/casino-offers/v2' : '/api/casino/casino-offers/v1');
       const apiBrandCode = brandCode === 'N' ? 'CCL' : brandCode;
       const brandLabel = brandCode === 'C' ? 'Celebrity' : (brandCode === 'N' ? 'Carnival' : 'Royal Caribbean');
-      
       log('📡 Calling ' + brandLabel + ' Casino Offers API...');
       log('Endpoint: ' + endpoint);
-      
-      const requestBody = {
-        cruiseLoyaltyId: loyaltyId,
-        offerCode: '',
-        brand: apiBrandCode
-      };
-      
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'progress',
-        current: 0,
-        total: 100,
-        stepName: 'Fetching offers from API...'
-      }));
-      
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: headers,
-        credentials: 'omit',
-        body: JSON.stringify(requestBody)
-      });
-      
+      const requestBody = { cruiseLoyaltyId: loyaltyId, offerCode: '', brand: apiBrandCode };
+      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'progress', current: 0, total: 100, stepName: 'Fetching offers from API...' }));
+      const response = await fetch(endpoint, { method: 'POST', headers: headers, credentials: 'omit', body: JSON.stringify(requestBody) });
       log('API response status: ' + response.status);
-      
       if (response.status === 403) {
         throw new Error('Session expired (403). Please log in again.');
       }
-      
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error('API error: ' + response.status + ' - ' + errorText);
       }
-      
       const rawData = await response.json();
       const data = normalizeOffersApiResponse(rawData);
-      
       if (!Array.isArray(data.offers)) {
         throw new Error('Invalid API response format');
       }
-
       if (!Array.isArray(rawData?.offers) && Array.isArray(data.offers)) {
         log('ℹ️ Normalized casino offers from nested API payload', 'info');
       }
-      
       log('✅ API returned ' + data.offers.length + ' offers', 'success');
-      
-      const offersWithEmptySailings = data.offers.filter(o => 
-        o?.campaignOffer?.offerCode && 
-        Array.isArray(o.campaignOffer.sailings) && 
-        (o.campaignOffer.sailings.length === 0 || (o.campaignOffer.sailings[0] && o.campaignOffer.sailings[0].itineraryCode === null))
+      const offersWithEmptySailings = data.offers.filter(o =>
+        o?.campaignOffer?.offerCode &&
+        Array.isArray(o.campaignOffer.sailings) &&
+        (o.campaignOffer.sailings.length === 0 || (o.campaignOffer.sailings[0] && o.campaignOffer.sailings[0].itineraryCode === null)) &&
+        !isOfferInProgress(o.campaignOffer, o)
       );
-      
       if (offersWithEmptySailings.length > 0) {
         log('🔄 Refetching ' + offersWithEmptySailings.length + ' offers with empty/incomplete sailings...');
-        
         for (let offerIndex = 0; offerIndex < offersWithEmptySailings.length; offerIndex += 1) {
           const offer = offersWithEmptySailings[offerIndex];
           const code = offer.campaignOffer.offerCode.trim();
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'progress',
-            current: offerIndex + 1,
-            total: offersWithEmptySailings.length,
-            stepName: 'Refetching full sailing lists...'
-          }));
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'progress', current: offerIndex + 1, total: offersWithEmptySailings.length, stepName: 'Refetching full sailing lists...' }));
           log('  Refetching offer: ' + code + ' (' + (offerIndex + 1) + '/' + offersWithEmptySailings.length + ')');
-          
           try {
             const refetchBody = { ...requestBody, offerCode: code };
-            const refetchResponse = await fetch(endpoint, {
-              method: 'POST',
-              headers: headers,
-              credentials: 'omit',
-              body: JSON.stringify(refetchBody)
-            });
-            
+            const refetchResponse = await fetch(endpoint, { method: 'POST', headers: headers, credentials: 'omit', body: JSON.stringify(refetchBody) });
             if (refetchResponse.ok) {
               const refetchRawData = await refetchResponse.json();
               const refetchData = normalizeOffersApiResponse(refetchRawData);
               const refreshedOffer = refetchData.offers?.find(o => o?.campaignOffer?.offerCode === code);
-              
               if (refreshedOffer?.campaignOffer?.sailings?.length > 0) {
-                const originalIdx = data.offers.findIndex(o => o?.campaignOffer?.offerCode === code);
+                const originalIdx = data.offers.indexOf(offer);
                 if (originalIdx !== -1) {
                   const origSailings = data.offers[originalIdx].campaignOffer.sailings || [];
                   const newSailings = refreshedOffer.campaignOffer.sailings;
-                  
                   const sailingMap = new Map();
                   origSailings.forEach(s => {
                     const key = (s.shipCode || '') + '|' + (s.sailDate || '');
@@ -504,7 +423,6 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
                     const key = (s.shipCode || '') + '|' + (s.sailDate || '');
                     if (key !== '|') sailingMap.set(key, s);
                   });
-                  
                   data.offers[originalIdx].campaignOffer.sailings = Array.from(sailingMap.values());
                   log('  ✓ Updated ' + code + ': now has ' + data.offers[originalIdx].campaignOffer.sailings.length + ' sailings', 'success');
                 }
@@ -513,11 +431,9 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
           } catch (refetchErr) {
             log('  ⚠️ Failed to refetch ' + code + ': ' + refetchErr.message, 'warning');
           }
-          
           await wait(300);
         }
       }
-      
       return data;
     } catch (error) {
       log('Casino Offers API fetch failed: ' + error.message, 'error');
@@ -529,9 +445,7 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
     if (!SCRAPE_PRICING_AND_ITINERARY || allOfferRows.length === 0) {
       return allOfferRows;
     }
-    
     log('💰 Fetching stateroom pricing, taxes & day-by-day itinerary...', 'info');
-    
     const shipDateMap = new Map();
     allOfferRows.forEach((row, idx) => {
       if (row.shipCode && row.sailingDate) {
@@ -545,14 +459,11 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
         }
       }
     });
-    
     const uniqueSailings = Array.from(shipDateMap.values());
     log('📊 Found ' + uniqueSailings.length + ' unique ship/date combinations to enrich', 'info');
-    
     if (uniqueSailings.length === 0) {
       return allOfferRows;
     }
-    
     const shipGroups = {};
     uniqueSailings.forEach(s => {
       if (!shipGroups[s.shipCode]) {
@@ -563,28 +474,13 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
       if (!group.minDate || s.sailDate < group.minDate) group.minDate = s.sailDate;
       if (!group.maxDate || s.sailDate > group.maxDate) group.maxDate = s.sailDate;
     });
-    
     const groups = Object.values(shipGroups);
     let processedCount = 0;
     const totalCount = uniqueSailings.length;
-    
     for (const group of groups) {
       try {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'progress',
-          current: processedCount,
-          total: totalCount,
-          stepName: 'Fetching pricing for ' + group.shipCode + '...'
-        }));
-        
-        const cruises = await fetchPricingAndItinerary(
-          baseUrl, 
-          group.shipCode, 
-          group.minDate, 
-          group.maxDate, 
-          group.sailings.length * 3
-        );
-        
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'progress', current: processedCount, total: totalCount, stepName: 'Fetching pricing for ' + group.shipCode + '...' }));
+        const cruises = await fetchPricingAndItinerary(baseUrl, group.shipCode, group.minDate, group.maxDate, group.sailings.length * 3);
         if (cruises && cruises.length > 0) {
           const cruiseByDate = {};
           cruises.forEach(cruise => {
@@ -596,12 +492,10 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
               }
             });
           });
-          
           for (const sailing of group.sailings) {
             const cruise = cruiseByDate[sailing.sailDate];
             if (cruise) {
               const pricingData = extractPricingFromCruise(cruise, sailing.sailDate);
-              
               for (const idx of sailing.indices) {
                 const row = allOfferRows[idx];
                 if (!row.interiorPrice && pricingData.interiorPrice) row.interiorPrice = pricingData.interiorPrice;
@@ -617,54 +511,47 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
                   row.dayByDayItinerary = pricingData.dayByDayItinerary;
                 }
               }
-              
               processedCount += sailing.indices.length;
             } else {
               processedCount += sailing.indices.length;
             }
           }
-          
           log('  ✓ Enriched ' + group.sailings.length + ' sailing(s) for ship ' + group.shipCode, 'success');
         } else {
           processedCount += group.sailings.reduce((sum, s) => sum + s.indices.length, 0);
           log('  ⚠️ No pricing data found for ship ' + group.shipCode, 'warning');
         }
-        
         await wait(200);
       } catch (err) {
         processedCount += group.sailings.reduce((sum, s) => sum + s.indices.length, 0);
         log('  ⚠️ Error fetching pricing for ' + group.shipCode + ': ' + err.message, 'warning');
       }
     }
-    
     const enrichedCount = allOfferRows.filter(r => r.interiorPrice || r.oceanviewPrice || r.balconyPrice || r.suitePrice).length;
     log('✅ Pricing enrichment complete: ' + enrichedCount + '/' + allOfferRows.length + ' sailings have pricing data', 'success');
-    
     return allOfferRows;
   }
 
   function processAPIResponse(data, scrapePricing) {
     const allOfferRows = [];
     let totalSailings = 0;
-    
     if (!data || !Array.isArray(data.offers)) {
       return { offerRows: allOfferRows, offerCount: 0, totalSailings: 0 };
     }
-    
     const validOffers = data.offers.filter(o => o && o.campaignOffer);
-    
+    const host = location && location.hostname ? location.hostname : '';
+    const defaultOfferType = host.includes('celebritycruises.com') ? 'Blue Chip Club' : 'Club Royale';
     log('📊 Processing ' + validOffers.length + ' offers from API response...');
-    
     for (let i = 0; i < validOffers.length; i++) {
       const offer = validOffers[i];
       const co = offer.campaignOffer;
-      
       const offerName = co.name || '';
       const offerCode = co.offerCode || '';
       const offerExpiry = formatDate(co.reserveByDate);
       const tradeInValue = co.tradeInValue ? '$' + Number(co.tradeInValue).toFixed(2) : '';
       const perks = tradeInValue ? 'Trade-in value: ' + tradeInValue : '';
-      
+      const offerStatus = getOfferStatus(co, offer);
+      const offerIsInProgress = isOfferInProgress(co, offer);
       log('━━━━━ Offer ' + (i + 1) + '/' + validOffers.length + ' ━━━━━');
       log('  Offer Name: ' + offerName);
       log('  Offer Code: ' + (offerCode || '[NOT FOUND]'), offerCode ? 'info' : 'warning');
@@ -672,18 +559,18 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
       if (tradeInValue) {
         log('  Trade-in Value: ' + tradeInValue);
       }
-      
+      if (offerStatus) {
+        log('  Status: ' + offerStatus, offerIsInProgress ? 'warning' : 'info');
+      }
       const sailings = co.sailings || [];
-      
       if (sailings.length === 0) {
         log('  ⚠️ No sailings available for this offer', 'warning');
-        
         allOfferRows.push({
-          sourcePage: 'Offers',
+          sourcePage: defaultOfferType === 'Blue Chip Club' ? 'Blue Chip Club Offers' : 'Offers',
           offerName: offerName,
           offerCode: offerCode,
           offerExpirationDate: offerExpiry,
-          offerType: 'Club Royale',
+          offerType: defaultOfferType,
           shipName: '',
           shipCode: '',
           sailingDate: '',
@@ -703,19 +590,17 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
           dayByDayItinerary: [],
           destinationName: '',
           totalNights: null,
-          bookingLink: ''
+          bookingLink: '',
+          offerStatus: offerStatus || 'No sailings available',
+          isInProgress: true
         });
         totalSailings++;
-        
         sendOfferProgress(i + 1, validOffers.length, offerName, 0, 'complete');
         continue;
       }
-      
       log('  📜 Processing ' + sailings.length + ' sailings...');
       sendOfferProgress(i + 1, validOffers.length, offerName, 0, 'processing');
-      
       let offerSailingCount = 0;
-      
       for (let sailingIndex = 0; sailingIndex < sailings.length; sailingIndex += 1) {
         const sailing = sailings[sailingIndex];
         const shipName = sailing.shipName || '';
@@ -724,21 +609,17 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
         const departurePort = safeStr(sailing.departurePort?.name || sailing.departurePortName || sailing.departurePort || '');
         const itinerary = safeStr(sailing.itineraryDescription || sailing.sailingType?.name || sailing.sailingType || '');
         const cabinType = safeStr(sailing.roomType || sailing.stateroomType || '');
-        
         const isGOBO = sailing.isGOBO || co.isGOBO || false;
         const numberOfGuests = isGOBO ? '1' : '2';
-        
         let interiorPrice = '';
         let oceanviewPrice = '';
         let balconyPrice = '';
         let suitePrice = '';
-        
         if (sailing.pricing && Array.isArray(sailing.pricing)) {
           for (const priceInfo of sailing.pricing) {
             const type = (priceInfo.roomType || priceInfo.cabinType || '').toLowerCase();
             const price = priceInfo.price || priceInfo.amount || priceInfo.rate;
             const priceStr = price ? '$' + Number(price).toFixed(2) : '';
-            
             if (type.includes('interior') || type.includes('inside')) {
               interiorPrice = priceStr;
             } else if (type.includes('oceanview') || type.includes('ocean view')) {
@@ -750,16 +631,14 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
             }
           }
         }
-        
         const ports = sailing.ports || sailing.itinerary?.ports || [];
         const portList = Array.isArray(ports) ? ports.map(p => p.name || p.portName || '').filter(n => n).join(', ') : '';
-        
         allOfferRows.push({
-          sourcePage: 'Offers',
+          sourcePage: defaultOfferType === 'Blue Chip Club' ? 'Blue Chip Club Offers' : 'Offers',
           offerName: offerName,
           offerCode: offerCode,
           offerExpirationDate: offerExpiry,
-          offerType: 'Club Royale',
+          offerType: defaultOfferType,
           shipName: shipName,
           shipCode: shipCode,
           sailingDate: sailDate,
@@ -779,114 +658,75 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
           dayByDayItinerary: [],
           destinationName: '',
           totalNights: null,
-          bookingLink: ''
+          bookingLink: '',
+          offerStatus: offerStatus,
+          isInProgress: offerIsInProgress
         });
-        
         totalSailings++;
         offerSailingCount++;
-        
         if (totalSailings % BATCH_SIZE === 0 || offerSailingCount === 1 || offerSailingCount === sailings.length || offerSailingCount % 100 === 0) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'progress',
-            current: totalSailings,
-            total: Math.max(totalSailings, validOffers.length),
-            stepName: 'Processing offers...'
-          }));
-          sendOfferProgress(
-            i + 1,
-            validOffers.length,
-            offerName,
-            offerSailingCount,
-            offerSailingCount === sailings.length ? 'parsed' : 'processing'
-          );
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'progress', current: totalSailings, total: Math.max(totalSailings, validOffers.length), stepName: 'Processing offers...' }));
+          sendOfferProgress(i + 1, validOffers.length, offerName, offerSailingCount, offerSailingCount === sailings.length ? 'parsed' : 'processing');
         }
-        
         if (offerSailingCount % 100 === 0) {
           log('    ✓ Processed ' + offerSailingCount + '/' + sailings.length + ' sailings (' + totalSailings + ' total)');
         }
       }
-      
       sendOfferProgress(i + 1, validOffers.length, offerName, offerSailingCount, 'complete');
       log('Offer ' + (i + 1) + '/' + validOffers.length + ' (' + offerName + '): ' + offerSailingCount + ' sailings - complete', 'success');
       log('  ✓ Offer complete: ' + offerSailingCount + ' sailings added', 'success');
     }
-    
     return { offerRows: allOfferRows, offerCount: validOffers.length, totalSailings };
   }
 
   async function extractOffers() {
     try {
       log('Extracting Club Royale data...');
-      
       await extractClubRoyaleStatus();
-      
       log('Loading Club Royale Offers page...');
       await wait(2000);
-      
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'progress',
-        current: 0,
-        total: 100,
-        stepName: 'Authenticating and fetching all data...'
-      }));
-      
+      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'progress', current: 0, total: 100, stepName: 'Authenticating and fetching all data...' }));
       const authContext = await getAuthContext();
-      
       const offersData = await fetchOffersFromAPI(authContext);
-      
-      let { offerRows, offerCount, totalSailings } = processAPIResponse(offersData, SCRAPE_PRICING_AND_ITINERARY);
-      
+      let { offerRows, offerCount } = processAPIResponse(offersData, SCRAPE_PRICING_AND_ITINERARY);
       if (SCRAPE_PRICING_AND_ITINERARY && offerRows.length > 0) {
         log('🔄 Starting pricing and itinerary enrichment...', 'info');
         offerRows = await enrichWithPricingData(offerRows, authContext.baseUrl);
       }
-      
       sendOfferRowsInChunks(offerRows, offerCount);
-      
       log('✓ Extracted ' + offerRows.length + ' offer rows from ' + offerCount + ' offer(s)', 'success');
-      
       if (SCRAPE_PRICING_AND_ITINERARY) {
         const withPricing = offerRows.filter(r => r.interiorPrice || r.oceanviewPrice || r.balconyPrice || r.suitePrice).length;
         const withItinerary = offerRows.filter(r => r.dayByDayItinerary && r.dayByDayItinerary.length > 0).length;
         const withTaxes = offerRows.filter(r => r.taxesAndFees).length;
         log('📊 Enrichment summary: ' + withPricing + ' with pricing, ' + withItinerary + ' with day-by-day itinerary, ' + withTaxes + ' with taxes/fees', 'success');
       }
-      
     } catch (error) {
       log('❌ API extraction failed: ' + error.message, 'error');
       log('Attempting fallback to DOM scraping...', 'warning');
-      
       await fallbackDOMExtraction();
     }
   }
 
   async function fallbackDOMExtraction() {
     log('🔄 Starting DOM-based fallback extraction...', 'warning');
-    
     const pageText = document.body.textContent || '';
-    
     let expectedOfferCount = 0;
     const featuredMatch = pageText.match(/Featured\\s+Offers?\\s*\\((\\d+)\\)/i);
     const moreMatch = pageText.match(/More\\s+Offers?\\s*\\((\\d+)\\)/i);
-    
     if (featuredMatch) expectedOfferCount += parseInt(featuredMatch[1], 10);
     if (moreMatch) expectedOfferCount += parseInt(moreMatch[1], 10);
-    
     log('Expected offers from page: ' + expectedOfferCount);
-    
     const viewSailingsButtons = Array.from(document.querySelectorAll('button, a, [role="button"]')).filter(el => {
       const text = (el.textContent || '').trim().toLowerCase();
       return text.includes('view sailing') || text.includes('see sailing');
     });
-    
     if (viewSailingsButtons.length === 0) {
       log('No offers found on page', 'warning');
       sendOfferBatch([], true, 0, 0);
       return;
     }
-    
     log('Found ' + viewSailingsButtons.length + ' View Sailings buttons');
-    
     const basicOffer = {
       sourcePage: 'Offers',
       offerName: 'Unknown Offer',
@@ -912,12 +752,12 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
       dayByDayItinerary: [],
       destinationName: '',
       totalNights: null,
-      bookingLink: ''
+      bookingLink: '',
+      offerStatus: 'Fallback extraction incomplete',
+      isInProgress: true
     };
-    
     sendOfferBatch([basicOffer], false);
     sendOfferBatch([], true, 1, viewSailingsButtons.length);
-    
     log('⚠️ DOM fallback completed with limited data. Please try again or check login status.', 'warning');
   }
 

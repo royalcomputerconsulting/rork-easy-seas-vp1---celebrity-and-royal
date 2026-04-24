@@ -48,6 +48,7 @@ import { AlertsManagerModal } from '@/components/AlertsManagerModal';
 import { AgentXAnalysisCard } from '@/components/AgentXAnalysisCard';
 import { QuickActionsFAB } from '@/components/ui/QuickActionsFAB';
 import { createDateFromString, getDaysUntil, isDateInPast, formatDate } from '@/lib/date';
+import { isActiveBookedCruise } from '@/lib/bookedCruiseStatus';
 import { MachineStrategyCard } from '@/components/MachineStrategyCard';
 import { CertificateExplorerModal } from '@/components/CertificateExplorerModal';
 
@@ -225,6 +226,10 @@ function OverviewScreenContent() {
   }, [offersData]);
 
   const bookedCruises = useMemo(() => allBookedCruises, [allBookedCruises]);
+
+  const activeBookedCruises = useMemo(() => {
+    return bookedCruises.filter((cruise: BookedCruise) => isActiveBookedCruise(cruise));
+  }, [bookedCruises]);
 
   const bookedCruiseIds = useMemo(() => {
     return new Set(bookedCruises.map((b: BookedCruise) => b.id));
@@ -646,7 +651,7 @@ function OverviewScreenContent() {
           onLogoutPress={handleLogoutPress}
           alertCount={summary.totalActive}
           availableCruises={availableCruisesCount}
-          bookedCruises={bookedCruises.length}
+          bookedCruises={activeBookedCruises.length}
           activeOffers={realActiveOffersCount}
           onCruisesPress={handleCruisesPress}
           onBookedPress={handleBookedPress}

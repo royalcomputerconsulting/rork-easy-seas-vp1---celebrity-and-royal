@@ -80,6 +80,37 @@ function getBoolean(value: unknown): boolean {
   return false;
 }
 
+function getOfferStatus(offer: UnknownRecord, entry: UnknownRecord): string {
+  return getString(
+    offer.status ??
+      offer.offerStatus ??
+      offer.redemptionStatus ??
+      offer.progressStatus ??
+      offer.state ??
+      entry.status ??
+      entry.offerStatus ??
+      entry.redemptionStatus ??
+      entry.progressStatus ??
+      entry.state
+  );
+}
+
+function isOfferInProgress(offer: UnknownRecord, entry: UnknownRecord): boolean {
+  if (
+    getBoolean(offer.isInProgress) ||
+    getBoolean(offer.inProgress) ||
+    getBoolean(offer.isPending) ||
+    getBoolean(entry.isInProgress) ||
+    getBoolean(entry.inProgress) ||
+    getBoolean(entry.isPending)
+  ) {
+    return true;
+  }
+
+  const status = getOfferStatus(offer, entry).toLowerCase().replace(/[\s_-]+/g, ' ').trim();
+  return status.includes('in progress') || status.includes('pending') || status.includes('processing') || status.includes('earning');
+}
+
 function getDateParts(value: string): { year: number; month: number; day: number } | null {
   const normalized = value.trim();
   if (!normalized) {
@@ -480,6 +511,8 @@ export function parseCasinoOffersPayload(
     const offerCode = getString(offer.offerCode ?? offer.marketingCouponCode ?? offer.code);
     const offerExpirationDate = formatDate(offer.reserveByDate ?? offer.expirationDate ?? offer.marketingEndDate);
     const offerType = getString(offer.type ?? offer.offerType) || defaultOfferType;
+    const offerStatus = getOfferStatus(offer, entry);
+    const isInProgress = isOfferInProgress(offer, entry);
     const tradeInValue = extractTradeInValue(offer);
     const perks = extractPerks(offer, tradeInValue);
     const bookingLink = getString(asRecord(offer.marketingUiAttributes)?.ctaLink ?? offer.bookingLink);
@@ -513,6 +546,8 @@ export function parseCasinoOffersPayload(
         destinationName: undefined,
         totalNights: undefined,
         bookingLink: bookingLink || undefined,
+        offerStatus: offerStatus || undefined,
+        isInProgress,
       });
       totalSailings += 1;
       return;
@@ -557,6 +592,8 @@ export function parseCasinoOffersPayload(
         destinationName: undefined,
         totalNights,
         bookingLink: getString(sailing.bookingLink ?? asRecord(sailing.marketingUiAttributes)?.ctaLink) || bookingLink || undefined,
+        offerStatus: offerStatus || undefined,
+        isInProgress,
       });
       totalSailings += 1;
     });
