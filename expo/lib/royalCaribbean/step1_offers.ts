@@ -464,9 +464,16 @@ export const STEP1_OFFERS_SCRIPT = `
       if (offersWithEmptySailings.length > 0) {
         log('🔄 Refetching ' + offersWithEmptySailings.length + ' offers with empty/incomplete sailings...');
         
-        for (const offer of offersWithEmptySailings) {
+        for (let offerIndex = 0; offerIndex < offersWithEmptySailings.length; offerIndex += 1) {
+          const offer = offersWithEmptySailings[offerIndex];
           const code = offer.campaignOffer.offerCode.trim();
-          log('  Refetching offer: ' + code);
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'progress',
+            current: offerIndex + 1,
+            total: offersWithEmptySailings.length,
+            stepName: 'Refetching full sailing lists...'
+          }));
+          log('  Refetching offer: ' + code + ' (' + (offerIndex + 1) + '/' + offersWithEmptySailings.length + ')');
           
           try {
             const refetchBody = { ...requestBody, offerCode: code };
@@ -705,10 +712,12 @@ export const STEP1_OFFERS_SCRIPT = `
       }
       
       log('  📜 Processing ' + sailings.length + ' sailings...');
+      sendOfferProgress(i + 1, validOffers.length, offerName, 0, 'processing');
       
       let offerSailingCount = 0;
       
-      for (const sailing of sailings) {
+      for (let sailingIndex = 0; sailingIndex < sailings.length; sailingIndex += 1) {
+        const sailing = sailings[sailingIndex];
         const shipName = sailing.shipName || '';
         const shipCode = sailing.shipCode || '';
         const sailDate = formatSailDate(sailing.sailDate);
@@ -776,13 +785,20 @@ export const STEP1_OFFERS_SCRIPT = `
         totalSailings++;
         offerSailingCount++;
         
-        if (totalSailings % BATCH_SIZE === 0) {
+        if (totalSailings % BATCH_SIZE === 0 || offerSailingCount === 1 || offerSailingCount === sailings.length || offerSailingCount % 100 === 0) {
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'progress',
             current: totalSailings,
-            total: validOffers.length,
+            total: Math.max(totalSailings, validOffers.length),
             stepName: 'Processing offers...'
           }));
+          sendOfferProgress(
+            i + 1,
+            validOffers.length,
+            offerName,
+            offerSailingCount,
+            offerSailingCount === sailings.length ? 'parsed' : 'processing'
+          );
         }
         
         if (offerSailingCount % 100 === 0) {

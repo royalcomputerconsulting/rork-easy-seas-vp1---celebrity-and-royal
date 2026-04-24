@@ -127,22 +127,69 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     return Object.keys(value as Record<string, unknown>);
   }, []);
 
+  const getPayloadIdentifier = useCallback(function collect(value: unknown, depth: number = 0): string {
+    if (depth > 2) {
+      return '';
+    }
+
+    if (Array.isArray(value)) {
+      return value
+        .slice(0, 6)
+        .map((item) => collect(item, depth + 1))
+        .filter(Boolean)
+        .join('|');
+    }
+
+    if (!value || typeof value !== 'object') {
+      return stringifyValue(value).slice(0, 120);
+    }
+
+    const record = value as Record<string, unknown>;
+    const directIdentifier = stringifyValue(
+      record.offerCode ??
+        record.marketingCouponCode ??
+        record.bookingId ??
+        record.confirmationNumber ??
+        record.reservationId ??
+        record.accountId ??
+        record.loyaltyNumber ??
+        record.shipCode ??
+        record.shipName ??
+        record.sailDate ??
+        record.startDate ??
+        record.id ??
+        record.code ??
+        record.name ??
+        record.title
+    );
+
+    if (directIdentifier) {
+      return directIdentifier.slice(0, 120);
+    }
+
+    return (
+      collect(record.campaignOffer ?? record.payload ?? record.offers ?? record.casinoOffers ?? record.sailingInfo ?? record.profileBookings ?? record.bookings ?? record.Items, depth + 1) ||
+      Object.keys(record).sort().join(',')
+    ).slice(0, 240);
+  }, [stringifyValue]);
+
   const createPayloadSignature = useCallback((value: unknown): string => {
     if (Array.isArray(value)) {
-      const firstItem = value[0];
-      const firstItemKeys = getObjectKeys(firstItem).slice(0, 8).join(',');
-      return `array:${value.length}:${firstItemKeys}`;
+      const firstItemKeys = getObjectKeys(value[0]).slice(0, 8).join(',');
+      const identifiers = getPayloadIdentifier(value);
+      return `array:${value.length}:${firstItemKeys}:${identifiers}`;
     }
 
     if (value && typeof value === 'object') {
       const record = value as Record<string, unknown>;
       const topLevelKeys = Object.keys(record).sort().join(',');
       const payloadKeys = getObjectKeys(record.payload).slice(0, 8).sort().join(',');
-      return `object:${topLevelKeys}:${payloadKeys}`;
+      const identifiers = getPayloadIdentifier(record);
+      return `object:${topLevelKeys}:${payloadKeys}:${identifiers}`;
     }
 
     return `${typeof value}:${stringifyValue(value).slice(0, 120)}`;
-  }, [getObjectKeys, stringifyValue]);
+  }, [getObjectKeys, getPayloadIdentifier, stringifyValue]);
 
   const normalizeOfferRows = useCallback((value: unknown): OfferRow[] => {
     if (!Array.isArray(value)) {
@@ -1301,7 +1348,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       return new Promise((resolve) => {
         let lastProgressTime = Date.now();
         let isSettled = false;
-        const progressTimeoutMs = 90000;
+        const progressTimeoutMs = step === 1 ? 240000 : 90000;
 
         const finishStep = (timeoutMessage?: string) => {
           if (isSettled) {

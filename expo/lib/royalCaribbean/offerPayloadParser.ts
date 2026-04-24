@@ -239,44 +239,86 @@ function extractPerks(offer: UnknownRecord, tradeInValue: number | undefined): s
 
 function extractDeparturePortName(sailing: UnknownRecord): string {
   const departurePort = asRecord(sailing.departurePort);
-  return getString(departurePort?.name ?? sailing.departurePortName ?? sailing.departurePort);
+  const itinerary = asRecord(sailing.itinerary);
+  const itineraryDeparturePort = asRecord(itinerary?.departurePort);
+  return getString(
+    departurePort?.name ??
+      sailing.departurePortName ??
+      sailing.departurePort ??
+      itineraryDeparturePort?.name
+  );
 }
 
 function extractItineraryText(sailing: UnknownRecord): string {
   const sailingType = asRecord(sailing.sailingType);
   const itinerary = asRecord(sailing.itinerary);
+  const masterSailing = asRecord(sailing.masterSailing);
+  const masterItinerary = asRecord(masterSailing?.itinerary);
   return getString(
     sailing.itineraryDescription ??
       sailingType?.name ??
       sailing.sailingType ??
       itinerary?.description ??
-      itinerary?.name
+      itinerary?.name ??
+      masterItinerary?.description ??
+      masterItinerary?.name
   );
 }
 
 function extractPortList(sailing: UnknownRecord): string {
   const itinerary = asRecord(sailing.itinerary);
+  const itineraryDays = Array.isArray(itinerary?.days) ? itinerary.days : [];
   const ports = Array.isArray(sailing.ports)
     ? sailing.ports
     : Array.isArray(itinerary?.ports)
     ? itinerary.ports
-    : [];
+    : itineraryDays.flatMap((day) => {
+        const dayRecord = asRecord(day);
+        return Array.isArray(dayRecord?.ports) ? dayRecord.ports : [];
+      });
 
   const portNames = ports
     .map((port) => {
       const portRecord = asRecord(port);
-      return getString(portRecord?.name ?? portRecord?.portName ?? port);
+      const nestedPort = asRecord(portRecord?.port);
+      return getString(nestedPort?.name ?? portRecord?.name ?? portRecord?.portName ?? port);
     })
     .filter(Boolean);
 
   return Array.from(new Set(portNames)).join(', ');
 }
 
+function extractSailings(entry: UnknownRecord, offer: UnknownRecord): UnknownRecord[] {
+  const candidateArrays: unknown[] = [
+    offer.sailings,
+    offer.availableSailings,
+    offer.eligibleSailings,
+    offer.sailingInfo,
+    entry.sailings,
+    entry.availableSailings,
+    entry.eligibleSailings,
+    entry.sailingInfo,
+  ];
+
+  for (const candidate of candidateArrays) {
+    const sailings = asRecordArray(candidate);
+    if (sailings.length > 0) {
+      return sailings;
+    }
+  }
+
+  return [];
+}
+
 function extractNights(sailing: UnknownRecord, offer: UnknownRecord): number | undefined {
+  const masterSailing = asRecord(sailing.masterSailing);
+  const masterItinerary = asRecord(masterSailing?.itinerary);
   const candidates: unknown[] = [
     sailing.numberOfNights,
     sailing.duration,
     sailing.totalNights,
+    masterItinerary?.totalNights,
+    masterItinerary?.sailingNights,
     offer.numberOfNights,
     offer.duration,
     offer.totalNights,
@@ -290,6 +332,57 @@ function extractNights(sailing: UnknownRecord, offer: UnknownRecord): number | u
   }
 
   return undefined;
+}
+
+function normalizePricingCategory(roomType: string): 'interior' | 'oceanview' | 'balcony' | 'suite' | null {
+  const normalized = roomType.trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+
+  if (
+    normalized.includes('interior') ||
+    normalized.includes('inside') ||
+    normalized === 'i' ||
+    normalized === 'in' ||
+    normalized === 'int'
+  ) {
+    return 'interior';
+  }
+
+  if (
+    normalized.includes('oceanview') ||
+    normalized.includes('ocean view') ||
+    normalized.includes('outside') ||
+    normalized === 'o' ||
+    normalized === 'ov' ||
+    normalized === 'ob' ||
+    normalized === 'e'
+  ) {
+    return 'oceanview';
+  }
+
+  if (
+    normalized.includes('balcony') ||
+    normalized === 'b' ||
+    normalized === 'bal' ||
+    normalized === 'bk'
+  ) {
+    return 'balcony';
+  }
+
+  if (
+    normalized.includes('suite') ||
+    normalized === 's' ||
+    normalized === 'su' ||
+    normalized === 'js' ||
+    normalized === 'dlx' ||
+    normalized === 'd'
+  ) {
+    return 'suite';
+  }
+
+  return null;
 }
 
 function applyPriceCandidate(
@@ -324,6 +417,7 @@ function extractCabinPrices(sailing: UnknownRecord): {
   suitePrice?: string;
   taxesAndFees?: string;
 } {
+  const taxesAndFeesRecord = asRecord(sailing.taxesAndFees);
   const prices: {
     interiorPrice?: string;
     oceanviewPrice?: string;
@@ -335,21 +429,35 @@ function extractCabinPrices(sailing: UnknownRecord): {
     oceanviewPrice: formatMoney(sailing.oceanviewPrice),
     balconyPrice: formatMoney(sailing.balconyPrice),
     suitePrice: formatMoney(sailing.suitePrice),
-    taxesAndFees: formatMoney(sailing.taxes ?? sailing.taxesAndFees),
+    taxesAndFees: formatMoney(taxesAndFeesRecord?.value ?? sailing.taxes ?? sailing.taxesAndFees),
   };
 
-  const pricingEntries = asRecordArray(sailing.pricing);
-  pricingEntries.forEach((entry) => {
-    const roomType = getString(entry.roomType ?? entry.cabinType ?? entry.type).toLowerCase();
-    const rawPrice = entry.price ?? entry.amount ?? entry.rate;
+  const pricingEntries = [
+    ...asRecordArray(sailing.pricing),
+    ...asRecordArray(sailing.stateroomClassPricing),
+  ];
 
-    if (roomType.includes('interior') || roomType.includes('inside')) {
+  pricingEntries.forEach((entry) => {
+    const stateroomClass = asRecord(entry.stateroomClass);
+    const stateroomContent = asRecord(stateroomClass?.content);
+    const roomType = getString(
+      entry.roomType ??
+        entry.cabinType ??
+        entry.type ??
+        stateroomContent?.code ??
+        stateroomClass?.id
+    ).toLowerCase();
+    const priceRecord = asRecord(entry.price);
+    const rawPrice = priceRecord?.value ?? entry.price ?? entry.amount ?? entry.rate;
+    const category = normalizePricingCategory(roomType);
+
+    if (category === 'interior') {
       prices.interiorPrice = applyPriceCandidate(prices.interiorPrice, rawPrice);
-    } else if (roomType.includes('oceanview') || roomType.includes('ocean view') || roomType.includes('outside')) {
+    } else if (category === 'oceanview') {
       prices.oceanviewPrice = applyPriceCandidate(prices.oceanviewPrice, rawPrice);
-    } else if (roomType.includes('balcony')) {
+    } else if (category === 'balcony') {
       prices.balconyPrice = applyPriceCandidate(prices.balconyPrice, rawPrice);
-    } else if (roomType.includes('suite')) {
+    } else if (category === 'suite') {
       prices.suitePrice = applyPriceCandidate(prices.suitePrice, rawPrice);
     }
   });
@@ -375,7 +483,7 @@ export function parseCasinoOffersPayload(
     const tradeInValue = extractTradeInValue(offer);
     const perks = extractPerks(offer, tradeInValue);
     const bookingLink = getString(asRecord(offer.marketingUiAttributes)?.ctaLink ?? offer.bookingLink);
-    const sailings = asRecordArray(offer.sailings);
+    const sailings = extractSailings(entry, offer);
     const isGOBOOffer = getBoolean(offer.isGOBO);
 
     if (sailings.length === 0) {
@@ -411,9 +519,10 @@ export function parseCasinoOffersPayload(
     }
 
     sailings.forEach((sailing) => {
-      const shipCode = getString(sailing.shipCode);
-      const shipName = getString(sailing.shipName) || (shipCode ? getShipNameFromCode(shipCode) : '');
-      const sailingDate = formatDate(sailing.sailDate ?? sailing.startDate);
+      const shipRecord = asRecord(sailing.ship);
+      const shipCode = getString(sailing.shipCode ?? shipRecord?.code);
+      const shipName = getString(sailing.shipName ?? shipRecord?.name) || (shipCode ? getShipNameFromCode(shipCode) : '');
+      const sailingDate = formatDate(sailing.sailDate ?? sailing.startDate ?? sailing.departureDate ?? sailing.date);
       const departurePort = extractDeparturePortName(sailing);
       const itinerary = extractItineraryText(sailing);
       const cabinType = getString(sailing.roomType ?? sailing.stateroomType ?? sailing.cabinType);
@@ -447,7 +556,7 @@ export function parseCasinoOffersPayload(
         dayByDayItinerary: [],
         destinationName: undefined,
         totalNights,
-        bookingLink: getString(sailing.bookingLink) || bookingLink || undefined,
+        bookingLink: getString(sailing.bookingLink ?? asRecord(sailing.marketingUiAttributes)?.ctaLink) || bookingLink || undefined,
       });
       totalSailings += 1;
     });
