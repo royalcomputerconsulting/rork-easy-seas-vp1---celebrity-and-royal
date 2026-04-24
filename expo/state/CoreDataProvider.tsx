@@ -343,6 +343,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   const pendingBackendSyncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInitialLoadRef = useRef(true);
   const foregroundRefreshAttemptRef = useRef(0);
+  const backendRestoreGraceUntilRef = useRef<number>(0);
 
   const hasLocalData = cruises.length > 0 || bookedCruises.length > 0 || casinoOffers.length > 0 || calendarEvents.length > 0;
 
@@ -399,6 +400,16 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       console.error(`[CoreData] Failed to persist ${key}:`, error);
     }
   }, [persistLastSyncDate]);
+
+  const markLocalDataAuthoritative = useCallback((reason: string) => {
+    const gracePeriodMs = 2 * 60 * 1000;
+    backendRestoreGraceUntilRef.current = Date.now() + gracePeriodMs;
+    console.log('[CoreData] Marked local data as authoritative', {
+      reason,
+      gracePeriodMs,
+      until: new Date(backendRestoreGraceUntilRef.current).toISOString(),
+    });
+  }, []);
 
   const syncToBackend = useCallback(async () => {
     if (pendingBackendSyncTimeoutRef.current) {
@@ -530,6 +541,24 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       console.log('[CoreData] Backend load skipped - not authenticated or backend unavailable');
       return false;
     }
+
+    const inMemorySummary = {
+      cruises: cruises.length,
+      bookedCruises: bookedCruises.length,
+      casinoOffers: casinoOffers.length,
+      calendarEvents: calendarEvents.length,
+    };
+    const hasInMemoryData = Object.values(inMemorySummary).some((count) => count > 0);
+    const isGracePeriodActive = backendRestoreGraceUntilRef.current > Date.now();
+
+    if (isGracePeriodActive && hasInMemoryData) {
+      console.log('[CoreData] Backend restore skipped because fresh local data is authoritative', {
+        email: authenticatedEmail,
+        inMemorySummary,
+        graceUntil: new Date(backendRestoreGraceUntilRef.current).toISOString(),
+      });
+      return false;
+    }
     
     try {
       console.log('[CoreData] 🔄 Loading data from backend for:', authenticatedEmail);
@@ -566,10 +595,19 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
           localSummary.bookedCruises > backendSummary.bookedCruises ||
           localSummary.casinoOffers > backendSummary.casinoOffers ||
           localSummary.calendarEvents > backendSummary.calendarEvents;
+        const inMemoryLastSyncMs = parseStoredTimestamp(lastSyncDate);
+        const inMemoryHasMoreData =
+          inMemorySummary.cruises > backendSummary.cruises ||
+          inMemorySummary.bookedCruises > backendSummary.bookedCruises ||
+          inMemorySummary.casinoOffers > backendSummary.casinoOffers ||
+          inMemorySummary.calendarEvents > backendSummary.calendarEvents;
         const shouldPreferLocalData =
-          localHasMeaningfulData &&
-          ((localLastSyncMs !== null && (backendUpdatedAtMs === null || localLastSyncMs > backendUpdatedAtMs)) ||
-            (localHasMoreData && (backendUpdatedAtMs === null || localLastSyncMs === null || localLastSyncMs >= backendUpdatedAtMs)));
+          (localHasMeaningfulData &&
+            ((localLastSyncMs !== null && (backendUpdatedAtMs === null || localLastSyncMs > backendUpdatedAtMs)) ||
+              (localHasMoreData && (backendUpdatedAtMs === null || localLastSyncMs === null || localLastSyncMs >= backendUpdatedAtMs)))) ||
+          (hasInMemoryData &&
+            ((inMemoryLastSyncMs !== null && (backendUpdatedAtMs === null || inMemoryLastSyncMs > backendUpdatedAtMs)) ||
+              inMemoryHasMoreData));
 
         console.log('[CoreData] ✅ Backend data found:', {
           email: authenticatedEmail,
@@ -579,15 +617,19 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
           events: userData.calendarEvents?.length || 0,
           updatedAt: userData.updatedAt,
           localLastSync: localLastSyncRaw,
+          inMemoryLastSync: lastSyncDate,
           localSummary,
+          inMemorySummary,
         });
 
         if (shouldPreferLocalData) {
           console.log('[CoreData] Skipping backend restore because local data is newer or richer than cloud data', {
             email: authenticatedEmail,
             localLastSync: localLastSyncRaw,
+            inMemoryLastSync: lastSyncDate,
             backendUpdatedAt: userData.updatedAt,
             localSummary,
+            inMemorySummary,
             backendSummary,
           });
           return false;
@@ -663,7 +705,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       console.error('[CoreData] Backend load failed:', error);
       return false;
     }
-  }, [refetchBackendData, authenticatedEmail]);
+  }, [refetchBackendData, authenticatedEmail, cruises.length, bookedCruises.length, casinoOffers.length, calendarEvents.length, lastSyncDate]);
 
   const loadFromStorage = useCallback(async (force = false) => {
     console.log('[CoreData] === START LOADING FROM STORAGE ===', { force, alreadyAttempted: loadAttemptedRef.current });
@@ -965,12 +1007,13 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   }, [persistData, loadFromStorage]);
 
   const setCruises = useCallback(async (newCruises: Cruise[]) => {
+    markLocalDataAuthoritative('setCruises');
     setCruisesState(newCruises);
     await persistData(skRef.current.CRUISES, newCruises);
     await AsyncStorage.setItem(skRef.current.HAS_IMPORTED_DATA, 'true').catch(console.error);
     console.log('[CoreData] Cruises state updated and persisted:', newCruises.length);
     scheduleSyncToBackend('setCruises');
-  }, [persistData, scheduleSyncToBackend]);
+  }, [markLocalDataAuthoritative, persistData, scheduleSyncToBackend]);
 
   const addCruise = useCallback((cruise: Cruise) => {
     setCruisesState(prev => {
@@ -997,6 +1040,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   }, [persistData]);
 
   const setBookedCruises = useCallback(async (newCruises: BookedCruise[]) => {
+    markLocalDataAuthoritative('setBookedCruises');
     const booked = newCruises.filter(c => c.status !== 'available');
     
     // Filter out mock/demo cruises when setting real data
@@ -1055,7 +1099,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     await persistData(skRef.current.CALENDAR_EVENTS, newCalendarEvents);
     console.log('[CoreData] Booked cruises state updated and persisted:', normalizedCruises.length);
     scheduleSyncToBackend('setBookedCruises');
-  }, [persistData, scheduleSyncToBackend]);
+  }, [markLocalDataAuthoritative, persistData, scheduleSyncToBackend]);
 
   const buildCalendarEventFromCruise = useCallback((cruise: BookedCruise): CalendarEvent => ({
     id: `cruise-${cruise.id}`,
@@ -1153,6 +1197,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   }, [persistData]);
 
   const setCasinoOffers = useCallback(async (newOffers: CasinoOffer[]) => {
+    markLocalDataAuthoritative('setCasinoOffers');
     // Filter out demo offers when setting real offers
     const nonMockOffers = newOffers.filter(offer => 
       !offer.id?.includes('demo-') &&
@@ -1169,7 +1214,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     await AsyncStorage.setItem(skRef.current.HAS_IMPORTED_DATA, 'true').catch(console.error);
     console.log('[CoreData] Casino offers state updated and persisted:', nonMockOffers.length);
     scheduleSyncToBackend('setCasinoOffers');
-  }, [persistData, scheduleSyncToBackend]);
+  }, [markLocalDataAuthoritative, persistData, scheduleSyncToBackend]);
 
   const addCasinoOffer = useCallback((offer: CasinoOffer) => {
     setCasinoOffersState(prev => {
@@ -1285,6 +1330,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
 
   const clearAllData = useCallback(async () => {
     try {
+      backendRestoreGraceUntilRef.current = 0;
       console.log('[CoreData] Clearing all data and preventing mock data from loading...');
       await Promise.all([
         AsyncStorage.removeItem(skRef.current.CRUISES),
