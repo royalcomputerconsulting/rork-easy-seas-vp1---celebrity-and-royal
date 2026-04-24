@@ -164,6 +164,49 @@ export function convertLoyaltyInfoToExtended(
   return buildExtendedLoyaltyData(loyalty, accountId);
 }
 
+function hasMeaningfulLoyaltyValue(value: unknown): boolean {
+  if (value === undefined || value === null) {
+    return false;
+  }
+
+  if (typeof value === 'string') {
+    return value.trim().length > 0;
+  }
+
+  return true;
+}
+
+export function mergeExtendedLoyaltyData(
+  existing: ExtendedLoyaltyData | null | undefined,
+  incoming: ExtendedLoyaltyData | null | undefined
+): ExtendedLoyaltyData | null {
+  if (!existing && !incoming) {
+    return null;
+  }
+
+  if (!existing) {
+    return incoming ?? null;
+  }
+
+  if (!incoming) {
+    return existing;
+  }
+
+  const merged: Record<string, unknown> = {};
+  const allKeys = new Set<string>([
+    ...Object.keys(existing),
+    ...Object.keys(incoming),
+  ]);
+
+  allKeys.forEach((key) => {
+    const existingValue = (existing as Record<string, unknown>)[key];
+    const incomingValue = (incoming as Record<string, unknown>)[key];
+    merged[key] = hasMeaningfulLoyaltyValue(incomingValue) ? incomingValue : existingValue;
+  });
+
+  return merged as ExtendedLoyaltyData;
+}
+
 function formatTierName(tier: string | undefined): string | undefined {
   if (!tier) return undefined;
   

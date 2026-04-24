@@ -17,7 +17,7 @@ import {
   ExtendedLoyaltyData,
   LoyaltyApiInformation
 } from '@/lib/royalCaribbean/types';
-import { convertLoyaltyInfoToExtended } from '@/lib/royalCaribbean/loyaltyConverter';
+import { convertLoyaltyInfoToExtended, mergeExtendedLoyaltyData } from '@/lib/royalCaribbean/loyaltyConverter';
 import { rcLogger } from '@/lib/royalCaribbean/logger';
 import { generateOffersCSV, generateBookedCruisesCSV } from '@/lib/royalCaribbean/csvGenerator';
 import { injectOffersExtraction } from '@/lib/royalCaribbean/step1_offers';
@@ -70,7 +70,7 @@ const INITIAL_STATE: RoyalCaribbeanSyncState = {
   lastSyncTimestamp: null,
   syncCounts: null,
   syncPreview: null,
-  scrapePricingAndItinerary: true
+  scrapePricingAndItinerary: false
 };
 
 const INITIAL_EXTENDED_LOYALTY: ExtendedLoyaltyData | null = null;
@@ -708,7 +708,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         if (msg.loyalty && typeof msg.loyalty === 'object') {
           const loyaltyInfo = msg.loyalty as LoyaltyApiInformation;
           const converted = convertLoyaltyInfoToExtended(loyaltyInfo, '');
-          setExtendedLoyaltyData(converted);
+          setExtendedLoyaltyData((prev) => mergeExtendedLoyaltyData(prev, converted));
           hasReceivedApiLoyaltyDataRef.current = true;
           
           setState(prev => ({
@@ -746,7 +746,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       case 'extended_loyalty_data': {
         const extData = msg.data as LoyaltyApiInformation;
         const converted = convertLoyaltyInfoToExtended(extData, msg.accountId);
-        setExtendedLoyaltyData(converted);
+        setExtendedLoyaltyData((prev) => mergeExtendedLoyaltyData(prev, converted));
         
         // Mark that we've received API data - this takes precedence over DOM scraping
         hasReceivedApiLoyaltyDataRef.current = true;
@@ -839,13 +839,10 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
               };
             });
 
-            capturedSections.current.offers = true;
             addLog(`✅ Captured ${parsedOffers.offerCount} casino offer(s) with ${parsedOffers.totalSailings} sailing(s) from network capture`, 'success');
-
-            if (stepCompleteResolvers.current[1]) {
-              addLog('✅ Step 1 auto-completing with offers from network monitor', 'success');
-              stepCompleteResolvers.current[1]();
-              delete stepCompleteResolvers.current[1];
+            addLog('ℹ️ Waiting for full offer extraction before completing sync step', 'info');
+            if (progressCallbacks.current.onProgress) {
+              progressCallbacks.current.onProgress();
             }
           } else {
             addLog(`⚠️ Captured offers payload but no offer rows were parsed. Keys: ${dataKeys.join(', ')}`, 'warning');
@@ -1132,7 +1129,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           addLog('Loyalty payload keys: ' + Object.keys(loyaltyPayload).join(', '), 'info');
           
           const convertedLoyalty = convertLoyaltyInfoToExtended(loyaltyInfo, accountId);
-          setExtendedLoyaltyData(convertedLoyalty);
+          setExtendedLoyaltyData((prev) => mergeExtendedLoyaltyData(prev, convertedLoyalty));
           hasReceivedApiLoyaltyDataRef.current = true;
           
           setState(prev => ({
@@ -1446,7 +1443,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       setState(prev => {
         const offersByName = new Map<string, number>();
         prev.extractedOffers.forEach(offer => {
-          const key = offer.offerName || offer.offerCode || 'Unknown';
+          const key = offer.offerCode || offer.offerName || 'Unknown';
           offersByName.set(key, (offersByName.get(key) || 0) + 1);
         });
         const uniqueOffers = offersByName.size;
@@ -1947,7 +1944,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         // Group by offer name to get unique offer count
         const offersByName = new Map<string, number>();
         prev.extractedOffers.forEach(offer => {
-          const key = offer.offerName || offer.offerCode || 'Unknown';
+          const key = offer.offerCode || offer.offerName || 'Unknown';
           offersByName.set(key, (offersByName.get(key) || 0) + 1);
         });
         const uniqueOffers = offersByName.size;
@@ -2120,7 +2117,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   }, []);
 
   const setExtendedLoyalty = useCallback((data: ExtendedLoyaltyData | null) => {
-    setExtendedLoyaltyData(data);
+    setExtendedLoyaltyData((prev) => mergeExtendedLoyaltyData(prev, data));
     
     if (data) {
       setState(prev => ({

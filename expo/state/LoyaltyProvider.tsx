@@ -18,6 +18,7 @@ import { createDateFromString } from "@/lib/date";
 import { isRoyalCaribbeanShip } from "@/constants/shipInfo";
 import { ALL_STORAGE_KEYS, getUserScopedKey } from "@/lib/storage/storageKeys";
 import type { ExtendedLoyaltyData } from "@/lib/royalCaribbean/types";
+import { mergeExtendedLoyaltyData } from "@/lib/royalCaribbean/loyaltyConverter";
 
 interface LoyaltyState {
   clubRoyalePoints: number;
@@ -322,66 +323,68 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
   const setExtendedLoyaltyData = useCallback(async (data: ExtendedLoyaltyData) => {
     try {
       console.log('[LoyaltyProvider] ==================== SAVING EXTENDED LOYALTY DATA ====================');
-      console.log('[LoyaltyProvider] Data to save:', data);
-      
-      setExtendedLoyaltyState(data);
-      
-      const jsonValue = JSON.stringify(data);
-      await AsyncStorage.setItem(skRef.current.EXTENDED_LOYALTY_DATA, jsonValue);
-      console.log('[LoyaltyProvider] ✓ Extended loyalty data saved to storage');
-      
-      // Update Royal Caribbean loyalty data
-      if (data.clubRoyalePointsFromApi !== undefined) {
-        await setManualClubRoyalePoints(data.clubRoyalePointsFromApi);
-        console.log('[LoyaltyProvider] ✓ Updated Club Royale points:', data.clubRoyalePointsFromApi);
-      }
-      
-      if (data.crownAndAnchorPointsFromApi !== undefined) {
-        await setManualCrownAnchorPoints(data.crownAndAnchorPointsFromApi);
-        console.log('[LoyaltyProvider] ✓ Updated Crown & Anchor points:', data.crownAndAnchorPointsFromApi);
-      }
-      
-      const royalUpdates: Record<string, string | number> = {};
-      if (typeof data.crownAndAnchorId === 'string' && data.crownAndAnchorId.trim().length > 0) {
-        royalUpdates.crownAnchorNumber = data.crownAndAnchorId.trim();
-        console.log('[LoyaltyProvider] ✓ Updated Crown & Anchor number:', data.crownAndAnchorId.trim());
-      }
-      if (typeof data.crownAndAnchorTier === 'string' && data.crownAndAnchorTier.trim().length > 0) {
-        royalUpdates.crownAnchorLevel = data.crownAndAnchorTier.trim();
-        console.log('[LoyaltyProvider] ✓ Updated Crown & Anchor level:', data.crownAndAnchorTier.trim());
+      console.log('[LoyaltyProvider] Incoming data to save:', data);
+
+      const mergedData = mergeExtendedLoyaltyData(extendedLoyalty, data);
+      if (!mergedData) {
+        console.warn('[LoyaltyProvider] No extended loyalty data available after merge');
+        return;
       }
 
-      // Update Celebrity loyalty data
+      console.log('[LoyaltyProvider] Merged loyalty data:', mergedData);
+      setExtendedLoyaltyState(mergedData);
+
+      const jsonValue = JSON.stringify(mergedData);
+      await AsyncStorage.setItem(skRef.current.EXTENDED_LOYALTY_DATA, jsonValue);
+      console.log('[LoyaltyProvider] ✓ Extended loyalty data saved to storage');
+
+      if (mergedData.clubRoyalePointsFromApi !== undefined) {
+        await setManualClubRoyalePoints(mergedData.clubRoyalePointsFromApi);
+        console.log('[LoyaltyProvider] ✓ Updated Club Royale points:', mergedData.clubRoyalePointsFromApi);
+      }
+
+      if (mergedData.crownAndAnchorPointsFromApi !== undefined) {
+        await setManualCrownAnchorPoints(mergedData.crownAndAnchorPointsFromApi);
+        console.log('[LoyaltyProvider] ✓ Updated Crown & Anchor points:', mergedData.crownAndAnchorPointsFromApi);
+      }
+
+      const royalUpdates: Record<string, string | number> = {};
+      if (typeof mergedData.crownAndAnchorId === 'string' && mergedData.crownAndAnchorId.trim().length > 0) {
+        royalUpdates.crownAnchorNumber = mergedData.crownAndAnchorId.trim();
+        console.log('[LoyaltyProvider] ✓ Updated Crown & Anchor number:', mergedData.crownAndAnchorId.trim());
+      }
+      if (typeof mergedData.crownAndAnchorTier === 'string' && mergedData.crownAndAnchorTier.trim().length > 0) {
+        royalUpdates.crownAnchorLevel = mergedData.crownAndAnchorTier.trim();
+        console.log('[LoyaltyProvider] ✓ Updated Crown & Anchor level:', mergedData.crownAndAnchorTier.trim());
+      }
+
       const celebrityUpdates: Record<string, string | number> = {};
-      if (data.celebrityBlueChipPoints !== undefined) {
-        celebrityUpdates.celebrityBlueChipPoints = data.celebrityBlueChipPoints;
-        console.log('[LoyaltyProvider] ✓ Updated Celebrity Blue Chip points:', data.celebrityBlueChipPoints);
+      if (mergedData.celebrityBlueChipPoints !== undefined) {
+        celebrityUpdates.celebrityBlueChipPoints = mergedData.celebrityBlueChipPoints;
+        console.log('[LoyaltyProvider] ✓ Updated Celebrity Blue Chip points:', mergedData.celebrityBlueChipPoints);
       }
-      if (data.captainsClubPoints !== undefined) {
-        celebrityUpdates.celebrityCaptainsClubPoints = data.captainsClubPoints;
-        console.log('[LoyaltyProvider] ✓ Updated Celebrity Captains Club points:', data.captainsClubPoints);
+      if (mergedData.captainsClubPoints !== undefined) {
+        celebrityUpdates.celebrityCaptainsClubPoints = mergedData.captainsClubPoints;
+        console.log('[LoyaltyProvider] ✓ Updated Celebrity Captains Club points:', mergedData.captainsClubPoints);
       }
-      
-      // Update Silversea loyalty data
+
       const silverseaUpdates: Record<string, string | number> = {};
-      if (data.venetianSocietyTier !== undefined && data.venetianSocietyTier !== null) {
-        silverseaUpdates.silverseaVenetianTier = data.venetianSocietyTier;
-        console.log('[LoyaltyProvider] ✓ Updated Silversea Venetian tier:', data.venetianSocietyTier);
+      if (mergedData.venetianSocietyTier !== undefined && mergedData.venetianSocietyTier !== null) {
+        silverseaUpdates.silverseaVenetianTier = mergedData.venetianSocietyTier;
+        console.log('[LoyaltyProvider] ✓ Updated Silversea Venetian tier:', mergedData.venetianSocietyTier);
       }
-      
-      // Apply all updates to user profile if any exist
+
       if (Object.keys(royalUpdates).length > 0 || Object.keys(celebrityUpdates).length > 0 || Object.keys(silverseaUpdates).length > 0) {
         const allUpdates = { ...royalUpdates, ...celebrityUpdates, ...silverseaUpdates };
         console.log('[LoyaltyProvider] ✓ Updating user profile with all cruise line data:', allUpdates);
-        
-        // Store to AsyncStorage to persist across all three cruise lines
+
         const usersData = await AsyncStorage.getItem(userStorageKeys.USERS);
         if (usersData) {
           const users = JSON.parse(usersData);
           const currentUserId = await AsyncStorage.getItem(userStorageKeys.CURRENT_USER);
           if (currentUserId) {
-            const updatedUsers = users.map((u: any) => 
-              u.id === currentUserId 
+            const updatedUsers = users.map((u: any) =>
+              u.id === currentUserId
                 ? { ...u, ...allUpdates, updatedAt: new Date().toISOString() }
                 : u
             );
@@ -390,13 +393,13 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
           }
         }
       }
-      
+
       console.log('[LoyaltyProvider] ==================== SAVE COMPLETE ====================');
     } catch (error) {
       console.error('[LoyaltyProvider] ✗ Failed to save extended loyalty data:', error);
       throw error;
     }
-  }, [setManualClubRoyalePoints, setManualCrownAnchorPoints, userStorageKeys]);
+  }, [extendedLoyalty, setManualClubRoyalePoints, setManualCrownAnchorPoints, userStorageKeys]);
 
   const calculatedData = useMemo(() => {
     let calculatedClubRoyalePoints = 0;
