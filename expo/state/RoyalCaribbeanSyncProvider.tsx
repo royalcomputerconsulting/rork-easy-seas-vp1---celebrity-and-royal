@@ -198,6 +198,17 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
     const normalizedRows: OfferRow[] = [];
     const seenKeys = new Set<string>();
+    const detailPresenceByOffer = new Set<string>();
+
+    const getOfferIdentityKey = (row: OfferRow): string => {
+      return [
+        row.sourcePage,
+        row.offerCode || row.offerName,
+        row.offerName,
+        row.offerExpirationDate,
+        row.offerType,
+      ].join('|');
+    };
 
     value.forEach((item) => {
       if (!item || typeof item !== 'object') {
@@ -234,10 +245,16 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       };
 
       const dedupeKey = [
+        normalizedRow.sourcePage,
         normalizedRow.offerCode,
         normalizedRow.offerName,
+        normalizedRow.offerExpirationDate,
+        normalizedRow.offerType,
         normalizedRow.shipName,
         normalizedRow.sailingDate,
+        normalizedRow.itinerary,
+        normalizedRow.departurePort,
+        normalizedRow.cabinType,
         normalizedRow.bookingLink,
       ].join('|');
 
@@ -245,11 +262,22 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         return;
       }
 
+      if (normalizedRow.shipName || normalizedRow.sailingDate) {
+        detailPresenceByOffer.add(getOfferIdentityKey(normalizedRow));
+      }
+
       seenKeys.add(dedupeKey);
       normalizedRows.push(normalizedRow);
     });
 
-    return normalizedRows;
+    return normalizedRows.filter((row) => {
+      const isPlaceholderOfferRow = !row.shipName && !row.sailingDate;
+      if (!isPlaceholderOfferRow) {
+        return true;
+      }
+
+      return !detailPresenceByOffer.has(getOfferIdentityKey(row));
+    });
   }, [stringifyValue]);
 
   const mergeOfferRows = useCallback((existingRows: OfferRow[], incomingRows: OfferRow[]): OfferRow[] => {

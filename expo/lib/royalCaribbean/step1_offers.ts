@@ -1,4 +1,4 @@
-export const STEP1_OFFERS_SCRIPT = `
+export const STEP1_OFFERS_SCRIPT = String.raw`
 (function() {
   const BATCH_SIZE = 150;
   const PRICING_BATCH_SIZE = 10;
