@@ -4,6 +4,7 @@ import { createTRPCRouter, publicProcedure } from "../create-context";
 
 const UserDataSchema = z.object({
   email: z.string().email(),
+  ownerScopeId: z.string().min(3).optional(),
   cruises: z.array(z.any()).optional(),
   bookedCruises: z.array(z.any()).optional(),
   casinoOffers: z.array(z.any()).optional(),
@@ -34,6 +35,7 @@ const UserDataSchema = z.object({
 
 interface StoredUserData {
   email: string;
+  ownerScopeId?: string;
   cruises?: any[];
   bookedCruises?: any[];
   casinoOffers?: any[];
@@ -129,19 +131,25 @@ export const dataRouter = createTRPCRouter({
     .mutation(async ({ input }) => {
       const db = await getDb();
       const normalizedEmail = input.email.toLowerCase().trim();
+      const ownerScopeId = input.ownerScopeId?.trim() || '';
+      if (!ownerScopeId) {
+        console.log('[API] Refusing unscoped cloud save to prevent cross-user data exposure:', normalizedEmail);
+        throw new Error('OWNER_SCOPE_REQUIRED');
+      }
       const now = new Date().toISOString();
       
-      console.log('[API] Saving all user data for:', normalizedEmail);
+      console.log('[API] Saving all user data for:', { email: normalizedEmail, ownerScopeId });
 
       const existingResults = await db.query<[StoredUserData[]]>(
-        `SELECT * FROM user_profiles WHERE email = $email LIMIT 1`,
-        { email: normalizedEmail }
+        `SELECT * FROM user_profiles WHERE ownerScopeId = $ownerScopeId LIMIT 1`,
+        { ownerScopeId }
       );
 
       const existingData = existingResults?.[0]?.[0];
       
       const dataToSave: StoredUserData = {
         email: normalizedEmail,
+        ownerScopeId,
         cruises: input.cruises ?? existingData?.cruises ?? [],
         bookedCruises: input.bookedCruises ?? existingData?.bookedCruises ?? [],
         casinoOffers: input.casinoOffers ?? existingData?.casinoOffers ?? [],
@@ -201,8 +209,9 @@ export const dataRouter = createTRPCRouter({
             favoriteStaterooms = $favoriteStaterooms,
             sailingWeatherCache = $sailingWeatherCache,
             casinoOpenHours = $casinoOpenHours,
+            ownerScopeId = $ownerScopeId,
             updatedAt = $updatedAt
-          WHERE email = $email`,
+          WHERE ownerScopeId = $ownerScopeId`,
           dataToSave as Record<string, unknown>
         );
         console.log('[API] Updated existing user profile:', normalizedEmail);
@@ -227,22 +236,32 @@ export const dataRouter = createTRPCRouter({
     }),
 
   getAllUserData: publicProcedure
-    .input(z.object({ email: z.string().email() }))
+    .input(z.object({ email: z.string().email(), ownerScopeId: z.string().min(3).optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       const normalizedEmail = input.email.toLowerCase().trim();
+      const ownerScopeId = input.ownerScopeId?.trim() || '';
       
-      console.log('[API] Loading all user data for:', normalizedEmail);
+      console.log('[API] Loading all user data for:', { email: normalizedEmail, ownerScopeId: ownerScopeId || 'missing' });
+
+      if (!ownerScopeId) {
+        console.log('[API] Refusing unscoped cloud restore to prevent cross-user data exposure:', normalizedEmail);
+        return {
+          found: false,
+          data: null,
+        };
+      }
 
       const results = await db.query<[StoredUserData[]]>(
-        `SELECT * FROM user_profiles WHERE email = $email LIMIT 1`,
-        { email: normalizedEmail }
+        `SELECT * FROM user_profiles WHERE ownerScopeId = $ownerScopeId LIMIT 1`,
+        { ownerScopeId }
       );
 
       if (results && results[0] && results[0].length > 0) {
         const data = results[0][0];
         console.log('[API] Found user data:', {
           email: normalizedEmail,
+          ownerScopeId,
           availableCruises: data.cruises?.length ?? 0,
           cruises: data.bookedCruises?.length ?? 0,
           offers: data.casinoOffers?.length ?? 0,

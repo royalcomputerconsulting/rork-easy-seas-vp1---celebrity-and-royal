@@ -239,11 +239,7 @@ export function transformOfferRowsToCruisesAndOffers(
   const cruiseIdsByOfferKey = new Map<string, string[]>();
 
   for (const offer of offerRows) {
-    if (!offer.shipName?.trim() && !offer.sailingDate?.trim() && source !== 'carnival') {
-      console.log(`[DataTransformer] Skipping offer-level row without sailings: ${offer.offerCode || offer.offerName || 'unknown'}`);
-      continue;
-    }
-
+    const isOfferLevelOnly = !offer.shipName?.trim() && !offer.sailingDate?.trim();
     const cruiseId = generateId();
     const sailDate = parseDate(offer.sailingDate);
     const offerExpiryDate = parseDate(offer.offerExpirationDate);
@@ -254,7 +250,7 @@ export function transformOfferRowsToCruisesAndOffers(
       ? offer.totalNights
       : null;
     const nights = explicitNights ?? itineraryNights ?? 7;
-    const returnDate = calculateReturnDate(sailDate, nights);
+    const returnDate = isOfferLevelOnly ? '' : calculateReturnDate(sailDate, nights);
     const interiorPrice = parseMoneyValue(offer.interiorPrice);
     const oceanviewPrice = parseMoneyValue(offer.oceanviewPrice);
     const balconyPrice = parseMoneyValue(offer.balconyPrice);
@@ -264,8 +260,8 @@ export function transformOfferRowsToCruisesAndOffers(
     const ports = parsePortList(offer.portList);
 
     console.log(
-      `[DataTransformer] Transforming offer row ${offer.offerCode || offer.offerName || 'unknown'} -> ${offer.shipName || 'unknown ship'} ${sailDate || 'unknown date'} with prices`,
-      { interiorPrice, oceanviewPrice, balconyPrice, suitePrice, taxes, nights }
+      `[DataTransformer] Transforming offer row ${offer.offerCode || offer.offerName || 'unknown'} -> ${offer.shipName || 'offer-level only'} ${sailDate || 'no sailing date'} with prices`,
+      { interiorPrice, oceanviewPrice, balconyPrice, suitePrice, taxes, nights, isOfferLevelOnly }
     );
 
     const cruise: Cruise = {
@@ -302,7 +298,9 @@ export function transformOfferRowsToCruisesAndOffers(
       updatedAt: new Date().toISOString(),
     };
 
-    cruises.push(cruise);
+    if (!isOfferLevelOnly || source === 'carnival') {
+      cruises.push(cruise);
+    }
 
     const offerCodeKey = (offer.offerCode || '').trim().toUpperCase();
     const offerNameKey = (offer.offerName || '').trim().toLowerCase().replace(/\s+/g, ' ');
@@ -320,7 +318,7 @@ export function transformOfferRowsToCruisesAndOffers(
 
       const casinoOffer: CasinoOffer = {
         id: `offer_${offerKey.replace(/\s+/g, '_')}_${Date.now()}`,
-        cruiseId: cruiseId,
+        cruiseId: isOfferLevelOnly && source !== 'carnival' ? undefined : cruiseId,
         cruiseIds: [],
         offerCode: offer.offerCode || '',
         offerName: displayName,
@@ -407,7 +405,9 @@ export function transformOfferRowsToCruisesAndOffers(
       aggregatedOffer.updatedAt = new Date().toISOString();
     }
 
-    cruiseIdsByOfferKey.get(offerKey)?.push(cruiseId);
+    if (!isOfferLevelOnly || source === 'carnival') {
+      cruiseIdsByOfferKey.get(offerKey)?.push(cruiseId);
+    }
   }
 
   offerMap.forEach((offer, key) => {

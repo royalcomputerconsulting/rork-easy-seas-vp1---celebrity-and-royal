@@ -10,6 +10,8 @@ import {
   getTotalMachineSlots 
 } from '@/constants/deckPlans';
 import { getShipByName } from '@/constants/shipInfo';
+import { useAuth } from './AuthProvider';
+import { getUserScopedKey } from '@/lib/storage/storageKeys';
 
 const STORAGE_KEY_DECK_MAPPINGS = 'easyseas_deck_mappings';
 
@@ -58,15 +60,17 @@ export interface DeckPlanState {
 }
 
 const [DeckPlanContext, useDeckPlanHook] = createContextHook((): DeckPlanState => {
+  const { authenticatedEmail } = useAuth();
   const [mappings, setMappings] = useState<MachineDeckMapping[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const loadData = useCallback(async () => {
     try {
       setIsLoading(true);
-      console.log('[DeckPlan] Loading deck mappings...');
+      const scopedStorageKey = getUserScopedKey(STORAGE_KEY_DECK_MAPPINGS, authenticatedEmail);
+      console.log('[DeckPlan] Loading deck mappings...', { authenticatedEmail, scopedStorageKey });
 
-      const data = await AsyncStorage.getItem(STORAGE_KEY_DECK_MAPPINGS);
+      const data = await AsyncStorage.getItem(scopedStorageKey);
       if (data) {
         const parsed: MachineDeckMapping[] = JSON.parse(data);
         setMappings(parsed);
@@ -77,7 +81,7 @@ const [DeckPlanContext, useDeckPlanHook] = createContextHook((): DeckPlanState =
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [authenticatedEmail]);
 
   useEffect(() => {
     loadData();
@@ -85,12 +89,13 @@ const [DeckPlanContext, useDeckPlanHook] = createContextHook((): DeckPlanState =
 
   const saveData = useCallback(async (data: MachineDeckMapping[]) => {
     try {
-      await AsyncStorage.setItem(STORAGE_KEY_DECK_MAPPINGS, JSON.stringify(data));
-      console.log(`[DeckPlan] Saved ${data.length} mappings`);
+      const scopedStorageKey = getUserScopedKey(STORAGE_KEY_DECK_MAPPINGS, authenticatedEmail);
+      await AsyncStorage.setItem(scopedStorageKey, JSON.stringify(data));
+      console.log(`[DeckPlan] Saved ${data.length} mappings`, { authenticatedEmail, scopedStorageKey });
     } catch (error) {
       console.error('[DeckPlan] Error saving mappings:', error);
     }
-  }, []);
+  }, [authenticatedEmail]);
 
   const addMapping = useCallback(async (
     mappingData: Omit<MachineDeckMapping, 'id' | 'createdAt' | 'updatedAt' | 'isActive'>

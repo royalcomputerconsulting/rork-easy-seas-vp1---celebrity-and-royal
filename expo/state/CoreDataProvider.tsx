@@ -24,6 +24,7 @@ import {
 } from "./coreData/storageLoaders";
 import { clearUserSpecificData } from "@/lib/storage/storageOperations";
 import { ALL_STORAGE_KEYS, getUserScopedKey } from "@/lib/storage/storageKeys";
+import { buildOwnerScopeId, getInstallationId } from "@/lib/storage/installationId";
 import { updateAllCruiseLifecycles } from "@/lib/lifecycleManager";
 
 const getMockCruises = (): { BOOKED_CRUISES_DATA: BookedCruise[]; COMPLETED_CRUISES_DATA: BookedCruise[] } => {
@@ -334,6 +335,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   const accountSwitchClearingRef = useRef<Promise<void> | null>(null);
 
   const [lastSyncDate, setLastSyncDate] = useState<string | null>(null);
+  const [ownerScopeId, setOwnerScopeId] = useState<string | null>(null);
   
   const [filters, setFiltersState] = useState<CruiseFilter>(DEFAULT_FILTERS);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
@@ -347,9 +349,35 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
 
   const hasLocalData = cruises.length > 0 || bookedCruises.length > 0 || casinoOffers.length > 0 || calendarEvents.length > 0;
 
+  useEffect(() => {
+    let isMounted = true;
+
+    if (!authenticatedEmail) {
+      setOwnerScopeId(null);
+      return;
+    }
+
+    void getInstallationId()
+      .then((installationId) => {
+        if (!isMounted) {
+          return;
+        }
+        const nextOwnerScopeId = buildOwnerScopeId(authenticatedEmail, installationId);
+        setOwnerScopeId(nextOwnerScopeId);
+        console.log('[CoreData] Owner data scope resolved:', { email: authenticatedEmail, ownerScopeId: nextOwnerScopeId });
+      })
+      .catch((error) => {
+        console.error('[CoreData] Failed to resolve owner data scope:', error);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [authenticatedEmail]);
+
   const { mutateAsync: saveAllUserDataMutateAsync } = trpc.data.saveAllUserData.useMutation();
   const { refetch: refetchBackendData } = trpc.data.getAllUserData.useQuery(
-    { email: authenticatedEmail || '' },
+    { email: authenticatedEmail || 'placeholder@example.com', ownerScopeId: ownerScopeId || undefined },
     { enabled: false, retry: false, staleTime: 0 }
   );
 
@@ -417,8 +445,8 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       pendingBackendSyncTimeoutRef.current = null;
     }
 
-    if (!authenticatedEmail) {
-      console.log('[CoreData] Backend sync skipped - no authenticated email');
+    if (!authenticatedEmail || !ownerScopeId) {
+      console.log('[CoreData] Backend sync skipped - no authenticated email or owner scope');
       return;
     }
 
@@ -479,6 +507,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       
       const syncResult = await saveAllUserDataMutateAsync({
         email: authenticatedEmail,
+        ownerScopeId,
         cruises: parsedCruises,
         bookedCruises: parsedBooked,
         casinoOffers: parsedOffers,
@@ -506,7 +535,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         console.log('[CoreData] Backend sync failed (non-critical):', errorMessage);
       }
     }
-  }, [saveAllUserDataMutateAsync, authenticatedEmail]);
+  }, [saveAllUserDataMutateAsync, authenticatedEmail, ownerScopeId]);
 
   const scheduleSyncToBackend = useCallback((reason: string) => {
     if (!authenticatedEmail) {
@@ -537,8 +566,8 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   }, [authenticatedEmail, syncToBackend]);
 
   const loadFromBackend = useCallback(async () => {
-    if (!isBackendAvailable() || !authenticatedEmail) {
-      console.log('[CoreData] Backend load skipped - not authenticated or backend unavailable');
+    if (!isBackendAvailable() || !authenticatedEmail || !ownerScopeId) {
+      console.log('[CoreData] Backend load skipped - not authenticated, owner scope missing, or backend unavailable');
       return false;
     }
 
@@ -705,7 +734,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       console.error('[CoreData] Backend load failed:', error);
       return false;
     }
-  }, [refetchBackendData, authenticatedEmail, cruises.length, bookedCruises.length, casinoOffers.length, calendarEvents.length, lastSyncDate]);
+  }, [refetchBackendData, authenticatedEmail, ownerScopeId, cruises.length, bookedCruises.length, casinoOffers.length, calendarEvents.length, lastSyncDate]);
 
   const loadFromStorage = useCallback(async (force = false) => {
     console.log('[CoreData] === START LOADING FROM STORAGE ===', { force, alreadyAttempted: loadAttemptedRef.current });
@@ -877,6 +906,14 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
           }
           return;
         }
+
+        if (authenticatedEmail && !ownerScopeId) {
+          console.log('[CoreData] === Waiting for owner data scope before loading user data ===');
+          if (isMounted) {
+            setIsLoading(false);
+          }
+          return;
+        }
         
         console.log('[CoreData] === Calling loadFromStorage ===');
         didStartStorageLoad = true;
@@ -901,10 +938,10 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       isMounted = false;
       clearTimeout(loadTimeout);
     };
-  }, [loadFromStorage, isAuthenticated, authenticatedEmail, initialCheckComplete]);
+  }, [loadFromStorage, isAuthenticated, authenticatedEmail, ownerScopeId, initialCheckComplete]);
 
   useEffect(() => {
-    if (!isAuthenticated || !authenticatedEmail || !initialCheckComplete) {
+    if (!isAuthenticated || !authenticatedEmail || !ownerScopeId || !initialCheckComplete) {
       return;
     }
 
@@ -929,7 +966,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     return () => {
       subscription.remove();
     };
-  }, [loadFromStorage, isAuthenticated, authenticatedEmail, initialCheckComplete]);
+  }, [loadFromStorage, isAuthenticated, authenticatedEmail, ownerScopeId, initialCheckComplete]);
 
   // Auto-sync to backend when data changes (debounced)
   useEffect(() => {

@@ -5,6 +5,7 @@ import createContextHook from '@nkzw/create-context-hook';
 import type { SlotMachine, SlotMachineFilter, DeckPlanLocation } from '@/types/models';
 import { searchSlotMachines, filterSlotMachines, loadGlobalSlotMachines } from '@/lib/slotMachineUtils';
 import { useAuth } from './AuthProvider';
+import { getUserScopedKey } from '@/lib/storage/storageKeys';
 
 const STORAGE_KEYS = {
   USER_MACHINES: '@easyseas/user_slot_machines',
@@ -75,12 +76,14 @@ export const [SlotMachineProvider, useSlotMachines] = createContextHook((): Slot
   const loadFromStorage = useCallback(async () => {
     try {
       setIsLoading(true);
-      console.log('[SlotMachine] Loading data from storage...');
+      const userMachinesKey = getUserScopedKey(STORAGE_KEYS.USER_MACHINES, authenticatedEmail);
+      const deckLocationsKey = getUserScopedKey(STORAGE_KEYS.DECK_LOCATIONS, authenticatedEmail);
+      console.log('[SlotMachine] Loading data from scoped storage...', { authenticatedEmail, userMachinesKey, deckLocationsKey });
       
       const [globalData, userMachinesData, deckLocationsData] = await Promise.all([
         loadGlobalSlotMachines(),
-        AsyncStorage.getItem(STORAGE_KEYS.USER_MACHINES),
-        AsyncStorage.getItem(STORAGE_KEYS.DECK_LOCATIONS),
+        AsyncStorage.getItem(userMachinesKey),
+        AsyncStorage.getItem(deckLocationsKey),
       ]);
       
       setGlobalMachines(globalData);
@@ -103,7 +106,7 @@ export const [SlotMachineProvider, useSlotMachines] = createContextHook((): Slot
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [authenticatedEmail]);
   
   useEffect(() => {
     if (authenticatedEmail !== lastEmailRef.current) {
@@ -154,21 +157,23 @@ export const [SlotMachineProvider, useSlotMachines] = createContextHook((): Slot
   
   const persistUserMachines = useCallback(async (machines: SlotMachine[]) => {
     try {
-      await AsyncStorage.setItem(STORAGE_KEYS.USER_MACHINES, JSON.stringify(machines));
-      console.log('[SlotMachine] Persisted', machines.length, 'user machines');
+      const userMachinesKey = getUserScopedKey(STORAGE_KEYS.USER_MACHINES, authenticatedEmail);
+      await AsyncStorage.setItem(userMachinesKey, JSON.stringify(machines));
+      console.log('[SlotMachine] Persisted', machines.length, 'user machines for scoped user:', authenticatedEmail);
     } catch (error) {
       console.error('[SlotMachine] Failed to persist user machines:', error);
     }
-  }, []);
+  }, [authenticatedEmail]);
   
   const persistDeckLocations = useCallback(async (locations: DeckPlanLocation[]) => {
     try {
-      await AsyncStorage.setItem(STORAGE_KEYS.DECK_LOCATIONS, JSON.stringify(locations));
-      console.log('[SlotMachine] Persisted', locations.length, 'deck locations');
+      const deckLocationsKey = getUserScopedKey(STORAGE_KEYS.DECK_LOCATIONS, authenticatedEmail);
+      await AsyncStorage.setItem(deckLocationsKey, JSON.stringify(locations));
+      console.log('[SlotMachine] Persisted', locations.length, 'deck locations for scoped user:', authenticatedEmail);
     } catch (error) {
       console.error('[SlotMachine] Failed to persist deck locations:', error);
     }
-  }, []);
+  }, [authenticatedEmail]);
   
   const addMachine = useCallback(async (machineData: Omit<SlotMachine, 'id' | 'createdAt' | 'updatedAt'>): Promise<SlotMachine> => {
     const now = new Date().toISOString();

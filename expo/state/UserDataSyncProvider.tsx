@@ -5,6 +5,7 @@ import { trpc, trpcClient, isBackendReachable } from "@/lib/trpc";
 import { useAuth } from "@/state/AuthProvider";
 import { getUserScopedKey, ALL_STORAGE_KEYS } from "@/lib/storage/storageKeys";
 import { clearUserSpecificData } from "@/lib/storage/storageOperations";
+import { buildOwnerScopeId, getInstallationId } from "@/lib/storage/installationId";
 
 const _BASE_LAST_SYNC_KEY = "easyseas_last_cloud_sync";
 const MAX_RETRY_ATTEMPTS = 1;
@@ -321,7 +322,36 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
   const { authenticatedEmail, isAuthenticated } = useAuth();
 
   const emailRef = useRef<string | null>(authenticatedEmail);
+  const ownerScopeIdRef = useRef<string | null>(null);
+  const [ownerScopeId, setOwnerScopeId] = useState<string | null>(null);
   useEffect(() => { emailRef.current = authenticatedEmail; }, [authenticatedEmail]);
+  useEffect(() => {
+    let isMounted = true;
+
+    if (!authenticatedEmail) {
+      ownerScopeIdRef.current = null;
+      setOwnerScopeId(null);
+      return;
+    }
+
+    void getInstallationId()
+      .then((installationId) => {
+        if (!isMounted) {
+          return;
+        }
+        const nextOwnerScopeId = buildOwnerScopeId(authenticatedEmail, installationId);
+        ownerScopeIdRef.current = nextOwnerScopeId;
+        setOwnerScopeId(nextOwnerScopeId);
+        console.log('[UserDataSync] Owner data scope resolved:', { email: authenticatedEmail, ownerScopeId: nextOwnerScopeId });
+      })
+      .catch((error) => {
+        console.error('[UserDataSync] Failed to resolve owner data scope:', error);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [authenticatedEmail]);
   const sk = (baseKey: string) => getUserScopedKey(baseKey, emailRef.current);
   const lastSyncKey = () => getUserScopedKey(_BASE_LAST_SYNC_KEY, emailRef.current);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -346,7 +376,12 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
   const fetchAllUserDataByEmail = useCallback(async (email: string) => {
     const normalizedEmail = email.toLowerCase().trim();
     console.log("[UserDataSync] Fetching cloud data for:", normalizedEmail);
-    return trpcClient.data.getAllUserData.query({ email: normalizedEmail });
+    const currentOwnerScopeId = ownerScopeIdRef.current;
+    if (!currentOwnerScopeId) {
+      console.log('[UserDataSync] Cloud fetch skipped until owner scope is ready');
+      return { found: false, data: null };
+    }
+    return trpcClient.data.getAllUserData.query({ email: normalizedEmail, ownerScopeId: currentOwnerScopeId });
   }, []);
 
   const gatherAllLocalData = useCallback(async () => {
@@ -426,8 +461,8 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         AsyncStorage.getItem(scopedDismissedAlertEntitiesKey),
         AsyncStorage.getItem(scopedBankrollLimitsKey),
         AsyncStorage.getItem(scopedBankrollAlertsKey),
-        AsyncStorage.getItem(ALL_STORAGE_KEYS.USER_SLOT_MACHINES),
-        AsyncStorage.getItem(ALL_STORAGE_KEYS.DECK_PLAN_LOCATIONS),
+        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.USER_SLOT_MACHINES)),
+        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.DECK_PLAN_LOCATIONS)),
         AsyncStorage.getItem(scopedFavoriteStateroomsKey),
         AsyncStorage.getItem(scopedSailingWeatherKey),
       ]);
@@ -611,10 +646,10 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_SAILINGS), asArray(cloudData.crewRecognitionSailings)));
       }
       if (hasDefinedProperty(cloudData, 'userSlotMachines')) {
-        appendPromise(savePromises, buildJsonSetPromise(ALL_STORAGE_KEYS.USER_SLOT_MACHINES, asArray(cloudData.userSlotMachines)));
+        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.USER_SLOT_MACHINES), asArray(cloudData.userSlotMachines)));
       }
       if (hasDefinedProperty(cloudData, 'deckPlanLocations')) {
-        appendPromise(savePromises, buildJsonSetPromise(ALL_STORAGE_KEYS.DECK_PLAN_LOCATIONS, asArray(cloudData.deckPlanLocations)));
+        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.DECK_PLAN_LOCATIONS), asArray(cloudData.deckPlanLocations)));
       }
       if (hasDefinedProperty(cloudData, 'favoriteStaterooms')) {
         appendPromise(savePromises, buildJsonSetPromise(scopedFavoriteStateroomsKey, asArray(cloudData.favoriteStaterooms)));
@@ -859,8 +894,15 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         return;
       }
 
+      const currentOwnerScopeId = ownerScopeIdRef.current;
+      if (!currentOwnerScopeId) {
+        console.log('[UserDataSync] Cloud sync skipped until owner scope is ready');
+        return;
+      }
+
       await saveAllMutation.mutateAsync({
         email: authenticatedEmail,
+        ownerScopeId: currentOwnerScopeId,
         ...localData,
       });
 
@@ -940,6 +982,11 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       return;
     }
 
+    if (!ownerScopeId) {
+      console.log('[UserDataSync] Waiting for owner data scope before cloud initialization');
+      return;
+    }
+
     console.log("[UserDataSync] New user login detected, checking backend...");
     hasInitializedRef.current = true;
     
@@ -1004,7 +1051,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
     };
 
     void initSync();
-  }, [isAuthenticated, authenticatedEmail, loadFromCloud, syncToCloud, initialCheckComplete]);
+  }, [isAuthenticated, authenticatedEmail, ownerScopeId, loadFromCloud, syncToCloud, initialCheckComplete]);
 
   // Removed automatic storage change listener to prevent continuous sync loops
   // Users can manually trigger sync via forceSyncNow() if needed

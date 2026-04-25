@@ -143,12 +143,78 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
     return parts.year + '-' + pad2(parts.month) + '-' + pad2(parts.day);
   }
 
+  function isOfferLikeRecord(record) {
+    if (!record || typeof record !== 'object') return false;
+    return !!(
+      record.campaignOffer ||
+      record.offer ||
+      record.offerDetails ||
+      record.offerCode ||
+      record.marketingCouponCode ||
+      record.couponCode ||
+      record.reserveByDate ||
+      record.expirationDate ||
+      record.marketingEndDate
+    );
+  }
+
+  function getCampaignOffer(offer) {
+    return offer?.campaignOffer || offer?.offer || offer?.offerDetails || offer || {};
+  }
+
+  function collectOfferArrays(value, depth) {
+    if (depth > 4 || !value) return [];
+    if (Array.isArray(value)) {
+      if (value.some(isOfferLikeRecord)) return value;
+      return value.flatMap(item => collectOfferArrays(item, depth + 1));
+    }
+    if (typeof value !== 'object') return [];
+    const collected = [];
+    Object.keys(value).forEach(key => {
+      const normalizedKey = key.toLowerCase();
+      if (normalizedKey.includes('offer') || normalizedKey === 'payload' || normalizedKey === 'data') {
+        collected.push(...collectOfferArrays(value[key], depth + 1));
+      }
+    });
+    return collected;
+  }
+
   function extractOffersArray(data) {
-    if (Array.isArray(data?.offers)) return data.offers;
-    if (Array.isArray(data?.payload?.casinoOffers)) return data.payload.casinoOffers;
-    if (Array.isArray(data?.casinoOffers)) return data.casinoOffers;
-    if (Array.isArray(data?.payload?.offers)) return data.payload.offers;
-    return [];
+    const candidates = [
+      data?.offers,
+      data?.casinoOffers,
+      data?.featuredOffers,
+      data?.featuredCasinoOffers,
+      data?.casinoFeaturedOffers,
+      data?.moreOffers,
+      data?.availableOffers,
+      data?.payload?.casinoOffers,
+      data?.payload?.offers,
+      data?.payload?.featuredOffers,
+      data?.payload?.featuredCasinoOffers,
+      data?.payload?.casinoFeaturedOffers,
+      data?.payload?.moreOffers,
+      data?.payload?.availableOffers,
+    ];
+    const map = new Map();
+    const addOffer = (offer, index) => {
+      if (!offer || typeof offer !== 'object') return;
+      const co = getCampaignOffer(offer);
+      const key = [
+        safeStr(co.offerCode || co.marketingCouponCode || co.couponCode || co.code),
+        safeStr(co.name || co.title || co.offerName || co.marketingTitle || co.description),
+        safeStr(co.reserveByDate || co.expirationDate || co.marketingEndDate),
+        index,
+      ].join('|');
+      map.set(key, offer);
+    };
+    candidates.forEach(candidate => {
+      if (Array.isArray(candidate)) candidate.forEach(addOffer);
+    });
+    if (map.size === 0) {
+      collectOfferArrays(data, 0).forEach(addOffer);
+    }
+    return Array.from(map.values());
   }
 
   function normalizeOffersApiResponse(data) {
@@ -389,17 +455,19 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
         log('ℹ️ Normalized casino offers from nested API payload', 'info');
       }
       log('✅ API returned ' + data.offers.length + ' offers', 'success');
-      const offersWithEmptySailings = data.offers.filter(o =>
-        o?.campaignOffer?.offerCode &&
-        Array.isArray(o.campaignOffer.sailings) &&
-        (o.campaignOffer.sailings.length === 0 || (o.campaignOffer.sailings[0] && o.campaignOffer.sailings[0].itineraryCode === null)) &&
-        !isOfferInProgress(o.campaignOffer, o)
-      );
+      const offersWithEmptySailings = data.offers.filter(o => {
+        const co = getCampaignOffer(o);
+        return co?.offerCode &&
+          Array.isArray(co.sailings) &&
+          (co.sailings.length === 0 || (co.sailings[0] && co.sailings[0].itineraryCode === null)) &&
+          !isOfferInProgress(co, o);
+      });
       if (offersWithEmptySailings.length > 0) {
         log('🔄 Refetching ' + offersWithEmptySailings.length + ' offers with empty/incomplete sailings...');
         for (let offerIndex = 0; offerIndex < offersWithEmptySailings.length; offerIndex += 1) {
           const offer = offersWithEmptySailings[offerIndex];
-          const code = offer.campaignOffer.offerCode.trim();
+          const offerCampaign = getCampaignOffer(offer);
+          const code = offerCampaign.offerCode.trim();
           window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'progress', current: offerIndex + 1, total: offersWithEmptySailings.length, stepName: 'Refetching full sailing lists...' }));
           log('  Refetching offer: ' + code + ' (' + (offerIndex + 1) + '/' + offersWithEmptySailings.length + ')');
           try {
@@ -408,12 +476,14 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
             if (refetchResponse.ok) {
               const refetchRawData = await refetchResponse.json();
               const refetchData = normalizeOffersApiResponse(refetchRawData);
-              const refreshedOffer = refetchData.offers?.find(o => o?.campaignOffer?.offerCode === code);
-              if (refreshedOffer?.campaignOffer?.sailings?.length > 0) {
+              const refreshedOffer = refetchData.offers?.find(o => getCampaignOffer(o)?.offerCode === code);
+              const refreshedCampaign = getCampaignOffer(refreshedOffer);
+              if (refreshedCampaign?.sailings?.length > 0) {
                 const originalIdx = data.offers.indexOf(offer);
                 if (originalIdx !== -1) {
-                  const origSailings = data.offers[originalIdx].campaignOffer.sailings || [];
-                  const newSailings = refreshedOffer.campaignOffer.sailings;
+                  const originalCampaign = getCampaignOffer(data.offers[originalIdx]);
+                  const origSailings = originalCampaign.sailings || [];
+                  const newSailings = refreshedCampaign.sailings;
                   const sailingMap = new Map();
                   origSailings.forEach(s => {
                     const key = (s.shipCode || '') + '|' + (s.sailDate || '');
@@ -423,8 +493,8 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
                     const key = (s.shipCode || '') + '|' + (s.sailDate || '');
                     if (key !== '|') sailingMap.set(key, s);
                   });
-                  data.offers[originalIdx].campaignOffer.sailings = Array.from(sailingMap.values());
-                  log('  ✓ Updated ' + code + ': now has ' + data.offers[originalIdx].campaignOffer.sailings.length + ' sailings', 'success');
+                  originalCampaign.sailings = Array.from(sailingMap.values());
+                  log('  ✓ Updated ' + code + ': now has ' + originalCampaign.sailings.length + ' sailings', 'success');
                 }
               }
             }
@@ -538,15 +608,15 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
     if (!data || !Array.isArray(data.offers)) {
       return { offerRows: allOfferRows, offerCount: 0, totalSailings: 0 };
     }
-    const validOffers = data.offers.filter(o => o && o.campaignOffer);
+    const validOffers = data.offers.filter(o => o && isOfferLikeRecord(o));
     const host = location && location.hostname ? location.hostname : '';
     const defaultOfferType = host.includes('celebritycruises.com') ? 'Blue Chip Club' : 'Club Royale';
     log('📊 Processing ' + validOffers.length + ' offers from API response...');
     for (let i = 0; i < validOffers.length; i++) {
       const offer = validOffers[i];
-      const co = offer.campaignOffer;
-      const offerName = co.name || '';
-      const offerCode = co.offerCode || '';
+      const co = getCampaignOffer(offer);
+      const offerName = co.name || co.title || co.offerName || co.marketingTitle || '';
+      const offerCode = co.offerCode || co.marketingCouponCode || co.couponCode || co.code || '';
       const offerExpiry = formatDate(co.reserveByDate);
       const tradeInValue = co.tradeInValue ? '$' + Number(co.tradeInValue).toFixed(2) : '';
       const perks = tradeInValue ? 'Trade-in value: ' + tradeInValue : '';
@@ -562,7 +632,7 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
       if (offerStatus) {
         log('  Status: ' + offerStatus, offerIsInProgress ? 'warning' : 'info');
       }
-      const sailings = co.sailings || [];
+      const sailings = co.sailings || co.availableSailings || co.eligibleSailings || co.sailingInfo || co.offerSailings || offer.sailings || offer.availableSailings || offer.eligibleSailings || offer.sailingInfo || offer.offerSailings || [];
       if (sailings.length === 0) {
         log('  ⚠️ No sailings available for this offer', 'warning');
         allOfferRows.push({
@@ -592,7 +662,7 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
           totalNights: null,
           bookingLink: '',
           offerStatus: offerStatus || 'No sailings available',
-          isInProgress: true
+          isInProgress: offerIsInProgress
         });
         totalSailings++;
         sendOfferProgress(i + 1, validOffers.length, offerName, 0, 'complete');

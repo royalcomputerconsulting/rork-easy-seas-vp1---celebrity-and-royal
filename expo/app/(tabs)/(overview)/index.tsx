@@ -384,7 +384,7 @@ function OverviewScreenContent() {
       }
     });
 
-    const grouped = Array.from(offersMap.values()).filter((offer) => offer.cruises.length > 0);
+    const grouped = Array.from(offersMap.values());
     console.log('[Overview] Grouped active offers:', {
       groupedOffers: grouped.length,
       realActiveOffers: realActiveOffersCount,
@@ -705,7 +705,7 @@ function OverviewScreenContent() {
       <View style={styles.footerContent}>
         <CollapsibleSection
           title="Casino & Certificates"
-          subtitle={`${certificateSummary.reduce((sum, c) => sum + c.value, 0)} available`}
+          subtitle={`${availableCruisesCount} available`}
           icon={<Sparkles size={18} color="#FFFFFF" />}
           defaultExpanded={true}
           showBorder={false}

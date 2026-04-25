@@ -186,6 +186,48 @@ function formatMoney(value: unknown): string | undefined {
   return `$${amount.toFixed(2)}`;
 }
 
+function isOfferLikeRecord(record: UnknownRecord): boolean {
+  return Boolean(
+    asRecord(record.campaignOffer) ||
+      asRecord(record.offer) ||
+      record.offerCode ||
+      record.marketingCouponCode ||
+      record.reserveByDate ||
+      record.expirationDate ||
+      record.marketingEndDate
+  );
+}
+
+function collectOfferRecords(value: unknown, depth: number = 0): UnknownRecord[] {
+  if (depth > 4) {
+    return [];
+  }
+
+  if (Array.isArray(value)) {
+    const records = asRecordArray(value);
+    if (records.some(isOfferLikeRecord)) {
+      return records;
+    }
+
+    return records.flatMap((record) => collectOfferRecords(record, depth + 1));
+  }
+
+  const record = asRecord(value);
+  if (!record) {
+    return [];
+  }
+
+  const collected: UnknownRecord[] = [];
+  Object.entries(record).forEach(([key, childValue]) => {
+    const normalizedKey = key.toLowerCase();
+    if (normalizedKey.includes('offer') || normalizedKey === 'payload' || normalizedKey === 'data') {
+      collected.push(...collectOfferRecords(childValue, depth + 1));
+    }
+  });
+
+  return collected;
+}
+
 function getOffersArray(payload: unknown): UnknownRecord[] {
   if (Array.isArray(payload)) {
     return asRecordArray(payload);
@@ -200,22 +242,45 @@ function getOffersArray(payload: unknown): UnknownRecord[] {
   const candidateArrays: unknown[] = [
     record.offers,
     record.casinoOffers,
+    record.featuredOffers,
+    record.featuredCasinoOffers,
+    record.casinoFeaturedOffers,
+    record.moreOffers,
     nestedPayload?.offers,
     nestedPayload?.casinoOffers,
+    nestedPayload?.featuredOffers,
+    nestedPayload?.featuredCasinoOffers,
+    nestedPayload?.casinoFeaturedOffers,
+    nestedPayload?.moreOffers,
   ];
 
+  const offerMap = new Map<string, UnknownRecord>();
+  const addOffers = (offers: UnknownRecord[]) => {
+    offers.forEach((offer, index) => {
+      const offerRecord = getOfferRecord(offer);
+      const key = [
+        getString(offerRecord.offerCode ?? offerRecord.marketingCouponCode ?? offerRecord.code),
+        getString(offerRecord.name ?? offerRecord.title ?? offerRecord.offerName ?? offerRecord.description),
+        getString(offerRecord.reserveByDate ?? offerRecord.expirationDate ?? offerRecord.marketingEndDate),
+        index,
+      ].join('|');
+      offerMap.set(key, offer);
+    });
+  };
+
   for (const candidate of candidateArrays) {
-    const offers = asRecordArray(candidate);
-    if (offers.length > 0) {
-      return offers;
-    }
+    addOffers(asRecordArray(candidate));
   }
 
-  return [];
+  if (offerMap.size === 0) {
+    addOffers(collectOfferRecords(record));
+  }
+
+  return Array.from(offerMap.values());
 }
 
 function getOfferRecord(entry: UnknownRecord): UnknownRecord {
-  return asRecord(entry.campaignOffer) ?? entry;
+  return asRecord(entry.campaignOffer) ?? asRecord(entry.offer) ?? asRecord(entry.offerDetails) ?? entry;
 }
 
 function extractTradeInValue(offer: UnknownRecord): number | undefined {
@@ -325,10 +390,16 @@ function extractSailings(entry: UnknownRecord, offer: UnknownRecord): UnknownRec
     offer.availableSailings,
     offer.eligibleSailings,
     offer.sailingInfo,
+    offer.offerSailings,
+    offer.sailingList,
+    offer.cruises,
     entry.sailings,
     entry.availableSailings,
     entry.eligibleSailings,
     entry.sailingInfo,
+    entry.offerSailings,
+    entry.sailingList,
+    entry.cruises,
   ];
 
   for (const candidate of candidateArrays) {
@@ -507,8 +578,8 @@ export function parseCasinoOffersPayload(
 
   rawOffers.forEach((entry) => {
     const offer = getOfferRecord(entry);
-    const offerName = getString(offer.name ?? offer.title ?? offer.offerName ?? offer.description);
-    const offerCode = getString(offer.offerCode ?? offer.marketingCouponCode ?? offer.code);
+    const offerName = getString(offer.name ?? offer.title ?? offer.offerName ?? offer.marketingTitle ?? offer.description);
+    const offerCode = getString(offer.offerCode ?? offer.marketingCouponCode ?? offer.couponCode ?? offer.code);
     const offerExpirationDate = formatDate(offer.reserveByDate ?? offer.expirationDate ?? offer.marketingEndDate);
     const offerType = getString(offer.type ?? offer.offerType) || defaultOfferType;
     const offerStatus = getOfferStatus(offer, entry);

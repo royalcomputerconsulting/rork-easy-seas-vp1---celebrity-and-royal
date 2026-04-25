@@ -650,10 +650,6 @@ export function createSyncPreview(
       console.log(`[SyncLogic] Skipping IN PROGRESS offer: ${offer.offerCode} - ${offer.offerName}`);
       return false;
     }
-    if (syncSource !== 'carnival' && isEmptyOfferRow(offer)) {
-      console.log(`[SyncLogic] Skipping offer without available sailings: ${offer.offerCode} - ${offer.offerName}`);
-      return false;
-    }
     return true;
   });
   
