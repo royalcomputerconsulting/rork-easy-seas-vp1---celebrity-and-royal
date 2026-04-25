@@ -1,5 +1,4 @@
 import type { Cruise, BookedCruise, ItineraryDay } from '@/types/models';
-import { BOOKED_CRUISES_DATA } from '@/mocks/bookedCruises';
 
 function isValidDate(date: Date): boolean {
   if (!(date instanceof Date)) return false;
@@ -513,18 +512,7 @@ export function calculateCasinoAvailabilityForCruise(
     itineraryToUse = cruise.itinerary;
     console.log('[CasinoAvailability] Using cruise.itinerary:', itineraryToUse.length, 'days');
   } else {
-    // Try to find matching cruise in BOOKED_CRUISES_DATA for accurate itinerary
-    const bookedCruise = cruise as BookedCruise;
-    const mockMatch = BOOKED_CRUISES_DATA.find(mc => 
-      mc.id === cruise.id || 
-      mc.reservationNumber === bookedCruise.reservationNumber ||
-      (mc.shipName === cruise.shipName && mc.sailDate === cruise.sailDate)
-    );
-    
-    if (mockMatch?.itinerary && mockMatch.itinerary.length > 0) {
-      itineraryToUse = mockMatch.itinerary;
-      console.log('[CasinoAvailability] Using BOOKED_CRUISES_DATA mock itinerary for:', mockMatch.id, mockMatch.itinerary.length, 'days');
-    } else if ((cruise as any).portsAndTimes) {
+    if ((cruise as any).portsAndTimes) {
       itineraryToUse = parsePortsAndTimes((cruise as any).portsAndTimes);
       console.log('[CasinoAvailability] Parsed from cruise.portsAndTimes field');
     } else if (offers && offers.length > 0 && (cruise as any).offerCode) {

@@ -6,7 +6,7 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from "react"
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { StyleSheet, View, Text, ActivityIndicator, Platform, useWindowDimensions } from "react-native";
 import { CoreDataProvider, useCoreData } from "@/state/CoreDataProvider";
-import { clearAllAppData } from "@/lib/dataManager";
+import { clearAllAppData } from "@/lib/storage/storageOperations";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ALL_STORAGE_KEYS } from "@/lib/storage/storageKeys";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -32,7 +32,6 @@ import { PPHAlertsProvider } from "@/state/PPHAlertsProvider";
 import { BankrollProvider } from "@/state/BankrollProvider";
 import { TaxProvider } from "@/state/TaxProvider";
 import { MachineStrategyProvider } from "@/state/MachineStrategyProvider";
-import { SlotMachineProvider } from "@/state/SlotMachineProvider";
 import { SlotMachineLibraryProvider, useSlotMachineLibrary } from "@/state/SlotMachineLibraryProvider";
 import { DeckPlanProvider } from "@/state/DeckPlanProvider";
 import { UserDataSyncProvider, useUserDataSync } from "@/state/UserDataSyncProvider";
@@ -539,7 +538,6 @@ const DataProviders = composeProviders(
 const CasinoProviders = composeProviders(
   CasinoStrategyProvider,
   CasinoSessionProvider,
-  SlotMachineProvider,
   SlotMachineLibraryProvider,
   MachineStrategyProvider,
   BankrollProvider,

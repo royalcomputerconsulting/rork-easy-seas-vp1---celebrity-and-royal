@@ -56,24 +56,16 @@ import { isActiveBookedCruise, isCompletedBookedCruise } from '@/lib/bookedCruis
 import { useAppState } from '@/state/AppStateProvider';
 import { useUser } from '@/state/UserProvider';
 import { 
-  pickAndReadFile, 
   parseOffersCSV, 
   parseICSFile, 
   parseBookedCSV,
   generateOffersCSV, 
   generateCalendarICS,
   generateBookedCSV,
-  exportFile,
-  downloadFromURL,
   healImportedData
 } from '@/lib/importExport';
-import {
-  clearAllAppData,
-  exportAllDataToFile,
-  importAllDataFromFile,
-} from '@/lib/dataManager';
+import { clearAllAppData } from '@/lib/storage/storageOperations';
 import { getUserScopedKey, ALL_STORAGE_KEYS } from '@/lib/storage/storageKeys';
-import { downloadSeaPassGenerator } from '@/lib/seapassGeneratorDownload';
 import { generateCalendarFeed, generateFeedToken } from '@/lib/calendar/feedGenerator';
 import {
   getImportedSource,
@@ -83,9 +75,6 @@ import {
   mergeImportedOffers,
 } from '@/lib/importMerge';
 import { RENDER_BACKEND_URL, trpc } from '@/lib/trpc';
-import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
-import * as XLSX from 'xlsx';
 import type { BookedCruise } from '@/types/models';
 import { getCalendarEventsWithGeneratedCruiseEvents } from '@/lib/calendar/cruiseEvents';
 
@@ -94,14 +83,17 @@ import { UserProfileCard } from '@/components/ui/UserProfileCard';
 
 import { useSlotMachineLibrary } from '@/state/SlotMachineLibraryProvider';
 import { useCasinoSessions } from '@/state/CasinoSessionProvider';
-import { saveMockData } from '@/lib/saveMockData';
 import { generateSampleData, SAMPLE_LOYALTY_POINTS } from '@/lib/sampleData';
 import { useAuth } from '@/state/AuthProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
-import { UserManualModal } from '@/components/UserManualModal';
 import { ResponsiveContainer } from '@/components/ResponsiveContainer';
 import { useEntitlement } from '@/state/EntitlementProvider';
 import { useCrewRecognition } from '@/state/CrewRecognitionProvider';
+
+const LazyUserManualModal = React.lazy(async () => {
+  const module = await import('@/components/UserManualModal');
+  return { default: module.UserManualModal };
+});
 
 function normalizeAccountEmail(email: string | null | undefined): string | null {
   if (!email) {
@@ -384,6 +376,7 @@ export default function SettingsScreen() {
       setLastImportResult(null);
       console.log('[Settings] Starting offers CSV import');
       
+      const { pickAndReadFile } = await import('@/lib/fileIO/fileOperations');
       const result = await pickAndReadFile('csv');
       if (!result) {
         console.log('[Settings] Import cancelled');
@@ -625,6 +618,7 @@ export default function SettingsScreen() {
                 
                 // Try native download first (works better for authenticated URLs)
                 console.log('[Settings] Attempting native download first:', trimmedUrl);
+                const { downloadFromURL } = await import('@/lib/fileIO/fileOperations');
                 const nativeResult = await downloadFromURL(trimmedUrl);
                 
                 if (nativeResult.success && nativeResult.content) {
@@ -686,6 +680,7 @@ export default function SettingsScreen() {
       setLastImportResult(null);
       console.log('[Settings] Starting calendar ICS import from file');
       
+      const { pickAndReadFile } = await import('@/lib/fileIO/fileOperations');
       const result = await pickAndReadFile('ics');
       if (!result) {
         console.log('[Settings] Import cancelled');
@@ -748,6 +743,7 @@ export default function SettingsScreen() {
       setLastImportResult(null);
       console.log('[Settings] Starting booked CSV import');
       
+      const { pickAndReadFile } = await import('@/lib/fileIO/fileOperations');
       const result = await pickAndReadFile('csv');
       if (!result) {
         console.log('[Settings] Import cancelled');
@@ -823,6 +819,8 @@ export default function SettingsScreen() {
       setLastImportResult(null);
       console.log('[Settings] Starting completed cruises XLSX import');
 
+      const DocumentPicker = await import('expo-document-picker');
+      const XLSX = await import('xlsx');
       const pickerResult = await DocumentPicker.getDocumentAsync({
         type: [
           'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -842,14 +840,15 @@ export default function SettingsScreen() {
       const asset = pickerResult.assets[0];
       console.log('[Settings] XLSX file selected:', asset.name, 'size:', asset.size);
 
-      let workbook: XLSX.WorkBook;
+      let workbook: import('xlsx').WorkBook;
       try {
         if (Platform.OS === 'web') {
           const response = await fetch(asset.uri);
           const arrayBuffer = await response.arrayBuffer();
           workbook = XLSX.read(arrayBuffer, { type: 'array' });
         } else {
-          const base64 = await FileSystem.readAsStringAsync(asset.uri, { encoding: 'base64' as any });
+          const { File } = await import('expo-file-system');
+          const base64 = await new File(asset.uri).base64();
           workbook = XLSX.read(base64, { type: 'base64' });
         }
       } catch (parseError) {
@@ -1063,6 +1062,7 @@ export default function SettingsScreen() {
 
       const csvContent = generateBookedCSV(allBooked);
       const fileName = `easyseas_booked_${new Date().toISOString().split('T')[0]}.csv`;
+      const { exportFile } = await import('@/lib/fileIO/fileOperations');
       
       const success = await exportFile(csvContent, fileName);
       if (success) {
@@ -1095,6 +1095,7 @@ export default function SettingsScreen() {
 
       const csvContent = generateOffersCSV(allCruises, allOffers);
       const fileName = `easyseas_offers_${new Date().toISOString().split('T')[0]}.csv`;
+      const { exportFile } = await import('@/lib/fileIO/fileOperations');
       
       const success = await exportFile(csvContent, fileName);
       if (success) {
@@ -1130,6 +1131,7 @@ export default function SettingsScreen() {
 
       const icsContent = generateCalendarICS(allEvents);
       const fileName = `easyseas_calendar_${new Date().toISOString().split('T')[0]}.ics`;
+      const { exportFile } = await import('@/lib/fileIO/fileOperations');
       
       const success = await exportFile(icsContent, fileName);
       if (success) {
@@ -1233,6 +1235,7 @@ export default function SettingsScreen() {
       setIsExportingAll(true);
       console.log('[Settings] Starting full data export...');
       
+      const { exportAllDataToFile } = await import('@/lib/dataBundle/bundleFileIO');
       const result = await exportAllDataToFile(authenticatedEmail);
       
       if (result.success) {
@@ -1256,6 +1259,7 @@ export default function SettingsScreen() {
       setIsImportingAll(true);
       console.log('[Settings] Starting full data import...');
       
+      const { importAllDataFromFile } = await import('@/lib/dataBundle/bundleFileIO');
       const result = await importAllDataFromFile(authenticatedEmail);
       
       if (!result.success) {
@@ -1370,6 +1374,7 @@ export default function SettingsScreen() {
     try {
       setIsDownloadingSeaPass(true);
       console.log('[Settings] Starting SeaPass Generator download...');
+      const { downloadSeaPassGenerator } = await import('@/lib/seapassGeneratorDownload');
       const result = await downloadSeaPassGenerator();
       if (result.success) {
         Alert.alert(
@@ -1404,6 +1409,7 @@ booked-radiance-1,Radiance of the Seas,09-26-2025,10-04-2025,8,8 Night Pacific C
 booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & New England Cruise,"Cape Liberty, NJ (NYC)","Cape Liberty, NJ (NYC)",324123,2,7676777,TRUE,,`;
       
       const fileName = 'booked_template.csv';
+      const { exportFile } = await import('@/lib/fileIO/fileOperations');
       const success = await exportFile(csvTemplateContent, fileName);
       
       if (success) {
@@ -1668,6 +1674,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
       setLastImportResult(null);
       console.log('[Settings] Starting machines JSON import');
       
+      const { pickAndReadFile } = await import('@/lib/fileIO/fileOperations');
       const result = await pickAndReadFile('json');
       if (!result) {
         console.log('[Settings] Import cancelled');
@@ -1738,6 +1745,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
       const fileName = `easyseas_machines_${new Date().toISOString().split('T')[0]}.json`;
       
       console.log('[Settings] Writing export file...');
+      const { exportFile } = await import('@/lib/fileIO/fileOperations');
       const success = await exportFile(jsonContent, fileName);
       if (success) {
         Alert.alert(
@@ -1761,6 +1769,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
       setIsSavingMockData(true);
       console.log('[Settings] Starting mock data save...');
       
+      const { saveMockData } = await import('@/lib/saveMockData');
       const result = await saveMockData();
       
       if (result.success) {
@@ -2712,10 +2721,14 @@ STEP 4: Optional Calendar Import
         </ScrollView>
       </SafeAreaView>
       
-      <UserManualModal
-        visible={isUserManualVisible}
-        onClose={() => setIsUserManualVisible(false)}
-      />
+      {isUserManualVisible ? (
+        <React.Suspense fallback={null}>
+          <LazyUserManualModal
+            visible={isUserManualVisible}
+            onClose={() => setIsUserManualVisible(false)}
+          />
+        </React.Suspense>
+      ) : null}
     </View>
   );
 }

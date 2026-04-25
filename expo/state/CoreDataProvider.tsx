@@ -10,7 +10,6 @@ import { SAMPLE_CLUB_ROYALE_PROFILE } from "@/types/models";
 import {
   applyKnownRetailValues,
   enrichCruisesWithReceiptData,
-  enrichCruisesWithMockItineraries,
   applyFreeplayOBCData,
 } from "./coreData/dataEnrichment";
 import { DEFAULT_FILTERS } from "./coreData/filterLogic";
@@ -25,22 +24,6 @@ import {
 import { clearUserSpecificData } from "@/lib/storage/storageOperations";
 import { ALL_STORAGE_KEYS, getUserScopedKey } from "@/lib/storage/storageKeys";
 import { updateAllCruiseLifecycles } from "@/lib/lifecycleManager";
-
-const getMockCruises = (): { BOOKED_CRUISES_DATA: BookedCruise[]; COMPLETED_CRUISES_DATA: BookedCruise[] } => {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const bookedModule = require('@/mocks/bookedCruises');
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const completedModule = require('@/mocks/completedCruises');
-    return { 
-      BOOKED_CRUISES_DATA: bookedModule.BOOKED_CRUISES_DATA || [], 
-      COMPLETED_CRUISES_DATA: completedModule.COMPLETED_CRUISES_DATA || [] 
-    };
-  } catch (error) {
-    console.error('[CoreData] Failed to load mock data:', error);
-    return { BOOKED_CRUISES_DATA: [], COMPLETED_CRUISES_DATA: [] };
-  }
-};
 
 function parseOptionalStoredNumber(value: string | null): number | null {
   if (value === null || value === undefined || value === '') {
@@ -749,7 +732,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         setCruisesState(parsedCruises);
       }
 
-      const bookedResult = await processBookedCruises(status, snapshot, getMockCruises, getFirstTimeUserSampleData, authenticatedEmail);
+      const bookedResult = await processBookedCruises(status, snapshot, getFirstTimeUserSampleData, authenticatedEmail);
       setBookedCruisesState(bookedResult.bookedCruises);
 
       if (bookedResult.offersOverride) {
@@ -1066,8 +1049,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       nonMock: nonMockCruises.length 
     });
     
-    const withItineraries = enrichCruisesWithMockItineraries(nonMockCruises);
-    const withKnownRetail = applyKnownRetailValues(withItineraries);
+    const withKnownRetail = applyKnownRetailValues(nonMockCruises);
     const withFreeplayOBC = applyFreeplayOBCData(withKnownRetail);
     const enrichedCruises = enrichCruisesWithReceiptData(withFreeplayOBC);
     const lifecycleResult = updateAllCruiseLifecycles(enrichedCruises);
@@ -1172,14 +1154,9 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
 
   const removeBookedCruise = useCallback((id: string) => {
     setBookedCruisesState(prev => {
-      const { BOOKED_CRUISES_DATA, COMPLETED_CRUISES_DATA } = getMockCruises();
-      const allMockCruises = [
-        ...COMPLETED_CRUISES_DATA,
-        ...BOOKED_CRUISES_DATA
-      ];
-      const isMockCruise = allMockCruises.some(mc => mc.id === id);
+      const isDemoCruise = id.includes('demo-') || id.includes('booked-virtual') || id.includes('sample-');
       
-      if (isMockCruise) {
+      if (isDemoCruise) {
         void AsyncStorage.getItem(skRef.current.REMOVED_MOCK_CRUISES)
           .then(data => {
             const existing = data ? new Set<string>(JSON.parse(data)) : new Set<string>();
@@ -1187,7 +1164,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
             return AsyncStorage.setItem(skRef.current.REMOVED_MOCK_CRUISES, JSON.stringify([...existing]));
           })
           .then(() => {
-            console.log('[CoreData] Marked mock cruise as removed:', id);
+            console.log('[CoreData] Marked demo cruise as removed:', id);
           })
           .catch(console.error);
       }
@@ -1369,15 +1346,9 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
 
   const restoreMockData = useCallback(async () => {
     try {
-      console.log('[CoreData] Restoring mock data to AsyncStorage...');
-      const { BOOKED_CRUISES_DATA, COMPLETED_CRUISES_DATA } = getMockCruises();
-      const allMockCruises = [
-        ...COMPLETED_CRUISES_DATA,
-        ...BOOKED_CRUISES_DATA
-      ];
-      
-      const withItineraries = enrichCruisesWithMockItineraries(allMockCruises);
-      const withKnownRetail = applyKnownRetailValues(withItineraries);
+      console.log('[CoreData] Restoring sample data to AsyncStorage...');
+      const { sampleCruises } = getFirstTimeUserSampleData();
+      const withKnownRetail = applyKnownRetailValues(sampleCruises);
       const withFreeplayOBC = applyFreeplayOBCData(withKnownRetail);
       const enrichedCruises = enrichCruisesWithReceiptData(withFreeplayOBC);
       
@@ -1388,9 +1359,9 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       ]);
       
       setBookedCruisesState(enrichedCruises);
-      console.log('[CoreData] Mock data restored successfully:', enrichedCruises.length, 'cruises');
+      console.log('[CoreData] Sample data restored successfully:', enrichedCruises.length, 'cruises');
     } catch (error) {
-      console.error('[CoreData] Failed to restore mock data:', error);
+      console.error('[CoreData] Failed to restore sample data:', error);
       throw error;
     }
   }, []);
