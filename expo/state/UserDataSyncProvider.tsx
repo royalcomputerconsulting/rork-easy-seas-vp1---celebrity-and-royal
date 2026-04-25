@@ -440,6 +440,8 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         deckPlanLocationsRaw,
         favoriteStateroomsRaw,
         sailingWeatherCacheRaw,
+        compItemsRaw,
+        w2gRecordsRaw,
       ] = await Promise.all([
         AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CRUISES)),
         AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.BOOKED_CRUISES)),
@@ -474,6 +476,8 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.DECK_PLAN_LOCATIONS)),
         AsyncStorage.getItem(scopedFavoriteStateroomsKey),
         AsyncStorage.getItem(scopedSailingWeatherKey),
+        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.COMP_ITEMS)),
+        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.W2G_RECORDS)),
       ]);
 
       const casinoOpenHoursEntries = await loadStoredEntriesByPrefix(CASINO_OPEN_HOURS_STORAGE_PREFIX, emailRef.current);
@@ -538,6 +542,8 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         favoriteStaterooms: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(favoriteStateroomsRaw, 'favoriteStaterooms').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync favorite staterooms'),
         sailingWeatherCache: parseStoredRecord(sailingWeatherCacheRaw, 'sailingWeatherCache'),
         casinoOpenHours: normalizeDynamicStorageEntries(casinoOpenHoursEntries, 'casinoOpenHours'),
+        compItems: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(compItemsRaw, 'compItems').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync comp items'),
+        w2gRecords: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(w2gRecordsRaw, 'w2gRecords').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync W-2G records'),
       };
 
       console.log("[UserDataSync] Gathered data:", {
@@ -556,6 +562,8 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         casinoOpenHoursEntries: getRecordSize(data.casinoOpenHours),
         crewEntries: getArrayLength(data.crewRecognitionEntries),
         crewSailings: getArrayLength(data.crewRecognitionSailings),
+        compItems: getArrayLength(data.compItems),
+        w2gRecords: getArrayLength(data.w2gRecords),
       });
 
       return data;
@@ -678,6 +686,12 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       if (hasDefinedProperty(cloudData, 'sailingWeatherCache')) {
         appendPromise(savePromises, buildJsonSetPromise(scopedSailingWeatherKey, asRecord(cloudData.sailingWeatherCache)));
       }
+      if (hasDefinedProperty(cloudData, 'compItems')) {
+        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.COMP_ITEMS), prepareOwnedUnknownArray(cloudData.compItems, currentOwnerScopeId, currentEmail, 'cloud-restore comp items')));
+      }
+      if (hasDefinedProperty(cloudData, 'w2gRecords')) {
+        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.W2G_RECORDS), prepareOwnedUnknownArray(cloudData.w2gRecords, currentOwnerScopeId, currentEmail, 'cloud-restore W-2G records')));
+      }
       if (hasDefinedProperty(cloudData, 'casinoOpenHours')) {
         const existingCasinoOpenHoursEntries = await loadStoredEntriesByPrefix(CASINO_OPEN_HOURS_STORAGE_PREFIX, currentEmail);
         const nextCasinoOpenHours = asRecord(cloudData.casinoOpenHours);
@@ -720,6 +734,8 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         casinoOpenHoursEntries: getRecordSize(cloudData.casinoOpenHours),
         crewEntries: getArrayLength(cloudData.crewRecognitionEntries),
         crewSailings: getArrayLength(cloudData.crewRecognitionSailings),
+        compItems: getArrayLength(cloudData.compItems),
+        w2gRecords: getArrayLength(cloudData.w2gRecords),
       });
 
       return true;

@@ -147,7 +147,7 @@ export const crewRecognitionRouter = createTRPCRouter({
           
           if (sailing?.id) {
             const existingEntryResult = await db.query(
-              `SELECT * FROM recognition_entries WHERE crewMemberId = "${crewMember.id}" AND sailingId = "${sailing.id}" LIMIT 1`
+              `SELECT * FROM recognition_entries WHERE crewMemberId = "${crewMember.id}" AND sailingId = "${sailing.id}" AND userId = "${input.userId}" LIMIT 1`
             );
             
             if ((existingEntryResult[0] as any[])?.length === 0) {
@@ -251,7 +251,7 @@ export const crewRecognitionRouter = createTRPCRouter({
       const crewMember = Array.isArray(createResult) ? createResult[0] : createResult;
       
       if (input.sailingId && crewMember?.id) {
-        const sailingResult = await db.query(`SELECT * FROM sailings WHERE id = "${input.sailingId}" LIMIT 1`);
+        const sailingResult = await db.query(`SELECT * FROM sailings WHERE id = "${input.sailingId}" AND userId = "${input.userId}" LIMIT 1`);
         const sailing = (sailingResult[0] as any[])?.[0];
         
         if (sailing) {
@@ -282,6 +282,7 @@ export const crewRecognitionRouter = createTRPCRouter({
     .input(
       z.object({
         id: z.string(),
+        userId: z.string(),
         fullName: z.string().min(1),
         department: departmentEnum,
         roleTitle: z.string().optional(),
@@ -290,6 +291,16 @@ export const crewRecognitionRouter = createTRPCRouter({
     )
     .mutation(async ({ input }) => {
       const db = await getDb();
+      const existingResult = await db.query(
+        `SELECT * FROM crew_members WHERE id = "${input.id}" AND userId = "${input.userId}" AND isDeleted != true LIMIT 1`
+      );
+      const existing = (existingResult[0] as any[])?.[0];
+      if (!existing) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Crew member not found for this user',
+        });
+      }
       
       const now = new Date().toISOString();
       const updateData = {
@@ -305,12 +316,22 @@ export const crewRecognitionRouter = createTRPCRouter({
     }),
 
   deleteCrewMember: publicProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: z.string(), userId: z.string() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
+      const existingResult = await db.query(
+        `SELECT * FROM crew_members WHERE id = "${input.id}" AND userId = "${input.userId}" AND isDeleted != true LIMIT 1`
+      );
+      const existing = (existingResult[0] as any[])?.[0];
+      if (!existing) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Crew member not found for this user',
+        });
+      }
       
       const entriesResult = await db.query(
-        `SELECT * FROM recognition_entries WHERE crewMemberId = "${input.id}" LIMIT 1`
+        `SELECT * FROM recognition_entries WHERE crewMemberId = "${input.id}" AND userId = "${input.userId}" LIMIT 1`
       );
       
       const hasEntries = (entriesResult[0] as any[])?.length > 0;
@@ -401,7 +422,7 @@ export const crewRecognitionRouter = createTRPCRouter({
       
       const entriesWithCrew = await Promise.all(
         entries.map(async (entry: any) => {
-          const crewResult = await db.query(`SELECT * FROM crew_members WHERE id = "${entry.crewMemberId}" LIMIT 1`);
+          const crewResult = await db.query(`SELECT * FROM crew_members WHERE id = "${entry.crewMemberId}" AND userId = "${input.userId}" LIMIT 1`);
           const crew = (crewResult[0] as any[])?.[0];
           
           return {
@@ -429,13 +450,22 @@ export const crewRecognitionRouter = createTRPCRouter({
     .mutation(async ({ input }) => {
       const db = await getDb();
       
-      const sailingResult = await db.query(`SELECT * FROM sailings WHERE id = "${input.sailingId}" LIMIT 1`);
+      const sailingResult = await db.query(`SELECT * FROM sailings WHERE id = "${input.sailingId}" AND userId = "${input.userId}" LIMIT 1`);
       const sailing = (sailingResult[0] as any[])?.[0];
       
       if (!sailing) {
         throw new TRPCError({
           code: 'NOT_FOUND',
-          message: 'Sailing not found',
+          message: 'Sailing not found for this user',
+        });
+      }
+
+      const crewResult = await db.query(`SELECT * FROM crew_members WHERE id = "${input.crewMemberId}" AND userId = "${input.userId}" AND isDeleted != true LIMIT 1`);
+      const crew = (crewResult[0] as any[])?.[0];
+      if (!crew) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Crew member not found for this user',
         });
       }
       
@@ -464,6 +494,7 @@ export const crewRecognitionRouter = createTRPCRouter({
     .input(
       z.object({
         id: z.string(),
+        userId: z.string(),
         sailingId: z.string().optional(),
         department: departmentEnum.optional(),
         roleTitle: z.string().optional(),
@@ -472,13 +503,24 @@ export const crewRecognitionRouter = createTRPCRouter({
     )
     .mutation(async ({ input }) => {
       const db = await getDb();
+
+      const existingResult = await db.query(
+        `SELECT * FROM recognition_entries WHERE id = "${input.id}" AND userId = "${input.userId}" LIMIT 1`
+      );
+      const existing = (existingResult[0] as any[])?.[0];
+      if (!existing) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Recognition entry not found for this user',
+        });
+      }
       
       const updateData: any = {
         updatedAt: new Date().toISOString(),
       };
       
       if (input.sailingId) {
-        const sailingResult = await db.query(`SELECT * FROM sailings WHERE id = "${input.sailingId}" LIMIT 1`);
+        const sailingResult = await db.query(`SELECT * FROM sailings WHERE id = "${input.sailingId}" AND userId = "${input.userId}" LIMIT 1`);
         const sailing = (sailingResult[0] as any[])?.[0];
         
         if (sailing) {
@@ -508,9 +550,19 @@ export const crewRecognitionRouter = createTRPCRouter({
     }),
 
   deleteRecognitionEntry: publicProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: z.string(), userId: z.string() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
+      const existingResult = await db.query(
+        `SELECT * FROM recognition_entries WHERE id = "${input.id}" AND userId = "${input.userId}" LIMIT 1`
+      );
+      const existing = (existingResult[0] as any[])?.[0];
+      if (!existing) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Recognition entry not found for this user',
+        });
+      }
       await db.delete(input.id);
       return { success: true };
     }),
@@ -585,7 +637,7 @@ export const crewRecognitionRouter = createTRPCRouter({
 
           if (sailing?.id) {
             const existingEntryResult = await db.query(
-              `SELECT * FROM recognition_entries WHERE crewMemberId = "${crewMember.id}" AND sailingId = "${sailing.id}" LIMIT 1`
+              `SELECT * FROM recognition_entries WHERE crewMemberId = "${crewMember.id}" AND sailingId = "${sailing.id}" AND userId = "${input.userId}" LIMIT 1`
             );
 
             if ((existingEntryResult[0] as any[])?.length === 0) {
@@ -660,7 +712,7 @@ export const crewRecognitionRouter = createTRPCRouter({
           crewMemberId,
           count() as mentionCount
         FROM recognition_entries 
-        WHERE sailingId = "${input.sailingId}"
+        WHERE sailingId = "${input.sailingId}" AND userId = "${input.userId}"
         GROUP BY crewMemberId
       `;
       
@@ -669,11 +721,11 @@ export const crewRecognitionRouter = createTRPCRouter({
       
       const surveyList = await Promise.all(
         grouped.map(async (item: any) => {
-          const crewResult = await db.query(`SELECT * FROM crew_members WHERE id = "${item.crewMemberId}" LIMIT 1`);
+          const crewResult = await db.query(`SELECT * FROM crew_members WHERE id = "${item.crewMemberId}" AND userId = "${input.userId}" LIMIT 1`);
           const crew = (crewResult[0] as any[])?.[0];
           
           const entryResult = await db.query(
-            `SELECT * FROM recognition_entries WHERE crewMemberId = "${item.crewMemberId}" AND sailingId = "${input.sailingId}" LIMIT 1`
+            `SELECT * FROM recognition_entries WHERE crewMemberId = "${item.crewMemberId}" AND sailingId = "${input.sailingId}" AND userId = "${input.userId}" LIMIT 1`
           );
           const entry = (entryResult[0] as any[])?.[0];
           

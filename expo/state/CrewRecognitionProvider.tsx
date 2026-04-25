@@ -399,14 +399,14 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
   });
 
   const deleteRecognitionEntryWithFallback = useCallback(async (data: { id: string }) => {
-    const updatedEntries = localEntries.filter(e => e.id !== data.id);
+    const updatedEntries = localEntries.filter(e => e.id !== data.id && e.userId === userId);
     setLocalEntries(updatedEntries);
     await AsyncStorage.setItem(skEntriesRef.current, JSON.stringify(updatedEntries));
-    console.log('[CrewRecognition] Deleted entry locally:', data.id);
+    console.log('[CrewRecognition] Deleted scoped entry locally:', { entryId: data.id, userId });
 
     if (!isOfflineMode) {
       try {
-        const result = await deleteRecognitionEntryMutation.mutateAsync(data);
+        const result = await deleteRecognitionEntryMutation.mutateAsync({ ...data, userId });
         return result;
       } catch (err) {
         console.log('[CrewRecognition] Backend delete failed, local already removed:', err);
@@ -414,7 +414,7 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     }
 
     return { success: true };
-  }, [isOfflineMode, deleteRecognitionEntryMutation, localEntries]);
+  }, [isOfflineMode, deleteRecognitionEntryMutation, localEntries, userId]);
 
   const updateRecognitionEntryWithFallback = useCallback(async (data: { id: string; department?: Department; roleTitle?: string; sourceText?: string; sailingId?: string }) => {
     const updatedEntries = localEntries.map(e => {
@@ -442,7 +442,7 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
 
     if (!isOfflineMode) {
       try {
-        const result = await updateRecognitionEntryMutation.mutateAsync(data);
+        const result = await updateRecognitionEntryMutation.mutateAsync({ ...data, userId });
         return result;
       } catch (err) {
         console.log('[CrewRecognition] Backend update failed, local already updated:', err);
@@ -450,17 +450,17 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     }
 
     return { success: true };
-  }, [isOfflineMode, updateRecognitionEntryMutation, localEntries, localSailings]);
+  }, [isOfflineMode, updateRecognitionEntryMutation, localEntries, localSailings, userId]);
 
   const deleteCrewMemberWithFallback = useCallback(async (data: { id: string }) => {
-    const updatedEntries = localEntries.filter(e => e.crewMemberId !== data.id);
+    const updatedEntries = localEntries.filter(e => !(e.crewMemberId === data.id && e.userId === userId));
     setLocalEntries(updatedEntries);
     await AsyncStorage.setItem(skEntriesRef.current, JSON.stringify(updatedEntries));
-    console.log('[CrewRecognition] Deleted crew member entries locally:', data.id);
+    console.log('[CrewRecognition] Deleted scoped crew member entries locally:', { crewMemberId: data.id, userId });
 
     if (!isOfflineMode) {
       try {
-        const result = await deleteCrewMemberMutation.mutateAsync(data);
+        const result = await deleteCrewMemberMutation.mutateAsync({ ...data, userId });
         return result;
       } catch (err) {
         console.log('[CrewRecognition] Backend delete crew member failed, local already removed:', err);
@@ -468,13 +468,36 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     }
 
     return { success: true };
-  }, [isOfflineMode, deleteCrewMemberMutation, localEntries]);
+  }, [isOfflineMode, deleteCrewMemberMutation, localEntries, userId]);
 
   const createSailingMutation = trpc.crewRecognition.createSailing.useMutation({
     onSuccess: () => {
       void sailingsQuery.refetch();
     },
   });
+
+  const updateCrewMemberScoped = useCallback((data: {
+    id: string;
+    fullName: string;
+    department: Department;
+    roleTitle?: string;
+    notes?: string;
+  }) => updateCrewMemberMutation.mutateAsync({ ...data, userId }), [updateCrewMemberMutation, userId]);
+
+  const createRecognitionEntryScoped = useCallback((data: {
+    crewMemberId: string;
+    sailingId: string;
+    department: Department;
+    roleTitle?: string;
+    sourceText?: string;
+  }) => createRecognitionEntryMutation.mutateAsync({ ...data, userId }), [createRecognitionEntryMutation, userId]);
+
+  const createSailingScoped = useCallback((data: {
+    shipName: string;
+    sailStartDate: string;
+    sailEndDate: string;
+    nights?: number;
+  }) => createSailingMutation.mutateAsync({ ...data, userId }), [createSailingMutation, userId]);
 
   const clearCrewData = useCallback(async () => {
     console.log('[CrewRecognition] Clearing all crew data...');
@@ -707,21 +730,21 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     syncFromCSVLocally,
     importFromTextLocally,
     createCrewMember: addCrewMemberWithFallback,
-    updateCrewMember: updateCrewMemberMutation.mutateAsync,
+    updateCrewMember: updateCrewMemberScoped,
     deleteCrewMember: deleteCrewMemberWithFallback,
-    createRecognitionEntry: createRecognitionEntryMutation.mutateAsync,
+    createRecognitionEntry: createRecognitionEntryScoped,
     updateRecognitionEntry: updateRecognitionEntryWithFallback,
     deleteRecognitionEntry: deleteRecognitionEntryWithFallback,
-    createSailing: createSailingMutation.mutateAsync,
+    createSailing: createSailingScoped,
     clearCrewData,
     refetch,
   }), [
     userId, filters, updateFilters, resetFilters, page, pageSize, nextPage, previousPage, goToPage,
     useLocal, localStats, statsQuery.data, statsQuery.isLoading, filteredLocalEntries, backendEntries, backendTotal,
     entriesQuery.isLoading, localSailings, sailingsQuery.data, sailingsQuery.isLoading,
-    syncFromCSVLocally, importFromTextLocally, addCrewMemberWithFallback, updateCrewMemberMutation.mutateAsync,
-    deleteCrewMemberWithFallback, createRecognitionEntryMutation.mutateAsync,
+    syncFromCSVLocally, importFromTextLocally, addCrewMemberWithFallback, updateCrewMemberScoped,
+    deleteCrewMemberWithFallback, createRecognitionEntryScoped,
     updateRecognitionEntryWithFallback, deleteRecognitionEntryWithFallback,
-    createSailingMutation.mutateAsync, clearCrewData, refetch,
+    createSailingScoped, clearCrewData, refetch,
   ]);
 });

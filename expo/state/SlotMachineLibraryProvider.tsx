@@ -10,6 +10,8 @@ import type { GlobalSlotMachine } from '@/constants/globalSlotMachinesDatabase';
 import { permanentDB } from '@/lib/permanentMachineDatabase';
 import { machineIndexHelper, type MachineFullDetails } from '@/lib/machineIndexHelper';
 import { useEntitlement } from '@/state/EntitlementProvider';
+import { useAuth } from '@/state/AuthProvider';
+import { getUserScopedKey } from '@/lib/storage/storageKeys';
 
 const STORAGE_KEY_ENCYCLOPEDIA = 'easyseas_machine_encyclopedia_v2_262_only';
 const STORAGE_KEY_MY_ATLAS = 'easyseas_my_slot_atlas_v2_262_only';
@@ -55,6 +57,7 @@ function parseRTPRange(rtpRange: string): { min: number; max: number } | undefin
 
 export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContextHook(() => {
   const { isPro } = useEntitlement();
+  const { authenticatedEmail } = useAuth();
   const [encyclopedia, setEncyclopedia] = useState<MachineEncyclopediaEntry[]>([]);
   const [myAtlasIds, setMyAtlasIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -64,6 +67,18 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
   const [wizardOpen, setWizardOpen] = useState<boolean>(false);
   const [wizardData, setWizardData] = useState<AddGameWizardData>({ step: 1 });
   const [isUserWhitelisted, setIsUserWhitelisted] = useState<boolean>(false);
+  const encyclopediaKeyRef = useRef<string>(getUserScopedKey(STORAGE_KEY_ENCYCLOPEDIA, authenticatedEmail));
+  const atlasKeyRef = useRef<string>(getUserScopedKey(STORAGE_KEY_MY_ATLAS, authenticatedEmail));
+
+  useEffect(() => {
+    encyclopediaKeyRef.current = getUserScopedKey(STORAGE_KEY_ENCYCLOPEDIA, authenticatedEmail);
+    atlasKeyRef.current = getUserScopedKey(STORAGE_KEY_MY_ATLAS, authenticatedEmail);
+    proLoadTriggeredRef.current = false;
+    setEncyclopedia([]);
+    setMyAtlasIds([]);
+    setIndexLoadComplete(false);
+    console.log('[SlotMachineLibrary] Scoped storage keys updated for:', authenticatedEmail);
+  }, [authenticatedEmail]);
 
   const loadMachinesFromIndex = useCallback(async (
     currentEncyclopedia: MachineEncyclopediaEntry[],
@@ -112,7 +127,7 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
       console.log('[SlotMachineLibrary] Created', newEntries.length, 'new entries from index');
 
       const updatedEncyclopedia = [...currentEncyclopedia, ...newEntries];
-      await AsyncStorage.setItem(STORAGE_KEY_ENCYCLOPEDIA, JSON.stringify(updatedEncyclopedia));
+      await AsyncStorage.setItem(encyclopediaKeyRef.current, JSON.stringify(updatedEncyclopedia));
 
       return {
         success: true,
@@ -181,7 +196,7 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
       }
 
       const updated = [...currentEncyclopedia, ...newEntries];
-      await AsyncStorage.setItem(STORAGE_KEY_ENCYCLOPEDIA, JSON.stringify(updated));
+      await AsyncStorage.setItem(encyclopediaKeyRef.current, JSON.stringify(updated));
       await AsyncStorage.setItem(STORAGE_KEY_INDEX_LOADED, 'true');
 
       console.log('[SlotMachineLibrary] ensureEncyclopediaFullyLoadedForPro: added entries', {
@@ -210,8 +225,8 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
 
       try {
         [encyclopediaStr, atlasStr, indexLoaded] = await Promise.all([
-          AsyncStorage.getItem(STORAGE_KEY_ENCYCLOPEDIA),
-          AsyncStorage.getItem(STORAGE_KEY_MY_ATLAS),
+          AsyncStorage.getItem(encyclopediaKeyRef.current),
+          AsyncStorage.getItem(atlasKeyRef.current),
           AsyncStorage.getItem(STORAGE_KEY_INDEX_LOADED),
         ]);
       } catch (storageError) {
@@ -252,7 +267,7 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
       setMyAtlasIds([]);
       setIsLoading(false);
     }
-  }, [loadMachinesFromIndex]);
+  }, [loadMachinesFromIndex, authenticatedEmail]);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -262,12 +277,12 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
       clearTimeout(timeout);
       if (deferredLoadRef.current) clearTimeout(deferredLoadRef.current);
     };
-  }, [initializeAndLoadData]);
+  }, [initializeAndLoadData, authenticatedEmail]);
 
 
   const saveEncyclopedia = async (data: MachineEncyclopediaEntry[]) => {
     try {
-      await AsyncStorage.setItem(STORAGE_KEY_ENCYCLOPEDIA, JSON.stringify(data));
+      await AsyncStorage.setItem(encyclopediaKeyRef.current, JSON.stringify(data));
       console.log(`[SlotMachineLibrary] Saved ${data.length} encyclopedia entries`);
     } catch (error) {
       console.error('[SlotMachineLibrary] Error saving encyclopedia:', error);
@@ -276,7 +291,7 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
 
   const saveAtlas = async (ids: string[]) => {
     try {
-      await AsyncStorage.setItem(STORAGE_KEY_MY_ATLAS, JSON.stringify(ids));
+      await AsyncStorage.setItem(atlasKeyRef.current, JSON.stringify(ids));
       console.log(`[SlotMachineLibrary] Saved ${ids.length} atlas IDs`);
     } catch (error) {
       console.error('[SlotMachineLibrary] Error saving atlas:', error);

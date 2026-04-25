@@ -32,6 +32,8 @@ const UserDataSchema = z.object({
   favoriteStaterooms: z.array(z.any()).optional(),
   sailingWeatherCache: z.record(z.string(), z.any()).optional(),
   casinoOpenHours: z.record(z.string(), z.any()).optional(),
+  compItems: z.array(z.any()).optional(),
+  w2gRecords: z.array(z.any()).optional(),
 });
 
 interface StoredUserData {
@@ -63,6 +65,8 @@ interface StoredUserData {
   favoriteStaterooms?: any[];
   sailingWeatherCache?: Record<string, any>;
   casinoOpenHours?: Record<string, any>;
+  compItems?: any[];
+  w2gRecords?: any[];
   updatedAt: string;
   createdAt?: string;
   [key: string]: any;
@@ -177,6 +181,8 @@ export const dataRouter = createTRPCRouter({
         favoriteStaterooms: input.favoriteStaterooms ?? existingData?.favoriteStaterooms ?? [],
         sailingWeatherCache: input.sailingWeatherCache ?? existingData?.sailingWeatherCache ?? {},
         casinoOpenHours: input.casinoOpenHours ?? existingData?.casinoOpenHours ?? {},
+        compItems: input.compItems ?? existingData?.compItems ?? [],
+        w2gRecords: input.w2gRecords ?? existingData?.w2gRecords ?? [],
         updatedAt: now,
         createdAt: existingData?.createdAt ?? now,
       };
@@ -210,6 +216,8 @@ export const dataRouter = createTRPCRouter({
             favoriteStaterooms = $favoriteStaterooms,
             sailingWeatherCache = $sailingWeatherCache,
             casinoOpenHours = $casinoOpenHours,
+            compItems = $compItems,
+            w2gRecords = $w2gRecords,
             ownerScopeId = $ownerScopeId,
             updatedAt = $updatedAt
           WHERE ownerScopeId = $ownerScopeId AND email = $email`,
@@ -299,6 +307,8 @@ export const dataRouter = createTRPCRouter({
             favoriteStaterooms: data.favoriteStaterooms ?? [],
             sailingWeatherCache: data.sailingWeatherCache ?? {},
             casinoOpenHours: data.casinoOpenHours ?? {},
+            compItems: data.compItems ?? [],
+            w2gRecords: data.w2gRecords ?? [],
             ownerScopeId: data.ownerScopeId,
             updatedAt: data.updatedAt,
             createdAt: data.createdAt,

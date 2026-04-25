@@ -35,9 +35,12 @@ export function isRecordForOwner(record: unknown, ownerScopeId: string | null | 
 
   const normalizedEmail = normalizeOwnerEmail(email);
   const normalizedScope = ownerScopeId?.trim() ?? '';
-  const ownedRecord = record as OwnedDataRecord;
+  const ownedRecord = record as OwnedDataRecord & { userId?: unknown; email?: unknown; ownerEmail?: unknown };
   const recordScope = ownedRecord.dataOwnerScopeId?.trim();
   const recordEmail = normalizeOwnerEmail(ownedRecord.dataOwnerEmail);
+  const recordUserId = typeof ownedRecord.userId === 'string' ? normalizeOwnerEmail(ownedRecord.userId) : null;
+  const recordOwnEmail = typeof ownedRecord.email === 'string' ? normalizeOwnerEmail(ownedRecord.email) : null;
+  const recordOwnerEmail = typeof ownedRecord.ownerEmail === 'string' ? normalizeOwnerEmail(ownedRecord.ownerEmail) : null;
 
   if (recordScope) {
     return normalizedScope.length > 0 && recordScope === normalizedScope;
@@ -45,6 +48,18 @@ export function isRecordForOwner(record: unknown, ownerScopeId: string | null | 
 
   if (recordEmail) {
     return normalizedEmail !== null && recordEmail === normalizedEmail;
+  }
+
+  if (recordOwnerEmail) {
+    return normalizedEmail !== null && recordOwnerEmail === normalizedEmail;
+  }
+
+  if (recordOwnEmail) {
+    return normalizedEmail !== null && recordOwnEmail === normalizedEmail;
+  }
+
+  if (recordUserId && recordUserId !== 'local' && recordUserId !== 'guest') {
+    return normalizedEmail !== null && recordUserId === normalizedEmail;
   }
 
   return true;
