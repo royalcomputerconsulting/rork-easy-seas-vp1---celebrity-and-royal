@@ -73,6 +73,7 @@ import {
   importAllDataFromFile,
 } from '@/lib/dataManager';
 import { getUserScopedKey, ALL_STORAGE_KEYS } from '@/lib/storage/storageKeys';
+import { quotaSafeGetItem } from '@/lib/storage/quotaSafeStorage';
 import { downloadScraperExtension } from '@/lib/chromeExtension';
 import { downloadSeaPassGenerator } from '@/lib/seapassGeneratorDownload';
 import { generateCalendarFeed, generateFeedToken } from '@/lib/calendar/feedGenerator';
@@ -1285,10 +1286,10 @@ export default function SettingsScreen() {
         const sk = (baseKey: string) => getUserScopedKey(baseKey, authenticatedEmail ?? null);
         console.log('[Settings] Re-reading from AsyncStorage using scoped keys for user:', authenticatedEmail);
         const [cruisesData, bookedData, offersData, eventsData] = await Promise.all([
-          AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CRUISES)),
-          AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.BOOKED_CRUISES)),
-          AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CASINO_OFFERS)),
-          AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CALENDAR_EVENTS)),
+          quotaSafeGetItem(sk(ALL_STORAGE_KEYS.CRUISES)),
+          quotaSafeGetItem(sk(ALL_STORAGE_KEYS.BOOKED_CRUISES)),
+          quotaSafeGetItem(sk(ALL_STORAGE_KEYS.CASINO_OFFERS)),
+          quotaSafeGetItem(sk(ALL_STORAGE_KEYS.CALENDAR_EVENTS)),
         ]);
         
         const syncedCruises = cruisesData ? JSON.parse(cruisesData) : [];

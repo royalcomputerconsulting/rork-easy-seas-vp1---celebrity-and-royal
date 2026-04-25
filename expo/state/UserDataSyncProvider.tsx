@@ -5,6 +5,7 @@ import { trpc, trpcClient, isBackendReachable } from "@/lib/trpc";
 import { useAuth } from "@/state/AuthProvider";
 import { getUserScopedKey, ALL_STORAGE_KEYS } from "@/lib/storage/storageKeys";
 import { clearUserSpecificData } from "@/lib/storage/storageOperations";
+import { quotaSafeGetItem, quotaSafeSetItem, quotaSafeSetJsonItem, quotaSafeRemoveItem } from "@/lib/storage/quotaSafeStorage";
 import { buildOwnerScopeId, getInstallationId } from "@/lib/storage/installationId";
 import { filterRecordsForOwner, isOwnerScopeForEmail, isScopedDynamicKeyForOwner, stampRecordsForOwner, toOwnerScopedDynamicKey } from "@/lib/storage/dataOwnership";
 
@@ -44,7 +45,7 @@ async function loadStoredEntriesByPrefix(prefix: string, email: string | null): 
 
     const entries = await Promise.all(
       matchingKeys.map(async (key) => {
-        const value = await AsyncStorage.getItem(key);
+        const value = await quotaSafeGetItem(key);
         return value === null ? null : [key, value] as const;
       })
     );
@@ -187,10 +188,10 @@ function buildJsonSetPromise(key: string, value: unknown, options?: { removeWhen
   }
 
   if ((value === null || value === '') && options?.removeWhenNull) {
-    return AsyncStorage.removeItem(key);
+    return quotaSafeRemoveItem(key);
   }
 
-  return AsyncStorage.setItem(key, JSON.stringify(value));
+  return quotaSafeSetJsonItem(key, value);
 }
 
 function buildStringSetPromise(key: string, value: string | null | undefined): Promise<void> | undefined {
@@ -199,10 +200,10 @@ function buildStringSetPromise(key: string, value: string | null | undefined): P
   }
 
   if (value === null || value.length === 0) {
-    return AsyncStorage.removeItem(key);
+    return quotaSafeRemoveItem(key);
   }
 
-  return AsyncStorage.setItem(key, value);
+  return quotaSafeSetItem(key, value);
 }
 
 function buildNumberSetPromise(key: string, value: number | null | undefined): Promise<void> | undefined {
@@ -211,10 +212,10 @@ function buildNumberSetPromise(key: string, value: number | null | undefined): P
   }
 
   if (value === null || Number.isNaN(value)) {
-    return AsyncStorage.removeItem(key);
+    return quotaSafeRemoveItem(key);
   }
 
-  return AsyncStorage.setItem(key, value.toString());
+  return quotaSafeSetItem(key, value.toString());
 }
 
 function buildDualJsonSetPromises(primaryKey: string, secondaryKey: string, value: unknown): Promise<void>[] {
@@ -443,41 +444,41 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         compItemsRaw,
         w2gRecordsRaw,
       ] = await Promise.all([
-        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CRUISES)),
-        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.BOOKED_CRUISES)),
-        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CASINO_OFFERS)),
-        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CALENDAR_EVENTS)),
-        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CASINO_SESSIONS)),
-        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CLUB_PROFILE)),
-        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.SETTINGS)),
-        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.USER_POINTS)),
-        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CERTIFICATES)),
-        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.ALERTS)),
-        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.ALERT_RULES)),
-        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.MY_SLOT_ATLAS)),
-        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.EXTENDED_LOYALTY_DATA)),
-        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.MANUAL_CLUB_ROYALE_POINTS)),
-        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.MANUAL_CROWN_ANCHOR_POINTS)),
-        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.LOYALTY_DATA)),
-        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.BANKROLL_DATA)),
-        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CELEBRITY_EMAIL)),
-        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CELEBRITY_CAPTAINS_CLUB_NUMBER)),
-        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CELEBRITY_CAPTAINS_CLUB_POINTS)),
-        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CELEBRITY_BLUE_CHIP_POINTS)),
-        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_ENTRIES)),
-        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_SAILINGS)),
-        AsyncStorage.getItem(scopedAlertsKey),
-        AsyncStorage.getItem(scopedAlertRulesKey),
-        AsyncStorage.getItem(scopedDismissedAlertIdsKey),
-        AsyncStorage.getItem(scopedDismissedAlertEntitiesKey),
-        AsyncStorage.getItem(scopedBankrollLimitsKey),
-        AsyncStorage.getItem(scopedBankrollAlertsKey),
-        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.USER_SLOT_MACHINES)),
-        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.DECK_PLAN_LOCATIONS)),
-        AsyncStorage.getItem(scopedFavoriteStateroomsKey),
-        AsyncStorage.getItem(scopedSailingWeatherKey),
-        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.COMP_ITEMS)),
-        AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.W2G_RECORDS)),
+        quotaSafeGetItem(sk(ALL_STORAGE_KEYS.CRUISES)),
+        quotaSafeGetItem(sk(ALL_STORAGE_KEYS.BOOKED_CRUISES)),
+        quotaSafeGetItem(sk(ALL_STORAGE_KEYS.CASINO_OFFERS)),
+        quotaSafeGetItem(sk(ALL_STORAGE_KEYS.CALENDAR_EVENTS)),
+        quotaSafeGetItem(sk(ALL_STORAGE_KEYS.CASINO_SESSIONS)),
+        quotaSafeGetItem(sk(ALL_STORAGE_KEYS.CLUB_PROFILE)),
+        quotaSafeGetItem(sk(ALL_STORAGE_KEYS.SETTINGS)),
+        quotaSafeGetItem(sk(ALL_STORAGE_KEYS.USER_POINTS)),
+        quotaSafeGetItem(sk(ALL_STORAGE_KEYS.CERTIFICATES)),
+        quotaSafeGetItem(sk(ALL_STORAGE_KEYS.ALERTS)),
+        quotaSafeGetItem(sk(ALL_STORAGE_KEYS.ALERT_RULES)),
+        quotaSafeGetItem(sk(ALL_STORAGE_KEYS.MY_SLOT_ATLAS)),
+        quotaSafeGetItem(sk(ALL_STORAGE_KEYS.EXTENDED_LOYALTY_DATA)),
+        quotaSafeGetItem(sk(ALL_STORAGE_KEYS.MANUAL_CLUB_ROYALE_POINTS)),
+        quotaSafeGetItem(sk(ALL_STORAGE_KEYS.MANUAL_CROWN_ANCHOR_POINTS)),
+        quotaSafeGetItem(sk(ALL_STORAGE_KEYS.LOYALTY_DATA)),
+        quotaSafeGetItem(sk(ALL_STORAGE_KEYS.BANKROLL_DATA)),
+        quotaSafeGetItem(sk(ALL_STORAGE_KEYS.CELEBRITY_EMAIL)),
+        quotaSafeGetItem(sk(ALL_STORAGE_KEYS.CELEBRITY_CAPTAINS_CLUB_NUMBER)),
+        quotaSafeGetItem(sk(ALL_STORAGE_KEYS.CELEBRITY_CAPTAINS_CLUB_POINTS)),
+        quotaSafeGetItem(sk(ALL_STORAGE_KEYS.CELEBRITY_BLUE_CHIP_POINTS)),
+        quotaSafeGetItem(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_ENTRIES)),
+        quotaSafeGetItem(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_SAILINGS)),
+        quotaSafeGetItem(scopedAlertsKey),
+        quotaSafeGetItem(scopedAlertRulesKey),
+        quotaSafeGetItem(scopedDismissedAlertIdsKey),
+        quotaSafeGetItem(scopedDismissedAlertEntitiesKey),
+        quotaSafeGetItem(scopedBankrollLimitsKey),
+        quotaSafeGetItem(scopedBankrollAlertsKey),
+        quotaSafeGetItem(sk(ALL_STORAGE_KEYS.USER_SLOT_MACHINES)),
+        quotaSafeGetItem(sk(ALL_STORAGE_KEYS.DECK_PLAN_LOCATIONS)),
+        quotaSafeGetItem(scopedFavoriteStateroomsKey),
+        quotaSafeGetItem(scopedSailingWeatherKey),
+        quotaSafeGetItem(sk(ALL_STORAGE_KEYS.COMP_ITEMS)),
+        quotaSafeGetItem(sk(ALL_STORAGE_KEYS.W2G_RECORDS)),
       ]);
 
       const casinoOpenHoursEntries = await loadStoredEntriesByPrefix(CASINO_OPEN_HOURS_STORAGE_PREFIX, emailRef.current);
@@ -706,7 +707,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
 
         Object.keys(existingCasinoOpenHoursEntries).forEach((key) => {
           if (!nextCasinoOpenHoursKeys.has(key)) {
-            savePromises.push(AsyncStorage.removeItem(key));
+            savePromises.push(quotaSafeRemoveItem(key));
           }
         });
 
@@ -717,7 +718,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
 
       appendPromise(savePromises, buildStringSetPromise(sk(ALL_STORAGE_KEYS.HAS_IMPORTED_DATA), "true"));
 
-      await Promise.all(savePromises);
+      await Promise.allSettled(savePromises);
 
       console.log("[UserDataSync] Cloud data restored to local storage:", {
         availableCruises: getArrayLength(cloudData.cruises),
@@ -846,7 +847,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
           const syncTime = new Date().toISOString();
           setLastSyncTime(syncTime);
           setLastRestoreTime(syncTime);
-          await AsyncStorage.setItem(lastSyncKey(), syncTime);
+          await quotaSafeSetItem(lastSyncKey(), syncTime);
           lastSyncedEmailRef.current = authenticatedEmail;
           retryCountRef.current = 0;
           console.log("[UserDataSync] Successfully loaded and restored cloud data");
@@ -955,7 +956,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       const syncTime = new Date().toISOString();
       setLastSyncTime(syncTime);
       setHasCloudData(true);
-      await AsyncStorage.setItem(lastSyncKey(), syncTime);
+      await quotaSafeSetItem(lastSyncKey(), syncTime);
       lastSyncedEmailRef.current = authenticatedEmail;
       retryCountRef.current = 0;
       
@@ -1127,7 +1128,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       return;
     }
 
-    void AsyncStorage.getItem(lastSyncKey()).then((time) => {
+    void quotaSafeGetItem(lastSyncKey()).then((time) => {
       if (time) {
         setLastSyncTime(time);
       }

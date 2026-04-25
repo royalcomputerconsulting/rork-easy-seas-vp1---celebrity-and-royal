@@ -23,6 +23,7 @@ import {
   processMetadata,
 } from "./coreData/storageLoaders";
 import { clearUserSpecificData } from "@/lib/storage/storageOperations";
+import { quotaSafeGetItem, quotaSafeSetItem, quotaSafeSetJsonItem, quotaSafeRemoveItem } from "@/lib/storage/quotaSafeStorage";
 import { ALL_STORAGE_KEYS, getUserScopedKey } from "@/lib/storage/storageKeys";
 import { buildOwnerScopeId, getInstallationId } from "@/lib/storage/installationId";
 import { filterRecordsForOwner, isOwnerScopeForEmail, stampRecordsForOwner } from "@/lib/storage/dataOwnership";
@@ -410,7 +411,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     const nextTimestamp = timestamp ?? new Date().toISOString();
 
     try {
-      await AsyncStorage.setItem(skRef.current.LAST_SYNC, nextTimestamp);
+      await quotaSafeSetItem(skRef.current.LAST_SYNC, nextTimestamp);
       setLastSyncDate(nextTimestamp);
       console.log('[CoreData] Updated last sync timestamp:', nextTimestamp);
     } catch (error) {
@@ -424,7 +425,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     options?: { updateLastSync?: boolean; syncTimestamp?: string }
   ) => {
     try {
-      await AsyncStorage.setItem(key, JSON.stringify(data));
+      await quotaSafeSetJsonItem(key, data);
       if (options?.updateLastSync ?? true) {
         await persistLastSyncDate(options?.syncTimestamp);
       }
@@ -467,16 +468,16 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         MANUAL_CROWN_ANCHOR_POINTS: getUserScopedKey(ALL_STORAGE_KEYS.MANUAL_CROWN_ANCHOR_POINTS, authenticatedEmail),
       };
       const [cruisesData, bookedData, offersData, eventsData, settingsData, pointsData, profileData, extendedLoyaltyDataRaw, manualClubRoyalePointsRaw, manualCrownAnchorPointsRaw] = await Promise.all([
-        AsyncStorage.getItem(scopedKeys.CRUISES),
-        AsyncStorage.getItem(scopedKeys.BOOKED_CRUISES),
-        AsyncStorage.getItem(scopedKeys.CASINO_OFFERS),
-        AsyncStorage.getItem(scopedKeys.CALENDAR_EVENTS),
-        AsyncStorage.getItem(scopedKeys.SETTINGS),
-        AsyncStorage.getItem(scopedKeys.USER_POINTS),
-        AsyncStorage.getItem(scopedKeys.CLUB_PROFILE),
-        AsyncStorage.getItem(scopedLoyaltyKeys.EXTENDED_LOYALTY_DATA),
-        AsyncStorage.getItem(scopedLoyaltyKeys.MANUAL_CLUB_ROYALE_POINTS),
-        AsyncStorage.getItem(scopedLoyaltyKeys.MANUAL_CROWN_ANCHOR_POINTS),
+        quotaSafeGetItem(scopedKeys.CRUISES),
+        quotaSafeGetItem(scopedKeys.BOOKED_CRUISES),
+        quotaSafeGetItem(scopedKeys.CASINO_OFFERS),
+        quotaSafeGetItem(scopedKeys.CALENDAR_EVENTS),
+        quotaSafeGetItem(scopedKeys.SETTINGS),
+        quotaSafeGetItem(scopedKeys.USER_POINTS),
+        quotaSafeGetItem(scopedKeys.CLUB_PROFILE),
+        quotaSafeGetItem(scopedLoyaltyKeys.EXTENDED_LOYALTY_DATA),
+        quotaSafeGetItem(scopedLoyaltyKeys.MANUAL_CLUB_ROYALE_POINTS),
+        quotaSafeGetItem(scopedLoyaltyKeys.MANUAL_CROWN_ANCHOR_POINTS),
       ]);
       
       const parsedCruises = prepareOwnedRecords<Cruise>(cruisesData ? JSON.parse(cruisesData) as Cruise[] : [], ownerScopeId, authenticatedEmail, 'backend-sync available cruises');
@@ -524,7 +525,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       });
 
       const syncTimestamp = typeof syncResult?.updatedAt === 'string' ? syncResult.updatedAt : new Date().toISOString();
-      await AsyncStorage.setItem(scopedKeys.LAST_SYNC, syncTimestamp);
+      await quotaSafeSetItem(scopedKeys.LAST_SYNC, syncTimestamp);
       setLastSyncDate(syncTimestamp);
       
       console.log('[CoreData] ✅ Backend sync successful');
@@ -615,11 +616,11 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         const ownedBackendEvents = prepareOwnedRecords<CalendarEvent>((userData.calendarEvents ?? []) as CalendarEvent[], ownerScopeId, authenticatedEmail, 'backend-restore calendar events');
         const scopedKeys = getScopedStorageKeys(authenticatedEmail);
         const [localLastSyncRaw, localCruisesRaw, localBookedRaw, localOffersRaw, localEventsRaw] = await Promise.all([
-          AsyncStorage.getItem(scopedKeys.LAST_SYNC),
-          AsyncStorage.getItem(scopedKeys.CRUISES),
-          AsyncStorage.getItem(scopedKeys.BOOKED_CRUISES),
-          AsyncStorage.getItem(scopedKeys.CASINO_OFFERS),
-          AsyncStorage.getItem(scopedKeys.CALENDAR_EVENTS),
+          quotaSafeGetItem(scopedKeys.LAST_SYNC),
+          quotaSafeGetItem(scopedKeys.CRUISES),
+          quotaSafeGetItem(scopedKeys.BOOKED_CRUISES),
+          quotaSafeGetItem(scopedKeys.CASINO_OFFERS),
+          quotaSafeGetItem(scopedKeys.CALENDAR_EVENTS),
         ]);
 
         const backendUpdatedAtMs = parseStoredTimestamp(userData.updatedAt);
@@ -684,25 +685,25 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         
         const savePromises: Promise<void>[] = [];
         if (userData.cruises) {
-          savePromises.push(AsyncStorage.setItem(scopedKeys.CRUISES, JSON.stringify(ownedBackendCruises)));
+          savePromises.push(quotaSafeSetJsonItem(scopedKeys.CRUISES, ownedBackendCruises));
         }
         if (userData.bookedCruises) {
-          savePromises.push(AsyncStorage.setItem(scopedKeys.BOOKED_CRUISES, JSON.stringify(ownedBackendBookedCruises)));
+          savePromises.push(quotaSafeSetJsonItem(scopedKeys.BOOKED_CRUISES, ownedBackendBookedCruises));
         }
         if (userData.casinoOffers) {
-          savePromises.push(AsyncStorage.setItem(scopedKeys.CASINO_OFFERS, JSON.stringify(ownedBackendOffers)));
+          savePromises.push(quotaSafeSetJsonItem(scopedKeys.CASINO_OFFERS, ownedBackendOffers));
         }
         if (userData.calendarEvents) {
-          savePromises.push(AsyncStorage.setItem(scopedKeys.CALENDAR_EVENTS, JSON.stringify(ownedBackendEvents)));
+          savePromises.push(quotaSafeSetJsonItem(scopedKeys.CALENDAR_EVENTS, ownedBackendEvents));
         }
         if (userData.settings) {
-          savePromises.push(AsyncStorage.setItem(scopedKeys.SETTINGS, JSON.stringify(userData.settings)));
+          savePromises.push(quotaSafeSetJsonItem(scopedKeys.SETTINGS, userData.settings));
         }
         if (userData.userPoints !== undefined) {
-          savePromises.push(AsyncStorage.setItem(scopedKeys.USER_POINTS, userData.userPoints.toString()));
+          savePromises.push(quotaSafeSetItem(scopedKeys.USER_POINTS, userData.userPoints.toString()));
         }
         if (userData.clubRoyaleProfile) {
-          savePromises.push(AsyncStorage.setItem(scopedKeys.CLUB_PROFILE, JSON.stringify(userData.clubRoyaleProfile)));
+          savePromises.push(quotaSafeSetJsonItem(scopedKeys.CLUB_PROFILE, userData.clubRoyaleProfile));
         }
         if (userData.loyaltyData !== undefined) {
           const normalizedLoyaltyData = normalizeLoyaltySyncPayload(userData.loyaltyData);
@@ -717,30 +718,30 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
           const manualCrownAnchorPoints = normalizedLoyaltyData?.manualCrownAnchorPoints ?? null;
 
           if (extendedLoyaltyData !== null) {
-            savePromises.push(AsyncStorage.setItem(scopedLoyaltyKeys.EXTENDED_LOYALTY_DATA, JSON.stringify(extendedLoyaltyData)));
+            savePromises.push(quotaSafeSetJsonItem(scopedLoyaltyKeys.EXTENDED_LOYALTY_DATA, extendedLoyaltyData));
           } else {
-            savePromises.push(AsyncStorage.removeItem(scopedLoyaltyKeys.EXTENDED_LOYALTY_DATA));
+            savePromises.push(quotaSafeRemoveItem(scopedLoyaltyKeys.EXTENDED_LOYALTY_DATA));
           }
 
           if (manualClubRoyalePoints !== null) {
-            savePromises.push(AsyncStorage.setItem(scopedLoyaltyKeys.MANUAL_CLUB_ROYALE_POINTS, manualClubRoyalePoints.toString()));
+            savePromises.push(quotaSafeSetItem(scopedLoyaltyKeys.MANUAL_CLUB_ROYALE_POINTS, manualClubRoyalePoints.toString()));
           } else {
-            savePromises.push(AsyncStorage.removeItem(scopedLoyaltyKeys.MANUAL_CLUB_ROYALE_POINTS));
+            savePromises.push(quotaSafeRemoveItem(scopedLoyaltyKeys.MANUAL_CLUB_ROYALE_POINTS));
           }
 
           if (manualCrownAnchorPoints !== null) {
-            savePromises.push(AsyncStorage.setItem(scopedLoyaltyKeys.MANUAL_CROWN_ANCHOR_POINTS, manualCrownAnchorPoints.toString()));
+            savePromises.push(quotaSafeSetItem(scopedLoyaltyKeys.MANUAL_CROWN_ANCHOR_POINTS, manualCrownAnchorPoints.toString()));
           } else {
-            savePromises.push(AsyncStorage.removeItem(scopedLoyaltyKeys.MANUAL_CROWN_ANCHOR_POINTS));
+            savePromises.push(quotaSafeRemoveItem(scopedLoyaltyKeys.MANUAL_CROWN_ANCHOR_POINTS));
           }
         }
 
         const backendTimestamp = typeof userData.updatedAt === 'string' ? userData.updatedAt : new Date().toISOString();
-        savePromises.push(AsyncStorage.setItem(scopedKeys.LAST_SYNC, backendTimestamp));
+        savePromises.push(quotaSafeSetItem(scopedKeys.LAST_SYNC, backendTimestamp));
         
-        await Promise.all(savePromises);
+        await Promise.allSettled(savePromises);
         setLastSyncDate(backendTimestamp);
-        await AsyncStorage.setItem(scopedKeys.HAS_IMPORTED_DATA, 'true');
+        await quotaSafeSetItem(scopedKeys.HAS_IMPORTED_DATA, 'true');
         
         console.log('[CoreData] ✅ Backend data loaded and cached locally');
         return true;
@@ -809,11 +810,11 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       }
 
       if (bookedResult.shouldPersistFirstTimeData) {
-        await AsyncStorage.setItem(skRef.current.BOOKED_CRUISES, JSON.stringify(ownedBookedCruises));
+        await quotaSafeSetJsonItem(skRef.current.BOOKED_CRUISES, ownedBookedCruises);
         if (ownedOffersOverride) {
-          await AsyncStorage.setItem(skRef.current.CASINO_OFFERS, JSON.stringify(ownedOffersOverride));
+          await quotaSafeSetJsonItem(skRef.current.CASINO_OFFERS, ownedOffersOverride);
         }
-        await AsyncStorage.setItem(skRef.current.HAS_IMPORTED_DATA, 'true');
+        await quotaSafeSetItem(skRef.current.HAS_IMPORTED_DATA, 'true');
         console.log('[CoreData] First-time user data persisted');
       }
 
@@ -1076,7 +1077,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     const ownedCruises = prepareOwnedRecords<Cruise>(newCruises, ownerScopeId, authenticatedEmail, 'set available cruises');
     setCruisesState(ownedCruises);
     await persistData(skRef.current.CRUISES, ownedCruises);
-    await AsyncStorage.setItem(skRef.current.HAS_IMPORTED_DATA, 'true').catch(console.error);
+    await quotaSafeSetItem(skRef.current.HAS_IMPORTED_DATA, 'true').catch(console.error);
     console.log('[CoreData] Cruises state updated and persisted:', ownedCruises.length);
     scheduleSyncToBackend('setCruises');
   }, [markLocalDataAuthoritative, persistData, scheduleSyncToBackend, ownerScopeId, authenticatedEmail]);
@@ -1138,7 +1139,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     });
     setBookedCruisesState(normalizedCruises);
     await persistData(skRef.current.BOOKED_CRUISES, normalizedCruises);
-    await AsyncStorage.setItem(skRef.current.HAS_IMPORTED_DATA, 'true').catch(console.error);
+    await quotaSafeSetItem(skRef.current.HAS_IMPORTED_DATA, 'true').catch(console.error);
     
     // Auto-generate calendar events from booked cruises
     console.log('[CoreData] Auto-generating calendar events from', normalizedCruises.length, 'booked cruises');
@@ -1238,11 +1239,11 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       const isMockCruise = allMockCruises.some(mc => mc.id === id);
       
       if (isMockCruise) {
-        void AsyncStorage.getItem(skRef.current.REMOVED_MOCK_CRUISES)
+        void quotaSafeGetItem(skRef.current.REMOVED_MOCK_CRUISES)
           .then(data => {
             const existing = data ? new Set<string>(JSON.parse(data)) : new Set<string>();
             existing.add(id);
-            return AsyncStorage.setItem(skRef.current.REMOVED_MOCK_CRUISES, JSON.stringify([...existing]));
+            return quotaSafeSetJsonItem(skRef.current.REMOVED_MOCK_CRUISES, [...existing]);
           })
           .then(() => {
             console.log('[CoreData] Marked mock cruise as removed:', id);
@@ -1279,7 +1280,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     
     setCasinoOffersState(nonMockOffers);
     await persistData(skRef.current.CASINO_OFFERS, nonMockOffers);
-    await AsyncStorage.setItem(skRef.current.HAS_IMPORTED_DATA, 'true').catch(console.error);
+    await quotaSafeSetItem(skRef.current.HAS_IMPORTED_DATA, 'true').catch(console.error);
     console.log('[CoreData] Casino offers state updated and persisted:', nonMockOffers.length);
     scheduleSyncToBackend('setCasinoOffers');
   }, [markLocalDataAuthoritative, persistData, scheduleSyncToBackend, ownerScopeId, authenticatedEmail]);
@@ -1313,7 +1314,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     console.log('[CoreData] Setting calendar events:', ownedEvents.length);
     setCalendarEventsState(ownedEvents);
     void persistData(skRef.current.CALENDAR_EVENTS, ownedEvents);
-    void AsyncStorage.setItem(skRef.current.HAS_IMPORTED_DATA, 'true').catch(console.error);
+    void quotaSafeSetItem(skRef.current.HAS_IMPORTED_DATA, 'true').catch(console.error);
     
     if (!isSyncingRef.current) {
       isSyncingRef.current = true;
@@ -1374,8 +1375,8 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     setSettings(prev => {
       const updated = { ...prev, ...updates };
       const nextSyncTimestamp = new Date().toISOString();
-      AsyncStorage.setItem(skRef.current.SETTINGS, JSON.stringify(updated)).catch(console.error);
-      AsyncStorage.setItem(skRef.current.LAST_SYNC, nextSyncTimestamp).catch(console.error);
+      quotaSafeSetJsonItem(skRef.current.SETTINGS, updated).catch(console.error);
+      quotaSafeSetItem(skRef.current.LAST_SYNC, nextSyncTimestamp).catch(console.error);
       setLastSyncDate(nextSyncTimestamp);
       return updated;
     });
@@ -1385,16 +1386,16 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     const nextSyncTimestamp = new Date().toISOString();
     setUserPointsState(points);
     setLastSyncDate(nextSyncTimestamp);
-    AsyncStorage.setItem(skRef.current.USER_POINTS, points.toString()).catch(console.error);
-    AsyncStorage.setItem(skRef.current.LAST_SYNC, nextSyncTimestamp).catch(console.error);
+    quotaSafeSetItem(skRef.current.USER_POINTS, points.toString()).catch(console.error);
+    quotaSafeSetItem(skRef.current.LAST_SYNC, nextSyncTimestamp).catch(console.error);
   }, []);
 
   const setClubRoyaleProfile = useCallback((profile: ClubRoyaleProfile) => {
     const nextSyncTimestamp = new Date().toISOString();
     setClubRoyaleProfileState(profile);
     setLastSyncDate(nextSyncTimestamp);
-    AsyncStorage.setItem(skRef.current.CLUB_PROFILE, JSON.stringify(profile)).catch(console.error);
-    AsyncStorage.setItem(skRef.current.LAST_SYNC, nextSyncTimestamp).catch(console.error);
+    quotaSafeSetJsonItem(skRef.current.CLUB_PROFILE, profile).catch(console.error);
+    quotaSafeSetItem(skRef.current.LAST_SYNC, nextSyncTimestamp).catch(console.error);
   }, []);
 
   const clearAllData = useCallback(async () => {
@@ -1402,13 +1403,13 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       backendRestoreGraceUntilRef.current = 0;
       console.log('[CoreData] Clearing all data and preventing mock data from loading...');
       await Promise.all([
-        AsyncStorage.removeItem(skRef.current.CRUISES),
-        AsyncStorage.removeItem(skRef.current.BOOKED_CRUISES),
-        AsyncStorage.removeItem(skRef.current.CASINO_OFFERS),
-        AsyncStorage.removeItem(skRef.current.CALENDAR_EVENTS),
-        AsyncStorage.removeItem(skRef.current.LAST_SYNC),
-        AsyncStorage.removeItem(skRef.current.REMOVED_MOCK_CRUISES),
-        AsyncStorage.setItem(skRef.current.HAS_IMPORTED_DATA, 'true'),
+        quotaSafeRemoveItem(skRef.current.CRUISES),
+        quotaSafeRemoveItem(skRef.current.BOOKED_CRUISES),
+        quotaSafeRemoveItem(skRef.current.CASINO_OFFERS),
+        quotaSafeRemoveItem(skRef.current.CALENDAR_EVENTS),
+        quotaSafeRemoveItem(skRef.current.LAST_SYNC),
+        quotaSafeRemoveItem(skRef.current.REMOVED_MOCK_CRUISES),
+        quotaSafeSetItem(skRef.current.HAS_IMPORTED_DATA, 'true'),
       ]);
       setCruisesState([]);
       setBookedCruisesState([]);
@@ -1442,9 +1443,9 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       const enrichedCruises = enrichCruisesWithReceiptData(withFreeplayOBC);
       
       await Promise.all([
-        AsyncStorage.setItem(skRef.current.BOOKED_CRUISES, JSON.stringify(enrichedCruises)),
-        AsyncStorage.removeItem(skRef.current.HAS_IMPORTED_DATA),
-        AsyncStorage.removeItem(skRef.current.REMOVED_MOCK_CRUISES),
+        quotaSafeSetJsonItem(skRef.current.BOOKED_CRUISES, enrichedCruises),
+        quotaSafeRemoveItem(skRef.current.HAS_IMPORTED_DATA),
+        quotaSafeRemoveItem(skRef.current.REMOVED_MOCK_CRUISES),
       ]);
       
       setBookedCruisesState(enrichedCruises);

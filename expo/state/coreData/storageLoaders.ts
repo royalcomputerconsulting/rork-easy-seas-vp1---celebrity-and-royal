@@ -1,4 +1,3 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { BookedCruise, CasinoOffer, CalendarEvent, ClubRoyaleProfile } from "@/types/models";
 import { SAMPLE_CLUB_ROYALE_PROFILE } from "@/types/models";
 import {
@@ -9,6 +8,7 @@ import {
 } from "./dataEnrichment";
 import { updateAllCruiseLifecycles } from "@/lib/lifecycleManager";
 import { STORAGE_KEYS, DEFAULT_SETTINGS, getScopedStorageKeys, type AppSettings } from "./storageConfig";
+import { quotaSafeGetItem } from "@/lib/storage/quotaSafeStorage";
 
 export interface StorageSnapshot {
   cruisesData: string | null;
@@ -91,15 +91,15 @@ export async function readAllStorageKeys(email?: string | null): Promise<Storage
   const keys = email ? getScopedStorageKeys(email) : STORAGE_KEYS;
   console.log('[CoreData] Loading from storage for user:', email || 'unknown', 'using scoped keys:', !!email);
   const [cruisesData, bookedData, offersData, eventsData, lastSync, settingsData, pointsData, profileData, hasImportedData] = await Promise.all([
-    AsyncStorage.getItem(keys.CRUISES).catch(e => { console.error('[CoreData] Error loading cruises:', e); return null; }),
-    AsyncStorage.getItem(keys.BOOKED_CRUISES).catch(e => { console.error('[CoreData] Error loading booked:', e); return null; }),
-    AsyncStorage.getItem(keys.CASINO_OFFERS).catch(e => { console.error('[CoreData] Error loading offers:', e); return null; }),
-    AsyncStorage.getItem(keys.CALENDAR_EVENTS).catch(e => { console.error('[CoreData] Error loading events:', e); return null; }),
-    AsyncStorage.getItem(keys.LAST_SYNC).catch(e => { console.error('[CoreData] Error loading lastSync:', e); return null; }),
-    AsyncStorage.getItem(keys.SETTINGS).catch(e => { console.error('[CoreData] Error loading settings:', e); return null; }),
-    AsyncStorage.getItem(keys.USER_POINTS).catch(e => { console.error('[CoreData] Error loading points:', e); return null; }),
-    AsyncStorage.getItem(keys.CLUB_PROFILE).catch(e => { console.error('[CoreData] Error loading profile:', e); return null; }),
-    AsyncStorage.getItem(keys.HAS_IMPORTED_DATA).catch(e => { console.error('[CoreData] Error loading import flag:', e); return null; }),
+    quotaSafeGetItem(keys.CRUISES).catch(e => { console.error('[CoreData] Error loading cruises:', e); return null; }),
+    quotaSafeGetItem(keys.BOOKED_CRUISES).catch(e => { console.error('[CoreData] Error loading booked:', e); return null; }),
+    quotaSafeGetItem(keys.CASINO_OFFERS).catch(e => { console.error('[CoreData] Error loading offers:', e); return null; }),
+    quotaSafeGetItem(keys.CALENDAR_EVENTS).catch(e => { console.error('[CoreData] Error loading events:', e); return null; }),
+    quotaSafeGetItem(keys.LAST_SYNC).catch(e => { console.error('[CoreData] Error loading lastSync:', e); return null; }),
+    quotaSafeGetItem(keys.SETTINGS).catch(e => { console.error('[CoreData] Error loading settings:', e); return null; }),
+    quotaSafeGetItem(keys.USER_POINTS).catch(e => { console.error('[CoreData] Error loading points:', e); return null; }),
+    quotaSafeGetItem(keys.CLUB_PROFILE).catch(e => { console.error('[CoreData] Error loading profile:', e); return null; }),
+    quotaSafeGetItem(keys.HAS_IMPORTED_DATA).catch(e => { console.error('[CoreData] Error loading import flag:', e); return null; }),
   ]);
 
   console.log('[CoreData] Storage promises resolved for user:', email || 'unknown');
