@@ -2256,14 +2256,24 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
     syncToAppInFlightRef.current = true;
     
+    const setSyncProgress = (current: number, total: number, stepName: string) => {
+      setState(prev => ({
+        ...prev,
+        status: 'syncing',
+        progress: { current, total, stepName },
+        error: null,
+      }));
+    };
+
     try {
       console.log('[RoyalCaribbeanSync] Step 1: Setting status to syncing...');
-      setState(prev => ({ ...prev, status: 'syncing' }));
+      setSyncProgress(1, 9, 'Starting sync to app');
       addLog('🚀 Starting sync to app...', 'info');
 
       const persistenceFailures: string[] = [];
       
       console.log('[RoyalCaribbeanSync] Step 2: Creating sync preview...');
+      setSyncProgress(2, 9, 'Creating sync preview');
       addLog('Creating sync preview...', 'info');
 
       const currentLoyalty = {
@@ -2323,6 +2333,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         addLog(`⚠️ No booked cruise rows were captured for ${config.name}, so existing booked cruises will be preserved`, 'warning');
       }
 
+      setSyncProgress(3, 9, 'Merging extracted data');
       addLog('Applying sync...', 'info');
       const { offers: rawOffers, cruises: rawCruises, bookedCruises: finalBookedCruises } = applySyncPreview(
         preview,
@@ -2338,6 +2349,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       );
 
       console.log('[RoyalCaribbeanSync] Running data healing pass...');
+      setSyncProgress(4, 9, 'Validating imported data');
       const { cruises: finalCruises, offers: finalOffers, report: healingReport } = healImportedData(rawCruises, rawOffers);
       console.log('[RoyalCaribbeanSync] Data healing:', {
         cruisesHealed: healingReport.cruisesHealed,
@@ -2360,6 +2372,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       });
 
       console.log('[RoyalCaribbeanSync] Step: Persisting offers...');
+      setSyncProgress(5, 9, 'Saving offers');
       addLog(`Setting ${finalOffers.length} total offers in app`, 'info');
       try {
         console.log('[RoyalCaribbeanSync] Calling setCasinoOffers()...');
@@ -2374,6 +2387,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       }
 
       console.log('[RoyalCaribbeanSync] Step: Persisting available cruises...');
+      setSyncProgress(6, 9, 'Saving available sailings');
       addLog(`Setting ${finalCruises.length} total available cruises in app`, 'info');
       try {
         console.log('[RoyalCaribbeanSync] Calling setCruises()...');
@@ -2388,6 +2402,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       }
 
       console.log('[RoyalCaribbeanSync] Step: Persisting booked cruises...');
+      setSyncProgress(7, 9, 'Saving booked cruises');
       addLog(`Setting ${finalActiveBookedCruises.length} active booked cruise(s) in app (${finalBookedCruises.length} total including history)`, 'info');
       try {
         console.log('[RoyalCaribbeanSync] Calling setBookedCruises()...');
@@ -2404,6 +2419,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       if (persistenceFailures.length > 0) {
         throw new Error(`Sync could not persist required data: ${persistenceFailures.join('; ')}`);
       }
+
+      setSyncProgress(8, 9, 'Saving loyalty profile');
 
       if (syncSource !== 'carnival' && preview.loyalty) {
         try {
@@ -2518,8 +2535,9 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         }
       }
 
-      if (typeof coreDataContext.syncToBackend === 'function') {
+      if (Platform.OS !== 'web' && typeof coreDataContext.syncToBackend === 'function') {
         try {
+          setSyncProgress(9, 9, 'Backing up synced data');
           addLog('Flushing merged cruise data to backend...', 'info');
           await coreDataContext.syncToBackend();
           addLog('✅ Backend sync completed for merged cruise data', 'success');
@@ -2527,6 +2545,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           console.error('[RoyalCaribbeanSync] Error syncing merged data to backend:', backendSyncError);
           addLog(`⚠️ Warning: Failed to sync merged data to backend: ${String(backendSyncError)}`, 'warning');
         }
+      } else {
+        setSyncProgress(9, 9, 'Finalizing local sync');
       }
 
       if (cruiseLine === 'carnival' && carnivalUserDataRef.current) {
@@ -2595,7 +2615,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           offerRows: prev.syncCounts?.offerRows ?? 0,
           upcomingCruises: finalActiveBookedCruises.length,
           courtesyHolds: finalCourtesyHolds.length
-        }
+        },
+        progress: null
       }));
       
       // NOTE: Do NOT call refreshData() here.
@@ -2621,7 +2642,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.log('[RoyalCaribbeanSync] Setting status to error...');
-      setState(prev => ({ ...prev, status: 'error', error: errorMessage }));
+      setState(prev => ({ ...prev, status: 'error', error: errorMessage, progress: null }));
       addLog(`❌ Sync failed: ${errorMessage}`, 'error');
       addLog('Please try again or contact support if the issue persists', 'error');
     } finally {
