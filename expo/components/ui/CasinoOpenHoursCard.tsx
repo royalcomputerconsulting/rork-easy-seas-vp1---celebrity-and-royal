@@ -15,7 +15,8 @@ import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/
 import { LinearGradient } from 'expo-linear-gradient';
 import { formatTime12Hour } from '@/lib/format';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ALL_STORAGE_KEYS } from '@/lib/storage/storageKeys';
+import { ALL_STORAGE_KEYS, getUserScopedKey } from '@/lib/storage/storageKeys';
+import { useAuth } from '@/state/AuthProvider';
 import type { BookedCruise } from '@/types/models';
 import {
   type CasinoAvailability,
@@ -97,6 +98,7 @@ function formatSailingLabel(cruise: BookedCruise): string {
 }
 
 export function CasinoOpenHoursCard({ cruise, allUpcomingCruises, onHoursUpdated, onHoursDataLoaded }: CasinoOpenHoursCardProps) {
+  const { authenticatedEmail } = useAuth();
   const [selectedCruise, setSelectedCruise] = useState<BookedCruise | null>(cruise);
   const [hoursData, setHoursData] = useState<CasinoOpenHoursData | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -117,8 +119,8 @@ export function CasinoOpenHoursCard({ cruise, allUpcomingCruises, onHoursUpdated
 
   const storageKey = useMemo(() => {
     if (!activeCruise?.id) return null;
-    return `${ALL_STORAGE_KEYS.CASINO_OPEN_HOURS}_${activeCruise.id}`;
-  }, [activeCruise?.id]);
+    return getUserScopedKey(`${ALL_STORAGE_KEYS.CASINO_OPEN_HOURS}_${activeCruise.id}`, authenticatedEmail);
+  }, [activeCruise?.id, authenticatedEmail]);
 
   const casinoAvailability = useMemo(() => {
     if (!activeCruise) return null;

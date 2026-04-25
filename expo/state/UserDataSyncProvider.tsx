@@ -6,6 +6,7 @@ import { useAuth } from "@/state/AuthProvider";
 import { getUserScopedKey, ALL_STORAGE_KEYS } from "@/lib/storage/storageKeys";
 import { clearUserSpecificData } from "@/lib/storage/storageOperations";
 import { buildOwnerScopeId, getInstallationId } from "@/lib/storage/installationId";
+import { filterRecordsForOwner, isOwnerScopeForEmail, isScopedDynamicKeyForOwner, stampRecordsForOwner, toOwnerScopedDynamicKey } from "@/lib/storage/dataOwnership";
 
 const _BASE_LAST_SYNC_KEY = "easyseas_last_cloud_sync";
 const MAX_RETRY_ATTEMPTS = 1;
@@ -32,10 +33,10 @@ function parseStoredJson<T>(value: string | null, fallback: T, label: string): T
   }
 }
 
-async function loadStoredEntriesByPrefix(prefix: string): Promise<Record<string, string>> {
+async function loadStoredEntriesByPrefix(prefix: string, email: string | null): Promise<Record<string, string>> {
   try {
     const allKeys = await AsyncStorage.getAllKeys();
-    const matchingKeys = allKeys.filter((key) => key.startsWith(prefix));
+    const matchingKeys = allKeys.filter((key) => isScopedDynamicKeyForOwner(key, prefix, email));
 
     if (matchingKeys.length === 0) {
       return {};
@@ -130,6 +131,14 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
+}
+
+function prepareOwnedRecords<T extends object>(records: T[], ownerScopeId: string | null | undefined, email: string | null | undefined, label: string): T[] {
+  return stampRecordsForOwner(filterRecordsForOwner(records, ownerScopeId, email, label), ownerScopeId, email);
+}
+
+function prepareOwnedUnknownArray(value: unknown, ownerScopeId: string | null | undefined, email: string | null | undefined, label: string): unknown[] {
+  return prepareOwnedRecords<Record<string, unknown>>(asArray(value).filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeId, email, label);
 }
 
 function asString(value: unknown): string | null {
@@ -467,7 +476,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         AsyncStorage.getItem(scopedSailingWeatherKey),
       ]);
 
-      const casinoOpenHoursEntries = await loadStoredEntriesByPrefix(CASINO_OPEN_HOURS_STORAGE_PREFIX);
+      const casinoOpenHoursEntries = await loadStoredEntriesByPrefix(CASINO_OPEN_HOURS_STORAGE_PREFIX, emailRef.current);
       const alertsRaw = scopedAlertsRaw ?? legacyAlertsRaw;
       const alertRulesRaw = scopedAlertRulesRaw ?? legacyAlertRulesRaw;
 
@@ -503,30 +512,30 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         : normalizedLegacyLoyaltyData;
 
       const data = {
-        cruises: parseStoredUnknownArray(cruisesRaw, 'cruises'),
-        bookedCruises: parseStoredUnknownArray(bookedCruisesRaw, 'bookedCruises'),
-        casinoOffers: parseStoredUnknownArray(casinoOffersRaw, 'casinoOffers'),
-        calendarEvents: parseStoredUnknownArray(calendarEventsRaw, 'calendarEvents'),
-        casinoSessions: parseStoredUnknownArray(casinoSessionsRaw, 'casinoSessions'),
+        cruises: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(cruisesRaw, 'cruises').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync available cruises'),
+        bookedCruises: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(bookedCruisesRaw, 'bookedCruises').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync booked cruises'),
+        casinoOffers: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(casinoOffersRaw, 'casinoOffers').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync casino offers'),
+        calendarEvents: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(calendarEventsRaw, 'calendarEvents').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync calendar events'),
+        casinoSessions: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(casinoSessionsRaw, 'casinoSessions').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync casino sessions'),
         clubRoyaleProfile: parseStoredUnknown(clubProfileRaw, 'clubRoyaleProfile'),
         settings: parseStoredUnknown(settingsRaw, 'settings'),
         userPoints: parseStoredInteger(userPointsRaw, 0),
-        certificates: parseStoredUnknownArray(certificatesRaw, 'certificates'),
-        alerts: parseStoredUnknownArray(alertsRaw, 'alerts'),
-        alertRules: parseStoredUnknownArray(alertRulesRaw, 'alertRules'),
+        certificates: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(certificatesRaw, 'certificates').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync certificates'),
+        alerts: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(alertsRaw, 'alerts').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync alerts'),
+        alertRules: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(alertRulesRaw, 'alertRules').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync alert rules'),
         dismissedAlertIds: parseStoredStringArray(dismissedAlertIdsRaw, 'dismissedAlertIds'),
         dismissedAlertEntities: parseStoredStringArray(dismissedAlertEntitiesRaw, 'dismissedAlertEntities'),
-        slotAtlas: parseStoredUnknownArray(slotAtlasRaw, 'slotAtlas'),
+        slotAtlas: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(slotAtlasRaw, 'slotAtlas').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync slot atlas'),
         loyaltyData,
         bankrollData: parseStoredUnknown(bankrollDataRaw, 'bankrollData'),
-        bankrollLimits: parseStoredUnknownArray(bankrollLimitsRaw, 'bankrollLimits'),
-        bankrollAlerts: parseStoredUnknownArray(bankrollAlertsRaw, 'bankrollAlerts'),
+        bankrollLimits: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(bankrollLimitsRaw, 'bankrollLimits').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync bankroll limits'),
+        bankrollAlerts: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(bankrollAlertsRaw, 'bankrollAlerts').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync bankroll alerts'),
         celebrityData,
-        crewRecognitionEntries: parseStoredUnknownArray(crewEntriesRaw, 'crewRecognitionEntries'),
-        crewRecognitionSailings: parseStoredUnknownArray(crewSailingsRaw, 'crewRecognitionSailings'),
-        userSlotMachines: parseStoredUnknownArray(userSlotMachinesRaw, 'userSlotMachines'),
-        deckPlanLocations: parseStoredUnknownArray(deckPlanLocationsRaw, 'deckPlanLocations'),
-        favoriteStaterooms: parseStoredUnknownArray(favoriteStateroomsRaw, 'favoriteStaterooms'),
+        crewRecognitionEntries: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(crewEntriesRaw, 'crewRecognitionEntries').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync crew entries'),
+        crewRecognitionSailings: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(crewSailingsRaw, 'crewRecognitionSailings').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync crew sailings'),
+        userSlotMachines: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(userSlotMachinesRaw, 'userSlotMachines').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync user slot machines'),
+        deckPlanLocations: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(deckPlanLocationsRaw, 'deckPlanLocations').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync deck plan locations'),
+        favoriteStaterooms: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(favoriteStateroomsRaw, 'favoriteStaterooms').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync favorite staterooms'),
         sailingWeatherCache: parseStoredRecord(sailingWeatherCacheRaw, 'sailingWeatherCache'),
         casinoOpenHours: normalizeDynamicStorageEntries(casinoOpenHoursEntries, 'casinoOpenHours'),
       };
@@ -560,6 +569,18 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
     console.log("[UserDataSync] Restoring cloud data to local storage...");
 
     try {
+      const currentOwnerScopeId = ownerScopeIdRef.current;
+      const currentEmail = emailRef.current;
+      const cloudOwnerScopeId = typeof cloudData?.ownerScopeId === 'string' ? cloudData.ownerScopeId : currentOwnerScopeId;
+      if (!currentOwnerScopeId || !cloudOwnerScopeId || cloudOwnerScopeId !== currentOwnerScopeId || !isOwnerScopeForEmail(cloudOwnerScopeId, currentEmail)) {
+        console.warn('[UserDataSync] Refusing cloud restore for mismatched owner scope:', {
+          currentEmail,
+          currentOwnerScopeId,
+          cloudOwnerScopeId,
+        });
+        return false;
+      }
+
       const savePromises: Promise<void>[] = [];
       const scopedAlertsKey = resolveAlertStorageKey(emailRef.current);
       const scopedAlertRulesKey = resolveAlertRulesStorageKey(emailRef.current);
@@ -571,19 +592,19 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       const scopedSailingWeatherKey = resolveSailingWeatherStorageKey(emailRef.current);
 
       if (hasDefinedProperty(cloudData, 'cruises')) {
-        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.CRUISES), asArray(cloudData.cruises)));
+        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.CRUISES), prepareOwnedUnknownArray(cloudData.cruises, currentOwnerScopeId, currentEmail, 'cloud-restore available cruises')));
       }
       if (hasDefinedProperty(cloudData, 'bookedCruises')) {
-        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.BOOKED_CRUISES), asArray(cloudData.bookedCruises)));
+        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.BOOKED_CRUISES), prepareOwnedUnknownArray(cloudData.bookedCruises, currentOwnerScopeId, currentEmail, 'cloud-restore booked cruises')));
       }
       if (hasDefinedProperty(cloudData, 'casinoOffers')) {
-        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.CASINO_OFFERS), asArray(cloudData.casinoOffers)));
+        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.CASINO_OFFERS), prepareOwnedUnknownArray(cloudData.casinoOffers, currentOwnerScopeId, currentEmail, 'cloud-restore casino offers')));
       }
       if (hasDefinedProperty(cloudData, 'calendarEvents')) {
-        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.CALENDAR_EVENTS), asArray(cloudData.calendarEvents)));
+        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.CALENDAR_EVENTS), prepareOwnedUnknownArray(cloudData.calendarEvents, currentOwnerScopeId, currentEmail, 'cloud-restore calendar events')));
       }
       if (hasDefinedProperty(cloudData, 'casinoSessions')) {
-        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.CASINO_SESSIONS), asArray(cloudData.casinoSessions)));
+        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.CASINO_SESSIONS), prepareOwnedUnknownArray(cloudData.casinoSessions, currentOwnerScopeId, currentEmail, 'cloud-restore casino sessions')));
       }
       if (hasDefinedProperty(cloudData, 'clubRoyaleProfile')) {
         appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.CLUB_PROFILE), cloudData.clubRoyaleProfile ?? null, { removeWhenNull: true }));
@@ -595,13 +616,13 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         appendPromise(savePromises, buildNumberSetPromise(sk(ALL_STORAGE_KEYS.USER_POINTS), asNumber(cloudData.userPoints) ?? 0));
       }
       if (hasDefinedProperty(cloudData, 'certificates')) {
-        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.CERTIFICATES), asArray(cloudData.certificates)));
+        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.CERTIFICATES), prepareOwnedUnknownArray(cloudData.certificates, currentOwnerScopeId, currentEmail, 'cloud-restore certificates')));
       }
       if (hasDefinedProperty(cloudData, 'alerts')) {
-        savePromises.push(...buildDualJsonSetPromises(scopedAlertsKey, sk(ALL_STORAGE_KEYS.ALERTS), asArray(cloudData.alerts)));
+        savePromises.push(...buildDualJsonSetPromises(scopedAlertsKey, sk(ALL_STORAGE_KEYS.ALERTS), prepareOwnedUnknownArray(cloudData.alerts, currentOwnerScopeId, currentEmail, 'cloud-restore alerts')));
       }
       if (hasDefinedProperty(cloudData, 'alertRules')) {
-        savePromises.push(...buildDualJsonSetPromises(scopedAlertRulesKey, sk(ALL_STORAGE_KEYS.ALERT_RULES), asArray(cloudData.alertRules)));
+        savePromises.push(...buildDualJsonSetPromises(scopedAlertRulesKey, sk(ALL_STORAGE_KEYS.ALERT_RULES), prepareOwnedUnknownArray(cloudData.alertRules, currentOwnerScopeId, currentEmail, 'cloud-restore alert rules')));
       }
       if (hasDefinedProperty(cloudData, 'dismissedAlertIds')) {
         appendPromise(savePromises, buildJsonSetPromise(scopedDismissedAlertIdsKey, asArray(cloudData.dismissedAlertIds)));
@@ -610,7 +631,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         appendPromise(savePromises, buildJsonSetPromise(scopedDismissedAlertEntitiesKey, asArray(cloudData.dismissedAlertEntities)));
       }
       if (hasDefinedProperty(cloudData, 'slotAtlas')) {
-        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.MY_SLOT_ATLAS), asArray(cloudData.slotAtlas)));
+        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.MY_SLOT_ATLAS), prepareOwnedUnknownArray(cloudData.slotAtlas, currentOwnerScopeId, currentEmail, 'cloud-restore slot atlas')));
       }
       if (hasDefinedProperty(cloudData, 'loyaltyData')) {
         const normalizedLoyaltyData = normalizeSyncedLoyaltyPayload(cloudData.loyaltyData);
@@ -627,10 +648,10 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.BANKROLL_DATA), cloudData.bankrollData ?? null, { removeWhenNull: true }));
       }
       if (hasDefinedProperty(cloudData, 'bankrollLimits')) {
-        appendPromise(savePromises, buildJsonSetPromise(scopedBankrollLimitsKey, asArray(cloudData.bankrollLimits)));
+        appendPromise(savePromises, buildJsonSetPromise(scopedBankrollLimitsKey, prepareOwnedUnknownArray(cloudData.bankrollLimits, currentOwnerScopeId, currentEmail, 'cloud-restore bankroll limits')));
       }
       if (hasDefinedProperty(cloudData, 'bankrollAlerts')) {
-        appendPromise(savePromises, buildJsonSetPromise(scopedBankrollAlertsKey, asArray(cloudData.bankrollAlerts)));
+        appendPromise(savePromises, buildJsonSetPromise(scopedBankrollAlertsKey, prepareOwnedUnknownArray(cloudData.bankrollAlerts, currentOwnerScopeId, currentEmail, 'cloud-restore bankroll alerts')));
       }
       if (hasDefinedProperty(cloudData, 'celebrityData')) {
         const celebrityDataRecord = asNullableRecord(cloudData.celebrityData);
@@ -640,27 +661,34 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         appendPromise(savePromises, buildNumberSetPromise(sk(ALL_STORAGE_KEYS.CELEBRITY_BLUE_CHIP_POINTS), asNumber(celebrityDataRecord?.blueChipPoints ?? null)));
       }
       if (hasDefinedProperty(cloudData, 'crewRecognitionEntries')) {
-        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_ENTRIES), asArray(cloudData.crewRecognitionEntries)));
+        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_ENTRIES), prepareOwnedUnknownArray(cloudData.crewRecognitionEntries, currentOwnerScopeId, currentEmail, 'cloud-restore crew entries')));
       }
       if (hasDefinedProperty(cloudData, 'crewRecognitionSailings')) {
-        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_SAILINGS), asArray(cloudData.crewRecognitionSailings)));
+        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_SAILINGS), prepareOwnedUnknownArray(cloudData.crewRecognitionSailings, currentOwnerScopeId, currentEmail, 'cloud-restore crew sailings')));
       }
       if (hasDefinedProperty(cloudData, 'userSlotMachines')) {
-        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.USER_SLOT_MACHINES), asArray(cloudData.userSlotMachines)));
+        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.USER_SLOT_MACHINES), prepareOwnedUnknownArray(cloudData.userSlotMachines, currentOwnerScopeId, currentEmail, 'cloud-restore user slot machines')));
       }
       if (hasDefinedProperty(cloudData, 'deckPlanLocations')) {
-        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.DECK_PLAN_LOCATIONS), asArray(cloudData.deckPlanLocations)));
+        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.DECK_PLAN_LOCATIONS), prepareOwnedUnknownArray(cloudData.deckPlanLocations, currentOwnerScopeId, currentEmail, 'cloud-restore deck plan locations')));
       }
       if (hasDefinedProperty(cloudData, 'favoriteStaterooms')) {
-        appendPromise(savePromises, buildJsonSetPromise(scopedFavoriteStateroomsKey, asArray(cloudData.favoriteStaterooms)));
+        appendPromise(savePromises, buildJsonSetPromise(scopedFavoriteStateroomsKey, prepareOwnedUnknownArray(cloudData.favoriteStaterooms, currentOwnerScopeId, currentEmail, 'cloud-restore favorite staterooms')));
       }
       if (hasDefinedProperty(cloudData, 'sailingWeatherCache')) {
         appendPromise(savePromises, buildJsonSetPromise(scopedSailingWeatherKey, asRecord(cloudData.sailingWeatherCache)));
       }
       if (hasDefinedProperty(cloudData, 'casinoOpenHours')) {
-        const existingCasinoOpenHoursEntries = await loadStoredEntriesByPrefix(CASINO_OPEN_HOURS_STORAGE_PREFIX);
+        const existingCasinoOpenHoursEntries = await loadStoredEntriesByPrefix(CASINO_OPEN_HOURS_STORAGE_PREFIX, currentEmail);
         const nextCasinoOpenHours = asRecord(cloudData.casinoOpenHours);
-        const nextCasinoOpenHoursKeys = new Set(getRecordKeys(nextCasinoOpenHours));
+        const normalizedCasinoOpenHours = Object.entries(nextCasinoOpenHours).reduce<Record<string, unknown>>((accumulator, [key, value]) => {
+          const scopedKey = toOwnerScopedDynamicKey(key, CASINO_OPEN_HOURS_STORAGE_PREFIX, currentEmail);
+          if (scopedKey) {
+            accumulator[scopedKey] = value;
+          }
+          return accumulator;
+        }, {});
+        const nextCasinoOpenHoursKeys = new Set(getRecordKeys(normalizedCasinoOpenHours));
 
         Object.keys(existingCasinoOpenHoursEntries).forEach((key) => {
           if (!nextCasinoOpenHoursKeys.has(key)) {
@@ -668,7 +696,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
           }
         });
 
-        Object.entries(nextCasinoOpenHours).forEach(([key, value]) => {
+        Object.entries(normalizedCasinoOpenHours).forEach(([key, value]) => {
           appendPromise(savePromises, buildJsonSetPromise(key, value));
         });
       }

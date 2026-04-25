@@ -1,6 +1,7 @@
 import * as z from "zod";
 import { getDb } from "@/backend/db";
 import { createTRPCRouter, publicProcedure } from "../create-context";
+import { isOwnerScopeForEmail } from "@/lib/storage/dataOwnership";
 
 const UserDataSchema = z.object({
   email: z.string().email(),
@@ -132,8 +133,8 @@ export const dataRouter = createTRPCRouter({
       const db = await getDb();
       const normalizedEmail = input.email.toLowerCase().trim();
       const ownerScopeId = input.ownerScopeId?.trim() || '';
-      if (!ownerScopeId) {
-        console.log('[API] Refusing unscoped cloud save to prevent cross-user data exposure:', normalizedEmail);
+      if (!ownerScopeId || !isOwnerScopeForEmail(ownerScopeId, normalizedEmail)) {
+        console.log('[API] Refusing cloud save with invalid owner scope:', { email: normalizedEmail, ownerScopeId: ownerScopeId || 'missing' });
         throw new Error('OWNER_SCOPE_REQUIRED');
       }
       const now = new Date().toISOString();
@@ -141,8 +142,8 @@ export const dataRouter = createTRPCRouter({
       console.log('[API] Saving all user data for:', { email: normalizedEmail, ownerScopeId });
 
       const existingResults = await db.query<[StoredUserData[]]>(
-        `SELECT * FROM user_profiles WHERE ownerScopeId = $ownerScopeId LIMIT 1`,
-        { ownerScopeId }
+        `SELECT * FROM user_profiles WHERE ownerScopeId = $ownerScopeId AND email = $email LIMIT 1`,
+        { ownerScopeId, email: normalizedEmail }
       );
 
       const existingData = existingResults?.[0]?.[0];
@@ -211,7 +212,7 @@ export const dataRouter = createTRPCRouter({
             casinoOpenHours = $casinoOpenHours,
             ownerScopeId = $ownerScopeId,
             updatedAt = $updatedAt
-          WHERE ownerScopeId = $ownerScopeId`,
+          WHERE ownerScopeId = $ownerScopeId AND email = $email`,
           dataToSave as Record<string, unknown>
         );
         console.log('[API] Updated existing user profile:', normalizedEmail);
@@ -244,8 +245,8 @@ export const dataRouter = createTRPCRouter({
       
       console.log('[API] Loading all user data for:', { email: normalizedEmail, ownerScopeId: ownerScopeId || 'missing' });
 
-      if (!ownerScopeId) {
-        console.log('[API] Refusing unscoped cloud restore to prevent cross-user data exposure:', normalizedEmail);
+      if (!ownerScopeId || !isOwnerScopeForEmail(ownerScopeId, normalizedEmail)) {
+        console.log('[API] Refusing cloud restore with invalid owner scope:', { email: normalizedEmail, ownerScopeId: ownerScopeId || 'missing' });
         return {
           found: false,
           data: null,
@@ -253,8 +254,8 @@ export const dataRouter = createTRPCRouter({
       }
 
       const results = await db.query<[StoredUserData[]]>(
-        `SELECT * FROM user_profiles WHERE ownerScopeId = $ownerScopeId LIMIT 1`,
-        { ownerScopeId }
+        `SELECT * FROM user_profiles WHERE ownerScopeId = $ownerScopeId AND email = $email LIMIT 1`,
+        { ownerScopeId, email: normalizedEmail }
       );
 
       if (results && results[0] && results[0].length > 0) {
@@ -298,6 +299,7 @@ export const dataRouter = createTRPCRouter({
             favoriteStaterooms: data.favoriteStaterooms ?? [],
             sailingWeatherCache: data.sailingWeatherCache ?? {},
             casinoOpenHours: data.casinoOpenHours ?? {},
+            ownerScopeId: data.ownerScopeId,
             updatedAt: data.updatedAt,
             createdAt: data.createdAt,
           },
