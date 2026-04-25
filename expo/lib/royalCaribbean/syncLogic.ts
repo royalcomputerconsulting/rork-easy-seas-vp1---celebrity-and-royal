@@ -281,8 +281,6 @@ function isInstantRewardOrCertificate(offerCode: string | undefined, offerName: 
   return false;
 }
 
-const IN_PROGRESS_OFFER_CODES = ['2601C05', '2601A05'];
-
 function normalizeComparableText(value: string | undefined): string {
   return (value || '').toLowerCase().trim().replace(/[\s_-]+/g, ' ');
 }
@@ -298,14 +296,8 @@ function isInProgressOffer(
     return true;
   }
 
-  const normalizedCode = (offerCode || '').toUpperCase().trim();
   const normalizedStatus = normalizeComparableText(offerStatus);
   const normalizedName = normalizeComparableText(offerName);
-
-  if (IN_PROGRESS_OFFER_CODES.some(code => normalizedCode === code.toUpperCase())) {
-    console.log(`[SyncLogic] Detected IN PROGRESS offer code: ${offerCode}`);
-    return true;
-  }
 
   const statusIndicatesInProgress =
     normalizedStatus.includes('in progress') ||

@@ -228,53 +228,112 @@ function collectOfferRecords(value: unknown, depth: number = 0): UnknownRecord[]
   return collected;
 }
 
-function getOffersArray(payload: unknown): UnknownRecord[] {
-  if (Array.isArray(payload)) {
-    return asRecordArray(payload);
+function getOfferIdentityKey(offer: UnknownRecord, fallback: string): string {
+  const offerRecord = getOfferRecord(offer);
+  const keyParts = [
+    getString(offerRecord.offerCode ?? offerRecord.marketingCouponCode ?? offerRecord.couponCode ?? offerRecord.code),
+    getString(offerRecord.name ?? offerRecord.title ?? offerRecord.offerName ?? offerRecord.marketingTitle ?? offerRecord.description),
+    getString(offerRecord.reserveByDate ?? offerRecord.expirationDate ?? offerRecord.marketingEndDate),
+    getOfferStatus(offerRecord, offer),
+  ].filter(Boolean);
+
+  if (keyParts.length > 0) {
+    return keyParts.join('|').toLowerCase();
   }
 
-  const record = asRecord(payload);
+  try {
+    return `${fallback}|${JSON.stringify(offer).slice(0, 500)}`;
+  } catch {
+    return fallback;
+  }
+}
+
+function getOfferRecordsFromCandidate(candidate: unknown): UnknownRecord[] {
+  if (Array.isArray(candidate)) {
+    return asRecordArray(candidate);
+  }
+
+  const record = asRecord(candidate);
   if (!record) {
     return [];
   }
 
+  return isOfferLikeRecord(record) ? [record] : collectOfferRecords(record);
+}
+
+function getOffersArray(payload: unknown): UnknownRecord[] {
+  const directRecords = getOfferRecordsFromCandidate(payload);
+  const record = asRecord(payload);
+  if (!record) {
+    return directRecords;
+  }
+
   const nestedPayload = asRecord(record.payload);
-  const candidateArrays: unknown[] = [
+  const nestedData = asRecord(record.data);
+  const candidateValues: unknown[] = [
     record.offers,
+    record.offer,
     record.casinoOffers,
+    record.casinoOffer,
     record.featuredOffers,
+    record.featuredOffer,
     record.featuredCasinoOffers,
+    record.featuredCasinoOffer,
     record.casinoFeaturedOffers,
+    record.casinoFeaturedOffer,
+    record.highlightedOffers,
+    record.highlightedOffer,
+    record.primaryOffers,
+    record.primaryOffer,
     record.moreOffers,
+    record.moreOffer,
+    record.availableOffers,
+    record.availableOffer,
     nestedPayload?.offers,
+    nestedPayload?.offer,
     nestedPayload?.casinoOffers,
+    nestedPayload?.casinoOffer,
     nestedPayload?.featuredOffers,
+    nestedPayload?.featuredOffer,
     nestedPayload?.featuredCasinoOffers,
+    nestedPayload?.featuredCasinoOffer,
     nestedPayload?.casinoFeaturedOffers,
+    nestedPayload?.casinoFeaturedOffer,
+    nestedPayload?.highlightedOffers,
+    nestedPayload?.highlightedOffer,
+    nestedPayload?.primaryOffers,
+    nestedPayload?.primaryOffer,
     nestedPayload?.moreOffers,
+    nestedPayload?.moreOffer,
+    nestedPayload?.availableOffers,
+    nestedPayload?.availableOffer,
+    nestedData?.offers,
+    nestedData?.offer,
+    nestedData?.casinoOffers,
+    nestedData?.casinoOffer,
+    nestedData?.featuredOffers,
+    nestedData?.featuredOffer,
+    nestedData?.moreOffers,
+    nestedData?.moreOffer,
+    nestedData?.availableOffers,
+    nestedData?.availableOffer,
   ];
 
   const offerMap = new Map<string, UnknownRecord>();
-  const addOffers = (offers: UnknownRecord[]) => {
+  const addOffers = (offers: UnknownRecord[], source: string) => {
     offers.forEach((offer, index) => {
-      const offerRecord = getOfferRecord(offer);
-      const key = [
-        getString(offerRecord.offerCode ?? offerRecord.marketingCouponCode ?? offerRecord.code),
-        getString(offerRecord.name ?? offerRecord.title ?? offerRecord.offerName ?? offerRecord.description),
-        getString(offerRecord.reserveByDate ?? offerRecord.expirationDate ?? offerRecord.marketingEndDate),
-        index,
-      ].join('|');
-      offerMap.set(key, offer);
+      const key = getOfferIdentityKey(offer, `${source}:${index}`);
+      if (!offerMap.has(key)) {
+        offerMap.set(key, offer);
+      }
     });
   };
 
-  for (const candidate of candidateArrays) {
-    addOffers(asRecordArray(candidate));
-  }
-
-  if (offerMap.size === 0) {
-    addOffers(collectOfferRecords(record));
-  }
+  addOffers(directRecords, 'direct');
+  candidateValues.forEach((candidate, index) => {
+    addOffers(getOfferRecordsFromCandidate(candidate), `candidate:${index}`);
+  });
+  addOffers(collectOfferRecords(record), 'deep');
 
   return Array.from(offerMap.values());
 }

@@ -179,41 +179,85 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
     return collected;
   }
 
+  function getOfferIdentityKey(offer, fallback) {
+    const co = getCampaignOffer(offer);
+    const parts = [
+      safeStr(co.offerCode || co.marketingCouponCode || co.couponCode || co.code),
+      safeStr(co.name || co.title || co.offerName || co.marketingTitle || co.description),
+      safeStr(co.reserveByDate || co.expirationDate || co.marketingEndDate),
+      getOfferStatus(co, offer),
+    ].filter(Boolean);
+    if (parts.length > 0) return parts.join('|').toLowerCase();
+    try { return fallback + '|' + JSON.stringify(offer).slice(0, 500); } catch (e) { return fallback; }
+  }
+
+  function extractCandidateOffers(candidate) {
+    if (Array.isArray(candidate)) return candidate.filter(item => item && typeof item === 'object');
+    if (!candidate || typeof candidate !== 'object') return [];
+    if (isOfferLikeRecord(candidate)) return [candidate];
+    return collectOfferArrays(candidate, 0);
+  }
+
   function extractOffersArray(data) {
     const candidates = [
+      data,
       data?.offers,
+      data?.offer,
       data?.casinoOffers,
+      data?.casinoOffer,
       data?.featuredOffers,
+      data?.featuredOffer,
       data?.featuredCasinoOffers,
+      data?.featuredCasinoOffer,
       data?.casinoFeaturedOffers,
+      data?.casinoFeaturedOffer,
+      data?.highlightedOffers,
+      data?.highlightedOffer,
+      data?.primaryOffers,
+      data?.primaryOffer,
       data?.moreOffers,
+      data?.moreOffer,
       data?.availableOffers,
+      data?.availableOffer,
       data?.payload?.casinoOffers,
+      data?.payload?.casinoOffer,
       data?.payload?.offers,
+      data?.payload?.offer,
       data?.payload?.featuredOffers,
+      data?.payload?.featuredOffer,
       data?.payload?.featuredCasinoOffers,
+      data?.payload?.featuredCasinoOffer,
       data?.payload?.casinoFeaturedOffers,
+      data?.payload?.casinoFeaturedOffer,
+      data?.payload?.highlightedOffers,
+      data?.payload?.highlightedOffer,
+      data?.payload?.primaryOffers,
+      data?.payload?.primaryOffer,
       data?.payload?.moreOffers,
+      data?.payload?.moreOffer,
       data?.payload?.availableOffers,
+      data?.payload?.availableOffer,
+      data?.data?.casinoOffers,
+      data?.data?.casinoOffer,
+      data?.data?.offers,
+      data?.data?.offer,
+      data?.data?.featuredOffers,
+      data?.data?.featuredOffer,
+      data?.data?.moreOffers,
+      data?.data?.moreOffer,
+      data?.data?.availableOffers,
+      data?.data?.availableOffer,
     ];
     const map = new Map();
-    const addOffer = (offer, index) => {
+    const addOffer = (offer, index, source) => {
       if (!offer || typeof offer !== 'object') return;
-      const co = getCampaignOffer(offer);
-      const key = [
-        safeStr(co.offerCode || co.marketingCouponCode || co.couponCode || co.code),
-        safeStr(co.name || co.title || co.offerName || co.marketingTitle || co.description),
-        safeStr(co.reserveByDate || co.expirationDate || co.marketingEndDate),
-        index,
-      ].join('|');
-      map.set(key, offer);
+      const key = getOfferIdentityKey(offer, source + ':' + index);
+      if (!map.has(key)) map.set(key, offer);
     };
-    candidates.forEach(candidate => {
-      if (Array.isArray(candidate)) candidate.forEach(addOffer);
+    candidates.forEach((candidate, candidateIndex) => {
+      extractCandidateOffers(candidate).forEach((offer, offerIndex) => addOffer(offer, offerIndex, 'candidate:' + candidateIndex));
     });
-    if (map.size === 0) {
-      collectOfferArrays(data, 0).forEach(addOffer);
-    }
+    collectOfferArrays(data, 0).forEach((offer, index) => addOffer(offer, index, 'deep'));
     return Array.from(map.values());
   }
 
@@ -246,8 +290,7 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
     if (status.includes('in progress') || status.includes('pending') || status.includes('processing') || status.includes('earning')) {
       return true;
     }
-    const code = String(co?.offerCode || '').trim().toUpperCase();
-    return code === '2601C05' || code === '2601A05';
+    return false;
   }
 
   async function extractClubRoyaleStatus() {

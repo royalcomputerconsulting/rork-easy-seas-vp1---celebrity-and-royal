@@ -405,7 +405,7 @@ function OverviewScreenContent() {
   }, [groupedOffers, cruisesData]);
 
   const availableCruisesCount = useMemo(() => {
-    return cruisesData.filter((c: Cruise) => !isDateInPast(c.sailDate)).length;
+    return cruisesData.length;
   }, [cruisesData]);
 
   const certificateSummary = useMemo(() => {
