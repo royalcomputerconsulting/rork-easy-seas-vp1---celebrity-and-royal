@@ -73,7 +73,6 @@ import {
   importAllDataFromFile,
 } from '@/lib/dataManager';
 import { getUserScopedKey, ALL_STORAGE_KEYS } from '@/lib/storage/storageKeys';
-import { downloadScraperExtension } from '@/lib/chromeExtension';
 import { downloadSeaPassGenerator } from '@/lib/seapassGeneratorDownload';
 import { generateCalendarFeed, generateFeedToken } from '@/lib/calendar/feedGenerator';
 import {
@@ -1341,6 +1340,7 @@ export default function SettingsScreen() {
       setIsDownloadingExtension(true);
       console.log('[Settings] Starting Sync Extension download...');
       
+      const { downloadScraperExtension } = await import('@/lib/chromeExtension');
       const result = await downloadScraperExtension();
       
       if (result.success) {

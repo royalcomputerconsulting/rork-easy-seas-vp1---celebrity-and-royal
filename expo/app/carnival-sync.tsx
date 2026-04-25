@@ -15,7 +15,6 @@ import { WebCookieSyncModal } from '@/components/WebCookieSyncModal';
 import { LoyaltyPill } from '@/components/ui/LoyaltyPill';
 import { getCarnivalPlayersClubTierColor, getCarnivalVifpTierColor } from '@/constants/loyaltyTheme';
 import { trpc, isWebSyncAvailable } from '@/lib/trpc';
-import { downloadScraperExtension } from '@/lib/chromeExtension';
 const CARNIVAL_RED = '#CC2232';
 const CARNIVAL_GOLD = '#FFB400';
 const CARNIVAL_DARK = '#0c1520';
@@ -130,6 +129,7 @@ function CarnivalSyncScreen() {
     addLog('Preparing Easy Seas browser sync extension...', 'info');
 
     try {
+      const { downloadScraperExtension } = await import('@/lib/chromeExtension');
       const result = await downloadScraperExtension();
       if (!result.success) {
         const errorMessage = result.error || 'Unable to download Easy Seas browser extension';
