@@ -135,6 +135,7 @@ interface CasinoOfferCardData {
   freePlay?: number;
   obc?: number;
   perks?: string[];
+  isInProgress?: boolean;
   cruises: Cruise[];
 }
 
@@ -143,7 +144,16 @@ function normalizeOfferKey(value: string | undefined): string {
 }
 
 function getOfferLookupKey(offer: CasinoOffer): string {
-  return normalizeOfferKey(offer.offerCode || offer.id);
+  const code = normalizeOfferKey(offer.offerCode || offer.id);
+  const expiry = normalizeOfferKey(offer.expiryDate || offer.expires || offer.offerExpiryDate);
+  const name = normalizeOfferKey(offer.offerName || offer.title);
+  return [code || name || normalizeOfferKey(offer.id), expiry].filter(Boolean).join('|');
+}
+
+function getCruiseOfferLookupKey(cruise: Cruise): string {
+  const code = normalizeOfferKey(cruise.offerCode);
+  const expiry = normalizeOfferKey(cruise.offerExpiry);
+  return [code, expiry].filter(Boolean).join('|') || code;
 }
 
 function getOfferExpiryDate(offer: CasinoOffer): string | undefined {
@@ -314,7 +324,7 @@ function OverviewScreenContent() {
     
     offersData.forEach((offer: CasinoOffer) => {
       const lookupKey = getOfferLookupKey(offer);
-      if (!lookupKey || blockedOfferKeys.has(lookupKey)) {
+      if (!lookupKey) {
         return;
       }
 
@@ -323,7 +333,7 @@ function OverviewScreenContent() {
         return;
       }
 
-      const key = offer.offerCode || offer.id;
+      const key = lookupKey || offer.offerCode || offer.id;
       const existing = offersMap.get(key);
 
       const rawName = (offer.offerName || offer.title || '').trim();
@@ -344,6 +354,7 @@ function OverviewScreenContent() {
           freePlay: offer.freePlay ?? offer.freeplayAmount ?? 0,
           obc,
           perks: offer.perks ?? [],
+          isInProgress: isCasinoOfferInProgress(offer),
           cruises: [],
         });
         return;
@@ -372,6 +383,7 @@ function OverviewScreenContent() {
           obc: shouldUpgradeOBC ? obc : existing.obc,
           freePlay: shouldUpgradeFreePlay ? (offer.freePlay ?? offer.freeplayAmount ?? 0) : existing.freePlay,
           perks: shouldUpgradePerks ? (offer.perks ?? []) : existing.perks,
+          isInProgress: existing.isInProgress || isCasinoOfferInProgress(offer),
         });
       }
     });
@@ -382,19 +394,15 @@ function OverviewScreenContent() {
       }
       
       const offerCode = cruise.offerCode;
-      const cruiseOfferKey = normalizeOfferKey(offerCode);
-      if (cruiseOfferKey && blockedOfferKeys.has(cruiseOfferKey)) {
-        return;
-      }
-      if (offerCode && offersMap.has(offerCode)) {
-        const offerCard = offersMap.get(offerCode);
-        if (offerCard) {
-          offerCard.cruises.push(cruise);
-        }
+      const cruiseOfferKey = getCruiseOfferLookupKey(cruise);
+      const fallbackOfferKey = normalizeOfferKey(offerCode);
+      const offerCard = offersMap.get(cruiseOfferKey) ?? offersMap.get(fallbackOfferKey) ?? Array.from(offersMap.values()).find((offer) => normalizeOfferKey(offer.offerCode) === fallbackOfferKey && !offer.isInProgress);
+      if (offerCard && !offerCard.isInProgress) {
+        offerCard.cruises.push(cruise);
       }
     });
 
-    const grouped = Array.from(offersMap.values()).filter((offer) => offer.cruises.length > 0);
+    const grouped = Array.from(offersMap.values());
     console.log('[Overview] Grouped active offers:', {
       groupedOffers: grouped.length,
       realActiveOffers: realActiveOffersCount,
@@ -415,14 +423,8 @@ function OverviewScreenContent() {
   }, [groupedOffers, cruisesData]);
 
   const availableCruisesCount = useMemo(() => {
-    return cruisesData.filter((c: Cruise) => {
-      if (isDateInPast(c.sailDate)) {
-        return false;
-      }
-      const offerKey = normalizeOfferKey(c.offerCode);
-      return !offerKey || !blockedOfferKeys.has(offerKey);
-    }).length;
-  }, [cruisesData, blockedOfferKeys]);
+    return cruisesData.length;
+  }, [cruisesData]);
 
   const certificateSummary = useMemo(() => {
     const fppCerts = getCertificatesByType('fpp').filter(c => c.status === 'available');
@@ -823,6 +825,7 @@ function OverviewScreenContent() {
           freePlay={item.freePlay}
           obc={item.obc}
           cruises={item.cruises}
+          isInProgress={item.isInProgress}
           onPress={() => handleOfferPress(item)}
           onCruisePress={handleCruiseItemPress}
           bookedCruiseIds={bookedCruiseIds}

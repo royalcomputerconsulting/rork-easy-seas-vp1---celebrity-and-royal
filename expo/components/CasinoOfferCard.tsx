@@ -32,6 +32,7 @@ interface CasinoOfferCardProps {
   bookedCruiseIds?: Set<string>;
   isActive?: boolean;
   isBestValue?: boolean;
+  isInProgress?: boolean;
 }
 
 interface OfferSummaryCardProps {
@@ -252,6 +253,7 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
   bookedCruiseIds: _bookedCruiseIds = new Set(),
   isActive = true,
   isBestValue = false,
+  isInProgress = false,
 }: CasinoOfferCardProps) {
   const { localData } = useAppState();
   const [showOfferImage, setShowOfferImage] = useState(false);
@@ -276,9 +278,16 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
   }, [offerCode, offerName]);
 
   const offerDetails = useMemo(() => {
-    const offer = (localData.offers || []).find(
-      (o: CasinoOffer) => o.offerCode === offerCode
-    );
+    const offer = (localData.offers || []).find((o: CasinoOffer) => {
+      if (o.offerCode !== offerCode) {
+        return false;
+      }
+      if (!expiryDate) {
+        return true;
+      }
+      const offerExpiry = o.expiryDate || o.expires || o.offerExpiryDate;
+      return !offerExpiry || offerExpiry === expiryDate;
+    });
     
     if (!offer && cruises.length > 0) {
       const firstCruise = cruises[0];
@@ -287,7 +296,7 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
         perks: firstCruise.perks || [],
         receivedDate: undefined,
         tradeInValue: tradeInValue || 0,
-        totalCruises: cruises.length,
+        totalCruises: isInProgress ? 0 : cruises.length,
         totalValue: 0,
         averageValue: 0,
       };
@@ -301,15 +310,15 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
     const averageValue = cruises.length > 0 ? totalValue / cruises.length : 0;
 
     return {
-      roomType: offer?.roomType || cruises[0]?.cabinType || 'N/A',
+      roomType: offer?.roomType || cruises[0]?.cabinType || (isInProgress ? 'Pending' : 'N/A'),
       perks: offer?.perks || [],
       receivedDate: offer?.received,
       tradeInValue: offer?.tradeInValue || tradeInValue || 0,
-      totalCruises: cruises.length,
+      totalCruises: isInProgress ? 0 : cruises.length,
       totalValue,
       averageValue,
     };
-  }, [localData.offers, offerCode, cruises, tradeInValue]);
+  }, [localData.offers, offerCode, expiryDate, cruises, tradeInValue, isInProgress]);
   
   const getActualOfferImageUrl = (code: string): string => {
     return `https://image.royalcaribbeanmarketing.com/lib/fe9415737666017570/m/1/${code}.jpg`;
@@ -336,6 +345,9 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
   const getStatusBadge = () => {
     if (!isActive) {
       return { text: 'EXPIRED', bg: '#EF4444' };
+    }
+    if (isInProgress) {
+      return { text: 'IN PROGRESS', bg: '#F59E0B' };
     }
     if (isBestValue) {
       return { text: 'BEST VALUE', bg: COLORS.success };
@@ -543,7 +555,7 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
 
         <View style={styles.cruiseCountBadge}>
           <Text style={styles.cruiseCountBadgeText}>
-            {offerDetails.totalCruises} cruise{offerDetails.totalCruises !== 1 ? 's' : ''} available
+            {isInProgress ? 'Waiting on booking' : `${offerDetails.totalCruises} cruise${offerDetails.totalCruises !== 1 ? 's' : ''} available`}
           </Text>
         </View>
       </View>
@@ -581,18 +593,18 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
           )}
           <View style={styles.totalValueCompact}>
             <Text style={styles.totalValueCompactLabel}>
-              TOTAL VALUE{aggregateValue && aggregateValue.cruiseCount > 1 ? ` (${aggregateValue.cruiseCount})` : ''}
+              {isInProgress ? 'STATUS' : `TOTAL VALUE${aggregateValue && aggregateValue.cruiseCount > 1 ? ` (${aggregateValue.cruiseCount})` : ''}`}
             </Text>
             <Text style={styles.totalValueCompactAmount}>
-              ${totalValue > 0 ? Math.round(totalValue).toLocaleString() : '---'}
+              {isInProgress ? 'Pending' : `${totalValue > 0 ? Math.round(totalValue).toLocaleString() : '---'}`}
             </Text>
           </View>
         </View>
 
         {/* ACTION ROW */}
         <View style={styles.actionRowLarge}>
-          <TouchableOpacity style={styles.primaryButtonLarge} onPress={onPress} testID="casino-offer-card.view-all-cruises">
-            <Text style={styles.primaryButtonTextLarge}>View All Cruises</Text>
+          <TouchableOpacity style={[styles.primaryButtonLarge, isInProgress && styles.primaryButtonInProgress]} onPress={onPress} testID="casino-offer-card.view-all-cruises">
+            <Text style={styles.primaryButtonTextLarge}>{isInProgress ? 'View Offer Status' : 'View All Cruises'}</Text>
             <ChevronRight size={18} color={COLORS.white} />
           </TouchableOpacity>
 
@@ -1006,6 +1018,9 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.lg,
     borderRadius: BORDER_RADIUS.sm,
+  },
+  primaryButtonInProgress: {
+    backgroundColor: '#F59E0B',
   },
   primaryButtonTextLarge: {
     fontSize: 14,
