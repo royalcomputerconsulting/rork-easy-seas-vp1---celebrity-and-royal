@@ -7,6 +7,7 @@ import { COLORS } from '@/constants/theme';
 import { useSlotMachineLibrary } from '@/state/SlotMachineLibraryProvider';
 import { useCasinoSessions } from '@/state/CasinoSessionProvider';
 import QuickMachineWinModal, { type WinEntryData } from '@/components/QuickMachineWinModal';
+import { exportSingleMachineToDocx } from '@/lib/exportMachinesToDocx';
 import type { MachineEncyclopediaEntry } from '@/types/models';
 
 export default function MachineDetailScreen() {
@@ -142,7 +143,6 @@ export default function MachineDetailScreen() {
     try {
       setIsExporting(true);
       console.log('[MachineDetail] Exporting machine:', displayMachine.machineName);
-      const { exportSingleMachineToDocx } = await import('@/lib/exportMachinesToDocx');
       await exportSingleMachineToDocx(displayMachine);
       console.log('[MachineDetail] Export successful');
     } catch (error) {

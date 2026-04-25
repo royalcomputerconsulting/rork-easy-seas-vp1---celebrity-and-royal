@@ -23,6 +23,7 @@ import {
   MachineRecommendationInput,
   CertificateLevelSearchInput,
 } from '@/lib/agentTools';
+import { useSlotMachines } from './SlotMachineProvider';
 import { useSlotMachineLibrary } from './SlotMachineLibraryProvider';
 import { useDeckPlan } from './DeckPlanProvider';
 import { useCasinoSessions } from './CasinoSessionProvider';
@@ -268,8 +269,8 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
   const { isAdmin } = useAuth();
   const { cruises, bookedCruises, casinoOffers } = useCoreData();
   const { clubRoyalePoints, clubRoyaleTier } = useLoyalty();
+  const { allMachines } = useSlotMachines();
   const { myAtlasMachines, globalLibrary, encyclopedia } = useSlotMachineLibrary();
-  const allMachines = globalLibrary;
   const { mappings: deckMappings } = useDeckPlan();
   const { sessions, getSessionAnalytics, getMachineAnalytics } = useCasinoSessions();
   
@@ -308,7 +309,7 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
       getSessionAnalytics,
       getMachineAnalytics,
     };
-  }, [cruises, bookedCruises, casinoOffers, clubRoyalePoints, clubRoyaleTier, myAtlasMachines, globalLibrary, encyclopedia, deckMappings, sessions, getSessionAnalytics, getMachineAnalytics]);
+  }, [cruises, bookedCruises, casinoOffers, clubRoyalePoints, clubRoyaleTier, allMachines, myAtlasMachines, globalLibrary, encyclopedia, deckMappings, sessions, getSessionAnalytics, getMachineAnalytics]);
 
   const executeToolCall = useCallback((tool: string, params: unknown): string => {
     console.log('[AgentX] Executing tool:', tool, params);

@@ -1,5 +1,7 @@
 import type { Cruise, BookedCruise, CasinoOffer } from '@/types/models';
 import { KNOWN_RETAIL_VALUES } from '@/constants/knownRetailValues';
+import { BOOKED_CRUISES_DATA } from '@/mocks/bookedCruises';
+import { COMPLETED_CRUISES_DATA } from '@/mocks/completedCruises';
 import { findReceiptByShipAndDate } from '@/constants/receiptData';
 import { findFreeplayOBCByOfferCode, findFreeplayOBCByShipAndDate } from '@/constants/freeplayOBCData';
 
@@ -88,7 +90,26 @@ export function applyFreeplayOBCData(cruises: BookedCruise[]): BookedCruise[] {
 }
 
 export function enrichCruisesWithMockItineraries(cruises: BookedCruise[]): BookedCruise[] {
-  return cruises;
+  return cruises.map(cruise => {
+    const allMockCruises = [...COMPLETED_CRUISES_DATA, ...BOOKED_CRUISES_DATA];
+    const mockCruise = allMockCruises.find(mc => 
+      mc.id === cruise.id || 
+      mc.reservationNumber === cruise.reservationNumber ||
+      (mc.shipName === cruise.shipName && mc.sailDate === cruise.sailDate)
+    );
+    
+    if (mockCruise?.itinerary && mockCruise.itinerary.length > 0) {
+      return {
+        ...cruise,
+        itinerary: mockCruise.itinerary,
+        seaDays: mockCruise.seaDays,
+        portDays: mockCruise.portDays,
+        casinoOpenDays: mockCruise.casinoOpenDays,
+      };
+    }
+    
+    return cruise;
+  });
 }
 
 export function enrichCruisesWithOfferData(cruises: Cruise[], offers: CasinoOffer[]): Cruise[] {

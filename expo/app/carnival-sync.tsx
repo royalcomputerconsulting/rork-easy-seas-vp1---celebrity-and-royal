@@ -15,6 +15,7 @@ import { WebCookieSyncModal } from '@/components/WebCookieSyncModal';
 import { LoyaltyPill } from '@/components/ui/LoyaltyPill';
 import { getCarnivalPlayersClubTierColor, getCarnivalVifpTierColor } from '@/constants/loyaltyTheme';
 import { trpc, isWebSyncAvailable } from '@/lib/trpc';
+import { downloadScraperExtension } from '@/lib/chromeExtension';
 const CARNIVAL_RED = '#CC2232';
 const CARNIVAL_GOLD = '#FFB400';
 const CARNIVAL_DARK = '#0c1520';
@@ -129,7 +130,6 @@ function CarnivalSyncScreen() {
     addLog('Preparing Easy Seas browser sync extension...', 'info');
 
     try {
-      const { downloadScraperExtension } = await import('@/lib/chromeExtension');
       const result = await downloadScraperExtension();
       if (!result.success) {
         const errorMessage = result.error || 'Unable to download Easy Seas browser extension';
@@ -274,11 +274,6 @@ function CarnivalSyncScreen() {
   const canRunIngestion = state.status === 'logged_in' || state.status === 'complete';
   const isRunning = state.status.startsWith('running_') || state.status === 'syncing';
   const showConfirmation = state.status === 'awaiting_confirmation';
-  const showSyncProgress = state.status === 'syncing';
-  const syncProgressTotal = state.progress?.total && state.progress.total > 0 ? state.progress.total : 9;
-  const syncProgressCurrent = Math.max(0, Math.min(state.progress?.current ?? 1, syncProgressTotal));
-  const syncProgressPercent = Math.max(8, Math.min(100, Math.round((syncProgressCurrent / syncProgressTotal) * 100)));
-  const syncProgressLabel = state.progress?.stepName ?? 'Syncing to app';
 
   const handleRunIngestion = useCallback(() => {
     if (isRunning || !canRunIngestion) {
@@ -315,7 +310,7 @@ function CarnivalSyncScreen() {
   };
 
   const handleConfirmSync = useCallback(() => {
-    if (isConfirmingSync || showSyncProgress) {
+    if (isConfirmingSync) {
       return;
     }
 
@@ -329,7 +324,7 @@ function CarnivalSyncScreen() {
       .finally(() => {
         setIsConfirmingSync(false);
       });
-  }, [addLog, coreData, isConfirmingSync, loyalty, showSyncProgress, syncToApp]);
+  }, [addLog, coreData, isConfirmingSync, loyalty, syncToApp]);
 
   return (
     <>
@@ -851,12 +846,7 @@ function CarnivalSyncScreen() {
                 <Text style={styles.confirmationQuestion}>Sync this Carnival data to the app?</Text>
 
                 <View style={styles.confirmationButtons}>
-                  <Pressable
-                    style={[styles.button, styles.cancelButton, isConfirmingSync && styles.buttonDisabled]}
-                    onPress={cancelSync}
-                    disabled={isConfirmingSync}
-                    testID="carnival-cancel-sync-button"
-                  >
+                  <Pressable style={[styles.button, styles.cancelButton]} onPress={cancelSync}>
                     <Text style={styles.cancelButtonText}>No</Text>
                   </Pressable>
                   <Pressable
@@ -865,36 +855,8 @@ function CarnivalSyncScreen() {
                     disabled={isConfirmingSync}
                     testID="carnival-confirm-sync-button"
                   >
-                    {isConfirmingSync ? <ActivityIndicator size="small" color="#fff" /> : null}
-                    <Text style={styles.buttonText}>{isConfirmingSync ? 'Starting Sync…' : 'Yes, Sync Now'}</Text>
+                    <Text style={styles.buttonText}>{isConfirmingSync ? 'Syncing…' : 'Yes, Sync Now'}</Text>
                   </Pressable>
-                </View>
-              </View>
-            </View>
-          </Modal>
-
-          <Modal
-            visible={showSyncProgress}
-            transparent={true}
-            animationType="fade"
-          >
-            <View style={styles.modalOverlay}>
-              <View style={styles.syncProgressModal} testID="carnival-sync-progress-modal">
-                <View style={styles.syncProgressIconWrap}>
-                  <ActivityIndicator size="large" color={CARNIVAL_GOLD} />
-                </View>
-                <Text style={styles.syncProgressTitle}>Syncing to Easy Seas</Text>
-                <Text style={styles.syncProgressStep}>{syncProgressLabel}</Text>
-                <View style={styles.syncProgressTrack}>
-                  <View style={[styles.syncProgressFill, { width: `${syncProgressPercent}%` }]} />
-                </View>
-                <Text style={styles.syncProgressMeta}>{syncProgressPercent}% complete</Text>
-                <View style={styles.syncProgressLogBox}>
-                  {state.logs.slice(-3).map((log, index) => (
-                    <Text key={`${log.timestamp}-${index}`} style={styles.syncProgressLogText} numberOfLines={2}>
-                      {log.message}
-                    </Text>
-                  ))}
                 </View>
               </View>
             </View>
@@ -1499,76 +1461,6 @@ const styles = StyleSheet.create({
   confirmButton: {
     backgroundColor: CARNIVAL_RED,
     flex: 1.5,
-    flexDirection: 'row' as const,
-    gap: 8,
-  },
-  syncProgressModal: {
-    width: '100%',
-    maxWidth: 420,
-    backgroundColor: '#101a27',
-    borderRadius: 20,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: `${CARNIVAL_RED}70`,
-    alignItems: 'center' as const,
-  },
-  syncProgressIconWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: `${CARNIVAL_RED}18`,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    marginBottom: 14,
-  },
-  syncProgressTitle: {
-    color: '#f8fafc',
-    fontSize: 20,
-    fontWeight: '800' as const,
-    marginBottom: 6,
-    textAlign: 'center' as const,
-  },
-  syncProgressStep: {
-    color: '#fecaca',
-    fontSize: 14,
-    fontWeight: '600' as const,
-    textAlign: 'center' as const,
-    marginBottom: 18,
-  },
-  syncProgressTrack: {
-    width: '100%',
-    height: 12,
-    borderRadius: 999,
-    backgroundColor: CARNIVAL_DARK,
-    overflow: 'hidden' as const,
-    borderWidth: 1,
-    borderColor: `${CARNIVAL_RED}55`,
-  },
-  syncProgressFill: {
-    height: '100%',
-    borderRadius: 999,
-    backgroundColor: CARNIVAL_GOLD,
-  },
-  syncProgressMeta: {
-    color: '#94a3b8',
-    fontSize: 12,
-    fontWeight: '700' as const,
-    marginTop: 10,
-  },
-  syncProgressLogBox: {
-    width: '100%',
-    marginTop: 16,
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: CARNIVAL_DARK,
-    borderWidth: 1,
-    borderColor: CARNIVAL_BORDER,
-    gap: 6,
-  },
-  syncProgressLogText: {
-    color: '#cbd5e1',
-    fontSize: 12,
-    lineHeight: 16,
   },
   successContainer: {
     flexDirection: 'row' as const,

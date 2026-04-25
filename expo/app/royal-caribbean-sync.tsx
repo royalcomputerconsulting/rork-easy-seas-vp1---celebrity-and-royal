@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, Pressable, Modal, Switch, Platform, Linking, ScrollView, ActivityIndicator, Animated } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync } from '@/state/RoyalCaribbeanSyncProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import { ChevronDown, ChevronUp, LoaderCircle, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, DollarSign, Anchor, Crown, Star, Award, Download, FileDown, Cookie } from 'lucide-react-native';
@@ -52,7 +52,6 @@ function RoyalCaribbeanSyncScreen() {
   const [cookieSyncError, setCookieSyncError] = useState<string | null>(null);
   const [syncingPricing, setSyncingPricing] = useState(false);
   const [isExportingLog, setIsExportingLog] = useState(false);
-  const [isConfirmingSync, setIsConfirmingSync] = useState(false);
   const [syncStarted, setSyncStarted] = useState(false);
   const syncPulse = useState(() => new Animated.Value(1))[0];
   const [_pricingSyncResults, setPricingSyncResults] = useState<{ updated: number; total: number } | null>(null);
@@ -316,28 +315,6 @@ function RoyalCaribbeanSyncScreen() {
   const canRunIngestion = state.status === 'logged_in' || state.status === 'complete';
   const isRunning = state.status.startsWith('running_') || state.status === 'syncing';
   const showConfirmation = state.status === 'awaiting_confirmation';
-  const showSyncProgress = state.status === 'syncing';
-  const syncProgressTotal = state.progress?.total && state.progress.total > 0 ? state.progress.total : 9;
-  const syncProgressCurrent = Math.max(0, Math.min(state.progress?.current ?? 1, syncProgressTotal));
-  const syncProgressPercent = Math.max(8, Math.min(100, Math.round((syncProgressCurrent / syncProgressTotal) * 100)));
-  const syncProgressLabel = state.progress?.stepName ?? 'Syncing to app';
-
-  const handleConfirmSync = useCallback(() => {
-    if (isConfirmingSync || showSyncProgress) {
-      return;
-    }
-
-    setIsConfirmingSync(true);
-    void syncToApp(coreData, loyalty)
-      .catch((error) => {
-        const errorMessage = error instanceof Error ? error.message : 'Sync failed';
-        console.error('[RoyalCaribbeanSync] Sync-to-app error:', error);
-        addLog(`Unable to finish sync: ${errorMessage}`, 'error');
-      })
-      .finally(() => {
-        setIsConfirmingSync(false);
-      });
-  }, [addLog, coreData, isConfirmingSync, loyalty, showSyncProgress, syncToApp]);
 
   return (
     <>
@@ -1003,50 +980,20 @@ function RoyalCaribbeanSyncScreen() {
 
               <View style={styles.confirmationButtons}>
                 <Pressable 
-                  style={[styles.button, styles.cancelButton, isConfirmingSync && styles.buttonDisabled]}
+                  style={[styles.button, styles.cancelButton]}
                   onPress={cancelSync}
-                  disabled={isConfirmingSync}
-                  testID="royal-cancel-sync-button"
                 >
                   <Text style={styles.cancelButtonText}>No</Text>
                 </Pressable>
 
                 <Pressable 
-                  style={[styles.button, styles.confirmButton, isConfirmingSync && styles.buttonDisabled]}
-                  onPress={handleConfirmSync}
-                  disabled={isConfirmingSync}
-                  testID="royal-confirm-sync-button"
+                  style={[styles.button, styles.confirmButton]}
+                  onPress={() => {
+                    void syncToApp(coreData, loyalty);
+                  }}
                 >
-                  {isConfirmingSync ? <ActivityIndicator size="small" color="#fff" /> : null}
-                  <Text style={styles.buttonText}>{isConfirmingSync ? 'Starting Sync…' : 'Yes, Sync Now'}</Text>
+                  <Text style={styles.buttonText}>Yes, Sync Now</Text>
                 </Pressable>
-              </View>
-            </View>
-          </View>
-        </Modal>
-
-        <Modal
-          visible={showSyncProgress}
-          transparent={true}
-          animationType="fade"
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.syncProgressModal} testID="royal-sync-progress-modal">
-              <View style={styles.syncProgressIconWrap}>
-                <ActivityIndicator size="large" color="#34d399" />
-              </View>
-              <Text style={styles.syncProgressTitle}>Syncing to Easy Seas</Text>
-              <Text style={styles.syncProgressStep}>{syncProgressLabel}</Text>
-              <View style={styles.syncProgressTrack}>
-                <View style={[styles.syncProgressFill, { width: `${syncProgressPercent}%` }]} />
-              </View>
-              <Text style={styles.syncProgressMeta}>{syncProgressPercent}% complete</Text>
-              <View style={styles.syncProgressLogBox}>
-                {state.logs.slice(-3).map((log, index) => (
-                  <Text key={`${log.timestamp}-${index}`} style={styles.syncProgressLogText} numberOfLines={2}>
-                    {log.message}
-                  </Text>
-                ))}
               </View>
             </View>
           </View>
@@ -1587,77 +1534,7 @@ const styles = StyleSheet.create({
   },
   confirmButton: {
     backgroundColor: '#059669',
-    flex: 1.5,
-    flexDirection: 'row' as const,
-    gap: 8
-  },
-  syncProgressModal: {
-    width: '100%',
-    maxWidth: 420,
-    backgroundColor: '#102033',
-    borderRadius: 20,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: '#1d4ed8',
-    alignItems: 'center' as const,
-  },
-  syncProgressIconWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#052e2b',
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    marginBottom: 14,
-  },
-  syncProgressTitle: {
-    color: '#f8fafc',
-    fontSize: 20,
-    fontWeight: '800' as const,
-    marginBottom: 6,
-    textAlign: 'center' as const,
-  },
-  syncProgressStep: {
-    color: '#93c5fd',
-    fontSize: 14,
-    fontWeight: '600' as const,
-    textAlign: 'center' as const,
-    marginBottom: 18,
-  },
-  syncProgressTrack: {
-    width: '100%',
-    height: 12,
-    borderRadius: 999,
-    backgroundColor: '#0f172a',
-    overflow: 'hidden' as const,
-    borderWidth: 1,
-    borderColor: '#1e3a8a',
-  },
-  syncProgressFill: {
-    height: '100%',
-    borderRadius: 999,
-    backgroundColor: '#34d399',
-  },
-  syncProgressMeta: {
-    color: '#94a3b8',
-    fontSize: 12,
-    fontWeight: '700' as const,
-    marginTop: 10,
-  },
-  syncProgressLogBox: {
-    width: '100%',
-    marginTop: 16,
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: '#0f172a',
-    borderWidth: 1,
-    borderColor: '#1e293b',
-    gap: 6,
-  },
-  syncProgressLogText: {
-    color: '#cbd5e1',
-    fontSize: 12,
-    lineHeight: 16,
+    flex: 1.5
   },
   confirmButtonLocked: {
     backgroundColor: '#0ea5e9',

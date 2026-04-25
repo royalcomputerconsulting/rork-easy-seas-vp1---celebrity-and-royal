@@ -135,7 +135,6 @@ interface CasinoOfferCardData {
   freePlay?: number;
   obc?: number;
   perks?: string[];
-  isInProgress?: boolean;
   cruises: Cruise[];
 }
 
@@ -144,25 +143,11 @@ function normalizeOfferKey(value: string | undefined): string {
 }
 
 function getOfferLookupKey(offer: CasinoOffer): string {
-  const code = normalizeOfferKey(offer.offerCode || offer.id);
-  const expiry = normalizeOfferKey(offer.expiryDate || offer.expires || offer.offerExpiryDate);
-  const name = normalizeOfferKey(offer.offerName || offer.title);
-  return [code || name || normalizeOfferKey(offer.id), expiry].filter(Boolean).join('|');
-}
-
-function getCruiseOfferLookupKey(cruise: Cruise): string {
-  const code = normalizeOfferKey(cruise.offerCode);
-  const expiry = normalizeOfferKey(cruise.offerExpiry);
-  return [code, expiry].filter(Boolean).join('|') || code;
+  return normalizeOfferKey(offer.offerCode || offer.id);
 }
 
 function getOfferExpiryDate(offer: CasinoOffer): string | undefined {
   return offer.expiryDate || offer.expires || offer.offerExpiryDate || undefined;
-}
-
-function isCasinoOfferInProgress(offer: CasinoOffer): boolean {
-  const normalizedStatus = (offer.offerStatus || offer.status || '').trim().toLowerCase().replace(/[\s_-]+/g, ' ');
-  return offer.isInProgress === true || normalizedStatus.includes('in progress') || normalizedStatus.includes('pending') || normalizedStatus.includes('processing') || normalizedStatus === 'booked';
 }
 
 function isOfferLinkedCruiseInProgress(cruise: BookedCruise, today: Date): boolean {
@@ -282,9 +267,8 @@ function OverviewScreenContent() {
       const normalizedStatus = offer.status?.trim().toLowerCase();
       const hasBlockedStatus = normalizedStatus === 'used' || normalizedStatus === 'booked' || normalizedStatus === 'expired';
       const isLinkedToInProgressCruise = !!offer.offerCode && inProgressOfferKeys.has(normalizeOfferKey(offer.offerCode));
-      const isSyncedInProgressOffer = isCasinoOfferInProgress(offer);
 
-      if (hasBlockedStatus || isLinkedToInProgressCruise || isSyncedInProgressOffer) {
+      if (hasBlockedStatus || isLinkedToInProgressCruise) {
         keys.add(lookupKey);
       }
     });
@@ -324,7 +308,7 @@ function OverviewScreenContent() {
     
     offersData.forEach((offer: CasinoOffer) => {
       const lookupKey = getOfferLookupKey(offer);
-      if (!lookupKey) {
+      if (!lookupKey || blockedOfferKeys.has(lookupKey)) {
         return;
       }
 
@@ -333,7 +317,7 @@ function OverviewScreenContent() {
         return;
       }
 
-      const key = lookupKey || offer.offerCode || offer.id;
+      const key = offer.offerCode || offer.id;
       const existing = offersMap.get(key);
 
       const rawName = (offer.offerName || offer.title || '').trim();
@@ -354,7 +338,6 @@ function OverviewScreenContent() {
           freePlay: offer.freePlay ?? offer.freeplayAmount ?? 0,
           obc,
           perks: offer.perks ?? [],
-          isInProgress: isCasinoOfferInProgress(offer),
           cruises: [],
         });
         return;
@@ -383,7 +366,6 @@ function OverviewScreenContent() {
           obc: shouldUpgradeOBC ? obc : existing.obc,
           freePlay: shouldUpgradeFreePlay ? (offer.freePlay ?? offer.freeplayAmount ?? 0) : existing.freePlay,
           perks: shouldUpgradePerks ? (offer.perks ?? []) : existing.perks,
-          isInProgress: existing.isInProgress || isCasinoOfferInProgress(offer),
         });
       }
     });
@@ -394,15 +376,15 @@ function OverviewScreenContent() {
       }
       
       const offerCode = cruise.offerCode;
-      const cruiseOfferKey = getCruiseOfferLookupKey(cruise);
-      const fallbackOfferKey = normalizeOfferKey(offerCode);
-      const offerCard = offersMap.get(cruiseOfferKey) ?? offersMap.get(fallbackOfferKey) ?? Array.from(offersMap.values()).find((offer) => normalizeOfferKey(offer.offerCode) === fallbackOfferKey && !offer.isInProgress);
-      if (offerCard && !offerCard.isInProgress) {
-        offerCard.cruises.push(cruise);
+      if (offerCode && offersMap.has(offerCode)) {
+        const offerCard = offersMap.get(offerCode);
+        if (offerCard) {
+          offerCard.cruises.push(cruise);
+        }
       }
     });
 
-    const grouped = Array.from(offersMap.values());
+    const grouped = Array.from(offersMap.values()).filter((offer) => offer.cruises.length > 0);
     console.log('[Overview] Grouped active offers:', {
       groupedOffers: grouped.length,
       realActiveOffers: realActiveOffersCount,
@@ -423,7 +405,7 @@ function OverviewScreenContent() {
   }, [groupedOffers, cruisesData]);
 
   const availableCruisesCount = useMemo(() => {
-    return cruisesData.length;
+    return cruisesData.filter((c: Cruise) => !isDateInPast(c.sailDate)).length;
   }, [cruisesData]);
 
   const certificateSummary = useMemo(() => {
@@ -825,7 +807,6 @@ function OverviewScreenContent() {
           freePlay={item.freePlay}
           obc={item.obc}
           cruises={item.cruises}
-          isInProgress={item.isInProgress}
           onPress={() => handleOfferPress(item)}
           onCruisePress={handleCruiseItemPress}
           bookedCruiseIds={bookedCruiseIds}

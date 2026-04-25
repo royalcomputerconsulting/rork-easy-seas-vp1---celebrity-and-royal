@@ -7,17 +7,9 @@ import {
   AddGameWizardData,
 } from '@/types/models';
 import type { GlobalSlotMachine } from '@/constants/globalSlotMachinesDatabase';
-import type { MachineFullDetails } from '@/lib/machineIndexHelper';
+import { permanentDB } from '@/lib/permanentMachineDatabase';
+import { machineIndexHelper, type MachineFullDetails } from '@/lib/machineIndexHelper';
 import { useEntitlement } from '@/state/EntitlementProvider';
-
-type MachineIndexHelperModule = typeof import('@/lib/machineIndexHelper');
-let machineIndexModulePromise: Promise<MachineIndexHelperModule> | null = null;
-function loadMachineIndexHelper(): Promise<MachineIndexHelperModule> {
-  if (!machineIndexModulePromise) {
-    machineIndexModulePromise = import('@/lib/machineIndexHelper');
-  }
-  return machineIndexModulePromise;
-}
 
 const STORAGE_KEY_ENCYCLOPEDIA = 'easyseas_machine_encyclopedia_v2_262_only';
 const STORAGE_KEY_MY_ATLAS = 'easyseas_my_slot_atlas_v2_262_only';
@@ -80,7 +72,6 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
     try {
       console.log('[SlotMachineLibrary] Loading machines from index (lightweight mode)...');
 
-      const { machineIndexHelper } = await loadMachineIndexHelper();
       const machineIndex = await machineIndexHelper.getOrCreateIndex();
       console.log(`[SlotMachineLibrary] Loaded ${machineIndex.length} machines from index`);
 
@@ -151,7 +142,6 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
         currentAtlasIds: currentAtlasIds.length,
       });
 
-      const { machineIndexHelper } = await loadMachineIndexHelper();
       const machineIndex = await machineIndexHelper.getOrCreateIndex();
       const indexCount = machineIndex.length;
 
@@ -294,7 +284,6 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
   };
 
   const addMachineFromGlobal = async (globalMachineId: string) => {
-    const { permanentDB } = await import('@/lib/permanentMachineDatabase');
     const allGlobalMachines = permanentDB.getAllMachines();
     const globalMachine = allGlobalMachines.find(m => m.id === globalMachineId);
     if (!globalMachine) {
@@ -361,7 +350,6 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
       hasMHB: data.apMetadata?.hasMustHitBy,
     };
 
-    const { permanentDB } = await import('@/lib/permanentMachineDatabase');
     await permanentDB.addOrUpdateMachine(globalMachine, 'manual');
     console.log('[SlotMachineLibrary] Added machine to permanent database');
 
@@ -564,7 +552,6 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
 
       console.log(`[SlotMachineLibrary] Processing ${machines.length} machines from import...`);
       
-      const { permanentDB } = await import('@/lib/permanentMachineDatabase');
       const result = await permanentDB.importFromJSON(jsonString);
       console.log('[SlotMachineLibrary] Permanent DB import result:', result);
 
@@ -699,7 +686,6 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
   const getMachineFullDetails = useCallback(async (machineId: string): Promise<MachineFullDetails | null> => {
     try {
       console.log(`[SlotMachineLibrary] Fetching full details for machine: ${machineId}`);
-      const { machineIndexHelper } = await loadMachineIndexHelper();
       const details = await machineIndexHelper.getMachineDetails(machineId);
       return details;
     } catch (error) {

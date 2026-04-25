@@ -132,6 +132,7 @@ export function determineUserStatus(
 export async function processBookedCruises(
   status: UserStatus,
   snapshot: StorageSnapshot,
+  getMockCruises: () => { BOOKED_CRUISES_DATA: BookedCruise[]; COMPLETED_CRUISES_DATA: BookedCruise[] },
   getFirstTimeUserSampleData: () => { sampleCruises: BookedCruise[]; sampleOffers: CasinoOffer[] },
   email?: string | null,
 ): Promise<ProcessedBookedResult> {
@@ -148,7 +149,35 @@ export async function processBookedCruises(
     let mergedCruises = nonMockCruises;
 
     if (storedVersion !== CURRENT_CRUISE_DATA_VERSION) {
-      console.log('[CoreData] Cruise data version changed:', storedVersion, '->', CURRENT_CRUISE_DATA_VERSION, '- preserving user data without injecting bundled mock cruises');
+      console.log('[CoreData] Cruise data version changed:', storedVersion, '->', CURRENT_CRUISE_DATA_VERSION, '- merging missing cruises');
+      const { BOOKED_CRUISES_DATA, COMPLETED_CRUISES_DATA } = getMockCruises();
+      const realMockCruises = filterDemoCruises(BOOKED_CRUISES_DATA);
+      const realCompletedCruises = filterDemoCruises(COMPLETED_CRUISES_DATA);
+
+      const existingIds = new Set(mergedCruises.map((c: BookedCruise) => c.id));
+      const existingResNums = new Set(mergedCruises.map((c: BookedCruise) => c.reservationNumber));
+      const existingShipDates = new Set(mergedCruises.map((c: BookedCruise) => `${c.shipName}|${c.sailDate}`));
+
+      const missingBookedCruises = realMockCruises.filter((mc: BookedCruise) => 
+        !existingResNums.has(mc.reservationNumber) && 
+        !existingIds.has(mc.id) &&
+        !existingShipDates.has(`${mc.shipName}|${mc.sailDate}`)
+      );
+
+      const missingCompletedCruises = realCompletedCruises.filter((mc: BookedCruise) => 
+        !existingIds.has(mc.id) &&
+        !existingShipDates.has(`${mc.shipName}|${mc.sailDate}`)
+      );
+
+      const allMissing = [...missingBookedCruises, ...missingCompletedCruises];
+
+      if (allMissing.length > 0) {
+        console.log('[CoreData] Adding', allMissing.length, 'missing cruises (', missingBookedCruises.length, 'booked,', missingCompletedCruises.length, 'completed)');
+        mergedCruises = [...mergedCruises, ...allMissing];
+      } else {
+        console.log('[CoreData] No missing cruises to add');
+      }
+
       await AsyncStorage.setItem(versionKey, CURRENT_CRUISE_DATA_VERSION).catch(console.error);
     }
 

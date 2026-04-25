@@ -24,6 +24,7 @@ import { useCasinoSessions, type CasinoSession } from '@/state/CasinoSessionProv
 import { AtlasCard } from '@/components/AtlasCard';
 import { useEntitlement } from '@/state/EntitlementProvider';
 import { useAuth } from '@/state/AuthProvider';
+import { exportFavoriteMachinesToDocx, exportAllMachinesIncrementallyToDocx } from '@/lib/exportMachinesToDocx';
 import { MachineSessionStats } from '@/components/MachineSessionStats';
 import { MachineSessionsList } from '@/components/MachineSessionsList';
 import { EditMachineSessionModal } from '@/components/EditMachineSessionModal';
@@ -558,7 +559,6 @@ export default function AtlasScreen() {
     try {
       setIsExporting(true);
       console.log(`[Atlas] Exporting ${favoriteMachines.length} favorite machines to DOCX...`);
-      const { exportFavoriteMachinesToDocx } = await import('@/lib/exportMachinesToDocx');
       await exportFavoriteMachinesToDocx(favoriteMachines);
       console.log('[Atlas] Export successful');
     } catch (error) {
@@ -579,7 +579,6 @@ export default function AtlasScreen() {
       setIsExporting(true);
       setExportProgress({ current: 0, total: myAtlasMachines.length });
       console.log(`[Atlas] Exporting ALL ${myAtlasMachines.length} machines with full details to DOCX...`);
-      const { exportAllMachinesIncrementallyToDocx } = await import('@/lib/exportMachinesToDocx');
       await exportAllMachinesIncrementallyToDocx(myAtlasMachines, (current, total) => {
         setExportProgress({ current, total });
       });

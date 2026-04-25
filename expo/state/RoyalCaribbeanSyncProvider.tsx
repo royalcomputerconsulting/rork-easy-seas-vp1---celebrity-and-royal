@@ -21,14 +21,7 @@ import { convertLoyaltyInfoToExtended, mergeExtendedLoyaltyData } from '@/lib/ro
 import { rcLogger } from '@/lib/royalCaribbean/logger';
 import { generateOffersCSV, generateBookedCruisesCSV } from '@/lib/royalCaribbean/csvGenerator';
 import { injectOffersExtraction } from '@/lib/royalCaribbean/step1_offers';
-type CarnivalExtractionModule = typeof import('@/lib/carnival/carnivalOffersExtraction');
-let _carnivalModulePromise: Promise<CarnivalExtractionModule> | null = null;
-function loadCarnivalExtraction(): Promise<CarnivalExtractionModule> {
-  if (!_carnivalModulePromise) {
-    _carnivalModulePromise = import('@/lib/carnival/carnivalOffersExtraction');
-  }
-  return _carnivalModulePromise;
-}
+import { injectCarnivalOffersExtraction, injectCarnivalBookingsScrape, injectCarnivalCruiseSearchScrape, injectCarnivalTgoExtract } from '@/lib/carnival/carnivalOffersExtraction';
 import { createSyncPreview, calculateSyncCounts, applySyncPreview } from '@/lib/royalCaribbean/syncLogic';
 import { parseCasinoOffersPayload } from '@/lib/royalCaribbean/offerPayloadParser';
 import { healImportedData } from '@/lib/dataHealing';
@@ -210,6 +203,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
     const getOfferIdentityKey = (row: OfferRow): string => {
       return [
+        row.sourcePage,
         row.offerCode || row.offerName,
         row.offerName,
         row.offerExpirationDate,
@@ -222,9 +216,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         return;
       }
 
-      const row = item as Partial<OfferRow> & { inProgress?: unknown; isPending?: unknown };
-      const rawInProgress = stringifyValue(row.isInProgress).toLowerCase();
-      const rawAltInProgress = stringifyValue(row.inProgress ?? row.isPending).toLowerCase();
+      const row = item as Partial<OfferRow>;
       const normalizedRow: OfferRow = {
         sourcePage: stringifyValue(row.sourcePage) || 'Offers',
         offerName: stringifyValue(row.offerName) || stringifyValue(row.offerCode) || 'Carnival Offer',
@@ -252,10 +244,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         totalNights: typeof row.totalNights === 'number' && Number.isFinite(row.totalNights) ? row.totalNights : undefined,
         bookingLink: stringifyValue(row.bookingLink) || undefined,
         offerStatus: stringifyValue(row.offerStatus) || undefined,
-        isInProgress: row.isInProgress === true || rawInProgress === 'true' || rawInProgress === '1' || rawInProgress === 'yes' || rawAltInProgress === 'true' || rawAltInProgress === '1' || rawAltInProgress === 'yes',
+        isInProgress: row.isInProgress === true,
       };
 
       const dedupeKey = [
+        normalizedRow.sourcePage,
         normalizedRow.offerCode,
         normalizedRow.offerName,
         normalizedRow.offerExpirationDate,
@@ -1487,10 +1480,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           carnivalTgoDataResolver.current = null;
           const tgoTimeout = setTimeout(() => { carnivalTgoDataResolver.current = null; resolve(null); }, timeoutMs);
           carnivalTgoDataResolver.current = (data) => { clearTimeout(tgoTimeout); resolve(data); };
-          (async () => {
-            const m = await loadCarnivalExtraction();
-            webViewRef.current?.injectJavaScript(m.injectCarnivalTgoExtract());
-          })();
+          webViewRef.current?.injectJavaScript(injectCarnivalTgoExtract());
         });
 
         tgoData = await extractTgo(9000);
@@ -1516,7 +1506,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       if (webViewRef.current) {
         if (isCarnivalMode) {
           addLog('🎪 Injecting Carnival extraction on offers page...', 'info');
-          { const m = await loadCarnivalExtraction(); webViewRef.current.injectJavaScript(m.injectCarnivalOffersExtraction() + '; true;'); }
+          webViewRef.current.injectJavaScript(injectCarnivalOffersExtraction() + '; true;');
         } else {
           webViewRef.current.injectJavaScript(injectOffersExtraction(state.scrapePricingAndItinerary) + '; true;');
         }
@@ -1529,29 +1519,27 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       }
       
       setState(prev => {
-        const allOffersByKey = new Set<string>();
-        const activeOffersByKey = new Set<string>();
-        const inProgressOffersByKey = new Set<string>();
+        const offersByName = new Map<string, number>();
         let totalSailings = 0;
         prev.extractedOffers.forEach(offer => {
           const status = (offer.offerStatus || '').toLowerCase().replace(/[\s_-]+/g, ' ');
-          const isInProgress = offer.isInProgress === true || status.includes('in progress') || status.includes('pending') || status.includes('processing') || status.includes('earning') || (!offer.shipName && !offer.sailingDate);
+          const isInProgress = offer.isInProgress === true || status.includes('in progress') || status.includes('pending') || status.includes('processing') || status.includes('earning');
           const hasSailing = Boolean(offer.shipName || offer.sailingDate);
-          const key = [offer.offerCode || offer.offerName || 'Unknown', offer.offerExpirationDate || ''].join('|');
-          allOffersByKey.add(key);
-          if (isInProgress) {
-            inProgressOffersByKey.add(key);
-            return;
-          }
-          activeOffersByKey.add(key);
-          if (hasSailing) {
+          if (!isInProgress && hasSailing) {
+            const key = [offer.offerCode || offer.offerName || 'Unknown', offer.offerExpirationDate || ''].join('|');
+            offersByName.set(key, (offersByName.get(key) || 0) + 1);
             totalSailings += 1;
           }
         });
+        const uniqueOffers = offersByName.size;
+        const hiddenInProgress = prev.extractedOffers.filter(offer => {
+          const status = (offer.offerStatus || '').toLowerCase().replace(/[\s_-]+/g, ' ');
+          return offer.isInProgress === true || status.includes('in progress') || status.includes('pending') || status.includes('processing') || status.includes('earning') || (!offer.shipName && !offer.sailingDate);
+        }).length;
         
-        addLog(`✅ STEP 1 COMPLETE: Captured ${allOffersByKey.size} casino offer(s): ${activeOffersByKey.size} active, ${inProgressOffersByKey.size} in progress, ${totalSailings} active sailing(s)`, 'success');
-        if (inProgressOffersByKey.size > 0) {
-          addLog(`ℹ️ In-progress offers are saved as offers but their sailings are excluded from available cruises`, 'info');
+        addLog(`✅ STEP 1 COMPLETE: Captured ${uniqueOffers} active casino offer(s) with ${totalSailings} total sailing(s)`, 'success');
+        if (hiddenInProgress > 0) {
+          addLog(`ℹ️ Excluded ${hiddenInProgress} in-progress/empty offer row(s) from active offer counts`, 'info');
         }
         
         return prev;
@@ -1646,9 +1634,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             await delay(5000);
 
             if (webViewRef.current) {
-              const m = await loadCarnivalExtraction();
               webViewRef.current.injectJavaScript(
-                m.injectCarnivalCruiseSearchScrape(offer.offerName, offer.offerCode, offer.offerExpiry, offer.perks, oi + 1)
+                injectCarnivalCruiseSearchScrape(offer.offerName, offer.offerCode, offer.offerExpiry, offer.perks, oi + 1)
               );
             }
 
@@ -1737,12 +1724,10 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             if (isCarnivalMode && webViewRef.current) {
               if (page.section === 'bookings') {
                 addLog('🎪 Injecting Carnival bookings scraper...', 'info');
-                const m = await loadCarnivalExtraction();
-                webViewRef.current.injectJavaScript(m.injectCarnivalBookingsScrape() + '; true;');
+                webViewRef.current.injectJavaScript(injectCarnivalBookingsScrape() + '; true;');
               } else if (page.name === 'Profile Home') {
                 addLog('🎪 Injecting Carnival bookings scraper on profile page...', 'info');
-                const m = await loadCarnivalExtraction();
-                webViewRef.current.injectJavaScript(m.injectCarnivalBookingsScrape() + '; true;');
+                webViewRef.current.injectJavaScript(injectCarnivalBookingsScrape() + '; true;');
               }
             }
             
@@ -2269,24 +2254,14 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
     syncToAppInFlightRef.current = true;
     
-    const setSyncProgress = (current: number, total: number, stepName: string) => {
-      setState(prev => ({
-        ...prev,
-        status: 'syncing',
-        progress: { current, total, stepName },
-        error: null,
-      }));
-    };
-
     try {
       console.log('[RoyalCaribbeanSync] Step 1: Setting status to syncing...');
-      setSyncProgress(1, 9, 'Starting sync to app');
+      setState(prev => ({ ...prev, status: 'syncing' }));
       addLog('🚀 Starting sync to app...', 'info');
 
       const persistenceFailures: string[] = [];
       
       console.log('[RoyalCaribbeanSync] Step 2: Creating sync preview...');
-      setSyncProgress(2, 9, 'Creating sync preview');
       addLog('Creating sync preview...', 'info');
 
       const currentLoyalty = {
@@ -2346,7 +2321,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         addLog(`⚠️ No booked cruise rows were captured for ${config.name}, so existing booked cruises will be preserved`, 'warning');
       }
 
-      setSyncProgress(3, 9, 'Merging extracted data');
       addLog('Applying sync...', 'info');
       const { offers: rawOffers, cruises: rawCruises, bookedCruises: finalBookedCruises } = applySyncPreview(
         preview,
@@ -2362,7 +2336,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       );
 
       console.log('[RoyalCaribbeanSync] Running data healing pass...');
-      setSyncProgress(4, 9, 'Validating imported data');
       const { cruises: finalCruises, offers: finalOffers, report: healingReport } = healImportedData(rawCruises, rawOffers);
       console.log('[RoyalCaribbeanSync] Data healing:', {
         cruisesHealed: healingReport.cruisesHealed,
@@ -2385,7 +2358,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       });
 
       console.log('[RoyalCaribbeanSync] Step: Persisting offers...');
-      setSyncProgress(5, 9, 'Saving offers');
       addLog(`Setting ${finalOffers.length} total offers in app`, 'info');
       try {
         console.log('[RoyalCaribbeanSync] Calling setCasinoOffers()...');
@@ -2400,7 +2372,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       }
 
       console.log('[RoyalCaribbeanSync] Step: Persisting available cruises...');
-      setSyncProgress(6, 9, 'Saving available sailings');
       addLog(`Setting ${finalCruises.length} total available cruises in app`, 'info');
       try {
         console.log('[RoyalCaribbeanSync] Calling setCruises()...');
@@ -2415,7 +2386,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       }
 
       console.log('[RoyalCaribbeanSync] Step: Persisting booked cruises...');
-      setSyncProgress(7, 9, 'Saving booked cruises');
       addLog(`Setting ${finalActiveBookedCruises.length} active booked cruise(s) in app (${finalBookedCruises.length} total including history)`, 'info');
       try {
         console.log('[RoyalCaribbeanSync] Calling setBookedCruises()...');
@@ -2432,8 +2402,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       if (persistenceFailures.length > 0) {
         throw new Error(`Sync could not persist required data: ${persistenceFailures.join('; ')}`);
       }
-
-      setSyncProgress(8, 9, 'Saving loyalty profile');
 
       if (syncSource !== 'carnival' && preview.loyalty) {
         try {
@@ -2548,9 +2516,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         }
       }
 
-      if (Platform.OS !== 'web' && typeof coreDataContext.syncToBackend === 'function') {
+      if (typeof coreDataContext.syncToBackend === 'function') {
         try {
-          setSyncProgress(9, 9, 'Backing up synced data');
           addLog('Flushing merged cruise data to backend...', 'info');
           await coreDataContext.syncToBackend();
           addLog('✅ Backend sync completed for merged cruise data', 'success');
@@ -2558,8 +2525,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           console.error('[RoyalCaribbeanSync] Error syncing merged data to backend:', backendSyncError);
           addLog(`⚠️ Warning: Failed to sync merged data to backend: ${String(backendSyncError)}`, 'warning');
         }
-      } else {
-        setSyncProgress(9, 9, 'Finalizing local sync');
       }
 
       if (cruiseLine === 'carnival' && carnivalUserDataRef.current) {
@@ -2628,8 +2593,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           offerRows: prev.syncCounts?.offerRows ?? 0,
           upcomingCruises: finalActiveBookedCruises.length,
           courtesyHolds: finalCourtesyHolds.length
-        },
-        progress: null
+        }
       }));
       
       // NOTE: Do NOT call refreshData() here.
@@ -2655,7 +2619,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.log('[RoyalCaribbeanSync] Setting status to error...');
-      setState(prev => ({ ...prev, status: 'error', error: errorMessage, progress: null }));
+      setState(prev => ({ ...prev, status: 'error', error: errorMessage }));
       addLog(`❌ Sync failed: ${errorMessage}`, 'error');
       addLog('Please try again or contact support if the issue persists', 'error');
     } finally {

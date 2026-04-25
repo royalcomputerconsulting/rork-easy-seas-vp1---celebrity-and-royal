@@ -332,7 +332,7 @@ function isEmptyOfferRow(row: OfferRow): boolean {
 }
 
 function getOfferExpiry(offer: CasinoOffer): string {
-  return normalizeSailDate(offer.offerExpiryDate || offer.expiryDate || offer.expires || (offer as { offerExpiry?: string }).offerExpiry || '');
+  return normalizeSailDate(offer.offerExpiryDate || offer.expiryDate || offer.expires || offer.offerExpiry || '');
 }
 
 function getOfferNameKey(offer: CasinoOffer): string {
@@ -646,22 +646,26 @@ export function createSyncPreview(
   console.log(`[SyncLogic] After dedup: ${dedupedBookedCruises.length} unique cruises from ${extractedBookedCruises.length} raw`);
 
   const filteredOffers = extractedOffers.filter(offer => {
-    if (syncSource !== 'carnival' && isEmptyOfferRow(offer) && !isInProgressOffer(offer.offerCode, offer.offerName, offer.offerStatus, offer.isInProgress)) {
-      console.log(`[SyncLogic] Keeping offer-only row without available sailings: ${offer.offerCode} - ${offer.offerName}`);
-      return true;
+    if (isInProgressOffer(offer.offerCode, offer.offerName, offer.offerStatus, offer.isInProgress)) {
+      console.log(`[SyncLogic] Skipping IN PROGRESS offer: ${offer.offerCode} - ${offer.offerName}`);
+      return false;
+    }
+    if (syncSource !== 'carnival' && isEmptyOfferRow(offer)) {
+      console.log(`[SyncLogic] Skipping offer without available sailings: ${offer.offerCode} - ${offer.offerName}`);
+      return false;
     }
     return true;
   });
   
-  const inProgressCount = filteredOffers.filter(offer => isInProgressOffer(offer.offerCode, offer.offerName, offer.offerStatus, offer.isInProgress)).length;
+  const inProgressCount = extractedOffers.length - filteredOffers.length;
   if (inProgressCount > 0) {
-    console.log(`[SyncLogic] Preserving ${inProgressCount} IN PROGRESS offer row(s) as offer records while excluding their sailings from available cruises`);
+    console.log(`[SyncLogic] Filtered out ${inProgressCount} IN PROGRESS offer(s) from sync`);
   }
 
   const { cruises: transformedCruises, offers: transformedOffers } = transformOfferRowsToCruisesAndOffers(filteredOffers, loyaltyData, syncSource);
   const transformedBookedCruises = transformBookedCruisesToAppFormat(dedupedBookedCruises, loyaltyData, syncSource);
 
-  console.log(`[SyncLogic] Transformed ${transformedCruises.length} active cruise records and ${transformedOffers.length} offer records from ${filteredOffers.length} offer rows`);
+  console.log(`[SyncLogic] Transformed ${transformedCruises.length} cruise records from ${filteredOffers.length} offer rows`);
 
   const offersNew: CasinoOffer[] = [];
   const offersUpdates: { existing: CasinoOffer; updated: CasinoOffer }[] = [];
