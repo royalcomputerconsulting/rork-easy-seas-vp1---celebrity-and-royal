@@ -77,12 +77,15 @@ export const dataRouter = createTRPCRouter({
     .mutation(async ({ input }) => {
       const db = await getDb();
       
-      const result = await db.create("user_data", {
-        userId: input.userId,
-        bookedCruises: input.bookedCruises,
-        casinoOffers: input.casinoOffers,
-        updatedAt: new Date().toISOString(),
-      });
+      await db.query(
+        `CREATE user_data CONTENT $data`,
+        { data: {
+          userId: input.userId,
+          bookedCruises: input.bookedCruises,
+          casinoOffers: input.casinoOffers,
+          updatedAt: new Date().toISOString(),
+        }}
+      );
 
       console.log('[API] Saved user data:', {
         userId: input.userId,
@@ -90,7 +93,7 @@ export const dataRouter = createTRPCRouter({
         offers: input.casinoOffers.length,
       });
 
-      return { success: true, id: result };
+      return { success: true, id: [] };
     }),
 
   getUserData: publicProcedure

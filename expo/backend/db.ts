@@ -1,4 +1,4 @@
-import Surreal from 'surrealdb.js';
+import Surreal from 'surrealdb';
 
 let db: Surreal | null = null;
 let isConnecting = false;
@@ -16,19 +16,20 @@ async function createConnection(): Promise<Surreal> {
   }
 
   const newDb = new Surreal();
-  
+
   const connectPromise = newDb.connect(endpoint, {
     namespace,
     database: 'easyseas',
-    auth: token,
+    authentication: token,
+    versionCheck: false,
   });
 
-  const timeoutPromise = new Promise((_, reject) => {
+  const timeoutPromise = new Promise<never>((_, reject) => {
     setTimeout(() => reject(new Error('Database connection timeout')), CONNECTION_TIMEOUT);
   });
 
   await Promise.race([connectPromise, timeoutPromise]);
-  
+
   console.log('[DB] Connected to SurrealDB');
   return newDb;
 }
@@ -55,13 +56,13 @@ export async function getDb(): Promise<Surreal> {
     if (timeSinceLastConnection < 60000) {
       return db;
     }
-    
+
     const isHealthy = await testConnection(db);
     if (isHealthy) {
       lastConnectionTime = Date.now();
       return db;
     }
-    
+
     console.log('[DB] Connection unhealthy, reconnecting...');
     try {
       await db.close();
