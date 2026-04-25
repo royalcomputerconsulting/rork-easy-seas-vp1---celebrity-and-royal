@@ -43,13 +43,28 @@ export interface MachineFullDetails extends MachineIndexEntry {
   [key: string]: any;
 }
 
-import MACHINES_262_RAW from '@/assets/MACHINES_262.json';
-
-const _machinesData: any[] = (MACHINES_262_RAW as any[]) ?? [];
+let _machinesDataCache: any[] | null = null;
+let _machinesDataPromise: Promise<any[]> | null = null;
 
 async function getMachinesData(): Promise<any[]> {
-  console.log(`[MachineIndex] Using ${_machinesData.length} machines from MACHINES_262.json`);
-  return _machinesData;
+  if (_machinesDataCache) {
+    return _machinesDataCache;
+  }
+  if (_machinesDataPromise) {
+    return _machinesDataPromise;
+  }
+  _machinesDataPromise = (async () => {
+    const mod = await import('@/assets/MACHINES_262.json');
+    const data = ((mod as any).default ?? mod) as any[];
+    _machinesDataCache = Array.isArray(data) ? data : [];
+    console.log(`[MachineIndex] Loaded ${_machinesDataCache.length} machines from MACHINES_262.json`);
+    return _machinesDataCache;
+  })();
+  try {
+    return await _machinesDataPromise;
+  } finally {
+    _machinesDataPromise = null;
+  }
 }
 
 class MachineIndexHelper {

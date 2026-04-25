@@ -332,7 +332,7 @@ function isEmptyOfferRow(row: OfferRow): boolean {
 }
 
 function getOfferExpiry(offer: CasinoOffer): string {
-  return normalizeSailDate(offer.offerExpiryDate || offer.expiryDate || offer.expires || offer.offerExpiry || '');
+  return normalizeSailDate(offer.offerExpiryDate || offer.expiryDate || offer.expires || (offer as { offerExpiry?: string }).offerExpiry || '');
 }
 
 function getOfferNameKey(offer: CasinoOffer): string {
