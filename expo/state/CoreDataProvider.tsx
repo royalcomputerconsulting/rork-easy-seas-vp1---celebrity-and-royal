@@ -446,7 +446,9 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         AsyncStorage.getItem(scopedLoyaltyKeys.MANUAL_CROWN_ANCHOR_POINTS),
       ]);
       
-      const parsedCruises = cruisesData ? JSON.parse(cruisesData) : [];
+      const allCruises: unknown[] = cruisesData ? JSON.parse(cruisesData) : [];
+      const MAX_SYNC_CRUISES = 200;
+      const parsedCruises = allCruises.length > MAX_SYNC_CRUISES ? allCruises.slice(0, MAX_SYNC_CRUISES) : allCruises;
       const parsedBooked = bookedData ? JSON.parse(bookedData) : [];
       const parsedOffers = offersData ? JSON.parse(offersData) : [];
       const parsedEvents = eventsData ? JSON.parse(eventsData) : [];
@@ -472,6 +474,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       console.log('[CoreData] Syncing to backend:', {
         email: authenticatedEmail,
         availableCruises: parsedCruises.length,
+        availableCruisesTotal: allCruises.length,
         cruises: parsedBooked.length,
         offers: parsedOffers.length,
         events: parsedEvents.length,
@@ -500,7 +503,13 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       
       if (['BACKEND_NOT_CONFIGURED', 'BACKEND_TEMPORARILY_DISABLED', 'RATE_LIMITED', 'SERVER_ERROR', 'NETWORK_ERROR'].includes(errorMessage)) {
         console.log('[CoreData] Backend sync skipped:', errorMessage);
-      } else if (errorString.includes('Failed to fetch') || errorString.includes('Network request failed')) {
+      } else if (
+        errorString.includes('Failed to fetch') ||
+        errorString.includes('Network request failed') ||
+        errorString.includes('Network connection') ||
+        errorString.includes('connection lost') ||
+        errorString.includes('fetch')
+      ) {
         console.log('[CoreData] Backend sync skipped: Network error - backend may be unavailable');
       } else {
         console.log('[CoreData] Backend sync failed (non-critical):', errorMessage);

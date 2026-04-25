@@ -467,8 +467,12 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
           }
         : normalizedLegacyLoyaltyData;
 
+      const parsedCruises = parseStoredUnknownArray(cruisesRaw, 'cruises');
+      const MAX_SYNC_CRUISES = 200;
       const data = {
-        cruises: parseStoredUnknownArray(cruisesRaw, 'cruises'),
+        // Limit available cruises (offer sailings) in cloud backup to prevent oversized payloads.
+        // These are regenerated from RC/Celebrity/Carnival sync and can be thousands of records.
+        cruises: parsedCruises.length > MAX_SYNC_CRUISES ? parsedCruises.slice(0, MAX_SYNC_CRUISES) : parsedCruises,
         bookedCruises: parseStoredUnknownArray(bookedCruisesRaw, 'bookedCruises'),
         casinoOffers: parseStoredUnknownArray(casinoOffersRaw, 'casinoOffers'),
         calendarEvents: parseStoredUnknownArray(calendarEventsRaw, 'calendarEvents'),
@@ -798,6 +802,8 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       const isNetworkError = 
         errorMessage.includes('Failed to fetch') ||
         errorMessage.includes('Network request failed') ||
+        errorMessage.includes('Network connection') ||
+        errorMessage.includes('connection lost') ||
         errorMessage.includes('fetch') ||
         errorMessage.includes('timeout') ||
         errorMessage.includes('AbortError') ||
@@ -882,6 +888,8 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       const isNetworkError = 
         errorMessage.includes('Failed to fetch') ||
         errorMessage.includes('Network request failed') ||
+        errorMessage.includes('Network connection') ||
+        errorMessage.includes('connection lost') ||
         errorMessage.includes('fetch') ||
         errorMessage.includes('timeout') ||
         errorMessage.includes('AbortError') ||
