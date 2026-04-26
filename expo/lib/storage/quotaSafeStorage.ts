@@ -1,10 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const DB_NAME = 'easyseas_large_storage_v1';
+const DB_VERSION = 2;
 const STORE_NAME = 'kv';
 const LOCAL_STORAGE_VALUE_CHAR_LIMIT = 750_000;
 
 let dbPromise: Promise<IDBDatabase | null> | null = null;
+let hasLoggedIndexedDbGetUnavailable = false;
 
 function canUseIndexedDb(): boolean {
   return typeof globalThis !== 'undefined' && typeof globalThis.indexedDB !== 'undefined';
@@ -20,6 +22,43 @@ function getValueLength(value: string): number {
   return value.length;
 }
 
+function describeStorageError(error: unknown): string {
+  if (error instanceof Error) {
+    return `${error.name}: ${error.message}`;
+  }
+
+  if (error && typeof error === 'object') {
+    const record = error as { name?: unknown; message?: unknown; code?: unknown; target?: { error?: unknown } };
+    const targetError = record.target?.error;
+    if (targetError instanceof Error) {
+      return `${targetError.name}: ${targetError.message}`;
+    }
+
+    const parts: string[] = [];
+    if (typeof record.name === 'string' && record.name.length > 0) {
+      parts.push(record.name);
+    }
+    if (typeof record.message === 'string' && record.message.length > 0) {
+      parts.push(record.message);
+    }
+    if (typeof record.code === 'number' || typeof record.code === 'string') {
+      parts.push(`code=${String(record.code)}`);
+    }
+
+    return parts.length > 0 ? parts.join(': ') : Object.prototype.toString.call(error);
+  }
+
+  return String(error);
+}
+
+function hasObjectStore(db: IDBDatabase): boolean {
+  return db.objectStoreNames.contains(STORE_NAME);
+}
+
+function resetDbCache(): void {
+  dbPromise = null;
+}
+
 async function openDb(): Promise<IDBDatabase | null> {
   if (!canUseIndexedDb()) {
     return null;
@@ -31,7 +70,7 @@ async function openDb(): Promise<IDBDatabase | null> {
 
   dbPromise = new Promise<IDBDatabase | null>((resolve) => {
     try {
-      const request = globalThis.indexedDB.open(DB_NAME, 1);
+      const request = globalThis.indexedDB.open(DB_NAME, DB_VERSION);
 
       request.onupgradeneeded = () => {
         const db = request.result;
@@ -42,12 +81,23 @@ async function openDb(): Promise<IDBDatabase | null> {
 
       request.onsuccess = () => {
         const db = request.result;
-        db.onversionchange = () => db.close();
+        if (!hasObjectStore(db)) {
+          console.log('[QuotaSafeStorage] IndexedDB store missing after open; fallback disabled until browser repairs storage');
+          db.close();
+          resetDbCache();
+          resolve(null);
+          return;
+        }
+        db.onversionchange = () => {
+          db.close();
+          resetDbCache();
+        };
         resolve(db);
       };
 
       request.onerror = () => {
-        console.error('[QuotaSafeStorage] IndexedDB open failed:', request.error);
+        console.error('[QuotaSafeStorage] IndexedDB open failed:', describeStorageError(request.error));
+        resetDbCache();
         resolve(null);
       };
 
@@ -55,7 +105,8 @@ async function openDb(): Promise<IDBDatabase | null> {
         console.log('[QuotaSafeStorage] IndexedDB open blocked');
       };
     } catch (error) {
-      console.error('[QuotaSafeStorage] IndexedDB open threw:', error);
+      console.error('[QuotaSafeStorage] IndexedDB open threw:', describeStorageError(error));
+      resetDbCache();
       resolve(null);
     }
   });
@@ -71,6 +122,12 @@ async function idbGetItem(key: string): Promise<string | null> {
 
   return new Promise<string | null>((resolve) => {
     try {
+      if (!hasObjectStore(db)) {
+        resetDbCache();
+        resolve(null);
+        return;
+      }
+
       const transaction = db.transaction(STORE_NAME, 'readonly');
       const store = transaction.objectStore(STORE_NAME);
       const request = store.get(key);
@@ -81,11 +138,25 @@ async function idbGetItem(key: string): Promise<string | null> {
       };
 
       request.onerror = () => {
-        console.error('[QuotaSafeStorage] IndexedDB get failed:', { key, error: request.error });
+        if (!hasLoggedIndexedDbGetUnavailable) {
+          hasLoggedIndexedDbGetUnavailable = true;
+          console.log('[QuotaSafeStorage] IndexedDB get unavailable; continuing with AsyncStorage value only:', { key, error: describeStorageError(request.error) });
+        }
         resolve(null);
       };
+
+      transaction.onerror = () => {
+        if (!hasLoggedIndexedDbGetUnavailable) {
+          hasLoggedIndexedDbGetUnavailable = true;
+          console.log('[QuotaSafeStorage] IndexedDB read transaction unavailable; continuing safely:', { key, error: describeStorageError(transaction.error) });
+        }
+      };
     } catch (error) {
-      console.error('[QuotaSafeStorage] IndexedDB get threw:', { key, error });
+      if (!hasLoggedIndexedDbGetUnavailable) {
+        hasLoggedIndexedDbGetUnavailable = true;
+        console.log('[QuotaSafeStorage] IndexedDB get unavailable; continuing with empty fallback:', { key, error: describeStorageError(error) });
+      }
+      resetDbCache();
       resolve(null);
     }
   });
@@ -105,14 +176,15 @@ async function idbSetItem(key: string, value: string): Promise<boolean> {
 
       request.onsuccess = () => resolve(true);
       request.onerror = () => {
-        console.error('[QuotaSafeStorage] IndexedDB set failed:', { key, error: request.error });
+        console.error('[QuotaSafeStorage] IndexedDB set failed:', { key, error: describeStorageError(request.error) });
         resolve(false);
       };
       transaction.onerror = () => {
-        console.error('[QuotaSafeStorage] IndexedDB transaction failed:', { key, error: transaction.error });
+        console.error('[QuotaSafeStorage] IndexedDB transaction failed:', { key, error: describeStorageError(transaction.error) });
       };
     } catch (error) {
-      console.error('[QuotaSafeStorage] IndexedDB set threw:', { key, error });
+      console.error('[QuotaSafeStorage] IndexedDB set threw:', { key, error: describeStorageError(error) });
+      resetDbCache();
       resolve(false);
     }
   });
@@ -132,11 +204,12 @@ async function idbRemoveItem(key: string): Promise<void> {
 
       request.onsuccess = () => resolve();
       request.onerror = () => {
-        console.error('[QuotaSafeStorage] IndexedDB delete failed:', { key, error: request.error });
+        console.error('[QuotaSafeStorage] IndexedDB delete failed:', { key, error: describeStorageError(request.error) });
         resolve();
       };
     } catch (error) {
-      console.error('[QuotaSafeStorage] IndexedDB delete threw:', { key, error });
+      console.error('[QuotaSafeStorage] IndexedDB delete threw:', { key, error: describeStorageError(error) });
+      resetDbCache();
       resolve();
     }
   });
