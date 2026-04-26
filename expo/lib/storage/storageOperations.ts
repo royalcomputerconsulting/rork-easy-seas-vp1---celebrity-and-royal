@@ -5,6 +5,8 @@ const AUTH_PRESERVE_KEYS = new Set<string>([
   ALL_STORAGE_KEYS.HAS_LAUNCHED_BEFORE,
   ALL_STORAGE_KEYS.AUTHENTICATED,
   ALL_STORAGE_KEYS.EMAIL_WHITELIST,
+  ALL_STORAGE_KEYS.EMAIL_WHITELIST_GLOBAL,
+  ALL_STORAGE_KEYS.EMAIL_WHITELIST_PENDING,
   ALL_STORAGE_KEYS.USERS,
   ALL_STORAGE_KEYS.CURRENT_USER,
   'easyseas_auth_email',
@@ -65,13 +67,17 @@ export async function clearAllAppData(): Promise<{
   const authenticated = await AsyncStorage.getItem(ALL_STORAGE_KEYS.AUTHENTICATED);
   const authEmail = await AsyncStorage.getItem('easyseas_auth_email');
   const emailWhitelist = await AsyncStorage.getItem(ALL_STORAGE_KEYS.EMAIL_WHITELIST);
-  console.log('[StorageOps] Preserving authentication state:', { hasLaunchedBefore, authenticated: !!authenticated, email: !!authEmail });
+  const globalEmailWhitelist = await AsyncStorage.getItem(ALL_STORAGE_KEYS.EMAIL_WHITELIST_GLOBAL);
+  const pendingEmailWhitelistSync = await AsyncStorage.getItem(ALL_STORAGE_KEYS.EMAIL_WHITELIST_PENDING);
+  console.log('[StorageOps] Preserving authentication state:', { hasLaunchedBefore, authenticated: !!authenticated, email: !!authEmail, globalWhitelist: !!globalEmailWhitelist, pendingWhitelistSync: !!pendingEmailWhitelistSync });
 
   const allKeys = Object.values(ALL_STORAGE_KEYS);
   const preserveKeys = new Set<string>([
     ALL_STORAGE_KEYS.HAS_LAUNCHED_BEFORE,
     ALL_STORAGE_KEYS.AUTHENTICATED,
     ALL_STORAGE_KEYS.EMAIL_WHITELIST,
+    ALL_STORAGE_KEYS.EMAIL_WHITELIST_GLOBAL,
+    ALL_STORAGE_KEYS.EMAIL_WHITELIST_PENDING,
   ]);
 
   for (const key of allKeys) {
@@ -99,6 +105,8 @@ export async function clearAllAppData(): Promise<{
       ALL_STORAGE_KEYS.HAS_LAUNCHED_BEFORE,
       ALL_STORAGE_KEYS.AUTHENTICATED,
       ALL_STORAGE_KEYS.EMAIL_WHITELIST,
+      ALL_STORAGE_KEYS.EMAIL_WHITELIST_GLOBAL,
+      ALL_STORAGE_KEYS.EMAIL_WHITELIST_PENDING,
       'easyseas_auth_email',
     ]);
     
@@ -154,6 +162,24 @@ export async function clearAllAppData(): Promise<{
       console.log('[StorageOps] Restored email whitelist');
     } catch (error) {
       console.error('[StorageOps] Error restoring email whitelist:', error);
+    }
+  }
+
+  if (globalEmailWhitelist) {
+    try {
+      await AsyncStorage.setItem(ALL_STORAGE_KEYS.EMAIL_WHITELIST_GLOBAL, globalEmailWhitelist);
+      console.log('[StorageOps] Restored global email whitelist');
+    } catch (error) {
+      console.error('[StorageOps] Error restoring global email whitelist:', error);
+    }
+  }
+
+  if (pendingEmailWhitelistSync) {
+    try {
+      await AsyncStorage.setItem(ALL_STORAGE_KEYS.EMAIL_WHITELIST_PENDING, pendingEmailWhitelistSync);
+      console.log('[StorageOps] Restored pending global email whitelist sync queue');
+    } catch (error) {
+      console.error('[StorageOps] Error restoring pending global email whitelist sync queue:', error);
     }
   }
 

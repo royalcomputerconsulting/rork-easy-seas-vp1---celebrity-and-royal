@@ -48,6 +48,8 @@ export const ALL_STORAGE_KEYS = {
   HAS_IMPORTED_DATA: 'easyseas_has_imported_data',
   AUTHENTICATED: 'easyseas_authenticated',
   EMAIL_WHITELIST: 'easyseas_email_whitelist',
+  EMAIL_WHITELIST_GLOBAL: 'easyseas_email_whitelist_global',
+  EMAIL_WHITELIST_PENDING: 'easyseas_email_whitelist_pending_sync',
   HAS_LAUNCHED_BEFORE: 'easyseas_has_launched_before',
   CELEBRITY_EMAIL: 'easyseas_celebrity_email',
   CELEBRITY_CAPTAINS_CLUB_NUMBER: 'easyseas_celebrity_captains_club_number',
@@ -81,6 +83,8 @@ export const ALL_STORAGE_KEYS = {
 export const GLOBAL_KEYS = new Set<string>([
   ALL_STORAGE_KEYS.AUTHENTICATED,
   ALL_STORAGE_KEYS.EMAIL_WHITELIST,
+  ALL_STORAGE_KEYS.EMAIL_WHITELIST_GLOBAL,
+  ALL_STORAGE_KEYS.EMAIL_WHITELIST_PENDING,
   ALL_STORAGE_KEYS.HAS_LAUNCHED_BEFORE,
   ALL_STORAGE_KEYS.MACHINE_ENCYCLOPEDIA,
 ]);

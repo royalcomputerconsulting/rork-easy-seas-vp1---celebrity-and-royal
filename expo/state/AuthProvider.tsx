@@ -12,6 +12,18 @@ const PENDING_ACCOUNT_SWITCH_KEY = "easyseas_pending_account_switch";
 export const ADMIN_EMAILS = ["scott.merlis1@gmail.com", "s@a.com"] as const;
 const PRIMARY_ADMIN_EMAIL = ADMIN_EMAILS[0];
 const FREE_USE_SUBSCRIPTION_LEVEL = "Free Use of App" as const;
+const GLOBAL_WHITELIST_KEY = STORAGE_KEYS.EMAIL_WHITELIST_GLOBAL;
+const LEGACY_WHITELIST_KEY = STORAGE_KEYS.EMAIL_WHITELIST;
+const PENDING_WHITELIST_SYNC_KEY = STORAGE_KEYS.EMAIL_WHITELIST_PENDING;
+const WHITELIST_STORAGE_KEYS = [GLOBAL_WHITELIST_KEY, LEGACY_WHITELIST_KEY] as const;
+type WhitelistPendingAction = 'add' | 'remove';
+
+interface WhitelistPendingMutation {
+  email: string;
+  action: WhitelistPendingAction;
+  adminEmail: string;
+  createdAt: string;
+}
 
 interface AuthState {
   isAuthenticated: boolean;
@@ -56,6 +68,143 @@ function mergeWhitelistEmails(...lists: string[][]): string[] {
   return Array.from(merged).sort();
 }
 
+function parseWhitelist(value: string | null): string[] {
+  if (!value) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed.filter((email): email is string => typeof email === 'string');
+  } catch (error) {
+    console.error('[AuthProvider] Failed parsing stored whitelist:', error);
+    return [];
+  }
+}
+
+async function writeGlobalWhitelist(whitelist: string[]): Promise<void> {
+  const mergedWhitelist = mergeWhitelistEmails(whitelist);
+  const payload = JSON.stringify(mergedWhitelist);
+  await Promise.all(WHITELIST_STORAGE_KEYS.map((key) => AsyncStorage.setItem(key, payload)));
+  console.log('[AuthProvider] Persisted global whitelist cache:', { count: mergedWhitelist.length, keys: WHITELIST_STORAGE_KEYS });
+}
+
+async function readStoredWhitelists(): Promise<string[]> {
+  const storedValues = await Promise.all(WHITELIST_STORAGE_KEYS.map((key) => AsyncStorage.getItem(key)));
+  return mergeWhitelistEmails(...storedValues.map(parseWhitelist));
+}
+
+function parsePendingWhitelistMutations(value: string | null): WhitelistPendingMutation[] {
+  if (!value) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed.filter((entry): entry is WhitelistPendingMutation => {
+      if (!entry || typeof entry !== 'object') {
+        return false;
+      }
+      const mutation = entry as Partial<WhitelistPendingMutation>;
+      return typeof mutation.email === 'string' && mutation.email.includes('@') && (mutation.action === 'add' || mutation.action === 'remove') && typeof mutation.adminEmail === 'string' && mutation.adminEmail.includes('@') && typeof mutation.createdAt === 'string';
+    });
+  } catch (error) {
+    console.error('[AuthProvider] Failed parsing pending global whitelist sync queue:', error);
+    return [];
+  }
+}
+
+async function readPendingWhitelistMutations(): Promise<WhitelistPendingMutation[]> {
+  return parsePendingWhitelistMutations(await AsyncStorage.getItem(PENDING_WHITELIST_SYNC_KEY));
+}
+
+async function writePendingWhitelistMutations(mutations: WhitelistPendingMutation[]): Promise<void> {
+  const byEmail = new Map<string, WhitelistPendingMutation>();
+  mutations.forEach((mutation) => {
+    const normalizedEmail = normalizeEmail(mutation.email);
+    const normalizedAdminEmail = normalizeEmail(mutation.adminEmail);
+    if (normalizedEmail?.includes('@') && normalizedAdminEmail?.includes('@')) {
+      byEmail.set(normalizedEmail, {
+        email: normalizedEmail,
+        action: mutation.action,
+        adminEmail: normalizedAdminEmail,
+        createdAt: mutation.createdAt,
+      });
+    }
+  });
+  const normalizedMutations = Array.from(byEmail.values());
+  if (normalizedMutations.length === 0) {
+    await AsyncStorage.removeItem(PENDING_WHITELIST_SYNC_KEY);
+    return;
+  }
+  await AsyncStorage.setItem(PENDING_WHITELIST_SYNC_KEY, JSON.stringify(normalizedMutations));
+}
+
+async function queueWhitelistMutation(mutation: WhitelistPendingMutation): Promise<void> {
+  const pending = await readPendingWhitelistMutations();
+  await writePendingWhitelistMutations([...pending, mutation]);
+  console.log('[AuthProvider] Queued global whitelist sync mutation:', { email: mutation.email, action: mutation.action });
+}
+
+async function removeQueuedWhitelistMutation(email: string, action: WhitelistPendingAction): Promise<void> {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) {
+    return;
+  }
+  const pending = await readPendingWhitelistMutations();
+  await writePendingWhitelistMutations(pending.filter((mutation) => !(normalizeEmail(mutation.email) === normalizedEmail && mutation.action === action)));
+}
+
+function applyPendingWhitelistMutations(whitelist: string[], pending: WhitelistPendingMutation[]): string[] {
+  const merged = new Set<string>(mergeWhitelistEmails(whitelist));
+  pending.forEach((mutation) => {
+    const normalizedEmail = normalizeEmail(mutation.email);
+    if (!normalizedEmail?.includes('@')) {
+      return;
+    }
+    if (mutation.action === 'remove' && !isAdminEmail(normalizedEmail)) {
+      merged.delete(normalizedEmail);
+      return;
+    }
+    if (mutation.action === 'add') {
+      merged.add(normalizedEmail);
+    }
+  });
+  ADMIN_EMAILS.forEach((adminEmail) => merged.add(adminEmail));
+  return Array.from(merged).sort();
+}
+
+async function flushPendingWhitelistMutations(): Promise<void> {
+  const pending = await readPendingWhitelistMutations();
+  if (pending.length === 0) {
+    return;
+  }
+
+  const remaining: WhitelistPendingMutation[] = [];
+  for (const mutation of pending) {
+    try {
+      if (mutation.action === 'add') {
+        await trpcClient.access.addToWhitelist.mutate({ adminEmail: mutation.adminEmail, email: mutation.email });
+      } else {
+        await trpcClient.access.removeFromWhitelist.mutate({ adminEmail: mutation.adminEmail, email: mutation.email });
+      }
+      console.log('[AuthProvider] Flushed global whitelist sync mutation:', { email: mutation.email, action: mutation.action });
+    } catch (error) {
+      console.warn('[AuthProvider] Global whitelist sync mutation still pending:', { email: mutation.email, action: mutation.action, error });
+      remaining.push(mutation);
+    }
+  }
+
+  await writePendingWhitelistMutations(remaining);
+}
+
 export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -79,23 +228,24 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
 
   const getWhitelistInternal = async (): Promise<string[]> => {
     try {
-      const stored = await AsyncStorage.getItem(STORAGE_KEYS.EMAIL_WHITELIST);
-      const localWhitelist = stored ? JSON.parse(stored) as string[] : [];
+      const localWhitelist = await readStoredWhitelists();
+      await flushPendingWhitelistMutations();
+      const pendingMutations = await readPendingWhitelistMutations();
       let cloudWhitelist: string[] = [];
 
       try {
         const cloudResult = await trpcClient.access.getWhitelist.query();
         cloudWhitelist = cloudResult.whitelist;
-        console.log('[AuthProvider] Loaded cloud whitelist:', { count: cloudWhitelist.length });
+        console.log('[AuthProvider] Loaded cloud global whitelist:', { count: cloudWhitelist.length });
       } catch (cloudError) {
-        console.warn('[AuthProvider] Cloud whitelist unavailable, using local whitelist:', cloudError);
+        console.warn('[AuthProvider] Cloud global whitelist unavailable, using local global whitelist cache:', cloudError);
       }
 
-      const mergedWhitelist = mergeWhitelistEmails(localWhitelist, cloudWhitelist);
-      await AsyncStorage.setItem(STORAGE_KEYS.EMAIL_WHITELIST, JSON.stringify(mergedWhitelist));
+      const mergedWhitelist = applyPendingWhitelistMutations(mergeWhitelistEmails(localWhitelist, cloudWhitelist), pendingMutations);
+      await writeGlobalWhitelist(mergedWhitelist);
       return mergedWhitelist;
     } catch (error) {
-      console.error('[AuthProvider] Failed loading whitelist:', error);
+      console.error('[AuthProvider] Failed loading global whitelist:', error);
       return [...ADMIN_EMAILS];
     }
   };
@@ -157,12 +307,15 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
       }
 
       const updated = mergeWhitelistEmails(whitelist, [normalizedEmail]);
-      await AsyncStorage.setItem(STORAGE_KEYS.EMAIL_WHITELIST, JSON.stringify(updated));
+      await writeGlobalWhitelist(updated);
+      await queueWhitelistMutation({ email: normalizedEmail, action: 'add', adminEmail: adminEmail ?? PRIMARY_ADMIN_EMAIL, createdAt: new Date().toISOString() });
 
       try {
         await trpcClient.access.addToWhitelist.mutate({ adminEmail: adminEmail ?? PRIMARY_ADMIN_EMAIL, email: normalizedEmail });
+        await removeQueuedWhitelistMutation(normalizedEmail, 'add');
+        console.log('[AuthProvider] Cloud global whitelist add confirmed:', normalizedEmail);
       } catch (cloudError) {
-        console.warn('[AuthProvider] Cloud whitelist add failed after local save:', cloudError);
+        console.warn('[AuthProvider] Cloud global whitelist add pending retry:', cloudError);
       }
 
       if (normalizeEmail(authenticatedEmail) === normalizedEmail) {
@@ -192,12 +345,15 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
         throw new Error('Cannot remove admin email from whitelist');
       }
       const updated = mergeWhitelistEmails(whitelist.filter(e => normalizeEmail(e) !== normalizedEmail));
-      await AsyncStorage.setItem(STORAGE_KEYS.EMAIL_WHITELIST, JSON.stringify(updated));
+      await writeGlobalWhitelist(updated);
+      await queueWhitelistMutation({ email: normalizedEmail, action: 'remove', adminEmail: adminEmail ?? PRIMARY_ADMIN_EMAIL, createdAt: new Date().toISOString() });
 
       try {
         await trpcClient.access.removeFromWhitelist.mutate({ adminEmail: adminEmail ?? PRIMARY_ADMIN_EMAIL, email: normalizedEmail });
+        await removeQueuedWhitelistMutation(normalizedEmail, 'remove');
+        console.log('[AuthProvider] Cloud global whitelist remove confirmed:', normalizedEmail);
       } catch (cloudError) {
-        console.warn('[AuthProvider] Cloud whitelist remove failed after local save:', cloudError);
+        console.warn('[AuthProvider] Cloud global whitelist remove pending retry:', cloudError);
       }
 
       if (normalizeEmail(authenticatedEmail) === normalizedEmail) {
@@ -299,15 +455,17 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
   };
 
   const logout = async () => {
-    console.log('[AuthProvider] Logging out and clearing all user data...');
+    console.log('[AuthProvider] Logging out and clearing local user data while preserving global free-use whitelist...');
+    const globalWhitelist = await readStoredWhitelists();
     await AsyncStorage.clear();
+    await writeGlobalWhitelist(globalWhitelist);
     setIsAuthenticated(false);
     setAuthenticatedEmail(null);
     setIsFreshStart(false);
     setIsAdmin(false);
     setIsWhitelisted(false);
     setSubscriptionLevel(null);
-    console.log('[AuthProvider] Logged out - all localStorage cleared');
+    console.log('[AuthProvider] Logged out - local user data cleared and global whitelist restored');
   };
 
   const clearFreshStartFlag = async () => {
