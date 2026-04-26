@@ -4,11 +4,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import { IMAGES } from '@/constants/images';
 
-import { useAuth } from '@/state/AuthProvider';
+import { ADMIN_EMAILS, useAuth } from '@/state/AuthProvider';
 
 const { width, height } = Dimensions.get('window');
-
-const ADMIN_EMAIL = 'scott.merlis1@gmail.com';
 
 export function LoginScreen() {
   const [email, setEmail] = useState<string>('');
@@ -21,7 +19,7 @@ export function LoginScreen() {
 
   
   
-  const isAdminEmail = email.toLowerCase().trim() === ADMIN_EMAIL.toLowerCase();
+  const isAdminEmail = ADMIN_EMAILS.includes(email.toLowerCase().trim() as typeof ADMIN_EMAILS[number]);
 
   const handleLogin = async () => {
     setError('');

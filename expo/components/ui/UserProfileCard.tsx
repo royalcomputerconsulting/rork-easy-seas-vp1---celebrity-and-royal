@@ -230,6 +230,7 @@ export function UserProfileCard({
     : !!enrichmentData?.venetianSocietyMemberNumber;
 
   const getSubscriptionTierDisplay = () => {
+    if (entitlement.subscriptionDisplayStatus === 'free_use') return { text: entitlement.subscriptionLevel ?? 'Free Use of App', color: '#059669' };
     if (entitlement.subscriptionDisplayStatus === 'annual') return { text: 'Annual Subscription', color: '#10B981' };
     if (entitlement.subscriptionDisplayStatus === 'monthly') return { text: 'Monthly Subscription', color: '#3B82F6' };
     if (entitlement.subscriptionDisplayStatus === 'grace_period') return { text: `Grace Period (${entitlement.trialDaysRemaining}d left)`, color: '#F59E0B' };

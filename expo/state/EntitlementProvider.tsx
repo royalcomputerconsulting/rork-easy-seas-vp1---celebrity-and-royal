@@ -26,9 +26,9 @@ type PurchasesModule = {
 let Purchases: PurchasesModule | null = null;
 let purchasesInitError: string | null = null;
 
-export type EntitlementSource = 'iap' | 'dev' | 'grandfathered' | 'unknown';
+export type EntitlementSource = 'iap' | 'dev' | 'grandfathered' | 'free_use' | 'unknown';
 export type SubscriptionTier = 'trial' | 'view' | 'basic' | 'pro';
-export type SubscriptionDisplayStatus = 'grace_period' | 'monthly' | 'annual' | 'expired';
+export type SubscriptionDisplayStatus = 'grace_period' | 'monthly' | 'annual' | 'free_use' | 'expired';
 
 export interface EntitlementState {
   isPro: boolean;
@@ -45,6 +45,7 @@ export interface EntitlementState {
   isGrandfathered: boolean;
   accountCreatedAt: Date | null;
   subscriptionDisplayStatus: SubscriptionDisplayStatus;
+  subscriptionLevel: string | null;
   refresh: () => Promise<void>;
   subscribeBasicMonthly: () => Promise<void>;
   subscribeProMonthly: () => Promise<void>;
@@ -328,10 +329,11 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     return 'basic';
   }, []);
 
-  const computeDisplayStatus = useCallback((info: CustomerInfo | null, currentTrialEnd: Date | null, currentIsGrandfathered: boolean, computedIsPro: boolean, computedIsBasic: boolean): SubscriptionDisplayStatus => {
+  const computeDisplayStatus = useCallback((info: CustomerInfo | null, currentTrialEnd: Date | null, currentIsGrandfathered: boolean, computedIsPro: boolean, computedIsBasic: boolean, currentHasFreeUse: boolean): SubscriptionDisplayStatus => {
     const subType = detectActiveSubscriptionType(info);
-    console.log('[Entitlement] computeDisplayStatus', { subType, currentIsGrandfathered, computedIsPro, computedIsBasic, trialEnd: currentTrialEnd?.toISOString() });
+    console.log('[Entitlement] computeDisplayStatus', { subType, currentIsGrandfathered, computedIsPro, computedIsBasic, currentHasFreeUse, trialEnd: currentTrialEnd?.toISOString() });
     
+    if (currentHasFreeUse) return 'free_use';
     if (subType === 'annual') return 'annual';
     if (subType === 'monthly') return 'monthly';
     
@@ -350,28 +352,31 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
   const setStateFromCustomerInfo = useCallback((info: CustomerInfo | null, currentTrialEnd: Date | null, currentIsGrandfathered: boolean) => {
     const computedIsPro = computeIsProFromCustomerInfo(info);
     const computedIsBasic = computeIsBasicFromCustomerInfo(info);
-    const computedTier = computeTier(computedIsPro, computedIsBasic, currentTrialEnd, currentIsGrandfathered);
+    const hasFreeUse = auth.isWhitelisted;
+    const computedTier = hasFreeUse ? 'pro' : computeTier(computedIsPro, computedIsBasic, currentTrialEnd, currentIsGrandfathered);
     
     console.log('[Entitlement] setStateFromCustomerInfo', {
       computedIsPro,
       computedIsBasic,
       computedTier,
       isGrandfathered: currentIsGrandfathered,
+      hasFreeUse,
+      subscriptionLevel: auth.subscriptionLevel,
       activeSubscriptions: info?.activeSubscriptions ?? [],
       entitlementsActiveKeys: Object.keys(info?.entitlements?.active ?? {}),
     });
 
     const wasPro = lastIsProRef.current;
-    const finalIsPro = currentIsGrandfathered || computedIsPro;
+    const finalIsPro = hasFreeUse || currentIsGrandfathered || computedIsPro;
 
     setCustomerInfo(info);
     setIsPro(finalIsPro);
-    setIsBasic(computedIsBasic);
+    setIsBasic(hasFreeUse || computedIsBasic);
     setTier(computedTier);
-    setSource(currentIsGrandfathered ? 'grandfathered' : (computedIsPro || computedIsBasic ? 'iap' : 'unknown'));
+    setSource(hasFreeUse ? 'free_use' : currentIsGrandfathered ? 'grandfathered' : (computedIsPro || computedIsBasic ? 'iap' : 'unknown'));
     setLastCheckedAt(new Date().toISOString());
     
-    const displayStatus = computeDisplayStatus(info, currentTrialEnd, currentIsGrandfathered, computedIsPro, computedIsBasic);
+    const displayStatus = computeDisplayStatus(info, currentTrialEnd, currentIsGrandfathered, computedIsPro, computedIsBasic, hasFreeUse);
     setSubscriptionDisplayStatus(displayStatus);
     console.log('[Entitlement] Display status set to:', displayStatus);
 
@@ -387,7 +392,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
         console.error('[Entitlement] Failed to dispatch entitlementProUnlocked event', e);
       }
     }
-  }, [computeDisplayStatus, computeTier]);
+  }, [auth.isWhitelisted, auth.subscriptionLevel, computeDisplayStatus, computeTier]);
 
   const ensurePurchasesLoaded = useCallback(async (): Promise<PurchasesModule | null> => {
     if (Platform.OS === 'web') return null;
@@ -509,21 +514,48 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
     const storedTrialEnd = await AsyncStorage.getItem(storageKeys.TRIAL_END);
     const currentTrialEnd = storedTrialEnd ? new Date(storedTrialEnd) : null;
 
+    if (auth.isWhitelisted) {
+      const wasPro = lastIsProRef.current;
+      setIsPro(true);
+      setIsBasic(true);
+      setTier('pro');
+      setSource('free_use');
+      setLastCheckedAt(new Date().toISOString());
+      setCustomerInfo(null);
+      setOfferings([]);
+      setSubscriptionDisplayStatus('free_use');
+      lastIsProRef.current = true;
+      if (!wasPro) {
+        try {
+          if (typeof window !== 'undefined' && typeof CustomEvent !== 'undefined') {
+            console.log('[Entitlement] Dispatching entitlementProUnlocked event for free-use user');
+            window.dispatchEvent(new CustomEvent('entitlementProUnlocked'));
+          }
+        } catch (e) {
+          console.error('[Entitlement] Failed to dispatch entitlementProUnlocked event for free-use user', e);
+        }
+      }
+      setIsLoading(false);
+      console.log('[Entitlement] Free-use whitelist entitlement active:', { email: auth.authenticatedEmail, subscriptionLevel: auth.subscriptionLevel });
+      return;
+    }
+
     if (Platform.OS === 'web') {
       try {
         const stored = await AsyncStorage.getItem(storageKeys.WEB_IS_PRO);
         const storedIsPro = stored === 'true';
-        console.log('[Entitlement] web refresh: storedIsPro', storedIsPro, 'isGrandfathered', currentIsGrandfathered);
+        const hasFreeUse = auth.isWhitelisted;
+        console.log('[Entitlement] web refresh: storedIsPro', storedIsPro, 'isGrandfathered', currentIsGrandfathered, 'hasFreeUse', hasFreeUse);
         if (!mountedRef.current) return;
-        const finalIsPro = currentIsGrandfathered || storedIsPro;
+        const finalIsPro = hasFreeUse || currentIsGrandfathered || storedIsPro;
         setIsPro(finalIsPro);
-        setIsBasic(false);
-        setTier(computeTier(storedIsPro, false, currentTrialEnd, currentIsGrandfathered));
-        setSource(currentIsGrandfathered ? 'grandfathered' : (storedIsPro ? 'dev' : 'unknown'));
+        setIsBasic(hasFreeUse);
+        setTier(hasFreeUse ? 'pro' : computeTier(storedIsPro, false, currentTrialEnd, currentIsGrandfathered));
+        setSource(hasFreeUse ? 'free_use' : currentIsGrandfathered ? 'grandfathered' : (storedIsPro ? 'dev' : 'unknown'));
         setLastCheckedAt(new Date().toISOString());
         setCustomerInfo(null);
         setOfferings([]);
-        const webDisplayStatus = computeDisplayStatus(null, currentTrialEnd, currentIsGrandfathered, storedIsPro, false);
+        const webDisplayStatus = computeDisplayStatus(null, currentTrialEnd, currentIsGrandfathered, storedIsPro, false, hasFreeUse);
         setSubscriptionDisplayStatus(webDisplayStatus);
         console.log('[Entitlement] Web display status set to:', webDisplayStatus);
       } catch (e) {
@@ -573,7 +605,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
         setIsLoading(false);
       }
     }
-  }, [computeDisplayStatus, computeTier, ensurePurchasesLoaded, initializeAccountTracking, initializeTrial, setStateFromCustomerInfo, storageKeys.TRIAL_END, storageKeys.WEB_IS_PRO, syncPurchasesIdentity]);
+  }, [auth.authenticatedEmail, auth.isWhitelisted, auth.subscriptionLevel, computeDisplayStatus, computeTier, ensurePurchasesLoaded, initializeAccountTracking, initializeTrial, setStateFromCustomerInfo, storageKeys.TRIAL_END, storageKeys.WEB_IS_PRO, syncPurchasesIdentity]);
 
   useEffect(() => {
     console.log('[Entitlement] Provider mounted - refreshing entitlements');
@@ -717,7 +749,10 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
         hasWhitelistAccess = true;
         
         setIsPro(true);
-        setSource('dev');
+        setIsBasic(true);
+        setTier('pro');
+        setSource('free_use');
+        setSubscriptionDisplayStatus('free_use');
         setLastCheckedAt(new Date().toISOString());
         
         const wasPro = lastIsProRef.current;
@@ -741,7 +776,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
         console.warn('[Entitlement] restore: Purchases unavailable', { message });
         
         if (hasWhitelistAccess) {
-          Alert.alert('Success', 'Full access unlocked via whitelisted email.');
+          Alert.alert('Success', 'Free Use of App access is active for this email.');
         } else {
           Alert.alert('Not Available', message);
           setError(message);
@@ -769,9 +804,9 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       
       if (hasWhitelistAccess && hasAnyActivePurchase) {
         const tierName = hasProPurchase ? 'Pro' : 'Basic';
-        Alert.alert('Success', `Full access unlocked via whitelisted email and active ${tierName} subscription restored.`);
+        Alert.alert('Success', `Free Use of App access is active and active ${tierName} subscription was also restored.`);
       } else if (hasWhitelistAccess) {
-        Alert.alert('Success', 'Full access unlocked via whitelisted email.');
+        Alert.alert('Success', 'Free Use of App access is active for this email.');
       } else if (hasProPurchase) {
         Alert.alert('Restored', 'Pro subscription restored successfully.');
       } else if (hasBasicPurchase) {
@@ -861,6 +896,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       isGrandfathered,
       accountCreatedAt,
       subscriptionDisplayStatus,
+      subscriptionLevel: auth.isWhitelisted ? (auth.subscriptionLevel ?? 'Free Use of App') : null,
       refresh,
       subscribeBasicMonthly,
       subscribeProMonthly,
@@ -886,6 +922,8 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       isGrandfathered,
       accountCreatedAt,
       subscriptionDisplayStatus,
+      auth.isWhitelisted,
+      auth.subscriptionLevel,
       refresh,
       subscribeBasicMonthly,
       subscribeProMonthly,

@@ -98,7 +98,7 @@ import { useSlotMachineLibrary } from '@/state/SlotMachineLibraryProvider';
 import { useCasinoSessions } from '@/state/CasinoSessionProvider';
 import { saveMockData } from '@/lib/saveMockData';
 import { generateSampleData, SAMPLE_LOYALTY_POINTS } from '@/lib/sampleData';
-import { useAuth } from '@/state/AuthProvider';
+import { ADMIN_EMAILS, useAuth } from '@/state/AuthProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { UserManualModal } from '@/components/UserManualModal';
 import { ResponsiveContainer } from '@/components/ResponsiveContainer';
@@ -112,6 +112,10 @@ function normalizeAccountEmail(email: string | null | undefined): string | null 
 
   const normalizedEmail = email.toLowerCase().trim();
   return normalizedEmail.length > 0 ? normalizedEmail : null;
+}
+
+function isAdminAccountEmail(email: string): boolean {
+  return ADMIN_EMAILS.includes(email.toLowerCase().trim() as typeof ADMIN_EMAILS[number]);
 }
 
 export default function SettingsScreen() {
@@ -182,7 +186,7 @@ export default function SettingsScreen() {
     }
 
     if (!currentUser || !normalizedCurrentUserEmail) {
-      return false;
+      return true;
     }
 
     return normalizedCurrentUserEmail === normalizedAuthenticatedEmail;
@@ -212,6 +216,17 @@ export default function SettingsScreen() {
     }
   }, [isAdmin, loadWhitelist]);
 
+  useEffect(() => {
+    if (!authenticatedEmail || isUserLoading || currentUser) {
+      return;
+    }
+
+    console.log('[Settings] Profile missing for authenticated email, ensuring owner profile:', authenticatedEmail);
+    ensureOwner().catch((error) => {
+      console.error('[Settings] Failed to ensure owner profile:', error);
+    });
+  }, [authenticatedEmail, currentUser, ensureOwner, isUserLoading]);
+
   const handleAddToWhitelist = async () => {
     if (!newWhitelistEmail.trim() || !newWhitelistEmail.includes('@')) {
       Alert.alert('Invalid Email', 'Please enter a valid email address.');
@@ -222,17 +237,17 @@ export default function SettingsScreen() {
       await addToWhitelist(newWhitelistEmail.trim());
       await loadWhitelist();
       setNewWhitelistEmail('');
-      Alert.alert('Success', `Added ${newWhitelistEmail.trim()} to whitelist.`);
+      Alert.alert('Success', `${newWhitelistEmail.trim()} now has Free Use of App access.`);
     } catch (error) {
       console.error('[Settings] Error adding to whitelist:', error);
-      Alert.alert('Error', 'Failed to add email to whitelist.');
+      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to add email to whitelist.');
     }
   };
 
   const handleRemoveFromWhitelist = async (email: string) => {
     Alert.alert(
       'Remove Email',
-      `Remove ${email} from whitelist? They will no longer be able to log in.`,
+      `Remove Free Use of App access for ${email}? They will need an active subscription unless they are an admin.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -242,7 +257,7 @@ export default function SettingsScreen() {
             try {
               await removeFromWhitelist(email);
               await loadWhitelist();
-              Alert.alert('Success', `Removed ${email} from whitelist.`);
+              Alert.alert('Success', `Removed Free Use of App access for ${email}.`);
             } catch (error) {
               console.error('[Settings] Error removing from whitelist:', error);
               Alert.alert('Error', error instanceof Error ? error.message : 'Failed to remove email from whitelist.');
@@ -2424,18 +2439,21 @@ STEP 4: Optional Calendar Import
               </TouchableOpacity>
               <View style={styles.subscriptionStatusBanner}>
                 <Crown size={18} color={
+                  entitlement.subscriptionDisplayStatus === 'free_use' ? '#059669' :
                   entitlement.subscriptionDisplayStatus === 'monthly' || entitlement.subscriptionDisplayStatus === 'annual' ? '#3B82F6' :
                   entitlement.subscriptionDisplayStatus === 'grace_period' ? '#F59E0B' :
                   '#EF4444'
                 } />
                 <View style={styles.subscriptionStatusText}>
                   <Text style={styles.subscriptionStatusTitle}>
-                    {entitlement.subscriptionDisplayStatus === 'monthly' || entitlement.subscriptionDisplayStatus === 'annual' ? 'Monthly Subscription' :
+                    {entitlement.subscriptionDisplayStatus === 'free_use' ? (entitlement.subscriptionLevel ?? 'Free Use of App') :
+                     entitlement.subscriptionDisplayStatus === 'monthly' || entitlement.subscriptionDisplayStatus === 'annual' ? 'Monthly Subscription' :
                      entitlement.subscriptionDisplayStatus === 'grace_period' ? '5-Day Grace Period' :
                      'Subscription Expired'}
                   </Text>
                   <Text style={styles.subscriptionStatusSubtitle}>
-                    {entitlement.subscriptionDisplayStatus === 'monthly' || entitlement.subscriptionDisplayStatus === 'annual' ? 'Monthly plan active — all features unlocked' :
+                    {entitlement.subscriptionDisplayStatus === 'free_use' ? 'Admin-granted free access — all app features unlocked' :
+                     entitlement.subscriptionDisplayStatus === 'monthly' || entitlement.subscriptionDisplayStatus === 'annual' ? 'Monthly plan active — all features unlocked' :
                      entitlement.subscriptionDisplayStatus === 'grace_period' ? `${entitlement.trialDaysRemaining} day${entitlement.trialDaysRemaining !== 1 ? 's' : ''} remaining — full access` :
                      'Purchase a monthly subscription ($9.99/month) to continue'}
                   </Text>
@@ -2475,7 +2493,7 @@ STEP 4: Optional Calendar Import
               )}
             </View>
             <Text style={styles.subscriptionHint}>
-              Manage your subscription status, restore previous purchases, and review legal terms. The subscription automatically renews at $9.99/month unless canceled at least 24 hours before the end of the current period.
+              Manage your subscription status, restore previous purchases, and review legal terms. Whitelisted accounts show as Free Use of App and do not need a paid subscription.
             </Text>
           </View>
 
@@ -2486,7 +2504,7 @@ STEP 4: Optional Calendar Import
                 <View style={styles.adminHeader}>
                   <Text style={styles.adminHeaderText}>Manage user access</Text>
                   <Text style={styles.adminHeaderSubtext}>
-                    Whitelisted emails can access restricted features without a subscription. Admin email cannot be removed.
+                    Add any user email here to grant Free Use of App access. Only scott.merlis1@gmail.com and s@a.com are admins and cannot be removed.
                   </Text>
                 </View>
                 
@@ -2495,7 +2513,7 @@ STEP 4: Optional Calendar Import
                     style={styles.addEmailInput}
                     value={newWhitelistEmail}
                     onChangeText={setNewWhitelistEmail}
-                    placeholder="Enter email to whitelist"
+                    placeholder="Enter email for Free Use of App"
                     placeholderTextColor={CLEAN_THEME.text.secondary}
                     keyboardType="email-address"
                     autoCapitalize="none"
@@ -2604,7 +2622,7 @@ STEP 4: Optional Calendar Import
                 ) : (
                   <View style={styles.whitelistContainer}>
                     <Text style={styles.whitelistCount}>
-                      {whitelist.length} whitelisted {whitelist.length === 1 ? 'email' : 'emails'}
+                      {whitelist.length} Free Use of App {whitelist.length === 1 ? 'email' : 'emails'}
                     </Text>
                     {whitelist.map((email) => (
                       <View key={email} style={styles.whitelistItem}>
@@ -2613,13 +2631,17 @@ STEP 4: Optional Calendar Import
                             <CheckCircle size={16} color={COLORS.success} />
                           </View>
                           <Text style={styles.whitelistItemEmail}>{email}</Text>
-                          {email.toLowerCase() === 'scott.merlis1@gmail.com' && (
+                          {isAdminAccountEmail(email) ? (
                             <View style={styles.adminBadge}>
                               <Text style={styles.adminBadgeText}>ADMIN</Text>
                             </View>
+                          ) : (
+                            <View style={styles.freeUseBadge}>
+                              <Text style={styles.freeUseBadgeText}>FREE USE</Text>
+                            </View>
                           )}
                         </View>
-                        {email.toLowerCase() !== 'scott.merlis1@gmail.com' && (
+                        {!isAdminAccountEmail(email) && (
                           <TouchableOpacity
                             onPress={() => handleRemoveFromWhitelist(email)}
                             style={styles.removeButton}
@@ -3254,6 +3276,17 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.sm,
   },
   adminBadgeText: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: COLORS.white,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  freeUseBadge: {
+    backgroundColor: '#059669',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 2,
+    borderRadius: BORDER_RADIUS.sm,
+  },
+  freeUseBadgeText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
     color: COLORS.white,
     fontWeight: TYPOGRAPHY.fontWeightBold,
