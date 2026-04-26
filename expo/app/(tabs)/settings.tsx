@@ -104,6 +104,7 @@ import { UserManualModal } from '@/components/UserManualModal';
 import { ResponsiveContainer } from '@/components/ResponsiveContainer';
 import { useEntitlement } from '@/state/EntitlementProvider';
 import { useCrewRecognition } from '@/state/CrewRecognitionProvider';
+import { useUserDataSync } from '@/state/UserDataSyncProvider';
 
 function normalizeAccountEmail(email: string | null | undefined): string | null {
   if (!email) {
@@ -143,7 +144,6 @@ export default function SettingsScreen() {
     extendedLoyalty,
     venetianSociety,
     captainsClub,
-    isLoading: isLoyaltyLoading,
   } = useLoyalty();
   
   const [isImporting, setIsImporting] = useState(false);
@@ -173,27 +173,26 @@ export default function SettingsScreen() {
   const { reload: reloadCasinoSessions } = useCasinoSessions();
   const { isAdmin, getWhitelist, addToWhitelist, removeFromWhitelist, updateEmail, authenticatedEmail } = useAuth();
   const { stats: crewStats } = useCrewRecognition();
+  const { forceSyncNow: forceProfileSyncNow } = useUserDataSync();
 
   const normalizedAuthenticatedEmail = useMemo(() => normalizeAccountEmail(authenticatedEmail), [authenticatedEmail]);
   const normalizedCurrentUserEmail = useMemo(() => normalizeAccountEmail(currentUser?.email), [currentUser?.email]);
-  const isProfileIdentityReady = useMemo(() => {
-    if (!normalizedAuthenticatedEmail) {
-      return false;
+  const profileDisplayUser = useMemo(() => {
+    if (!currentUser) {
+      return null;
     }
 
-    if (isUserLoading) {
-      return false;
+    if (normalizedAuthenticatedEmail && normalizedCurrentUserEmail && normalizedCurrentUserEmail !== normalizedAuthenticatedEmail) {
+      console.log('[Settings] Hiding stale profile values while account storage catches up:', {
+        authenticatedEmail: normalizedAuthenticatedEmail,
+        profileEmail: normalizedCurrentUserEmail,
+      });
+      return null;
     }
 
-    if (!currentUser || !normalizedCurrentUserEmail) {
-      return true;
-    }
-
-    return normalizedCurrentUserEmail === normalizedAuthenticatedEmail;
-  }, [currentUser, isUserLoading, normalizedAuthenticatedEmail, normalizedCurrentUserEmail]);
-  const isProfileDisplayReady = useMemo(() => {
-    return isProfileIdentityReady && !isLoyaltyLoading;
-  }, [isProfileIdentityReady, isLoyaltyLoading]);
+    return currentUser;
+  }, [currentUser, normalizedAuthenticatedEmail, normalizedCurrentUserEmail]);
+  const isProfileDisplayReady = true;
 
 
 
@@ -269,48 +268,39 @@ export default function SettingsScreen() {
   };
 
   const currentProfileValues = useMemo(() => ({
-    name: isProfileDisplayReady ? currentUser?.name || '' : '',
-    email: isProfileDisplayReady ? currentUser?.email || authenticatedEmail || '' : authenticatedEmail || '',
-    crownAnchorNumber: isProfileDisplayReady ? currentUser?.crownAnchorNumber || '' : '',
-    clubRoyalePoints: isProfileDisplayReady ? loyaltyClubRoyalePoints : 0,
-    clubRoyaleTier: isProfileDisplayReady ? loyaltyClubRoyaleTier : 'Choice',
-    loyaltyPoints: isProfileDisplayReady ? loyaltyCrownAnchorPoints : 0,
-    crownAnchorLevel: isProfileDisplayReady ? loyaltyCrownAnchorLevel : 'Gold',
-    celebrityEmail: isProfileDisplayReady ? currentUser?.celebrityEmail || '' : '',
-    celebrityCaptainsClubNumber: isProfileDisplayReady ? currentUser?.celebrityCaptainsClubNumber || '' : '',
-    celebrityCaptainsClubPoints: isProfileDisplayReady ? currentUser?.celebrityCaptainsClubPoints || 0 : 0,
-    celebrityBlueChipPoints: isProfileDisplayReady ? currentUser?.celebrityBlueChipPoints || 0 : 0,
+    name: profileDisplayUser?.name || '',
+    email: profileDisplayUser?.email || authenticatedEmail || '',
+    crownAnchorNumber: profileDisplayUser?.crownAnchorNumber || '',
+    clubRoyalePoints: loyaltyClubRoyalePoints,
+    clubRoyaleTier: loyaltyClubRoyaleTier,
+    loyaltyPoints: loyaltyCrownAnchorPoints,
+    crownAnchorLevel: loyaltyCrownAnchorLevel,
+    celebrityEmail: profileDisplayUser?.celebrityEmail || '',
+    celebrityCaptainsClubNumber: profileDisplayUser?.celebrityCaptainsClubNumber || '',
+    celebrityCaptainsClubPoints: profileDisplayUser?.celebrityCaptainsClubPoints || 0,
+    celebrityBlueChipPoints: profileDisplayUser?.celebrityBlueChipPoints || 0,
     celebrityBlueChipTier: 'Pearl',
     celebrityCaptainsClubLevel: 'Preview',
-    preferredBrand: isProfileDisplayReady ? currentUser?.preferredBrand || 'royal' : 'royal',
-    silverseaEmail: isProfileDisplayReady ? currentUser?.silverseaEmail || '' : '',
-    silverseaVenetianNumber: isProfileDisplayReady ? currentUser?.silverseaVenetianNumber || '' : '',
-    silverseaVenetianTier: isProfileDisplayReady ? currentUser?.silverseaVenetianTier || '' : '',
-    silverseaVenetianPoints: isProfileDisplayReady ? currentUser?.silverseaVenetianPoints || 0 : 0,
-    carnivalVifpNumber: isProfileDisplayReady ? currentUser?.carnivalVifpNumber || '' : '',
-    carnivalVifpTier: isProfileDisplayReady ? currentUser?.carnivalVifpTier || '' : '',
-    carnivalPlayersClubTier: isProfileDisplayReady ? currentUser?.carnivalPlayersClubTier || '' : '',
-    carnivalPlayersClubPoints: isProfileDisplayReady ? currentUser?.carnivalPlayersClubPoints || 0 : 0,
-    birthdate: isProfileDisplayReady ? currentUser?.birthdate || '' : '',
+    preferredBrand: profileDisplayUser?.preferredBrand || 'royal',
+    silverseaEmail: profileDisplayUser?.silverseaEmail || '',
+    silverseaVenetianNumber: profileDisplayUser?.silverseaVenetianNumber || '',
+    silverseaVenetianTier: profileDisplayUser?.silverseaVenetianTier || '',
+    silverseaVenetianPoints: profileDisplayUser?.silverseaVenetianPoints || 0,
+    carnivalVifpNumber: profileDisplayUser?.carnivalVifpNumber || '',
+    carnivalVifpTier: profileDisplayUser?.carnivalVifpTier || '',
+    carnivalPlayersClubTier: profileDisplayUser?.carnivalPlayersClubTier || '',
+    carnivalPlayersClubPoints: profileDisplayUser?.carnivalPlayersClubPoints || 0,
+    birthdate: profileDisplayUser?.birthdate || '',
   }), [
     authenticatedEmail,
-    currentUser,
-    isProfileDisplayReady,
     loyaltyClubRoyalePoints,
     loyaltyClubRoyaleTier,
     loyaltyCrownAnchorLevel,
     loyaltyCrownAnchorPoints,
+    profileDisplayUser,
   ]);
 
 
-
-  const profileTransitionSubtitle = useMemo(() => {
-    if (authenticatedEmail) {
-      return `Loading private settings for ${authenticatedEmail}`;
-    }
-
-    return 'Securing your private settings';
-  }, [authenticatedEmail]);
 
   const enrichmentData = useMemo(() => {
     if (!isProfileDisplayReady) return null;
@@ -1463,17 +1453,11 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
     carnivalPlayersClubPoints?: number;
     birthdate?: string;
   }) => {
-    if (!isProfileDisplayReady) {
-      console.log('[Settings] Blocked profile save while account data is still loading');
-      Alert.alert('Profile Loading', 'Please wait for your account data to finish loading.');
-      return;
-    }
-
     try {
       setIsSaving(true);
       console.log('[Settings] Saving profile:', profileData);
       
-      const oldEmail = currentUser?.email?.toLowerCase().trim();
+      const oldEmail = profileDisplayUser?.email?.toLowerCase().trim() || authenticatedEmail?.toLowerCase().trim();
       const newEmail = profileData.email.toLowerCase().trim();
       const emailChanged = oldEmail && oldEmail !== newEmail;
       
@@ -1570,8 +1554,9 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
     emailChanged: boolean
   ) {
     try {
-      if (currentUser) {
-        await updateUser(currentUser.id, { 
+      const editableUser = profileDisplayUser ?? (await ensureOwner());
+
+      await updateUser(editableUser.id, { 
           name: profileData.name,
           email: profileData.email,
           crownAnchorNumber: profileData.crownAnchorNumber,
@@ -1590,28 +1575,6 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
           carnivalPlayersClubPoints: profileData.carnivalPlayersClubPoints,
           birthdate: profileData.birthdate || undefined,
         });
-      } else {
-        const owner = await ensureOwner();
-        await updateUser(owner.id, {
-          name: profileData.name,
-          email: profileData.email,
-          crownAnchorNumber: profileData.crownAnchorNumber,
-          celebrityEmail: profileData.celebrityEmail,
-          celebrityCaptainsClubNumber: profileData.celebrityCaptainsClubNumber,
-          celebrityCaptainsClubPoints: profileData.celebrityCaptainsClubPoints,
-          celebrityBlueChipPoints: profileData.celebrityBlueChipPoints,
-          preferredBrand: profileData.preferredBrand,
-          silverseaEmail: profileData.silverseaEmail,
-          silverseaVenetianNumber: profileData.silverseaVenetianNumber,
-          silverseaVenetianTier: profileData.silverseaVenetianTier,
-          silverseaVenetianPoints: profileData.silverseaVenetianPoints,
-          carnivalVifpNumber: profileData.carnivalVifpNumber,
-          carnivalVifpTier: profileData.carnivalVifpTier,
-          carnivalPlayersClubTier: profileData.carnivalPlayersClubTier,
-          carnivalPlayersClubPoints: profileData.carnivalPlayersClubPoints,
-          birthdate: profileData.birthdate || undefined,
-        });
-      }
       
       // Update Royal Caribbean loyalty data
       await setManualClubRoyalePoints(profileData.clubRoyalePoints);
@@ -1639,6 +1602,10 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
         playersClubTier: profileData.carnivalPlayersClubTier,
         playersClubPoints: profileData.carnivalPlayersClubPoints
       });
+      
+      await syncUserFromStorage();
+      await syncLoyaltyFromStorage();
+      await forceProfileSyncNow();
       
       if (emailChanged) {
         console.log('[Settings] Email changed - updating auth state and triggering re-login');
@@ -2025,33 +1992,13 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
             </View>
           </View>
 
-          {isProfileDisplayReady ? (
-            <>
-              <UserProfileCard
-                key={`profile-${normalizedAuthenticatedEmail ?? 'guest'}`}
-                currentValues={currentProfileValues}
-                enrichmentData={enrichmentData}
-                onSave={handleSaveProfile}
-                isSaving={isSaving}
-              />
-
-
-            </>
-          ) : (
-            <>
-              <View style={styles.profileLoadingCard} testID="settings-profile-loading-card">
-                <View style={styles.profileLoadingIconWrap}>
-                  <ActivityIndicator size="small" color={COLORS.navyDeep} />
-                </View>
-                <View style={styles.profileLoadingCopy}>
-                  <Text style={styles.profileLoadingTitle}>Securing your profile</Text>
-                  <Text style={styles.profileLoadingSubtitle}>{profileTransitionSubtitle}</Text>
-                </View>
-              </View>
-
-
-            </>
-          )}
+          <UserProfileCard
+            key={`profile-${normalizedAuthenticatedEmail ?? 'guest'}`}
+            currentValues={currentProfileValues}
+            enrichmentData={enrichmentData}
+            onSave={handleSaveProfile}
+            isSaving={isSaving}
+          />
 
           <View style={styles.section}>
             <View style={styles.sectionCard}>

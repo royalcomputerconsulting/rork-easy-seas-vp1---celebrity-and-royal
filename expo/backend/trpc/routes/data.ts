@@ -11,6 +11,8 @@ const UserDataSchema = z.object({
   casinoOffers: z.array(z.any()).optional(),
   calendarEvents: z.array(z.any()).optional(),
   casinoSessions: z.array(z.any()).optional(),
+  userProfiles: z.array(z.any()).optional(),
+  currentUserId: z.string().nullable().optional(),
   clubRoyaleProfile: z.any().optional(),
   settings: z.any().optional(),
   userPoints: z.number().optional(),
@@ -44,6 +46,8 @@ interface StoredUserData {
   casinoOffers?: any[];
   calendarEvents?: any[];
   casinoSessions?: any[];
+  userProfiles?: any[];
+  currentUserId?: string | null;
   clubRoyaleProfile?: any;
   settings?: any;
   userPoints?: number;
@@ -160,6 +164,8 @@ export const dataRouter = createTRPCRouter({
         casinoOffers: input.casinoOffers ?? existingData?.casinoOffers ?? [],
         calendarEvents: input.calendarEvents ?? existingData?.calendarEvents ?? [],
         casinoSessions: input.casinoSessions ?? existingData?.casinoSessions ?? [],
+        userProfiles: input.userProfiles ?? existingData?.userProfiles ?? [],
+        currentUserId: input.currentUserId ?? existingData?.currentUserId ?? null,
         clubRoyaleProfile: input.clubRoyaleProfile ?? existingData?.clubRoyaleProfile,
         settings: input.settings ?? existingData?.settings,
         userPoints: input.userPoints ?? existingData?.userPoints ?? 0,
@@ -195,6 +201,8 @@ export const dataRouter = createTRPCRouter({
             casinoOffers = $casinoOffers,
             calendarEvents = $calendarEvents,
             casinoSessions = $casinoSessions,
+            userProfiles = $userProfiles,
+            currentUserId = $currentUserId,
             clubRoyaleProfile = $clubRoyaleProfile,
             settings = $settings,
             userPoints = $userPoints,
@@ -286,6 +294,8 @@ export const dataRouter = createTRPCRouter({
             casinoOffers: data.casinoOffers ?? [],
             calendarEvents: data.calendarEvents ?? [],
             casinoSessions: data.casinoSessions ?? [],
+            userProfiles: data.userProfiles ?? [],
+            currentUserId: data.currentUserId ?? null,
             clubRoyaleProfile: data.clubRoyaleProfile,
             settings: data.settings,
             userPoints: data.userPoints ?? 0,

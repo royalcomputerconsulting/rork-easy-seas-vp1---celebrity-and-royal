@@ -558,6 +558,26 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
       ));
 
       await AsyncStorage.setItem(scopedKeys.USERS, JSON.stringify(updatedUsers));
+
+      const normalizedTargetEmail = updates.email !== undefined ? normalizeEmail(updates.email) : normalizedAuthenticatedEmail;
+      if (normalizedTargetEmail && normalizedTargetEmail !== normalizedAuthenticatedEmail) {
+        const targetScopedKeys = getScopedUserKeys(normalizedTargetEmail);
+        const targetScopedUsers = updatedUsers.map((user) => (
+          user.id === userId
+            ? { ...user, email: normalizedTargetEmail, isOwner: true, updatedAt: new Date().toISOString() }
+            : { ...user, email: normalizeEmail(user.email) ?? normalizedTargetEmail }
+        ));
+        await Promise.all([
+          AsyncStorage.setItem(targetScopedKeys.USERS, JSON.stringify(targetScopedUsers)),
+          AsyncStorage.setItem(targetScopedKeys.CURRENT_USER, userId),
+        ]);
+        console.log('[UserProvider] Mirrored profile update into new email scope:', {
+          previousEmail: normalizedAuthenticatedEmail,
+          targetEmail: normalizedTargetEmail,
+          userId,
+        });
+      }
+
       setUsers(updatedUsers);
 
       console.log('[UserProvider] Updated scoped user:', {

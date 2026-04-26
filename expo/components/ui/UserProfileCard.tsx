@@ -78,7 +78,7 @@ interface EnrichmentData {
 interface UserProfileCardProps {
   currentValues: UserProfileData;
   enrichmentData?: EnrichmentData | null;
-  onSave: (data: UserProfileData) => void;
+  onSave: (data: UserProfileData) => void | Promise<void>;
   isSaving?: boolean;
 }
 
@@ -113,8 +113,8 @@ export function UserProfileCard({
   const calculatedCelebrityTier = getCelebrityBlueChipTierByLevel(celebrityBlueChipLevel);
   const calculatedCelebrityTierInfo = CELEBRITY_BLUE_CHIP_TIERS[calculatedCelebrityTier];
 
-  const handleSave = () => {
-    onSave({
+  const handleSave = async () => {
+    await onSave({
       ...formData,
       clubRoyaleTier: calculatedTier,
       crownAnchorLevel: calculatedLevel,
@@ -624,6 +624,7 @@ export function UserProfileCard({
           style={styles.editButton}
           onPress={() => setIsModalVisible(true)}
           activeOpacity={0.7}
+          testID="profile-edit-button"
         >
           <Edit2 size={16} color={getBrandGradient()[0]} />
           <Text style={[styles.editButtonText, { color: getBrandGradient()[0] }]}>Edit Profile</Text>

@@ -467,7 +467,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         MANUAL_CLUB_ROYALE_POINTS: getUserScopedKey(ALL_STORAGE_KEYS.MANUAL_CLUB_ROYALE_POINTS, authenticatedEmail),
         MANUAL_CROWN_ANCHOR_POINTS: getUserScopedKey(ALL_STORAGE_KEYS.MANUAL_CROWN_ANCHOR_POINTS, authenticatedEmail),
       };
-      const [cruisesData, bookedData, offersData, eventsData, settingsData, pointsData, profileData, extendedLoyaltyDataRaw, manualClubRoyalePointsRaw, manualCrownAnchorPointsRaw] = await Promise.all([
+      const [cruisesData, bookedData, offersData, eventsData, settingsData, pointsData, profileData, usersData, currentUserIdData, extendedLoyaltyDataRaw, manualClubRoyalePointsRaw, manualCrownAnchorPointsRaw] = await Promise.all([
         quotaSafeGetItem(scopedKeys.CRUISES),
         quotaSafeGetItem(scopedKeys.BOOKED_CRUISES),
         quotaSafeGetItem(scopedKeys.CASINO_OFFERS),
@@ -475,6 +475,8 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         quotaSafeGetItem(scopedKeys.SETTINGS),
         quotaSafeGetItem(scopedKeys.USER_POINTS),
         quotaSafeGetItem(scopedKeys.CLUB_PROFILE),
+        quotaSafeGetItem(scopedKeys.USERS),
+        quotaSafeGetItem(scopedKeys.CURRENT_USER),
         quotaSafeGetItem(scopedLoyaltyKeys.EXTENDED_LOYALTY_DATA),
         quotaSafeGetItem(scopedLoyaltyKeys.MANUAL_CLUB_ROYALE_POINTS),
         quotaSafeGetItem(scopedLoyaltyKeys.MANUAL_CROWN_ANCHOR_POINTS),
@@ -484,7 +486,16 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       const parsedBooked = prepareOwnedRecords<BookedCruise>(bookedData ? JSON.parse(bookedData) as BookedCruise[] : [], ownerScopeId, authenticatedEmail, 'backend-sync booked cruises');
       const parsedOffers = prepareOwnedRecords<CasinoOffer>(offersData ? JSON.parse(offersData) as CasinoOffer[] : [], ownerScopeId, authenticatedEmail, 'backend-sync casino offers');
       const parsedEvents = prepareOwnedRecords<CalendarEvent>(eventsData ? JSON.parse(eventsData) as CalendarEvent[] : [], ownerScopeId, authenticatedEmail, 'backend-sync calendar events');
-      const parsedSettings = settingsData ? JSON.parse(settingsData) : undefined;
+      const parsedSettings = settingsData ? JSON.parse(settingsData) as Record<string, unknown> : undefined;
+      const parsedUsers = usersData ? JSON.parse(usersData) as unknown[] : [];
+      const parsedCurrentUserId = currentUserIdData || null;
+      const syncableSettings = parsedSettings ? { ...parsedSettings } : undefined;
+      if (syncableSettings && parsedUsers.length > 0) {
+        syncableSettings.__easySeasUserProfiles = parsedUsers;
+      }
+      if (syncableSettings && parsedCurrentUserId) {
+        syncableSettings.__easySeasCurrentUserId = parsedCurrentUserId;
+      }
       const parsedPoints = pointsData ? parseInt(pointsData, 10) : undefined;
       const parsedProfile = profileData ? JSON.parse(profileData) : undefined;
       const parsedExtendedLoyalty = extendedLoyaltyDataRaw
@@ -518,7 +529,9 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         bookedCruises: parsedBooked,
         casinoOffers: parsedOffers,
         calendarEvents: parsedEvents,
-        settings: parsedSettings,
+        userProfiles: parsedUsers,
+        currentUserId: parsedCurrentUserId,
+        settings: syncableSettings,
         userPoints: parsedPoints,
         clubRoyaleProfile: parsedProfile,
         loyaltyData: parsedExtendedLoyalty,
