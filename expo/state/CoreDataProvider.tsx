@@ -337,6 +337,8 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   const [calendarEvents, setCalendarEventsState] = useState<CalendarEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const loadAttemptedRef = useRef(false);
+  const loadFromStorageRef = useRef<(force?: boolean) => Promise<void>>(async () => undefined);
+  const lastCloudRestoreReloadRef = useRef(0);
   const lastAuthEmailRef = useRef<string | null>(null);
   const accountSwitchClearingRef = useRef<Promise<void> | null>(null);
 
@@ -881,6 +883,10 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   }, [loadFromBackend, initialCheckComplete, hasCloudData, authenticatedEmail, ownerScopeId, syncToBackend, persistData]);
 
   useEffect(() => {
+    loadFromStorageRef.current = loadFromStorage;
+  }, [loadFromStorage]);
+
+  useEffect(() => {
     if (!isAuthenticated) {
       console.log('[CoreData] User not authenticated, clearing data');
       setCruisesState([]);
@@ -959,7 +965,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         
         console.log('[CoreData] === Calling loadFromStorage ===');
         didStartStorageLoad = true;
-        await loadFromStorage();
+        await loadFromStorageRef.current();
         console.log('[CoreData] === loadFromStorage completed ===');
       } catch (error) {
         console.error('[CoreData] === ERROR during load ===', error);
@@ -980,7 +986,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       isMounted = false;
       clearTimeout(loadTimeout);
     };
-  }, [loadFromStorage, isAuthenticated, authenticatedEmail, ownerScopeId, initialCheckComplete]);
+  }, [isAuthenticated, authenticatedEmail, ownerScopeId, initialCheckComplete]);
 
   useEffect(() => {
     if (!isAuthenticated || !authenticatedEmail || !ownerScopeId || !initialCheckComplete) {
@@ -1000,7 +1006,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
 
       foregroundRefreshAttemptRef.current = now;
       console.log('[CoreData] App became active - forcing backend/local refresh to pick up latest data');
-      void loadFromStorage(true);
+      void loadFromStorageRef.current(true);
     };
 
     const subscription = AppState.addEventListener('change', handleAppStateChange);
@@ -1008,7 +1014,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     return () => {
       subscription.remove();
     };
-  }, [loadFromStorage, isAuthenticated, authenticatedEmail, ownerScopeId, initialCheckComplete]);
+  }, [isAuthenticated, authenticatedEmail, ownerScopeId, initialCheckComplete]);
 
   // Auto-sync to backend when data changes (debounced)
   useEffect(() => {
@@ -1058,9 +1064,15 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     };
 
     const handleCloudDataRestored = () => {
+      const now = Date.now();
+      if (now - lastCloudRestoreReloadRef.current < 1200) {
+        console.log('[CoreDataProvider] Cloud data restored event ignored because a reload just ran');
+        return;
+      }
+      lastCloudRestoreReloadRef.current = now;
       console.log('[CoreDataProvider] Cloud data restored event received, reloading data...');
       loadAttemptedRef.current = false;
-      void loadFromStorage(true);
+      void loadFromStorageRef.current(true);
     };
 
     try {
@@ -1068,7 +1080,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         const handleEntitlementProUnlocked = () => {
           console.log('[CoreDataProvider] entitlementProUnlocked event received, reloading data...');
           loadAttemptedRef.current = false;
-          void loadFromStorage(true);
+          void loadFromStorageRef.current(true);
         };
 
         window.addEventListener('casinoSessionPointsUpdated', handleSessionPointsUpdate as EventListener);
@@ -1083,7 +1095,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     } catch (error) {
       console.log('[CoreDataProvider] Could not set up event listener (not on web):', error);
     }
-  }, [persistData, loadFromStorage]);
+  }, [persistData]);
 
   const setCruises = useCallback(async (newCruises: Cruise[]) => {
     markLocalDataAuthoritative('setCruises');
@@ -1438,8 +1450,8 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
 
   const refreshData = useCallback(async () => {
     console.log('[CoreData] === REFRESH DATA CALLED (FORCE RELOAD) ===');
-    await loadFromStorage(true);
-  }, [loadFromStorage]);
+    await loadFromStorageRef.current(true);
+  }, []);
 
   const restoreMockData = useCallback(async () => {
     try {
