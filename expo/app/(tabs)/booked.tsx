@@ -40,10 +40,14 @@ import { LoyaltyPill } from '@/components/ui/LoyaltyPill';
 import { useAppState } from '@/state/AppStateProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { useUser } from '@/state/UserProvider';
+import { ADMIN_EMAILS, useAuth } from '@/state/AuthProvider';
 import { MinimalistFilterBar } from '@/components/ui/MinimalistFilterBar';
 import { isDateInPast, createDateFromString } from '@/lib/date';
 import { CruiseCard } from '@/components/CruiseCard';
 import type { BookedCruise } from '@/types/models';
+import { BOOKED_CRUISES_DATA } from '@/mocks/bookedCruises';
+import { COMPLETED_CRUISES_DATA } from '@/mocks/completedCruises';
+import { CRUISE_HISTORY_SUPPLEMENT_DATA } from '@/mocks/cruiseHistorySupplement';
 import { AddBookedCruiseModal } from '@/components/AddBookedCruiseModal';
 import { MarineAlertsPanel } from '@/components/MarineAlertsPanel';
 import { ResponsiveContainer } from '@/components/ResponsiveContainer';
@@ -95,10 +99,24 @@ const SORT_OPTIONS: { label: string; value: SortType }[] = [
   { label: 'By Nights', value: 'nights' },
 ];
 
+function getCruiseIdentity(cruise: BookedCruise): string {
+  const directId = cruise.reservationNumber || cruise.bookingId || cruise.bwoNumber;
+  if (directId) return `reservation:${directId.toLowerCase().trim()}`;
+  return `sailing:${cruise.shipName.toLowerCase().trim()}:${cruise.sailDate}:${cruise.returnDate}:${(cruise.itineraryName || cruise.destination || '').toLowerCase().trim()}`;
+}
+
+function mergeCruiseData(primaryCruises: BookedCruise[], fallbackCruises: BookedCruise[]): BookedCruise[] {
+  const cruiseMap = new Map<string, BookedCruise>();
+  fallbackCruises.forEach((cruise) => cruiseMap.set(getCruiseIdentity(cruise), cruise));
+  primaryCruises.forEach((cruise) => cruiseMap.set(getCruiseIdentity(cruise), cruise));
+  return Array.from(cruiseMap.values());
+}
+
 export default function BookedScreen() {
   const router = useRouter();
   const { localData, clubRoyaleProfile, isLoading: appLoading, refreshData } = useAppState();
   const { addBookedCruise, bookedCruises: storedBooked } = useCoreData();
+  const { authenticatedEmail } = useAuth();
   useUser();
   const { casinoAnalytics } = useSimpleAnalytics();
   const {
@@ -119,10 +137,19 @@ export default function BookedScreen() {
 
   const bookedCruises = useMemo(() => {
     const localBooked = localData.booked || [];
-    if (localBooked.length > 0) return localBooked;
-    if (storedBooked.length > 0) return storedBooked;
-    return [];
-  }, [localData.booked, storedBooked]);
+    const baseCruises = localBooked.length > 0 ? localBooked : storedBooked;
+    const normalizedEmail = authenticatedEmail?.toLowerCase().trim() ?? null;
+    const shouldIncludeKnownAdminCruises = !!normalizedEmail && ADMIN_EMAILS.includes(normalizedEmail as typeof ADMIN_EMAILS[number]);
+    const knownAdminCruises = shouldIncludeKnownAdminCruises ? [...COMPLETED_CRUISES_DATA, ...BOOKED_CRUISES_DATA, ...CRUISE_HISTORY_SUPPLEMENT_DATA] : [];
+    const mergedCruises = mergeCruiseData(baseCruises, knownAdminCruises);
+    console.log('[Booked] Resolved booked cruise source:', {
+      authenticatedEmail: normalizedEmail,
+      baseCruises: baseCruises.length,
+      knownAdminCruises: knownAdminCruises.length,
+      mergedCruises: mergedCruises.length,
+    });
+    return mergedCruises;
+  }, [authenticatedEmail, localData.booked, storedBooked]);
 
   const filteredCruises = useMemo(() => {
     let result = [...bookedCruises];

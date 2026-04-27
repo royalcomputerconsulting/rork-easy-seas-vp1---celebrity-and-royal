@@ -90,6 +90,7 @@ export interface Cruise {
   seaDays?: number;
   portDays?: number;
   received?: string;
+  programCharter?: string;
   cruiseSource?: 'royal' | 'celebrity' | 'carnival';
   createdAt?: string;
   updatedAt?: string;

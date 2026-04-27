@@ -10,6 +10,7 @@ import { useCoreData } from '@/state/CoreDataProvider';
 import { ADMIN_EMAILS, useAuth } from '@/state/AuthProvider';
 import { BOOKED_CRUISES_DATA } from '@/mocks/bookedCruises';
 import { COMPLETED_CRUISES_DATA } from '@/mocks/completedCruises';
+import { CRUISE_HISTORY_SUPPLEMENT_DATA } from '@/mocks/cruiseHistorySupplement';
 import { buildCountryVisits, summarizeVisitsByYear, type CountryVisit, type CruiseCountryFilter } from '@/lib/cruiseCountries';
 import { createDateFromString } from '@/lib/date';
 import type { BookedCruise } from '@/types/models';
@@ -55,11 +56,13 @@ export default function CountriesScreen() {
   const { bookedCruises, cruises } = useCoreData();
   const { authenticatedEmail } = useAuth();
   const [filter, setFilter] = useState<CruiseCountryFilter>(() => getInitialFilter(params.filter));
+  const [selectedYear, setSelectedYear] = useState<number | null>(null);
+  const [showYearFilter, setShowYearFilter] = useState(false);
 
   const sourceCruises = useMemo(() => {
     const normalizedEmail = authenticatedEmail?.toLowerCase().trim() ?? null;
     const shouldIncludeKnownAdminCruises = !!normalizedEmail && ADMIN_EMAILS.includes(normalizedEmail as typeof ADMIN_EMAILS[number]);
-    const knownAdminCruises = shouldIncludeKnownAdminCruises ? [...COMPLETED_CRUISES_DATA, ...BOOKED_CRUISES_DATA] : [];
+    const knownAdminCruises = shouldIncludeKnownAdminCruises ? [...COMPLETED_CRUISES_DATA, ...BOOKED_CRUISES_DATA, ...CRUISE_HISTORY_SUPPLEMENT_DATA] : [];
     const bookedLikeCruises = cruises.filter((cruise) => cruise.status === 'booked' || cruise.status === 'completed' || Boolean((cruise as BookedCruise).reservationNumber || (cruise as BookedCruise).bookingId));
     const storedCruises = mergeCruiseData(bookedCruises, bookedLikeCruises);
     const mergedCruises = mergeCruiseData(storedCruises, knownAdminCruises);
@@ -85,7 +88,6 @@ export default function CountriesScreen() {
 
   const summaries = useMemo(() => summarizeVisitsByYear(visits), [visits]);
   const yearOptions = useMemo(() => summaries.map((summary) => summary.year), [summaries]);
-  const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const activeYear = selectedYear ?? yearOptions[0] ?? new Date().getFullYear();
 
   const activeYearVisits = useMemo(() => visits.filter((visit) => visit.year === activeYear), [activeYear, visits]);
@@ -185,26 +187,47 @@ export default function CountriesScreen() {
             </View>
 
             {yearOptions.length > 0 && (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.yearScrollContent}>
-                {yearOptions.map((year) => {
-                  const isActive = year === activeYear;
-                  return (
-                    <TouchableOpacity
-                      key={year}
-                      style={[styles.yearPill, isActive && styles.yearPillActive]}
-                      onPress={() => {
-                        console.log('[Countries] Year selected:', year);
-                        setSelectedYear(year);
-                      }}
-                      activeOpacity={0.78}
-                      testID={`countries-year-${year}`}
-                    >
-                      <CalendarDays size={14} color={isActive ? COLORS.white : COLORS.navyDeep} />
-                      <Text style={[styles.yearPillText, isActive && styles.yearPillTextActive]}>{year}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
+              <View style={styles.yearFilterWrap} testID="countries-year-filter">
+                <TouchableOpacity
+                  style={styles.yearFilterButton}
+                  onPress={() => setShowYearFilter((current) => !current)}
+                  activeOpacity={0.78}
+                  testID="countries-year-filter-button"
+                >
+                  <View style={styles.yearFilterIconBadge}>
+                    <CalendarDays size={15} color={COLORS.white} />
+                  </View>
+                  <View style={styles.yearFilterTextGroup}>
+                    <Text style={styles.yearFilterLabel}>Year filter</Text>
+                    <Text style={styles.yearFilterValue}>{activeYear}</Text>
+                  </View>
+                  <Text style={styles.yearFilterCount}>{yearOptions.length} years</Text>
+                </TouchableOpacity>
+                {showYearFilter && (
+                  <View style={styles.yearOptionsPanel} testID="countries-year-options-panel">
+                    {yearOptions.map((year) => {
+                      const isActive = year === activeYear;
+                      const summary = summaries.find((item) => item.year === year);
+                      return (
+                        <TouchableOpacity
+                          key={year}
+                          style={[styles.yearOptionRow, isActive && styles.yearOptionRowActive]}
+                          onPress={() => {
+                            console.log('[Countries] Year selected:', year);
+                            setSelectedYear(year);
+                            setShowYearFilter(false);
+                          }}
+                          activeOpacity={0.78}
+                          testID={`countries-year-option-${year}`}
+                        >
+                          <Text style={[styles.yearOptionText, isActive && styles.yearOptionTextActive]}>{year}</Text>
+                          <Text style={[styles.yearOptionMeta, isActive && styles.yearOptionTextActive]}>{summary?.countries.length ?? 0} countries • {summary?.ports.length ?? 0} ports</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
             )}
 
             {visits.length === 0 ? (
@@ -233,13 +256,19 @@ export default function CountriesScreen() {
                   {MONTH_LABELS.map((month, index) => {
                     const monthVisits = visitsByMonth.get(index) ?? [];
                     const monthCountries = Array.from(new Set(monthVisits.map((visit) => visit.country)));
+                    const monthPortLines = monthVisits.slice(0, 3);
                     return (
                       <View key={month} style={[styles.monthCard, monthVisits.length > 0 && styles.monthCardActive]}>
                         <Text style={[styles.monthLabel, monthVisits.length > 0 && styles.monthLabelActive]}>{month}</Text>
                         {monthVisits.length > 0 ? (
                           <>
                             <Text style={styles.monthCount}>{monthCountries.length} {monthCountries.length === 1 ? 'country' : 'countries'}</Text>
-                            <Text style={styles.monthCountries} numberOfLines={3}>{monthCountries.join(', ')}</Text>
+                            {monthPortLines.map((visit) => (
+                              <Text key={`${month}-${visit.id}`} style={styles.monthPortLine} numberOfLines={2}>{visit.port} • {visit.shipName}</Text>
+                            ))}
+                            {monthVisits.length > monthPortLines.length && (
+                              <Text style={styles.monthMoreText}>+{monthVisits.length - monthPortLines.length} more port visits</Text>
+                            )}
                           </>
                         ) : (
                           <Text style={styles.monthEmpty}>No ports</Text>
@@ -416,6 +445,86 @@ const styles = StyleSheet.create({
   filterPillTextActive: {
     color: COLORS.white,
   },
+  yearFilterWrap: {
+    marginBottom: SPACING.md,
+  },
+  yearFilterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    borderRadius: 18,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    gap: SPACING.sm,
+    ...SHADOW.sm,
+  },
+  yearFilterIconBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: COLORS.navyDeep,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  yearFilterTextGroup: {
+    flex: 1,
+  },
+  yearFilterLabel: {
+    fontSize: 11,
+    fontWeight: '800' as const,
+    color: COLORS.textMuted,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.6,
+  },
+  yearFilterValue: {
+    fontSize: 20,
+    fontWeight: '900' as const,
+    color: COLORS.navyDeep,
+    marginTop: 1,
+  },
+  yearFilterCount: {
+    fontSize: 12,
+    fontWeight: '800' as const,
+    color: COLORS.tealAccent,
+  },
+  yearOptionsPanel: {
+    backgroundColor: COLORS.white,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    marginTop: SPACING.sm,
+    overflow: 'hidden',
+    ...SHADOW.sm,
+  },
+  yearOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderLight,
+    gap: SPACING.sm,
+  },
+  yearOptionRowActive: {
+    backgroundColor: COLORS.navyDeep,
+  },
+  yearOptionText: {
+    fontSize: 14,
+    fontWeight: '900' as const,
+    color: COLORS.navyDeep,
+  },
+  yearOptionMeta: {
+    flex: 1,
+    textAlign: 'right' as const,
+    fontSize: 12,
+    fontWeight: '700' as const,
+    color: COLORS.textMuted,
+  },
+  yearOptionTextActive: {
+    color: COLORS.white,
+  },
   yearScrollContent: {
     gap: SPACING.sm,
     paddingVertical: SPACING.sm,
@@ -554,6 +663,18 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 15,
     color: COLORS.textDarkGrey,
+  },
+  monthPortLine: {
+    fontSize: 10,
+    lineHeight: 14,
+    color: COLORS.textDarkGrey,
+    marginTop: 2,
+  },
+  monthMoreText: {
+    fontSize: 10,
+    fontWeight: '800' as const,
+    color: COLORS.tealAccent,
+    marginTop: 4,
   },
   monthEmpty: {
     fontSize: 11,

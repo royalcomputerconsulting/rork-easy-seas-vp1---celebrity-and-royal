@@ -113,6 +113,12 @@ const COUNTRY_ALIASES: Record<string, string> = {
   'united kingdom': 'United Kingdom',
   england: 'United Kingdom',
   scotland: 'United Kingdom',
+  morocco: 'Morocco',
+  turkey: 'Turkey',
+  croatia: 'Croatia',
+  guatemala: 'Guatemala',
+  'costa rica': 'Costa Rica',
+  'u.s.v.i.': 'U.S. Virgin Islands',
 };
 
 const PORT_COUNTRY_LOOKUP: Record<string, string> = {
@@ -183,6 +189,66 @@ const PORT_COUNTRY_LOOKUP: Record<string, string> = {
   'la coruna': 'Spain',
   'a coruña': 'Spain',
   vigo: 'Spain',
+  barcelona: 'Spain',
+  'palma de mallorca': 'Spain',
+  málaga: 'Spain',
+  malaga: 'Spain',
+  cádiz: 'Spain',
+  cadiz: 'Spain',
+  seville: 'Spain',
+  ibiza: 'Spain',
+  'a coruna': 'Spain',
+  marseille: 'France',
+  nice: 'France',
+  villefranche: 'France',
+  'la spezia': 'Italy',
+  civitavecchia: 'Italy',
+  rome: 'Italy',
+  naples: 'Italy',
+  livorno: 'Italy',
+  florence: 'Italy',
+  santorini: 'Greece',
+  mykonos: 'Greece',
+  athens: 'Greece',
+  piraeus: 'Greece',
+  kusadasi: 'Turkey',
+  ephesus: 'Turkey',
+  istanbul: 'Turkey',
+  dubrovnik: 'Croatia',
+  venice: 'Italy',
+  lisbon: 'Portugal',
+  porto: 'Portugal',
+  leixões: 'Portugal',
+  leixoes: 'Portugal',
+  tangier: 'Morocco',
+  casablanca: 'Morocco',
+  'belize city': 'Belize',
+  roatán: 'Honduras',
+  'frederiksted': 'U.S. Virgin Islands',
+  'st. croix': 'U.S. Virgin Islands',
+  'st croix': 'U.S. Virgin Islands',
+  'beach club at bimini': 'Bahamas',
+  'bimini beach club': 'Bahamas',
+  'playa del carmen': 'Mexico',
+  'puerto limon': 'Costa Rica',
+  limón: 'Costa Rica',
+  limon: 'Costa Rica',
+  colón: 'Panama',
+  colon: 'Panama',
+  'puerto quetzal': 'Guatemala',
+  puntarenas: 'Costa Rica',
+  manzanillo: 'Mexico',
+  'royal naval dockyard': 'Bermuda',
+  'king\'s wharf': 'Bermuda',
+  'hubbard glacier': 'United States',
+  sitka: 'United States',
+  seward: 'United States',
+  ketchikan: 'United States',
+  'icy strait point': 'United States',
+  'nã pali coast': 'United States',
+  'nā pali coast': 'United States',
+  hilo: 'United States',
+  lahaina: 'United States',
 };
 
 function normalizeText(value: string): string {
@@ -370,13 +436,12 @@ function getPortDate(cruise: BookedCruise, portIndex: number, itineraryDay: Itin
 }
 
 function getCruiseDedupeKey(cruise: BookedCruise): string {
-  const directKey = cruise.reservationNumber || cruise.bookingId || cruise.bwoNumber;
-  if (directKey) return `reservation:${normalizeText(directKey)}`;
-  return `sailing:${normalizeText(cruise.shipName)}:${cruise.sailDate}:${cruise.returnDate}:${normalizeText(cruise.itineraryName || cruise.destination || '')}`;
+  return `sailing:${normalizeText(cruise.shipName)}:${cruise.sailDate}:${cruise.returnDate}`;
 }
 
 function getCruiseDataScore(cruise: BookedCruise): number {
-  return (cruise.itinerary?.length ?? 0) * 8 + (cruise.ports?.length ?? 0) * 5 + (cruise.itineraryRaw?.length ?? 0) * 3 + (cruise.portsAndTimes ? 6 : 0) + (cruise.reservationNumber ? 4 : 0) + (cruise.offerCode ? 2 : 0);
+  const charterScore = cruise.programCharter ? 40 : 0;
+  return charterScore + (cruise.itinerary?.length ?? 0) * 8 + (cruise.ports?.length ?? 0) * 5 + (cruise.itineraryRaw?.length ?? 0) * 3 + (cruise.portsAndTimes ? 6 : 0) + (cruise.reservationNumber ? 4 : 0) + (cruise.offerCode ? 2 : 0);
 }
 
 function dedupeCruises(cruises: BookedCruise[]): BookedCruise[] {
