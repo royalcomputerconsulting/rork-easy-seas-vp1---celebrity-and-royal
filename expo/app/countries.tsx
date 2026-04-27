@@ -23,6 +23,16 @@ const FILTERS: { key: CruiseCountryFilter; label: string }[] = [
 
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+type DetailMode = 'countries' | 'ports' | null;
+
+type CountryListItem = {
+  country: string;
+  visitCount: number;
+  portCount: number;
+  shipCount: number;
+  latestDate: string;
+};
+
 function getInitialFilter(value: string | string[] | undefined): CruiseCountryFilter {
   const raw = Array.isArray(value) ? value[0] : value;
   if (raw === 'upcoming' || raw === 'completed') return raw;
@@ -58,6 +68,7 @@ export default function CountriesScreen() {
   const [filter, setFilter] = useState<CruiseCountryFilter>(() => getInitialFilter(params.filter));
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [showYearFilter, setShowYearFilter] = useState(false);
+  const [detailMode, setDetailMode] = useState<DetailMode>(null);
 
   const sourceCruises = useMemo(() => {
     const normalizedEmail = authenticatedEmail?.toLowerCase().trim() ?? null;
@@ -104,6 +115,33 @@ export default function CountriesScreen() {
     [visits]
   );
 
+  const lifetimeCountryRows = useMemo<CountryListItem[]>(() => {
+    const countryMap = new Map<string, CountryVisit[]>();
+    visits.forEach((visit) => {
+      const current = countryMap.get(visit.country) ?? [];
+      current.push(visit);
+      countryMap.set(visit.country, current);
+    });
+
+    return Array.from(countryMap.entries())
+      .map(([country, countryVisits]) => {
+        const latestVisit = [...countryVisits].sort((left, right) => {
+          const leftTime = createDateFromString(left.date).getTime();
+          const rightTime = createDateFromString(right.date).getTime();
+          return rightTime - leftTime;
+        })[0];
+
+        return {
+          country,
+          visitCount: countryVisits.length,
+          portCount: new Set(countryVisits.map((visit) => visit.port)).size,
+          shipCount: new Set(countryVisits.map((visit) => visit.shipName)).size,
+          latestDate: latestVisit?.date ?? countryVisits[0]?.date ?? '',
+        };
+      })
+      .sort((left, right) => left.country.localeCompare(right.country));
+  }, [visits]);
+
   const visitsByMonth = useMemo(() => {
     const grouped = new Map<number, CountryVisit[]>();
     activeYearVisits.forEach((visit) => {
@@ -118,6 +156,21 @@ export default function CountriesScreen() {
   const handleBack = useCallback(() => {
     router.back();
   }, [router]);
+
+  const handleCountriesSummaryPress = useCallback(() => {
+    console.log('[Countries] Countries summary pressed:', { countries: lifetimeCountries.length, filter });
+    setDetailMode((current) => (current === 'countries' ? null : 'countries'));
+  }, [filter, lifetimeCountries.length]);
+
+  const handlePortVisitsSummaryPress = useCallback(() => {
+    console.log('[Countries] Port visits summary pressed:', { visits: visits.length, filter });
+    setDetailMode((current) => (current === 'ports' ? null : 'ports'));
+  }, [filter, visits.length]);
+
+  const handleCloseDetailPanel = useCallback(() => {
+    console.log('[Countries] Detail panel closed');
+    setDetailMode(null);
+  }, []);
 
   return (
     <View style={styles.container} testID="countries-screen">
@@ -150,20 +203,90 @@ export default function CountriesScreen() {
               </View>
               <Text style={styles.heroSubtitle}>See the countries and ports from your upcoming and completed cruises using your booked cruise data.</Text>
               <View style={styles.heroStatsRow}>
-                <View style={styles.heroStatPill}>
+                <TouchableOpacity
+                  style={[styles.heroStatPill, detailMode === 'countries' && styles.heroStatPillActive]}
+                  onPress={handleCountriesSummaryPress}
+                  activeOpacity={0.78}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Show ${lifetimeCountries.length} countries`}
+                  testID="countries-summary-countries-button"
+                >
                   <Text style={styles.heroStatValue}>{lifetimeCountries.length}</Text>
                   <Text style={styles.heroStatLabel}>Countries</Text>
-                </View>
-                <View style={styles.heroStatPill}>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.heroStatPill, detailMode === 'ports' && styles.heroStatPillActive]}
+                  onPress={handlePortVisitsSummaryPress}
+                  activeOpacity={0.78}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Show ${visits.length} port visits`}
+                  testID="countries-summary-port-visits-button"
+                >
                   <Text style={styles.heroStatValue}>{visits.length}</Text>
                   <Text style={styles.heroStatLabel}>Port visits</Text>
-                </View>
+                </TouchableOpacity>
                 <View style={styles.heroStatPill}>
                   <Text style={styles.heroStatValue}>{yearOptions.length}</Text>
                   <Text style={styles.heroStatLabel}>Years</Text>
                 </View>
               </View>
             </LinearGradient>
+
+            {detailMode !== null && visits.length > 0 && (
+              <View style={styles.detailPanel} testID={`countries-detail-panel-${detailMode}`}>
+                <View style={styles.detailHeaderRow}>
+                  <View style={styles.detailHeaderTitleRow}>
+                    {detailMode === 'countries' ? <Globe2 size={18} color={COLORS.navyDeep} /> : <Anchor size={18} color={COLORS.navyDeep} />}
+                    <Text style={styles.detailTitle}>{detailMode === 'countries' ? `${lifetimeCountries.length} countries` : `${visits.length} individual port visits`}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.detailCloseButton}
+                    onPress={handleCloseDetailPanel}
+                    activeOpacity={0.78}
+                    accessibilityRole="button"
+                    accessibilityLabel="Close list"
+                    testID="countries-detail-close-button"
+                  >
+                    <Text style={styles.detailCloseText}>Close</Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.detailSubtitle}>{filter === 'all' ? 'All upcoming and completed cruises' : filter === 'completed' ? 'Completed cruises only' : 'Upcoming cruises only'}</Text>
+                {detailMode === 'countries' ? (
+                  <View style={styles.detailList} testID="countries-all-countries-list">
+                    {lifetimeCountryRows.map((item, index) => (
+                      <View key={item.country} style={styles.detailRow} testID={`countries-country-row-${index}`}>
+                        <View style={styles.detailIndexBadge}>
+                          <Text style={styles.detailIndexText}>{index + 1}</Text>
+                        </View>
+                        <View style={styles.detailTextGroup}>
+                          <Text style={styles.detailRowTitle}>{item.country}</Text>
+                          <Text style={styles.detailRowSubtitle}>{item.visitCount} visits • {item.portCount} ports • {item.shipCount} ships</Text>
+                        </View>
+                        {item.latestDate.length > 0 && <Text style={styles.detailDateText}>{formatVisitDate(item.latestDate)}</Text>}
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <View style={styles.detailList} testID="countries-all-port-visits-list">
+                    {visits.map((visit, index) => (
+                      <View key={`${visit.id}-${index}`} style={styles.detailRow} testID={`countries-port-visit-row-${index}`}>
+                        <View style={[styles.detailIndexBadge, styles.detailPortIndexBadge]}>
+                          <Text style={styles.detailIndexText}>{index + 1}</Text>
+                        </View>
+                        <View style={styles.detailTextGroup}>
+                          <Text style={styles.detailRowTitle}>{visit.port}</Text>
+                          <Text style={styles.detailRowSubtitle}>{visit.country} • {formatVisitDate(visit.date)}</Text>
+                          <Text style={styles.detailShipText}>{visit.shipName} • {visit.cruiseName}</Text>
+                        </View>
+                        <View style={[styles.detailStatusPill, visit.isCompleted ? styles.completedPill : styles.upcomingPill]}>
+                          <Text style={[styles.detailStatusText, visit.isCompleted ? styles.completedText : styles.upcomingText]}>{visit.isCompleted ? 'Done' : 'Soon'}</Text>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+            )}
 
             <View style={styles.filterRow} testID="countries-filter-tabs">
               {FILTERS.map((item) => {
@@ -176,6 +299,7 @@ export default function CountriesScreen() {
                       console.log('[Countries] Filter selected:', item.key);
                       setFilter(item.key);
                       setSelectedYear(null);
+                      setDetailMode(null);
                     }}
                     activeOpacity={0.78}
                     testID={`countries-filter-${item.key}`}
@@ -407,6 +531,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.18)',
   },
+  heroStatPillActive: {
+    backgroundColor: 'rgba(255,255,255,0.26)',
+    borderColor: 'rgba(255,255,255,0.52)',
+  },
   heroStatValue: {
     fontSize: 21,
     fontWeight: '900' as const,
@@ -417,6 +545,116 @@ const styles = StyleSheet.create({
     fontWeight: '700' as const,
     color: 'rgba(255,255,255,0.72)',
     marginTop: 1,
+  },
+  detailPanel: {
+    backgroundColor: COLORS.white,
+    borderRadius: 24,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: 'rgba(0,151,167,0.22)',
+    ...SHADOW.md,
+  },
+  detailHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: SPACING.sm,
+  },
+  detailHeaderTitleRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+  },
+  detailTitle: {
+    flex: 1,
+    fontSize: 19,
+    fontWeight: '900' as const,
+    color: COLORS.navyDeep,
+  },
+  detailCloseButton: {
+    borderRadius: BORDER_RADIUS.round,
+    backgroundColor: COLORS.bgTertiary,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 7,
+  },
+  detailCloseText: {
+    fontSize: 12,
+    fontWeight: '900' as const,
+    color: COLORS.navyDeep,
+  },
+  detailSubtitle: {
+    fontSize: 12,
+    fontWeight: '700' as const,
+    color: COLORS.textMuted,
+    marginTop: 4,
+    marginBottom: SPACING.sm,
+  },
+  detailList: {
+    gap: SPACING.xs,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F7FBFB',
+    borderRadius: 16,
+    padding: SPACING.sm,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    gap: SPACING.sm,
+  },
+  detailIndexBadge: {
+    minWidth: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.navyDeep,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+  detailPortIndexBadge: {
+    backgroundColor: COLORS.tealAccent,
+  },
+  detailIndexText: {
+    fontSize: 11,
+    fontWeight: '900' as const,
+    color: COLORS.white,
+  },
+  detailTextGroup: {
+    flex: 1,
+  },
+  detailRowTitle: {
+    fontSize: 14,
+    fontWeight: '900' as const,
+    color: COLORS.navyDeep,
+  },
+  detailRowSubtitle: {
+    fontSize: 12,
+    fontWeight: '700' as const,
+    color: COLORS.textDarkGrey,
+    marginTop: 2,
+  },
+  detailShipText: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 3,
+  },
+  detailDateText: {
+    maxWidth: 82,
+    fontSize: 11,
+    fontWeight: '800' as const,
+    color: COLORS.tealAccent,
+    textAlign: 'right' as const,
+  },
+  detailStatusPill: {
+    borderRadius: BORDER_RADIUS.round,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
+  detailStatusText: {
+    fontSize: 10,
+    fontWeight: '900' as const,
   },
   filterRow: {
     flexDirection: 'row',
