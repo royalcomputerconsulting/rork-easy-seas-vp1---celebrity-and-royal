@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-nati
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Anchor, CalendarDays, ChevronLeft, Globe2, MapPin, Ship } from 'lucide-react-native';
+import { Anchor, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Globe2, MapPin, Ship } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { ResponsiveContainer } from '@/components/ResponsiveContainer';
 import { useCoreData } from '@/state/CoreDataProvider';
@@ -33,6 +33,16 @@ type CountryListItem = {
   latestDate: string;
 };
 
+type PortDestinationListItem = {
+  key: string;
+  port: string;
+  country: string;
+  visitCount: number;
+  shipCount: number;
+  latestDate: string;
+  visits: CountryVisit[];
+};
+
 function getInitialFilter(value: string | string[] | undefined): CruiseCountryFilter {
   const raw = Array.isArray(value) ? value[0] : value;
   if (raw === 'upcoming' || raw === 'completed') return raw;
@@ -53,6 +63,14 @@ function getCruiseIdentity(cruise: BookedCruise): string {
   return `sailing:${cruise.shipName.toLowerCase().trim()}:${cruise.sailDate}:${cruise.returnDate}:${(cruise.itineraryName || cruise.destination || '').toLowerCase().trim()}`;
 }
 
+function getDestinationKey(visit: CountryVisit): string {
+  return `${visit.port.toLowerCase().trim()}|${visit.country.toLowerCase().trim()}`;
+}
+
+function formatCount(value: number, singular: string, plural: string = `${singular}s`): string {
+  return `${value} ${value === 1 ? singular : plural}`;
+}
+
 function mergeCruiseData(primaryCruises: BookedCruise[], fallbackCruises: BookedCruise[]): BookedCruise[] {
   const cruiseMap = new Map<string, BookedCruise>();
   fallbackCruises.forEach((cruise) => cruiseMap.set(getCruiseIdentity(cruise), cruise));
@@ -67,8 +85,9 @@ export default function CountriesScreen() {
   const { authenticatedEmail } = useAuth();
   const [filter, setFilter] = useState<CruiseCountryFilter>(() => getInitialFilter(params.filter));
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
-  const [showYearFilter, setShowYearFilter] = useState(false);
+  const [showYearFilter, setShowYearFilter] = useState<boolean>(false);
   const [detailMode, setDetailMode] = useState<DetailMode>(null);
+  const [expandedDestinationKey, setExpandedDestinationKey] = useState<string | null>(null);
 
   const sourceCruises = useMemo(() => {
     const normalizedEmail = authenticatedEmail?.toLowerCase().trim() ?? null;
@@ -142,6 +161,37 @@ export default function CountriesScreen() {
       .sort((left, right) => left.country.localeCompare(right.country));
   }, [visits]);
 
+  const destinationRows = useMemo<PortDestinationListItem[]>(() => {
+    const destinationMap = new Map<string, CountryVisit[]>();
+    visits.forEach((visit) => {
+      const key = getDestinationKey(visit);
+      const current = destinationMap.get(key) ?? [];
+      current.push(visit);
+      destinationMap.set(key, current);
+    });
+
+    return Array.from(destinationMap.entries())
+      .map(([key, destinationVisits]) => {
+        const sortedVisits = [...destinationVisits].sort((left, right) => {
+          const leftTime = createDateFromString(left.date).getTime();
+          const rightTime = createDateFromString(right.date).getTime();
+          return rightTime - leftTime;
+        });
+        const firstVisit = sortedVisits[0];
+
+        return {
+          key,
+          port: firstVisit?.port ?? 'Unknown destination',
+          country: firstVisit?.country ?? 'Unknown country',
+          visitCount: sortedVisits.length,
+          shipCount: new Set(sortedVisits.map((visit) => visit.shipName)).size,
+          latestDate: firstVisit?.date ?? '',
+          visits: sortedVisits,
+        };
+      })
+      .sort((left, right) => left.port.localeCompare(right.port));
+  }, [visits]);
+
   const visitsByMonth = useMemo(() => {
     const grouped = new Map<number, CountryVisit[]>();
     activeYearVisits.forEach((visit) => {
@@ -163,13 +213,24 @@ export default function CountriesScreen() {
   }, [filter, lifetimeCountries.length]);
 
   const handlePortVisitsSummaryPress = useCallback(() => {
-    console.log('[Countries] Port visits summary pressed:', { visits: visits.length, filter });
+    console.log('[Countries] Port visits summary pressed:', { visits: visits.length, destinations: destinationRows.length, filter });
     setDetailMode((current) => (current === 'ports' ? null : 'ports'));
-  }, [filter, visits.length]);
+    setExpandedDestinationKey(null);
+  }, [destinationRows.length, filter, visits.length]);
+
+  const handleDestinationPress = useCallback((destination: PortDestinationListItem) => {
+    console.log('[Countries] Destination row pressed:', {
+      port: destination.port,
+      country: destination.country,
+      visits: destination.visitCount,
+    });
+    setExpandedDestinationKey((current) => (current === destination.key ? null : destination.key));
+  }, []);
 
   const handleCloseDetailPanel = useCallback(() => {
     console.log('[Countries] Detail panel closed');
     setDetailMode(null);
+    setExpandedDestinationKey(null);
   }, []);
 
   return (
@@ -237,7 +298,7 @@ export default function CountriesScreen() {
                 <View style={styles.detailHeaderRow}>
                   <View style={styles.detailHeaderTitleRow}>
                     {detailMode === 'countries' ? <Globe2 size={18} color={COLORS.navyDeep} /> : <Anchor size={18} color={COLORS.navyDeep} />}
-                    <Text style={styles.detailTitle}>{detailMode === 'countries' ? `${lifetimeCountries.length} countries` : `${visits.length} individual port visits`}</Text>
+                    <Text style={styles.detailTitle}>{detailMode === 'countries' ? `${lifetimeCountries.length} countries` : `${destinationRows.length} destinations`}</Text>
                   </View>
                   <TouchableOpacity
                     style={styles.detailCloseButton}
@@ -250,7 +311,7 @@ export default function CountriesScreen() {
                     <Text style={styles.detailCloseText}>Close</Text>
                   </TouchableOpacity>
                 </View>
-                <Text style={styles.detailSubtitle}>{filter === 'all' ? 'All upcoming and completed cruises' : filter === 'completed' ? 'Completed cruises only' : 'Upcoming cruises only'}</Text>
+                <Text style={styles.detailSubtitle}>{detailMode === 'ports' ? `${formatCount(visits.length, 'individual port visit')} batched by destination` : filter === 'all' ? 'All upcoming and completed cruises' : filter === 'completed' ? 'Completed cruises only' : 'Upcoming cruises only'}</Text>
                 {detailMode === 'countries' ? (
                   <View style={styles.detailList} testID="countries-all-countries-list">
                     {lifetimeCountryRows.map((item, index) => (
@@ -268,21 +329,47 @@ export default function CountriesScreen() {
                   </View>
                 ) : (
                   <View style={styles.detailList} testID="countries-all-port-visits-list">
-                    {visits.map((visit, index) => (
-                      <View key={`${visit.id}-${index}`} style={styles.detailRow} testID={`countries-port-visit-row-${index}`}>
-                        <View style={[styles.detailIndexBadge, styles.detailPortIndexBadge]}>
-                          <Text style={styles.detailIndexText}>{index + 1}</Text>
+                    {destinationRows.map((destination, index) => {
+                      const isExpanded = expandedDestinationKey === destination.key;
+                      return (
+                        <View key={destination.key} style={styles.destinationGroup} testID={`countries-destination-group-${index}`}>
+                          <TouchableOpacity
+                            style={[styles.detailRow, isExpanded && styles.detailRowExpanded]}
+                            onPress={() => handleDestinationPress(destination)}
+                            activeOpacity={0.78}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Show ${destination.visitCount} visits to ${destination.port}`}
+                            testID={`countries-destination-row-${index}`}
+                          >
+                            <View style={[styles.detailIndexBadge, styles.detailPortIndexBadge]}>
+                              <Text style={styles.detailIndexText}>{destination.visitCount}</Text>
+                            </View>
+                            <View style={styles.detailTextGroup}>
+                              <Text style={styles.detailRowTitle}>{destination.port}</Text>
+                              <Text style={styles.detailRowSubtitle}>{destination.country} • {formatCount(destination.visitCount, 'visit')} • {formatCount(destination.shipCount, 'ship')}</Text>
+                              {destination.latestDate.length > 0 && <Text style={styles.detailShipText}>Latest: {formatVisitDate(destination.latestDate)}</Text>}
+                            </View>
+                            {isExpanded ? <ChevronDown size={18} color={COLORS.tealAccent} /> : <ChevronRight size={18} color={COLORS.textMuted} />}
+                          </TouchableOpacity>
+                          {isExpanded && (
+                            <View style={styles.destinationVisitsWrap} testID={`countries-destination-visits-${index}`}>
+                              {destination.visits.map((visit, visitIndex) => (
+                                <View key={`${visit.id}-${visitIndex}`} style={styles.destinationVisitRow} testID={`countries-destination-visit-${index}-${visitIndex}`}>
+                                  <View style={[styles.visitStatusDot, visit.isCompleted ? styles.completedDot : styles.upcomingDot]} />
+                                  <View style={styles.destinationVisitTextGroup}>
+                                    <Text style={styles.destinationVisitTitle}>{visit.shipName}</Text>
+                                    <Text style={styles.destinationVisitSubtitle}>{formatVisitDate(visit.date)} • {visit.cruiseName}</Text>
+                                  </View>
+                                  <View style={[styles.detailStatusPill, visit.isCompleted ? styles.completedPill : styles.upcomingPill]}>
+                                    <Text style={[styles.detailStatusText, visit.isCompleted ? styles.completedText : styles.upcomingText]}>{visit.isCompleted ? 'Done' : 'Soon'}</Text>
+                                  </View>
+                                </View>
+                              ))}
+                            </View>
+                          )}
                         </View>
-                        <View style={styles.detailTextGroup}>
-                          <Text style={styles.detailRowTitle}>{visit.port}</Text>
-                          <Text style={styles.detailRowSubtitle}>{visit.country} • {formatVisitDate(visit.date)}</Text>
-                          <Text style={styles.detailShipText}>{visit.shipName} • {visit.cruiseName}</Text>
-                        </View>
-                        <View style={[styles.detailStatusPill, visit.isCompleted ? styles.completedPill : styles.upcomingPill]}>
-                          <Text style={[styles.detailStatusText, visit.isCompleted ? styles.completedText : styles.upcomingText]}>{visit.isCompleted ? 'Done' : 'Soon'}</Text>
-                        </View>
-                      </View>
-                    ))}
+                      );
+                    })}
                   </View>
                 )}
               </View>
@@ -300,6 +387,7 @@ export default function CountriesScreen() {
                       setFilter(item.key);
                       setSelectedYear(null);
                       setDetailMode(null);
+                      setExpandedDestinationKey(null);
                     }}
                     activeOpacity={0.78}
                     testID={`countries-filter-${item.key}`}
@@ -603,6 +691,57 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.borderLight,
     gap: SPACING.sm,
+  },
+  detailRowExpanded: {
+    backgroundColor: '#ECFEFF',
+    borderColor: 'rgba(0,151,167,0.4)',
+  },
+  destinationGroup: {
+    gap: 0,
+  },
+  destinationVisitsWrap: {
+    marginLeft: 16,
+    marginTop: 0,
+    marginBottom: SPACING.xs,
+    paddingLeft: SPACING.sm,
+    paddingTop: SPACING.xs,
+    borderLeftWidth: 2,
+    borderLeftColor: 'rgba(0,151,167,0.18)',
+    gap: SPACING.xs,
+  },
+  destinationVisitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    borderRadius: 14,
+    padding: SPACING.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(0,151,167,0.12)',
+    gap: SPACING.sm,
+  },
+  visitStatusDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+  },
+  completedDot: {
+    backgroundColor: COLORS.success,
+  },
+  upcomingDot: {
+    backgroundColor: COLORS.warning,
+  },
+  destinationVisitTextGroup: {
+    flex: 1,
+  },
+  destinationVisitTitle: {
+    fontSize: 13,
+    fontWeight: '900' as const,
+    color: COLORS.navyDeep,
+  },
+  destinationVisitSubtitle: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 2,
   },
   detailIndexBadge: {
     minWidth: 32,
