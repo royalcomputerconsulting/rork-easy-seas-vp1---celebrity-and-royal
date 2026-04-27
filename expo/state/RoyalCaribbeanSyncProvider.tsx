@@ -1174,19 +1174,16 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
               } as unknown as OfferRow;
             });
             setState(prev => {
-              const newOffers = [...prev.extractedOffers, ...offerRows];
+              const newOffers = mergeOfferRows(prev.extractedOffers, offerRows);
               extractedOffersRef.current = newOffers;
               return { ...prev, extractedOffers: newOffers };
             });
             capturedSections.current.offers = true;
-            addLog('Captured ' + String(offerRows.length) + ' Carnival VIFP offer(s)', 'success');
+            addLog('Captured ' + String(offerRows.length) + ' Carnival VIFP offer(s); continuing page scan for featured offers', 'success');
             offerRows.forEach((o: OfferRow) => {
               addLog('  ' + o.offerName + ' (' + o.offerCode + ')' + (o.interiorPrice ? ' - from ' + o.interiorPrice : ''), 'success');
             });
-            if (stepCompleteResolvers.current[1]) {
-              stepCompleteResolvers.current[1]();
-              delete stepCompleteResolvers.current[1];
-            }
+            console.log('[CarnivalSync] VIFP network payload merged; waiting for injected page extraction to finish before completing step 1');
           }
         }
         
