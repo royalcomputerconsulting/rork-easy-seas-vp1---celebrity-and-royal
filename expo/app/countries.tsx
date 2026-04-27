@@ -7,8 +7,12 @@ import { Anchor, CalendarDays, ChevronLeft, Globe2, MapPin, Ship } from 'lucide-
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { ResponsiveContainer } from '@/components/ResponsiveContainer';
 import { useCoreData } from '@/state/CoreDataProvider';
+import { ADMIN_EMAILS, useAuth } from '@/state/AuthProvider';
+import { BOOKED_CRUISES_DATA } from '@/mocks/bookedCruises';
+import { COMPLETED_CRUISES_DATA } from '@/mocks/completedCruises';
 import { buildCountryVisits, summarizeVisitsByYear, type CountryVisit, type CruiseCountryFilter } from '@/lib/cruiseCountries';
 import { createDateFromString } from '@/lib/date';
+import type { BookedCruise } from '@/types/models';
 
 const FILTERS: { key: CruiseCountryFilter; label: string }[] = [
   { key: 'all', label: 'All' },
@@ -32,21 +36,52 @@ function formatVisitDate(date: string): string {
   });
 }
 
+function getCruiseIdentity(cruise: BookedCruise): string {
+  const directId = cruise.reservationNumber || cruise.bookingId || cruise.bwoNumber;
+  if (directId) return `reservation:${directId.toLowerCase().trim()}`;
+  return `sailing:${cruise.shipName.toLowerCase().trim()}:${cruise.sailDate}:${cruise.returnDate}:${(cruise.itineraryName || cruise.destination || '').toLowerCase().trim()}`;
+}
+
+function mergeCruiseData(primaryCruises: BookedCruise[], fallbackCruises: BookedCruise[]): BookedCruise[] {
+  const cruiseMap = new Map<string, BookedCruise>();
+  fallbackCruises.forEach((cruise) => cruiseMap.set(getCruiseIdentity(cruise), cruise));
+  primaryCruises.forEach((cruise) => cruiseMap.set(getCruiseIdentity(cruise), cruise));
+  return Array.from(cruiseMap.values());
+}
+
 export default function CountriesScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ filter?: string }>();
-  const { bookedCruises } = useCoreData();
+  const { bookedCruises, cruises } = useCoreData();
+  const { authenticatedEmail } = useAuth();
   const [filter, setFilter] = useState<CruiseCountryFilter>(() => getInitialFilter(params.filter));
 
+  const sourceCruises = useMemo(() => {
+    const normalizedEmail = authenticatedEmail?.toLowerCase().trim() ?? null;
+    const shouldIncludeKnownAdminCruises = !!normalizedEmail && ADMIN_EMAILS.includes(normalizedEmail as typeof ADMIN_EMAILS[number]);
+    const knownAdminCruises = shouldIncludeKnownAdminCruises ? [...COMPLETED_CRUISES_DATA, ...BOOKED_CRUISES_DATA] : [];
+    const bookedLikeCruises = cruises.filter((cruise) => cruise.status === 'booked' || cruise.status === 'completed' || Boolean((cruise as BookedCruise).reservationNumber || (cruise as BookedCruise).bookingId));
+    const storedCruises = mergeCruiseData(bookedCruises, bookedLikeCruises);
+    const mergedCruises = mergeCruiseData(storedCruises, knownAdminCruises);
+    console.log('[Countries] Resolved country cruise source:', {
+      authenticatedEmail: normalizedEmail,
+      storedBookedCruises: bookedCruises.length,
+      storedBookedLikeCruises: bookedLikeCruises.length,
+      knownAdminCruises: knownAdminCruises.length,
+      mergedCruises: mergedCruises.length,
+    });
+    return mergedCruises;
+  }, [authenticatedEmail, bookedCruises, cruises]);
+
   const visits = useMemo(() => {
-    const builtVisits = buildCountryVisits(bookedCruises, filter);
+    const builtVisits = buildCountryVisits(sourceCruises, filter);
     console.log('[Countries] Built country visits:', {
-      cruises: bookedCruises.length,
+      cruises: sourceCruises.length,
       visits: builtVisits.length,
       filter,
     });
     return builtVisits;
-  }, [bookedCruises, filter]);
+  }, [sourceCruises, filter]);
 
   const summaries = useMemo(() => summarizeVisitsByYear(visits), [visits]);
   const yearOptions = useMemo(() => summaries.map((summary) => summary.year), [summaries]);
