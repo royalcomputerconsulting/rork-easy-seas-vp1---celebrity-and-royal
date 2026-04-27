@@ -390,6 +390,14 @@ function getShortMapLabel(port: string): string {
   return `${firstPart.slice(0, 11).trim()}…`;
 }
 
+function getCityDotRadius(visitCount: number): number {
+  return Math.min(3.1, 1.65 + Math.min(visitCount, 10) * 0.13);
+}
+
+function getCityGlowRadius(visitCount: number): number {
+  return Math.min(6.2, 2.9 + Math.min(visitCount, 14) * 0.24);
+}
+
 function buildCruiseMapRegions(points: CruiseMapPoint[]): CruiseMapRegionRow[] {
   const regionMap = new Map<MapRegionName, { destinationCount: number; visitCount: number }>();
   points.forEach((point) => {
@@ -727,8 +735,9 @@ export default function CountriesScreen() {
                         ))}
                         {cruiseMapPoints.map((point) => (
                           <G key={point.key}>
-                            <Circle cx={point.x} cy={point.y} r={Math.min(5.5, 2.6 + point.visitCount * 0.36)} fill={point.color} opacity={0.28} />
-                            <Circle cx={point.x} cy={point.y} r={Math.min(3.7, 1.8 + point.visitCount * 0.22)} fill={point.color} stroke="#FFF6D6" strokeWidth={0.65} />
+                            <Circle cx={point.x} cy={point.y} r={getCityGlowRadius(point.visitCount)} fill={point.color} opacity={0.18} />
+                            <Circle cx={point.x} cy={point.y} r={getCityDotRadius(point.visitCount)} fill={point.color} stroke="#FFF6D6" strokeWidth={0.55} opacity={0.98} />
+                            <Circle cx={point.x - 0.65} cy={point.y - 0.65} r={0.62} fill="#FFFFFF" opacity={0.72} />
                           </G>
                         ))}
                         {featuredMapLabels.map((point, index) => {
@@ -750,6 +759,14 @@ export default function CountriesScreen() {
                           {filter.toUpperCase()} ROUTES
                         </SvgText>
                       </Svg>
+                    </View>
+                    <View style={styles.mapLegendNote} testID="countries-map-city-dot-legend">
+                      <View style={styles.mapLegendDotsRow}>
+                        {cruiseMapRegions.slice(0, 4).map((region) => (
+                          <View key={`legend-dot-${region.region}`} style={[styles.mapLegendDot, { backgroundColor: region.color }]} />
+                        ))}
+                      </View>
+                      <Text style={styles.mapLegendText}>{cruiseMapPoints.length} color-coded city dots mark ports traveled to. Brighter glows mean repeat visits.</Text>
                     </View>
                     <View style={styles.mapRegionGrid}>
                       {cruiseMapRegions.map((region) => (
@@ -1211,6 +1228,37 @@ const styles = StyleSheet.create({
     backgroundColor: '#08243B',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
+  },
+  mapLegendNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: SPACING.sm,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(248,215,126,0.14)',
+  },
+  mapLegendDotsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  mapLegendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginLeft: -2,
+    borderWidth: 1,
+    borderColor: '#FFF6D6',
+  },
+  mapLegendText: {
+    flex: 1,
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: '800' as const,
+    color: 'rgba(255,244,214,0.84)',
   },
   mapRegionGrid: {
     flexDirection: 'row',
