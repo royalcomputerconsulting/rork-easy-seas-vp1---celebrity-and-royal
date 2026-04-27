@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, ScrollView } from 'react-native';
-import { X, Bell, Ship, ChevronDown, Check } from 'lucide-react-native';
+import { X, Ship, ChevronDown, Check } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME, COLORS, SHADOW } from '@/constants/theme';
 
@@ -54,7 +54,7 @@ export const MinimalistFilterBar = React.memo(function MinimalistFilterBar({
   onClearShips,
 }: MinimalistFilterBarProps) {
   const [showShipFilter, setShowShipFilter] = useState(false);
-  const alertAction = actions.find(a => a.key === 'alerts');
+  const visibleActions = actions.filter(action => action.key === 'alerts' || action.key === 'countries');
 
   const handleShipPress = (ship: string) => {
     if (onShipToggle) {
@@ -150,23 +150,28 @@ export const MinimalistFilterBar = React.memo(function MinimalistFilterBar({
         </View>
 
         <View style={styles.actionsContainer}>
-          {alertAction && (
-            <TouchableOpacity
-              style={styles.actionPill}
-              onPress={alertAction.onPress}
-              activeOpacity={0.7}
-            >
-              <Bell size={14} color={COLORS.textNavy} />
-              <Text style={styles.actionPillText}>Alerts</Text>
-              {alertAction.badge !== undefined && alertAction.badge > 0 && (
-                <View style={styles.alertBadge}>
-                  <Text style={styles.alertBadgeText}>
-                    {alertAction.badge > 9 ? '9+' : alertAction.badge}
-                  </Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          )}
+          {visibleActions.map((action) => {
+            const ActionIcon = action.icon;
+            return (
+              <TouchableOpacity
+                key={action.key}
+                style={[styles.actionPill, action.active && styles.actionPillActive]}
+                onPress={action.onPress}
+                activeOpacity={0.7}
+                testID={`filter-action-${action.key}`}
+              >
+                <ActionIcon size={14} color={action.active ? COLORS.white : COLORS.textNavy} />
+                <Text style={[styles.actionPillText, action.active && styles.actionPillTextActive]}>{action.label}</Text>
+                {action.badge !== undefined && action.badge > 0 && (
+                  <View style={styles.alertBadge}>
+                    <Text style={styles.alertBadgeText}>
+                      {action.badge > 9 ? '9+' : action.badge}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </View>
 
@@ -344,10 +349,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.borderLight,
   },
+  actionPillActive: {
+    backgroundColor: COLORS.navyDeep,
+    borderColor: COLORS.navyDeep,
+  },
   actionPillText: {
     fontSize: 12,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
     color: COLORS.textNavy,
+  },
+  actionPillTextActive: {
+    color: COLORS.white,
   },
   alertBadge: {
     backgroundColor: COLORS.error,

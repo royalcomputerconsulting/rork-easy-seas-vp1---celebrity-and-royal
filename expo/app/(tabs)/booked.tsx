@@ -30,6 +30,7 @@ import {
   Target,
   DollarSign,
   Crown,
+  Globe2,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
@@ -272,6 +273,12 @@ export default function BookedScreen() {
     console.log('[Booked] Opening add cruise modal');
     setShowAddModal(true);
   }, []);
+
+  const handleCountriesPress = useCallback(() => {
+    const countryFilter = filter === 'upcoming' || filter === 'completed' ? filter : 'all';
+    console.log('[Booked] Opening Countries view:', countryFilter);
+    router.push({ pathname: '/countries' as any, params: { filter: countryFilter } });
+  }, [filter, router]);
 
   const handleSaveNewCruise = useCallback(async (cruise: BookedCruise) => {
     console.log('[Booked] Saving new cruise:', cruise);
@@ -648,6 +655,7 @@ export default function BookedScreen() {
             activeTab={filter}
             onTabPress={(key) => setFilter(key as FilterType)}
             actions={[
+              { key: 'countries', label: 'Countries', icon: Globe2, onPress: handleCountriesPress },
               { key: 'refresh', label: 'Refresh', icon: RotateCcw, onPress: onRefresh },
               { key: 'hide', label: hideCompleted ? 'Show All' : 'Hide Done', icon: EyeOff, active: hideCompleted, onPress: () => setHideCompleted(!hideCompleted) },
               { key: 'clear', label: 'Clear Filters', icon: X, onPress: clearFilters },
