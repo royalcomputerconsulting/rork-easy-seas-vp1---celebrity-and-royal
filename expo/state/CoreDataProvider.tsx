@@ -26,7 +26,7 @@ import { clearUserSpecificData } from "@/lib/storage/storageOperations";
 import { quotaSafeGetItem, quotaSafeSetItem, quotaSafeSetJsonItem, quotaSafeRemoveItem } from "@/lib/storage/quotaSafeStorage";
 import { ALL_STORAGE_KEYS, getUserScopedKey } from "@/lib/storage/storageKeys";
 import { buildOwnerScopeId, getInstallationId } from "@/lib/storage/installationId";
-import { filterRecordsForOwner, isOwnerScopeForEmail, stampRecordsForOwner } from "@/lib/storage/dataOwnership";
+import { containsKnownForeignPersonalData, filterRecordsForOwner, isOwnerScopeForEmail, stampRecordsForOwner } from "@/lib/storage/dataOwnership";
 import { updateAllCruiseLifecycles } from "@/lib/lifecycleManager";
 
 const getMockCruises = (): { BOOKED_CRUISES_DATA: BookedCruise[]; COMPLETED_CRUISES_DATA: BookedCruise[] } => {
@@ -115,6 +115,15 @@ function getStoredItemCount(rawValue: string | null): number {
 
 function prepareOwnedRecords<T extends object>(records: T[], ownerScopeId: string | null, email: string | null, label: string): T[] {
   return stampRecordsForOwner(filterRecordsForOwner(records, ownerScopeId, email, label), ownerScopeId, email);
+}
+
+function sanitizeForeignValue<T>(value: T, email: string | null, label: string): T | undefined {
+  if (containsKnownForeignPersonalData(value, email)) {
+    console.warn('[CoreData] Dropped user-identifiable data outside active user scope:', { label, email });
+    return undefined;
+  }
+
+  return value;
 }
 
 const getFirstTimeUserSampleData = (): { sampleCruises: BookedCruise[]; sampleOffers: CasinoOffer[] } => {
@@ -488,9 +497,15 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       const parsedBooked = prepareOwnedRecords<BookedCruise>(bookedData ? JSON.parse(bookedData) as BookedCruise[] : [], ownerScopeId, authenticatedEmail, 'backend-sync booked cruises');
       const parsedOffers = prepareOwnedRecords<CasinoOffer>(offersData ? JSON.parse(offersData) as CasinoOffer[] : [], ownerScopeId, authenticatedEmail, 'backend-sync casino offers');
       const parsedEvents = prepareOwnedRecords<CalendarEvent>(eventsData ? JSON.parse(eventsData) as CalendarEvent[] : [], ownerScopeId, authenticatedEmail, 'backend-sync calendar events');
-      const parsedSettings = settingsData ? JSON.parse(settingsData) as Record<string, unknown> : undefined;
-      const parsedUsers = usersData ? JSON.parse(usersData) as unknown[] : [];
-      const parsedCurrentUserId = currentUserIdData || null;
+      const parsedSettings = settingsData ? sanitizeForeignValue(JSON.parse(settingsData) as Record<string, unknown>, authenticatedEmail, 'backend-sync settings') : undefined;
+      const parsedUsers = prepareOwnedRecords<Record<string, unknown>>(
+        usersData ? (JSON.parse(usersData) as unknown[]).filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)) : [],
+        ownerScopeId,
+        authenticatedEmail,
+        'backend-sync user profiles'
+      );
+      const parsedUserIds = new Set(parsedUsers.map((user) => typeof user.id === 'string' ? user.id : null).filter((id): id is string => id !== null));
+      const parsedCurrentUserId = currentUserIdData && (parsedUserIds.size === 0 || parsedUserIds.has(currentUserIdData)) ? currentUserIdData : null;
       const syncableSettings = parsedSettings ? { ...parsedSettings } : undefined;
       if (syncableSettings && parsedUsers.length > 0) {
         syncableSettings.__easySeasUserProfiles = parsedUsers;
@@ -499,13 +514,13 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         syncableSettings.__easySeasCurrentUserId = parsedCurrentUserId;
       }
       const parsedPoints = pointsData ? parseInt(pointsData, 10) : undefined;
-      const parsedProfile = profileData ? JSON.parse(profileData) : undefined;
+      const parsedProfile = profileData ? sanitizeForeignValue(JSON.parse(profileData), authenticatedEmail, 'backend-sync club profile') : undefined;
       const parsedExtendedLoyalty = extendedLoyaltyDataRaw
-        ? {
+        ? sanitizeForeignValue({
             extendedLoyaltyData: JSON.parse(extendedLoyaltyDataRaw),
             manualClubRoyalePoints: parseOptionalStoredNumber(manualClubRoyalePointsRaw),
             manualCrownAnchorPoints: parseOptionalStoredNumber(manualCrownAnchorPointsRaw),
-          }
+          }, authenticatedEmail, 'backend-sync loyalty data')
         : (
             parseOptionalStoredNumber(manualClubRoyalePointsRaw) !== null || parseOptionalStoredNumber(manualCrownAnchorPointsRaw) !== null
               ? {
@@ -712,16 +727,27 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
           savePromises.push(quotaSafeSetJsonItem(scopedKeys.CALENDAR_EVENTS, ownedBackendEvents));
         }
         if (userData.settings) {
-          savePromises.push(quotaSafeSetJsonItem(scopedKeys.SETTINGS, userData.settings));
+          const sanitizedSettings = sanitizeForeignValue(userData.settings, authenticatedEmail, 'backend-restore settings');
+          if (sanitizedSettings !== undefined) {
+            savePromises.push(quotaSafeSetJsonItem(scopedKeys.SETTINGS, sanitizedSettings));
+          } else {
+            savePromises.push(quotaSafeRemoveItem(scopedKeys.SETTINGS));
+          }
         }
         if (userData.userPoints !== undefined) {
           savePromises.push(quotaSafeSetItem(scopedKeys.USER_POINTS, userData.userPoints.toString()));
         }
         if (userData.clubRoyaleProfile) {
-          savePromises.push(quotaSafeSetJsonItem(scopedKeys.CLUB_PROFILE, userData.clubRoyaleProfile));
+          const sanitizedClubProfile = sanitizeForeignValue(userData.clubRoyaleProfile, authenticatedEmail, 'backend-restore club profile');
+          if (sanitizedClubProfile !== undefined) {
+            savePromises.push(quotaSafeSetJsonItem(scopedKeys.CLUB_PROFILE, sanitizedClubProfile));
+          } else {
+            savePromises.push(quotaSafeRemoveItem(scopedKeys.CLUB_PROFILE));
+          }
         }
         if (userData.loyaltyData !== undefined) {
-          const normalizedLoyaltyData = normalizeLoyaltySyncPayload(userData.loyaltyData);
+          const sanitizedLoyaltyData = sanitizeForeignValue(userData.loyaltyData, authenticatedEmail, 'backend-restore loyalty data');
+          const normalizedLoyaltyData = normalizeLoyaltySyncPayload(sanitizedLoyaltyData);
           const scopedLoyaltyKeys = {
             EXTENDED_LOYALTY_DATA: getUserScopedKey(ALL_STORAGE_KEYS.EXTENDED_LOYALTY_DATA, authenticatedEmail),
             MANUAL_CLUB_ROYALE_POINTS: getUserScopedKey(ALL_STORAGE_KEYS.MANUAL_CLUB_ROYALE_POINTS, authenticatedEmail),
@@ -842,7 +868,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
 
       if (snapshot.lastSync) setLastSyncDate(snapshot.lastSync);
 
-      const metadata = processMetadata(snapshot, ownedStatus.isFirstTimeUser);
+      const metadata = processMetadata(snapshot, ownedStatus.isFirstTimeUser, authenticatedEmail);
       if (metadata.settings) setSettings(metadata.settings);
       if (metadata.userPoints !== null) setUserPointsState(metadata.userPoints);
       if (metadata.clubRoyaleProfile) setClubRoyaleProfileState(metadata.clubRoyaleProfile);

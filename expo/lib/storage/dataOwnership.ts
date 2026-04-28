@@ -2,6 +2,42 @@ export const DATA_OWNER_SCOPE_FIELD = 'dataOwnerScopeId' as const;
 export const DATA_OWNER_EMAIL_FIELD = 'dataOwnerEmail' as const;
 export const DATA_OWNER_SYNCED_AT_FIELD = 'dataOwnerSyncedAt' as const;
 
+const KNOWN_PRIVATE_OWNER_RULES: { ownerEmails: string[]; signatures: string[] }[] = [
+  {
+    ownerEmails: ['scott.merlis1@gmail.com', 's@a.com'],
+    signatures: ['scott merlis', 'justin pence'],
+  },
+];
+
+function normalizeSearchText(value: string): string {
+  return value.toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function valueContainsSignature(value: unknown, signatures: string[], depth = 0): boolean {
+  if (depth > 8 || value === null || value === undefined) {
+    return false;
+  }
+
+  if (typeof value === 'string') {
+    const normalizedValue = normalizeSearchText(value);
+    return signatures.some((signature) => normalizedValue.includes(signature));
+  }
+
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return false;
+  }
+
+  if (Array.isArray(value)) {
+    return value.some((entry) => valueContainsSignature(entry, signatures, depth + 1));
+  }
+
+  if (typeof value === 'object') {
+    return Object.values(value as Record<string, unknown>).some((entry) => valueContainsSignature(entry, signatures, depth + 1));
+  }
+
+  return false;
+}
+
 export interface OwnedDataRecord {
   dataOwnerScopeId?: string;
   dataOwnerEmail?: string;
@@ -28,9 +64,25 @@ export function isOwnerScopeForEmail(ownerScopeId: string | null | undefined, em
   return normalizedScope === normalizedEmail || normalizedScope.startsWith(`${normalizedEmail}::`);
 }
 
+export function containsKnownForeignPersonalData(value: unknown, email: string | null | undefined): boolean {
+  const normalizedEmail = normalizeOwnerEmail(email);
+
+  return KNOWN_PRIVATE_OWNER_RULES.some((rule) => {
+    if (normalizedEmail && rule.ownerEmails.includes(normalizedEmail)) {
+      return false;
+    }
+
+    return valueContainsSignature(value, rule.signatures.map(normalizeSearchText));
+  });
+}
+
 export function isRecordForOwner(record: unknown, ownerScopeId: string | null | undefined, email: string | null | undefined): boolean {
   if (!record || typeof record !== 'object') {
     return true;
+  }
+
+  if (containsKnownForeignPersonalData(record, email)) {
+    return false;
   }
 
   const normalizedEmail = normalizeOwnerEmail(email);

@@ -9,6 +9,7 @@ import {
 import { updateAllCruiseLifecycles } from "@/lib/lifecycleManager";
 import { STORAGE_KEYS, DEFAULT_SETTINGS, getScopedStorageKeys, type AppSettings } from "./storageConfig";
 import { quotaSafeGetItem } from "@/lib/storage/quotaSafeStorage";
+import { containsKnownForeignPersonalData } from "@/lib/storage/dataOwnership";
 
 export interface StorageSnapshot {
   cruisesData: string | null;
@@ -255,11 +256,13 @@ export function processCalendarEvents(
 export function processMetadata(
   snapshot: StorageSnapshot,
   isFirstTimeUser: boolean,
+  email?: string | null,
 ): ProcessedMetadata {
   const { settingsData, pointsData, profileData } = snapshot;
 
-  const settings: AppSettings | null = settingsData
-    ? { ...DEFAULT_SETTINGS, ...JSON.parse(settingsData) }
+  const parsedSettings = settingsData ? JSON.parse(settingsData) : null;
+  const settings: AppSettings | null = parsedSettings && !containsKnownForeignPersonalData(parsedSettings, email)
+    ? { ...DEFAULT_SETTINGS, ...parsedSettings }
     : null;
 
   const userPoints: number | null = pointsData
@@ -268,8 +271,13 @@ export function processMetadata(
 
   let clubRoyaleProfile: ClubRoyaleProfile | null = null;
   if (profileData) {
-    clubRoyaleProfile = JSON.parse(profileData);
-    console.log('[CoreData] Loaded existing loyalty profile');
+    const parsedProfile = JSON.parse(profileData) as ClubRoyaleProfile;
+    if (!containsKnownForeignPersonalData(parsedProfile, email)) {
+      clubRoyaleProfile = parsedProfile;
+      console.log('[CoreData] Loaded existing loyalty profile');
+    } else {
+      console.warn('[CoreData] Ignored loyalty profile outside active user scope');
+    }
   } else if (isFirstTimeUser) {
     console.log('[CoreData] First time user - initializing with default loyalty profile');
     clubRoyaleProfile = SAMPLE_CLUB_ROYALE_PROFILE;
