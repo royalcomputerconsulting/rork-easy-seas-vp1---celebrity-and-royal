@@ -93,7 +93,6 @@ export async function getAllStoredData(email?: string | null): Promise<FullAppDa
       manualCrownAnchor,
       userPoints,
       scopedUsersData,
-      globalUsersData,
       machineEncyclopediaData,
       myAtlasData,
       crewEntriesData,
@@ -112,7 +111,6 @@ export async function getAllStoredData(email?: string | null): Promise<FullAppDa
       AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.MANUAL_CROWN_ANCHOR_POINTS)),
       AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.USER_POINTS)),
       AsyncStorage.getItem(scopedUsersKey),
-      AsyncStorage.getItem(ALL_STORAGE_KEYS.USERS),
       AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.MACHINE_ENCYCLOPEDIA)),
       AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.MY_SLOT_ATLAS)),
       AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_ENTRIES)),
@@ -120,8 +118,8 @@ export async function getAllStoredData(email?: string | null): Promise<FullAppDa
       quotaSafeGetItem(extendedLoyaltyKey),
     ]);
 
-    const usersData = scopedUsersData || globalUsersData;
-    console.log('[DataBundle] Users lookup: scopedKey=', scopedUsersKey, 'found=', !!scopedUsersData, ', globalFallback=', !!globalUsersData);
+    const usersData = scopedUsersData;
+    console.log('[DataBundle] Users lookup: scopedKey=', scopedUsersKey, 'found=', !!scopedUsersData);
 
     let cruises: Cruise[] = [];
     let bookedCruises: BookedCruise[] = [];
@@ -543,8 +541,6 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
     if (usersToImport && usersToImport.length > 0) {
       const normalizedEmail = email ? email.toLowerCase().trim() : null;
       
-      // Always normalise the user email to the currently authenticated account so
-      // UserProvider (which reads from a scoped key) can match the profile.
       if (normalizedEmail) {
         usersToImport = usersToImport.map(u => ({
           ...u,
@@ -552,9 +548,6 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
         }));
       }
 
-      // UserProvider stores/reads users under an email-scoped key even though
-      // ALL_STORAGE_KEYS.USERS appears in GLOBAL_KEYS.  Write directly to the
-      // scoped key so syncFromStorage() picks up the data immediately.
       const scopedUsersKey = normalizedEmail
         ? getUserScopedKey(ALL_STORAGE_KEYS.USERS, normalizedEmail)
         : ALL_STORAGE_KEYS.USERS;

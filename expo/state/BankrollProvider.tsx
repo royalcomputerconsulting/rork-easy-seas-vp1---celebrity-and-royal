@@ -176,6 +176,9 @@ export const [BankrollProvider, useBankroll] = createContextHook((): BankrollSta
         const parsed = JSON.parse(storedAlerts) as BankrollAlert[];
         setAlerts(parsed);
         console.log('[BankrollProvider] Loaded alerts:', parsed.length);
+      } else {
+        setAlerts([]);
+        console.log('[BankrollProvider] No scoped alerts found, using empty state');
       }
     } catch (error) {
       console.error('[BankrollProvider] Failed to load data:', error);

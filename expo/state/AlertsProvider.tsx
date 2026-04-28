@@ -108,46 +108,84 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
   useEffect(() => { dismissedIdsRef.current = dismissedIds; }, [dismissedIds]);
   useEffect(() => { dismissedEntitiesRef.current = dismissedEntities; }, [dismissedEntities]);
 
+  const loadStoredData = useCallback(async () => {
+    try {
+      const scopedKeys = {
+        ALERTS: getUserScopedKey(BASE_ALERTS_KEY, authenticatedEmail),
+        RULES: getUserScopedKey(BASE_RULES_KEY, authenticatedEmail),
+        DISMISSED_IDS: getUserScopedKey(BASE_DISMISSED_IDS_KEY, authenticatedEmail),
+        DISMISSED_ENTITIES: getUserScopedKey(BASE_DISMISSED_ENTITIES_KEY, authenticatedEmail),
+      };
+      skRef.current = scopedKeys;
+      const [storedAlerts, storedRules, storedDismissed, storedDismissedEntities] = await Promise.all([
+        AsyncStorage.getItem(scopedKeys.ALERTS),
+        AsyncStorage.getItem(scopedKeys.RULES),
+        AsyncStorage.getItem(scopedKeys.DISMISSED_IDS),
+        AsyncStorage.getItem(scopedKeys.DISMISSED_ENTITIES),
+      ]);
+
+      const parsedAlerts = storedAlerts ? JSON.parse(storedAlerts) as Alert[] : [];
+      setAlerts(parsedAlerts);
+      console.log('[AlertsProvider] Loaded scoped alerts:', { email: authenticatedEmail, count: parsedAlerts.length });
+
+      const parsedRules = storedRules ? JSON.parse(storedRules) as AlertRule[] : DEFAULT_ALERT_RULES;
+      setRules(parsedRules);
+      console.log('[AlertsProvider] Loaded scoped rules:', { email: authenticatedEmail, count: parsedRules.length });
+
+      const parsedDismissed = storedDismissed ? JSON.parse(storedDismissed) as string[] : [];
+      setDismissedIds(new Set(parsedDismissed));
+      console.log('[AlertsProvider] Loaded scoped dismissed IDs:', { email: authenticatedEmail, count: parsedDismissed.length });
+
+      const parsedDismissedEntities = storedDismissedEntities ? JSON.parse(storedDismissedEntities) as string[] : [];
+      setDismissedEntities(new Set(parsedDismissedEntities));
+      console.log('[AlertsProvider] Loaded scoped dismissed entities:', { email: authenticatedEmail, count: parsedDismissedEntities.length });
+    } catch (error) {
+      console.error('[AlertsProvider] Error loading scoped stored data:', error);
+      setAlerts([]);
+      setRules(DEFAULT_ALERT_RULES);
+      setDismissedIds(new Set());
+      setDismissedEntities(new Set());
+    }
+  }, [authenticatedEmail]);
+
   useEffect(() => {
-    const loadStoredData = async () => {
-      try {
-        const [storedAlerts, storedRules, storedDismissed] = await Promise.all([
-          AsyncStorage.getItem(skRef.current.ALERTS),
-          AsyncStorage.getItem(skRef.current.RULES),
-          AsyncStorage.getItem(skRef.current.DISMISSED_IDS),
-        ]);
+    setAlerts([]);
+    setRules(DEFAULT_ALERT_RULES);
+    setDismissedIds(new Set());
+    setDismissedEntities(new Set());
+    void loadStoredData();
+  }, [authenticatedEmail, loadStoredData]);
 
-        if (storedAlerts) {
-          const parsed = JSON.parse(storedAlerts);
-          setAlerts(parsed);
-          console.log('[AlertsProvider] Loaded stored alerts:', parsed.length);
-        }
-
-        if (storedRules) {
-          const parsed = JSON.parse(storedRules);
-          setRules(parsed);
-          console.log('[AlertsProvider] Loaded stored rules:', parsed.length);
-        }
-
-        if (storedDismissed) {
-          const parsed = JSON.parse(storedDismissed);
-          setDismissedIds(new Set(parsed));
-          console.log('[AlertsProvider] Loaded dismissed IDs:', parsed.length);
-        }
-
-        const storedDismissedEntities = await AsyncStorage.getItem(skRef.current.DISMISSED_ENTITIES);
-        if (storedDismissedEntities) {
-          const parsed = JSON.parse(storedDismissedEntities);
-          setDismissedEntities(new Set(parsed));
-          console.log('[AlertsProvider] Loaded dismissed entities:', parsed.length);
-        }
-      } catch (error) {
-        console.error('[AlertsProvider] Error loading stored data:', error);
-      }
+  useEffect(() => {
+    const handleDataCleared = () => {
+      console.log('[AlertsProvider] Data cleared event detected, resetting scoped alerts');
+      setAlerts([]);
+      setRules(DEFAULT_ALERT_RULES);
+      setAnomalies([]);
+      setInsights([]);
+      setDismissedIds(new Set());
+      setDismissedEntities(new Set());
+      setLastDetectionRun(null);
     };
 
-    void loadStoredData();
-  }, []);
+    const handleCloudRestore = () => {
+      console.log('[AlertsProvider] Cloud data restored, reloading scoped alerts');
+      void loadStoredData();
+    };
+
+    try {
+      if (typeof window !== 'undefined' && typeof window.addEventListener !== 'undefined') {
+        window.addEventListener('appDataCleared', handleDataCleared);
+        window.addEventListener('cloudDataRestored', handleCloudRestore);
+        return () => {
+          window.removeEventListener('appDataCleared', handleDataCleared);
+          window.removeEventListener('cloudDataRestored', handleCloudRestore);
+        };
+      }
+    } catch (error) {
+      console.log('[AlertsProvider] Could not set up scoped storage event listeners:', error);
+    }
+  }, [loadStoredData]);
 
   useEffect(() => {
     const saveAlerts = async () => {

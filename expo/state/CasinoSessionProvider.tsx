@@ -205,6 +205,9 @@ export const [CasinoSessionProvider, useCasinoSessions] = createContextHook((): 
         const parsed = JSON.parse(stored) as CasinoSession[];
         setSessions(parsed);
         console.log('[CasinoSessionProvider] Loaded sessions:', parsed.length);
+      } else {
+        setSessions([]);
+        console.log('[CasinoSessionProvider] No scoped sessions found, using empty state');
       }
     } catch (error) {
       console.error('[CasinoSessionProvider] Failed to load sessions:', error);

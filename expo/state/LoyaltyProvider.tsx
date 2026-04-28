@@ -196,7 +196,11 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
           console.log('[LoyaltyProvider] ✓ Loaded extended loyalty data from storage');
         } catch (parseError) {
           console.warn('[LoyaltyProvider] Failed to parse extended loyalty data:', parseError);
+          setExtendedLoyaltyState(null);
         }
+      } else {
+        setExtendedLoyaltyState(null);
+        console.log('[LoyaltyProvider] No scoped extended loyalty data found, using empty state');
       }
       
       console.log('[LoyaltyProvider] ✓ Manual points loaded successfully:', {
