@@ -19,7 +19,7 @@ import { Download, FileDown, RefreshCcw, Shield, Ship } from 'lucide-react-nativ
 import { SeaPassWebPass } from '@/components/seapass/SeaPassWebPass';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { BORDER_RADIUS, COLORS, SPACING, TYPOGRAPHY } from '@/constants/theme';
-import { SEA_PASS_APPROVED_SCREENSHOT_URL, SEA_PASS_DEFAULTS, SEA_PASS_VIEWBOX, type SeaPassWebPassData } from '@/lib/seaPassWebPass';
+import { SEA_PASS_APPROVED_SCREENSHOT_URL, SEA_PASS_DEFAULTS, SEA_PASS_TERMINAL_SHIP_CODES, SEA_PASS_VIEWBOX, type SeaPassWebPassData } from '@/lib/seaPassWebPass';
 import { exportSeaPassPdf, exportSeaPassPng } from '@/lib/seapassExport';
 import { useAuth } from '@/state/AuthProvider';
 
@@ -81,14 +81,25 @@ const FIELD_CONFIGS: SeaPassFieldConfig[] = [
     keyboardType: 'default',
     autoCapitalize: 'characters',
   },
+  {
+    key: 'terminal',
+    label: 'Terminal',
+    placeholder: 'A',
+    keyboardType: 'default',
+    autoCapitalize: 'characters',
+  },
 ];
 
 function normalizeSeaPassFieldValue(key: keyof SeaPassWebPassData, value: string): string {
-  if (key === 'ship' || key === 'muster') {
+  if (key === 'ship' || key === 'muster' || key === 'terminal') {
     return value.toUpperCase();
   }
 
   return value;
+}
+
+function shouldDefaultTerminalToA(shipCode: string): boolean {
+  return SEA_PASS_TERMINAL_SHIP_CODES.includes(shipCode.trim().toUpperCase() as typeof SEA_PASS_TERMINAL_SHIP_CODES[number]);
 }
 
 function SeaPassGeneratorScreen() {
@@ -128,10 +139,19 @@ function SeaPassGeneratorScreen() {
   const handleFieldChange = useCallback((key: keyof SeaPassWebPassData, value: string) => {
     const normalizedValue = normalizeSeaPassFieldValue(key, value);
     console.log('[SeaPassGenerator] Field changed', { key, value: normalizedValue });
-    setFormData((current) => ({
-      ...current,
-      [key]: normalizedValue,
-    }));
+    setFormData((current) => {
+      const next: SeaPassWebPassData = {
+        ...current,
+        [key]: normalizedValue,
+      };
+
+      if (key === 'ship' && shouldDefaultTerminalToA(normalizedValue) && current.terminal.trim().length === 0) {
+        console.log('[SeaPassGenerator] Auto-defaulting terminal to A for supported ship', { ship: normalizedValue });
+        next.terminal = 'A';
+      }
+
+      return next;
+    });
   }, []);
 
   const handleReset = useCallback(() => {
@@ -193,6 +213,7 @@ function SeaPassGeneratorScreen() {
               muster={formData.muster}
               reservation={formData.reservation}
               ship={formData.ship}
+              terminal={formData.terminal}
               width={SEA_PASS_VIEWBOX.width}
               style={styles.hiddenExportPass}
               testID="seapass-generator.export-pass"
@@ -228,6 +249,7 @@ function SeaPassGeneratorScreen() {
                     muster={formData.muster}
                     reservation={formData.reservation}
                     ship={formData.ship}
+                    terminal={formData.terminal}
                     width={previewWidth}
                     style={styles.previewPass}
                     testID="seapass-generator.preview"
@@ -248,7 +270,7 @@ function SeaPassGeneratorScreen() {
                     <Shield size={14} color="#5A319F" />
                     <Text style={styles.lockedBadgeText}>Locked Elements</Text>
                   </View>
-                  <Text style={styles.lockedInfoText}>Scott Merlis • DIAMOND PLUS • SIGNATURE • LOS ANGELES, CALIFORNIA</Text>
+                  <Text style={styles.lockedInfoText}>Scott Merlis • DIAMOND PLUS • SIGNATURE • LOS ANGELES, CALIFORNIA • Terminal is optional for IC, SG, and LE sailings.</Text>
                 </View>
 
                 <View style={styles.fieldsGrid}>
