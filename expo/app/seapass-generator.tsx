@@ -82,6 +82,13 @@ const FIELD_CONFIGS: SeaPassFieldConfig[] = [
     autoCapitalize: 'characters',
   },
   {
+    key: 'port',
+    label: 'Port',
+    placeholder: 'MIAMI, FLORIDA',
+    keyboardType: 'default',
+    autoCapitalize: 'characters',
+  },
+  {
     key: 'terminal',
     label: 'Terminal',
     placeholder: 'A',
@@ -91,7 +98,7 @@ const FIELD_CONFIGS: SeaPassFieldConfig[] = [
 ];
 
 function normalizeSeaPassFieldValue(key: keyof SeaPassWebPassData, value: string): string {
-  if (key === 'ship' || key === 'muster' || key === 'terminal') {
+  if (key === 'ship' || key === 'muster' || key === 'port' || key === 'terminal') {
     return value.toUpperCase();
   }
 
@@ -213,6 +220,7 @@ function SeaPassGeneratorScreen() {
               muster={formData.muster}
               reservation={formData.reservation}
               ship={formData.ship}
+              port={formData.port}
               terminal={formData.terminal}
               width={SEA_PASS_VIEWBOX.width}
               style={styles.hiddenExportPass}
@@ -249,6 +257,7 @@ function SeaPassGeneratorScreen() {
                     muster={formData.muster}
                     reservation={formData.reservation}
                     ship={formData.ship}
+                    port={formData.port}
                     terminal={formData.terminal}
                     width={previewWidth}
                     style={styles.previewPass}
@@ -270,7 +279,7 @@ function SeaPassGeneratorScreen() {
                     <Shield size={14} color="#5A319F" />
                     <Text style={styles.lockedBadgeText}>Locked Elements</Text>
                   </View>
-                  <Text style={styles.lockedInfoText}>Scott Merlis • DIAMOND PLUS • SIGNATURE • LOS ANGELES, CALIFORNIA • Terminal is optional for IC, SG, and LE sailings.</Text>
+                  <Text style={styles.lockedInfoText}>Scott Merlis • DIAMOND PLUS • SIGNATURE • Port is editable • Terminal is optional for IC, SG, and LE sailings.</Text>
                 </View>
 
                 <View style={styles.fieldsGrid}>
