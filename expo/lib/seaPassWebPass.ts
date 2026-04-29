@@ -85,6 +85,7 @@ export const SEA_PASS_PREVIEW_BACKGROUND = '#EFF3F8';
 export const SEA_PASS_EXPORT_BACKGROUND = '#FFFFFF';
 export const SEA_PASS_FONT_STACK = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 export const SEA_PASS_APPROVED_SCREENSHOT_SOURCE_URL = 'https://r2-pub.rork.com/attachments/vvcelze4prvyhmkje7pah.png';
+export const SEA_PASS_APPROVED_SCREENSHOT_CORS_PROXY_URL = 'https://images.weserv.nl/?url=r2-pub.rork.com/attachments/vvcelze4prvyhmkje7pah.png&output=png';
 
 function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, '');
@@ -110,6 +111,18 @@ export const SEA_PASS_APPROVED_SCREENSHOT_URL = getSeaPassApprovedScreenshotUrl(
 
 let approvedSeaPassImageDataUrlPromise: Promise<string> | null = null;
 let approvedSeaPassSourceImageDataUrlPromise: Promise<string> | null = null;
+
+function getUniqueUrls(urls: string[]): string[] {
+  return urls.filter((url, index) => url.trim().length > 0 && urls.indexOf(url) === index);
+}
+
+function getSeaPassApprovedImageCandidates(): string[] {
+  return getUniqueUrls([
+    SEA_PASS_APPROVED_SCREENSHOT_URL,
+    SEA_PASS_APPROVED_SCREENSHOT_CORS_PROXY_URL,
+    SEA_PASS_APPROVED_SCREENSHOT_SOURCE_URL,
+  ]);
+}
 
 export const SEA_PASS_LAYOUT = {
   cardX: 24,
@@ -354,44 +367,68 @@ function shouldRenderDynamicOverlay(key: SeaPassOverlayKey, value: string): bool
 }
 
 async function fetchImageAsDataUrl(url: string): Promise<string> {
-  const response = await fetch(url);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 18_000);
 
-  if (!response.ok) {
-    throw new Error(`Unable to load approved SeaPass image (${response.status}).`);
+  try {
+    console.log('[SeaPassWebPass] Fetching approved shell for export', { url });
+    const response = await fetch(url, { signal: controller.signal });
+
+    if (!response.ok) {
+      throw new Error(`Unable to load approved SeaPass image (${response.status}).`);
+    }
+
+    const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
+
+    if (contentType.length > 0 && !contentType.includes('image')) {
+      throw new Error(`Approved SeaPass image returned ${contentType}.`);
+    }
+
+    const blob = await response.blob();
+
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+
+      reader.onloadend = () => {
+        const result = reader.result;
+
+        if (typeof result === 'string') {
+          resolve(result);
+          return;
+        }
+
+        reject(new Error('Unable to convert approved SeaPass image for web export.'));
+      };
+
+      reader.onerror = () => reject(new Error('Unable to read approved SeaPass image for web export.'));
+      reader.readAsDataURL(blob);
+    });
+  } finally {
+    clearTimeout(timeout);
   }
-
-  const blob = await response.blob();
-
-  return await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-
-    reader.onloadend = () => {
-      const result = reader.result;
-
-      if (typeof result === 'string') {
-        resolve(result);
-        return;
-      }
-
-      reject(new Error('Unable to convert approved SeaPass image for web export.'));
-    };
-
-    reader.onerror = () => reject(new Error('Unable to read approved SeaPass image for web export.'));
-    reader.readAsDataURL(blob);
-  });
 }
 
 async function getSeaPassApprovedScreenshotDataUrl(): Promise<string> {
   if (!approvedSeaPassImageDataUrlPromise) {
-    approvedSeaPassImageDataUrlPromise = fetchImageAsDataUrl(SEA_PASS_APPROVED_SCREENSHOT_URL)
-      .catch((error) => {
-        console.log('[SeaPassWebPass] API proxy fetch failed, falling back to source URL:', error instanceof Error ? error.message : String(error));
-        return fetchImageAsDataUrl(SEA_PASS_APPROVED_SCREENSHOT_SOURCE_URL);
-      })
-      .catch((error) => {
-        approvedSeaPassImageDataUrlPromise = null;
-        throw error;
-      });
+    approvedSeaPassImageDataUrlPromise = (async () => {
+      let lastError: unknown = null;
+
+      for (const url of getSeaPassApprovedImageCandidates()) {
+        try {
+          const dataUrl = await fetchImageAsDataUrl(url);
+          console.log('[SeaPassWebPass] Approved SeaPass shell ready for export', { url, length: dataUrl.length });
+          return dataUrl;
+        } catch (error) {
+          lastError = error;
+          console.log('[SeaPassWebPass] Approved shell candidate failed', { url, error: error instanceof Error ? error.message : String(error) });
+        }
+      }
+
+      throw lastError instanceof Error ? lastError : new Error('Unable to load approved SeaPass image for export.');
+    })().catch((error) => {
+      approvedSeaPassImageDataUrlPromise = null;
+      throw error;
+    });
   }
 
   return approvedSeaPassImageDataUrlPromise;
@@ -578,7 +615,7 @@ export function buildSeaPassSvgMarkup(
 }
 
 export function buildSeaPassPrintHtml(input: Partial<SeaPassWebPassData>): string {
-  const svg = buildSeaPassSvgMarkup(input, SEA_PASS_EXPORT_BACKGROUND, SEA_PASS_APPROVED_SCREENSHOT_URL);
+  const svg = buildSeaPassSvgMarkup(input, SEA_PASS_EXPORT_BACKGROUND, SEA_PASS_APPROVED_SCREENSHOT_SOURCE_URL);
 
   return `
 <!DOCTYPE html>
@@ -626,7 +663,7 @@ export async function exportSeaPassPngOnWeb(input: Partial<SeaPassWebPassData>, 
     console.log('[SeaPassWebPass] Approved SeaPass shell embedded for exact PNG export');
   } catch (error) {
     console.error('[SeaPassWebPass] Unable to prepare approved SeaPass shell for PNG export', error);
-    throw new Error('The approved SeaPass artwork is not ready for export yet. Please try again in a moment.');
+    throw new Error('The approved SeaPass artwork could not be downloaded for PNG export. Please check your connection and try again.');
   }
 
   const svgMarkup = buildSeaPassSvgMarkup(input, SEA_PASS_EXPORT_BACKGROUND, approvedImageHref);
