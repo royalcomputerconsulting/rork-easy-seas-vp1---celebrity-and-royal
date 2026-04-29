@@ -109,11 +109,16 @@ function shouldDefaultTerminalToA(shipCode: string): boolean {
   return SEA_PASS_TERMINAL_SHIP_CODES.includes(shipCode.trim().toUpperCase() as typeof SEA_PASS_TERMINAL_SHIP_CODES[number]);
 }
 
+const INITIAL_SEA_PASS_FORM_DATA: SeaPassWebPassData = {
+  ...SEA_PASS_DEFAULTS,
+  terminal: 'A',
+};
+
 function SeaPassGeneratorScreen() {
   const { width } = useWindowDimensions();
   const previewCaptureRef = useRef<View | null>(null);
   const exportCaptureRef = useRef<View | null>(null);
-  const [formData, setFormData] = useState<SeaPassWebPassData>({ ...SEA_PASS_DEFAULTS });
+  const [formData, setFormData] = useState<SeaPassWebPassData>({ ...INITIAL_SEA_PASS_FORM_DATA });
   const [isExportingPng, setIsExportingPng] = useState<boolean>(false);
   const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
 
@@ -163,7 +168,7 @@ function SeaPassGeneratorScreen() {
 
   const handleReset = useCallback(() => {
     console.log('[SeaPassGenerator] Resetting form to defaults');
-    setFormData({ ...SEA_PASS_DEFAULTS });
+    setFormData({ ...INITIAL_SEA_PASS_FORM_DATA });
   }, []);
 
   const handleExportPng = useCallback(async () => {

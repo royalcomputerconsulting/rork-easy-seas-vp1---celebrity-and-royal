@@ -275,12 +275,10 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
     mask: {
       x: 78,
       y: 852,
-      width: 696,
+      width: 884,
       height: 78,
       fill: '#F8F8F9',
-      radius: 6,
-      sampleX: 292,
-      sampleY: 786,
+      radius: 0,
     },
   },
   terminal: {
@@ -292,14 +290,12 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
     letterSpacing: -0.8,
     textAnchor: 'end',
     mask: {
-      x: 770,
+      x: 744,
       y: 804,
-      width: 190,
+      width: 216,
       height: 132,
       fill: '#F8F8F9',
-      radius: 6,
-      sampleX: 604,
-      sampleY: 716,
+      radius: 0,
     },
   },
   barcodeCaption: {
@@ -348,6 +344,10 @@ function getDynamicOverlayValue(key: SeaPassOverlayKey, data: SeaPassWebPassData
 function shouldRenderDynamicOverlay(key: SeaPassOverlayKey, value: string): boolean {
   if (key === 'barcodeCaption') {
     return value !== getSeaPassBarcodeCaption(SEA_PASS_DEFAULTS);
+  }
+
+  if (key === 'terminal') {
+    return value.trim().length > 0;
   }
 
   return value !== SEA_PASS_DEFAULTS[key];
