@@ -72,7 +72,9 @@ export const SEA_PASS_DEFAULTS: SeaPassWebPassData = {
   terminal: '',
 };
 
-export const SEA_PASS_TERMINAL_SHIP_CODES = ['IC', 'SG', 'LE'] as const;
+export const SEA_PASS_TERMINAL_SHIP_CODES = ['IC'] as const;
+export const SEA_PASS_TERMINAL_PORT = 'MIAMI, FLORIDA';
+export const SEA_PASS_TERMINAL_VALUE = 'A';
 
 export const SEA_PASS_NAME_LINES = ['Scott', 'Merlis'] as const;
 export const SEA_PASS_STATUS = 'DIAMOND PLUS • SIGNATURE';
@@ -347,6 +349,19 @@ function normalizeField(value: string | null | undefined, fallback: string): str
   return trimmed && trimmed.length > 0 ? trimmed : fallback;
 }
 
+function normalizeTerminalRuleValue(value: string): string {
+  return value.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '');
+}
+
+export function shouldShowSeaPassTerminal(input: Pick<SeaPassWebPassData, 'ship' | 'port'>): boolean {
+  const ship = normalizeTerminalRuleValue(input.ship);
+  const port = normalizeTerminalRuleValue(input.port);
+  const isIcon = ship === 'IC' || ship === 'ICON' || ship === 'ICONOFTHESEAS';
+  const isMiamiFlorida = port === normalizeTerminalRuleValue(SEA_PASS_TERMINAL_PORT);
+
+  return isIcon && isMiamiFlorida;
+}
+
 function getDynamicOverlayValue(key: SeaPassOverlayKey, data: SeaPassWebPassData, barcodeCaption: string): string {
   if (key === 'barcodeCaption') {
     return barcodeCaption;
@@ -391,13 +406,13 @@ function getSeaPassTextEraseStrokeWidth(key: SeaPassOverlayKey): number {
   return 8;
 }
 
-function shouldRenderDynamicOverlay(key: SeaPassOverlayKey, value: string): boolean {
+function shouldRenderDynamicOverlay(key: SeaPassOverlayKey, value: string, data: SeaPassWebPassData): boolean {
   if (key === 'barcodeCaption') {
     return value !== getSeaPassBarcodeCaption(SEA_PASS_DEFAULTS);
   }
 
   if (key === 'terminal') {
-    return value.trim().length > 0;
+    return shouldShowSeaPassTerminal(data) && value.trim().length > 0;
   }
 
   return value !== SEA_PASS_DEFAULTS[key];
@@ -528,7 +543,7 @@ function buildSeaPassOverlaySvgMarkup(
       return `${eraseMarkup}<text x="${overlay.x}" y="${overlay.y}"${textAnchor}${letterSpacing} font-family="${SEA_PASS_FONT_STACK}" font-size="${overlay.fontSize}" font-weight="${overlay.fontWeight}" fill="${overlay.fill}">${value}</text>`;
     })
     .join('');
-  const terminalLabelMarkup = data.terminal.trim().length > 0
+  const terminalLabelMarkup = shouldShowSeaPassTerminal(data) && data.terminal.trim().length > 0
     ? `<text x="930" y="846" text-anchor="end" letter-spacing="0.2" font-family="${SEA_PASS_FONT_STACK}" font-size="34" font-weight="500" fill="#6D737C">TERMINAL</text>`
     : '';
 
@@ -567,7 +582,7 @@ export function getSeaPassDynamicOverlays(input: Partial<SeaPassWebPassData>): S
     const overlayValue = getDynamicOverlayValue(key, data, barcodeCaption);
     const shouldRender = key === 'time' || key === 'date'
       ? topRightChanged
-      : shouldRenderDynamicOverlay(key, overlayValue);
+      : shouldRenderDynamicOverlay(key, overlayValue, data);
 
     if (!shouldRender) {
       return accumulator;

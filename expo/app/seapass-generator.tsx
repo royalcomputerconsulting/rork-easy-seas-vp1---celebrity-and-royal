@@ -19,7 +19,7 @@ import { Download, FileDown, RefreshCcw, Shield, Ship } from 'lucide-react-nativ
 import { SeaPassWebPass } from '@/components/seapass/SeaPassWebPass';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { BORDER_RADIUS, COLORS, SPACING, TYPOGRAPHY } from '@/constants/theme';
-import { SEA_PASS_APPROVED_SCREENSHOT_URL, SEA_PASS_DEFAULTS, SEA_PASS_TERMINAL_SHIP_CODES, SEA_PASS_VIEWBOX, type SeaPassWebPassData } from '@/lib/seaPassWebPass';
+import { SEA_PASS_APPROVED_SCREENSHOT_URL, SEA_PASS_DEFAULTS, SEA_PASS_TERMINAL_PORT, SEA_PASS_TERMINAL_VALUE, SEA_PASS_VIEWBOX, shouldShowSeaPassTerminal, type SeaPassWebPassData } from '@/lib/seaPassWebPass';
 import { exportSeaPassPdf, exportSeaPassPng } from '@/lib/seapassExport';
 import { useAuth } from '@/state/AuthProvider';
 
@@ -105,13 +105,9 @@ function normalizeSeaPassFieldValue(key: keyof SeaPassWebPassData, value: string
   return value;
 }
 
-function shouldDefaultTerminalToA(shipCode: string): boolean {
-  return SEA_PASS_TERMINAL_SHIP_CODES.includes(shipCode.trim().toUpperCase() as typeof SEA_PASS_TERMINAL_SHIP_CODES[number]);
-}
-
 const INITIAL_SEA_PASS_FORM_DATA: SeaPassWebPassData = {
   ...SEA_PASS_DEFAULTS,
-  terminal: 'A',
+  terminal: SEA_PASS_TERMINAL_VALUE,
 };
 
 function SeaPassGeneratorScreen() {
@@ -130,6 +126,9 @@ function SeaPassGeneratorScreen() {
 
     return Math.min(Math.max(width - 48, 280), 520);
   }, [isWideLayout, width]);
+
+  const canShowTerminal = useMemo(() => shouldShowSeaPassTerminal(formData), [formData]);
+  const visibleFieldConfigs = useMemo(() => FIELD_CONFIGS.filter((field) => field.key !== 'terminal' || canShowTerminal), [canShowTerminal]);
 
   useEffect(() => {
     console.log('[SeaPassGenerator] Screen mounted');
@@ -157,9 +156,16 @@ function SeaPassGeneratorScreen() {
         [key]: normalizedValue,
       };
 
-      if (key === 'ship' && shouldDefaultTerminalToA(normalizedValue) && current.terminal.trim().length === 0) {
-        console.log('[SeaPassGenerator] Auto-defaulting terminal to A for supported ship', { ship: normalizedValue });
-        next.terminal = 'A';
+      const nextCanShowTerminal = shouldShowSeaPassTerminal(next);
+
+      if ((key === 'ship' || key === 'port') && nextCanShowTerminal && next.terminal.trim().length === 0) {
+        console.log('[SeaPassGenerator] Auto-defaulting terminal to A for Icon sailing from Miami, Florida', { ship: next.ship, port: next.port });
+        next.terminal = SEA_PASS_TERMINAL_VALUE;
+      }
+
+      if ((key === 'ship' || key === 'port') && !nextCanShowTerminal && next.terminal.trim().length > 0) {
+        console.log('[SeaPassGenerator] Hiding terminal because sailing is not Icon from Miami, Florida', { ship: next.ship, port: next.port });
+        next.terminal = '';
       }
 
       return next;
@@ -284,11 +290,11 @@ function SeaPassGeneratorScreen() {
                     <Shield size={14} color="#5A319F" />
                     <Text style={styles.lockedBadgeText}>Locked Elements</Text>
                   </View>
-                  <Text style={styles.lockedInfoText}>Scott Merlis • DIAMOND PLUS • SIGNATURE • Port is editable • Terminal is optional for IC, SG, and LE sailings.</Text>
+                  <Text style={styles.lockedInfoText}>Scott Merlis • DIAMOND PLUS • SIGNATURE • Port is editable • Terminal appears only for Icon sailings from {SEA_PASS_TERMINAL_PORT}.</Text>
                 </View>
 
                 <View style={styles.fieldsGrid}>
-                  {FIELD_CONFIGS.map((field) => (
+                  {visibleFieldConfigs.map((field) => (
                     <View key={field.key} style={styles.fieldGroup}>
                       <Text style={styles.fieldLabel}>{field.label}</Text>
                       <TextInput
