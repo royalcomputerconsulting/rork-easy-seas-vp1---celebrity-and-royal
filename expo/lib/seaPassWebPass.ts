@@ -166,8 +166,8 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
       height: 84,
       fill: '#6B459A',
       radius: 0,
-      sampleX: 632,
-      sampleY: 228,
+      sampleX: 466,
+      sampleY: 148,
     },
   },
   date: {
@@ -185,8 +185,8 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
       height: 128,
       fill: '#6B459A',
       radius: 0,
-      sampleX: 632,
-      sampleY: 228,
+      sampleX: 414,
+      sampleY: 170,
     },
   },
   deck: {
@@ -573,9 +573,19 @@ function buildSeaPassOverlaySvgMarkup(
         const defaultTextAnchor = definition.textAnchor ? ` text-anchor="${definition.textAnchor}"` : '';
         const defaultLetterSpacing = typeof definition.letterSpacing === 'number' ? ` letter-spacing="${definition.letterSpacing}"` : '';
         const eraseStrokeWidth = getSeaPassTextEraseStrokeWidth(overlay.key);
-        eraseMarkup = getSeaPassTextEraseOffsets(overlay.key)
-          .map((offset) => `<text x="${definition.x + offset.x}" y="${definition.y + offset.y}"${defaultTextAnchor}${defaultLetterSpacing} font-family="${SEA_PASS_FONT_STACK}" font-size="${definition.fontSize}" font-weight="${definition.fontWeight}" fill="${mask.fill}" stroke="${mask.fill}" stroke-width="${eraseStrokeWidth}" stroke-linecap="round" stroke-linejoin="round">${defaultValue}</text>`)
+        const eraseTextMarkup = getSeaPassTextEraseOffsets(overlay.key)
+          .map((offset) => `<text x="${definition.x + offset.x}" y="${definition.y + offset.y}"${defaultTextAnchor}${defaultLetterSpacing} font-family="${SEA_PASS_FONT_STACK}" font-size="${definition.fontSize}" font-weight="${definition.fontWeight}" fill="{fill}" stroke="{fill}" stroke-width="${eraseStrokeWidth}" stroke-linecap="round" stroke-linejoin="round">${defaultValue}</text>`)
           .join('');
+
+        if (typeof mask.sampleX === 'number' && typeof mask.sampleY === 'number') {
+          const textMaskId = `overlay-text-mask-${overlay.key}`;
+          defs.push(
+            `<mask id="${textMaskId}" maskUnits="userSpaceOnUse" x="0" y="0" width="${SEA_PASS_VIEWBOX.width}" height="${SEA_PASS_VIEWBOX.height}"><rect x="0" y="0" width="${SEA_PASS_VIEWBOX.width}" height="${SEA_PASS_VIEWBOX.height}" fill="#000000" />${eraseTextMarkup.replace(/\{fill\}/g, '#FFFFFF')}</mask>`,
+          );
+          eraseMarkup = `<image href="${safeImageHref}" x="${mask.x - mask.sampleX}" y="${mask.y - mask.sampleY}" width="${SEA_PASS_VIEWBOX.width}" height="${SEA_PASS_VIEWBOX.height}" preserveAspectRatio="none" mask="url(#${textMaskId})" />`;
+        } else {
+          eraseMarkup = eraseTextMarkup.replace(/\{fill\}/g, mask.fill);
+        }
       } else if (eraseMode === 'rect') {
         eraseMarkup = `<rect x="${mask.x}" y="${mask.y}" width="${mask.width}" height="${mask.height}" rx="${mask.radius}" fill="${mask.fill}" />`;
 
