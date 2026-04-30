@@ -293,7 +293,7 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
       y: 852,
       width: 884,
       height: 78,
-      fill: '#F2F3F4',
+      fill: '#ECEDED',
       radius: 0,
     },
   },
@@ -349,6 +349,10 @@ function normalizeField(value: string | null | undefined, fallback: string): str
   return trimmed && trimmed.length > 0 ? trimmed : fallback;
 }
 
+function normalizePortDisplayValue(value: string): string {
+  return value.replace(/\s*,\s*/g, ', ');
+}
+
 function normalizeTerminalRuleValue(value: string): string {
   return value.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '');
 }
@@ -392,7 +396,7 @@ function getSeaPassOverlayEraseMode(key: SeaPassOverlayKey): SeaPassOverlayErase
 
 function getSeaPassTextEraseStrokeWidth(key: SeaPassOverlayKey): number {
   if (key === 'port') {
-    return 14;
+    return 22;
   }
 
   if (key === 'date') {
@@ -404,6 +408,20 @@ function getSeaPassTextEraseStrokeWidth(key: SeaPassOverlayKey): number {
   }
 
   return 8;
+}
+
+function getSeaPassTextEraseOffsets(key: SeaPassOverlayKey): { x: number; y: number }[] {
+  if (key === 'port') {
+    return [
+      { x: 0, y: 0 },
+      { x: -1, y: 0 },
+      { x: 1, y: 0 },
+      { x: 0, y: -1 },
+      { x: 0, y: 1 },
+    ];
+  }
+
+  return [{ x: 0, y: 0 }];
 }
 
 function shouldRenderDynamicOverlay(key: SeaPassOverlayKey, value: string, data: SeaPassWebPassData): boolean {
@@ -526,7 +544,9 @@ function buildSeaPassOverlaySvgMarkup(
         const defaultTextAnchor = definition.textAnchor ? ` text-anchor="${definition.textAnchor}"` : '';
         const defaultLetterSpacing = typeof definition.letterSpacing === 'number' ? ` letter-spacing="${definition.letterSpacing}"` : '';
         const eraseStrokeWidth = getSeaPassTextEraseStrokeWidth(overlay.key);
-        eraseMarkup = `<text x="${definition.x}" y="${definition.y}"${defaultTextAnchor}${defaultLetterSpacing} font-family="${SEA_PASS_FONT_STACK}" font-size="${definition.fontSize}" font-weight="${definition.fontWeight}" fill="${mask.fill}" stroke="${mask.fill}" stroke-width="${eraseStrokeWidth}" stroke-linecap="round" stroke-linejoin="round">${defaultValue}</text>`;
+        eraseMarkup = getSeaPassTextEraseOffsets(overlay.key)
+          .map((offset) => `<text x="${definition.x + offset.x}" y="${definition.y + offset.y}"${defaultTextAnchor}${defaultLetterSpacing} font-family="${SEA_PASS_FONT_STACK}" font-size="${definition.fontSize}" font-weight="${definition.fontWeight}" fill="${mask.fill}" stroke="${mask.fill}" stroke-width="${eraseStrokeWidth}" stroke-linecap="round" stroke-linejoin="round">${defaultValue}</text>`)
+          .join('');
       } else if (eraseMode === 'rect') {
         eraseMarkup = `<rect x="${mask.x}" y="${mask.y}" width="${mask.width}" height="${mask.height}" rx="${mask.radius}" fill="${mask.fill}" />`;
 
@@ -562,7 +582,7 @@ export function getSeaPassData(input: Partial<SeaPassWebPassData>): SeaPassWebPa
     muster: normalizeField(input.muster, SEA_PASS_DEFAULTS.muster),
     reservation: normalizeField(input.reservation, SEA_PASS_DEFAULTS.reservation),
     ship: normalizeField(input.ship, SEA_PASS_DEFAULTS.ship),
-    port: normalizeField(input.port, SEA_PASS_DEFAULTS.port),
+    port: normalizePortDisplayValue(normalizeField(input.port, SEA_PASS_DEFAULTS.port)),
     terminal: normalizeField(input.terminal, SEA_PASS_DEFAULTS.terminal),
   };
 }
