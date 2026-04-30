@@ -635,13 +635,10 @@ export function getSeaPassDynamicOverlays(input: Partial<SeaPassWebPassData>): S
   const data = getSeaPassData(input);
   const barcodeCaption = getSeaPassBarcodeCaption(data);
   const orderedKeys: SeaPassOverlayKey[] = ['time', 'date', 'deck', 'stateroom', 'muster', 'reservation', 'ship', 'port', 'terminal', 'barcodeCaption'];
-  const topRightChanged = data.time !== SEA_PASS_DEFAULTS.time || data.date !== SEA_PASS_DEFAULTS.date;
 
   return orderedKeys.reduce<SeaPassDynamicOverlay[]>((accumulator, key) => {
     const overlayValue = getDynamicOverlayValue(key, data, barcodeCaption);
-    const shouldRender = key === 'time' || key === 'date'
-      ? topRightChanged
-      : shouldRenderDynamicOverlay(key, overlayValue, data);
+    const shouldRender = shouldRenderDynamicOverlay(key, overlayValue, data);
 
     if (!shouldRender) {
       return accumulator;
