@@ -165,7 +165,7 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
       width: 336,
       height: 84,
       fill: '#6B459A',
-      radius: 8,
+      radius: 0,
       sampleX: 632,
       sampleY: 228,
     },
@@ -182,9 +182,9 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
       x: 632,
       y: 104,
       width: 336,
-      height: 108,
+      height: 128,
       fill: '#6B459A',
-      radius: 8,
+      radius: 0,
       sampleX: 632,
       sampleY: 228,
     },
@@ -400,7 +400,7 @@ function getSeaPassTextEraseStrokeWidth(key: SeaPassOverlayKey): number {
   }
 
   if (key === 'date') {
-    return 18;
+    return 34;
   }
 
   if (key === 'time') {
@@ -423,15 +423,30 @@ function getSeaPassTextEraseOffsets(key: SeaPassOverlayKey): { x: number; y: num
 
   if (key === 'date') {
     return [
+      { x: -3, y: -6 },
+      { x: 0, y: -6 },
+      { x: 3, y: -6 },
+      { x: -3, y: -3 },
+      { x: 0, y: -3 },
+      { x: 3, y: -3 },
+      { x: -3, y: 0 },
       { x: 0, y: 0 },
-      { x: 0, y: 1 },
-      { x: 0, y: 2 },
-      { x: 0, y: 3 },
+      { x: 3, y: 0 },
+      { x: -3, y: 4 },
       { x: 0, y: 4 },
-      { x: -1, y: 1 },
-      { x: 1, y: 1 },
-      { x: -1, y: 3 },
-      { x: 1, y: 3 },
+      { x: 3, y: 4 },
+      { x: -3, y: 8 },
+      { x: 0, y: 8 },
+      { x: 3, y: 8 },
+      { x: -3, y: 12 },
+      { x: 0, y: 12 },
+      { x: 3, y: 12 },
+      { x: -3, y: 16 },
+      { x: 0, y: 16 },
+      { x: 3, y: 16 },
+      { x: -3, y: 20 },
+      { x: 0, y: 20 },
+      { x: 3, y: 20 },
     ];
   }
 
