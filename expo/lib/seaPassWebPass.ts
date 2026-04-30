@@ -400,7 +400,7 @@ function getSeaPassTextEraseStrokeWidth(key: SeaPassOverlayKey): number {
   }
 
   if (key === 'date') {
-    return 10;
+    return 18;
   }
 
   if (key === 'time') {
@@ -418,6 +418,20 @@ function getSeaPassTextEraseOffsets(key: SeaPassOverlayKey): { x: number; y: num
       { x: 1, y: 0 },
       { x: 0, y: -1 },
       { x: 0, y: 1 },
+    ];
+  }
+
+  if (key === 'date') {
+    return [
+      { x: 0, y: 0 },
+      { x: 0, y: 1 },
+      { x: 0, y: 2 },
+      { x: 0, y: 3 },
+      { x: 0, y: 4 },
+      { x: -1, y: 1 },
+      { x: 1, y: 1 },
+      { x: -1, y: 3 },
+      { x: 1, y: 3 },
     ];
   }
 
