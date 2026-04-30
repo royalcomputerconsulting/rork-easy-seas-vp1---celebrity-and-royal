@@ -16,6 +16,7 @@ export interface SeaPassBarcodeBar {
 }
 
 export type SeaPassOverlayKey = keyof SeaPassWebPassData | 'barcodeCaption';
+type SeaPassOverlayEraseMode = 'rect' | 'text' | 'none';
 
 export interface SeaPassOverlayMask {
   x: number;
@@ -161,7 +162,7 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
       y: 36,
       width: 336,
       height: 84,
-      fill: '#5A3C8E',
+      fill: '#6B459A',
       radius: 8,
       sampleX: 632,
       sampleY: 228,
@@ -180,7 +181,7 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
       y: 104,
       width: 336,
       height: 108,
-      fill: '#5A3C8E',
+      fill: '#6B459A',
       radius: 8,
       sampleX: 632,
       sampleY: 228,
@@ -290,7 +291,7 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
       y: 852,
       width: 884,
       height: 78,
-      fill: '#F8F8F9',
+      fill: '#F2F3F4',
       radius: 0,
     },
   },
@@ -307,7 +308,7 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
       y: 804,
       width: 216,
       height: 132,
-      fill: '#F8F8F9',
+      fill: '#F2F3F4',
       radius: 0,
     },
   },
@@ -352,6 +353,42 @@ function getDynamicOverlayValue(key: SeaPassOverlayKey, data: SeaPassWebPassData
   }
 
   return data[key];
+}
+
+function getDefaultOverlayValue(key: SeaPassOverlayKey): string {
+  if (key === 'barcodeCaption') {
+    return getSeaPassBarcodeCaption(SEA_PASS_DEFAULTS);
+  }
+
+  return SEA_PASS_DEFAULTS[key];
+}
+
+function getSeaPassOverlayEraseMode(key: SeaPassOverlayKey): SeaPassOverlayEraseMode {
+  if (key === 'terminal') {
+    return 'none';
+  }
+
+  if (key === 'time' || key === 'date' || key === 'port') {
+    return 'text';
+  }
+
+  return 'rect';
+}
+
+function getSeaPassTextEraseStrokeWidth(key: SeaPassOverlayKey): number {
+  if (key === 'port') {
+    return 14;
+  }
+
+  if (key === 'date') {
+    return 10;
+  }
+
+  if (key === 'time') {
+    return 8;
+  }
+
+  return 8;
 }
 
 function shouldRenderDynamicOverlay(key: SeaPassOverlayKey, value: string): boolean {
@@ -463,17 +500,29 @@ function buildSeaPassOverlaySvgMarkup(
       const textAnchor = overlay.textAnchor ? ` text-anchor="${overlay.textAnchor}"` : '';
       const letterSpacing = typeof overlay.letterSpacing === 'number' ? ` letter-spacing="${overlay.letterSpacing}"` : '';
       const value = escapeXml(getDynamicOverlayValue(overlay.key, data, barcodeCaption));
-      const hasSampleBackground = typeof mask.sampleX === 'number' && typeof mask.sampleY === 'number';
+      const eraseMode = getSeaPassOverlayEraseMode(overlay.key);
+      const hasSampleBackground = eraseMode === 'rect' && typeof mask.sampleX === 'number' && typeof mask.sampleY === 'number';
+      const definition = SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS[overlay.key];
 
-      let eraseMarkup = `<rect x="${mask.x}" y="${mask.y}" width="${mask.width}" height="${mask.height}" rx="${mask.radius}" fill="${mask.fill}" />`;
+      let eraseMarkup = '';
 
-      if (hasSampleBackground) {
-        const sampleX = mask.sampleX ?? 0;
-        const sampleY = mask.sampleY ?? 0;
-        defs.push(
-          `<clipPath id="${clipPathId}"><rect x="${mask.x}" y="${mask.y}" width="${mask.width}" height="${mask.height}" rx="${mask.radius}" ry="${mask.radius}" /></clipPath>`,
-        );
-        eraseMarkup = `<g clip-path="url(#${clipPathId})"><image href="${safeImageHref}" x="${mask.x - sampleX}" y="${mask.y - sampleY}" width="${SEA_PASS_VIEWBOX.width}" height="${SEA_PASS_VIEWBOX.height}" preserveAspectRatio="none" /></g>`;
+      if (eraseMode === 'text') {
+        const defaultValue = escapeXml(getDefaultOverlayValue(overlay.key));
+        const defaultTextAnchor = definition.textAnchor ? ` text-anchor="${definition.textAnchor}"` : '';
+        const defaultLetterSpacing = typeof definition.letterSpacing === 'number' ? ` letter-spacing="${definition.letterSpacing}"` : '';
+        const eraseStrokeWidth = getSeaPassTextEraseStrokeWidth(overlay.key);
+        eraseMarkup = `<text x="${definition.x}" y="${definition.y}"${defaultTextAnchor}${defaultLetterSpacing} font-family="${SEA_PASS_FONT_STACK}" font-size="${definition.fontSize}" font-weight="${definition.fontWeight}" fill="${mask.fill}" stroke="${mask.fill}" stroke-width="${eraseStrokeWidth}" stroke-linecap="round" stroke-linejoin="round">${defaultValue}</text>`;
+      } else if (eraseMode === 'rect') {
+        eraseMarkup = `<rect x="${mask.x}" y="${mask.y}" width="${mask.width}" height="${mask.height}" rx="${mask.radius}" fill="${mask.fill}" />`;
+
+        if (hasSampleBackground) {
+          const sampleX = mask.sampleX ?? 0;
+          const sampleY = mask.sampleY ?? 0;
+          defs.push(
+            `<clipPath id="${clipPathId}"><rect x="${mask.x}" y="${mask.y}" width="${mask.width}" height="${mask.height}" rx="${mask.radius}" ry="${mask.radius}" /></clipPath>`,
+          );
+          eraseMarkup = `<g clip-path="url(#${clipPathId})"><image href="${safeImageHref}" x="${mask.x - sampleX}" y="${mask.y - sampleY}" width="${SEA_PASS_VIEWBOX.width}" height="${SEA_PASS_VIEWBOX.height}" preserveAspectRatio="none" /></g>`;
+        }
       }
 
       return `${eraseMarkup}<text x="${overlay.x}" y="${overlay.y}"${textAnchor}${letterSpacing} font-family="${SEA_PASS_FONT_STACK}" font-size="${overlay.fontSize}" font-weight="${overlay.fontWeight}" fill="${overlay.fill}">${value}</text>`;
