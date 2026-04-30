@@ -3,9 +3,9 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator,
 import { Save, CheckCircle, AlertCircle, Star, Anchor, Ship, Edit2, X, User } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
-import { getLevelByNights, CROWN_ANCHOR_LEVELS } from '@/constants/crownAnchor';
-import { getTierByPoints, CLUB_ROYALE_TIERS } from '@/constants/clubRoyaleTiers';
-import { getCelebrityCaptainsClubLevelByPoints, CELEBRITY_CAPTAINS_CLUB_LEVELS } from '@/constants/celebrityCaptainsClub';
+import { getLevelByNights, getLevelProgress, CROWN_ANCHOR_LEVELS } from '@/constants/crownAnchor';
+import { getTierByPoints, getTierProgress, CLUB_ROYALE_TIERS } from '@/constants/clubRoyaleTiers';
+import { getCelebrityCaptainsClubLevelByPoints, getCelebrityCaptainsClubLevelProgress, CELEBRITY_CAPTAINS_CLUB_LEVELS } from '@/constants/celebrityCaptainsClub';
 import { getCelebrityBlueChipTierByLevel, CELEBRITY_BLUE_CHIP_TIERS } from '@/constants/celebrityBlueChipClub';
 import { BrandToggle, BrandType } from './BrandToggle';
 import { LoyaltyPill } from '@/components/ui/LoyaltyPill';
@@ -102,12 +102,15 @@ export function UserProfileCard({
 
   const calculatedLevel = getLevelByNights(formData.loyaltyPoints);
   const calculatedLevelInfo = CROWN_ANCHOR_LEVELS[calculatedLevel];
+  const calculatedLevelProgress = getLevelProgress(currentValues.loyaltyPoints, getLevelByNights(currentValues.loyaltyPoints));
   
   const calculatedTier = getTierByPoints(formData.clubRoyalePoints);
   const calculatedTierInfo = CLUB_ROYALE_TIERS[calculatedTier];
+  const calculatedTierProgress = getTierProgress(currentValues.clubRoyalePoints, getTierByPoints(currentValues.clubRoyalePoints));
 
   const calculatedCelebrityLevel = getCelebrityCaptainsClubLevelByPoints(formData.celebrityCaptainsClubPoints || 0);
   const calculatedCelebrityLevelInfo = CELEBRITY_CAPTAINS_CLUB_LEVELS[calculatedCelebrityLevel];
+  const calculatedCelebrityProgress = getCelebrityCaptainsClubLevelProgress(currentValues.celebrityCaptainsClubPoints || 0, getCelebrityCaptainsClubLevelByPoints(currentValues.celebrityCaptainsClubPoints || 0));
   
   const celebrityBlueChipLevel = 1;
   const calculatedCelebrityTier = getCelebrityBlueChipTierByLevel(celebrityBlueChipLevel);
@@ -250,8 +253,10 @@ export function UserProfileCard({
         {renderValueCard('Loyalty Points', currentValues.loyaltyPoints, COLORS.loyalty)}
         {renderValueCard('Club Royale Tier', enrichmentData?.clubRoyaleTierFromApi || calculatedTier, calculatedTierInfo?.color, false, true)}
         {renderValueCard('Casino Points', enrichmentData?.clubRoyalePointsFromApi ?? currentValues.clubRoyalePoints, COLORS.points)}
-        {!!enrichmentData?.crownAndAnchorNextTier && renderValueCard('Next C&A Level', enrichmentData.crownAndAnchorNextTier, calculatedLevelInfo?.color, false, true)}
-        {enrichmentData?.crownAndAnchorRemainingPoints !== undefined && renderValueCard('Points to Next', enrichmentData.crownAndAnchorRemainingPoints)}
+        {calculatedLevelProgress.nextLevel && renderValueCard('Next C&A Level', calculatedLevelProgress.nextLevel, calculatedLevelInfo?.color, false, true)}
+        {renderValueCard('Points to Next', calculatedLevelProgress.nightsToNext)}
+        {calculatedTierProgress.nextTier && renderValueCard('Next Club Royale Tier', calculatedTierProgress.nextTier, calculatedTierInfo?.color, false, true)}
+        {renderValueCard('Casino Points to Next', calculatedTierProgress.pointsToNext, COLORS.points)}
       </View>
     );
   };
@@ -268,8 +273,8 @@ export function UserProfileCard({
         {renderValueCard('Club Points', enrichmentData?.captainsClubPoints ?? currentValues.celebrityCaptainsClubPoints, COLORS.loyalty)}
         {renderValueCard('Blue Chip Tier', enrichmentData?.celebrityBlueChipTier || calculatedCelebrityTier, calculatedCelebrityTierInfo?.color, false, true)}
         {renderValueCard('Casino Points', enrichmentData?.celebrityBlueChipPoints ?? currentValues.celebrityBlueChipPoints, COLORS.points)}
-        {!!enrichmentData?.captainsClubNextTier && renderValueCard('Next Level', enrichmentData.captainsClubNextTier, calculatedCelebrityLevelInfo?.color, false, true)}
-        {enrichmentData?.captainsClubRemainingPoints !== undefined && renderValueCard('Points to Next', enrichmentData.captainsClubRemainingPoints)}
+        {calculatedCelebrityProgress.nextLevel && renderValueCard('Next Level', calculatedCelebrityProgress.nextLevel, calculatedCelebrityLevelInfo?.color, false, true)}
+        {renderValueCard('Points to Next', calculatedCelebrityProgress.pointsToNext)}
       </View>
     );
   };

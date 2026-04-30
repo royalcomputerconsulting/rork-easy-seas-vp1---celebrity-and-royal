@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Linking, Platform } from 'react-native';
+import { Alert, AppState, Linking, Platform, type AppStateStatus } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
 import Constants from 'expo-constants';
@@ -20,6 +20,10 @@ type PurchasesModule = {
   logOut: () => Promise<CustomerInfo>;
   purchasePackage: (pkg: PurchasesPackage) => Promise<{ productIdentifier: string; customerInfo: CustomerInfo }>;
   restorePurchases: () => Promise<CustomerInfo>;
+  syncPurchases?: () => Promise<CustomerInfo>;
+  presentCodeRedemptionSheet?: () => Promise<void>;
+  addCustomerInfoUpdateListener?: (listener: (info: CustomerInfo) => void) => void;
+  removeCustomerInfoUpdateListener?: (listener: (info: CustomerInfo) => void) => void;
   configure: (args: { apiKey: string; appUserID?: string }) => void;
 };
 
@@ -51,6 +55,7 @@ export interface EntitlementState {
   subscribeProMonthly: () => Promise<void>;
   subscribeProAnnual: () => Promise<void>;
   restore: () => Promise<void>;
+  redeemOfferCode: () => Promise<void>;
   openManageSubscription: () => Promise<void>;
   openPrivacyPolicy: () => Promise<void>;
   openTerms: () => Promise<void>;
@@ -116,16 +121,42 @@ function getScopedEntitlementKeys(email: string | null) {
   } as const;
 }
 
+function getActiveEntitlementIds(info: CustomerInfo | null): string[] {
+  if (!info) return [];
+  const entitlements = (info.entitlements?.active ?? {}) as Record<string, unknown>;
+  return Object.keys(entitlements).map(k => k.toLowerCase().trim()).filter(Boolean);
+}
+
+function getActiveSubscriptionIds(info: CustomerInfo | null): string[] {
+  if (!info) return [];
+  return ((info.activeSubscriptions ?? []) as string[]).map(id => id.toLowerCase().trim()).filter(Boolean);
+}
+
+function customerInfoHasAnyStoreAccess(info: CustomerInfo | null): boolean {
+  return getActiveEntitlementIds(info).length > 0 || getActiveSubscriptionIds(info).length > 0;
+}
+
 function computeIsProFromCustomerInfo(info: CustomerInfo | null): boolean {
   if (!info) return false;
 
   try {
-    const entitlements = (info.entitlements?.active ?? {}) as Record<string, unknown>;
-    const entitlementIds = Object.keys(entitlements).map(k => k.toLowerCase().trim());
-    if (entitlementIds.includes('pro') || entitlementIds.includes('pro access')) return true;
+    const entitlementIds = getActiveEntitlementIds(info);
+    const hasKnownProEntitlement = entitlementIds.some(id =>
+      id === 'pro' ||
+      id === 'pro access' ||
+      id === 'premium' ||
+      id === 'full access' ||
+      id === 'free use' ||
+      id.includes('pro') ||
+      id.includes('premium')
+    );
+    if (hasKnownProEntitlement) return true;
 
-    const active = (info.activeSubscriptions ?? []) as string[];
+    const active = getActiveSubscriptionIds(info);
     if (active.includes(PRO_PRODUCT_ID_MONTHLY) || active.includes(PRO_PRODUCT_ID_ANNUAL)) return true;
+    if (active.length > 0) return true;
+
+    if (entitlementIds.length > 0) return true;
 
     return false;
   } catch (e) {
@@ -137,14 +168,15 @@ function computeIsProFromCustomerInfo(info: CustomerInfo | null): boolean {
 function detectActiveSubscriptionType(info: CustomerInfo | null): 'monthly' | 'annual' | null {
   if (!info) return null;
   try {
-    const active = (info.activeSubscriptions ?? []) as string[];
+    const active = getActiveSubscriptionIds(info);
     console.log('[Entitlement] Detecting subscription type from active subs:', active);
     if (active.includes(PRO_PRODUCT_ID_ANNUAL)) return 'annual';
     if (active.includes(PRO_PRODUCT_ID_MONTHLY) || active.includes(BASIC_PRODUCT_ID_MONTHLY)) return 'monthly';
+    if (active.some(s => s.includes('annual') || s.includes('yearly'))) return 'annual';
+    if (active.length > 0) return 'monthly';
     
-    const entitlements = (info.entitlements?.active ?? {}) as Record<string, unknown>;
-    const entitlementIds = Object.keys(entitlements).map(k => k.toLowerCase().trim());
-    if (entitlementIds.includes('pro') || entitlementIds.includes('pro access') || entitlementIds.includes('basic')) {
+    const entitlementIds = getActiveEntitlementIds(info);
+    if (entitlementIds.includes('pro') || entitlementIds.includes('pro access') || entitlementIds.includes('basic') || entitlementIds.length > 0) {
       if (active.some(s => s.toLowerCase().includes('annual') || s.toLowerCase().includes('yearly'))) return 'annual';
       return 'monthly';
     }
@@ -159,14 +191,13 @@ function computeIsBasicFromCustomerInfo(info: CustomerInfo | null): boolean {
   if (!info) return false;
 
   try {
-    const entitlements = (info.entitlements?.active ?? {}) as Record<string, unknown>;
-    const entitlementIds = Object.keys(entitlements).map(k => k.toLowerCase().trim());
+    const entitlementIds = getActiveEntitlementIds(info);
     if (entitlementIds.includes('basic')) return true;
 
-    const active = (info.activeSubscriptions ?? []) as string[];
+    const active = getActiveSubscriptionIds(info);
     if (active.includes(BASIC_PRODUCT_ID_MONTHLY)) return true;
 
-    return false;
+    return customerInfoHasAnyStoreAccess(info);
   } catch (e) {
     console.error('[Entitlement] computeIsBasicFromCustomerInfo failed', e);
     return false;
@@ -581,6 +612,15 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
 
       await syncPurchasesIdentity(purchases);
 
+      if (Platform.OS === 'ios' && typeof purchases.syncPurchases === 'function') {
+        try {
+          console.log('[Entitlement] Syncing iOS purchases before customer info check to pick up App Store code redemptions');
+          await withTimeout(purchases.syncPurchases(), DEFAULT_TIMEOUT_MS, 'Syncing App Store purchases');
+        } catch (syncError) {
+          console.warn('[Entitlement] iOS syncPurchases failed during refresh, continuing:', syncError);
+        }
+      }
+
       console.log('[Entitlement] Fetching offerings');
       try {
         const offers = await withTimeout(purchases.getOfferings(), DEFAULT_TIMEOUT_MS, 'Loading subscription options');
@@ -615,6 +655,69 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
   useEffect(() => {
     lastIsProRef.current = isPro;
   }, [isPro]);
+
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      return;
+    }
+
+    const handleCustomerInfoUpdate = async (info: CustomerInfo) => {
+      try {
+        console.log('[Entitlement] Customer info listener fired', {
+          activeSubscriptions: info.activeSubscriptions ?? [],
+          entitlementsActiveKeys: Object.keys(info.entitlements?.active ?? {}),
+        });
+        const storedTrialEnd = await AsyncStorage.getItem(storageKeys.TRIAL_END);
+        const currentTrialEnd = storedTrialEnd ? new Date(storedTrialEnd) : null;
+        if (mountedRef.current) {
+          setStateFromCustomerInfo(info, currentTrialEnd, isGrandfathered);
+        }
+      } catch (listenerError) {
+        console.error('[Entitlement] Customer info listener failed:', listenerError);
+      }
+    };
+
+    let listenerAttached = false;
+    let purchasesRef: PurchasesModule | null = null;
+
+    void ensurePurchasesLoaded().then((purchases) => {
+      purchasesRef = purchases;
+      if (purchases?.addCustomerInfoUpdateListener) {
+        purchases.addCustomerInfoUpdateListener(handleCustomerInfoUpdate);
+        listenerAttached = true;
+        console.log('[Entitlement] Customer info update listener attached');
+      }
+    }).catch((listenerSetupError) => {
+      console.error('[Entitlement] Failed to attach customer info listener:', listenerSetupError);
+    });
+
+    return () => {
+      if (listenerAttached && purchasesRef?.removeCustomerInfoUpdateListener) {
+        purchasesRef.removeCustomerInfoUpdateListener(handleCustomerInfoUpdate);
+        console.log('[Entitlement] Customer info update listener removed');
+      }
+    };
+  }, [ensurePurchasesLoaded, isGrandfathered, setStateFromCustomerInfo, storageKeys.TRIAL_END]);
+
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      return;
+    }
+
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      if (nextAppState !== 'active') {
+        return;
+      }
+
+      console.log('[Entitlement] App became active - refreshing purchases to pick up redeemed App Store codes');
+      void refresh();
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => {
+      subscription.remove();
+    };
+  }, [refresh]);
 
   const findPackageByProductId = useCallback((productId: string): PurchasesPackage | null => {
     try {
@@ -785,7 +888,15 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       }
 
       console.log(`[Entitlement] Restoring purchases via ${restoreStoreName}`);
-      const info = await withTimeout(purchases.restorePurchases(), DEFAULT_TIMEOUT_MS, 'Restoring purchases');
+      let info = await withTimeout(purchases.restorePurchases(), DEFAULT_TIMEOUT_MS, 'Restoring purchases');
+      if (Platform.OS === 'ios' && typeof purchases.syncPurchases === 'function') {
+        try {
+          console.log('[Entitlement] Syncing iOS purchases after restore to include App Store redeemed codes');
+          info = await withTimeout(purchases.syncPurchases(), DEFAULT_TIMEOUT_MS, 'Syncing App Store purchases');
+        } catch (syncError) {
+          console.warn('[Entitlement] syncPurchases after restore failed, using restore result:', syncError);
+        }
+      }
       console.log('[Entitlement] restorePurchases customerInfo', {
         activeSubscriptions: info?.activeSubscriptions ?? [],
         entitlements: Object.keys(info?.entitlements?.active ?? {}),
@@ -827,6 +938,71 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       }
     }
   }, [auth.authenticatedEmail, auth.isWhitelisted, ensurePurchasesLoaded, isGrandfathered, setStateFromCustomerInfo, storageKeys.TRIAL_END]);
+
+  const redeemOfferCode = useCallback(async () => {
+    console.log('[Entitlement] redeemOfferCode called');
+    if (Platform.OS !== 'ios') {
+      Alert.alert('App Store Only', 'Offer code redemption is available on iPhone and iPad through the App Store.');
+      return;
+    }
+
+    if (actionInFlightRef.current) {
+      console.log('[Entitlement] redeemOfferCode ignored: action already in flight');
+      return;
+    }
+
+    actionInFlightRef.current = true;
+    setError(null);
+
+    try {
+      setIsLoading(true);
+      const purchases = await ensurePurchasesLoaded();
+      if (!purchases) {
+        const message = purchasesInitError ?? 'In-app purchases are not configured.';
+        console.warn('[Entitlement] redeemOfferCode: Purchases unavailable', { message });
+        Alert.alert('Not Available', message);
+        setError(message);
+        return;
+      }
+
+      await syncPurchasesIdentity(purchases);
+
+      if (typeof purchases.presentCodeRedemptionSheet === 'function') {
+        await withTimeout(purchases.presentCodeRedemptionSheet(), DEFAULT_TIMEOUT_MS, 'Opening App Store code redemption');
+        console.log('[Entitlement] App Store code redemption sheet presented');
+      } else {
+        await safeOpenURL('https://apps.apple.com/redeem?context=offercodes');
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 1800));
+
+      const info = typeof purchases.syncPurchases === 'function'
+        ? await withTimeout(purchases.syncPurchases(), DEFAULT_TIMEOUT_MS, 'Syncing redeemed App Store code')
+        : await withTimeout(purchases.getCustomerInfo(), DEFAULT_TIMEOUT_MS, 'Checking redeemed App Store code');
+
+      if (!mountedRef.current) return;
+      const storedTrialEnd = await AsyncStorage.getItem(storageKeys.TRIAL_END);
+      const currentTrialEnd = storedTrialEnd ? new Date(storedTrialEnd) : null;
+      setStateFromCustomerInfo(info, currentTrialEnd, isGrandfathered);
+
+      if (customerInfoHasAnyStoreAccess(info)) {
+        Alert.alert('Access Unlocked', 'Your App Store code has been redeemed and full access is active.');
+      } else {
+        Alert.alert('Code Checked', 'If you just redeemed a code in the App Store, it can take a moment to appear. Tap Restore Purchases if access is not active yet.');
+      }
+    } catch (e) {
+      console.error('[Entitlement] redeemOfferCode failed', e);
+      const message = e instanceof Error ? e.message : 'Unable to redeem code.';
+      if (!mountedRef.current) return;
+      setError(message);
+      Alert.alert('Redeem Code Failed', message);
+    } finally {
+      actionInFlightRef.current = false;
+      if (mountedRef.current) {
+        setIsLoading(false);
+      }
+    }
+  }, [ensurePurchasesLoaded, isGrandfathered, setStateFromCustomerInfo, storageKeys.TRIAL_END, syncPurchasesIdentity]);
 
   const openManageSubscription = useCallback(async () => {
     if (Platform.OS === 'web') {
@@ -902,6 +1078,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       subscribeProMonthly,
       subscribeProAnnual,
       restore,
+      redeemOfferCode,
       openManageSubscription,
       openPrivacyPolicy,
       openTerms,
@@ -929,6 +1106,7 @@ export const [EntitlementProvider, useEntitlement] = createContextHook((): Entit
       subscribeProMonthly,
       subscribeProAnnual,
       restore,
+      redeemOfferCode,
       openManageSubscription,
       openPrivacyPolicy,
       openTerms,

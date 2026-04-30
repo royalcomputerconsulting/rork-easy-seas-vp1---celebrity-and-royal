@@ -2394,13 +2394,15 @@ STEP 4: Optional Calendar Import
                 <View style={styles.subscriptionStatusText}>
                   <Text style={styles.subscriptionStatusTitle}>
                     {entitlement.subscriptionDisplayStatus === 'free_use' ? (entitlement.subscriptionLevel ?? 'Free Use of App') :
-                     entitlement.subscriptionDisplayStatus === 'monthly' || entitlement.subscriptionDisplayStatus === 'annual' ? 'Monthly Subscription' :
+                     entitlement.subscriptionDisplayStatus === 'annual' ? 'Annual Subscription' :
+                     entitlement.subscriptionDisplayStatus === 'monthly' ? 'Monthly / Redeemed Access' :
                      entitlement.subscriptionDisplayStatus === 'grace_period' ? '5-Day Grace Period' :
                      'Subscription Expired'}
                   </Text>
                   <Text style={styles.subscriptionStatusSubtitle}>
                     {entitlement.subscriptionDisplayStatus === 'free_use' ? 'Admin-granted free access — all app features unlocked' :
-                     entitlement.subscriptionDisplayStatus === 'monthly' || entitlement.subscriptionDisplayStatus === 'annual' ? 'Monthly plan active — all features unlocked' :
+                     entitlement.subscriptionDisplayStatus === 'annual' ? 'Annual plan or App Store redeemed access active — all features unlocked' :
+                     entitlement.subscriptionDisplayStatus === 'monthly' ? 'Monthly plan or App Store redeemed access active — all features unlocked' :
                      entitlement.subscriptionDisplayStatus === 'grace_period' ? `${entitlement.trialDaysRemaining} day${entitlement.trialDaysRemaining !== 1 ? 's' : ''} remaining — full access` :
                      'Purchase a monthly subscription ($9.99/month) to continue'}
                   </Text>
@@ -2412,6 +2414,12 @@ STEP 4: Optional Calendar Import
                 'Restore Purchases',
                 <ChevronRight size={14} color={CLEAN_THEME.text.secondary} />,
                 () => { void entitlement.restore(); }
+              )}
+              {renderSettingRow(
+                <Star size={18} color={COLORS.navyDeep} />,
+                'Redeem App Store Code',
+                <ChevronRight size={14} color={CLEAN_THEME.text.secondary} />,
+                () => { void entitlement.redeemOfferCode(); }
               )}
               {renderSettingRow(
                 <ExternalLink size={18} color={COLORS.navyDeep} />,
@@ -2440,7 +2448,7 @@ STEP 4: Optional Calendar Import
               )}
             </View>
             <Text style={styles.subscriptionHint}>
-              Manage your subscription status, restore previous purchases, and review legal terms. Whitelisted accounts show as Free Use of App and do not need a paid subscription.
+              Manage your subscription status, redeem App Store offer codes, restore previous purchases, and review legal terms. Whitelisted accounts show as Free Use of App and do not need a paid subscription.
             </Text>
           </View>
 

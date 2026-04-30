@@ -15,6 +15,86 @@ import { ALL_STORAGE_KEYS, GLOBAL_KEYS, getUserScopedKey, type AppSettings } fro
 import { quotaSafeGetItem, quotaSafeSetItem, quotaSafeSetJsonItem } from '../storage/quotaSafeStorage';
 import { applyKnownRetailValuesToBooked } from '../dataEnrichment/retailValueEnrichment';
 
+function normalizeImportKeyPart(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  return String(value).trim().toLowerCase();
+}
+
+function dedupeRecords<T>(items: T[], buildKey: (item: T, index: number) => string, label: string): T[] {
+  const keyedItems = new Map<string, T>();
+  items.forEach((item, index) => {
+    const key = buildKey(item, index);
+    if (keyedItems.has(key)) {
+      console.log('[DataBundle] Deduped duplicate record during import:', { label, key });
+    }
+    keyedItems.set(key, item);
+  });
+  return Array.from(keyedItems.values());
+}
+
+function dedupeByIdOrPayload<T extends object>(items: T[], label: string): T[] {
+  return dedupeRecords(items, (item) => {
+    const record = item as Record<string, unknown>;
+    const id = normalizeImportKeyPart(record.id);
+    return id ? `id:${id}` : `payload:${normalizeImportKeyPart(JSON.stringify(item))}`;
+  }, label);
+}
+
+function getCruiseBackupKey(cruise: Cruise, index: number): string {
+  const id = normalizeImportKeyPart(cruise.id);
+  if (id) return `id:${id}`;
+  return [
+    normalizeImportKeyPart(cruise.cruiseSource),
+    normalizeImportKeyPart(cruise.shipName),
+    normalizeImportKeyPart(cruise.sailDate),
+    normalizeImportKeyPart(cruise.offerCode),
+    normalizeImportKeyPart(cruise.cabinType),
+    index.toString(),
+  ].join('|');
+}
+
+function getBookedCruiseBackupKey(cruise: BookedCruise, index: number): string {
+  const reservation = normalizeImportKeyPart(cruise.reservationNumber ?? cruise.bookingId);
+  if (reservation) return `reservation:${normalizeImportKeyPart(cruise.cruiseSource)}:${reservation}`;
+  const id = normalizeImportKeyPart(cruise.id);
+  if (id) return `id:${id}`;
+  return [
+    normalizeImportKeyPart(cruise.cruiseSource),
+    normalizeImportKeyPart(cruise.shipName),
+    normalizeImportKeyPart(cruise.sailDate),
+    normalizeImportKeyPart(cruise.cabinNumber),
+    normalizeImportKeyPart(cruise.cabinType),
+    index.toString(),
+  ].join('|');
+}
+
+function getOfferBackupKey(offer: CasinoOffer, index: number): string {
+  const id = normalizeImportKeyPart(offer.id);
+  if (id) return `id:${id}`;
+  return [
+    normalizeImportKeyPart(offer.offerSource),
+    normalizeImportKeyPart(offer.offerCode),
+    normalizeImportKeyPart(offer.shipName),
+    normalizeImportKeyPart(offer.sailingDate),
+    normalizeImportKeyPart(offer.roomType),
+    normalizeImportKeyPart(offer.offerName ?? offer.title),
+    index.toString(),
+  ].join('|');
+}
+
+function getCalendarBackupKey(event: CalendarEvent, index: number): string {
+  const id = normalizeImportKeyPart(event.id);
+  if (id) return `id:${id}`;
+  return [
+    normalizeImportKeyPart(event.cruiseId),
+    normalizeImportKeyPart(event.title),
+    normalizeImportKeyPart(event.startDate ?? event.start),
+    normalizeImportKeyPart(event.endDate ?? event.end),
+    normalizeImportKeyPart(event.type),
+    index.toString(),
+  ].join('|');
+}
+
 export interface FullAppDataBundle {
   version: string;
   exportDate: string;
@@ -372,6 +452,7 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
 }> {
   console.log('[DataBundle] Importing all data for email:', email || '(none)');
   const errors: string[] = [];
+  const importTimestamp = new Date().toISOString();
   const imported = {
     cruises: 0,
     bookedCruises: 0,
@@ -389,9 +470,10 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
 
   try {
     if (bundle.cruises && Array.isArray(bundle.cruises)) {
-      await quotaSafeSetJsonItem(sk(ALL_STORAGE_KEYS.CRUISES), bundle.cruises);
+      const dedupedCruises = dedupeRecords(bundle.cruises, getCruiseBackupKey, 'cruises');
+      await quotaSafeSetJsonItem(sk(ALL_STORAGE_KEYS.CRUISES), dedupedCruises);
       await quotaSafeSetItem(sk(ALL_STORAGE_KEYS.HAS_IMPORTED_DATA), 'true');
-      imported.cruises = bundle.cruises.length;
+      imported.cruises = dedupedCruises.length;
       console.log('[DataBundle] Imported cruises:', imported.cruises);
     }
   } catch (error) {
@@ -400,7 +482,8 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
 
   try {
     if (bundle.bookedCruises && Array.isArray(bundle.bookedCruises)) {
-      const enrichedBooked = applyKnownRetailValuesToBooked(bundle.bookedCruises);
+      const dedupedBooked = dedupeRecords(bundle.bookedCruises, getBookedCruiseBackupKey, 'bookedCruises');
+      const enrichedBooked = applyKnownRetailValuesToBooked(dedupedBooked);
       await quotaSafeSetJsonItem(sk(ALL_STORAGE_KEYS.BOOKED_CRUISES), enrichedBooked);
       await quotaSafeSetItem(sk(ALL_STORAGE_KEYS.HAS_IMPORTED_DATA), 'true');
       imported.bookedCruises = enrichedBooked.length;
@@ -412,9 +495,10 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
 
   try {
     if (bundle.casinoOffers && Array.isArray(bundle.casinoOffers)) {
-      await quotaSafeSetJsonItem(sk(ALL_STORAGE_KEYS.CASINO_OFFERS), bundle.casinoOffers);
+      const dedupedOffers = dedupeRecords(bundle.casinoOffers, getOfferBackupKey, 'casinoOffers');
+      await quotaSafeSetJsonItem(sk(ALL_STORAGE_KEYS.CASINO_OFFERS), dedupedOffers);
       await quotaSafeSetItem(sk(ALL_STORAGE_KEYS.HAS_IMPORTED_DATA), 'true');
-      imported.casinoOffers = bundle.casinoOffers.length;
+      imported.casinoOffers = dedupedOffers.length;
       console.log('[DataBundle] Imported casino offers:', imported.casinoOffers);
     }
   } catch (error) {
@@ -423,8 +507,9 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
 
   try {
     if (bundle.calendarEvents && Array.isArray(bundle.calendarEvents)) {
-      await quotaSafeSetJsonItem(sk(ALL_STORAGE_KEYS.CALENDAR_EVENTS), bundle.calendarEvents);
-      imported.calendarEvents = bundle.calendarEvents.length;
+      const dedupedEvents = dedupeRecords(bundle.calendarEvents, getCalendarBackupKey, 'calendarEvents');
+      await quotaSafeSetJsonItem(sk(ALL_STORAGE_KEYS.CALENDAR_EVENTS), dedupedEvents);
+      imported.calendarEvents = dedupedEvents.length;
       console.log('[DataBundle] Imported calendar events:', imported.calendarEvents);
     }
   } catch (error) {
@@ -433,8 +518,9 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
 
   try {
     if (bundle.casinoSessions && Array.isArray(bundle.casinoSessions)) {
-      await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CASINO_SESSIONS), JSON.stringify(bundle.casinoSessions));
-      imported.casinoSessions = bundle.casinoSessions.length;
+      const dedupedSessions = dedupeByIdOrPayload(bundle.casinoSessions, 'casinoSessions');
+      await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CASINO_SESSIONS), JSON.stringify(dedupedSessions));
+      imported.casinoSessions = dedupedSessions.length;
       console.log('[DataBundle] Imported casino sessions:', imported.casinoSessions);
     }
   } catch (error) {
@@ -443,8 +529,9 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
 
   try {
     if (bundle.certificates && Array.isArray(bundle.certificates)) {
-      await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CERTIFICATES), JSON.stringify(bundle.certificates));
-      imported.certificates = bundle.certificates.length;
+      const dedupedCertificates = dedupeByIdOrPayload(bundle.certificates, 'certificates');
+      await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CERTIFICATES), JSON.stringify(dedupedCertificates));
+      imported.certificates = dedupedCertificates.length;
       console.log('[DataBundle] Imported certificates:', imported.certificates);
     }
   } catch (error) {
@@ -573,12 +660,14 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
   try {
     if (bundle.machines) {
       if (bundle.machines.encyclopedia && Array.isArray(bundle.machines.encyclopedia)) {
-        await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.MACHINE_ENCYCLOPEDIA), JSON.stringify(bundle.machines.encyclopedia));
-        console.log('[DataBundle] Imported machine encyclopedia:', bundle.machines.encyclopedia.length);
+        const dedupedMachineEntries = dedupeByIdOrPayload(bundle.machines.encyclopedia, 'machineEncyclopedia');
+        await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.MACHINE_ENCYCLOPEDIA), JSON.stringify(dedupedMachineEntries));
+        console.log('[DataBundle] Imported machine encyclopedia:', dedupedMachineEntries.length);
       }
       if (bundle.machines.atlasIds && Array.isArray(bundle.machines.atlasIds)) {
-        await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.MY_SLOT_ATLAS), JSON.stringify(bundle.machines.atlasIds));
-        imported.machines = bundle.machines.atlasIds.length;
+        const dedupedAtlasIds = Array.from(new Set(bundle.machines.atlasIds.filter((id): id is string => typeof id === 'string' && id.trim().length > 0)));
+        await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.MY_SLOT_ATLAS), JSON.stringify(dedupedAtlasIds));
+        imported.machines = dedupedAtlasIds.length;
         console.log('[DataBundle] Imported slot atlas:', imported.machines, 'machines');
       }
     }
@@ -590,17 +679,27 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
   try {
     if (bundle.crewRecognition) {
       if (bundle.crewRecognition.entries && Array.isArray(bundle.crewRecognition.entries)) {
-        await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_ENTRIES), JSON.stringify(bundle.crewRecognition.entries));
-        console.log('[DataBundle] Imported crew recognition entries:', bundle.crewRecognition.entries.length);
+        const dedupedCrewEntries = dedupeByIdOrPayload(bundle.crewRecognition.entries, 'crewRecognitionEntries');
+        await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_ENTRIES), JSON.stringify(dedupedCrewEntries));
+        console.log('[DataBundle] Imported crew recognition entries:', dedupedCrewEntries.length);
       }
       if (bundle.crewRecognition.sailings && Array.isArray(bundle.crewRecognition.sailings)) {
-        await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_SAILINGS), JSON.stringify(bundle.crewRecognition.sailings));
-        console.log('[DataBundle] Imported crew recognition sailings:', bundle.crewRecognition.sailings.length);
+        const dedupedCrewSailings = dedupeByIdOrPayload(bundle.crewRecognition.sailings, 'crewRecognitionSailings');
+        await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_SAILINGS), JSON.stringify(dedupedCrewSailings));
+        console.log('[DataBundle] Imported crew recognition sailings:', dedupedCrewSailings.length);
       }
     }
   } catch (error) {
     console.error('[DataBundle] Error importing crew recognition:', error);
     errors.push(`Failed to import crew recognition: ${error}`);
+  }
+
+  try {
+    await quotaSafeSetItem(sk(ALL_STORAGE_KEYS.LAST_SYNC), importTimestamp);
+    await quotaSafeSetItem(sk(ALL_STORAGE_KEYS.HAS_IMPORTED_DATA), 'true');
+    console.log('[DataBundle] Marked imported backup as latest local state:', importTimestamp);
+  } catch (error) {
+    errors.push(`Failed to finalize import timestamp: ${error}`);
   }
 
   const success = errors.length === 0;
