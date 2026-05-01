@@ -33,6 +33,9 @@ import { useEntitlement } from './EntitlementProvider';
 import { useAuth } from './AuthProvider';
 import { useCertificates } from './CertificatesProvider';
 import { useMachineConditionLogs } from './MachineConditionLogProvider';
+import { useIntelligenceFilters } from './IntelligenceFiltersProvider';
+import { useUser } from './UserProvider';
+import { filterRecordsByIntelligence, getBrandLabel, getProgramLabel, getProfileDisplayName } from '@/lib/intelligenceFilters';
 
 interface AgentXState {
   messages: ChatMessage[];
@@ -273,6 +276,8 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
   const { tier } = useEntitlement();
   const { isAdmin } = useAuth();
   const { cruises, bookedCruises, casinoOffers, calendarEvents, filters } = useCoreData();
+  const { users } = useUser();
+  const { selectedProfileId, selectedBrand, selectedProgram } = useIntelligenceFilters();
   const { clubRoyalePoints, clubRoyaleTier } = useLoyalty();
   const { allMachines } = useSlotMachines();
   const { myAtlasMachines, globalLibrary, encyclopedia } = useSlotMachineLibrary();
@@ -288,11 +293,29 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<AgentXMode>('travelAgent');
 
+  const intelligenceFilterSnapshot = useMemo(() => ({
+    selectedProfileId,
+    selectedBrand,
+    selectedProgram,
+  }), [selectedBrand, selectedProfileId, selectedProgram]);
+
+  const selectedProfileLabel = useMemo(() => {
+    if (selectedProfileId === 'all') return 'All Profiles';
+    if (selectedProfileId === 'unassigned') return 'Unassigned Imports';
+    const profile = users.find((item) => item.id === selectedProfileId);
+    return getProfileDisplayName(profile);
+  }, [selectedProfileId, users]);
+
+  const filteredCruises = useMemo(() => filterRecordsByIntelligence(cruises, intelligenceFilterSnapshot, users), [cruises, intelligenceFilterSnapshot, users]);
+  const filteredBookedCruises = useMemo(() => filterRecordsByIntelligence(bookedCruises, intelligenceFilterSnapshot, users), [bookedCruises, intelligenceFilterSnapshot, users]);
+  const filteredCasinoOffers = useMemo(() => filterRecordsByIntelligence(casinoOffers, intelligenceFilterSnapshot, users), [casinoOffers, intelligenceFilterSnapshot, users]);
+  const filteredCalendarEvents = useMemo(() => filterRecordsByIntelligence(calendarEvents, intelligenceFilterSnapshot, users), [calendarEvents, intelligenceFilterSnapshot, users]);
+
   const toolContext = useMemo((): AgentToolContext => {
     console.log('[AgentX] Recalculating toolContext with latest data...');
     
     console.log('[AgentX] Current state:', {
-      bookedCruises: bookedCruises.length,
+      bookedCruises: filteredBookedCruises.length,
       clubRoyalePoints,
       clubRoyaleTier,
       slotMachines: allMachines.length,
@@ -304,12 +327,15 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
       machineLogs: machineLogs.length,
       mode,
       filters,
+      selectedProfileLabel,
+      selectedBrand,
+      selectedProgram,
     });
     
     return {
-      cruises,
-      bookedCruises,
-      offers: casinoOffers,
+      cruises: filteredCruises,
+      bookedCruises: filteredBookedCruises,
+      offers: filteredCasinoOffers,
       userPoints: clubRoyalePoints,
       currentTier: clubRoyaleTier,
       slotMachines: allMachines,
@@ -321,7 +347,7 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
       getSessionAnalytics,
       getMachineAnalytics,
     };
-  }, [cruises, bookedCruises, casinoOffers, clubRoyalePoints, clubRoyaleTier, allMachines, myAtlasMachines, globalLibrary, encyclopedia, deckMappings, sessions, getSessionAnalytics, getMachineAnalytics, certificates.length, machineLogs.length, mode, filters]);
+  }, [filteredCruises, filteredBookedCruises, filteredCasinoOffers, clubRoyalePoints, clubRoyaleTier, allMachines, myAtlasMachines, globalLibrary, encyclopedia, deckMappings, sessions, getSessionAnalytics, getMachineAnalytics, certificates.length, machineLogs.length, mode, filters, selectedProfileLabel, selectedBrand, selectedProgram]);
 
   const executeToolCall = useCallback((tool: string, params: unknown): string => {
     console.log('[AgentX] Executing tool:', tool, params);
@@ -345,13 +371,13 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
         return executeMachineRecommendations(params as MachineRecommendationInput, toolContext);
       case 'askMyData': {
         const query = typeof (params as { query?: unknown }).query === 'string' ? (params as { query: string }).query : '';
-        const response = askMyDataSearch({ query, offers: casinoOffers, cruises: [...cruises, ...bookedCruises], certificates, calendarEvents });
+        const response = askMyDataSearch({ query, offers: filteredCasinoOffers, cruises: [...filteredCruises, ...filteredBookedCruises], certificates, calendarEvents: filteredCalendarEvents });
         return formatAskMyDataResponse(response);
       }
       default:
         return `Unknown tool: ${tool}`;
     }
-  }, [toolContext, casinoOffers, cruises, bookedCruises, certificates, calendarEvents]);
+  }, [toolContext, filteredCasinoOffers, filteredCruises, filteredBookedCruises, certificates, filteredCalendarEvents]);
 
   const sendMessage = useCallback(async (content: string) => {
     console.log('[AgentX] User message:', content, 'mode:', mode);
@@ -451,6 +477,9 @@ User's current status (FRESH DATA - UPDATED ON EVERY REQUEST):
 - Upcoming Cruises: ${upcomingCruises.length}
 - Available Cruises: ${availableCruises.length}
 - Active Casino Offers: ${toolContext.offers.length}
+- Active Profile Scope: ${selectedProfileLabel}
+- Active Brand Scope: ${getBrandLabel(selectedBrand)}
+- Active Program Scope: ${getProgramLabel(selectedProgram)}
 
 Completed Cruises with Points Earned:
   ${completedWithPoints || 'No points data recorded for completed cruises'}
@@ -524,7 +553,7 @@ CRITICAL: The user has EXACTLY ${toolContext.userPoints.toLocaleString()} Club R
     } finally {
       setIsLoading(false);
     }
-  }, [messages, tier, isAdmin, toolContext, executeToolCall, globalLibrary, myAtlasMachines, sessions, deckMappings, machineLogs, certificates, mode]);
+  }, [messages, tier, isAdmin, toolContext, executeToolCall, globalLibrary, myAtlasMachines, sessions, deckMappings, machineLogs, certificates, mode, selectedProfileLabel, selectedBrand, selectedProgram]);
 
   const clearMessages = useCallback(() => {
     console.log('[AgentX] Clearing messages');

@@ -7,13 +7,17 @@ import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/
 import { IMAGES } from '@/constants/images';
 import { useAppState } from '@/state/AppStateProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
-import type { CalendarEvent, BookedCruise } from '@/types/models';
+import type { CalendarEvent, BookedCruise, CasinoOffer } from '@/types/models';
 import { createDateFromString } from '@/lib/date';
 import { CrewRecognitionSection } from '@/components/crew-recognition/CrewRecognitionSection';
 import { TimeZoneConverter } from '@/components/TimeZoneConverter';
 import { getCalendarEventsWithGeneratedCruiseEvents, getNormalizedCruiseDateRange } from '@/lib/calendar/cruiseEvents';
 import { ResponsiveContainer } from '@/components/ResponsiveContainer';
 import { useCertificates } from '@/state/CertificatesProvider';
+import { IntelligenceFilterStrip } from '@/components/IntelligenceFilterStrip';
+import { useIntelligenceFilters } from '@/state/IntelligenceFiltersProvider';
+import { useUser } from '@/state/UserProvider';
+import { filterRecordsByIntelligence } from '@/lib/intelligenceFilters';
 import { deriveCruiseDayPlan } from '@/lib/cruisePlanningIntelligence';
 
 type ViewMode = 'events' | 'week' | 'month' | '90days' | 'passenger';
@@ -61,12 +65,32 @@ export default function EventsScreen() {
   const coreData = useCoreData();
   const { bookedCruises } = coreData;
   const { certificates } = useCertificates();
+  const { users } = useUser();
+  const { selectedProfileId, selectedBrand, selectedProgram } = useIntelligenceFilters();
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [refreshKey, setRefreshKey] = useState(0);
 
+  const intelligenceFilterSnapshot = useMemo(() => ({
+    selectedProfileId,
+    selectedBrand,
+    selectedProgram,
+  }), [selectedBrand, selectedProfileId, selectedProgram]);
+
+  const filteredBookedCruises = useMemo(() => {
+    return filterRecordsByIntelligence(bookedCruises, intelligenceFilterSnapshot, users);
+  }, [bookedCruises, intelligenceFilterSnapshot, users]);
+
+  const filteredCertificates = useMemo(() => {
+    return filterRecordsByIntelligence(certificates, intelligenceFilterSnapshot, users);
+  }, [certificates, intelligenceFilterSnapshot, users]);
+
+  const filteredOffers = useMemo(() => {
+    return filterRecordsByIntelligence((localData.offers || []) as CasinoOffer[], intelligenceFilterSnapshot, users);
+  }, [intelligenceFilterSnapshot, localData.offers, users]);
+
   const normalizedBookedCruises = useMemo((): BookedCruise[] => {
-    return bookedCruises
+    return filteredBookedCruises
       .map((cruise) => {
         const cruiseDateRange = getNormalizedCruiseDateRange(cruise);
         if (!cruiseDateRange) return null;
@@ -77,9 +101,12 @@ export default function EventsScreen() {
         };
       })
       .filter((cruise): cruise is BookedCruise => cruise !== null);
-  }, [bookedCruises]);
+  }, [filteredBookedCruises]);
 
-  const sourceCalendarEvents = useMemo(() => [...(localData.calendar || []), ...(localData.tripit || [])], [localData.calendar, localData.tripit]);
+  const sourceCalendarEvents = useMemo(() => {
+    const mergedEvents = [...((localData.calendar || []) as CalendarEvent[]), ...((localData.tripit || []) as CalendarEvent[])];
+    return filterRecordsByIntelligence(mergedEvents, intelligenceFilterSnapshot, users);
+  }, [intelligenceFilterSnapshot, localData.calendar, localData.tripit, users]);
 
   const calendarEvents = useMemo(() => {
     const mergedEvents = getCalendarEventsWithGeneratedCruiseEvents(
@@ -520,7 +547,7 @@ export default function EventsScreen() {
       });
     });
 
-    (localData.offers || []).forEach((offer) => {
+    filteredOffers.forEach((offer) => {
       const expiry = offer.expiryDate || offer.expires || offer.offerExpiryDate;
       if (!expiry) return;
       const date = expiry.split('T')[0];
@@ -534,7 +561,7 @@ export default function EventsScreen() {
       });
     });
 
-    certificates.forEach((certificate) => {
+    filteredCertificates.forEach((certificate) => {
       if (!certificate.expiryDate) return;
       addItem({
         id: `certificate-expiration-${certificate.id}`,
@@ -583,7 +610,7 @@ export default function EventsScreen() {
       expirations: sortedItems.filter((item) => item.kind === 'expiration').length,
     });
     return sortedItems;
-  }, [certificates, formatDateOnly, localData.offers, normalizedBookedCruises, sourceCalendarEvents]);
+  }, [filteredCertificates, filteredOffers, formatDateOnly, normalizedBookedCruises, sourceCalendarEvents]);
 
   const passengerSummary = useMemo(() => {
     return {
@@ -683,6 +710,8 @@ export default function EventsScreen() {
               />
             </View>
           </View>
+
+          <IntelligenceFilterStrip contextLabel="Calendar" />
 
           <View style={styles.viewToggleContainer}>
             {(['events', 'week', 'month', '90days', 'passenger'] as ViewMode[]).map((mode) => (

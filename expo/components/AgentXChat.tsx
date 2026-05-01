@@ -41,6 +41,7 @@ import {
   ClipboardCheck,
 } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
+import { IntelligenceFilterStrip } from '@/components/IntelligenceFilterStrip';
 import type { AgentXMode } from '@/types/models';
 
 export interface ChatMessage {
@@ -736,6 +737,10 @@ export const AgentXChat = React.memo(function AgentXChat({
         </ScrollView>
       </View>
 
+      <View style={styles.filterStripWrap}>
+        <IntelligenceFilterStrip contextLabel="AgentX" compact={true} />
+      </View>
+
       {isRecording && (
         <View style={styles.recordingBanner}>
           <Animated.View style={[styles.recordingDot, { transform: [{ scale: pulseAnim }] }]} />
@@ -982,6 +987,10 @@ const styles = StyleSheet.create({
   },
   headerButtonActive: {
     backgroundColor: COLORS.navyDeep,
+  },
+  filterStripWrap: {
+    paddingHorizontal: SPACING.sm,
+    marginBottom: 4,
   },
   agentModeStrip: {
     backgroundColor: 'rgba(255, 255, 255, 0.78)',

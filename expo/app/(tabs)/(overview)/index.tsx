@@ -60,6 +60,9 @@ import { createDateFromString, getDaysUntil, isDateInPast, formatDate } from '@/
 import { isActiveBookedCruise } from '@/lib/bookedCruiseStatus';
 import { MachineStrategyCard } from '@/components/MachineStrategyCard';
 import { CertificateExplorerModal } from '@/components/CertificateExplorerModal';
+import { IntelligenceFilterStrip } from '@/components/IntelligenceFilterStrip';
+import { useIntelligenceFilters } from '@/state/IntelligenceFiltersProvider';
+import { filterRecordsByIntelligence } from '@/lib/intelligenceFilters';
 
 import type { Cruise, BookedCruise, CasinoOffer } from '@/types/models';
 import { getCabinPriceFromEntity, GUEST_COUNT_DEFAULT } from '@/lib/valueCalculator';
@@ -194,7 +197,8 @@ function isOfferLinkedCruiseInProgress(cruise: BookedCruise, today: Date): boole
 function OverviewScreenContent() {
   const router = useRouter();
   const { cruises, bookedCruises: allBookedCruises, casinoOffers, clubRoyaleProfile, updateCasinoOffer } = useCoreData();
-  const { currentUser } = useUser();
+  const { currentUser, users } = useUser();
+  const { selectedProfileId, selectedBrand, selectedProgram } = useIntelligenceFilters();
   const { logout } = useAuth();
   const { messages, isLoading: agentLoading, sendMessage, isVisible, setVisible, toggleExpanded, isExpanded, refreshAnalysis, mode: agentMode, setMode: setAgentMode } = useAgentX();
   const { summary } = useAlerts();
@@ -215,9 +219,15 @@ function OverviewScreenContent() {
     getCertificatesByType,
   } = useCertificates();
 
-  const cruisesData = useMemo(() => cruises, [cruises]);
+  const intelligenceFilterSnapshot = useMemo(() => ({
+    selectedProfileId,
+    selectedBrand,
+    selectedProgram,
+  }), [selectedBrand, selectedProfileId, selectedProgram]);
 
-  const offersData = useMemo(() => casinoOffers, [casinoOffers]);
+  const cruisesData = useMemo(() => filterRecordsByIntelligence(cruises, intelligenceFilterSnapshot, users), [cruises, intelligenceFilterSnapshot, users]);
+
+  const offersData = useMemo(() => filterRecordsByIntelligence(casinoOffers, intelligenceFilterSnapshot, users), [casinoOffers, intelligenceFilterSnapshot, users]);
 
   const offerNameByCode = useMemo(() => {
     const map = new Map<string, string>();
@@ -246,7 +256,7 @@ function OverviewScreenContent() {
     return map;
   }, [offersData]);
 
-  const bookedCruises = useMemo(() => allBookedCruises, [allBookedCruises]);
+  const bookedCruises = useMemo(() => filterRecordsByIntelligence(allBookedCruises, intelligenceFilterSnapshot, users), [allBookedCruises, intelligenceFilterSnapshot, users]);
 
   const activeBookedCruises = useMemo(() => {
     return bookedCruises.filter((cruise: BookedCruise) => isActiveBookedCruise(cruise));
@@ -553,7 +563,7 @@ function OverviewScreenContent() {
   }, [groupedOffers]);
 
   const cruisesWithCasinoData = useMemo(() => {
-    const allCruises = [...allBookedCruises, ...cruises];
+    const allCruises = [...bookedCruises, ...cruisesData];
     return allCruises.filter((cruise: BookedCruise) => {
       const hasWinnings = cruise.winnings !== undefined && cruise.winnings !== 0;
       const hasPoints = (cruise.earnedPoints !== undefined && cruise.earnedPoints > 0) || 
@@ -564,7 +574,7 @@ function OverviewScreenContent() {
       const dateB = new Date(b.sailDate).getTime();
       return dateB - dateA;
     });
-  }, [allBookedCruises, cruises]);
+  }, [bookedCruises, cruisesData]);
 
   const sortedOffers = useMemo(() => {
     if (groupedOffers.length === 0) return nonExpiredOffers;
@@ -738,6 +748,8 @@ function OverviewScreenContent() {
           onBookedPress={handleBookedPress}
           onOffersPress={() => console.log('Active offers pressed')}
         />
+
+        <IntelligenceFilterStrip contextLabel="Offers" />
 
         <CollapsibleSection
           title="AI Analysis"

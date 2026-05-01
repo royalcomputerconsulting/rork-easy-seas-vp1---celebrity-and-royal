@@ -43,6 +43,7 @@ import { COLORS, SPACING, TYPOGRAPHY } from "@/constants/theme";
 import { composeProviders } from "@/lib/composeProviders";
 import { ensureStorageHealthy } from "@/lib/storage/storageRecovery";
 import { SailingWeatherProvider } from "@/state/SailingWeatherProvider";
+import { IntelligenceFiltersProvider } from "@/state/IntelligenceFiltersProvider";
 
 try {
   void SplashScreen.preventAutoHideAsync();
@@ -561,6 +562,7 @@ const ServiceProviders = composeProviders(
   TaxProvider,
   AlertsProvider,
   CertificatesProvider,
+  IntelligenceFiltersProvider,
   AgentXProvider,
   SailingWeatherProvider,
 );

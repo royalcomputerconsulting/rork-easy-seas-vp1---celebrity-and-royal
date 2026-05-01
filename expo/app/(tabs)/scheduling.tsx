@@ -32,7 +32,7 @@ import { CompactDashboardHeader } from '@/components/CompactDashboardHeader';
 import { MinimalistFilterBar } from '@/components/ui/MinimalistFilterBar';
 import { isDateInPast, getDaysUntil, createDateFromString } from '@/lib/date';
 import { CruiseCard } from '@/components/CruiseCard';
-import type { Cruise, BookedCruise } from '@/types/models';
+import type { Cruise, BookedCruise, CasinoOffer } from '@/types/models';
 import { calculateCruiseValue } from '@/lib/valueCalculator';
 import { useAgentX } from '@/state/AgentXProvider';
 import { getRecommendedCruises, type RecommendationScore } from '@/lib/recommendationEngine';
@@ -40,6 +40,9 @@ import { AgentXChat } from '@/components/AgentXChat';
 import { AlertsManagerModal } from '@/components/AlertsManagerModal';
 import { ResponsiveContainer } from '@/components/ResponsiveContainer';
 import { FavoriteStateroomsSection } from '@/components/favorite-staterooms/FavoriteStateroomsSection';
+import { IntelligenceFilterStrip } from '@/components/IntelligenceFilterStrip';
+import { useIntelligenceFilters } from '@/state/IntelligenceFiltersProvider';
+import { filterRecordsByIntelligence } from '@/lib/intelligenceFilters';
 import { findBackToBackSets, type BackToBackSet, type CruiseOffer } from '@/lib/backToBackFinder';
 import { Link2, Calendar, Tag, Anchor } from 'lucide-react-native';
 
@@ -73,8 +76,9 @@ const CABIN_FILTERS: { key: CabinFilter; label: string }[] = [
 export default function SchedulingScreen() {
   const router = useRouter();
   const { localData, clubRoyaleProfile, isLoading: appLoading } = useAppState();
-  const { bookedCruises } = useCoreData();
-  const { currentUser } = useUser();
+  const { bookedCruises: storedBookedCruises } = useCoreData();
+  const { currentUser, users } = useUser();
+  const { selectedProfileId, selectedBrand, selectedProgram } = useIntelligenceFilters();
   const { messages, isLoading: agentLoading, sendMessage, isVisible, setVisible, isExpanded, toggleExpanded, mode: agentMode, setMode: setAgentMode } = useAgentX();
 
   const [activeTab, setActiveTab] = useState<ViewTab>('available');
@@ -90,22 +94,40 @@ export default function SchedulingScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [showAlertsModal, setShowAlertsModal] = useState(false);
 
+  const intelligenceFilterSnapshot = useMemo(() => ({
+    selectedProfileId,
+    selectedBrand,
+    selectedProgram,
+  }), [selectedBrand, selectedProfileId, selectedProgram]);
+
   const allCruises = useMemo(() => {
-    return localData.cruises || [];
-  }, [localData.cruises]);
+    return filterRecordsByIntelligence((localData.cruises || []) as Cruise[], intelligenceFilterSnapshot, users);
+  }, [intelligenceFilterSnapshot, localData.cruises, users]);
+
+  const allOffers = useMemo(() => {
+    return filterRecordsByIntelligence((localData.offers || []) as CasinoOffer[], intelligenceFilterSnapshot, users);
+  }, [intelligenceFilterSnapshot, localData.offers, users]);
+
+  const scopedLocalBookedCruises = useMemo(() => {
+    return filterRecordsByIntelligence((localData.booked || []) as BookedCruise[], intelligenceFilterSnapshot, users);
+  }, [intelligenceFilterSnapshot, localData.booked, users]);
+
+  const scopedStoredBookedCruises = useMemo(() => {
+    return filterRecordsByIntelligence((storedBookedCruises || []) as BookedCruise[], intelligenceFilterSnapshot, users);
+  }, [intelligenceFilterSnapshot, storedBookedCruises, users]);
 
   const bookedIds = useMemo(() => {
-    const localBooked = localData.booked || [];
-    const storeBooked = bookedCruises || [];
+    const localBooked = scopedLocalBookedCruises;
+    const storeBooked = scopedStoredBookedCruises;
     return new Set([
       ...localBooked.map((b: BookedCruise) => b.id),
       ...storeBooked.map((b: BookedCruise) => b.id),
     ]);
-  }, [localData.booked, bookedCruises]);
+  }, [scopedLocalBookedCruises, scopedStoredBookedCruises]);
 
   const bookedDates = useMemo(() => {
     const dates = new Set<string>();
-    const allBooked = [...(localData.booked || []), ...(bookedCruises || [])];
+    const allBooked = [...scopedLocalBookedCruises, ...scopedStoredBookedCruises];
     allBooked.forEach((cruise: BookedCruise) => {
       const sailDate = createDateFromString(cruise.sailDate);
       const returnDate = createDateFromString(cruise.returnDate);
@@ -116,7 +138,7 @@ export default function SchedulingScreen() {
       }
     });
     return dates;
-  }, [localData.booked, bookedCruises]);
+  }, [scopedLocalBookedCruises, scopedStoredBookedCruises]);
 
   const hasConflict = useCallback((cruise: Cruise): boolean => {
     const sailDate = createDateFromString(cruise.sailDate);
@@ -135,8 +157,8 @@ export default function SchedulingScreen() {
   const [b2bSets, setB2bSets] = useState<BackToBackSet[]>([]);
 
   const _getSmartRecommendations = useCallback((cruises: Cruise[]): Cruise[] => {
-    const allBooked = [...(localData.booked || []), ...(bookedCruises || [])];
-    const offers = localData.offers || [];
+    const allBooked = [...scopedLocalBookedCruises, ...scopedStoredBookedCruises];
+    const offers = allOffers;
     
     console.log('[Scheduling] Running smart recommendation engine...');
     
@@ -160,17 +182,17 @@ export default function SchedulingScreen() {
     console.log('[Scheduling] Recommendations generated:', recommendations.length);
     
     return recommendations.map(r => r.cruise);
-  }, [bookedDates, localData.booked, localData.offers, bookedCruises]);
+  }, [bookedDates, scopedLocalBookedCruises, scopedStoredBookedCruises, allOffers]);
 
   const getBackToBackSets = useCallback((cruises: Cruise[]): BackToBackSet[] => {
     console.log('[Scheduling] Finding back-to-back cruise sets...');
     console.log('[Scheduling] Total cruises to search:', cruises.length);
     
-    const allBooked = [...(localData.booked || []), ...(bookedCruises || [])];
+    const allBooked = [...scopedLocalBookedCruises, ...scopedStoredBookedCruises];
     console.log('[Scheduling] Including booked cruises for B2B matching:', allBooked.length);
     
-    const allOffers = localData.offers || [];
-    console.log('[Scheduling] Including casino offers for status filtering:', allOffers.length);
+    const scopedOffers = allOffers;
+    console.log('[Scheduling] Including casino offers for status filtering:', scopedOffers.length);
     
     const sets = findBackToBackSets(cruises, bookedDates, {
       maxGapDays: 2,
@@ -178,18 +200,18 @@ export default function SchedulingScreen() {
       excludeConflicts: false,
       minChainLength: 2,
       bookedCruises: allBooked,
-      casinoOffers: allOffers,
+      casinoOffers: scopedOffers,
     });
     
     console.log('[Scheduling] Found', sets.length, 'back-to-back sets');
     setB2bSets(sets);
     
     return sets;
-  }, [bookedDates, localData.booked, bookedCruises, localData.offers]);
+  }, [bookedDates, scopedLocalBookedCruises, scopedStoredBookedCruises, allOffers]);
 
   const availableShips = useMemo(() => {
     const ships = new Set<string>();
-    const offers = localData.offers || [];
+    const offers = allOffers;
     offers.forEach((offer: any) => {
       if (offer.shipName) {
         ships.add(offer.shipName);
@@ -201,10 +223,10 @@ export default function SchedulingScreen() {
       }
     });
     return Array.from(ships).sort();
-  }, [localData.offers, allCruises]);
+  }, [allOffers, allCruises]);
 
   const enrichedCruises = useMemo(() => {
-    const offers = localData.offers || [];
+    const offers = allOffers;
     
     return allCruises.map(cruise => {
       if (cruise.offerName && cruise.offerCode) {
@@ -236,14 +258,14 @@ export default function SchedulingScreen() {
       
       return cruise;
     });
-  }, [allCruises, localData.offers]);
+  }, [allCruises, allOffers]);
 
   const bookedCruisesData = useMemo(() => {
-    const localBooked = localData.booked || [];
-    const storeBooked = bookedCruises || [];
+    const localBooked = scopedLocalBookedCruises;
+    const storeBooked = scopedStoredBookedCruises;
     if (localBooked.length > 0) return localBooked;
     return storeBooked;
-  }, [localData.booked, bookedCruises]);
+  }, [scopedLocalBookedCruises, scopedStoredBookedCruises]);
 
   const filteredCruises = useMemo(() => {
     let result = [...enrichedCruises];
@@ -318,14 +340,14 @@ export default function SchedulingScreen() {
   }), [filteredCruises, enrichedCruises, bookedIds, bookedCruisesData]);
 
   const alertCount = useMemo(() => {
-    return (localData.offers || []).filter((o: any) => {
+    return allOffers.filter((o: CasinoOffer) => {
       if (o.expiryDate) {
         const days = getDaysUntil(o.expiryDate);
         return days > 0 && days <= 7;
       }
       return false;
     }).length;
-  }, [localData.offers]);
+  }, [allOffers]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -578,6 +600,8 @@ export default function SchedulingScreen() {
         onBookedPress={() => router.push('/booked' as any)}
         onOffersPress={() => setActiveTab('foryou')}
       />
+
+      <IntelligenceFilterStrip contextLabel="Cruises" />
 
       <MinimalistFilterBar
         tabs={TABS.map(tab => ({ key: tab.key, label: tab.label }))}

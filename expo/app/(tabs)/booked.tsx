@@ -58,6 +58,9 @@ import { useSimpleAnalytics } from '@/state/SimpleAnalyticsProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import { formatCurrency, formatNumber as formatNum } from '@/lib/format';
 import { CrownAnchorTimeline } from '@/components/CrownAnchorTimeline';
+import { IntelligenceFilterStrip } from '@/components/IntelligenceFilterStrip';
+import { useIntelligenceFilters } from '@/state/IntelligenceFiltersProvider';
+import { filterRecordsByIntelligence } from '@/lib/intelligenceFilters';
 import { buildCruiseEconomicsSummary } from '@/lib/casinoCruiseEconomics';
 
 type FilterType = 'all' | 'upcoming' | 'completed' | 'celebrity';
@@ -109,7 +112,8 @@ export default function BookedScreen() {
   const { localData, clubRoyaleProfile, isLoading: appLoading, refreshData } = useAppState();
   const { addBookedCruise, bookedCruises: storedBooked } = useCoreData();
   const { authenticatedEmail } = useAuth();
-  useUser();
+  const { users } = useUser();
+  const { selectedProfileId, selectedBrand, selectedProgram } = useIntelligenceFilters();
   const { casinoAnalytics } = useSimpleAnalytics();
   const {
     clubRoyaleTier: loyaltyClubRoyaleTier,
@@ -127,13 +131,20 @@ export default function BookedScreen() {
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [showAddModal, setShowAddModal] = useState(false);
 
+  const intelligenceFilterSnapshot = useMemo(() => ({
+    selectedProfileId,
+    selectedBrand,
+    selectedProgram,
+  }), [selectedBrand, selectedProfileId, selectedProgram]);
+
   const bookedCruises = useMemo(() => {
-    const localBooked = localData.booked || [];
-    const baseCruises = localBooked.length > 0 ? localBooked : storedBooked;
+    const localBooked = filterRecordsByIntelligence((localData.booked || []) as BookedCruise[], intelligenceFilterSnapshot, users);
+    const storedScoped = filterRecordsByIntelligence(storedBooked, intelligenceFilterSnapshot, users);
+    const baseCruises = localBooked.length > 0 ? localBooked : storedScoped;
     const normalizedEmail = authenticatedEmail?.toLowerCase().trim() ?? null;
     const shouldIncludeKnownAdminCruises = !!normalizedEmail && ADMIN_EMAILS.includes(normalizedEmail as typeof ADMIN_EMAILS[number]);
     const knownAdminCruises = shouldIncludeKnownAdminCruises ? [...COMPLETED_CRUISES_DATA, ...BOOKED_CRUISES_DATA, ...CRUISE_HISTORY_SUPPLEMENT_DATA] : [];
-    const mergedCruises = mergeCruiseData(baseCruises, knownAdminCruises);
+    const mergedCruises = filterRecordsByIntelligence(mergeCruiseData(baseCruises, knownAdminCruises), intelligenceFilterSnapshot, users);
     console.log('[Booked] Resolved booked cruise source:', {
       authenticatedEmail: normalizedEmail,
       baseCruises: baseCruises.length,
@@ -141,7 +152,7 @@ export default function BookedScreen() {
       mergedCruises: mergedCruises.length,
     });
     return mergedCruises;
-  }, [authenticatedEmail, localData.booked, storedBooked]);
+  }, [authenticatedEmail, intelligenceFilterSnapshot, localData.booked, storedBooked, users]);
 
   const filteredCruises = useMemo(() => {
     let result = [...bookedCruises];
@@ -620,6 +631,8 @@ export default function BookedScreen() {
           )}
         </LinearGradient>
       </View>
+
+      <IntelligenceFilterStrip contextLabel="Booked" />
 
       <View style={styles.viewModeRow}>
         <View style={styles.viewModeToggle}>
