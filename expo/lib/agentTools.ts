@@ -9,6 +9,14 @@ import {
   isPreferredPort,
 } from '@/lib/recommendationEngine';
 import { executeCertificateLevelSearch, type CertificateLevelSearchInput } from '@/lib/certificateLevelSearch';
+import { decodeOffer, getOfferDisplayCode } from '@/lib/offerIntelligence';
+import {
+  buildPortTracker,
+  calculateSeaDayDensityScore,
+  calculateShipFamiliarityScore,
+  findCruiseReplacementCandidates,
+  type ReplacementCandidate,
+} from '@/lib/cruisePlanningIntelligence';
 
 export interface AgentToolContext {
   cruises: Cruise[];
@@ -67,6 +75,23 @@ export interface OfferAnalysisInput {
   includeExpiring?: boolean;
   expiryDays?: number;
   sortBy?: 'value' | 'expiry' | 'freeplay' | 'cabin';
+}
+
+export interface DecodeOfferInput {
+  offerId?: string;
+  offerCode?: string;
+  query?: string;
+  limit?: number;
+}
+
+export type ReplacementGoalId = 'improveOfferValue' | 'lowerOutOfPocket' | 'addSeaDays' | 'improveBackToBackFit' | 'useExpiringOffer' | 'addNewPorts' | 'improveShipFamiliarity' | 'improveTierProgress';
+
+export interface ReplacementFinderInput {
+  currentCruiseId?: string;
+  offerCode?: string;
+  query?: string;
+  goal?: ReplacementGoalId;
+  limit?: number;
 }
 
 export type { CertificateLevelSearchInput };
@@ -521,6 +546,200 @@ export function executeCertificateSearch(input: CertificateLevelSearchInput, con
     bookedCruises: context.bookedCruises,
     offers: context.offers,
   });
+}
+
+export function executeDecodeOffer(input: DecodeOfferInput, context: AgentToolContext): string {
+  console.log('[AgentTools] Decode offer input:', input);
+
+  const query = (input.offerCode || input.offerId || input.query || '').toLowerCase().trim();
+  const activeOffers = context.offers.filter((offer) => offer.status !== 'archived' && offer.status !== 'skipped' && offer.archiveStatus !== 'archived' && offer.archiveStatus !== 'replaced');
+  const sortedOffers = [...activeOffers].sort((a, b) => {
+    const aDays = (a.expires || a.expiryDate || a.offerExpiryDate) ? getDaysUntil(a.expires || a.expiryDate || a.offerExpiryDate!) : 9999;
+    const bDays = (b.expires || b.expiryDate || b.offerExpiryDate) ? getDaysUntil(b.expires || b.expiryDate || b.offerExpiryDate!) : 9999;
+    return aDays - bDays;
+  });
+
+  const matchedOffers = query
+    ? sortedOffers.filter((offer) => {
+      const fields = [offer.id, offer.offerCode, offer.promoCode, offer.title, offer.offerName]
+        .filter((value): value is string => typeof value === 'string')
+        .map((value) => value.toLowerCase());
+      return fields.some((value) => value.includes(query) || query.includes(value));
+    })
+    : sortedOffers;
+
+  const selectedOffers = matchedOffers.slice(0, input.limit ?? 3);
+
+  if (selectedOffers.length === 0) {
+    return query
+      ? `No active offer found matching "${input.offerCode || input.offerId || input.query}". Try opening the offer detail page or asking AgentX to show active offers first.`
+      : 'No active offers are available to decode in the current profile/brand/program scope.';
+  }
+
+  const lines = ['## Decoded Offer Guidance', ''];
+  selectedOffers.forEach((offer, index) => {
+    const decoded = decodeOffer(offer, context.cruises);
+    const code = getOfferDisplayCode(offer);
+    lines.push(`### ${index + 1}. ${decoded.title}`);
+    lines.push(`Offer code: ${code}`);
+    decoded.bullets.forEach((bullet) => lines.push(`• ${bullet}`));
+    lines.push(`• Next action: tap Decode Offer on the offer detail screen for the full in-app panel, or compare ${code} against replacement cruises.`);
+    lines.push('');
+  });
+  lines.push('Important: verify official Royal/Celebrity casino terms before booking, upgrading, or stacking certificates.');
+
+  return lines.join('\n');
+}
+
+const REPLACEMENT_GOAL_LABELS: Record<ReplacementGoalId, string> = {
+  improveOfferValue: 'Improve offer value',
+  lowerOutOfPocket: 'Lower out-of-pocket cost',
+  addSeaDays: 'Add sea days',
+  improveBackToBackFit: 'Improve back-to-back fit',
+  useExpiringOffer: 'Use expiring offer',
+  addNewPorts: 'Add new ports',
+  improveShipFamiliarity: 'Improve ship familiarity',
+  improveTierProgress: 'Improve tier progress',
+};
+
+function findOfferForReplacementCruise(cruise: Cruise, offers: CasinoOffer[]): CasinoOffer | undefined {
+  return offers.find((offer) => offer.cruiseId === cruise.id || offer.cruiseIds?.includes(cruise.id) || (offer.offerCode && cruise.offerCode && offer.offerCode === cruise.offerCode) || (offer.shipName === cruise.shipName && offer.sailingDate === cruise.sailDate));
+}
+
+function estimateReplacementOutOfPocketForAgent(cruise: Cruise, offers: CasinoOffer[]): number {
+  const offer = findOfferForReplacementCruise(cruise, offers);
+  const taxes = cruise.taxes ?? offer?.taxesFees ?? offer?.portCharges ?? Math.round((cruise.nights || offer?.nights || 7) * 60);
+  const cabin = cruise.price ?? cruise.totalPrice ?? 0;
+  return Math.max(0, taxes + cabin);
+}
+
+function getReplacementDateGapDays(first: string | undefined, second: string | undefined): number | null {
+  if (!first || !second) return null;
+  const firstDate = createDateFromString(first);
+  const secondDate = createDateFromString(second);
+  if (Number.isNaN(firstDate.getTime()) || Number.isNaN(secondDate.getTime())) return null;
+  return Math.round((secondDate.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function scoreReplacementCandidateForGoal(candidate: ReplacementCandidate, currentCruise: Cruise, goal: ReplacementGoalId, offers: CasinoOffer[], history: Cruise[]): number {
+  if (goal === 'improveOfferValue') return candidate.offerScore + Math.min(18, candidate.rankScore * 0.18);
+  if (goal === 'addSeaDays') return candidate.seaDayDensityScore;
+  if (goal === 'improveTierProgress') return candidate.seaDayDensityScore + Math.min(24, (candidate.cruise.nights || 0) * 2.5) + Math.min(14, candidate.offerScore * 0.14);
+  if (goal === 'lowerOutOfPocket') {
+    const currentCost = estimateReplacementOutOfPocketForAgent(currentCruise, offers);
+    const candidateCost = estimateReplacementOutOfPocketForAgent(candidate.cruise, offers);
+    return Math.max(0, Math.min(100, 55 + ((currentCost - candidateCost) / 35)));
+  }
+  if (goal === 'improveBackToBackFit') {
+    const gapAfterCurrent = getReplacementDateGapDays(currentCruise.returnDate, candidate.cruise.sailDate);
+    const gapBeforeCurrent = getReplacementDateGapDays(candidate.cruise.returnDate, currentCruise.sailDate);
+    const validGaps = [gapAfterCurrent, gapBeforeCurrent].filter((gap): gap is number => gap !== null && gap >= 0);
+    const bestGap = validGaps.length > 0 ? Math.min(...validGaps) : 99;
+    return Math.max(0, 100 - bestGap * 16);
+  }
+  if (goal === 'useExpiringOffer') {
+    const offer = findOfferForReplacementCruise(candidate.cruise, offers);
+    const expiryDate = offer?.expiryDate || offer?.expires || offer?.offerExpiryDate || candidate.cruise.offerExpiry;
+    if (!expiryDate) return candidate.offerScore * 0.35;
+    const daysUntilExpiry = getDaysUntil(expiryDate);
+    if (daysUntilExpiry < 0) return candidate.offerScore * 0.25;
+    return Math.max(0, Math.min(100, 96 - daysUntilExpiry * 1.8 + candidate.offerScore * 0.18));
+  }
+  if (goal === 'addNewPorts') return buildPortTracker(history, candidate.cruise).itineraryNoveltyScore;
+  return calculateShipFamiliarityScore(candidate.cruise.shipName, history, offers).score;
+}
+
+function inferReplacementGoal(message: string): ReplacementGoalId {
+  if (/lower|cheaper|out[- ]of[- ]pocket|cash|cost/i.test(message)) return 'lowerOutOfPocket';
+  if (/sea day|casino day|more days/i.test(message)) return 'addSeaDays';
+  if (/back[- ]to[- ]back|b2b|gap|consecutive/i.test(message)) return 'improveBackToBackFit';
+  if (/expir|use.*offer/i.test(message)) return 'useExpiringOffer';
+  if (/new port|fresh port|countries|itinerary novelty/i.test(message)) return 'addNewPorts';
+  if (/familiar|known ship|same ship|home ship/i.test(message)) return 'improveShipFamiliarity';
+  if (/tier|points|progress|signature|masters|prime/i.test(message)) return 'improveTierProgress';
+  return 'improveOfferValue';
+}
+
+function resolveReplacementAnchor(input: ReplacementFinderInput, context: AgentToolContext): Cruise | null {
+  const allCruises = [...context.bookedCruises, ...context.cruises];
+  if (input.currentCruiseId) {
+    const byId = allCruises.find((cruise) => cruise.id === input.currentCruiseId);
+    if (byId) return byId;
+  }
+
+  const query = (input.offerCode || input.query || '').toLowerCase().trim();
+  const offer = query
+    ? context.offers.find((item) => [item.offerCode, item.promoCode, item.title, item.offerName].some((value) => typeof value === 'string' && (value.toLowerCase().includes(query) || query.includes(value.toLowerCase()))))
+    : [...context.offers].sort((a, b) => ((b.totalValue || b.offerValue || b.freePlay || 0) - (a.totalValue || a.offerValue || a.freePlay || 0)))[0];
+
+  if (offer) {
+    const linked = allCruises.find((cruise) => cruise.id === offer.cruiseId || offer.cruiseIds?.includes(cruise.id) || (offer.offerCode && cruise.offerCode === offer.offerCode) || (offer.shipName === cruise.shipName && offer.sailingDate === cruise.sailDate));
+    if (linked) return linked;
+  }
+
+  return context.bookedCruises.find((cruise) => !isDateInPast(cruise.sailDate)) ?? context.cruises.find((cruise) => !isDateInPast(cruise.sailDate)) ?? null;
+}
+
+export function executeReplacementFinder(input: ReplacementFinderInput, context: AgentToolContext): string {
+  console.log('[AgentTools] Replacement finder input:', input);
+  const goal = input.goal ?? inferReplacementGoal(input.query ?? '');
+  const currentCruise = resolveReplacementAnchor(input, context);
+
+  if (!currentCruise) {
+    return 'No current cruise or offer-linked sailing could be found for replacement comparison in the active scope. Import or select a booked/offer sailing first.';
+  }
+
+  const history = [...context.bookedCruises, ...context.cruises];
+  const candidates = findCruiseReplacementCandidates(currentCruise, context.cruises, context.offers, history)
+    .map((candidate) => ({
+      candidate,
+      goalScore: scoreReplacementCandidateForGoal(candidate, currentCruise, goal, context.offers, history),
+      outOfPocket: estimateReplacementOutOfPocketForAgent(candidate.cruise, context.offers),
+      sea: calculateSeaDayDensityScore(candidate.cruise),
+      ship: calculateShipFamiliarityScore(candidate.cruise.shipName, history, context.offers),
+      ports: buildPortTracker(history, candidate.cruise),
+    }))
+    .sort((left, right) => right.goalScore - left.goalScore)
+    .slice(0, input.limit ?? 5);
+
+  const currentCost = estimateReplacementOutOfPocketForAgent(currentCruise, context.offers);
+  const currentSea = calculateSeaDayDensityScore(currentCruise);
+  const currentShip = calculateShipFamiliarityScore(currentCruise.shipName, history, context.offers);
+  const currentPorts = buildPortTracker(history, currentCruise);
+
+  const lines = [
+    '## Cruise Replacement Workspace',
+    '',
+    `**Selected goal:** ${REPLACEMENT_GOAL_LABELS[goal]}`,
+    `**Replacing / comparing against:** ${currentCruise.shipName} • ${formatDate(currentCruise.sailDate, 'medium')} • ${currentCruise.nights} nights`,
+    `**Current baseline:** ${Math.round(currentCost).toLocaleString()} out-of-pocket estimate • sea score ${currentSea.casinoOpportunityScore} • ship familiarity ${currentShip.score} • new-port score ${currentPorts.itineraryNoveltyScore}`,
+    '',
+    '### Goal Picker',
+    'Improve offer value | Lower out-of-pocket cost | Add sea days | Improve back-to-back fit | Use expiring offer | Add new ports | Improve ship familiarity | Improve tier progress',
+    '',
+  ];
+
+  if (candidates.length === 0) {
+    lines.push('No replacement candidates found for this goal in the current active scope. Try broadening profile/brand filters or importing more available cruises.');
+    return lines.join('\n');
+  }
+
+  lines.push('### Ranked Replacements');
+  candidates.forEach(({ candidate, goalScore, outOfPocket, sea, ship, ports }, index) => {
+    const costDelta = currentCost - outOfPocket;
+    const seaDelta = sea.casinoOpportunityScore - currentSea.casinoOpportunityScore;
+    const shipDelta = ship.score - currentShip.score;
+    lines.push(`${index + 1}. **${candidate.cruise.shipName}** — ${formatDate(candidate.cruise.sailDate, 'medium')} • ${candidate.cruise.nights} nights`);
+    lines.push(`   Goal score: ${Math.round(goalScore)}/100 • Offer ${candidate.offerCode} (${candidate.offerScore}/100) • ${candidate.casinoPaysForSummary}`);
+    lines.push(`   Delta: ${costDelta >= 0 ? 'saves' : 'costs extra'} ${Math.abs(Math.round(costDelta)).toLocaleString()} • sea ${seaDelta >= 0 ? '+' : ''}${Math.round(seaDelta)} • ship familiarity ${shipDelta >= 0 ? '+' : ''}${Math.round(shipDelta)} • new ports ${ports.newPorts.length}`);
+    lines.push(`   Why: ${candidate.reasonBetterWorse}`);
+    if (candidate.warnings[0]) lines.push(`   Watch-out: ${candidate.warnings[0]}`);
+    lines.push('');
+  });
+
+  lines.push('### How to use this workspace');
+  lines.push('Tap another replacement goal chip in AgentX, or ask: “Find replacements that lower out-of-pocket” / “Find replacements with more sea days” / “Find B2B replacements.”');
+  return lines.join('\n');
 }
 
 export function executeOfferAnalysis(input: OfferAnalysisInput, context: AgentToolContext): string {
@@ -1282,6 +1501,7 @@ export const AGENT_TOOL_DESCRIPTIONS = {
   checkTierProgress: 'Calculate tier progress and projections. Shows current status and estimated timeline.',
   analyzeOffers: 'Analyze casino offers. Find expiring offers, compare values, and get recommendations.',
   getRecommendations: 'Get AI-powered cruise recommendations based on points potential, value, urgency, and port preferences.',
+  findReplacements: 'Find replacement cruises with a goal picker for value, lower out-of-pocket cost, sea days, back-to-back fit, expiring offers, new ports, ship familiarity, and tier progress.',
   searchSlotMachines: 'Search for slot machines by name, manufacturer, persistence type, or ship location.',
   analyzeSlotMachineAP: 'Get detailed AP (Advantage Play) analysis for slot machines including entry/exit conditions, bankroll requirements, and expected returns.',
   recommendMachines: 'Get personalized slot machine recommendations for a specific ship or cruise. Uses your session history, ROI data, win rates, AP potential, and machine locations to suggest the best machines to play.',

@@ -53,6 +53,7 @@ export interface ChatMessage {
   toolName?: string;
   toolInput?: unknown;
   contextSummary?: string;
+  suggestedActions?: { id: string; label: string; prompt: string }[];
 }
 
 interface AgentXChatProps {
@@ -547,6 +548,22 @@ export const AgentXChat = React.memo(function AgentXChat({
                     {message.content}
                   </Text>
                 </ScrollView>
+                {!isUser && message.suggestedActions && message.suggestedActions.length > 0 ? (
+                  <View style={styles.suggestedActionsRow} testID={`agentx-suggested-actions-${message.id}`}>
+                    {message.suggestedActions.map((action) => (
+                      <TouchableOpacity
+                        key={action.id}
+                        style={styles.suggestedActionChip}
+                        onPress={() => handleQuickAction(action.prompt)}
+                        activeOpacity={0.75}
+                        testID={`agentx-action-${action.id}`}
+                      >
+                        <Sparkles size={12} color="#0F766E" />
+                        <Text style={styles.suggestedActionText}>{action.label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                ) : null}
               </>
             )}
             
@@ -575,7 +592,7 @@ export const AgentXChat = React.memo(function AgentXChat({
         </View>
       </Animated.View>
     );
-  }, [fadeAnim, speakText]);
+  }, [fadeAnim, handleQuickAction, speakText]);
 
   const renderWelcome = () => (
     <View style={styles.welcomeContainer}>
@@ -1335,6 +1352,28 @@ const styles = StyleSheet.create({
   },
   messageScrollView: {
     maxHeight: 200,
+  },
+  suggestedActionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: SPACING.sm,
+  },
+  suggestedActionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(15, 118, 110, 0.08)',
+    borderRadius: BORDER_RADIUS.round,
+    borderWidth: 1,
+    borderColor: 'rgba(15, 118, 110, 0.2)',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 6,
+  },
+  suggestedActionText: {
+    fontSize: 11,
+    fontWeight: '800' as const,
+    color: '#0F766E',
   },
   userMessageContent: {
     backgroundColor: COLORS.navyDeep,

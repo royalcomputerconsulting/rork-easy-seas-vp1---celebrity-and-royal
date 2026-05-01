@@ -13,6 +13,8 @@ import {
   executePortfolioOptimizer,
   executeTierProgress,
   executeOfferAnalysis,
+  executeDecodeOffer,
+  executeReplacementFinder,
   executeRecommendations,
   executeMachineRecommendations,
   executeCertificateSearch,
@@ -21,6 +23,9 @@ import {
   PortfolioOptimizerInput,
   TierProgressInput,
   OfferAnalysisInput,
+  DecodeOfferInput,
+  ReplacementFinderInput,
+  ReplacementGoalId,
   RecommendationInput,
   MachineRecommendationInput,
   CertificateLevelSearchInput,
@@ -136,6 +141,8 @@ function isDevAssistantRequest(message: string): boolean {
 function parseToolCall(message: string): { tool: string; params: unknown } | null {
   const askDataMatch = message.match(/ask my data|search my data|find in my data|search everything|global search|natural language search|show me.*data|what .* do i have|which .* do i have/i);
   const certificateMatch = message.match(/certificate|certificates|levels?\s+of\s+certificates?|what\s+levels?|appears?\s+on.*certificate|a\s+or\s+c\s+certificate/i);
+  const decodeOfferMatch = message.match(/decode\s+(?:my\s+)?offer|decode\s+(?:the\s+)?best\s+offer|explain\s+(?:my\s+)?offer|what\s+does\s+(?:this\s+)?offer\s+mean|break\s+down\s+(?:my\s+)?offer/i);
+  const replacementMatch = message.match(/replacement|replace\s+(?:this|my)?\s*cruise|find\s+replacements?|compare\s+replacements?|better\s+replacement|alternate\s+sailing|alternative\s+cruise/i);
   const searchMatch = message.match(/search.*cruise|find.*cruise|available.*cruise|cruise.*search/i);
   const tierMatch = message.match(/tier.*progress|progress.*tier|points.*tier|signature|masters|pinnacle/i);
   const recommendMatch = message.match(/recommend.*for.*me|for.*you|best.*for.*me|suggest.*for.*me|what.*should.*book|which.*cruise|recommended/i);
@@ -148,9 +155,38 @@ function parseToolCall(message: string): { tool: string; params: unknown } | nul
     return { tool: 'askMyData', params: { query: message } };
   }
 
-  if (certificateMatch) {
+  if (certificateMatch && !decodeOfferMatch) {
     const params: CertificateLevelSearchInput = { query: message };
     return { tool: 'searchCertificateLevels', params };
+  }
+
+  if (decodeOfferMatch) {
+    const codeMatch = message.match(/(?:offer|code|promo)\s+([A-Z0-9-]{3,})/i) || message.match(/\b([A-Z]{2,}[A-Z0-9-]{2,})\b/);
+    const params: DecodeOfferInput = { query: message, limit: 3 };
+    if (codeMatch?.[1]) params.offerCode = codeMatch[1];
+    return { tool: 'decodeOffer', params };
+  }
+
+  if (replacementMatch) {
+    const goal: ReplacementGoalId = message.match(/lower|cheaper|out[- ]of[- ]pocket|cash|cost/i)
+      ? 'lowerOutOfPocket'
+      : message.match(/sea day|casino day|more days/i)
+        ? 'addSeaDays'
+        : message.match(/back[- ]to[- ]back|b2b|gap|consecutive/i)
+          ? 'improveBackToBackFit'
+          : message.match(/expir|use.*offer/i)
+            ? 'useExpiringOffer'
+            : message.match(/new port|fresh port|countries|itinerary novelty/i)
+              ? 'addNewPorts'
+              : message.match(/familiar|known ship|same ship|home ship/i)
+                ? 'improveShipFamiliarity'
+                : message.match(/tier|points|progress|signature|masters|prime/i)
+                  ? 'improveTierProgress'
+                  : 'improveOfferValue';
+    const codeMatch = message.match(/(?:offer|code|promo)\s+([A-Z0-9-]{3,})/i) || message.match(/\b([A-Z]{2,}[A-Z0-9-]{2,})\b/);
+    const params: ReplacementFinderInput = { query: message, goal, limit: 5 };
+    if (codeMatch?.[1]) params.offerCode = codeMatch[1];
+    return { tool: 'findReplacements', params };
   }
 
   if (searchMatch) {
@@ -279,6 +315,46 @@ function parseToolCall(message: string): { tool: string; params: unknown } | nul
   return null;
 }
 
+function buildReplacementGoalActions(userContent: string): NonNullable<ChatMessage['suggestedActions']> {
+  const base = userContent.replace(/\s+/g, ' ').trim();
+  return [
+    { id: 'replacement-goal-value', label: 'Improve value', prompt: `Find replacement cruises for this using goal: improve offer value. Context: ${base}` },
+    { id: 'replacement-goal-cost', label: 'Lower cost', prompt: `Find replacement cruises for this using goal: lower out-of-pocket cost. Context: ${base}` },
+    { id: 'replacement-goal-sea-days', label: 'Add sea days', prompt: `Find replacement cruises for this using goal: add sea days. Context: ${base}` },
+    { id: 'replacement-goal-b2b', label: 'B2B fit', prompt: `Find replacement cruises for this using goal: improve back-to-back fit. Context: ${base}` },
+    { id: 'replacement-goal-expiring', label: 'Use expiring', prompt: `Find replacement cruises for this using goal: use expiring offer. Context: ${base}` },
+    { id: 'replacement-goal-new-ports', label: 'New ports', prompt: `Find replacement cruises for this using goal: add new ports. Context: ${base}` },
+    { id: 'replacement-goal-ship', label: 'Known ship', prompt: `Find replacement cruises for this using goal: improve ship familiarity. Context: ${base}` },
+    { id: 'replacement-goal-tier', label: 'Tier progress', prompt: `Find replacement cruises for this using goal: improve tier progress. Context: ${base}` },
+  ];
+}
+
+function buildAgentSuggestedActions(tool: string | null, userContent: string): ChatMessage['suggestedActions'] {
+  if (tool === 'findReplacements') return buildReplacementGoalActions(userContent);
+
+  if (tool === 'analyzeOffers') {
+    return [
+      { id: 'decode-best-offer', label: 'Decode best offer', prompt: 'Decode my best active offer and explain what the casino is actually paying for.' },
+      { id: 'compare-offer-replacements', label: 'Find replacements', prompt: 'Find replacement cruises for my strongest active offer, prioritizing better value and lower out-of-pocket cost.' },
+    ];
+  }
+
+  if (tool === 'decodeOffer') {
+    return [
+      { id: 'compare-decoded-offer', label: 'Compare replacements', prompt: `Find replacement cruises for this decoded offer: ${userContent}` },
+      { id: 'certificate-fit-decoded-offer', label: 'Check certificates', prompt: `Check certificate fit and stacking risk for this decoded offer: ${userContent}` },
+    ];
+  }
+
+  if (tool === 'getRecommendations' || tool === 'optimizePortfolio') {
+    return [
+      { id: 'decode-recommended-offer', label: 'Decode offer behind this', prompt: 'Decode the offer connected to the top recommendation and explain the casino-paid value.' },
+    ];
+  }
+
+  return undefined;
+}
+
 export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => {
   const { tier } = useEntitlement();
   const { isAdmin } = useAuth();
@@ -381,6 +457,10 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
         return executeTierProgress(params as TierProgressInput, toolContext);
       case 'analyzeOffers':
         return executeOfferAnalysis(params as OfferAnalysisInput, toolContext);
+      case 'decodeOffer':
+        return executeDecodeOffer(params as DecodeOfferInput, toolContext);
+      case 'findReplacements':
+        return executeReplacementFinder(params as ReplacementFinderInput, toolContext);
       case 'searchCertificateLevels':
         return executeCertificateSearch(params as CertificateLevelSearchInput, toolContext);
       case 'getRecommendations':
@@ -557,6 +637,7 @@ CRITICAL: The user has EXACTLY ${toolContext.userPoints.toLocaleString()} casino
           : `${contextConfirmation}\n\n${aiResponse}`,
         timestamp: new Date(),
         contextSummary: contextConfirmation,
+        suggestedActions: buildAgentSuggestedActions(toolCall?.tool ?? null, content),
       };
       
       setMessages(prev => prev.filter(m => m.id !== loadingMessage.id).concat(assistantMessage));
