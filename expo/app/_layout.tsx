@@ -300,6 +300,14 @@ function RootLayoutNav() {
         }} 
       />
       <Stack.Screen 
+        name="ask-my-data" 
+        options={{ 
+          presentation: "modal",
+          headerShown: false,
+          animation: 'slide_from_bottom' as const,
+        }} 
+      />
+      <Stack.Screen 
         name="add-machine-wizard" 
         options={{ 
           presentation: "modal",

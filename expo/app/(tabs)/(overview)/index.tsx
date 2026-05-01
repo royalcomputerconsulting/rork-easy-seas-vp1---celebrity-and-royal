@@ -34,6 +34,7 @@ import {
   CheckCircle,
   Clock,
   BookOpen,
+  DatabaseZap,
 } from 'lucide-react-native';
 
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
@@ -777,6 +778,24 @@ function OverviewScreenContent() {
             <View style={styles.learnSystemCopy}>
               <Text style={styles.learnSystemTitle}>Learn the System</Text>
               <Text style={styles.learnSystemSubtitle}>Offer math, certificates, loyalty basics, machine logs, and EasySeas tutorials.</Text>
+            </View>
+            <Text style={styles.learnSystemAction}>Open</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.learnSystemCard}
+          onPress={() => router.push('/ask-my-data' as any)}
+          activeOpacity={0.85}
+          testID="dashboard-ask-my-data"
+        >
+          <LinearGradient colors={['#061826', '#0F766E', '#115E59']} style={styles.learnSystemGradient}>
+            <View style={styles.learnSystemIcon}>
+              <DatabaseZap size={20} color="#A7F3D0" />
+            </View>
+            <View style={styles.learnSystemCopy}>
+              <Text style={styles.learnSystemTitle}>Ask My Data</Text>
+              <Text style={styles.learnSystemSubtitle}>Standalone natural-language search for scoped offers, cruises, certificates, and calendar records.</Text>
             </View>
             <Text style={styles.learnSystemAction}>Open</Text>
           </LinearGradient>
