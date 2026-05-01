@@ -20,8 +20,155 @@ type LegacyFullDataBundle = Partial<FullAppDataBundle> & {
   };
 };
 
+type ImportedCalendarEvent = FullAppDataBundle['calendarEvents'][number];
+type ImportedBookedCruise = FullAppDataBundle['bookedCruises'][number];
+
 function normalizeImportedArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? value as T[] : [];
+}
+
+function normalizeImportedDateOnly(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  return trimmed.includes('T') ? trimmed.split('T')[0] : trimmed;
+}
+
+function dateOnlyTime(value: string): number | null {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const [, year, month, day] = match;
+  return Date.UTC(Number(year), Number(month) - 1, Number(day));
+}
+
+function diffDateOnlyDays(startDate: string, endDate: string): number {
+  const startTime = dateOnlyTime(startDate);
+  const endTime = dateOnlyTime(endDate);
+  if (startTime === null || endTime === null) return 0;
+  return Math.max(0, Math.round((endTime - startTime) / 86400000));
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function extractDescriptionValue(description: string | undefined, label: string): string | undefined {
+  if (!description) return undefined;
+  const escapedLabel = escapeRegExp(label);
+  const match = description.match(new RegExp(`${escapedLabel}\\s+([^•]+)`, 'i'));
+  const value = match?.[1]?.trim();
+  return value && value.length > 0 ? value : undefined;
+}
+
+function getStringField(record: unknown, field: string): string | undefined {
+  if (!record || typeof record !== 'object') return undefined;
+  const value = (record as Record<string, unknown>)[field];
+  return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
+}
+
+function inferShipNameFromCruiseEvents(events: ImportedCalendarEvent[]): string {
+  const spanEvent = events.find((event) => {
+    const startDate = normalizeImportedDateOnly(event.startDate ?? event.start);
+    const endDate = normalizeImportedDateOnly(event.endDate ?? event.end);
+    return event.id?.includes('generated-cruise-span-') || (!!startDate && !!endDate && startDate !== endDate);
+  });
+
+  if (spanEvent?.title?.trim()) return spanEvent.title.trim();
+
+  const description = events.find((event) => typeof event.description === 'string' && event.description.includes('•'))?.description;
+  const fromDescription = description?.split('•')[0]?.trim();
+  if (fromDescription) return fromDescription;
+
+  return events.find((event) => event.location?.trim())?.location?.trim() || 'Imported Cruise';
+}
+
+function inferCruiseDateRange(events: ImportedCalendarEvent[]): { sailDate: string; returnDate: string } | null {
+  const spanEvent = events.find((event) => event.id?.includes('generated-cruise-span-'));
+  const spanStart = normalizeImportedDateOnly(spanEvent?.startDate ?? spanEvent?.start);
+  const spanEnd = normalizeImportedDateOnly(spanEvent?.endDate ?? spanEvent?.end);
+  if (spanStart && spanEnd) return { sailDate: spanStart, returnDate: spanEnd };
+
+  const dates = events
+    .flatMap((event) => [
+      normalizeImportedDateOnly(event.startDate ?? event.start),
+      normalizeImportedDateOnly(event.endDate ?? event.end),
+    ])
+    .filter((date): date is string => date.length > 0)
+    .sort();
+
+  if (dates.length === 0) return null;
+  return { sailDate: dates[0], returnDate: dates[dates.length - 1] };
+}
+
+function inferCruiseStatus(returnDate: string): Pick<ImportedBookedCruise, 'status' | 'completionState'> {
+  const today = new Date().toISOString().split('T')[0];
+  if (returnDate && returnDate < today) {
+    return { status: 'completed', completionState: 'completed' };
+  }
+  return { status: 'booked', completionState: 'upcoming' };
+}
+
+function inferCruiseSource(brand: string | undefined): NonNullable<ImportedBookedCruise['cruiseSource']> {
+  const normalizedBrand = brand?.toLowerCase().trim() ?? '';
+  if (normalizedBrand === 'celebrity') return 'celebrity';
+  if (normalizedBrand === 'carnival') return 'carnival';
+  return 'royal';
+}
+
+function recoverBookedCruisesFromCalendarEvents(events: ImportedCalendarEvent[]): ImportedBookedCruise[] {
+  const groupedCruiseEvents = new Map<string, ImportedCalendarEvent[]>();
+
+  events.forEach((event) => {
+    if (event.type !== 'cruise' && event.sourceType !== 'cruise') return;
+    const cruiseId = typeof event.cruiseId === 'string' && event.cruiseId.trim().length > 0
+      ? event.cruiseId.trim()
+      : event.id?.replace(/^generated-cruise-(?:span|day|sea-day|time-in-port|port-arrival|all-aboard)-/, '').replace(/-\d+$/, '');
+    if (!cruiseId) return;
+    groupedCruiseEvents.set(cruiseId, [...(groupedCruiseEvents.get(cruiseId) ?? []), event]);
+  });
+
+  return Array.from(groupedCruiseEvents.entries()).flatMap(([cruiseId, cruiseEvents]) => {
+    const dateRange = inferCruiseDateRange(cruiseEvents);
+    if (!dateRange) return [];
+
+    const shipName = inferShipNameFromCruiseEvents(cruiseEvents);
+    const spanEvent = cruiseEvents.find((event) => event.id?.includes('generated-cruise-span-')) ?? cruiseEvents[0];
+    const embarkationEvent = cruiseEvents.find((event) => event.title?.toLowerCase().includes('embarkation'));
+    const description = spanEvent?.description ?? cruiseEvents.find((event) => event.description)?.description;
+    const nights = diffDateOnlyDays(dateRange.sailDate, dateRange.returnDate);
+    const reservationNumber = extractDescriptionValue(description, 'Reservation');
+    const cabinNumber = extractDescriptionValue(description, 'Cabin');
+    const statusFields = inferCruiseStatus(dateRange.returnDate);
+    const brand = spanEvent?.brand ?? embarkationEvent?.brand ?? 'royal';
+    const syncedAt = getStringField(spanEvent, 'dataOwnerSyncedAt') ?? new Date().toISOString();
+
+    return [{
+      id: cruiseId,
+      shipName,
+      sailDate: dateRange.sailDate,
+      returnDate: dateRange.returnDate,
+      departurePort: embarkationEvent?.location ?? spanEvent?.location ?? '',
+      destination: 'Cruise',
+      nights,
+      itineraryName: `${nights || 1} Night ${shipName} Cruise`,
+      reservationNumber,
+      bookingId: reservationNumber,
+      cabinNumber,
+      cabinType: cabinNumber ? undefined : 'Balcony',
+      guests: 2,
+      guestNames: [],
+      cruiseSource: inferCruiseSource(brand),
+      createdAt: syncedAt,
+      updatedAt: syncedAt,
+      ownerProfileId: spanEvent?.ownerProfileId ?? embarkationEvent?.ownerProfileId,
+      sourceEmail: spanEvent?.sourceEmail ?? embarkationEvent?.sourceEmail,
+      brand,
+      casinoProgram: spanEvent?.casinoProgram ?? embarkationEvent?.casinoProgram,
+      importStatus: spanEvent?.importStatus ?? embarkationEvent?.importStatus,
+      reconciliationStatus: spanEvent?.reconciliationStatus ?? embarkationEvent?.reconciliationStatus,
+      ...statusFields,
+    } satisfies ImportedBookedCruise];
+  });
 }
 
 function normalizeImportedBackup(rawBundle: LegacyFullDataBundle): FullAppDataBundle {
@@ -29,7 +176,7 @@ function normalizeImportedBackup(rawBundle: LegacyFullDataBundle): FullAppDataBu
   const cruises = normalizeImportedArray<FullAppDataBundle['cruises'][number]>(
     rawBundle.cruises ?? localData?.cruises
   );
-  const bookedCruises = normalizeImportedArray<FullAppDataBundle['bookedCruises'][number]>(
+  const importedBookedCruises = normalizeImportedArray<FullAppDataBundle['bookedCruises'][number]>(
     rawBundle.bookedCruises ?? rawBundle.booked ?? localData?.bookedCruises ?? localData?.booked
   );
   const casinoOffers = normalizeImportedArray<FullAppDataBundle['casinoOffers'][number]>(
@@ -38,6 +185,13 @@ function normalizeImportedBackup(rawBundle: LegacyFullDataBundle): FullAppDataBu
   const calendarEvents = normalizeImportedArray<FullAppDataBundle['calendarEvents'][number]>(
     rawBundle.calendarEvents ?? rawBundle.calendar ?? localData?.calendarEvents ?? localData?.calendar
   );
+  const recoveredBookedCruises = importedBookedCruises.length === 0 && calendarEvents.length > 0
+    ? recoverBookedCruisesFromCalendarEvents(calendarEvents)
+    : [];
+  const bookedCruises = importedBookedCruises.length > 0 ? importedBookedCruises : recoveredBookedCruises;
+  if (recoveredBookedCruises.length > 0) {
+    console.log('[DataFileIO] Recovered booked cruises from generated calendar events:', recoveredBookedCruises.length);
+  }
   const casinoSessions = normalizeImportedArray<FullAppDataBundle['casinoSessions'][number]>(rawBundle.casinoSessions);
   const certificates = normalizeImportedArray<FullAppDataBundle['certificates'][number]>(rawBundle.certificates);
   const users = normalizeImportedArray<FullAppDataBundle['users'][number]>(rawBundle.users);
