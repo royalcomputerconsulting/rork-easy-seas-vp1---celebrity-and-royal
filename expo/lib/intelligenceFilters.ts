@@ -120,7 +120,7 @@ function recordMatchesProfile(record: FilterableRecord, selectedProfileId: Profi
       : undefined;
 
   if (selectedProfileId === 'unassigned') {
-    return !matchedProfile && !record.ownerProfileId;
+    return !matchedProfile;
   }
 
   const selectedProfile = profiles.find((profile) => profile.id === selectedProfileId);

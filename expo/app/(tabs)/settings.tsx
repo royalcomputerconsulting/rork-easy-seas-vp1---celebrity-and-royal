@@ -47,6 +47,7 @@ import {
   Link2,
   Copy,
   Rss,
+  MailQuestion,
 } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME, SHADOW } from '@/constants/theme';
@@ -90,6 +91,7 @@ import * as FileSystem from 'expo-file-system';
 import * as XLSX from 'xlsx';
 import type { BookedCruise } from '@/types/models';
 import { getCalendarEventsWithGeneratedCruiseEvents, getDayAgendaEventCountForYear } from '@/lib/calendar/cruiseEvents';
+import { getImportAssignmentReviewItems } from '@/lib/importAssignmentReview';
 
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import { UserProfileCard } from '@/components/ui/UserProfileCard';
@@ -132,6 +134,7 @@ export default function SettingsScreen() {
     ensureOwner,
     syncFromStorage: syncUserFromStorage,
     isLoading: isUserLoading,
+    users,
   } = useUser();
   const {
     clubRoyalePoints: loyaltyClubRoyalePoints,
@@ -385,6 +388,17 @@ export default function SettingsScreen() {
       crewMembers: crewStats?.crewMemberCount || 0,
     };
   }, [cruises, bookedCruises, casinoOffers, localData, myAtlasMachines, crewStats]);
+
+  const importAssignmentReviewCount = useMemo(() => {
+    const reviewItems = getImportAssignmentReviewItems({
+      offers: casinoOffers.length > 0 ? casinoOffers : (localData.offers || []),
+      cruises: cruises.length > 0 ? cruises : (localData.cruises || []),
+      bookedCruises: bookedCruises.length > 0 ? bookedCruises : (localData.booked || []),
+      calendarEvents: localData.calendar || [],
+      users,
+    });
+    return reviewItems.length;
+  }, [bookedCruises, casinoOffers, cruises, localData.booked, localData.calendar, localData.cruises, localData.offers, users]);
 
   const handleImportOffersCSV = useCallback(async () => {
     try {
@@ -1982,6 +1996,22 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
               <Text style={styles.quickActionLabelInline}>Load Import Offers.CSV</Text>
               <ChevronRight size={16} color={CLEAN_THEME.text.secondary} />
             </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.quickActionFullWidth} 
+              onPress={() => router.push('/import-review' as any)}
+              activeOpacity={0.7}
+              testID="settings-open-import-review"
+            >
+              <View style={[styles.quickActionIconSmall, { backgroundColor: 'rgba(15, 118, 110, 0.1)' }]}> 
+                <MailQuestion size={16} color="#0F766E" />
+              </View>
+              <Text style={styles.quickActionLabelInline}>Review Import Assignments</Text>
+              {importAssignmentReviewCount > 0 ? (
+                <Text style={styles.countBadge}>{importAssignmentReviewCount}</Text>
+              ) : (
+                <ChevronRight size={16} color={CLEAN_THEME.text.secondary} />
+              )}
+            </TouchableOpacity>
             <View style={styles.quickActionsRow}>
               <TouchableOpacity 
                 style={styles.quickActionHalf} 
@@ -2107,6 +2137,16 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
                   </View>
                 ) : undefined,
                 handleImportCalendarICS
+              )}
+              {renderSettingRow(
+                <MailQuestion size={18} color="#0F766E" />,
+                'Import Assignment Review',
+                importAssignmentReviewCount > 0 ? (
+                  <Text style={styles.countBadge}>{importAssignmentReviewCount} review</Text>
+                ) : (
+                  <Text style={styles.countBadge}>Clear</Text>
+                ),
+                () => router.push('/import-review' as any)
               )}
 <View style={styles.dataDivider} />
 
