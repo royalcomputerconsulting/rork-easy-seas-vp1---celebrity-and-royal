@@ -15,12 +15,20 @@ function normalizeDateKey(value: unknown): string {
   return normalized.includes('t') ? normalized.split('t')[0] : normalized;
 }
 
-function getSourceKey(value: { cruiseSource?: Cruise['cruiseSource']; offerSource?: CasinoOffer['offerSource'] }): string {
-  return normalizeKeyPart(value.cruiseSource ?? value.offerSource);
+function getSourceKey(value: { cruiseSource?: Cruise['cruiseSource']; offerSource?: CasinoOffer['offerSource']; brand?: string }): string {
+  return normalizeKeyPart(value.brand ?? value.cruiseSource ?? value.offerSource);
+}
+
+function getOwnerKey(value: { ownerProfileId?: string; sourceEmail?: string; dataOwnerEmail?: string }): string {
+  return [
+    normalizeKeyPart(value.ownerProfileId),
+    normalizeKeyPart(value.sourceEmail ?? value.dataOwnerEmail),
+  ].join('|');
 }
 
 export function getCruiseIdentityKey(cruise: Cruise): string {
   const naturalParts = [
+    getOwnerKey(cruise),
     getSourceKey(cruise),
     normalizeKeyPart(cruise.shipName),
     normalizeDateKey(cruise.sailDate),
@@ -29,36 +37,41 @@ export function getCruiseIdentityKey(cruise: Cruise): string {
     normalizeKeyPart(cruise.cabinType),
   ];
 
-  if (naturalParts[1] && naturalParts[2]) {
+  if (naturalParts[2] && naturalParts[3]) {
     return `sailing:${naturalParts.join('|')}`;
   }
 
   const id = normalizeKeyPart(cruise.id);
-  return id ? `id:${id}` : `payload:${normalizeKeyPart(JSON.stringify(cruise))}`;
+  return id ? `id:${getOwnerKey(cruise)}|${getSourceKey(cruise)}|${id}` : `payload:${normalizeKeyPart(JSON.stringify(cruise))}`;
 }
 
 export function getBookedCruiseIdentityKey(cruise: BookedCruise): string {
+  const ownerKey = getOwnerKey(cruise);
+  const sourceKey = getSourceKey(cruise);
   const reservation = normalizeKeyPart(cruise.reservationNumber ?? cruise.bookingId ?? cruise.bwoNumber);
   if (reservation) {
-    return `reservation:${reservation}`;
+    return `reservation:${ownerKey}|${sourceKey}|${reservation}`;
   }
 
   const naturalParts = [
+    ownerKey,
+    sourceKey,
     normalizeKeyPart(cruise.shipName),
     normalizeDateKey(cruise.sailDate),
     normalizeDateKey(cruise.returnDate),
   ];
 
-  if (naturalParts[0] && naturalParts[1]) {
+  if (naturalParts[2] && naturalParts[3]) {
     return `sailing:${naturalParts.join('|')}`;
   }
 
   const id = normalizeKeyPart(cruise.id);
-  return id ? `id:${id}` : `payload:${normalizeKeyPart(JSON.stringify(cruise))}`;
+  return id ? `id:${ownerKey}|${sourceKey}|${id}` : `payload:${normalizeKeyPart(JSON.stringify(cruise))}`;
 }
 
 export function getOfferIdentityKey(offer: CasinoOffer): string {
   const naturalParts = [
+    getOwnerKey(offer),
     getSourceKey(offer),
     normalizeOfferCode(offer.offerCode),
     normalizeKeyPart(offer.shipName),
@@ -67,18 +80,19 @@ export function getOfferIdentityKey(offer: CasinoOffer): string {
     normalizeKeyPart(offer.offerName ?? offer.title),
   ];
 
-  if (naturalParts[1] || (naturalParts[2] && naturalParts[3])) {
+  if (naturalParts[2] || (naturalParts[3] && naturalParts[4])) {
     return `offer:${naturalParts.join('|')}`;
   }
 
   const id = normalizeKeyPart(offer.id);
-  return id ? `id:${id}` : `payload:${normalizeKeyPart(JSON.stringify(offer))}`;
+  return id ? `id:${getOwnerKey(offer)}|${getSourceKey(offer)}|${id}` : `payload:${normalizeKeyPart(JSON.stringify(offer))}`;
 }
 
 export function getCalendarEventIdentityKey(event: CalendarEvent): string {
   const start = normalizeDateKey(event.start ?? event.startDate);
   const end = normalizeDateKey(event.end ?? event.endDate);
   const naturalParts = [
+    getOwnerKey(event),
     normalizeKeyPart(event.cruiseId),
     normalizeKeyPart(event.title),
     start,
@@ -87,12 +101,12 @@ export function getCalendarEventIdentityKey(event: CalendarEvent): string {
     normalizeKeyPart(event.location),
   ];
 
-  if (naturalParts[1] && naturalParts[2]) {
+  if (naturalParts[2] && naturalParts[3]) {
     return `event:${naturalParts.join('|')}`;
   }
 
   const id = normalizeKeyPart(event.id);
-  return id ? `id:${id}` : `payload:${normalizeKeyPart(JSON.stringify(event))}`;
+  return id ? `id:${getOwnerKey(event)}|${id}` : `payload:${normalizeKeyPart(JSON.stringify(event))}`;
 }
 
 export function dedupeByIdentity<T>(items: T[], getKey: (item: T) => string, label: string): T[] {

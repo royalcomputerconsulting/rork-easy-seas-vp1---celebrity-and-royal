@@ -143,12 +143,19 @@ export function stampRecordsForOwner<T extends object>(records: T[], ownerScopeI
     return records;
   }
 
-  return records.map((record) => ({
-    ...record,
-    dataOwnerScopeId: normalizedScope,
-    dataOwnerEmail: normalizedEmail,
-    dataOwnerSyncedAt: syncedAt,
-  }));
+  return records.map((record) => {
+    const existing = record as Record<string, unknown>;
+    return {
+      ...record,
+      dataOwnerScopeId: normalizedScope,
+      dataOwnerEmail: normalizedEmail,
+      dataOwnerSyncedAt: syncedAt,
+      ownerProfileId: typeof existing.ownerProfileId === 'string' && existing.ownerProfileId.trim().length > 0 ? existing.ownerProfileId : normalizedEmail,
+      sourceEmail: typeof existing.sourceEmail === 'string' && existing.sourceEmail.trim().length > 0 ? existing.sourceEmail.toLowerCase().trim() : normalizedEmail,
+      importStatus: typeof existing.importStatus === 'string' ? existing.importStatus : 'assigned',
+      reconciliationStatus: typeof existing.reconciliationStatus === 'string' ? existing.reconciliationStatus : 'matched',
+    };
+  });
 }
 
 export function isScopedDynamicKeyForOwner(key: string, basePrefix: string, email: string | null | undefined): boolean {

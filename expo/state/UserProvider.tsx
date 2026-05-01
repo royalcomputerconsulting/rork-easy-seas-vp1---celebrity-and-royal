@@ -39,14 +39,21 @@ export const DEFAULT_PLAYING_HOURS: PlayingHours = {
 export interface UserProfile {
   id: string;
   name: string;
+  displayName?: string;
+  relationshipLabel?: string;
   email: string;
   isOwner?: boolean;
+  defaultProfile?: boolean;
+  active?: boolean;
   avatarUrl?: string;
   crownAnchorNumber?: string;
+  royalCaribbeanNumber?: string;
+  clubRoyaleId?: string;
   crownAnchorLevel?: string;
   playingHours?: PlayingHours;
   celebrityEmail?: string;
   celebrityCaptainsClubNumber?: string;
+  blueChipId?: string;
   celebrityCaptainsClubPoints?: number;
   celebrityBlueChipPoints?: number;
   preferredBrand?: 'royal' | 'celebrity' | 'silversea' | 'carnival';
@@ -119,12 +126,19 @@ function createOwnerProfile(email: string | null): UserProfile {
   return {
     id: `user_${Date.now()}`,
     name: DEFAULT_OWNER.name,
+    displayName: DEFAULT_OWNER.name,
+    relationshipLabel: 'Self',
     email: email ?? DEFAULT_OWNER.email,
     isOwner: true,
+    defaultProfile: true,
+    active: true,
     crownAnchorNumber: DEFAULT_OWNER.crownAnchorNumber,
+    royalCaribbeanNumber: DEFAULT_OWNER.crownAnchorNumber,
+    clubRoyaleId: '',
     crownAnchorLevel: DEFAULT_OWNER.crownAnchorLevel,
     celebrityEmail: DEFAULT_OWNER.celebrityEmail,
     celebrityCaptainsClubNumber: DEFAULT_OWNER.celebrityCaptainsClubNumber,
+    blueChipId: '',
     celebrityCaptainsClubPoints: DEFAULT_OWNER.celebrityCaptainsClubPoints,
     celebrityBlueChipPoints: DEFAULT_OWNER.celebrityBlueChipPoints,
     preferredBrand: DEFAULT_OWNER.preferredBrand,
@@ -188,14 +202,21 @@ function sanitizeUserProfile(user: unknown, fallbackEmail: string | null, index:
   return {
     id: typeof userRecord.id === 'string' && userRecord.id.trim().length > 0 ? userRecord.id : `user_${Date.now()}_${index}`,
     name: typeof userRecord.name === 'string' && userRecord.name.trim().length > 0 ? userRecord.name : DEFAULT_OWNER.name,
+    displayName: typeof userRecord.displayName === 'string' && userRecord.displayName.trim().length > 0 ? userRecord.displayName : (typeof userRecord.name === 'string' && userRecord.name.trim().length > 0 ? userRecord.name : DEFAULT_OWNER.name),
+    relationshipLabel: typeof userRecord.relationshipLabel === 'string' ? userRecord.relationshipLabel : (userRecord.isOwner === true ? 'Self' : ''),
     email: normalizedEmail,
     isOwner: userRecord.isOwner === true,
+    defaultProfile: userRecord.defaultProfile === true || userRecord.isOwner === true,
+    active: userRecord.active !== false,
     avatarUrl: typeof userRecord.avatarUrl === 'string' ? userRecord.avatarUrl : undefined,
     crownAnchorNumber: typeof userRecord.crownAnchorNumber === 'string' ? userRecord.crownAnchorNumber : DEFAULT_OWNER.crownAnchorNumber,
+    royalCaribbeanNumber: typeof userRecord.royalCaribbeanNumber === 'string' ? userRecord.royalCaribbeanNumber : (typeof userRecord.crownAnchorNumber === 'string' ? userRecord.crownAnchorNumber : DEFAULT_OWNER.crownAnchorNumber),
+    clubRoyaleId: typeof userRecord.clubRoyaleId === 'string' ? userRecord.clubRoyaleId : '',
     crownAnchorLevel: typeof userRecord.crownAnchorLevel === 'string' ? userRecord.crownAnchorLevel : DEFAULT_OWNER.crownAnchorLevel,
     playingHours: sanitizePlayingHours(userRecord.playingHours),
     celebrityEmail: typeof userRecord.celebrityEmail === 'string' ? userRecord.celebrityEmail : DEFAULT_OWNER.celebrityEmail,
     celebrityCaptainsClubNumber: typeof userRecord.celebrityCaptainsClubNumber === 'string' ? userRecord.celebrityCaptainsClubNumber : DEFAULT_OWNER.celebrityCaptainsClubNumber,
+    blueChipId: typeof userRecord.blueChipId === 'string' ? userRecord.blueChipId : '',
     celebrityCaptainsClubPoints: typeof userRecord.celebrityCaptainsClubPoints === 'number' ? userRecord.celebrityCaptainsClubPoints : DEFAULT_OWNER.celebrityCaptainsClubPoints,
     celebrityBlueChipPoints: typeof userRecord.celebrityBlueChipPoints === 'number' ? userRecord.celebrityBlueChipPoints : DEFAULT_OWNER.celebrityBlueChipPoints,
     preferredBrand: userRecord.preferredBrand === 'royal' || userRecord.preferredBrand === 'celebrity' || userRecord.preferredBrand === 'silversea' || userRecord.preferredBrand === 'carnival'
@@ -466,12 +487,17 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
     const now = new Date().toISOString();
     const normalizedEmail = normalizeEmail(user.email) ?? normalizedAuthenticatedEmail ?? DEFAULT_OWNER.email;
 
+    const isFirstUser = users.length === 0;
     const newUser: UserProfile = {
       id: user.id || `user_${Date.now()}`,
       name: user.name,
+      displayName: user.name,
+      relationshipLabel: isFirstUser ? 'Self' : '',
       email: normalizedEmail,
       avatarUrl: user.avatarUrl,
-      isOwner: users.length === 0,
+      isOwner: isFirstUser,
+      defaultProfile: isFirstUser,
+      active: true,
       createdAt: now,
       updatedAt: now,
     };

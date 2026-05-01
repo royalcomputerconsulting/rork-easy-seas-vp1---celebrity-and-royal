@@ -22,6 +22,7 @@ import {
   dedupeByIdentity,
 } from '../dataIdentity';
 import { generateCruiseCalendarEvents } from '../calendar/cruiseEvents';
+import { applyFoundationFields } from '../dataFoundation';
 
 function normalizeImportKeyPart(value: unknown): string {
   if (value === null || value === undefined) return '';
@@ -418,7 +419,12 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
 
   try {
     if (bundle.cruises && Array.isArray(bundle.cruises)) {
-      const dedupedCruises = dedupeCruises(bundle.cruises, 'backup cruises');
+      const foundationCruises = applyFoundationFields(bundle.cruises, {
+        fallbackOwnerProfileId: email ?? null,
+        fallbackSourceEmail: email ?? null,
+        markUnassigned: true,
+      });
+      const dedupedCruises = dedupeCruises(foundationCruises, 'backup cruises');
       await quotaSafeSetJsonItem(sk(ALL_STORAGE_KEYS.CRUISES), dedupedCruises);
       await quotaSafeSetItem(sk(ALL_STORAGE_KEYS.HAS_IMPORTED_DATA), 'true');
       imported.cruises = dedupedCruises.length;
@@ -430,7 +436,12 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
 
   try {
     if (bundle.bookedCruises && Array.isArray(bundle.bookedCruises)) {
-      const dedupedBooked = dedupeBookedCruises(bundle.bookedCruises, 'backup booked cruises');
+      const foundationBooked = applyFoundationFields(bundle.bookedCruises, {
+        fallbackOwnerProfileId: email ?? null,
+        fallbackSourceEmail: email ?? null,
+        markUnassigned: true,
+      });
+      const dedupedBooked = dedupeBookedCruises(foundationBooked, 'backup booked cruises');
       const enrichedBooked = applyKnownRetailValuesToBooked(dedupedBooked);
       importedBookedForCalendar = enrichedBooked;
       await quotaSafeSetJsonItem(sk(ALL_STORAGE_KEYS.BOOKED_CRUISES), enrichedBooked);
@@ -444,7 +455,12 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
 
   try {
     if (bundle.casinoOffers && Array.isArray(bundle.casinoOffers)) {
-      const dedupedOffers = dedupeCasinoOffers(bundle.casinoOffers, 'backup casino offers');
+      const foundationOffers = applyFoundationFields(bundle.casinoOffers, {
+        fallbackOwnerProfileId: email ?? null,
+        fallbackSourceEmail: email ?? null,
+        markUnassigned: true,
+      });
+      const dedupedOffers = dedupeCasinoOffers(foundationOffers, 'backup casino offers');
       await quotaSafeSetJsonItem(sk(ALL_STORAGE_KEYS.CASINO_OFFERS), dedupedOffers);
       await quotaSafeSetItem(sk(ALL_STORAGE_KEYS.HAS_IMPORTED_DATA), 'true');
       imported.casinoOffers = dedupedOffers.length;
@@ -457,7 +473,12 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
   try {
     if (bundle.calendarEvents && Array.isArray(bundle.calendarEvents)) {
       const generatedCruiseEvents = generateCruiseCalendarEvents(importedBookedForCalendar);
-      const dedupedEvents = dedupeCalendarEvents([...bundle.calendarEvents, ...generatedCruiseEvents], 'backup calendar events');
+      const foundationEvents = applyFoundationFields([...bundle.calendarEvents, ...generatedCruiseEvents], {
+        fallbackOwnerProfileId: email ?? null,
+        fallbackSourceEmail: email ?? null,
+        markUnassigned: true,
+      });
+      const dedupedEvents = dedupeCalendarEvents(foundationEvents, 'backup calendar events');
       await quotaSafeSetJsonItem(sk(ALL_STORAGE_KEYS.CALENDAR_EVENTS), dedupedEvents);
       imported.calendarEvents = dedupedEvents.length;
       console.log('[DataBundle] Imported calendar events:', {

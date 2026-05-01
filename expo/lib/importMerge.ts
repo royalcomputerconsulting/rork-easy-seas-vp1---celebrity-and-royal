@@ -1,11 +1,25 @@
-import type { BookedCruise, CasinoOffer, Cruise } from '@/types/models';
+import type { BookedCruise, CasinoOffer, Cruise, ImportReconciliationSummary } from '@/types/models';
 import {
   dedupeBookedCruises,
   dedupeCasinoOffers,
   dedupeCruises,
+  getBookedCruiseIdentityKey,
+  getCruiseIdentityKey,
+  getOfferIdentityKey,
 } from '@/lib/dataIdentity';
+import { applyFoundationFields, buildReconciliationSummary } from '@/lib/dataFoundation';
 
 type SyncSource = NonNullable<Cruise['cruiseSource']>;
+
+export interface ImportMergeOptions {
+  ownerProfileId?: string | null;
+  sourceEmail?: string | null;
+}
+
+export interface ImportMergeResult<T> {
+  merged: T[];
+  reconciliation: ImportReconciliationSummary;
+}
 
 function getUniqueSources(values: Array<SyncSource | undefined | null>): SyncSource[] {
   return Array.from(new Set(values.filter((value): value is SyncSource => value === 'royal' || value === 'celebrity' || value === 'carnival')));
@@ -44,34 +58,75 @@ export function getImportedSource(input: {
   return sources.length === 1 ? sources[0] : null;
 }
 
-export function mergeImportedCruises(existingCruises: Cruise[], importedCruises: Cruise[]): Cruise[] {
-  const importSource = getImportedSource({ cruises: importedCruises });
-  if (!importSource) {
-    return dedupeCruises([...existingCruises, ...importedCruises], 'merged imported cruises');
-  }
-
-  const preservedCruises = existingCruises.filter((cruise) => cruise.cruiseSource !== importSource);
-  return dedupeCruises([...preservedCruises, ...importedCruises], 'merged imported cruises');
+export function mergeImportedCruises(existingCruises: Cruise[], importedCruises: Cruise[], options: ImportMergeOptions = {}): Cruise[] {
+  return mergeImportedCruisesWithReconciliation(existingCruises, importedCruises, options).merged;
 }
 
-export function mergeImportedOffers(existingOffers: CasinoOffer[], importedOffers: CasinoOffer[]): CasinoOffer[] {
-  const importSource = getImportedSource({ offers: importedOffers });
-  if (!importSource) {
-    return dedupeCasinoOffers([...existingOffers, ...importedOffers], 'merged imported offers');
-  }
-
-  const preservedOffers = existingOffers.filter((offer) => offer.offerSource !== importSource);
-  return dedupeCasinoOffers([...preservedOffers, ...importedOffers], 'merged imported offers');
+export function mergeImportedCruisesWithReconciliation(existingCruises: Cruise[], importedCruises: Cruise[], options: ImportMergeOptions = {}): ImportMergeResult<Cruise> {
+  const preparedImported = applyFoundationFields(importedCruises, {
+    fallbackOwnerProfileId: options.ownerProfileId,
+    fallbackSourceEmail: options.sourceEmail,
+    fallbackBrand: getImportedSource({ cruises: importedCruises }),
+    markUnassigned: true,
+  });
+  const merged = dedupeCruises([...existingCruises, ...preparedImported], 'merged imported cruises');
+  return {
+    merged,
+    reconciliation: buildReconciliationSummary(existingCruises, preparedImported, merged, getCruiseIdentityKey),
+  };
 }
 
-export function mergeImportedBookedCruises(existingCruises: BookedCruise[], importedCruises: BookedCruise[]): BookedCruise[] {
-  const importSource = getImportedSource({ bookedCruises: importedCruises });
-  if (!importSource) {
-    return dedupeBookedCruises([...existingCruises, ...importedCruises], 'merged imported booked cruises');
-  }
+export function mergeImportedOffers(existingOffers: CasinoOffer[], importedOffers: CasinoOffer[], options: ImportMergeOptions = {}): CasinoOffer[] {
+  return mergeImportedOffersWithReconciliation(existingOffers, importedOffers, options).merged;
+}
 
-  const preservedCruises = existingCruises.filter((cruise) => cruise.cruiseSource !== importSource || isCompletedBookedCruise(cruise));
-  return dedupeBookedCruises([...preservedCruises, ...importedCruises], 'merged imported booked cruises');
+export function mergeImportedOffersWithReconciliation(existingOffers: CasinoOffer[], importedOffers: CasinoOffer[], options: ImportMergeOptions = {}): ImportMergeResult<CasinoOffer> {
+  const preparedImported = applyFoundationFields(importedOffers, {
+    fallbackOwnerProfileId: options.ownerProfileId,
+    fallbackSourceEmail: options.sourceEmail,
+    fallbackBrand: getImportedSource({ offers: importedOffers }),
+    markUnassigned: true,
+  });
+  const importedKeys = new Set(preparedImported.map(getOfferIdentityKey));
+  const preparedExisting = existingOffers.map((offer) => {
+    const sameImportSource = getImportedSource({ offers: preparedImported }) !== null && offer.offerSource === getImportedSource({ offers: preparedImported });
+    const shouldReviewMissing = sameImportSource && !importedKeys.has(getOfferIdentityKey(offer)) && offer.archiveStatus !== 'archived';
+    return shouldReviewMissing
+      ? { ...offer, archiveStatus: 'reviewNeeded' as const, reconciliationStatus: 'reviewNeeded' as const }
+      : offer;
+  });
+  const merged = dedupeCasinoOffers([...preparedExisting, ...preparedImported], 'merged imported offers');
+  return {
+    merged,
+    reconciliation: buildReconciliationSummary(preparedExisting, preparedImported, merged, getOfferIdentityKey),
+  };
+}
+
+export function mergeImportedBookedCruises(existingCruises: BookedCruise[], importedCruises: BookedCruise[], options: ImportMergeOptions = {}): BookedCruise[] {
+  return mergeImportedBookedCruisesWithReconciliation(existingCruises, importedCruises, options).merged;
+}
+
+export function mergeImportedBookedCruisesWithReconciliation(existingCruises: BookedCruise[], importedCruises: BookedCruise[], options: ImportMergeOptions = {}): ImportMergeResult<BookedCruise> {
+  const preparedImported = applyFoundationFields(importedCruises, {
+    fallbackOwnerProfileId: options.ownerProfileId,
+    fallbackSourceEmail: options.sourceEmail,
+    fallbackBrand: getImportedSource({ bookedCruises: importedCruises }),
+    markUnassigned: true,
+  });
+  const importSource = getImportedSource({ bookedCruises: preparedImported });
+  const importedKeys = new Set(preparedImported.map(getBookedCruiseIdentityKey));
+  const preparedExisting = existingCruises.map((cruise) => {
+    const sameImportSource = importSource !== null && cruise.cruiseSource === importSource;
+    const shouldReviewMissing = sameImportSource && !isCompletedBookedCruise(cruise) && !importedKeys.has(getBookedCruiseIdentityKey(cruise));
+    return shouldReviewMissing
+      ? { ...cruise, reconciliationStatus: 'reviewNeeded' as const, importStatus: cruise.importStatus ?? 'reviewNeeded' as const }
+      : cruise;
+  });
+  const merged = dedupeBookedCruises([...preparedExisting, ...preparedImported], 'merged imported booked cruises');
+  return {
+    merged,
+    reconciliation: buildReconciliationSummary(preparedExisting, preparedImported, merged, getBookedCruiseIdentityKey),
+  };
 }
 
 export function getImportedSourceLabel(source: SyncSource | null): string {

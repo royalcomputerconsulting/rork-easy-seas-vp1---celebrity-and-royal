@@ -80,9 +80,9 @@ import { generateCalendarFeed, generateFeedToken } from '@/lib/calendar/feedGene
 import {
   getImportedSource,
   getImportedSourceLabel,
-  mergeImportedBookedCruises,
-  mergeImportedCruises,
-  mergeImportedOffers,
+  mergeImportedBookedCruisesWithReconciliation,
+  mergeImportedCruisesWithReconciliation,
+  mergeImportedOffersWithReconciliation,
 } from '@/lib/importMerge';
 import { RENDER_BACKEND_URL, trpc } from '@/lib/trpc';
 import * as DocumentPicker from 'expo-document-picker';
@@ -419,8 +419,17 @@ export default function SettingsScreen() {
       const existingCruises = cruises.length > 0 ? cruises : (localData.cruises || []);
       const existingOffers = casinoOffers.length > 0 ? casinoOffers : (localData.offers || []);
       const importedSource = getImportedSource({ cruises: parsedCruises, offers: parsedOffers });
-      const mergedCruises = mergeImportedCruises(existingCruises, parsedCruises);
-      const mergedOffers = mergeImportedOffers(existingOffers, parsedOffers);
+      const importOwnerOptions = {
+        ownerProfileId: currentUser?.id ?? normalizedAuthenticatedEmail,
+        sourceEmail: authenticatedEmail ?? currentUser?.email ?? normalizedAuthenticatedEmail,
+      };
+      const cruisesMergeResult = mergeImportedCruisesWithReconciliation(existingCruises, parsedCruises, importOwnerOptions);
+      const offersMergeResult = mergeImportedOffersWithReconciliation(existingOffers, parsedOffers, importOwnerOptions);
+      const mergedCruises = cruisesMergeResult.merged;
+      const mergedOffers = offersMergeResult.merged;
+      const reviewNeededCount = cruisesMergeResult.reconciliation.reviewNeededItems + offersMergeResult.reconciliation.reviewNeededItems;
+      const overlapCount = cruisesMergeResult.reconciliation.duplicateOverlappingSailings + offersMergeResult.reconciliation.duplicateOverlappingSailings;
+      const suggestedArchiveCount = cruisesMergeResult.reconciliation.suggestedArchiveRows + offersMergeResult.reconciliation.suggestedArchiveRows;
 
       console.log('[Settings] Merged imported offers CSV:', {
         importedSource,
@@ -430,6 +439,8 @@ export default function SettingsScreen() {
         parsedOffers: parsedOffers.length,
         mergedCruises: mergedCruises.length,
         mergedOffers: mergedOffers.length,
+        cruiseReconciliation: cruisesMergeResult.reconciliation,
+        offerReconciliation: offersMergeResult.reconciliation,
       });
 
       await setCruises(mergedCruises);
@@ -444,10 +455,13 @@ export default function SettingsScreen() {
 
       const sourceLabel = getImportedSourceLabel(importedSource);
       const healNote = healingReport.fieldsFixed.length > 0 ? `\n\nData healing fixed ${healingReport.fieldsFixed.length} field(s).` : '';
+      const reconciliationNote = reviewNeededCount > 0 || overlapCount > 0 || suggestedArchiveCount > 0
+        ? `\n\nReconciliation: ${reviewNeededCount} item(s) need review, ${overlapCount} overlapping sailing(s) were preserved, ${suggestedArchiveCount} missing row(s) were flagged instead of deleted.`
+        : '';
       setLastImportResult({ type: 'offers', count: parsedCruises.length });
       Alert.alert(
         'Import Successful', 
-        `${sourceLabel} import updated ${parsedCruises.length} cruises and ${parsedOffers.length} offers from ${result.fileName}.${healNote}`
+        `${sourceLabel} import updated ${parsedCruises.length} cruises and ${parsedOffers.length} offers from ${result.fileName}.${healNote}${reconciliationNote}`
       );
       console.log('[Settings] Import complete:', parsedCruises.length, 'cruises,', parsedOffers.length, 'offers');
     } catch (error) {
@@ -472,7 +486,7 @@ export default function SettingsScreen() {
     } finally {
       setIsImporting(false);
     }
-  }, [casinoOffers, cruises, localData.cruises, localData.offers, setCruises, setCasinoOffers, setLocalData]);
+  }, [authenticatedEmail, casinoOffers, cruises, currentUser?.email, currentUser?.id, localData.cruises, localData.offers, normalizedAuthenticatedEmail, setCruises, setCasinoOffers, setLocalData]);
 
   const fetchICSMutation = trpc.calendar.fetchICS.useMutation();
   const saveCalendarFeedMutation = trpc.calendar.saveCalendarFeed.useMutation();
@@ -777,12 +791,17 @@ export default function SettingsScreen() {
       }
 
       const importedSource = getImportedSource({ bookedCruises: parsedBooked });
-      const mergedBooked = mergeImportedBookedCruises(existingBooked, parsedBooked);
+      const bookedMergeResult = mergeImportedBookedCruisesWithReconciliation(existingBooked, parsedBooked, {
+        ownerProfileId: currentUser?.id ?? normalizedAuthenticatedEmail,
+        sourceEmail: authenticatedEmail ?? currentUser?.email ?? normalizedAuthenticatedEmail,
+      });
+      const mergedBooked = bookedMergeResult.merged;
       console.log('[Settings] Merged booked cruises:', {
         importedSource,
         existingBooked: existingBooked.length,
         parsedBooked: parsedBooked.length,
         mergedBooked: mergedBooked.length,
+        reconciliation: bookedMergeResult.reconciliation,
       });
 
       await setBookedCruises(mergedBooked);
@@ -794,11 +813,14 @@ export default function SettingsScreen() {
       console.log('[Settings] Set HAS_LAUNCHED_BEFORE flag to prevent data wipe on restart');
 
       const sourceLabel = getImportedSourceLabel(importedSource);
+      const bookedReconciliationNote = bookedMergeResult.reconciliation.reviewNeededItems > 0 || bookedMergeResult.reconciliation.duplicateOverlappingSailings > 0
+        ? ` ${bookedMergeResult.reconciliation.reviewNeededItems} item(s) need review and ${bookedMergeResult.reconciliation.duplicateOverlappingSailings} overlapping sailing(s) were preserved.`
+        : '';
       setLastImportResult({ type: 'booked', count: parsedBooked.length });
       
       Alert.alert(
         'Import Successful', 
-        `${sourceLabel} booked cruises updated from ${result.fileName}. Imported ${parsedBooked.length} cruise row(s).`
+        `${sourceLabel} booked cruises updated from ${result.fileName}. Imported ${parsedBooked.length} cruise row(s).${bookedReconciliationNote}`
       );
       console.log('[Settings] Booked import complete:', parsedBooked.length, 'cruise rows imported');
     } catch (error) {
@@ -823,7 +845,7 @@ export default function SettingsScreen() {
     } finally {
       setIsImporting(false);
     }
-  }, [bookedCruises, localData.booked, setBookedCruises, setLocalData]);
+  }, [authenticatedEmail, bookedCruises, currentUser?.email, currentUser?.id, localData.booked, normalizedAuthenticatedEmail, setBookedCruises, setLocalData]);
 
   const handleImportCompletedCruisesXLSX = useCallback(async () => {
     try {

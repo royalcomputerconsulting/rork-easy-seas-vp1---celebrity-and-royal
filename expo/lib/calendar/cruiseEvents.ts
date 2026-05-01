@@ -98,6 +98,17 @@ function buildCruiseDescription(cruise: BookedCruise, itineraryDay?: ItineraryDa
   return lines.length > 0 ? lines.join(' • ') : undefined;
 }
 
+function getCruiseFoundationFields(cruise: BookedCruise): Partial<CalendarEvent> {
+  return {
+    ownerProfileId: cruise.ownerProfileId,
+    sourceEmail: cruise.sourceEmail,
+    brand: cruise.brand ?? cruise.cruiseSource,
+    casinoProgram: cruise.casinoProgram,
+    importStatus: cruise.importStatus,
+    reconciliationStatus: cruise.reconciliationStatus,
+  };
+}
+
 function createCruiseEvent(event: CalendarEvent): CalendarEvent {
   return event;
 }
@@ -139,6 +150,7 @@ function createCruiseSpanEvent(cruise: BookedCruise): CalendarEvent | null {
     cruiseId: cruise.id,
     allDay: true,
     source: 'import',
+    ...getCruiseFoundationFields(cruise),
   });
 }
 
@@ -168,6 +180,7 @@ function createTimedCruiseEvent(params: {
     cruiseId: params.cruise.id,
     allDay: false,
     source: 'import',
+    ...getCruiseFoundationFields(params.cruise),
   });
 }
 
@@ -194,6 +207,7 @@ function createAllDayCruiseEvent(params: {
     cruiseId: params.cruise.id,
     allDay: true,
     source: 'import',
+    ...getCruiseFoundationFields(params.cruise),
   });
 }
 
