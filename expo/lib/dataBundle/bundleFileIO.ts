@@ -22,6 +22,7 @@ type LegacyFullDataBundle = Partial<FullAppDataBundle> & {
 
 type ImportedCalendarEvent = FullAppDataBundle['calendarEvents'][number];
 type ImportedBookedCruise = FullAppDataBundle['bookedCruises'][number];
+type CasinoDataBundle = NonNullable<FullAppDataBundle['casinoData']>;
 
 function normalizeImportedArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? value as T[] : [];
@@ -192,11 +193,22 @@ function normalizeImportedBackup(rawBundle: LegacyFullDataBundle): FullAppDataBu
   if (recoveredBookedCruises.length > 0) {
     console.log('[DataFileIO] Recovered booked cruises from generated calendar events:', recoveredBookedCruises.length);
   }
-  const casinoSessions = normalizeImportedArray<FullAppDataBundle['casinoSessions'][number]>(rawBundle.casinoSessions);
+  const rawCasinoData = rawBundle.casinoData && typeof rawBundle.casinoData === 'object' ? rawBundle.casinoData : undefined;
+  const casinoSessions = normalizeImportedArray<FullAppDataBundle['casinoSessions'][number]>(rawBundle.casinoSessions ?? rawCasinoData?.sessions);
   const certificates = normalizeImportedArray<FullAppDataBundle['certificates'][number]>(rawBundle.certificates);
   const users = normalizeImportedArray<FullAppDataBundle['users'][number]>(rawBundle.users);
   const machineData = rawBundle.machines && typeof rawBundle.machines === 'object' ? rawBundle.machines : undefined;
   const crewRecognition = rawBundle.crewRecognition && typeof rawBundle.crewRecognition === 'object' ? rawBundle.crewRecognition : undefined;
+  const casinoData = {
+    sessions: casinoSessions,
+    bankrollLimits: normalizeImportedArray<CasinoDataBundle['bankrollLimits'][number]>(rawCasinoData?.bankrollLimits),
+    bankrollAlerts: normalizeImportedArray<CasinoDataBundle['bankrollAlerts'][number]>(rawCasinoData?.bankrollAlerts),
+    casinoOpenHours: rawCasinoData?.casinoOpenHours && typeof rawCasinoData.casinoOpenHours === 'object'
+      ? rawCasinoData.casinoOpenHours as CasinoDataBundle['casinoOpenHours']
+      : {},
+    compItems: normalizeImportedArray<CasinoDataBundle['compItems'][number]>(rawCasinoData?.compItems),
+    w2gRecords: normalizeImportedArray<CasinoDataBundle['w2gRecords'][number]>(rawCasinoData?.w2gRecords),
+  };
 
   return {
     ...rawBundle,
@@ -221,11 +233,14 @@ function normalizeImportedBackup(rawBundle: LegacyFullDataBundle): FullAppDataBu
     machines: {
       encyclopedia: normalizeImportedArray<FullAppDataBundle['machines']['encyclopedia'][number]>(machineData?.encyclopedia),
       atlasIds: normalizeImportedArray<string>(machineData?.atlasIds),
+      userMachines: normalizeImportedArray<NonNullable<FullAppDataBundle['machines']['userMachines']>[number]>(machineData?.userMachines),
+      deckLocations: normalizeImportedArray<NonNullable<FullAppDataBundle['machines']['deckLocations']>[number]>(machineData?.deckLocations),
     },
     crewRecognition: {
       entries: normalizeImportedArray<FullAppDataBundle['crewRecognition']['entries'][number]>(crewRecognition?.entries),
       sailings: normalizeImportedArray<FullAppDataBundle['crewRecognition']['sailings'][number]>(crewRecognition?.sailings),
     },
+    casinoData,
     metadata: {
       totalCruises: cruises.length,
       totalBooked: bookedCruises.length,
@@ -233,8 +248,12 @@ function normalizeImportedBackup(rawBundle: LegacyFullDataBundle): FullAppDataBu
       totalEvents: calendarEvents.length,
       totalCertificates: certificates.length,
       totalSessions: casinoSessions.length,
-      totalMachines: normalizeImportedArray<string>(machineData?.atlasIds).length,
+      totalMachines: normalizeImportedArray<string>(machineData?.atlasIds).length || normalizeImportedArray<FullAppDataBundle['machines']['encyclopedia'][number]>(machineData?.encyclopedia).length,
       totalCrewEntries: normalizeImportedArray<FullAppDataBundle['crewRecognition']['entries'][number]>(crewRecognition?.entries).length,
+      totalBankrollLimits: casinoData.bankrollLimits.length,
+      totalCasinoOpenHours: Object.keys(casinoData.casinoOpenHours).length,
+      totalCompItems: casinoData.compItems.length,
+      totalW2GRecords: casinoData.w2gRecords.length,
     },
   };
 }
@@ -304,6 +323,11 @@ export async function importAllDataFromFile(email?: string | null): Promise<{
     casinoSessions: number;
     certificates: number;
     machines: number;
+    crewRecognitionEntries: number;
+    bankrollLimits: number;
+    casinoOpenHours: number;
+    compItems: number;
+    w2gRecords: number;
   };
   error?: string;
 }> {
@@ -372,7 +396,14 @@ export async function importAllDataFromFile(email?: string | null): Promise<{
       bundle.certificates.length === 0 &&
       bundle.users.length === 0 &&
       bundle.machines.atlasIds.length === 0 &&
+      (bundle.machines.userMachines?.length ?? 0) === 0 &&
+      (bundle.machines.deckLocations?.length ?? 0) === 0 &&
       bundle.crewRecognition.entries.length === 0 &&
+      (bundle.casinoData?.bankrollLimits.length ?? 0) === 0 &&
+      (bundle.casinoData?.bankrollAlerts.length ?? 0) === 0 &&
+      Object.keys(bundle.casinoData?.casinoOpenHours ?? {}).length === 0 &&
+      (bundle.casinoData?.compItems.length ?? 0) === 0 &&
+      (bundle.casinoData?.w2gRecords.length ?? 0) === 0 &&
       !bundle.clubRoyaleProfile &&
       !bundle.userProfile
     ) {
@@ -391,7 +422,13 @@ export async function importAllDataFromFile(email?: string | null): Promise<{
       casinoSessions: bundle.casinoSessions?.length || 0,
       certificates: bundle.certificates?.length || 0,
       users: bundle.users?.length || 0,
-      machines: bundle.machines?.atlasIds?.length || 0,
+      machines: bundle.machines?.atlasIds?.length || bundle.machines?.encyclopedia?.length || 0,
+      userMachines: bundle.machines?.userMachines?.length || 0,
+      deckLocations: bundle.machines?.deckLocations?.length || 0,
+      bankrollLimits: bundle.casinoData?.bankrollLimits?.length || 0,
+      casinoOpenHours: Object.keys(bundle.casinoData?.casinoOpenHours ?? {}).length,
+      compItems: bundle.casinoData?.compItems?.length || 0,
+      w2gRecords: bundle.casinoData?.w2gRecords?.length || 0,
     });
 
     const importResult = await importAllData(bundle, email ?? null);

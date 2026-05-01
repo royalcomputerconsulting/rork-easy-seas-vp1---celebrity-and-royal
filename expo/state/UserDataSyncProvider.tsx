@@ -20,6 +20,8 @@ const DISMISSED_ALERT_IDS_STORAGE_BASE = '@easy_seas_dismissed_alerts';
 const DISMISSED_ALERT_ENTITIES_STORAGE_BASE = '@easy_seas_dismissed_entities';
 const SAILING_WEATHER_CACHE_STORAGE_BASE = '@easy_seas_sailing_weather_cache_v1';
 const CASINO_OPEN_HOURS_STORAGE_PREFIX = `${ALL_STORAGE_KEYS.CASINO_OPEN_HOURS}_`;
+const CURRENT_MACHINE_ENCYCLOPEDIA_KEY = 'easyseas_machine_encyclopedia_v2_262_only';
+const CURRENT_MY_SLOT_ATLAS_KEY = 'easyseas_my_slot_atlas_v2_262_only';
 const SETTINGS_USER_PROFILES_SYNC_KEY = '__easySeasUserProfiles';
 const SETTINGS_CURRENT_USER_ID_SYNC_KEY = '__easySeasCurrentUserId';
 
@@ -134,6 +136,10 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
+}
+
+function asStringArray(value: unknown): string[] {
+  return asArray(value).filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
 }
 
 function prepareOwnedRecords<T extends object>(records: T[], ownerScopeId: string | null | undefined, email: string | null | undefined, label: string): T[] {
@@ -433,6 +439,8 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         legacyAlertsRaw,
         legacyAlertRulesRaw,
         slotAtlasRaw,
+        currentMachineEncyclopediaRaw,
+        currentMyAtlasRaw,
         extendedLoyaltyDataRaw,
         manualClubRoyalePointsRaw,
         manualCrownAnchorPointsRaw,
@@ -471,6 +479,8 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         quotaSafeGetItem(sk(ALL_STORAGE_KEYS.ALERTS)),
         quotaSafeGetItem(sk(ALL_STORAGE_KEYS.ALERT_RULES)),
         quotaSafeGetItem(sk(ALL_STORAGE_KEYS.MY_SLOT_ATLAS)),
+        quotaSafeGetItem(getUserScopedKey(CURRENT_MACHINE_ENCYCLOPEDIA_KEY, emailRef.current)),
+        quotaSafeGetItem(getUserScopedKey(CURRENT_MY_SLOT_ATLAS_KEY, emailRef.current)),
         quotaSafeGetItem(sk(ALL_STORAGE_KEYS.EXTENDED_LOYALTY_DATA)),
         quotaSafeGetItem(sk(ALL_STORAGE_KEYS.MANUAL_CLUB_ROYALE_POINTS)),
         quotaSafeGetItem(sk(ALL_STORAGE_KEYS.MANUAL_CROWN_ANCHOR_POINTS)),
@@ -565,7 +575,8 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         alertRules: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(alertRulesRaw, 'alertRules').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync alert rules'),
         dismissedAlertIds: parseStoredStringArray(dismissedAlertIdsRaw, 'dismissedAlertIds'),
         dismissedAlertEntities: parseStoredStringArray(dismissedAlertEntitiesRaw, 'dismissedAlertEntities'),
-        slotAtlas: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(slotAtlasRaw, 'slotAtlas').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync slot atlas'),
+        slotAtlas: asStringArray(parseStoredUnknownArray(currentMyAtlasRaw ?? slotAtlasRaw, 'slotAtlas')),
+        machineEncyclopedia: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(currentMachineEncyclopediaRaw, 'machineEncyclopedia').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync machine encyclopedia'),
         loyaltyData: sanitizeForeignValue(loyaltyData, emailRef.current, 'loyaltyData'),
         bankrollData: sanitizeForeignValue(parseStoredUnknown(bankrollDataRaw, 'bankrollData'), emailRef.current, 'bankrollData'),
         bankrollLimits: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(bankrollLimitsRaw, 'bankrollLimits').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync bankroll limits'),
@@ -590,6 +601,8 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         sessions: getArrayLength(data.casinoSessions),
         userProfiles: getArrayLength(data.userProfiles),
         alerts: getArrayLength(data.alerts),
+        machineEncyclopedia: getArrayLength(data.machineEncyclopedia),
+        slotAtlas: getArrayLength(data.slotAtlas),
         dismissedAlertIds: getArrayLength(data.dismissedAlertIds),
         bankrollLimits: getArrayLength(data.bankrollLimits),
         userSlotMachines: getArrayLength(data.userSlotMachines),
@@ -683,8 +696,15 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       if (hasDefinedProperty(cloudData, 'dismissedAlertEntities')) {
         appendPromise(savePromises, buildJsonSetPromise(scopedDismissedAlertEntitiesKey, asArray(cloudData.dismissedAlertEntities)));
       }
+      if (hasDefinedProperty(cloudData, 'machineEncyclopedia')) {
+        const machineEncyclopedia = prepareOwnedUnknownArray(cloudData.machineEncyclopedia, currentOwnerScopeId, currentEmail, 'cloud-restore machine encyclopedia');
+        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.MACHINE_ENCYCLOPEDIA), machineEncyclopedia));
+        appendPromise(savePromises, buildJsonSetPromise(getUserScopedKey(CURRENT_MACHINE_ENCYCLOPEDIA_KEY, currentEmail), machineEncyclopedia));
+      }
       if (hasDefinedProperty(cloudData, 'slotAtlas')) {
-        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.MY_SLOT_ATLAS), prepareOwnedUnknownArray(cloudData.slotAtlas, currentOwnerScopeId, currentEmail, 'cloud-restore slot atlas')));
+        const slotAtlasIds = asStringArray(cloudData.slotAtlas);
+        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.MY_SLOT_ATLAS), slotAtlasIds));
+        appendPromise(savePromises, buildJsonSetPromise(getUserScopedKey(CURRENT_MY_SLOT_ATLAS_KEY, currentEmail), slotAtlasIds));
       }
       if (hasDefinedProperty(cloudData, 'loyaltyData')) {
         const sanitizedCloudLoyaltyData = sanitizeForeignValue(cloudData.loyaltyData, currentEmail, 'cloud-restore loyaltyData');
@@ -773,6 +793,8 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         sessions: getArrayLength(cloudData.casinoSessions),
         userProfiles: getArrayLength(cloudData.userProfiles),
         alerts: getArrayLength(cloudData.alerts),
+        machineEncyclopedia: getArrayLength(cloudData.machineEncyclopedia),
+        slotAtlas: getArrayLength(cloudData.slotAtlas),
         bankrollLimits: getArrayLength(cloudData.bankrollLimits),
         userSlotMachines: getArrayLength(cloudData.userSlotMachines),
         deckPlanLocations: getArrayLength(cloudData.deckPlanLocations),

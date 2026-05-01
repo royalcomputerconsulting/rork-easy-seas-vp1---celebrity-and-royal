@@ -6,10 +6,16 @@ import type {
   CalendarEvent, 
   ClubRoyaleProfile,
   MachineEncyclopediaEntry,
+  CompItem,
+  W2GRecord,
+  SlotMachine,
+  DeckPlanLocation,
 } from '@/types/models';
 import type { UserProfile } from '@/state/UserProvider';
+import type { BankrollAlert, BankrollLimit } from '@/state/BankrollProvider';
 import type { Certificate } from '@/components/CertificateManagerModal';
 import type { CasinoSession } from '@/state/CasinoSessionProvider';
+import type { CasinoOpenHoursData } from '@/components/ui/CasinoOpenHoursCard';
 import type { RecognitionEntryWithCrew, Sailing } from '@/types/crew-recognition';
 import { ALL_STORAGE_KEYS, GLOBAL_KEYS, getUserScopedKey, type AppSettings } from '../storage/storageKeys';
 import { quotaSafeGetItem, quotaSafeSetItem, quotaSafeSetJsonItem } from '../storage/quotaSafeStorage';
@@ -23,6 +29,10 @@ import {
 } from '../dataIdentity';
 import { generateCruiseCalendarEvents } from '../calendar/cruiseEvents';
 import { applyFoundationFields } from '../dataFoundation';
+
+const CURRENT_MACHINE_ENCYCLOPEDIA_KEY = 'easyseas_machine_encyclopedia_v2_262_only';
+const CURRENT_MY_SLOT_ATLAS_KEY = 'easyseas_my_slot_atlas_v2_262_only';
+const CASINO_OPEN_HOURS_STORAGE_PREFIX = `${ALL_STORAGE_KEYS.CASINO_OPEN_HOURS}_`;
 
 function normalizeImportKeyPart(value: unknown): string {
   if (value === null || value === undefined) return '';
@@ -63,6 +73,46 @@ function adoptBackupRecordsForActiveAccount<T extends object>(records: T[], emai
   });
 }
 
+async function loadStoredEntriesByPrefix(prefix: string, email: string | null | undefined): Promise<Record<string, unknown>> {
+  const normalizedEmail = normalizeBackupImportEmail(email);
+  const allKeys = await AsyncStorage.getAllKeys();
+  const matchingKeys = allKeys.filter((key) => {
+    if (!key.startsWith(prefix)) return false;
+    return normalizedEmail ? key.endsWith(`::${normalizedEmail}`) : true;
+  });
+
+  const entries = await Promise.all(
+    matchingKeys.map(async (key) => {
+      const value = await quotaSafeGetItem(key);
+      if (value === null) return null;
+      try {
+        return [key, JSON.parse(value)] as const;
+      } catch (error) {
+        console.error('[DataBundle] Error parsing dynamic storage entry:', { key, error });
+        return null;
+      }
+    })
+  );
+
+  return Object.fromEntries(entries.filter((entry): entry is readonly [string, unknown] => entry !== null));
+}
+
+function resolveImportedDynamicKey(key: string, prefix: string, email: string | null | undefined): string | null {
+  if (!key.startsWith(prefix)) return null;
+  const unscopedKey = key.includes('::') ? key.slice(0, key.indexOf('::')) : key;
+  return getUserScopedKey(unscopedKey, email ?? null);
+}
+
+function parseStoredArray<T>(rawValue: string | null, label: string): T[] {
+  try {
+    const parsed = rawValue ? JSON.parse(rawValue) : [];
+    return Array.isArray(parsed) ? parsed as T[] : [];
+  } catch (error) {
+    console.error(`[DataBundle] Error parsing ${label}:`, error);
+    return [];
+  }
+}
+
 export interface FullAppDataBundle {
   version: string;
   exportDate: string;
@@ -97,10 +147,20 @@ export interface FullAppDataBundle {
   machines: {
     encyclopedia: MachineEncyclopediaEntry[];
     atlasIds: string[];
+    userMachines?: SlotMachine[];
+    deckLocations?: DeckPlanLocation[];
   };
   crewRecognition: {
     entries: RecognitionEntryWithCrew[];
     sailings: Sailing[];
+  };
+  casinoData?: {
+    sessions: CasinoSession[];
+    bankrollLimits: BankrollLimit[];
+    bankrollAlerts: BankrollAlert[];
+    casinoOpenHours: Record<string, CasinoOpenHoursData>;
+    compItems: CompItem[];
+    w2gRecords: W2GRecord[];
   };
   metadata: {
     totalCruises: number;
@@ -111,6 +171,10 @@ export interface FullAppDataBundle {
     totalSessions: number;
     totalMachines: number;
     totalCrewEntries: number;
+    totalBankrollLimits?: number;
+    totalCasinoOpenHours?: number;
+    totalCompItems?: number;
+    totalW2GRecords?: number;
   };
 }
 
@@ -143,9 +207,17 @@ export async function getAllStoredData(email?: string | null): Promise<FullAppDa
       scopedUsersData,
       machineEncyclopediaData,
       myAtlasData,
+      currentMachineEncyclopediaData,
+      currentMyAtlasData,
       crewEntriesData,
       crewSailingsData,
       extendedLoyaltyRaw,
+      bankrollLimitsData,
+      bankrollAlertsData,
+      userSlotMachinesData,
+      deckPlanLocationsData,
+      compItemsData,
+      w2gRecordsData,
     ] = await Promise.all([
       quotaSafeGetItem(sk(ALL_STORAGE_KEYS.CRUISES)),
       quotaSafeGetItem(sk(ALL_STORAGE_KEYS.BOOKED_CRUISES)),
@@ -161,9 +233,17 @@ export async function getAllStoredData(email?: string | null): Promise<FullAppDa
       AsyncStorage.getItem(scopedUsersKey),
       AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.MACHINE_ENCYCLOPEDIA)),
       AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.MY_SLOT_ATLAS)),
+      AsyncStorage.getItem(getUserScopedKey(CURRENT_MACHINE_ENCYCLOPEDIA_KEY, email ?? null)),
+      AsyncStorage.getItem(getUserScopedKey(CURRENT_MY_SLOT_ATLAS_KEY, email ?? null)),
       AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_ENTRIES)),
       AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_SAILINGS)),
       quotaSafeGetItem(extendedLoyaltyKey),
+      AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.BANKROLL_LIMITS)),
+      AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.BANKROLL_ALERTS)),
+      AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.USER_SLOT_MACHINES)),
+      AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.DECK_PLAN_LOCATIONS)),
+      AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.COMP_ITEMS)),
+      AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.W2G_RECORDS)),
     ]);
 
     const usersData = scopedUsersData;
@@ -180,8 +260,15 @@ export async function getAllStoredData(email?: string | null): Promise<FullAppDa
     let users: UserProfile[] = [];
     let machineEncyclopedia: MachineEncyclopediaEntry[] = [];
     let myAtlasIds: string[] = [];
+    let userSlotMachines: SlotMachine[] = [];
+    let deckPlanLocations: DeckPlanLocation[] = [];
     let crewEntries: RecognitionEntryWithCrew[] = [];
     let crewSailings: Sailing[] = [];
+    let bankrollLimits: BankrollLimit[] = [];
+    let bankrollAlerts: BankrollAlert[] = [];
+    let compItems: CompItem[] = [];
+    let w2gRecords: W2GRecord[] = [];
+    let casinoOpenHours: Record<string, CasinoOpenHoursData> = {};
     
     try {
       cruises = cruisesData ? JSON.parse(cruisesData) : [];
@@ -255,7 +342,8 @@ export async function getAllStoredData(email?: string | null): Promise<FullAppDa
     }
 
     try {
-      machineEncyclopedia = machineEncyclopediaData ? JSON.parse(machineEncyclopediaData) : [];
+      const activeMachineData = currentMachineEncyclopediaData ?? machineEncyclopediaData;
+      machineEncyclopedia = activeMachineData ? JSON.parse(activeMachineData) : [];
       if (!Array.isArray(machineEncyclopedia)) machineEncyclopedia = [];
     } catch (e) {
       console.error('[DataBundle] Error parsing machine encyclopedia:', e);
@@ -263,11 +351,26 @@ export async function getAllStoredData(email?: string | null): Promise<FullAppDa
     }
 
     try {
-      myAtlasIds = myAtlasData ? JSON.parse(myAtlasData) : [];
+      const activeAtlasData = currentMyAtlasData ?? myAtlasData;
+      myAtlasIds = activeAtlasData ? JSON.parse(activeAtlasData) : [];
       if (!Array.isArray(myAtlasIds)) myAtlasIds = [];
     } catch (e) {
       console.error('[DataBundle] Error parsing atlas IDs:', e);
       myAtlasIds = [];
+    }
+
+    userSlotMachines = parseStoredArray<SlotMachine>(userSlotMachinesData, 'user slot machines');
+    deckPlanLocations = parseStoredArray<DeckPlanLocation>(deckPlanLocationsData, 'deck plan locations');
+    bankrollLimits = parseStoredArray<BankrollLimit>(bankrollLimitsData, 'bankroll limits');
+    bankrollAlerts = parseStoredArray<BankrollAlert>(bankrollAlertsData, 'bankroll alerts');
+    compItems = parseStoredArray<CompItem>(compItemsData, 'comp items');
+    w2gRecords = parseStoredArray<W2GRecord>(w2gRecordsData, 'W-2G records');
+
+    try {
+      casinoOpenHours = await loadStoredEntriesByPrefix(CASINO_OPEN_HOURS_STORAGE_PREFIX, email ?? null) as Record<string, CasinoOpenHoursData>;
+    } catch (e) {
+      console.error('[DataBundle] Error loading casino open hours:', e);
+      casinoOpenHours = {};
     }
 
     try {
@@ -343,10 +446,20 @@ export async function getAllStoredData(email?: string | null): Promise<FullAppDa
       machines: {
         encyclopedia: machineEncyclopedia,
         atlasIds: myAtlasIds,
+        userMachines: userSlotMachines,
+        deckLocations: deckPlanLocations,
       },
       crewRecognition: {
         entries: crewEntries,
         sailings: crewSailings,
+      },
+      casinoData: {
+        sessions: casinoSessions,
+        bankrollLimits,
+        bankrollAlerts,
+        casinoOpenHours,
+        compItems,
+        w2gRecords,
       },
       metadata: {
         totalCruises: cruises.length,
@@ -355,8 +468,12 @@ export async function getAllStoredData(email?: string | null): Promise<FullAppDa
         totalEvents: calendarEvents.length,
         totalCertificates: certificates.length,
         totalSessions: casinoSessions.length,
-        totalMachines: myAtlasIds.length,
+        totalMachines: myAtlasIds.length || machineEncyclopedia.length,
         totalCrewEntries: crewEntries.length,
+        totalBankrollLimits: bankrollLimits.length,
+        totalCasinoOpenHours: Object.keys(casinoOpenHours).length,
+        totalCompItems: compItems.length,
+        totalW2GRecords: w2gRecords.length,
       },
     };
 
@@ -379,6 +496,11 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
     casinoSessions: number;
     certificates: number;
     machines: number;
+    crewRecognitionEntries: number;
+    bankrollLimits: number;
+    casinoOpenHours: number;
+    compItems: number;
+    w2gRecords: number;
   };
   errors: string[];
 }> {
@@ -393,6 +515,11 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
     casinoSessions: 0,
     certificates: 0,
     machines: 0,
+    crewRecognitionEntries: 0,
+    bankrollLimits: 0,
+    casinoOpenHours: 0,
+    compItems: 0,
+    w2gRecords: 0,
   };
 
   const sk = (baseKey: string): string => {
@@ -482,8 +609,9 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
   }
 
   try {
-    if (bundle.casinoSessions && Array.isArray(bundle.casinoSessions)) {
-      const adoptedSessions = adoptBackupRecordsForActiveAccount(bundle.casinoSessions, email);
+    const sourceSessions = bundle.casinoData?.sessions ?? bundle.casinoSessions;
+    if (sourceSessions && Array.isArray(sourceSessions)) {
+      const adoptedSessions = adoptBackupRecordsForActiveAccount(sourceSessions, email);
       const dedupedSessions = dedupeByIdOrPayload(adoptedSessions, 'casinoSessions');
       await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CASINO_SESSIONS), JSON.stringify(dedupedSessions));
       imported.casinoSessions = dedupedSessions.length;
@@ -627,15 +755,31 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
   try {
     if (bundle.machines) {
       if (bundle.machines.encyclopedia && Array.isArray(bundle.machines.encyclopedia)) {
-        const dedupedMachineEntries = dedupeByIdOrPayload(bundle.machines.encyclopedia, 'machineEncyclopedia');
+        const adoptedMachineEntries = adoptBackupRecordsForActiveAccount(bundle.machines.encyclopedia, email);
+        const dedupedMachineEntries = dedupeByIdOrPayload(adoptedMachineEntries, 'machineEncyclopedia');
         await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.MACHINE_ENCYCLOPEDIA), JSON.stringify(dedupedMachineEntries));
+        await AsyncStorage.setItem(getUserScopedKey(CURRENT_MACHINE_ENCYCLOPEDIA_KEY, email ?? null), JSON.stringify(dedupedMachineEntries));
+        imported.machines = dedupedMachineEntries.length;
         console.log('[DataBundle] Imported machine encyclopedia:', dedupedMachineEntries.length);
       }
       if (bundle.machines.atlasIds && Array.isArray(bundle.machines.atlasIds)) {
         const dedupedAtlasIds = Array.from(new Set(bundle.machines.atlasIds.filter((id): id is string => typeof id === 'string' && id.trim().length > 0)));
         await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.MY_SLOT_ATLAS), JSON.stringify(dedupedAtlasIds));
-        imported.machines = dedupedAtlasIds.length;
-        console.log('[DataBundle] Imported slot atlas:', imported.machines, 'machines');
+        await AsyncStorage.setItem(getUserScopedKey(CURRENT_MY_SLOT_ATLAS_KEY, email ?? null), JSON.stringify(dedupedAtlasIds));
+        imported.machines = imported.machines || dedupedAtlasIds.length;
+        console.log('[DataBundle] Imported slot atlas:', dedupedAtlasIds.length, 'machines');
+      }
+      if (bundle.machines.userMachines && Array.isArray(bundle.machines.userMachines)) {
+        const adoptedUserMachines = adoptBackupRecordsForActiveAccount(bundle.machines.userMachines, email);
+        const dedupedUserMachines = dedupeByIdOrPayload(adoptedUserMachines, 'userSlotMachines');
+        await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.USER_SLOT_MACHINES), JSON.stringify(dedupedUserMachines));
+        console.log('[DataBundle] Imported user slot machines:', dedupedUserMachines.length);
+      }
+      if (bundle.machines.deckLocations && Array.isArray(bundle.machines.deckLocations)) {
+        const adoptedDeckLocations = adoptBackupRecordsForActiveAccount(bundle.machines.deckLocations, email);
+        const dedupedDeckLocations = dedupeByIdOrPayload(adoptedDeckLocations, 'deckPlanLocations');
+        await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.DECK_PLAN_LOCATIONS), JSON.stringify(dedupedDeckLocations));
+        console.log('[DataBundle] Imported deck plan locations:', dedupedDeckLocations.length);
       }
     }
   } catch (error) {
@@ -649,6 +793,7 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
         const adoptedCrewEntries = adoptBackupRecordsForActiveAccount(bundle.crewRecognition.entries, email);
         const dedupedCrewEntries = dedupeByIdOrPayload(adoptedCrewEntries, 'crewRecognitionEntries');
         await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_ENTRIES), JSON.stringify(dedupedCrewEntries));
+        imported.crewRecognitionEntries = dedupedCrewEntries.length;
         console.log('[DataBundle] Imported crew recognition entries:', dedupedCrewEntries.length);
       }
       if (bundle.crewRecognition.sailings && Array.isArray(bundle.crewRecognition.sailings)) {
@@ -661,6 +806,55 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
   } catch (error) {
     console.error('[DataBundle] Error importing crew recognition:', error);
     errors.push(`Failed to import crew recognition: ${error}`);
+  }
+
+  try {
+    if (bundle.casinoData) {
+      if (bundle.casinoData.bankrollLimits && Array.isArray(bundle.casinoData.bankrollLimits)) {
+        const adoptedBankrollLimits = adoptBackupRecordsForActiveAccount(bundle.casinoData.bankrollLimits, email);
+        const dedupedBankrollLimits = dedupeByIdOrPayload(adoptedBankrollLimits, 'bankrollLimits');
+        await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.BANKROLL_LIMITS), JSON.stringify(dedupedBankrollLimits));
+        imported.bankrollLimits = dedupedBankrollLimits.length;
+        console.log('[DataBundle] Imported bankroll limits:', imported.bankrollLimits);
+      }
+
+      if (bundle.casinoData.bankrollAlerts && Array.isArray(bundle.casinoData.bankrollAlerts)) {
+        const adoptedBankrollAlerts = adoptBackupRecordsForActiveAccount(bundle.casinoData.bankrollAlerts, email);
+        const dedupedBankrollAlerts = dedupeByIdOrPayload(adoptedBankrollAlerts, 'bankrollAlerts');
+        await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.BANKROLL_ALERTS), JSON.stringify(dedupedBankrollAlerts));
+        console.log('[DataBundle] Imported bankroll alerts:', dedupedBankrollAlerts.length);
+      }
+
+      if (bundle.casinoData.compItems && Array.isArray(bundle.casinoData.compItems)) {
+        const adoptedCompItems = adoptBackupRecordsForActiveAccount(bundle.casinoData.compItems, email);
+        const dedupedCompItems = dedupeByIdOrPayload(adoptedCompItems, 'compItems');
+        await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.COMP_ITEMS), JSON.stringify(dedupedCompItems));
+        imported.compItems = dedupedCompItems.length;
+        console.log('[DataBundle] Imported comp items:', imported.compItems);
+      }
+
+      if (bundle.casinoData.w2gRecords && Array.isArray(bundle.casinoData.w2gRecords)) {
+        const adoptedW2GRecords = adoptBackupRecordsForActiveAccount(bundle.casinoData.w2gRecords, email);
+        const dedupedW2GRecords = dedupeByIdOrPayload(adoptedW2GRecords, 'w2gRecords');
+        await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.W2G_RECORDS), JSON.stringify(dedupedW2GRecords));
+        imported.w2gRecords = dedupedW2GRecords.length;
+        console.log('[DataBundle] Imported W-2G records:', imported.w2gRecords);
+      }
+
+      if (bundle.casinoData.casinoOpenHours && typeof bundle.casinoData.casinoOpenHours === 'object') {
+        const saveOpenHoursEntries = Object.entries(bundle.casinoData.casinoOpenHours).map(async ([key, value]) => {
+          const scopedKey = resolveImportedDynamicKey(key, CASINO_OPEN_HOURS_STORAGE_PREFIX, email ?? null);
+          if (!scopedKey) return;
+          await quotaSafeSetJsonItem(scopedKey, value);
+        });
+        await Promise.all(saveOpenHoursEntries);
+        imported.casinoOpenHours = Object.keys(bundle.casinoData.casinoOpenHours).length;
+        console.log('[DataBundle] Imported casino open-hours records:', imported.casinoOpenHours);
+      }
+    }
+  } catch (error) {
+    console.error('[DataBundle] Error importing casino detail data:', error);
+    errors.push(`Failed to import casino detail data: ${error}`);
   }
 
   try {
@@ -688,6 +882,11 @@ export async function getDataSummary(): Promise<{
   hasSettings: boolean;
   hasLoyaltyData: boolean;
   machines: number;
+  crewRecognitionEntries: number;
+  bankrollLimits: number;
+  casinoOpenHours: number;
+  compItems: number;
+  w2gRecords: number;
 }> {
   try {
     const bundle = await getAllStoredData();
@@ -703,6 +902,11 @@ export async function getDataSummary(): Promise<{
       hasLoyaltyData: bundle.loyaltyData.manualClubRoyalePoints !== null || 
                       bundle.loyaltyData.manualCrownAnchorPoints !== null,
       machines: bundle.metadata.totalMachines,
+      crewRecognitionEntries: bundle.metadata.totalCrewEntries,
+      bankrollLimits: bundle.metadata.totalBankrollLimits ?? 0,
+      casinoOpenHours: bundle.metadata.totalCasinoOpenHours ?? 0,
+      compItems: bundle.metadata.totalCompItems ?? 0,
+      w2gRecords: bundle.metadata.totalW2GRecords ?? 0,
     };
   } catch (error) {
     console.error('[DataBundle] Error getting data summary:', error);
@@ -717,6 +921,11 @@ export async function getDataSummary(): Promise<{
       hasSettings: false,
       hasLoyaltyData: false,
       machines: 0,
+      crewRecognitionEntries: 0,
+      bankrollLimits: 0,
+      casinoOpenHours: 0,
+      compItems: 0,
+      w2gRecords: 0,
     };
   }
 }

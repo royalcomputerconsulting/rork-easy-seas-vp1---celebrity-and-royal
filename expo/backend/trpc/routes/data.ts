@@ -21,6 +21,7 @@ const UserDataSchema = z.object({
   alerts: z.array(z.any()).optional(),
   alertRules: z.array(z.any()).optional(),
   slotAtlas: z.array(z.any()).optional(),
+  machineEncyclopedia: z.array(z.any()).optional(),
   loyaltyData: z.any().optional(),
   bankrollData: z.any().optional(),
   celebrityData: z.any().optional(),
@@ -60,6 +61,11 @@ function prepareOwnedCalendarEvents(value: any[] | undefined, fallback: any[] | 
   return dedupeCalendarEvents(prepareOwnedDataArray(value, fallback, ownerScopeId, email, label), label);
 }
 
+function prepareStringArray(value: any[] | undefined, fallback: any[] | undefined): string[] {
+  const source = Array.isArray(value) ? value : Array.isArray(fallback) ? fallback : [];
+  return Array.from(new Set(source.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)));
+}
+
 function sanitizeForeignValue<T>(value: T | undefined, fallback: T | undefined, email: string, label: string): T | undefined {
   const source = value !== undefined ? value : fallback;
   if (source === undefined || source === null) {
@@ -90,7 +96,8 @@ interface StoredUserData {
   certificates?: any[];
   alerts?: any[];
   alertRules?: any[];
-  slotAtlas?: any[];
+  slotAtlas?: string[];
+  machineEncyclopedia?: any[];
   loyaltyData?: any;
   bankrollData?: any;
   celebrityData?: any;
@@ -212,7 +219,8 @@ export const dataRouter = createTRPCRouter({
         certificates: prepareOwnedDataArray(input.certificates, existingData?.certificates, ownerScopeId, normalizedEmail, 'api-save certificates'),
         alerts: prepareOwnedDataArray(input.alerts, existingData?.alerts, ownerScopeId, normalizedEmail, 'api-save alerts'),
         alertRules: prepareOwnedDataArray(input.alertRules, existingData?.alertRules, ownerScopeId, normalizedEmail, 'api-save alert rules'),
-        slotAtlas: prepareOwnedDataArray(input.slotAtlas, existingData?.slotAtlas, ownerScopeId, normalizedEmail, 'api-save slot atlas'),
+        slotAtlas: prepareStringArray(input.slotAtlas, existingData?.slotAtlas),
+        machineEncyclopedia: prepareOwnedDataArray(input.machineEncyclopedia, existingData?.machineEncyclopedia, ownerScopeId, normalizedEmail, 'api-save machine encyclopedia'),
         loyaltyData: sanitizeForeignValue(input.loyaltyData, existingData?.loyaltyData, normalizedEmail, 'api-save loyaltyData'),
         bankrollData: sanitizeForeignValue(input.bankrollData, existingData?.bankrollData, normalizedEmail, 'api-save bankrollData'),
         celebrityData: sanitizeForeignValue(input.celebrityData, existingData?.celebrityData, normalizedEmail, 'api-save celebrityData'),
@@ -250,6 +258,7 @@ export const dataRouter = createTRPCRouter({
             alerts = $alerts,
             alertRules = $alertRules,
             slotAtlas = $slotAtlas,
+            machineEncyclopedia = $machineEncyclopedia,
             loyaltyData = $loyaltyData,
             bankrollData = $bankrollData,
             celebrityData = $celebrityData,
@@ -332,7 +341,8 @@ export const dataRouter = createTRPCRouter({
           certificates: prepareOwnedDataArray(rawData.certificates, undefined, ownerScopeId, normalizedEmail, 'api-restore certificates'),
           alerts: prepareOwnedDataArray(rawData.alerts, undefined, ownerScopeId, normalizedEmail, 'api-restore alerts'),
           alertRules: prepareOwnedDataArray(rawData.alertRules, undefined, ownerScopeId, normalizedEmail, 'api-restore alert rules'),
-          slotAtlas: prepareOwnedDataArray(rawData.slotAtlas, undefined, ownerScopeId, normalizedEmail, 'api-restore slot atlas'),
+          slotAtlas: prepareStringArray(rawData.slotAtlas, undefined),
+          machineEncyclopedia: prepareOwnedDataArray(rawData.machineEncyclopedia, undefined, ownerScopeId, normalizedEmail, 'api-restore machine encyclopedia'),
           bankrollLimits: prepareOwnedDataArray(rawData.bankrollLimits, undefined, ownerScopeId, normalizedEmail, 'api-restore bankroll limits'),
           bankrollAlerts: prepareOwnedDataArray(rawData.bankrollAlerts, undefined, ownerScopeId, normalizedEmail, 'api-restore bankroll alerts'),
           crewRecognitionEntries: prepareOwnedDataArray(rawData.crewRecognitionEntries, undefined, ownerScopeId, normalizedEmail, 'api-restore crew entries'),
@@ -374,6 +384,7 @@ export const dataRouter = createTRPCRouter({
             alerts: data.alerts ?? [],
             alertRules: data.alertRules ?? [],
             slotAtlas: data.slotAtlas ?? [],
+            machineEncyclopedia: data.machineEncyclopedia ?? [],
             loyaltyData: data.loyaltyData,
             bankrollData: data.bankrollData,
             celebrityData: data.celebrityData,
