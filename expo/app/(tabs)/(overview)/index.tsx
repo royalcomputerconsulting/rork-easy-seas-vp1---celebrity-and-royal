@@ -33,6 +33,7 @@ import {
   Archive,
   CheckCircle,
   Clock,
+  BookOpen,
 } from 'lucide-react-native';
 
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
@@ -195,7 +196,7 @@ function OverviewScreenContent() {
   const { cruises, bookedCruises: allBookedCruises, casinoOffers, clubRoyaleProfile, updateCasinoOffer } = useCoreData();
   const { currentUser } = useUser();
   const { logout } = useAuth();
-  const { messages, isLoading: agentLoading, sendMessage, isVisible, setVisible, toggleExpanded, isExpanded, refreshAnalysis } = useAgentX();
+  const { messages, isLoading: agentLoading, sendMessage, isVisible, setVisible, toggleExpanded, isExpanded, refreshAnalysis, mode: agentMode, setMode: setAgentMode } = useAgentX();
   const { summary } = useAlerts();
   
   usePriceTrackingSync();
@@ -751,6 +752,24 @@ function OverviewScreenContent() {
           />
         </CollapsibleSection>
 
+        <TouchableOpacity
+          style={styles.learnSystemCard}
+          onPress={() => router.push('/learn-system' as any)}
+          activeOpacity={0.85}
+          testID="dashboard-learn-system"
+        >
+          <LinearGradient colors={['#0F2439', '#1E3A5F', '#0F766E']} style={styles.learnSystemGradient}>
+            <View style={styles.learnSystemIcon}>
+              <BookOpen size={20} color="#A7F3D0" />
+            </View>
+            <View style={styles.learnSystemCopy}>
+              <Text style={styles.learnSystemTitle}>Learn the System</Text>
+              <Text style={styles.learnSystemSubtitle}>Offer math, certificates, loyalty basics, machine logs, and EasySeas tutorials.</Text>
+            </View>
+            <Text style={styles.learnSystemAction}>Open</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+
         {offerSummary && (
           <OfferSummaryCard
             totalValue={offerSummary.totalValue}
@@ -1081,6 +1100,8 @@ function OverviewScreenContent() {
               onToggleExpand={toggleExpanded}
               onClose={() => setVisible(false)}
               showHeader={true}
+              mode={agentMode}
+              onModeChange={setAgentMode}
             />
           </View>
         </View>
@@ -1494,6 +1515,47 @@ const styles = StyleSheet.create({
   agentChatExpanded: {
     top: 0,
     bottom: 0,
+  },
+  learnSystemCard: {
+    borderRadius: BORDER_RADIUS.xl,
+    overflow: 'hidden',
+    marginBottom: SPACING.md,
+    ...SHADOW.md,
+  },
+  learnSystemGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    padding: SPACING.md,
+  },
+  learnSystemIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: 'rgba(167, 243, 208, 0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(167, 243, 208, 0.24)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  learnSystemCopy: {
+    flex: 1,
+  },
+  learnSystemTitle: {
+    fontSize: 15,
+    fontWeight: '900' as const,
+    color: '#FFFFFF',
+  },
+  learnSystemSubtitle: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.72)',
+    lineHeight: 17,
+    marginTop: 2,
+  },
+  learnSystemAction: {
+    fontSize: 12,
+    fontWeight: '900' as const,
+    color: '#A7F3D0',
   },
   warRoomCard: {
     borderRadius: BORDER_RADIUS.xl,

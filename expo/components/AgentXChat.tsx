@@ -36,8 +36,12 @@ import {
   Workflow,
   Radio,
   SlidersHorizontal,
+  Search,
+  CalendarDays,
+  ClipboardCheck,
 } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
+import type { AgentXMode } from '@/types/models';
 
 export interface ChatMessage {
   id: string;
@@ -58,6 +62,8 @@ interface AgentXChatProps {
   onClose?: () => void;
   showHeader?: boolean;
   placeholder?: string;
+  mode?: AgentXMode;
+  onModeChange?: (mode: AgentXMode) => void;
 }
 
 const STT_ENDPOINT = 'https://toolkit.rork.com/stt/transcribe/';
@@ -67,6 +73,18 @@ const QUICK_ACTIONS = [
   { id: 'tier', label: 'Tier Progress', icon: Award, prompt: 'Show my tier progress to Signature' },
   { id: 'optimize', label: 'Optimize', icon: TrendingUp, prompt: 'Recommend cruises to maximize my points' },
   { id: 'offers', label: 'Offers', icon: Gift, prompt: 'Show expiring offers' },
+  { id: 'ask-data', label: 'Ask My Data', icon: Search, prompt: 'Ask my data: what offers, cruises, certificates, and calendar items need attention?' },
+];
+
+const AGENT_MODES: { id: AgentXMode; label: string; icon: typeof Ship }[] = [
+  { id: 'travelAgent', label: 'Travel Agent', icon: Ship },
+  { id: 'casinoHost', label: 'Casino Host', icon: Gift },
+  { id: 'certificateAdvisor', label: 'Certificate Advisor', icon: ClipboardCheck },
+  { id: 'loyaltyStrategist', label: 'Loyalty Strategist', icon: Award },
+  { id: 'apScout', label: 'AP Scout', icon: Radio },
+  { id: 'calendarPlanner', label: 'Calendar Planner', icon: CalendarDays },
+  { id: 'importAuditor', label: 'Import Auditor', icon: Workflow },
+  { id: 'easySeasGuide', label: 'EasySeas Guide', icon: Sparkles },
 ];
 
 const DEV_ASSISTANT_CAPABILITIES = [
@@ -156,6 +174,8 @@ export const AgentXChat = React.memo(function AgentXChat({
   onClose,
   showHeader = true,
   placeholder = 'Ask about cruises, tier progress, offers...',
+  mode = 'travelAgent',
+  onModeChange,
 }: AgentXChatProps) {
   const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
@@ -447,14 +467,19 @@ export const AgentXChat = React.memo(function AgentXChat({
     onSendMessage(prompt);
   }, [onSendMessage, isSpeaking, stopSpeaking]);
 
-  const handleModeChange = useCallback((mode: 'voice' | 'manual') => {
-    if (isRecording || isTranscribing || inputMode === mode) {
+  const handleModeChange = useCallback((inputModeValue: 'voice' | 'manual') => {
+    if (isRecording || isTranscribing || inputMode === inputModeValue) {
       return;
     }
 
-    console.log('[AgentXChat] Switching input mode to:', mode);
-    setInputMode(mode);
+    console.log('[AgentXChat] Switching input mode to:', inputModeValue);
+    setInputMode(inputModeValue);
   }, [inputMode, isRecording, isTranscribing]);
+
+  const handleAgentModeChange = useCallback((nextMode: AgentXMode) => {
+    console.log('[AgentXChat] Switching AgentX mode:', nextMode);
+    onModeChange?.(nextMode);
+  }, [onModeChange]);
 
   const handleManualSend = useCallback(() => {
     const trimmedInput = manualInput.trim();
@@ -688,6 +713,27 @@ export const AgentXChat = React.memo(function AgentXChat({
             </View>
           </View>
         )}
+      </View>
+
+      <View style={styles.agentModeStrip} testID="agentx-mode-selector">
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.agentModeScroll}>
+          {AGENT_MODES.map((agentMode) => {
+            const ModeIcon = agentMode.icon;
+            const isActive = mode === agentMode.id;
+            return (
+              <TouchableOpacity
+                key={agentMode.id}
+                style={[styles.agentModeChip, isActive && styles.agentModeChipActive]}
+                onPress={() => handleAgentModeChange(agentMode.id)}
+                activeOpacity={0.75}
+                testID={`agentx-mode-${agentMode.id}`}
+              >
+                <ModeIcon size={13} color={isActive ? COLORS.white : COLORS.navyDeep} />
+                <Text style={[styles.agentModeChipText, isActive && styles.agentModeChipTextActive]}>{agentMode.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
 
       {isRecording && (
@@ -936,6 +982,40 @@ const styles = StyleSheet.create({
   },
   headerButtonActive: {
     backgroundColor: COLORS.navyDeep,
+  },
+  agentModeStrip: {
+    backgroundColor: 'rgba(255, 255, 255, 0.78)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 31, 63, 0.08)',
+  },
+  agentModeScroll: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    gap: SPACING.xs,
+  },
+  agentModeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderRadius: BORDER_RADIUS.round,
+    backgroundColor: 'rgba(30, 58, 95, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(30, 58, 95, 0.1)',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 6,
+    marginRight: SPACING.xs,
+  },
+  agentModeChipActive: {
+    backgroundColor: COLORS.navyDeep,
+    borderColor: COLORS.navyDeep,
+  },
+  agentModeChipText: {
+    fontSize: 11,
+    fontWeight: '800' as const,
+    color: COLORS.navyDeep,
+  },
+  agentModeChipTextActive: {
+    color: COLORS.white,
   },
   messagesContainer: {
     flex: 1,

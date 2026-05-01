@@ -2375,6 +2375,12 @@ STEP 4: Optional Calendar Import
               )}
               {renderSettingRow(
                 <BookOpen size={18} color={COLORS.navyDeep} />,
+                'Learn the System',
+                <ChevronRight size={14} color={CLEAN_THEME.text.secondary} />,
+                () => router.push('/learn-system' as any)
+              )}
+              {renderSettingRow(
+                <BookOpen size={18} color={COLORS.navyDeep} />,
                 "Check out Scott Astin's Other Books",
                 <ExternalLink size={14} color={CLEAN_THEME.text.secondary} />,
                 () => handleOpenLink('https://www.amazon.com/stores/Scott-Astin/author/B0GCQ1S8MH')

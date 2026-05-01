@@ -33,6 +33,7 @@ import { PlayingHoursCard } from '@/components/ui/PlayingHoursCard';
 import { CasinoOpenHoursCard, type CasinoOpenHoursData } from '@/components/ui/CasinoOpenHoursCard';
 import { CasinoSessionTracker } from '@/components/CasinoSessionTracker';
 import { AddSessionModal } from '@/components/AddSessionModal';
+import { MachineConditionLogsPanel } from '@/components/MachineConditionLogsPanel';
 import { useUser, DEFAULT_PLAYING_HOURS } from '@/state/UserProvider';
 import type { PlayingHours } from '@/state/UserProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
@@ -727,6 +728,8 @@ export default function AtlasScreen() {
             <Text style={styles.loadingText}>Building machine index...</Text>
           </View>
         )}
+
+        <MachineConditionLogsPanel defaultShipName={nextUpcomingCruise?.shipName} />
 
         <View style={styles.hoursCardsSection}>
           <PlayingHoursCard

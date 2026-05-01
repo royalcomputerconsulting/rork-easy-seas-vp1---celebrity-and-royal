@@ -34,6 +34,7 @@ import { TaxProvider } from "@/state/TaxProvider";
 import { MachineStrategyProvider } from "@/state/MachineStrategyProvider";
 import { SlotMachineProvider } from "@/state/SlotMachineProvider";
 import { SlotMachineLibraryProvider, useSlotMachineLibrary } from "@/state/SlotMachineLibraryProvider";
+import { MachineConditionLogProvider } from "@/state/MachineConditionLogProvider";
 import { DeckPlanProvider } from "@/state/DeckPlanProvider";
 import { UserDataSyncProvider, useUserDataSync } from "@/state/UserDataSyncProvider";
 import { EntitlementProvider } from "@/state/EntitlementProvider";
@@ -283,6 +284,14 @@ function RootLayoutNav() {
       />
       <Stack.Screen 
         name="offer-details" 
+        options={{ 
+          presentation: "modal",
+          headerShown: false,
+          animation: 'slide_from_bottom' as const,
+        }} 
+      />
+      <Stack.Screen 
+        name="learn-system" 
         options={{ 
           presentation: "modal",
           headerShown: false,
@@ -541,6 +550,7 @@ const CasinoProviders = composeProviders(
   CasinoSessionProvider,
   SlotMachineProvider,
   SlotMachineLibraryProvider,
+  MachineConditionLogProvider,
   MachineStrategyProvider,
   BankrollProvider,
   GamificationProvider,
@@ -550,8 +560,8 @@ const CasinoProviders = composeProviders(
 const ServiceProviders = composeProviders(
   TaxProvider,
   AlertsProvider,
-  AgentXProvider,
   CertificatesProvider,
+  AgentXProvider,
   SailingWeatherProvider,
 );
 

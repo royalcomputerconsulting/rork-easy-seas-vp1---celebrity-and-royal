@@ -1,4 +1,6 @@
 export type TravelBrand = 'royal' | 'celebrity' | 'carnival' | 'silversea' | 'unknown';
+export type AgentXMode = 'travelAgent' | 'casinoHost' | 'certificateAdvisor' | 'loyaltyStrategist' | 'apScout' | 'calendarPlanner' | 'importAuditor' | 'easySeasGuide';
+export type MachineLogDecision = 'played' | 'passed' | 'watched';
 export type CasinoProgram = 'clubRoyale' | 'blueChip' | 'playersClub' | 'venetianSociety' | 'none' | 'unknown';
 export type ImportReviewStatus = 'assigned' | 'unassigned' | 'reviewNeeded' | 'matched' | 'overlap' | 'error';
 export type OfferArchiveStatus = 'active' | 'expiringSoon' | 'expired' | 'archived' | 'reviewNeeded' | 'replaced';
@@ -15,6 +17,26 @@ export interface TravelerProfile {
   blueChipId?: string;
   defaultProfile?: boolean;
   active?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MachineConditionLog extends SharedOwnershipFields {
+  id: string;
+  shipName: string;
+  casinoLocation: string;
+  machineId?: string;
+  machineName: string;
+  seatBankPosition: string;
+  denomination: string;
+  betLevel: string;
+  majorAmount?: number;
+  grandAmount?: number;
+  visibleMachineState: string;
+  bonusMeterCondition: string;
+  timeObserved: string;
+  decision: MachineLogDecision;
+  notes?: string;
   createdAt: string;
   updatedAt: string;
 }

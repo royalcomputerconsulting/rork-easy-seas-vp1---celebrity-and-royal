@@ -4,6 +4,8 @@ import { generateText } from '@rork-ai/toolkit-sdk';
 import { useCoreData } from './CoreDataProvider';
 import { useLoyalty } from './LoyaltyProvider';
 import type { ChatMessage } from '@/components/AgentXChat';
+import type { AgentXMode } from '@/types/models';
+import { askMyDataSearch, formatAskMyDataResponse } from '@/lib/askMyData';
 import {
   AgentToolContext,
   executeCruiseSearch,
@@ -29,6 +31,8 @@ import { useDeckPlan } from './DeckPlanProvider';
 import { useCasinoSessions } from './CasinoSessionProvider';
 import { useEntitlement } from './EntitlementProvider';
 import { useAuth } from './AuthProvider';
+import { useCertificates } from './CertificatesProvider';
+import { useMachineConditionLogs } from './MachineConditionLogProvider';
 
 interface AgentXState {
   messages: ChatMessage[];
@@ -36,67 +40,63 @@ interface AgentXState {
   isExpanded: boolean;
   isVisible: boolean;
   error: string | null;
+  mode: AgentXMode;
   
   sendMessage: (content: string) => Promise<void>;
   clearMessages: () => void;
   toggleExpanded: () => void;
   toggleVisible: () => void;
   setVisible: (visible: boolean) => void;
+  setMode: (mode: AgentXMode) => void;
   refreshAnalysis: () => Promise<void>;
 }
 
-function buildSystemPrompt(context: { globalLibrary?: any[], myAtlasMachines?: any[], sessions?: any[], deckMappings?: any[] }): string {
-  return `You are Agent X, an intelligent cruise and casino advisor for Royal Caribbean Club Royale casino cruisers. You help users:
+const AGENT_MODE_LABELS: Record<AgentXMode, string> = {
+  travelAgent: 'Travel Agent',
+  casinoHost: 'Casino Host',
+  certificateAdvisor: 'Certificate Advisor',
+  loyaltyStrategist: 'Loyalty Strategist',
+  apScout: 'AP Scout',
+  calendarPlanner: 'Calendar Planner',
+  importAuditor: 'Import Auditor',
+  easySeasGuide: 'EasySeas Guide',
+};
+
+function buildSystemPrompt(context: { globalLibrary?: any[], myAtlasMachines?: any[], sessions?: any[], deckMappings?: any[], machineLogs?: any[], certificates?: any[], mode: AgentXMode }): string {
+  return `You are Agent X in ${AGENT_MODE_LABELS[context.mode]} mode, an intelligent cruise and casino advisor for Royal Caribbean Club Royale casino cruisers. You help users:
 - Search and filter available cruises
 - Analyze bookings and calculate ROI
 - Track Club Royale tier progress (Choice, Prime, Signature, Masters)
 - Optimize their cruise portfolio for maximum points and value
 - Understand casino offers and their values
-- Identify which A or C certificate levels match specific ships or sailing dates
+- Identify which certificate levels match specific ships or sailing dates
 - Recommend slot machines on specific ships for advantage play (AP) and optimal returns
 - Analyze slot machine session data and performance
-- Track machine locations on specific ships via deck plans
-- Provide insights on machine win/loss patterns and player statistics
+- Track machine locations and condition logs on specific ships
+- Provide careful educational guidance about offer math, certificates, loyalty, and responsible use
 
 You have FULL ACCESS to:
 1. **Cruise Data**: All available cruises, booked cruises, casino offers, tier information
-2. **Slot Machine Library**: ${context.globalLibrary?.length || 0} total machines in permanent database, including:
-   - ${context.myAtlasMachines?.length || 0} machines in user's personal Atlas
-   - Machine details: manufacturer, volatility, cabinet type, AP potential
-   - Ship-specific machine locations and notes
-3. **Casino Sessions**: ${context.sessions?.length || 0} tracked sessions with:
-   - Win/loss records per machine
-   - Session duration and denomination tracking
-   - Machine performance analytics and ROI
+2. **Slot Machine Library**: ${context.globalLibrary?.length || 0} total machines in permanent database, including ${context.myAtlasMachines?.length || 0} machines in user's personal Atlas
+3. **Casino Sessions**: ${context.sessions?.length || 0} tracked sessions
 4. **Deck Plans**: ${context.deckMappings?.length || 0} machine location mappings across ships
-   - Exact deck, zone, and slot positions
-   - Ship-specific machine availability
+5. **Machine Condition Logs**: ${context.machineLogs?.length || 0} Machine Atlas observations
+6. **Certificates**: ${context.certificates?.length || 0} certificate records
 
-When users ask about slot machines, you can:
-- Search the entire permanent database (300+ machines)
-- Recommend machines based on session history and performance
-- Analyze win/loss patterns for specific machines
-- Show machine locations on specific ships
-- Compare machine performance across sessions
-- Suggest optimal machines based on user's playing history
+Mode guidance:
+- Travel Agent: prioritize itinerary, cabin, dates, route, ports, and booking practicality.
+- Casino Host: prioritize offer value, casino-paid value, FreePlay/OBC, and responsible play guidance.
+- Certificate Advisor: prioritize certificate fit, cautious stacking notes, expirations, and terms verification.
+- Loyalty Strategist: prioritize tier points, progress, milestones, and realistic earning paths.
+- AP Scout: prioritize machine condition logs, persistence, meters, jackpot conditions, and play/pass/watch decisions.
+- Calendar Planner: prioritize agenda dates, sailing days, expirations, travel gaps, and conflicts.
+- Import Auditor: prioritize source, profile ownership, reconciliation, missing rows, duplicates, and review-needed records.
+- EasySeas Guide: prioritize app tutorials, cruise casino basics, offer math, certificates, and responsible-use education.
 
-Key formulas to remember:
+Key formulas:
 - Points: 1 point per $5 coin-in
 - ROI = (Retail Value + Winnings - Out of Pocket) / Out of Pocket × 100%
-- Cabin Value = Cabin Price × 2 (double occupancy) + Taxes & Fees
-
-Current tier thresholds:
-- Choice: 0-2,500 points
-- Prime: 2,501-25,000 points
-- Signature: 25,001-100,000 points
-- Masters: 100,001+ points
-
-Slot Machine Advantage Play:
-- Look for machines with True Persistence or Must-Hit-By features
-- Consider volatility, denomination, and ship-specific placement
-- Check entry/exit conditions for optimal AP opportunities
-- Use session data to identify hot/cold machines
-- Analyze player ROI and win rates per machine`;
+- Cabin Value = Cabin Price × 2 (double occupancy) + Taxes & Fees`;
 }
 
 function buildDevAssistantSystemPrompt(): string {
@@ -124,6 +124,7 @@ function isDevAssistantRequest(message: string): boolean {
 }
 
 function parseToolCall(message: string): { tool: string; params: unknown } | null {
+  const askDataMatch = message.match(/ask my data|search my data|find in my data|search everything|global search|natural language search|show me.*data|what .* do i have|which .* do i have/i);
   const certificateMatch = message.match(/certificate|certificates|levels?\s+of\s+certificates?|what\s+levels?|appears?\s+on.*certificate|a\s+or\s+c\s+certificate/i);
   const searchMatch = message.match(/search.*cruise|find.*cruise|available.*cruise|cruise.*search/i);
   const tierMatch = message.match(/tier.*progress|progress.*tier|points.*tier|signature|masters|pinnacle/i);
@@ -132,6 +133,10 @@ function parseToolCall(message: string): { tool: string; params: unknown } | nul
   const analyzeMatch = message.match(/analyze|roi|value.*breakdown|portfolio.*summary/i);
   const offerMatch = message.match(/offer|expiring|freeplay|trade.*in|casino.*offer/i);
   const machineMatch = message.match(/slot.*machine|machine.*recommend|what.*machine|which.*machine|slot.*play|best.*machine|machine.*on|ap.*machine|advantage.*play/i);
+
+  if (askDataMatch) {
+    return { tool: 'askMyData', params: { query: message } };
+  }
 
   if (certificateMatch) {
     const params: CertificateLevelSearchInput = { query: message };
@@ -267,18 +272,21 @@ function parseToolCall(message: string): { tool: string; params: unknown } | nul
 export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => {
   const { tier } = useEntitlement();
   const { isAdmin } = useAuth();
-  const { cruises, bookedCruises, casinoOffers } = useCoreData();
+  const { cruises, bookedCruises, casinoOffers, calendarEvents, filters } = useCoreData();
   const { clubRoyalePoints, clubRoyaleTier } = useLoyalty();
   const { allMachines } = useSlotMachines();
   const { myAtlasMachines, globalLibrary, encyclopedia } = useSlotMachineLibrary();
   const { mappings: deckMappings } = useDeckPlan();
   const { sessions, getSessionAnalytics, getMachineAnalytics } = useCasinoSessions();
+  const { certificates } = useCertificates();
+  const { logs: machineLogs } = useMachineConditionLogs();
   
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<AgentXMode>('travelAgent');
 
   const toolContext = useMemo((): AgentToolContext => {
     console.log('[AgentX] Recalculating toolContext with latest data...');
@@ -292,6 +300,10 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
       globalLibrary: globalLibrary.length,
       sessions: sessions.length,
       deckMappings: deckMappings.length,
+      certificates: certificates.length,
+      machineLogs: machineLogs.length,
+      mode,
+      filters,
     });
     
     return {
@@ -309,7 +321,7 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
       getSessionAnalytics,
       getMachineAnalytics,
     };
-  }, [cruises, bookedCruises, casinoOffers, clubRoyalePoints, clubRoyaleTier, allMachines, myAtlasMachines, globalLibrary, encyclopedia, deckMappings, sessions, getSessionAnalytics, getMachineAnalytics]);
+  }, [cruises, bookedCruises, casinoOffers, clubRoyalePoints, clubRoyaleTier, allMachines, myAtlasMachines, globalLibrary, encyclopedia, deckMappings, sessions, getSessionAnalytics, getMachineAnalytics, certificates.length, machineLogs.length, mode, filters]);
 
   const executeToolCall = useCallback((tool: string, params: unknown): string => {
     console.log('[AgentX] Executing tool:', tool, params);
@@ -331,13 +343,18 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
         return executeRecommendations(params as RecommendationInput, toolContext);
       case 'recommendMachines':
         return executeMachineRecommendations(params as MachineRecommendationInput, toolContext);
+      case 'askMyData': {
+        const query = typeof (params as { query?: unknown }).query === 'string' ? (params as { query: string }).query : '';
+        const response = askMyDataSearch({ query, offers: casinoOffers, cruises: [...cruises, ...bookedCruises], certificates, calendarEvents });
+        return formatAskMyDataResponse(response);
+      }
       default:
         return `Unknown tool: ${tool}`;
     }
-  }, [toolContext]);
+  }, [toolContext, casinoOffers, cruises, bookedCruises, certificates, calendarEvents]);
 
   const sendMessage = useCallback(async (content: string) => {
-    console.log('[AgentX] User message:', content);
+    console.log('[AgentX] User message:', content, 'mode:', mode);
 
     const devAssistantRequest = isDevAssistantRequest(content);
     const hasAgentAccess = tier === 'pro' || isAdmin || devAssistantRequest;
@@ -448,6 +465,9 @@ CRITICAL: The user has EXACTLY ${toolContext.userPoints.toLocaleString()} Club R
             myAtlasMachines,
             sessions,
             deckMappings,
+            machineLogs,
+            certificates,
+            mode,
           });
       
       const messagesForAI = devAssistantRequest
@@ -471,8 +491,8 @@ CRITICAL: The user has EXACTLY ${toolContext.userPoints.toLocaleString()} Club R
             { 
               role: 'user' as const, 
               content: toolResult 
-                ? `User asked: "${content}"\n\nTool result:\n${toolResult}\n\nPlease summarize this information in a helpful, conversational way. Highlight the most important points.`
-                : `User asked: "${content}"\n\nPlease provide a helpful response based on the user's cruise data and context.`
+                ? `AgentX mode: ${AGENT_MODE_LABELS[mode]}\nUser asked: "${content}"\n\nTool result:\n${toolResult}\n\nPlease summarize this information in a helpful, conversational way. Highlight the most important points and name the data source used.`
+                : `AgentX mode: ${AGENT_MODE_LABELS[mode]}\nUser asked: "${content}"\n\nPlease provide a helpful response based on the user's cruise data, active profile/filter context, and selected mode.`
             },
           ];
       
@@ -504,7 +524,7 @@ CRITICAL: The user has EXACTLY ${toolContext.userPoints.toLocaleString()} Club R
     } finally {
       setIsLoading(false);
     }
-  }, [messages, tier, isAdmin, toolContext, executeToolCall, globalLibrary, myAtlasMachines, sessions, deckMappings]);
+  }, [messages, tier, isAdmin, toolContext, executeToolCall, globalLibrary, myAtlasMachines, sessions, deckMappings, machineLogs, certificates, mode]);
 
   const clearMessages = useCallback(() => {
     console.log('[AgentX] Clearing messages');
@@ -535,11 +555,13 @@ CRITICAL: The user has EXACTLY ${toolContext.userPoints.toLocaleString()} Club R
     isExpanded,
     isVisible,
     error,
+    mode,
     sendMessage,
     clearMessages,
     toggleExpanded,
     toggleVisible,
     setVisible: setVisibleState,
+    setMode,
     refreshAnalysis,
   }), [
     messages,
@@ -547,6 +569,7 @@ CRITICAL: The user has EXACTLY ${toolContext.userPoints.toLocaleString()} Club R
     isExpanded,
     isVisible,
     error,
+    mode,
     sendMessage,
     clearMessages,
     toggleExpanded,

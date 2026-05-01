@@ -75,7 +75,7 @@ export default function SchedulingScreen() {
   const { localData, clubRoyaleProfile, isLoading: appLoading } = useAppState();
   const { bookedCruises } = useCoreData();
   const { currentUser } = useUser();
-  const { messages, isLoading: agentLoading, sendMessage, isVisible, setVisible, isExpanded, toggleExpanded } = useAgentX();
+  const { messages, isLoading: agentLoading, sendMessage, isVisible, setVisible, isExpanded, toggleExpanded, mode: agentMode, setMode: setAgentMode } = useAgentX();
 
   const [activeTab, setActiveTab] = useState<ViewTab>('available');
   const [filters, setFilters] = useState<FilterState>({
@@ -921,6 +921,8 @@ export default function SchedulingScreen() {
               onClose={handleAgentClose}
               showHeader={true}
               placeholder="Ask about cruises, tier progress, offers..."
+              mode={agentMode}
+              onModeChange={setAgentMode}
             />
           </View>
         </View>
