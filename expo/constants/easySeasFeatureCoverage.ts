@@ -53,10 +53,10 @@ export const EASYSEAS_FEATURE_COVERAGE_CHECKLIST: EasySeasFeatureCoverageItem[] 
   },
   {
     id: 7,
-    title: 'Offer Expiration War Room',
-    status: 'partial',
-    representedIn: ['Offers dashboard War Room card', 'Expiration buckets', 'View/Decode/Compare/Archive/Mark skipped/Ask actions'],
-    deficiencies: ['The War Room is a dashboard module, not a dedicated full-screen management view.', 'Only the highest-priority visible buckets/items are surfaced on the dashboard.'],
+    title: 'Offer Expiration Command Center',
+    status: 'represented',
+    representedIn: ['Offers dashboard Command Center card', 'Full Command Center management screen', 'Expiration buckets', 'View/Decode/Compare/Archive/Mark skipped/Ask actions'],
+    deficiencies: ['Only the highest-priority visible buckets/items are surfaced on the dashboard preview; the full queue lives in Command Center.'],
   },
   {
     id: 8,
@@ -76,7 +76,7 @@ export const EASYSEAS_FEATURE_COVERAGE_CHECKLIST: EasySeasFeatureCoverageItem[] 
     id: 10,
     title: 'Decode Offer Button',
     status: 'partial',
-    representedIn: ['Offer cards', 'Offer detail pages', 'Expiration War Room actions', 'Decoded offer helper'],
+    representedIn: ['Offer cards', 'Offer detail pages', 'Expiration Command Center actions', 'Decoded offer helper'],
     deficiencies: ['Decode is not yet embedded as a structured action inside every AgentX response.', 'Certificate detail decoding is limited by the absence of a full standalone certificate detail page.'],
   },
   {
@@ -111,7 +111,7 @@ export const EASYSEAS_FEATURE_COVERAGE_CHECKLIST: EasySeasFeatureCoverageItem[] 
     id: 15,
     title: 'Offer Archive Guard',
     status: 'partial',
-    representedIn: ['Archive status fields', 'Review-needed missing-offer handling', 'War Room archive action', 'Import reconciliation guardrails'],
+    representedIn: ['Archive status fields', 'Review-needed missing-offer handling', 'Command Center archive action', 'Import reconciliation guardrails'],
     deficiencies: ['Missing offers are flagged rather than deleted, but there is no full review queue with Archive / Keep Active / Restore actions for every flagged item.', 'Replaced-offer lineage is not fully visualized.'],
   },
   {

@@ -68,13 +68,13 @@ import type { Cruise, BookedCruise, CasinoOffer } from '@/types/models';
 import { getCabinPriceFromEntity, GUEST_COUNT_DEFAULT } from '@/lib/valueCalculator';
 import { formatCurrency } from '@/lib/format';
 import {
-  buildWarRoomBuckets,
+  buildCommandCenterBuckets,
   calculateOfferIntelligenceScore,
   decodeOffer,
   getOfferDisplayCode,
   type DecodedOffer,
-  type WarRoomBucket,
-  type WarRoomOffer,
+  type CommandCenterBucket,
+  type CommandCenterOffer,
 } from '@/lib/offerIntelligence';
 
 function AnimatedEmptyState({ onImportPress }: { onImportPress: () => void }) {
@@ -485,17 +485,17 @@ function OverviewScreenContent() {
     };
   }, [currentUser]);
 
-  const warRoomBuckets = useMemo((): WarRoomBucket[] => {
-    return buildWarRoomBuckets(offersData, cruisesData, certificates, currentTravelerProfile);
+  const commandCenterBuckets = useMemo((): CommandCenterBucket[] => {
+    return buildCommandCenterBuckets(offersData, cruisesData, certificates, currentTravelerProfile);
   }, [offersData, cruisesData, certificates, currentTravelerProfile]);
 
-  const warRoomTotalCount = useMemo(() => {
-    return warRoomBuckets.reduce((sum, bucket) => sum + bucket.offers.length, 0);
-  }, [warRoomBuckets]);
+  const commandCenterTotalCount = useMemo(() => {
+    return commandCenterBuckets.reduce((sum, bucket) => sum + bucket.offers.length, 0);
+  }, [commandCenterBuckets]);
 
-  const topWarRoomBuckets = useMemo(() => {
-    return warRoomBuckets.filter((bucket) => bucket.offers.length > 0).slice(0, 3);
-  }, [warRoomBuckets]);
+  const topCommandCenterBuckets = useMemo(() => {
+    return commandCenterBuckets.filter((bucket) => bucket.offers.length > 0).slice(0, 3);
+  }, [commandCenterBuckets]);
 
   const [sortMode, setSortMode] = useState<'soonest' | 'highestValue'>('soonest');
 
@@ -626,9 +626,9 @@ function OverviewScreenContent() {
     setDecodedOffer(decodeOffer(offer, cruisesData, currentTravelerProfile));
   }, [cruisesData, currentTravelerProfile]);
 
-  const handleWarRoomAction = useCallback((action: 'view' | 'decode' | 'compare' | 'archive' | 'skip', item: WarRoomOffer) => {
+  const handleCommandCenterAction = useCallback((action: 'view' | 'decode' | 'compare' | 'archive' | 'skip', item: CommandCenterOffer) => {
     const offerCodeForLog = getOfferDisplayCode(item.offer);
-    console.log('[Overview] War Room action:', { action, offerCode: offerCodeForLog });
+    console.log('[Overview] Command Center action:', { action, offerCode: offerCodeForLog });
     if (action === 'view') {
       router.push(`/offer-details?offerCode=${encodeURIComponent(getOfferDisplayCode(item.offer))}` as any);
       return;
@@ -793,7 +793,7 @@ function OverviewScreenContent() {
           />
         )}
 
-        {renderWarRoom()}
+        {renderCommandCenter()}
 
         <View style={styles.sectionHeader}>
           <View style={styles.sectionTitleRow}>
@@ -813,85 +813,85 @@ function OverviewScreenContent() {
     </ResponsiveContainer>
   );
 
-  const renderWarRoom = () => {
-    if (warRoomTotalCount === 0) {
+  const renderCommandCenter = () => {
+    if (commandCenterTotalCount === 0) {
       return null;
     }
 
     return (
-      <View style={styles.warRoomCard} testID="offer-expiration-war-room">
+      <View style={styles.commandCenterCard} testID="offer-expiration-command-center">
         <LinearGradient
           colors={['#172554', '#0F766E']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={styles.warRoomGradient}
+          style={styles.commandCenterGradient}
         >
-          <View style={styles.warRoomHeader}>
-            <View style={styles.warRoomTitleRow}>
+          <View style={styles.commandCenterHeader}>
+            <View style={styles.commandCenterTitleRow}>
               <Clock size={18} color="#FDE68A" />
-              <Text style={styles.warRoomTitle}>Expiration War Room</Text>
+              <Text style={styles.commandCenterTitle}>Expiration Command Center</Text>
             </View>
-            <View style={styles.warRoomCountPill}>
-              <Text style={styles.warRoomCountText}>{warRoomTotalCount}</Text>
+            <View style={styles.commandCenterCountPill}>
+              <Text style={styles.commandCenterCountText}>{commandCenterTotalCount}</Text>
             </View>
           </View>
-          <Text style={styles.warRoomSubtitle}>Profile-aware urgent offers, review flags, and recently expired comps.</Text>
+          <Text style={styles.commandCenterSubtitle}>Profile-aware urgent offers, review flags, and recently expired comps.</Text>
           <TouchableOpacity
-            style={styles.warRoomOpenButton}
-            onPress={() => router.push('/war-room' as any)}
+            style={styles.commandCenterOpenButton}
+            onPress={() => router.push('/command-center' as any)}
             activeOpacity={0.82}
-            testID="open-full-war-room"
+            testID="open-full-command-center"
           >
-            <Text style={styles.warRoomOpenButtonText}>Open Full War Room</Text>
+            <Text style={styles.commandCenterOpenButtonText}>Open Full Command Center</Text>
           </TouchableOpacity>
 
-          {topWarRoomBuckets.map((bucket) => (
-            <View key={bucket.id} style={styles.warRoomBucket}>
-              <View style={styles.warRoomBucketHeader}>
-                <Text style={styles.warRoomBucketTitle}>{bucket.title}</Text>
-                <Text style={styles.warRoomBucketSubtitle}>{bucket.offers.length} item{bucket.offers.length === 1 ? '' : 's'}</Text>
+          {topCommandCenterBuckets.map((bucket) => (
+            <View key={bucket.id} style={styles.commandCenterBucket}>
+              <View style={styles.commandCenterBucketHeader}>
+                <Text style={styles.commandCenterBucketTitle}>{bucket.title}</Text>
+                <Text style={styles.commandCenterBucketSubtitle}>{bucket.offers.length} item{bucket.offers.length === 1 ? '' : 's'}</Text>
               </View>
               {bucket.offers.slice(0, 2).map((item) => (
-                <View key={item.offer.id} style={styles.warRoomOfferRow}>
-                  <View style={styles.warRoomScoreBubble}>
+                <View key={item.offer.id} style={styles.commandCenterOfferRow}>
+                  <View style={styles.commandCenterScoreBubble}>
                     <Gauge size={14} color="#A7F3D0" />
-                    <Text style={styles.warRoomScoreText}>{item.intelligence.score}</Text>
+                    <Text style={styles.commandCenterScoreText}>{item.intelligence.score}</Text>
                   </View>
-                  <View style={styles.warRoomOfferCopy}>
-                    <Text style={styles.warRoomOfferTitle} numberOfLines={1}>{item.offer.offerName || item.offer.title || item.offer.offerCode || 'Casino Offer'}</Text>
-                    <Text style={styles.warRoomOfferMeta} numberOfLines={1}>{item.intelligence.rating} · {item.intelligence.daysUntilExpiration === null ? 'No expiry found' : `${item.intelligence.daysUntilExpiration} days`} · {formatCurrency(item.intelligence.casinoPaysFor.casinoCoveredValue)}</Text>
+                  <View style={styles.commandCenterOfferCopy}>
+                    <Text style={styles.commandCenterOfferTitle} numberOfLines={1}>{item.offer.offerName || item.offer.title || item.offer.offerCode || 'Casino Offer'}</Text>
+                    <Text style={styles.commandCenterOfferMeta} numberOfLines={1}>{item.intelligence.rating} · {item.intelligence.daysUntilExpiration === null ? 'No expiry found' : `${item.intelligence.daysUntilExpiration} days`} · {formatCurrency(item.intelligence.casinoPaysFor.casinoCoveredValue)}</Text>
                   </View>
-                  <View style={styles.warRoomActions}>
-                    <TouchableOpacity style={styles.warRoomAction} onPress={() => handleWarRoomAction('view', item)} testID="war-room-view">
-                      <Text style={styles.warRoomActionText}>View</Text>
+                  <View style={styles.commandCenterActions}>
+                    <TouchableOpacity style={styles.commandCenterAction} onPress={() => handleCommandCenterAction('view', item)} testID="command-center-view">
+                      <Text style={styles.commandCenterActionText}>View</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.warRoomAction} onPress={() => handleWarRoomAction('decode', item)} testID="war-room-decode">
-                      <Text style={styles.warRoomActionText}>Decode</Text>
+                    <TouchableOpacity style={styles.commandCenterAction} onPress={() => handleCommandCenterAction('decode', item)} testID="command-center-decode">
+                      <Text style={styles.commandCenterActionText}>Decode</Text>
                     </TouchableOpacity>
                   </View>
-                  <View style={styles.warRoomActionsWide}>
-                    <TouchableOpacity style={styles.warRoomActionMuted} onPress={() => handleWarRoomAction('compare', item)} testID="war-room-compare">
+                  <View style={styles.commandCenterActionsWide}>
+                    <TouchableOpacity style={styles.commandCenterActionMuted} onPress={() => handleCommandCenterAction('compare', item)} testID="command-center-compare">
                       <Calculator size={12} color="#CBD5E1" />
-                      <Text style={styles.warRoomActionMutedText}>Compare</Text>
+                      <Text style={styles.commandCenterActionMutedText}>Compare</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.warRoomActionMuted} onPress={() => handleWarRoomAction('archive', item)} testID="war-room-archive">
+                    <TouchableOpacity style={styles.commandCenterActionMuted} onPress={() => handleCommandCenterAction('archive', item)} testID="command-center-archive">
                       <Archive size={12} color="#CBD5E1" />
-                      <Text style={styles.warRoomActionMutedText}>Archive</Text>
+                      <Text style={styles.commandCenterActionMutedText}>Archive</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.warRoomActionMuted} onPress={() => handleWarRoomAction('skip', item)} testID="war-room-skip">
+                    <TouchableOpacity style={styles.commandCenterActionMuted} onPress={() => handleCommandCenterAction('skip', item)} testID="command-center-skip">
                       <CheckCircle size={12} color="#CBD5E1" />
-                      <Text style={styles.warRoomActionMutedText}>Mark skipped</Text>
+                      <Text style={styles.commandCenterActionMutedText}>Mark skipped</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={styles.warRoomActionMuted}
+                      style={styles.commandCenterActionMuted}
                       onPress={() => {
                         setVisible(true);
                         void sendMessage(`Advise me on offer ${getOfferDisplayCode(item.offer)} using the current profile and filters.`);
                       }}
-                      testID="war-room-ask-agentx"
+                      testID="command-center-ask-agentx"
                     >
                       <Bot size={12} color="#CBD5E1" />
-                      <Text style={styles.warRoomActionMutedText}>Ask</Text>
+                      <Text style={styles.commandCenterActionMutedText}>Ask</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -1577,32 +1577,32 @@ const styles = StyleSheet.create({
     fontWeight: '900' as const,
     color: '#A7F3D0',
   },
-  warRoomCard: {
+  commandCenterCard: {
     borderRadius: BORDER_RADIUS.xl,
     overflow: 'hidden',
     marginBottom: SPACING.md,
     ...SHADOW.lg,
   },
-  warRoomGradient: {
+  commandCenterGradient: {
     padding: SPACING.md,
   },
-  warRoomHeader: {
+  commandCenterHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 6,
   },
-  warRoomTitleRow: {
+  commandCenterTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.sm,
   },
-  warRoomTitle: {
+  commandCenterTitle: {
     fontSize: 18,
     fontWeight: '900' as const,
     color: '#FFFFFF',
   },
-  warRoomCountPill: {
+  commandCenterCountPill: {
     minWidth: 34,
     height: 28,
     borderRadius: 14,
@@ -1611,18 +1611,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: SPACING.sm,
   },
-  warRoomCountText: {
+  commandCenterCountText: {
     fontSize: 14,
     fontWeight: '900' as const,
     color: '#FDE68A',
   },
-  warRoomSubtitle: {
+  commandCenterSubtitle: {
     fontSize: 12,
     color: 'rgba(255,255,255,0.78)',
     lineHeight: 17,
     marginBottom: SPACING.sm,
   },
-  warRoomOpenButton: {
+  commandCenterOpenButton: {
     alignSelf: 'flex-start',
     backgroundColor: '#FDE68A',
     borderRadius: BORDER_RADIUS.round,
@@ -1630,12 +1630,12 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     marginBottom: SPACING.sm,
   },
-  warRoomOpenButtonText: {
+  commandCenterOpenButtonText: {
     color: '#172554',
     fontSize: 12,
     fontWeight: '900' as const,
   },
-  warRoomBucket: {
+  commandCenterBucket: {
     backgroundColor: 'rgba(255,255,255,0.1)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.15)',
@@ -1643,28 +1643,28 @@ const styles = StyleSheet.create({
     padding: SPACING.sm,
     marginTop: SPACING.sm,
   },
-  warRoomBucketHeader: {
+  commandCenterBucketHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: SPACING.xs,
   },
-  warRoomBucketTitle: {
+  commandCenterBucketTitle: {
     fontSize: 13,
     fontWeight: '800' as const,
     color: '#FFFFFF',
   },
-  warRoomBucketSubtitle: {
+  commandCenterBucketSubtitle: {
     fontSize: 11,
     color: 'rgba(255,255,255,0.68)',
   },
-  warRoomOfferRow: {
+  commandCenterOfferRow: {
     backgroundColor: 'rgba(15, 23, 42, 0.28)',
     borderRadius: BORDER_RADIUS.sm,
     padding: SPACING.sm,
     marginTop: SPACING.xs,
   },
-  warRoomScoreBubble: {
+  commandCenterScoreBubble: {
     position: 'absolute',
     top: SPACING.sm,
     left: SPACING.sm,
@@ -1675,50 +1675,50 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  warRoomScoreText: {
+  commandCenterScoreText: {
     fontSize: 13,
     fontWeight: '900' as const,
     color: '#FFFFFF',
   },
-  warRoomOfferCopy: {
+  commandCenterOfferCopy: {
     marginLeft: 52,
     marginRight: 0,
     marginBottom: SPACING.sm,
   },
-  warRoomOfferTitle: {
+  commandCenterOfferTitle: {
     fontSize: 13,
     fontWeight: '800' as const,
     color: '#FFFFFF',
   },
-  warRoomOfferMeta: {
+  commandCenterOfferMeta: {
     fontSize: 11,
     color: '#BAE6FD',
     marginTop: 2,
   },
-  warRoomActions: {
+  commandCenterActions: {
     flexDirection: 'row',
     gap: SPACING.xs,
     marginLeft: 52,
   },
-  warRoomActionsWide: {
+  commandCenterActionsWide: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: SPACING.xs,
     marginLeft: 52,
     marginTop: SPACING.xs,
   },
-  warRoomAction: {
+  commandCenterAction: {
     backgroundColor: '#FFFFFF',
     borderRadius: BORDER_RADIUS.sm,
     paddingHorizontal: SPACING.md,
     paddingVertical: 6,
   },
-  warRoomActionText: {
+  commandCenterActionText: {
     fontSize: 12,
     fontWeight: '800' as const,
     color: COLORS.navyDeep,
   },
-  warRoomActionMuted: {
+  commandCenterActionMuted: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -1727,7 +1727,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.sm,
     paddingVertical: 5,
   },
-  warRoomActionMutedText: {
+  commandCenterActionMutedText: {
     fontSize: 11,
     fontWeight: '700' as const,
     color: '#CBD5E1',

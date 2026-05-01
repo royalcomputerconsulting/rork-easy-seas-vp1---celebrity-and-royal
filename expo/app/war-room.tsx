@@ -26,13 +26,13 @@ import { AgentXChat } from '@/components/AgentXChat';
 import { IntelligenceFilterStrip } from '@/components/IntelligenceFilterStrip';
 import { filterRecordsByIntelligence, getRecordOwnerLabel } from '@/lib/intelligenceFilters';
 import {
-  buildWarRoomBuckets,
+  buildCommandCenterBuckets,
   decodeOffer,
   getOfferDisplayCode,
   getOfferDisplayName,
+  type CommandCenterBucket,
+  type CommandCenterOffer,
   type DecodedOffer,
-  type WarRoomBucket,
-  type WarRoomOffer,
 } from '@/lib/offerIntelligence';
 import { formatCurrency } from '@/lib/format';
 import { getDaysUntil } from '@/lib/date';
@@ -94,7 +94,7 @@ function buildCertificateBuckets(certificates: CertificateReviewItem[]): Certifi
     else if (days <= 30) buckets[2].certificates.push(certificate);
   });
 
-  console.log('[WarRoom] Certificate buckets built:', buckets.map((bucket) => ({ id: bucket.id, count: bucket.certificates.length })));
+  console.log('[CommandCenter] Certificate buckets built:', buckets.map((bucket) => ({ id: bucket.id, count: bucket.certificates.length })));
   return buckets;
 }
 
@@ -105,7 +105,7 @@ function getCertificateExpiryLabel(certificate: CertificateReviewItem): string {
   return `${days} day${days === 1 ? '' : 's'} remaining`;
 }
 
-export default function WarRoomScreen() {
+export default function CommandCenterScreen() {
   const router = useRouter();
   const { cruises, casinoOffers, updateCasinoOffer } = useCoreData();
   const { users, currentUser } = useUser();
@@ -134,7 +134,7 @@ export default function WarRoomScreen() {
   const filteredCruises = useMemo(() => filterRecordsByIntelligence(cruises, filterSnapshot, users), [cruises, filterSnapshot, users]);
   const filteredCertificates = useMemo(() => filterRecordsByIntelligence(certificates as CertificateReviewItem[], filterSnapshot, users), [certificates, filterSnapshot, users]);
   const travelerProfile = useMemo(() => buildTravelerProfile(currentUser), [currentUser]);
-  const offerBuckets = useMemo((): WarRoomBucket[] => buildWarRoomBuckets(filteredOffers, filteredCruises, certificates, travelerProfile), [certificates, filteredCruises, filteredOffers, travelerProfile]);
+  const offerBuckets = useMemo((): CommandCenterBucket[] => buildCommandCenterBuckets(filteredOffers, filteredCruises, certificates, travelerProfile), [certificates, filteredCruises, filteredOffers, travelerProfile]);
   const certificateBuckets = useMemo(() => buildCertificateBuckets(filteredCertificates), [filteredCertificates]);
   const visibleOfferBuckets = useMemo(() => offerBuckets.filter((bucket) => bucket.offers.length > 0), [offerBuckets]);
   const visibleCertificateBuckets = useMemo(() => certificateBuckets.filter((bucket) => bucket.certificates.length > 0), [certificateBuckets]);
@@ -157,7 +157,7 @@ export default function WarRoomScreen() {
         style: 'destructive',
         onPress: () => {
           updateCasinoOffer(offer.id, { status: 'archived', archiveStatus: 'archived', reconciliationStatus: 'matched' });
-          console.log('[WarRoom] Archived offer:', { id: offer.id, offerCode: offer.offerCode });
+          console.log('[CommandCenter] Archived offer:', { id: offer.id, offerCode: offer.offerCode });
         },
       },
     ]);
@@ -165,23 +165,23 @@ export default function WarRoomScreen() {
 
   const handleKeepActiveOffer = useCallback((offer: CasinoOffer) => {
     updateCasinoOffer(offer.id, { status: 'active', archiveStatus: 'active', reconciliationStatus: 'matched' });
-    console.log('[WarRoom] Kept offer active:', { id: offer.id, offerCode: offer.offerCode });
+    console.log('[CommandCenter] Kept offer active:', { id: offer.id, offerCode: offer.offerCode });
   }, [updateCasinoOffer]);
 
   const handleRestoreOffer = useCallback((offer: CasinoOffer) => {
     updateCasinoOffer(offer.id, { status: 'active', archiveStatus: 'active', reconciliationStatus: 'matched' });
-    console.log('[WarRoom] Restored offer:', { id: offer.id, offerCode: offer.offerCode });
+    console.log('[CommandCenter] Restored offer:', { id: offer.id, offerCode: offer.offerCode });
   }, [updateCasinoOffer]);
 
   const handleSkipOffer = useCallback((offer: CasinoOffer) => {
     updateCasinoOffer(offer.id, { status: 'skipped', archiveStatus: 'active', reconciliationStatus: 'matched' });
-    console.log('[WarRoom] Marked offer skipped:', { id: offer.id, offerCode: offer.offerCode });
+    console.log('[CommandCenter] Marked offer skipped:', { id: offer.id, offerCode: offer.offerCode });
   }, [updateCasinoOffer]);
 
   const handleAskAgentX = useCallback((offer: CasinoOffer) => {
     setAgentMode('casinoHost');
     setVisible(true);
-    void sendMessage(`War Room review: advise me on offer ${getOfferDisplayCode(offer)}. Explain whether to view, decode, compare, keep active, archive, restore, or skip it using current profile, brand, and program filters.`);
+    void sendMessage(`Command Center review: advise me on offer ${getOfferDisplayCode(offer)}. Explain whether to view, decode, compare, keep active, archive, restore, or skip it using current profile, brand, and program filters.`);
   }, [sendMessage, setAgentMode, setVisible]);
 
   const handleCompareOffer = useCallback((offer: CasinoOffer) => {
@@ -193,25 +193,25 @@ export default function WarRoomScreen() {
   const handleCertificateAsk = useCallback((certificate: CertificateReviewItem) => {
     setAgentMode('certificateAdvisor');
     setVisible(true);
-    void sendMessage(`Certificate War Room review: explain best use, poor use warnings, and stacking considerations for certificate ${certificate.label || certificate.id}.`);
+    void sendMessage(`Certificate Command Center review: explain best use, poor use warnings, and stacking considerations for certificate ${certificate.label || certificate.id}.`);
   }, [sendMessage, setAgentMode, setVisible]);
 
   const handleMarkCertificateExpired = useCallback((certificate: CertificateReviewItem) => {
     updateCertificate(certificate.id, { status: 'expired' });
-    console.log('[WarRoom] Marked certificate expired:', { id: certificate.id, label: certificate.label });
+    console.log('[CommandCenter] Marked certificate expired:', { id: certificate.id, label: certificate.label });
   }, [updateCertificate]);
 
   const handleRestoreCertificate = useCallback((certificate: CertificateReviewItem) => {
     updateCertificate(certificate.id, { status: 'available' });
-    console.log('[WarRoom] Restored certificate:', { id: certificate.id, label: certificate.label });
+    console.log('[CommandCenter] Restored certificate:', { id: certificate.id, label: certificate.label });
   }, [updateCertificate]);
 
-  const renderOfferItem = useCallback((item: WarRoomOffer) => {
+  const renderOfferItem = useCallback((item: CommandCenterOffer) => {
     const offer = item.offer;
     const ownerLabel = getRecordOwnerLabel(offer, users);
     const isArchived = offer.status === 'archived' || offer.archiveStatus === 'archived';
     return (
-      <View key={offer.id} style={styles.itemCard} testID={`war-room-offer-${offer.id}`}>
+      <View key={offer.id} style={styles.itemCard} testID={`command-center-offer-${offer.id}`}>
         <View style={styles.itemTopRow}>
           <View style={styles.scorePill}>
             <Gauge size={15} color="#A7F3D0" />
@@ -234,29 +234,29 @@ export default function WarRoomScreen() {
           </View>
         </View>
         <View style={styles.actionGrid}>
-          <TouchableOpacity style={styles.primaryAction} onPress={() => handleViewOffer(offer)} testID={`war-room-view-${offer.id}`}>
+          <TouchableOpacity style={styles.primaryAction} onPress={() => handleViewOffer(offer)} testID={`command-center-view-${offer.id}`}>
             <Text style={styles.primaryActionText}>View</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.primaryAction} onPress={() => handleDecodeOffer(offer)} testID={`war-room-decode-${offer.id}`}>
+          <TouchableOpacity style={styles.primaryAction} onPress={() => handleDecodeOffer(offer)} testID={`command-center-decode-${offer.id}`}>
             <Text style={styles.primaryActionText}>Decode</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.secondaryAction} onPress={() => handleCompareOffer(offer)} testID={`war-room-compare-${offer.id}`}>
+          <TouchableOpacity style={styles.secondaryAction} onPress={() => handleCompareOffer(offer)} testID={`command-center-compare-${offer.id}`}>
             <Calculator size={13} color="#CBD5E1" />
             <Text style={styles.secondaryActionText}>Compare</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.secondaryAction} onPress={() => handleAskAgentX(offer)} testID={`war-room-ask-${offer.id}`}>
+          <TouchableOpacity style={styles.secondaryAction} onPress={() => handleAskAgentX(offer)} testID={`command-center-ask-${offer.id}`}>
             <Bot size={13} color="#CBD5E1" />
             <Text style={styles.secondaryActionText}>Ask AgentX</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.secondaryAction} onPress={() => handleKeepActiveOffer(offer)} testID={`war-room-keep-${offer.id}`}>
+          <TouchableOpacity style={styles.secondaryAction} onPress={() => handleKeepActiveOffer(offer)} testID={`command-center-keep-${offer.id}`}>
             <ShieldCheck size={13} color="#CBD5E1" />
             <Text style={styles.secondaryActionText}>Keep Active</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.secondaryAction} onPress={() => (isArchived ? handleRestoreOffer(offer) : handleArchiveOffer(offer))} testID={`war-room-archive-restore-${offer.id}`}>
+          <TouchableOpacity style={styles.secondaryAction} onPress={() => (isArchived ? handleRestoreOffer(offer) : handleArchiveOffer(offer))} testID={`command-center-archive-restore-${offer.id}`}>
             {isArchived ? <RotateCcw size={13} color="#CBD5E1" /> : <Archive size={13} color="#CBD5E1" />}
             <Text style={styles.secondaryActionText}>{isArchived ? 'Restore' : 'Archive'}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.secondaryAction} onPress={() => handleSkipOffer(offer)} testID={`war-room-skip-${offer.id}`}>
+          <TouchableOpacity style={styles.secondaryAction} onPress={() => handleSkipOffer(offer)} testID={`command-center-skip-${offer.id}`}>
             <CheckCircle2 size={13} color="#CBD5E1" />
             <Text style={styles.secondaryActionText}>Mark Skipped</Text>
           </TouchableOpacity>
@@ -265,8 +265,8 @@ export default function WarRoomScreen() {
     );
   }, [handleArchiveOffer, handleAskAgentX, handleCompareOffer, handleDecodeOffer, handleKeepActiveOffer, handleRestoreOffer, handleSkipOffer, handleViewOffer, users]);
 
-  const renderOfferBucket = useCallback((bucket: WarRoomBucket) => (
-    <View key={bucket.id} style={styles.bucketCard} testID={`war-room-bucket-${bucket.id}`}>
+  const renderOfferBucket = useCallback((bucket: CommandCenterBucket) => (
+    <View key={bucket.id} style={styles.bucketCard} testID={`command-center-bucket-${bucket.id}`}>
       <View style={styles.bucketHeader}>
         <View>
           <Text style={styles.bucketTitle}>{bucket.title}</Text>
@@ -279,7 +279,7 @@ export default function WarRoomScreen() {
   ), [renderOfferItem]);
 
   const renderCertificateItem = useCallback((certificate: CertificateReviewItem) => (
-    <View key={certificate.id} style={styles.certificateCard} testID={`war-room-certificate-${certificate.id}`}>
+    <View key={certificate.id} style={styles.certificateCard} testID={`command-center-certificate-${certificate.id}`}>
       <View style={styles.itemTopRow}>
         <View style={styles.certificateIconWrap}>
           <Ticket size={17} color="#FDE68A" />
@@ -291,15 +291,15 @@ export default function WarRoomScreen() {
       </View>
       <Text style={styles.itemExplanation}>{certificate.description || 'Review certificate owner, expiration, cabin entitlement, and stackability before applying it to a sailing.'}</Text>
       <View style={styles.actionGrid}>
-        <TouchableOpacity style={styles.secondaryAction} onPress={() => handleCertificateAsk(certificate)} testID={`war-room-cert-ask-${certificate.id}`}>
+        <TouchableOpacity style={styles.secondaryAction} onPress={() => handleCertificateAsk(certificate)} testID={`command-center-cert-ask-${certificate.id}`}>
           <Bot size={13} color="#CBD5E1" />
           <Text style={styles.secondaryActionText}>Ask AgentX</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.secondaryAction} onPress={() => handleRestoreCertificate(certificate)} testID={`war-room-cert-restore-${certificate.id}`}>
+        <TouchableOpacity style={styles.secondaryAction} onPress={() => handleRestoreCertificate(certificate)} testID={`command-center-cert-restore-${certificate.id}`}>
           <RotateCcw size={13} color="#CBD5E1" />
           <Text style={styles.secondaryActionText}>Restore</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.secondaryAction} onPress={() => handleMarkCertificateExpired(certificate)} testID={`war-room-cert-expire-${certificate.id}`}>
+        <TouchableOpacity style={styles.secondaryAction} onPress={() => handleMarkCertificateExpired(certificate)} testID={`command-center-cert-expire-${certificate.id}`}>
           <Archive size={13} color="#CBD5E1" />
           <Text style={styles.secondaryActionText}>Mark Expired</Text>
         </TouchableOpacity>
@@ -308,7 +308,7 @@ export default function WarRoomScreen() {
   ), [handleCertificateAsk, handleMarkCertificateExpired, handleRestoreCertificate]);
 
   const renderCertificateBucket = useCallback((bucket: CertificateReviewBucket) => (
-    <View key={bucket.id} style={styles.bucketCard} testID={`war-room-certificate-bucket-${bucket.id}`}>
+    <View key={bucket.id} style={styles.bucketCard} testID={`command-center-certificate-bucket-${bucket.id}`}>
       <View style={styles.bucketHeader}>
         <View>
           <Text style={styles.bucketTitle}>{bucket.title}</Text>
@@ -330,10 +330,10 @@ export default function WarRoomScreen() {
             <Clock size={22} color="#FDE68A" />
           </View>
           <View style={styles.headerCopy}>
-            <Text style={styles.headerTitle}>Expiration War Room</Text>
+            <Text style={styles.headerTitle}>Expiration Command Center</Text>
             <Text style={styles.headerSubtitle}>Full offer and certificate management queue</Text>
           </View>
-          <TouchableOpacity style={styles.closeButton} onPress={() => router.back()} testID="close-war-room">
+          <TouchableOpacity style={styles.closeButton} onPress={() => router.back()} testID="close-command-center">
             <X size={20} color={COLORS.white} />
           </TouchableOpacity>
         </View>
@@ -356,10 +356,10 @@ export default function WarRoomScreen() {
             </View>
           </View>
 
-          <IntelligenceFilterStrip contextLabel="War Room" compact={true} />
+          <IntelligenceFilterStrip contextLabel="Command Center" compact={true} />
 
           {offerCount === 0 && certificateCount === 0 ? (
-            <View style={styles.emptyCard} testID="war-room-empty">
+            <View style={styles.emptyCard} testID="command-center-empty">
               <CheckCircle2 size={36} color="#A7F3D0" />
               <Text style={styles.emptyTitle}>Nothing urgent right now</Text>
               <Text style={styles.emptyBody}>No expiring offers, recently expired items, or review-needed certificate records match the current filters.</Text>
@@ -384,13 +384,13 @@ export default function WarRoomScreen() {
 
       <Modal visible={decodedOffer !== null} transparent={true} animationType="fade" onRequestClose={() => setDecodedOffer(null)}>
         <View style={styles.decodeOverlay}>
-          <View style={styles.decodeCard} testID="war-room-decoded-offer-modal">
+          <View style={styles.decodeCard} testID="command-center-decoded-offer-modal">
             <View style={styles.decodeHeader}>
               <View style={styles.decodeTitleRow}>
                 <FileText size={20} color={COLORS.navyDeep} />
                 <Text style={styles.decodeTitle}>{decodedOffer?.title ?? 'Decoded Offer'}</Text>
               </View>
-              <TouchableOpacity style={styles.decodeClose} onPress={() => setDecodedOffer(null)} testID="war-room-decode-close">
+              <TouchableOpacity style={styles.decodeClose} onPress={() => setDecodedOffer(null)} testID="command-center-decode-close">
                 <Text style={styles.decodeCloseText}>Close</Text>
               </TouchableOpacity>
             </View>

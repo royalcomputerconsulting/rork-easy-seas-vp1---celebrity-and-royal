@@ -58,7 +58,7 @@ export function askMyDataSearch(params: {
   const wantsCruises = /cruise|ship|sail|port|sea|cabin|booking/.test(lowerQuery);
   const wantsCertificates = /certificate|cert|nextcruise|fpp|upgrade/.test(lowerQuery);
   const wantsCalendar = /calendar|event|date|agenda|travel|day/.test(lowerQuery);
-  const wantsExpiring = /expir|soon|urgent|war room/.test(lowerQuery);
+  const wantsExpiring = /expir|soon|urgent|command center|war room/.test(lowerQuery);
   const wantsBooked = /booked|booking|reservation/.test(lowerQuery);
 
   if (wantsExpiring) filtersApplied.push('expiring or date-sensitive');

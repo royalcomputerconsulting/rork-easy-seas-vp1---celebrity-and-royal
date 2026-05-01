@@ -4,7 +4,7 @@ import { getDaysUntil, formatDate } from '@/lib/date';
 import { calculateSeaDayDensityScore, buildPortTracker, calculateShipFamiliarityScore } from '@/lib/cruisePlanningIntelligence';
 
 export type OfferRatingLabel = 'Excellent' | 'Strong' | 'Average' | 'Weak' | 'Poor Use';
-export type WarRoomBucketId = 'expires7' | 'expires14' | 'expires30' | 'recentlyExpired' | 'needsReview';
+export type CommandCenterBucketId = 'expires7' | 'expires14' | 'expires30' | 'recentlyExpired' | 'needsReview';
 
 export interface CertificateLike {
   id: string;
@@ -61,16 +61,16 @@ export interface CertificateStackingNote {
   upgradeValueNotes: string[];
 }
 
-export interface WarRoomOffer {
+export interface CommandCenterOffer {
   offer: CasinoOffer;
   intelligence: OfferIntelligenceScore;
 }
 
-export interface WarRoomBucket {
-  id: WarRoomBucketId;
+export interface CommandCenterBucket {
+  id: CommandCenterBucketId;
   title: string;
   subtitle: string;
-  offers: WarRoomOffer[];
+  offers: CommandCenterOffer[];
 }
 
 function normalizeText(value: unknown): string {
@@ -336,8 +336,8 @@ export function buildCertificateStackingNotes(offer: CasinoOffer, certificates: 
     });
 }
 
-export function buildWarRoomBuckets(offers: CasinoOffer[], cruises: Cruise[] = [], certificates: CertificateLike[] = [], profile?: Partial<TravelerProfile> | null): WarRoomBucket[] {
-  const buckets: WarRoomBucket[] = [
+export function buildCommandCenterBuckets(offers: CasinoOffer[], cruises: Cruise[] = [], certificates: CertificateLike[] = [], profile?: Partial<TravelerProfile> | null): CommandCenterBucket[] {
+  const buckets: CommandCenterBucket[] = [
     { id: 'expires7', title: 'Expires in 7 days', subtitle: 'Book, decode, archive, or skip now.', offers: [] },
     { id: 'expires14', title: 'Expires in 14 days', subtitle: 'High-priority offers that need a decision soon.', offers: [] },
     { id: 'expires30', title: 'Expires in 30 days', subtitle: 'Planning window for useful comps.', offers: [] },
@@ -356,6 +356,6 @@ export function buildWarRoomBuckets(offers: CasinoOffer[], cruises: Cruise[] = [
     else if (days <= 30) buckets[2].offers.push(item);
   });
   const sortedBuckets = buckets.map((bucket) => ({ ...bucket, offers: bucket.offers.sort((a, b) => b.intelligence.score - a.intelligence.score) }));
-  console.log('[OfferIntelligence] War Room buckets built:', sortedBuckets.map((bucket) => ({ id: bucket.id, count: bucket.offers.length })));
+  console.log('[OfferIntelligence] Command Center buckets built:', sortedBuckets.map((bucket) => ({ id: bucket.id, count: bucket.offers.length })));
   return sortedBuckets;
 }
