@@ -1,53 +1,14 @@
 import type { BookedCruise, CasinoOffer, Cruise } from '@/types/models';
+import {
+  dedupeBookedCruises,
+  dedupeCasinoOffers,
+  dedupeCruises,
+} from '@/lib/dataIdentity';
 
 type SyncSource = NonNullable<Cruise['cruiseSource']>;
 
 function getUniqueSources(values: Array<SyncSource | undefined | null>): SyncSource[] {
   return Array.from(new Set(values.filter((value): value is SyncSource => value === 'royal' || value === 'celebrity' || value === 'carnival')));
-}
-
-function getCruiseKey(cruise: Cruise): string {
-  return [
-    cruise.cruiseSource ?? '',
-    cruise.shipName.trim().toLowerCase(),
-    cruise.sailDate.trim(),
-    (cruise.offerCode ?? '').trim().toUpperCase(),
-    String(cruise.cabinType ?? '').trim().toLowerCase(),
-  ].join('|');
-}
-
-function getOfferKey(offer: CasinoOffer): string {
-  return [
-    offer.offerSource ?? '',
-    (offer.offerCode ?? '').trim().toUpperCase(),
-    (offer.shipName ?? '').trim().toLowerCase(),
-    (offer.sailingDate ?? '').trim(),
-    String(offer.roomType ?? '').trim().toLowerCase(),
-    (offer.offerName ?? offer.title ?? '').trim().toLowerCase(),
-  ].join('|');
-}
-
-function getBookedCruiseKey(cruise: BookedCruise): string {
-  const identity = (cruise.reservationNumber ?? cruise.bookingId ?? '').trim();
-  if (identity) {
-    return [cruise.cruiseSource ?? '', identity].join('|');
-  }
-
-  return [
-    cruise.cruiseSource ?? '',
-    cruise.shipName.trim().toLowerCase(),
-    cruise.sailDate.trim(),
-    String(cruise.cabinNumber ?? '').trim().toLowerCase(),
-    String(cruise.cabinType ?? '').trim().toLowerCase(),
-  ].join('|');
-}
-
-function dedupeByKey<T>(items: T[], getKey: (item: T) => string): T[] {
-  const map = new Map<string, T>();
-  items.forEach((item) => {
-    map.set(getKey(item), item);
-  });
-  return Array.from(map.values());
 }
 
 function isCompletedBookedCruise(cruise: BookedCruise): boolean {
@@ -86,31 +47,31 @@ export function getImportedSource(input: {
 export function mergeImportedCruises(existingCruises: Cruise[], importedCruises: Cruise[]): Cruise[] {
   const importSource = getImportedSource({ cruises: importedCruises });
   if (!importSource) {
-    return dedupeByKey([...existingCruises, ...importedCruises], getCruiseKey);
+    return dedupeCruises([...existingCruises, ...importedCruises], 'merged imported cruises');
   }
 
   const preservedCruises = existingCruises.filter((cruise) => cruise.cruiseSource !== importSource);
-  return dedupeByKey([...preservedCruises, ...importedCruises], getCruiseKey);
+  return dedupeCruises([...preservedCruises, ...importedCruises], 'merged imported cruises');
 }
 
 export function mergeImportedOffers(existingOffers: CasinoOffer[], importedOffers: CasinoOffer[]): CasinoOffer[] {
   const importSource = getImportedSource({ offers: importedOffers });
   if (!importSource) {
-    return dedupeByKey([...existingOffers, ...importedOffers], getOfferKey);
+    return dedupeCasinoOffers([...existingOffers, ...importedOffers], 'merged imported offers');
   }
 
   const preservedOffers = existingOffers.filter((offer) => offer.offerSource !== importSource);
-  return dedupeByKey([...preservedOffers, ...importedOffers], getOfferKey);
+  return dedupeCasinoOffers([...preservedOffers, ...importedOffers], 'merged imported offers');
 }
 
 export function mergeImportedBookedCruises(existingCruises: BookedCruise[], importedCruises: BookedCruise[]): BookedCruise[] {
   const importSource = getImportedSource({ bookedCruises: importedCruises });
   if (!importSource) {
-    return dedupeByKey([...existingCruises, ...importedCruises], getBookedCruiseKey);
+    return dedupeBookedCruises([...existingCruises, ...importedCruises], 'merged imported booked cruises');
   }
 
   const preservedCruises = existingCruises.filter((cruise) => cruise.cruiseSource !== importSource || isCompletedBookedCruise(cruise));
-  return dedupeByKey([...preservedCruises, ...importedCruises], getBookedCruiseKey);
+  return dedupeBookedCruises([...preservedCruises, ...importedCruises], 'merged imported booked cruises');
 }
 
 export function getImportedSourceLabel(source: SyncSource | null): string {

@@ -2,6 +2,7 @@ import * as z from "zod";
 import { getDb } from "@/backend/db";
 import { createTRPCRouter, publicProcedure } from "../create-context";
 import { containsKnownForeignPersonalData, filterRecordsForOwner, isOwnerScopeForEmail, stampRecordsForOwner } from "@/lib/storage/dataOwnership";
+import { dedupeBookedCruises, dedupeCalendarEvents, dedupeCasinoOffers, dedupeCruises } from "@/lib/dataIdentity";
 
 const UserDataSchema = z.object({
   email: z.string().email(),
@@ -41,6 +42,22 @@ const UserDataSchema = z.object({
 function prepareOwnedDataArray(value: any[] | undefined, fallback: any[] | undefined, ownerScopeId: string, email: string, label: string): any[] {
   const source = Array.isArray(value) ? value : Array.isArray(fallback) ? fallback : [];
   return stampRecordsForOwner(filterRecordsForOwner(source, ownerScopeId, email, label), ownerScopeId, email);
+}
+
+function prepareOwnedCruises(value: any[] | undefined, fallback: any[] | undefined, ownerScopeId: string, email: string, label: string): any[] {
+  return dedupeCruises(prepareOwnedDataArray(value, fallback, ownerScopeId, email, label), label);
+}
+
+function prepareOwnedBookedCruises(value: any[] | undefined, fallback: any[] | undefined, ownerScopeId: string, email: string, label: string): any[] {
+  return dedupeBookedCruises(prepareOwnedDataArray(value, fallback, ownerScopeId, email, label), label);
+}
+
+function prepareOwnedCasinoOffers(value: any[] | undefined, fallback: any[] | undefined, ownerScopeId: string, email: string, label: string): any[] {
+  return dedupeCasinoOffers(prepareOwnedDataArray(value, fallback, ownerScopeId, email, label), label);
+}
+
+function prepareOwnedCalendarEvents(value: any[] | undefined, fallback: any[] | undefined, ownerScopeId: string, email: string, label: string): any[] {
+  return dedupeCalendarEvents(prepareOwnedDataArray(value, fallback, ownerScopeId, email, label), label);
 }
 
 function sanitizeForeignValue<T>(value: T | undefined, fallback: T | undefined, email: string, label: string): T | undefined {
@@ -182,10 +199,10 @@ export const dataRouter = createTRPCRouter({
       const dataToSave: StoredUserData = {
         email: normalizedEmail,
         ownerScopeId,
-        cruises: prepareOwnedDataArray(input.cruises, existingData?.cruises, ownerScopeId, normalizedEmail, 'api-save available cruises'),
-        bookedCruises: prepareOwnedDataArray(input.bookedCruises, existingData?.bookedCruises, ownerScopeId, normalizedEmail, 'api-save booked cruises'),
-        casinoOffers: prepareOwnedDataArray(input.casinoOffers, existingData?.casinoOffers, ownerScopeId, normalizedEmail, 'api-save casino offers'),
-        calendarEvents: prepareOwnedDataArray(input.calendarEvents, existingData?.calendarEvents, ownerScopeId, normalizedEmail, 'api-save calendar events'),
+        cruises: prepareOwnedCruises(input.cruises, existingData?.cruises, ownerScopeId, normalizedEmail, 'api-save available cruises'),
+        bookedCruises: prepareOwnedBookedCruises(input.bookedCruises, existingData?.bookedCruises, ownerScopeId, normalizedEmail, 'api-save booked cruises'),
+        casinoOffers: prepareOwnedCasinoOffers(input.casinoOffers, existingData?.casinoOffers, ownerScopeId, normalizedEmail, 'api-save casino offers'),
+        calendarEvents: prepareOwnedCalendarEvents(input.calendarEvents, existingData?.calendarEvents, ownerScopeId, normalizedEmail, 'api-save calendar events'),
         casinoSessions: prepareOwnedDataArray(input.casinoSessions, existingData?.casinoSessions, ownerScopeId, normalizedEmail, 'api-save casino sessions'),
         userProfiles,
         currentUserId: currentUserId && (userProfileIds.size === 0 || userProfileIds.has(currentUserId)) ? currentUserId : null,
@@ -301,10 +318,10 @@ export const dataRouter = createTRPCRouter({
         const rawData = results[0][0];
         const data: StoredUserData = {
           ...rawData,
-          cruises: prepareOwnedDataArray(rawData.cruises, undefined, ownerScopeId, normalizedEmail, 'api-restore available cruises'),
-          bookedCruises: prepareOwnedDataArray(rawData.bookedCruises, undefined, ownerScopeId, normalizedEmail, 'api-restore booked cruises'),
-          casinoOffers: prepareOwnedDataArray(rawData.casinoOffers, undefined, ownerScopeId, normalizedEmail, 'api-restore casino offers'),
-          calendarEvents: prepareOwnedDataArray(rawData.calendarEvents, undefined, ownerScopeId, normalizedEmail, 'api-restore calendar events'),
+          cruises: prepareOwnedCruises(rawData.cruises, undefined, ownerScopeId, normalizedEmail, 'api-restore available cruises'),
+          bookedCruises: prepareOwnedBookedCruises(rawData.bookedCruises, undefined, ownerScopeId, normalizedEmail, 'api-restore booked cruises'),
+          casinoOffers: prepareOwnedCasinoOffers(rawData.casinoOffers, undefined, ownerScopeId, normalizedEmail, 'api-restore casino offers'),
+          calendarEvents: prepareOwnedCalendarEvents(rawData.calendarEvents, undefined, ownerScopeId, normalizedEmail, 'api-restore calendar events'),
           casinoSessions: prepareOwnedDataArray(rawData.casinoSessions, undefined, ownerScopeId, normalizedEmail, 'api-restore casino sessions'),
           userProfiles: prepareOwnedDataArray(rawData.userProfiles, undefined, ownerScopeId, normalizedEmail, 'api-restore user profiles'),
           clubRoyaleProfile: sanitizeForeignValue(rawData.clubRoyaleProfile, undefined, normalizedEmail, 'api-restore clubRoyaleProfile'),

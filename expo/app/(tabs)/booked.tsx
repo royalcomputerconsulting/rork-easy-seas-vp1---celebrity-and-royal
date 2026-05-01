@@ -45,6 +45,7 @@ import { MinimalistFilterBar } from '@/components/ui/MinimalistFilterBar';
 import { isDateInPast, createDateFromString } from '@/lib/date';
 import { CruiseCard } from '@/components/CruiseCard';
 import type { BookedCruise } from '@/types/models';
+import { getBookedCruiseIdentityKey } from '@/lib/dataIdentity';
 import { BOOKED_CRUISES_DATA } from '@/mocks/bookedCruises';
 import { COMPLETED_CRUISES_DATA } from '@/mocks/completedCruises';
 import { CRUISE_HISTORY_SUPPLEMENT_DATA } from '@/mocks/cruiseHistorySupplement';
@@ -99,16 +100,10 @@ const SORT_OPTIONS: { label: string; value: SortType }[] = [
   { label: 'By Nights', value: 'nights' },
 ];
 
-function getCruiseIdentity(cruise: BookedCruise): string {
-  const directId = cruise.reservationNumber || cruise.bookingId || cruise.bwoNumber;
-  if (directId) return `reservation:${directId.toLowerCase().trim()}`;
-  return `sailing:${cruise.shipName.toLowerCase().trim()}:${cruise.sailDate}:${cruise.returnDate}:${(cruise.itineraryName || cruise.destination || '').toLowerCase().trim()}`;
-}
-
 function mergeCruiseData(primaryCruises: BookedCruise[], fallbackCruises: BookedCruise[]): BookedCruise[] {
   const cruiseMap = new Map<string, BookedCruise>();
-  fallbackCruises.forEach((cruise) => cruiseMap.set(getCruiseIdentity(cruise), cruise));
-  primaryCruises.forEach((cruise) => cruiseMap.set(getCruiseIdentity(cruise), cruise));
+  fallbackCruises.forEach((cruise) => cruiseMap.set(getBookedCruiseIdentityKey(cruise), cruise));
+  primaryCruises.forEach((cruise) => cruiseMap.set(getBookedCruiseIdentityKey(cruise), cruise));
   return Array.from(cruiseMap.values());
 }
 

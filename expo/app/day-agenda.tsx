@@ -1272,7 +1272,7 @@ export default function DayAgendaScreen() {
       );
       const cruiseEvents: CalendarEvent[] = generateCruiseCalendarEvents(normalizedBookedCruises);
       const allEvents = [...existingEvents, ...cruiseEvents];
-      coreData.setCalendarEvents(allEvents);
+      await coreData.setCalendarEvents(allEvents);
       
       console.log('[DayAgenda] Synced generated cruise events', {
         generatedEvents: cruiseEvents.length,

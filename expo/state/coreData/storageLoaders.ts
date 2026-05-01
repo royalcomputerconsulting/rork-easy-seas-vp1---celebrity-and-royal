@@ -10,6 +10,8 @@ import { updateAllCruiseLifecycles } from "@/lib/lifecycleManager";
 import { STORAGE_KEYS, DEFAULT_SETTINGS, getScopedStorageKeys, type AppSettings } from "./storageConfig";
 import { quotaSafeGetItem } from "@/lib/storage/quotaSafeStorage";
 import { containsKnownForeignPersonalData } from "@/lib/storage/dataOwnership";
+import { dedupeBookedCruises, dedupeCalendarEvents } from "@/lib/dataIdentity";
+import { generateCruiseCalendarEvents } from "@/lib/calendar/cruiseEvents";
 
 export interface StorageSnapshot {
   cruisesData: string | null;
@@ -118,7 +120,7 @@ export function determineUserStatus(
   const hasImported = hasImportedData === 'true';
   const hasAnyExistingData = !!(bookedData || offersData || profileData || pointsData || cruisesData);
 
-  const parsedBookedData: BookedCruise[] = bookedData ? JSON.parse(bookedData) : [];
+  const parsedBookedData: BookedCruise[] = bookedData ? dedupeBookedCruises(JSON.parse(bookedData) as BookedCruise[], 'stored booked cruises') : [];
   const parsedOffersData: CasinoOffer[] = offersData ? JSON.parse(offersData) : [];
   const realBookedData = filterDemoCruises(parsedBookedData);
   const realOffersData = filterDemoOffers(parsedOffersData);
@@ -175,13 +177,14 @@ export async function processBookedCruises(
       afterFilter: nonMockCruises.length,
     });
 
-    const withNormalizedLifecycle = normalizeCruiseLifecycle(nonMockCruises);
+    const dedupedNonMockCruises = dedupeBookedCruises(nonMockCruises, 'processed booked cruises');
+    const withNormalizedLifecycle = normalizeCruiseLifecycle(dedupedNonMockCruises);
     const enrichedBooked = enrichCruisePipeline(withNormalizedLifecycle);
 
     return {
       bookedCruises: enrichedBooked,
       finalBookedCount: enrichedBooked.length,
-      shouldPersistMergedCruises: false,
+      shouldPersistMergedCruises: dedupedNonMockCruises.length !== nonMockCruises.length,
       shouldPersistFirstTimeData: false,
     };
   }
@@ -218,7 +221,7 @@ export function processCalendarEvents(
   const { eventsData, bookedData } = snapshot;
   const { parsedBookedData } = status;
 
-  let parsedEvents: CalendarEvent[] = eventsData ? JSON.parse(eventsData) : [];
+  let parsedEvents: CalendarEvent[] = eventsData ? dedupeCalendarEvents(JSON.parse(eventsData) as CalendarEvent[], 'stored calendar events') : [];
 
   if (parsedEvents.length === 0 && finalBookedCount > 0) {
     console.log('[CoreData] No calendar events found but', finalBookedCount, 'booked cruises exist - auto-generating events');
@@ -230,19 +233,7 @@ export function processCalendarEvents(
       return [];
     })();
 
-    parsedEvents = currentBookedState
-      .filter((cruise: BookedCruise) => cruise.sailDate && cruise.returnDate)
-      .map((cruise: BookedCruise): CalendarEvent => ({
-        id: `cruise-${cruise.id}`,
-        title: cruise.shipName,
-        description: cruise.itineraryName || `${cruise.nights} Night Cruise`,
-        startDate: cruise.sailDate,
-        endDate: cruise.returnDate,
-        type: 'cruise',
-        allDay: true,
-        location: cruise.departurePort,
-        cruiseId: cruise.id,
-      }));
+    parsedEvents = generateCruiseCalendarEvents(dedupeBookedCruises(currentBookedState, 'auto-generated event cruises'));
 
     console.log('[CoreData] Auto-generated', parsedEvents.length, 'calendar events from booked cruises');
 

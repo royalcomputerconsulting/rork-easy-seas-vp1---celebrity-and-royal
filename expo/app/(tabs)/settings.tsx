@@ -89,7 +89,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import * as XLSX from 'xlsx';
 import type { BookedCruise } from '@/types/models';
-import { getCalendarEventsWithGeneratedCruiseEvents } from '@/lib/calendar/cruiseEvents';
+import { getCalendarEventsWithGeneratedCruiseEvents, getDayAgendaEventCountForYear } from '@/lib/calendar/cruiseEvents';
 
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import { UserProfileCard } from '@/components/ui/UserProfileCard';
@@ -367,9 +367,10 @@ export default function SettingsScreen() {
     const allBooked = bookedCruises.length > 0 ? bookedCruises : (localData.booked || []);
     const upcoming = allBooked.filter(c => isActiveBookedCruise(c)).length;
     const completed = allBooked.filter(c => isCompletedBookedCruise(c)).length;
-    const generatedCalendarEvents = getCalendarEventsWithGeneratedCruiseEvents(
+    const dayAgendaEventsThisYear = getDayAgendaEventCountForYear(
       allBooked,
-      [...(localData.calendar || []), ...(localData.tripit || [])]
+      [...(localData.calendar || []), ...(localData.tripit || [])],
+      new Date().getFullYear()
     );
 
     return {
@@ -379,7 +380,7 @@ export default function SettingsScreen() {
       completed,
       sailings: allOffers.length,
       uniqueOffers: uniqueOfferCount,
-      events: generatedCalendarEvents.length,
+      events: dayAgendaEventsThisYear,
       machines: myAtlasMachines.length || 0,
       crewMembers: crewStats?.crewMemberCount || 0,
     };
@@ -1319,6 +1320,8 @@ export default function SettingsScreen() {
         console.log('[Settings] Triggering final refresh to propagate to UI...');
         await new Promise(resolve => setTimeout(resolve, 300));
         await coreData.refreshData();
+        await coreData.syncToBackend();
+        await forceProfileSyncNow();
         
         try {
           if (typeof window !== 'undefined' && typeof window.dispatchEvent !== 'undefined') {
@@ -1340,7 +1343,7 @@ export default function SettingsScreen() {
     } finally {
       setIsImportingAll(false);
     }
-  }, [authenticatedEmail, coreData, reloadCasinoSessions, reloadMachines, setLocalData, syncLoyaltyFromStorage, syncUserFromStorage]);
+  }, [authenticatedEmail, coreData, forceProfileSyncNow, reloadCasinoSessions, reloadMachines, setLocalData, syncLoyaltyFromStorage, syncUserFromStorage]);
 
   const handleDownloadExtension = useCallback(async () => {
     try {

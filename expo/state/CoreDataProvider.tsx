@@ -28,6 +28,8 @@ import { ALL_STORAGE_KEYS, getUserScopedKey } from "@/lib/storage/storageKeys";
 import { buildOwnerScopeId, getInstallationId } from "@/lib/storage/installationId";
 import { containsKnownForeignPersonalData, filterRecordsForOwner, isOwnerScopeForEmail, stampRecordsForOwner } from "@/lib/storage/dataOwnership";
 import { updateAllCruiseLifecycles } from "@/lib/lifecycleManager";
+import { dedupeBookedCruises, dedupeCalendarEvents, dedupeCasinoOffers, dedupeCruises } from "@/lib/dataIdentity";
+import { generateCruiseCalendarEvents } from "@/lib/calendar/cruiseEvents";
 
 const getMockCruises = (): { BOOKED_CRUISES_DATA: BookedCruise[]; COMPLETED_CRUISES_DATA: BookedCruise[] } => {
   try {
@@ -295,7 +297,7 @@ interface CoreDataState {
   updateCasinoOffer: (id: string, updates: Partial<CasinoOffer>) => void;
   removeCasinoOffer: (id: string) => void;
   
-  setCalendarEvents: (events: CalendarEvent[]) => void;
+  setCalendarEvents: (events: CalendarEvent[]) => Promise<void>;
   addCalendarEvent: (event: CalendarEvent) => void;
   updateCalendarEvent: (id: string, updates: Partial<CalendarEvent>) => void;
   removeCalendarEvent: (id: string) => void;
@@ -493,10 +495,10 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         quotaSafeGetItem(scopedLoyaltyKeys.MANUAL_CROWN_ANCHOR_POINTS),
       ]);
       
-      const parsedCruises = prepareOwnedRecords<Cruise>(cruisesData ? JSON.parse(cruisesData) as Cruise[] : [], ownerScopeId, authenticatedEmail, 'backend-sync available cruises');
-      const parsedBooked = prepareOwnedRecords<BookedCruise>(bookedData ? JSON.parse(bookedData) as BookedCruise[] : [], ownerScopeId, authenticatedEmail, 'backend-sync booked cruises');
-      const parsedOffers = prepareOwnedRecords<CasinoOffer>(offersData ? JSON.parse(offersData) as CasinoOffer[] : [], ownerScopeId, authenticatedEmail, 'backend-sync casino offers');
-      const parsedEvents = prepareOwnedRecords<CalendarEvent>(eventsData ? JSON.parse(eventsData) as CalendarEvent[] : [], ownerScopeId, authenticatedEmail, 'backend-sync calendar events');
+      const parsedCruises = dedupeCruises(prepareOwnedRecords<Cruise>(cruisesData ? JSON.parse(cruisesData) as Cruise[] : [], ownerScopeId, authenticatedEmail, 'backend-sync available cruises'), 'backend-sync available cruises');
+      const parsedBooked = dedupeBookedCruises(prepareOwnedRecords<BookedCruise>(bookedData ? JSON.parse(bookedData) as BookedCruise[] : [], ownerScopeId, authenticatedEmail, 'backend-sync booked cruises'), 'backend-sync booked cruises');
+      const parsedOffers = dedupeCasinoOffers(prepareOwnedRecords<CasinoOffer>(offersData ? JSON.parse(offersData) as CasinoOffer[] : [], ownerScopeId, authenticatedEmail, 'backend-sync casino offers'), 'backend-sync casino offers');
+      const parsedEvents = dedupeCalendarEvents(prepareOwnedRecords<CalendarEvent>(eventsData ? JSON.parse(eventsData) as CalendarEvent[] : [], ownerScopeId, authenticatedEmail, 'backend-sync calendar events'), 'backend-sync calendar events');
       const parsedSettings = settingsData ? sanitizeForeignValue(JSON.parse(settingsData) as Record<string, unknown>, authenticatedEmail, 'backend-sync settings') : undefined;
       const parsedUsers = prepareOwnedRecords<Record<string, unknown>>(
         usersData ? (JSON.parse(usersData) as unknown[]).filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)) : [],
@@ -616,10 +618,11 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     const hasInMemoryData = Object.values(inMemorySummary).some((count) => count > 0);
     const isGracePeriodActive = backendRestoreGraceUntilRef.current > Date.now();
 
-    if (isGracePeriodActive && hasInMemoryData) {
+    if (isGracePeriodActive) {
       console.log('[CoreData] Backend restore skipped because fresh local data is authoritative', {
         email: authenticatedEmail,
         inMemorySummary,
+        hasInMemoryData,
         graceUntil: new Date(backendRestoreGraceUntilRef.current).toISOString(),
       });
       return false;
@@ -640,10 +643,10 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
           });
           return false;
         }
-        const ownedBackendCruises = prepareOwnedRecords<Cruise>((userData.cruises ?? []) as Cruise[], ownerScopeId, authenticatedEmail, 'backend-restore available cruises');
-        const ownedBackendBookedCruises = prepareOwnedRecords<BookedCruise>((userData.bookedCruises ?? []) as BookedCruise[], ownerScopeId, authenticatedEmail, 'backend-restore booked cruises');
-        const ownedBackendOffers = prepareOwnedRecords<CasinoOffer>((userData.casinoOffers ?? []) as CasinoOffer[], ownerScopeId, authenticatedEmail, 'backend-restore casino offers');
-        const ownedBackendEvents = prepareOwnedRecords<CalendarEvent>((userData.calendarEvents ?? []) as CalendarEvent[], ownerScopeId, authenticatedEmail, 'backend-restore calendar events');
+        const ownedBackendCruises = dedupeCruises(prepareOwnedRecords<Cruise>((userData.cruises ?? []) as Cruise[], ownerScopeId, authenticatedEmail, 'backend-restore available cruises'), 'backend-restore available cruises');
+        const ownedBackendBookedCruises = dedupeBookedCruises(prepareOwnedRecords<BookedCruise>((userData.bookedCruises ?? []) as BookedCruise[], ownerScopeId, authenticatedEmail, 'backend-restore booked cruises'), 'backend-restore booked cruises');
+        const ownedBackendOffers = dedupeCasinoOffers(prepareOwnedRecords<CasinoOffer>((userData.casinoOffers ?? []) as CasinoOffer[], ownerScopeId, authenticatedEmail, 'backend-restore casino offers'), 'backend-restore casino offers');
+        const ownedBackendEvents = dedupeCalendarEvents(prepareOwnedRecords<CalendarEvent>((userData.calendarEvents ?? []) as CalendarEvent[], ownerScopeId, authenticatedEmail, 'backend-restore calendar events'), 'backend-restore calendar events');
         const scopedKeys = getScopedStorageKeys(authenticatedEmail);
         const [localLastSyncRaw, localCruisesRaw, localBookedRaw, localOffersRaw, localEventsRaw] = await Promise.all([
           quotaSafeGetItem(scopedKeys.LAST_SYNC),
@@ -830,12 +833,12 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       setCasinoOffersState(ownedStatus.parsedOffersData);
 
       if (snapshot.cruisesData) {
-        const parsedCruises = prepareOwnedRecords<Cruise>(JSON.parse(snapshot.cruisesData) as Cruise[], ownerScopeId, authenticatedEmail, 'local available cruises');
+        const parsedCruises = dedupeCruises(prepareOwnedRecords<Cruise>(JSON.parse(snapshot.cruisesData) as Cruise[], ownerScopeId, authenticatedEmail, 'local available cruises'), 'local available cruises');
         setCruisesState(parsedCruises);
       }
 
       const bookedResult = await processBookedCruises(ownedStatus, snapshot, getMockCruises, getFirstTimeUserSampleData, authenticatedEmail);
-      const ownedBookedCruises = prepareOwnedRecords<BookedCruise>(bookedResult.bookedCruises, ownerScopeId, authenticatedEmail, 'processed booked cruises');
+      const ownedBookedCruises = dedupeBookedCruises(prepareOwnedRecords<BookedCruise>(bookedResult.bookedCruises, ownerScopeId, authenticatedEmail, 'processed booked cruises'), 'processed booked cruises');
       const ownedOffersOverride = bookedResult.offersOverride
         ? prepareOwnedRecords<CasinoOffer>(bookedResult.offersOverride, ownerScopeId, authenticatedEmail, 'processed casino offers')
         : undefined;
@@ -860,7 +863,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       }
 
       const eventsResult = processCalendarEvents(snapshot, ownedStatus, bookedResult.finalBookedCount);
-      const ownedEvents = prepareOwnedRecords<CalendarEvent>(eventsResult.events, ownerScopeId, authenticatedEmail, 'local calendar events');
+      const ownedEvents = dedupeCalendarEvents(prepareOwnedRecords<CalendarEvent>(eventsResult.events, ownerScopeId, authenticatedEmail, 'local calendar events'), 'local calendar events');
       if (eventsResult.shouldPersist) {
         await persistData(skRef.current.CALENDAR_EVENTS, ownedEvents);
       }
@@ -1125,7 +1128,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
 
   const setCruises = useCallback(async (newCruises: Cruise[]) => {
     markLocalDataAuthoritative('setCruises');
-    const ownedCruises = prepareOwnedRecords<Cruise>(newCruises, ownerScopeId, authenticatedEmail, 'set available cruises');
+    const ownedCruises = dedupeCruises(prepareOwnedRecords<Cruise>(newCruises, ownerScopeId, authenticatedEmail, 'set available cruises'), 'set available cruises');
     setCruisesState(ownedCruises);
     await persistData(skRef.current.CRUISES, ownedCruises);
     await quotaSafeSetItem(skRef.current.HAS_IMPORTED_DATA, 'true').catch(console.error);
@@ -1181,7 +1184,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     const withFreeplayOBC = applyFreeplayOBCData(withKnownRetail);
     const enrichedCruises = enrichCruisesWithReceiptData(withFreeplayOBC);
     const lifecycleResult = updateAllCruiseLifecycles(enrichedCruises);
-    const normalizedCruises = prepareOwnedRecords<BookedCruise>(lifecycleResult.updatedCruises, ownerScopeId, authenticatedEmail, 'normalized booked cruises');
+    const normalizedCruises = dedupeBookedCruises(prepareOwnedRecords<BookedCruise>(lifecycleResult.updatedCruises, ownerScopeId, authenticatedEmail, 'normalized booked cruises'), 'normalized booked cruises');
     console.log('[CoreData] Normalized booked cruise lifecycle before persist:', {
       total: normalizedCruises.length,
       upcoming: lifecycleResult.report.upcomingCount,
@@ -1194,24 +1197,10 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     
     // Auto-generate calendar events from booked cruises
     console.log('[CoreData] Auto-generating calendar events from', normalizedCruises.length, 'booked cruises');
-    const newCalendarEvents: CalendarEvent[] = prepareOwnedRecords<CalendarEvent>(normalizedCruises.map(cruise => ({
-      id: `cruise-${cruise.id}`,
-      title: `${cruise.shipName}`,
-      description: cruise.itineraryName || `${cruise.nights} Night Cruise`,
-      startDate: cruise.sailDate,
-      endDate: cruise.returnDate,
-      type: 'cruise',
-      isAllDay: true,
-      location: cruise.departurePort,
-      metadata: {
-        cruiseId: cruise.id,
-        shipName: cruise.shipName,
-        cabinNumber: cruise.cabinNumber,
-        reservationNumber: cruise.reservationNumber
-      },
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    })), ownerScopeId, authenticatedEmail, 'booked cruise calendar events');
+    const newCalendarEvents: CalendarEvent[] = dedupeCalendarEvents(
+      prepareOwnedRecords<CalendarEvent>(generateCruiseCalendarEvents(normalizedCruises), ownerScopeId, authenticatedEmail, 'booked cruise calendar events'),
+      'booked cruise calendar events'
+    );
     
     console.log('[CoreData] Generated', newCalendarEvents.length, 'calendar events from cruises');
     setCalendarEventsState(newCalendarEvents);
@@ -1317,7 +1306,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
 
   const setCasinoOffers = useCallback(async (newOffers: CasinoOffer[]) => {
     markLocalDataAuthoritative('setCasinoOffers');
-    const ownedOffers = prepareOwnedRecords<CasinoOffer>(newOffers, ownerScopeId, authenticatedEmail, 'set casino offers');
+    const ownedOffers = dedupeCasinoOffers(prepareOwnedRecords<CasinoOffer>(newOffers, ownerScopeId, authenticatedEmail, 'set casino offers'), 'set casino offers');
     const nonMockOffers = ownedOffers.filter(offer => 
       !offer.id?.includes('demo-') &&
       offer.offerCode !== 'NOWHERE2025'
@@ -1360,20 +1349,15 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     });
   }, [persistData]);
 
-  const setCalendarEvents = useCallback((newEvents: CalendarEvent[]) => {
-    const ownedEvents = prepareOwnedRecords<CalendarEvent>(newEvents, ownerScopeId, authenticatedEmail, 'set calendar events');
+  const setCalendarEvents = useCallback(async (newEvents: CalendarEvent[]) => {
+    markLocalDataAuthoritative('setCalendarEvents');
+    const ownedEvents = dedupeCalendarEvents(prepareOwnedRecords<CalendarEvent>(newEvents, ownerScopeId, authenticatedEmail, 'set calendar events'), 'set calendar events');
     console.log('[CoreData] Setting calendar events:', ownedEvents.length);
     setCalendarEventsState(ownedEvents);
-    void persistData(skRef.current.CALENDAR_EVENTS, ownedEvents);
-    void quotaSafeSetItem(skRef.current.HAS_IMPORTED_DATA, 'true').catch(console.error);
-    
-    if (!isSyncingRef.current) {
-      isSyncingRef.current = true;
-      void syncToBackend().finally(() => {
-        isSyncingRef.current = false;
-      });
-    }
-  }, [persistData, syncToBackend, ownerScopeId, authenticatedEmail]);
+    await persistData(skRef.current.CALENDAR_EVENTS, ownedEvents);
+    await quotaSafeSetItem(skRef.current.HAS_IMPORTED_DATA, 'true').catch(console.error);
+    scheduleSyncToBackend('setCalendarEvents');
+  }, [markLocalDataAuthoritative, persistData, scheduleSyncToBackend, ownerScopeId, authenticatedEmail]);
 
   const addCalendarEvent = useCallback((event: CalendarEvent) => {
     setCalendarEventsState(prev => {

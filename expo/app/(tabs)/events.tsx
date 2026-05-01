@@ -283,7 +283,7 @@ export default function EventsScreen() {
           style: 'destructive' as const,
           onPress: () => {
             console.log('[Events] Clearing all calendar events');
-            coreData.setCalendarEvents([]);
+            void coreData.setCalendarEvents([]);
             setRefreshKey(prev => prev + 1);
           },
         },

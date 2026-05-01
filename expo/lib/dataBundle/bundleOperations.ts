@@ -14,85 +14,26 @@ import type { RecognitionEntryWithCrew, Sailing } from '@/types/crew-recognition
 import { ALL_STORAGE_KEYS, GLOBAL_KEYS, getUserScopedKey, type AppSettings } from '../storage/storageKeys';
 import { quotaSafeGetItem, quotaSafeSetItem, quotaSafeSetJsonItem } from '../storage/quotaSafeStorage';
 import { applyKnownRetailValuesToBooked } from '../dataEnrichment/retailValueEnrichment';
+import {
+  dedupeBookedCruises,
+  dedupeCalendarEvents,
+  dedupeCasinoOffers,
+  dedupeCruises,
+  dedupeByIdentity,
+} from '../dataIdentity';
+import { generateCruiseCalendarEvents } from '../calendar/cruiseEvents';
 
 function normalizeImportKeyPart(value: unknown): string {
   if (value === null || value === undefined) return '';
   return String(value).trim().toLowerCase();
 }
 
-function dedupeRecords<T>(items: T[], buildKey: (item: T, index: number) => string, label: string): T[] {
-  const keyedItems = new Map<string, T>();
-  items.forEach((item, index) => {
-    const key = buildKey(item, index);
-    if (keyedItems.has(key)) {
-      console.log('[DataBundle] Deduped duplicate record during import:', { label, key });
-    }
-    keyedItems.set(key, item);
-  });
-  return Array.from(keyedItems.values());
-}
-
 function dedupeByIdOrPayload<T extends object>(items: T[], label: string): T[] {
-  return dedupeRecords(items, (item) => {
+  return dedupeByIdentity(items, (item) => {
     const record = item as Record<string, unknown>;
     const id = normalizeImportKeyPart(record.id);
     return id ? `id:${id}` : `payload:${normalizeImportKeyPart(JSON.stringify(item))}`;
   }, label);
-}
-
-function getCruiseBackupKey(cruise: Cruise, index: number): string {
-  const id = normalizeImportKeyPart(cruise.id);
-  if (id) return `id:${id}`;
-  return [
-    normalizeImportKeyPart(cruise.cruiseSource),
-    normalizeImportKeyPart(cruise.shipName),
-    normalizeImportKeyPart(cruise.sailDate),
-    normalizeImportKeyPart(cruise.offerCode),
-    normalizeImportKeyPart(cruise.cabinType),
-    index.toString(),
-  ].join('|');
-}
-
-function getBookedCruiseBackupKey(cruise: BookedCruise, index: number): string {
-  const reservation = normalizeImportKeyPart(cruise.reservationNumber ?? cruise.bookingId);
-  if (reservation) return `reservation:${normalizeImportKeyPart(cruise.cruiseSource)}:${reservation}`;
-  const id = normalizeImportKeyPart(cruise.id);
-  if (id) return `id:${id}`;
-  return [
-    normalizeImportKeyPart(cruise.cruiseSource),
-    normalizeImportKeyPart(cruise.shipName),
-    normalizeImportKeyPart(cruise.sailDate),
-    normalizeImportKeyPart(cruise.cabinNumber),
-    normalizeImportKeyPart(cruise.cabinType),
-    index.toString(),
-  ].join('|');
-}
-
-function getOfferBackupKey(offer: CasinoOffer, index: number): string {
-  const id = normalizeImportKeyPart(offer.id);
-  if (id) return `id:${id}`;
-  return [
-    normalizeImportKeyPart(offer.offerSource),
-    normalizeImportKeyPart(offer.offerCode),
-    normalizeImportKeyPart(offer.shipName),
-    normalizeImportKeyPart(offer.sailingDate),
-    normalizeImportKeyPart(offer.roomType),
-    normalizeImportKeyPart(offer.offerName ?? offer.title),
-    index.toString(),
-  ].join('|');
-}
-
-function getCalendarBackupKey(event: CalendarEvent, index: number): string {
-  const id = normalizeImportKeyPart(event.id);
-  if (id) return `id:${id}`;
-  return [
-    normalizeImportKeyPart(event.cruiseId),
-    normalizeImportKeyPart(event.title),
-    normalizeImportKeyPart(event.startDate ?? event.start),
-    normalizeImportKeyPart(event.endDate ?? event.end),
-    normalizeImportKeyPart(event.type),
-    index.toString(),
-  ].join('|');
 }
 
 export interface FullAppDataBundle {
@@ -388,6 +329,11 @@ export async function getAllStoredData(email?: string | null): Promise<FullAppDa
       console.error('[DataBundle] Error parsing extended loyalty data:', e);
     }
 
+    cruises = dedupeCruises(cruises, 'export cruises');
+    bookedCruises = dedupeBookedCruises(bookedCruises, 'export booked cruises');
+    casinoOffers = dedupeCasinoOffers(casinoOffers, 'export casino offers');
+    calendarEvents = dedupeCalendarEvents(calendarEvents, 'export calendar events');
+
     const bundle: FullAppDataBundle = {
       version: '2.1.0',
       exportDate: new Date().toISOString(),
@@ -468,9 +414,11 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
     return getUserScopedKey(baseKey, email ?? null);
   };
 
+  let importedBookedForCalendar: BookedCruise[] = [];
+
   try {
     if (bundle.cruises && Array.isArray(bundle.cruises)) {
-      const dedupedCruises = dedupeRecords(bundle.cruises, getCruiseBackupKey, 'cruises');
+      const dedupedCruises = dedupeCruises(bundle.cruises, 'backup cruises');
       await quotaSafeSetJsonItem(sk(ALL_STORAGE_KEYS.CRUISES), dedupedCruises);
       await quotaSafeSetItem(sk(ALL_STORAGE_KEYS.HAS_IMPORTED_DATA), 'true');
       imported.cruises = dedupedCruises.length;
@@ -482,8 +430,9 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
 
   try {
     if (bundle.bookedCruises && Array.isArray(bundle.bookedCruises)) {
-      const dedupedBooked = dedupeRecords(bundle.bookedCruises, getBookedCruiseBackupKey, 'bookedCruises');
+      const dedupedBooked = dedupeBookedCruises(bundle.bookedCruises, 'backup booked cruises');
       const enrichedBooked = applyKnownRetailValuesToBooked(dedupedBooked);
+      importedBookedForCalendar = enrichedBooked;
       await quotaSafeSetJsonItem(sk(ALL_STORAGE_KEYS.BOOKED_CRUISES), enrichedBooked);
       await quotaSafeSetItem(sk(ALL_STORAGE_KEYS.HAS_IMPORTED_DATA), 'true');
       imported.bookedCruises = enrichedBooked.length;
@@ -495,7 +444,7 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
 
   try {
     if (bundle.casinoOffers && Array.isArray(bundle.casinoOffers)) {
-      const dedupedOffers = dedupeRecords(bundle.casinoOffers, getOfferBackupKey, 'casinoOffers');
+      const dedupedOffers = dedupeCasinoOffers(bundle.casinoOffers, 'backup casino offers');
       await quotaSafeSetJsonItem(sk(ALL_STORAGE_KEYS.CASINO_OFFERS), dedupedOffers);
       await quotaSafeSetItem(sk(ALL_STORAGE_KEYS.HAS_IMPORTED_DATA), 'true');
       imported.casinoOffers = dedupedOffers.length;
@@ -507,10 +456,15 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
 
   try {
     if (bundle.calendarEvents && Array.isArray(bundle.calendarEvents)) {
-      const dedupedEvents = dedupeRecords(bundle.calendarEvents, getCalendarBackupKey, 'calendarEvents');
+      const generatedCruiseEvents = generateCruiseCalendarEvents(importedBookedForCalendar);
+      const dedupedEvents = dedupeCalendarEvents([...bundle.calendarEvents, ...generatedCruiseEvents], 'backup calendar events');
       await quotaSafeSetJsonItem(sk(ALL_STORAGE_KEYS.CALENDAR_EVENTS), dedupedEvents);
       imported.calendarEvents = dedupedEvents.length;
-      console.log('[DataBundle] Imported calendar events:', imported.calendarEvents);
+      console.log('[DataBundle] Imported calendar events:', {
+        importedCalendarEvents: bundle.calendarEvents.length,
+        generatedCruiseEvents: generatedCruiseEvents.length,
+        savedEvents: imported.calendarEvents,
+      });
     }
   } catch (error) {
     errors.push(`Failed to import calendar events: ${error}`);
