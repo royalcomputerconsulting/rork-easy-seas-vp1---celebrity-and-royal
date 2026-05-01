@@ -1,7 +1,13 @@
-import type { BookedCruise, CasinoOffer, Cruise, ImportReconciliationSummary } from '@/types/models';
+import type { BookedCruise, CalendarEvent, CasinoOffer, Cruise, ImportReconciliationSummary } from '@/types/models';
 
-export type SmartImportReviewKind = 'Cruise' | 'Offer' | 'Booked Cruise' | 'Completed Cruise';
+export type SmartImportReviewKind = 'Cruise' | 'Offer' | 'Booked Cruise' | 'Completed Cruise' | 'Calendar Event';
 export type SmartImportReviewAction = 'add' | 'update' | 'review' | 'preserve';
+
+export interface SmartImportFieldDiff {
+  field: string;
+  before: string;
+  after: string;
+}
 
 export interface SmartImportReviewRow {
   id: string;
@@ -13,9 +19,10 @@ export interface SmartImportReviewRow {
   before?: string;
   after?: string;
   changedFields: string[];
+  fieldDiffs: SmartImportFieldDiff[];
 }
 
-type AnyImportRecord = Cruise | CasinoOffer | BookedCruise;
+type AnyImportRecord = Cruise | CasinoOffer | BookedCruise | CalendarEvent;
 
 type OffersReviewInput = {
   existingCruises: Cruise[];
@@ -33,9 +40,16 @@ type BookedReviewInput = {
   kind?: SmartImportReviewKind;
 };
 
+type CalendarReviewInput = {
+  existingEvents: CalendarEvent[];
+  importedEvents: CalendarEvent[];
+  mergedEvents: CalendarEvent[];
+};
+
 const CRUISE_FIELDS = ['shipName', 'sailDate', 'returnDate', 'nights', 'departurePort', 'destination', 'cabinType', 'price', 'taxes', 'offerCode', 'status'] as const;
 const OFFER_FIELDS = ['offerCode', 'title', 'shipName', 'sailingDate', 'roomType', 'offerType', 'freePlay', 'freeplayAmount', 'OBC', 'obcAmount', 'expiryDate', 'expires', 'status'] as const;
 const BOOKED_FIELDS = ['reservationNumber', 'bookingId', 'shipName', 'sailDate', 'returnDate', 'nights', 'cabinType', 'cabinNumber', 'status', 'completionState', 'price', 'winnings', 'earnedPoints'] as const;
+const CALENDAR_FIELDS = ['title', 'startDate', 'endDate', 'start', 'end', 'type', 'location', 'description', 'cruiseId'] as const;
 
 function normalizeText(value: unknown): string {
   return typeof value === 'string' ? value.trim() : value === null || value === undefined ? '' : String(value).trim();
@@ -75,17 +89,23 @@ function getBookedLooseKey(cruise: BookedCruise): string {
   return `sailing:${[normalizeLower(cruise.shipName), normalizeDate(cruise.sailDate), normalizeDate(cruise.returnDate)].join('|')}`;
 }
 
+function getCalendarLooseKey(event: CalendarEvent): string {
+  return [normalizeLower(event.title), normalizeDate(event.startDate || event.start), normalizeDate(event.endDate || event.end), normalizeLower(event.location), normalizeLower(event.type)].join('|');
+}
+
 function hasReviewStatus(record: AnyImportRecord): boolean {
   return record.importStatus === 'reviewNeeded' || record.importStatus === 'unassigned' || record.reconciliationStatus === 'reviewNeeded' || record.archiveStatus === 'reviewNeeded' || record.status === 'reviewNeeded';
 }
 
-function describeChangedFields<T extends Record<string, unknown>>(existing: T | undefined, incoming: T, fields: readonly string[]): string[] {
+function describeFieldDiffs<T extends Record<string, unknown>>(existing: T | undefined, incoming: T, fields: readonly string[]): SmartImportFieldDiff[] {
   if (!existing) return [];
-  return fields.filter((field) => {
-    const beforeValue = formatValue(existing[field]);
-    const afterValue = formatValue(incoming[field]);
-    return afterValue.length > 0 && beforeValue !== afterValue;
-  });
+  return fields
+    .map((field) => ({
+      field,
+      before: formatValue(existing[field]),
+      after: formatValue(incoming[field]),
+    }))
+    .filter((diff) => diff.after.length > 0 && diff.before !== diff.after);
 }
 
 function summarizeChangedFields(changedFields: string[]): string {
@@ -104,6 +124,10 @@ function summarizeOffer(offer: CasinoOffer): string {
 
 function summarizeBooked(cruise: BookedCruise): string {
   return [cruise.reservationNumber ?? cruise.bookingId, cruise.shipName, normalizeDate(cruise.sailDate), cruise.nights ? `${cruise.nights} nights` : '', cruise.completionState ?? cruise.status].filter(Boolean).join(' • ');
+}
+
+function summarizeCalendarEvent(event: CalendarEvent): string {
+  return [event.title, normalizeDate(event.startDate || event.start), event.location, event.type].filter(Boolean).join(' • ');
 }
 
 function getReviewMeta(record: AnyImportRecord): string {
@@ -159,7 +183,8 @@ export function buildOffersImportReviewRows(input: OffersReviewInput): SmartImpo
 
   input.importedCruises.forEach((cruise, index) => {
     const existing = existingCruiseByKey.get(getCruiseLooseKey(cruise));
-    const changedFields = describeChangedFields(existing as Record<string, unknown> | undefined, cruise as unknown as Record<string, unknown>, CRUISE_FIELDS);
+    const fieldDiffs = describeFieldDiffs(existing as Record<string, unknown> | undefined, cruise as unknown as Record<string, unknown>, CRUISE_FIELDS);
+    const changedFields = fieldDiffs.map((diff) => diff.field);
     rows.push({
       id: `cruise:${cruise.id}:${index}`,
       kind: 'Cruise',
@@ -170,12 +195,14 @@ export function buildOffersImportReviewRows(input: OffersReviewInput): SmartImpo
       before: existing ? summarizeCruise(existing) : undefined,
       after: existing ? summarizeChangedFields(changedFields) : summarizeCruise(cruise),
       changedFields,
+      fieldDiffs,
     });
   });
 
   input.importedOffers.forEach((offer, index) => {
     const existing = existingOfferByKey.get(getOfferLooseKey(offer));
-    const changedFields = describeChangedFields(existing as Record<string, unknown> | undefined, offer as unknown as Record<string, unknown>, OFFER_FIELDS);
+    const fieldDiffs = describeFieldDiffs(existing as Record<string, unknown> | undefined, offer as unknown as Record<string, unknown>, OFFER_FIELDS);
+    const changedFields = fieldDiffs.map((diff) => diff.field);
     rows.push({
       id: `offer:${offer.id}:${index}`,
       kind: 'Offer',
@@ -186,6 +213,7 @@ export function buildOffersImportReviewRows(input: OffersReviewInput): SmartImpo
       before: existing ? summarizeOffer(existing) : undefined,
       after: existing ? summarizeChangedFields(changedFields) : summarizeOffer(offer),
       changedFields,
+      fieldDiffs,
     });
   });
 
@@ -200,6 +228,7 @@ export function buildOffersImportReviewRows(input: OffersReviewInput): SmartImpo
       meta: getReviewMeta(record),
       after: 'This row will be kept and flagged for review instead of being deleted or silently assigned.',
       changedFields: [],
+      fieldDiffs: [],
     });
   });
 
@@ -213,7 +242,8 @@ export function buildBookedImportReviewRows(input: BookedReviewInput): SmartImpo
 
   input.importedBooked.forEach((cruise, index) => {
     const existing = existingByKey.get(getBookedLooseKey(cruise));
-    const changedFields = describeChangedFields(existing as Record<string, unknown> | undefined, cruise as unknown as Record<string, unknown>, BOOKED_FIELDS);
+    const fieldDiffs = describeFieldDiffs(existing as Record<string, unknown> | undefined, cruise as unknown as Record<string, unknown>, BOOKED_FIELDS);
+    const changedFields = fieldDiffs.map((diff) => diff.field);
     rows.push({
       id: `booked:${cruise.id}:${index}`,
       kind,
@@ -224,6 +254,7 @@ export function buildBookedImportReviewRows(input: BookedReviewInput): SmartImpo
       before: existing ? summarizeBooked(existing) : undefined,
       after: existing ? summarizeChangedFields(changedFields) : summarizeBooked(cruise),
       changedFields,
+      fieldDiffs,
     });
   });
 
@@ -237,6 +268,46 @@ export function buildBookedImportReviewRows(input: BookedReviewInput): SmartImpo
       meta: getReviewMeta(cruise),
       after: 'This row will be preserved and flagged for review instead of being deleted or overwritten.',
       changedFields: [],
+      fieldDiffs: [],
+    });
+  });
+
+  return rows;
+}
+
+export function buildCalendarImportReviewRows(input: CalendarReviewInput): SmartImportReviewRow[] {
+  const existingByKey = new Map(input.existingEvents.map((event) => [getCalendarLooseKey(event), event]));
+  const rows: SmartImportReviewRow[] = [];
+
+  input.importedEvents.forEach((event, index) => {
+    const existing = existingByKey.get(getCalendarLooseKey(event));
+    const fieldDiffs = describeFieldDiffs(existing as Record<string, unknown> | undefined, event as unknown as Record<string, unknown>, CALENDAR_FIELDS);
+    const changedFields = fieldDiffs.map((diff) => diff.field);
+    rows.push({
+      id: `calendar:${event.id}:${index}`,
+      kind: 'Calendar Event',
+      action: existing ? 'update' : 'add',
+      title: event.title || 'Imported calendar event',
+      subtitle: summarizeCalendarEvent(event),
+      meta: getReviewMeta(event),
+      before: existing ? summarizeCalendarEvent(existing) : undefined,
+      after: existing ? summarizeChangedFields(changedFields) : summarizeCalendarEvent(event),
+      changedFields,
+      fieldDiffs,
+    });
+  });
+
+  input.mergedEvents.filter(hasReviewStatus).forEach((event, index) => {
+    rows.push({
+      id: `calendar-review:${event.id}:${index}`,
+      kind: 'Calendar Event',
+      action: 'review',
+      title: event.title || 'Review calendar event',
+      subtitle: summarizeCalendarEvent(event),
+      meta: getReviewMeta(event),
+      after: 'This event will be preserved and flagged for assignment/reconciliation review.',
+      changedFields: [],
+      fieldDiffs: [],
     });
   });
 

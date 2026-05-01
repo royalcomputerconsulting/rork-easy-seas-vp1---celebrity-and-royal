@@ -90,12 +90,13 @@ import { RENDER_BACKEND_URL, trpc } from '@/lib/trpc';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import * as XLSX from 'xlsx';
-import type { BookedCruise, CasinoOffer, Cruise, ImportReconciliationSummary } from '@/types/models';
+import type { BookedCruise, CalendarEvent, CasinoOffer, Cruise, ImportReconciliationSummary } from '@/types/models';
 import { getCalendarEventsWithGeneratedCruiseEvents, getDayAgendaEventCountForYear } from '@/lib/calendar/cruiseEvents';
 import { getImportAssignmentReviewItems } from '@/lib/importAssignmentReview';
 import { applyFoundationFields } from '@/lib/dataFoundation';
 import {
   buildBookedImportReviewRows,
+  buildCalendarImportReviewRows,
   buildOffersImportReviewRows,
   combineReconciliationSummaries,
   createSimpleReconciliationSummary,
@@ -744,10 +745,8 @@ export default function SettingsScreen() {
                   return;
                 }
 
-                await setLocalData({
-                  calendar: [...(localData.calendar || []), ...events],
-                });
-
+                const existingEvents = (localData.calendar || []) as CalendarEvent[];
+                const mergedEvents = [...existingEvents, ...events];
                 const calendarAssignmentReviewCount = getImportAssignmentReviewItems({
                   offers: [],
                   cruises: [],
@@ -755,18 +754,46 @@ export default function SettingsScreen() {
                   calendarEvents: events,
                   users,
                 }).length;
-                setLastImportResult({ type: 'calendar', count: events.length });
-                Alert.alert(
-                  'Import Successful',
-                  `Imported ${events.length} calendar events from URL${calendarAssignmentReviewCount > 0 ? `. ${calendarAssignmentReviewCount} event(s) need account assignment review.` : ''}`,
-                  calendarAssignmentReviewCount > 0
-                    ? [
-                        { text: 'Later', style: 'cancel' },
-                        { text: 'Review Assignments', onPress: () => router.push('/import-review' as any) },
-                      ]
-                    : undefined
-                );
-                console.log('[Settings] Import complete:', events.length, 'events');
+                const calendarSummary = createSimpleReconciliationSummary({
+                  addedRows: events.length,
+                  reviewNeededItems: calendarAssignmentReviewCount,
+                });
+                setPendingSmartImportReview({
+                  title: 'Calendar Import Review',
+                  fileName: trimmedUrl,
+                  summary: calendarSummary,
+                  rows: buildCalendarImportReviewRows({
+                    existingEvents,
+                    importedEvents: events as CalendarEvent[],
+                    mergedEvents,
+                  }),
+                  applyLabel: `Apply ${events.length} event(s)`,
+                  onApply: async () => {
+                    try {
+                      setIsImporting(true);
+                      console.log('[Settings] Applying reviewed calendar URL import:', { url: trimmedUrl, events: events.length });
+                      await setLocalData({ calendar: mergedEvents });
+                      setLastImportResult({ type: 'calendar', count: events.length });
+                      setPendingSmartImportReview(null);
+                      Alert.alert(
+                        'Import Applied',
+                        `Imported ${events.length} calendar events from URL${calendarAssignmentReviewCount > 0 ? `. ${calendarAssignmentReviewCount} event(s) need account assignment review.` : ''}`,
+                        calendarAssignmentReviewCount > 0
+                          ? [
+                              { text: 'Later', style: 'cancel' },
+                              { text: 'Review Assignments', onPress: () => router.push('/import-review' as any) },
+                            ]
+                          : undefined
+                      );
+                    } catch (applyError) {
+                      console.error('[Settings] Failed to apply reviewed calendar URL import:', applyError);
+                      Alert.alert('Apply Failed', 'The reviewed calendar import could not be applied. Please try again.');
+                    } finally {
+                      setIsImporting(false);
+                    }
+                  },
+                });
+                console.log('[Settings] Prepared calendar URL smart import review:', events.length, 'events');
               } catch (error) {
                 console.error('[Settings] URL import error:', error);
                 Alert.alert(
@@ -817,10 +844,8 @@ export default function SettingsScreen() {
         return;
       }
 
-      await setLocalData({
-        calendar: [...(localData.calendar || []), ...events],
-      });
-
+      const existingEvents = (localData.calendar || []) as CalendarEvent[];
+      const mergedEvents = [...existingEvents, ...events];
       const calendarAssignmentReviewCount = getImportAssignmentReviewItems({
         offers: [],
         cruises: [],
@@ -828,18 +853,46 @@ export default function SettingsScreen() {
         calendarEvents: events,
         users,
       }).length;
-      setLastImportResult({ type: 'calendar', count: events.length });
-      Alert.alert(
-        'Import Successful',
-        `Imported ${events.length} calendar events from ${result.fileName}${calendarAssignmentReviewCount > 0 ? `. ${calendarAssignmentReviewCount} event(s) need account assignment review.` : ''}`,
-        calendarAssignmentReviewCount > 0
-          ? [
-              { text: 'Later', style: 'cancel' },
-              { text: 'Review Assignments', onPress: () => router.push('/import-review' as any) },
-            ]
-          : undefined
-      );
-      console.log('[Settings] Import complete:', events.length, 'events');
+      const calendarSummary = createSimpleReconciliationSummary({
+        addedRows: events.length,
+        reviewNeededItems: calendarAssignmentReviewCount,
+      });
+      setPendingSmartImportReview({
+        title: 'Calendar Import Review',
+        fileName: result.fileName,
+        summary: calendarSummary,
+        rows: buildCalendarImportReviewRows({
+          existingEvents,
+          importedEvents: events as CalendarEvent[],
+          mergedEvents,
+        }),
+        applyLabel: `Apply ${events.length} event(s)`,
+        onApply: async () => {
+          try {
+            setIsImporting(true);
+            console.log('[Settings] Applying reviewed calendar file import:', { fileName: result.fileName, events: events.length });
+            await setLocalData({ calendar: mergedEvents });
+            setLastImportResult({ type: 'calendar', count: events.length });
+            setPendingSmartImportReview(null);
+            Alert.alert(
+              'Import Applied',
+              `Imported ${events.length} calendar events from ${result.fileName}${calendarAssignmentReviewCount > 0 ? `. ${calendarAssignmentReviewCount} event(s) need account assignment review.` : ''}`,
+              calendarAssignmentReviewCount > 0
+                ? [
+                    { text: 'Later', style: 'cancel' },
+                    { text: 'Review Assignments', onPress: () => router.push('/import-review' as any) },
+                  ]
+                : undefined
+            );
+          } catch (applyError) {
+            console.error('[Settings] Failed to apply reviewed calendar file import:', applyError);
+            Alert.alert('Apply Failed', 'The reviewed calendar import could not be applied. Please try again.');
+          } finally {
+            setIsImporting(false);
+          }
+        },
+      });
+      console.log('[Settings] Prepared calendar file smart import review:', events.length, 'events');
     } catch (error) {
       console.error('[Settings] Import error:', error);
       Alert.alert('Import Error', 'Failed to import the file. Please check the file format and try again.');
@@ -2061,6 +2114,19 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
       <Text style={styles.smartImportRowMeta} numberOfLines={2}>{row.meta}</Text>
       {row.before ? <Text style={styles.smartImportDiffText} numberOfLines={2}>Before: {row.before}</Text> : null}
       {row.after ? <Text style={styles.smartImportDiffText} numberOfLines={2}>After: {row.after}</Text> : null}
+      {row.fieldDiffs.length > 0 ? (
+        <View style={styles.smartImportFieldDiffList}>
+          {row.fieldDiffs.slice(0, 5).map((diff) => (
+            <View key={`${row.id}-${diff.field}`} style={styles.smartImportFieldDiffRow}>
+              <Text style={styles.smartImportFieldName}>{diff.field}</Text>
+              <Text style={styles.smartImportFieldBefore} numberOfLines={1}>{diff.before || 'blank'}</Text>
+              <ChevronRight size={12} color="#94A3B8" />
+              <Text style={styles.smartImportFieldAfter} numberOfLines={1}>{diff.after || 'blank'}</Text>
+            </View>
+          ))}
+          {row.fieldDiffs.length > 5 ? <Text style={styles.smartImportMoreDiffs}>+{row.fieldDiffs.length - 5} more changed field(s)</Text> : null}
+        </View>
+      ) : null}
     </View>
   ), []);
 
@@ -3993,6 +4059,44 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#0F766E',
     lineHeight: 16,
+  },
+  smartImportFieldDiffList: {
+    marginTop: SPACING.sm,
+    gap: 5,
+  },
+  smartImportFieldDiffRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#F8FAFC',
+    borderRadius: BORDER_RADIUS.sm,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: SPACING.xs,
+    paddingVertical: 6,
+  },
+  smartImportFieldName: {
+    width: 82,
+    fontSize: 10,
+    fontWeight: '900' as const,
+    color: COLORS.navyDeep,
+  },
+  smartImportFieldBefore: {
+    flex: 1,
+    fontSize: 10,
+    color: '#64748B',
+    textDecorationLine: 'line-through' as const,
+  },
+  smartImportFieldAfter: {
+    flex: 1,
+    fontSize: 10,
+    fontWeight: '800' as const,
+    color: '#0F766E',
+  },
+  smartImportMoreDiffs: {
+    fontSize: 10,
+    fontWeight: '800' as const,
+    color: '#64748B',
   },
   smartImportFooter: {
     flexDirection: 'row',

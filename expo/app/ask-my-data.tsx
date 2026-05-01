@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Bot, ChevronRight, DatabaseZap, FileSearch, Search, Ship, Sparkles, Tag, Ticket, X } from 'lucide-react-native';
+import { Bot, ChevronRight, DatabaseZap, FileSearch, Search, Ship, Sparkles, Tag, Ticket, X, Wand2 } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { IntelligenceFilterStrip } from '@/components/IntelligenceFilterStrip';
 import { ResponsiveContainer } from '@/components/ResponsiveContainer';
@@ -21,7 +21,8 @@ const SAMPLE_QUERIES = [
   'What offer expires soon but has the highest value?',
   'Which sailings are booked or reserved?',
   'Find cruises that fit after my next sailing',
-  'Show certificates that may fit active offers',
+  'Show unassigned imports that need review',
+  'Which certificates fit active offers?',
 ];
 
 const SOURCE_STYLES: Record<AskMyDataSource, { label: string; color: string; icon: typeof Tag }> = {
@@ -109,9 +110,14 @@ export default function AskMyDataScreen() {
     return (
       <View key={result.id} style={styles.resultCard} testID={`ask-my-data-result-${result.id}`}>
         <View style={styles.resultTopRow}>
+          <View style={styles.resultBadgeGroup}>
           <View style={[styles.sourceBadge, { backgroundColor: `${sourceStyle.color}16`, borderColor: `${sourceStyle.color}33` }]}>
             <SourceIcon size={14} color={sourceStyle.color} />
             <Text style={[styles.sourceText, { color: sourceStyle.color }]}>{sourceStyle.label}</Text>
+          </View>
+          <View style={[styles.confidenceBadge, result.confidence === 'high' ? styles.confidenceHigh : result.confidence === 'medium' ? styles.confidenceMedium : styles.confidenceLow]}>
+            <Text style={styles.confidenceText}>{result.confidence}</Text>
+          </View>
           </View>
           <View style={styles.rankBadge}>
             <Text style={styles.rankText}>#{index + 1}</Text>
@@ -136,6 +142,17 @@ export default function AskMyDataScreen() {
 
         {result.owner ? <Text style={styles.ownerText}>Owner: {result.owner}</Text> : null}
         {result.certificateFit ? <Text style={styles.fitText}>{result.certificateFit}</Text> : null}
+        {result.matchReasons.length > 0 ? (
+          <View style={styles.reasonWrap}>
+            {result.matchReasons.slice(0, 3).map((reason) => (
+              <View key={`${result.id}-${reason}`} style={styles.reasonChip}>
+                <Wand2 size={11} color="#0F766E" />
+                <Text style={styles.reasonText}>{reason}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+        {result.matchedTerms.length > 0 ? <Text style={styles.matchedTermsText}>Matched: {result.matchedTerms.slice(0, 8).join(', ')}</Text> : null}
 
         <TouchableOpacity
           style={[styles.actionButton, !result.actionRoute && styles.actionButtonDisabled]}
@@ -239,6 +256,13 @@ export default function AskMyDataScreen() {
 
             {response ? (
               <View style={styles.resultsSection}>
+                <View style={styles.interpretationCard} testID="ask-my-data-interpreted-intent">
+                  <View style={styles.interpretationTopRow}>
+                    <Wand2 size={15} color="#A7F3D0" />
+                    <Text style={styles.interpretationLabel}>Interpreted search</Text>
+                  </View>
+                  <Text style={styles.interpretationText}>{response.interpretedIntent}</Text>
+                </View>
                 <View style={styles.resultsHeader}>
                   <Text style={styles.resultsTitle}>{response.results.length} result{response.results.length === 1 ? '' : 's'}</Text>
                   <Text style={styles.resultsSubtitle}>{response.filtersApplied.join(' • ')}</Text>
@@ -250,6 +274,17 @@ export default function AskMyDataScreen() {
                     <Text style={styles.emptyBody}>{response.noResultsExplanation}</Text>
                   </View>
                 )}
+                {response.suggestedQueries.length > 0 ? (
+                  <View style={styles.followUpCard} testID="ask-my-data-followups">
+                    <Text style={styles.followUpTitle}>Follow-up searches</Text>
+                    {response.suggestedQueries.map((suggestion) => (
+                      <TouchableOpacity key={suggestion} style={styles.followUpChip} onPress={() => submitSearch(suggestion)} activeOpacity={0.78}>
+                        <Sparkles size={12} color="#FDE68A" />
+                        <Text style={styles.followUpText}>{suggestion}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                ) : null}
               </View>
             ) : null}
           </ResponsiveContainer>
@@ -443,6 +478,33 @@ const styles = StyleSheet.create({
   resultsSection: {
     gap: SPACING.sm,
   },
+  interpretationCard: {
+    backgroundColor: 'rgba(15, 118, 110, 0.24)',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(167, 243, 208, 0.26)',
+    padding: SPACING.md,
+    marginBottom: SPACING.xs,
+  },
+  interpretationTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 5,
+  },
+  interpretationLabel: {
+    color: '#A7F3D0',
+    fontSize: 10,
+    fontWeight: '900' as const,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.8,
+  },
+  interpretationText: {
+    color: COLORS.white,
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: '800' as const,
+    lineHeight: 18,
+  },
   resultsHeader: {
     marginBottom: SPACING.xs,
   },
@@ -471,6 +533,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: SPACING.sm,
   },
+  resultBadgeGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    flex: 1,
+  },
   sourceBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -483,6 +551,30 @@ const styles = StyleSheet.create({
   sourceText: {
     fontSize: 11,
     fontWeight: '900' as const,
+  },
+  confidenceBadge: {
+    borderRadius: BORDER_RADIUS.round,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 5,
+    borderWidth: 1,
+  },
+  confidenceHigh: {
+    backgroundColor: '#DCFCE7',
+    borderColor: '#86EFAC',
+  },
+  confidenceMedium: {
+    backgroundColor: '#FEF3C7',
+    borderColor: '#FDE68A',
+  },
+  confidenceLow: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#CBD5E1',
+  },
+  confidenceText: {
+    fontSize: 10,
+    fontWeight: '900' as const,
+    color: COLORS.navyDeep,
+    textTransform: 'uppercase' as const,
   },
   rankBadge: {
     backgroundColor: '#F1F5F9',
@@ -543,6 +635,34 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontWeight: '800' as const,
   },
+  reasonWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.xs,
+    marginTop: SPACING.sm,
+  },
+  reasonChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F0FDFA',
+    borderRadius: BORDER_RADIUS.round,
+    borderWidth: 1,
+    borderColor: '#CCFBF1',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 5,
+  },
+  reasonText: {
+    fontSize: 10,
+    fontWeight: '800' as const,
+    color: '#0F766E',
+  },
+  matchedTermsText: {
+    marginTop: 6,
+    fontSize: 10,
+    fontWeight: '700' as const,
+    color: '#64748B',
+  },
   actionButton: {
     marginTop: SPACING.md,
     backgroundColor: COLORS.navyDeep,
@@ -582,5 +702,38 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     textAlign: 'center',
     marginTop: 6,
+  },
+  followUpCard: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+    padding: SPACING.md,
+    gap: SPACING.xs,
+  },
+  followUpTitle: {
+    color: '#FDE68A',
+    fontSize: 11,
+    fontWeight: '900' as const,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.8,
+    marginBottom: 2,
+  },
+  followUpChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: BORDER_RADIUS.round,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 9,
+  },
+  followUpText: {
+    flex: 1,
+    color: COLORS.white,
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: '800' as const,
   },
 });
