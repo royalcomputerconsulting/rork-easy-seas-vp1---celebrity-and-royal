@@ -1,5 +1,6 @@
 import type { CasinoOffer, Cruise, TravelerProfile } from '@/types/models';
 import { createDateFromString, getDaysUntil } from '@/lib/date';
+import { calculateCasinoAvailabilityForCruise } from '@/lib/casinoAvailability';
 
 export type ShipFamiliarityRating = 'New Ship' | 'Familiar' | 'Very Familiar' | 'Home Ship';
 
@@ -143,27 +144,17 @@ export function deriveCruiseDayPlan(cruise: Cruise): CruiseDayPlan[] {
 }
 
 export function calculateSeaDayDensityScore(cruise: Cruise): SeaDayDensityResult {
-  const days = deriveCruiseDayPlan(cruise);
-  const sailingLength = Math.max(1, cruise.nights || Math.max(days.length - 1, 1));
-  const middleDays = days.filter((day) => !day.isEmbarkation && !day.isDisembarkation);
-  const seaDays = cruise.seaDays ?? middleDays.filter((day) => day.isSeaDay).length;
-  const portDays = cruise.portDays ?? middleDays.filter((day) => !day.isSeaDay).length;
-  let overnightPorts = 0;
-
-  for (let index = 1; index < days.length; index += 1) {
-    const previous = days[index - 1];
-    const current = days[index];
-    if (!previous.isSeaDay && !current.isSeaDay && normalizeLower(previous.port) === normalizeLower(current.port) && normalizeLower(current.port).length > 0) {
-      overnightPorts += 1;
-    }
-  }
-
-  const embarkationValue = days[0]?.isSeaDay ? 0.25 : 0.5;
+  const casinoSummary = calculateCasinoAvailabilityForCruise(cruise);
+  const sailingLength = Math.max(1, cruise.nights || Math.max(casinoSummary.totalDays - 1, 1));
+  const seaDays = casinoSummary.seaDays;
+  const portDays = casinoSummary.portDays;
+  const overnightPorts = casinoSummary.overnightPorts;
+  const embarkationValue = casinoSummary.dailyAvailability[0]?.casinoOpen ? 0.5 : 0;
   const disembarkationValue = 0;
-  const likelyCasinoOpenDays = Number((seaDays + Math.max(0, portDays - overnightPorts) * 0.35 + embarkationValue + disembarkationValue).toFixed(1));
-  const density = likelyCasinoOpenDays / Math.max(1, sailingLength);
-  const casinoOpportunityScore = clamp(Math.round(density * 100), 0, 100);
-  const explanation = `${seaDays} sea day${seaDays === 1 ? '' : 's'}, ${portDays} port day${portDays === 1 ? '' : 's'}, ${overnightPorts} overnight port${overnightPorts === 1 ? '' : 's'}; likely casino opportunity is ${likelyCasinoOpenDays}/${sailingLength} sailing days.`;
+  const likelyCasinoOpenDays = casinoSummary.casinoOpenDays;
+  const maxCasinoHours = Math.max(1, sailingLength * 16);
+  const casinoOpportunityScore = clamp(Math.round((casinoSummary.estimatedCasinoHours / maxCasinoHours) * 100), 0, 100);
+  const explanation = `${seaDays} sea day${seaDays === 1 ? '' : 's'}, ${portDays} port day${portDays === 1 ? '' : 's'}, ${overnightPorts} overnight port${overnightPorts === 1 ? '' : 's'}; casino is open on ${likelyCasinoOpenDays}/${casinoSummary.totalDays} calendar days for ~${casinoSummary.estimatedCasinoHours} estimated hours.`;
 
   console.log('[CruisePlanning] Sea-day density calculated:', {
     cruiseId: cruise.id,
