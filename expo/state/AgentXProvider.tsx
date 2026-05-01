@@ -35,7 +35,14 @@ import { useCertificates } from './CertificatesProvider';
 import { useMachineConditionLogs } from './MachineConditionLogProvider';
 import { useIntelligenceFilters } from './IntelligenceFiltersProvider';
 import { useUser } from './UserProvider';
-import { filterRecordsByIntelligence, getBrandLabel, getProgramLabel, getProfileDisplayName } from '@/lib/intelligenceFilters';
+import {
+  buildIntelligenceScopeLabel,
+  filterRecordsByIntelligence,
+  getBrandLabel,
+  getBrandProgramSystemLabel,
+  getProgramLabel,
+  getProfileDisplayName,
+} from '@/lib/intelligenceFilters';
 
 interface AgentXState {
   messages: ChatMessage[];
@@ -65,11 +72,11 @@ const AGENT_MODE_LABELS: Record<AgentXMode, string> = {
   easySeasGuide: 'EasySeas Guide',
 };
 
-function buildSystemPrompt(context: { globalLibrary?: any[], myAtlasMachines?: any[], sessions?: any[], deckMappings?: any[], machineLogs?: any[], certificates?: any[], mode: AgentXMode }): string {
-  return `You are Agent X in ${AGENT_MODE_LABELS[context.mode]} mode, an intelligent cruise and casino advisor for Royal Caribbean Club Royale casino cruisers. You help users:
+function buildSystemPrompt(context: { globalLibrary?: any[], myAtlasMachines?: any[], sessions?: any[], deckMappings?: any[], machineLogs?: any[], certificates?: any[], mode: AgentXMode; brandProgramLabel: string }): string {
+  return `You are Agent X in ${AGENT_MODE_LABELS[context.mode]} mode, an intelligent cruise and casino advisor for Easy Seas users managing Royal Caribbean / Club Royale and Celebrity / Blue Chip casino cruise data. The active casino system is: ${context.brandProgramLabel}. You help users:
 - Search and filter available cruises
 - Analyze bookings and calculate ROI
-- Track Club Royale tier progress (Choice, Prime, Signature, Masters)
+- Track casino program tier progress using the selected Royal/Celebrity scope
 - Optimize their cruise portfolio for maximum points and value
 - Understand casino offers and their values
 - Identify which certificate levels match specific ships or sailing dates
@@ -306,10 +313,18 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
     return getProfileDisplayName(profile);
   }, [selectedProfileId, users]);
 
+  const activeScopeLabel = useMemo(() => buildIntelligenceScopeLabel(intelligenceFilterSnapshot, users), [intelligenceFilterSnapshot, users]);
+  const brandProgramLabel = useMemo(() => getBrandProgramSystemLabel(selectedBrand, selectedProgram), [selectedBrand, selectedProgram]);
+
   const filteredCruises = useMemo(() => filterRecordsByIntelligence(cruises, intelligenceFilterSnapshot, users), [cruises, intelligenceFilterSnapshot, users]);
   const filteredBookedCruises = useMemo(() => filterRecordsByIntelligence(bookedCruises, intelligenceFilterSnapshot, users), [bookedCruises, intelligenceFilterSnapshot, users]);
   const filteredCasinoOffers = useMemo(() => filterRecordsByIntelligence(casinoOffers, intelligenceFilterSnapshot, users), [casinoOffers, intelligenceFilterSnapshot, users]);
   const filteredCalendarEvents = useMemo(() => filterRecordsByIntelligence(calendarEvents, intelligenceFilterSnapshot, users), [calendarEvents, intelligenceFilterSnapshot, users]);
+  const archiveContextLabel = useMemo(() => {
+    const archivedOrSkippedOffers = filteredCasinoOffers.filter((offer) => offer.status === 'archived' || offer.status === 'skipped' || offer.archiveStatus === 'archived' || offer.archiveStatus === 'replaced').length;
+    const reviewNeededOffers = filteredCasinoOffers.filter((offer) => offer.status === 'reviewNeeded' || offer.archiveStatus === 'reviewNeeded' || offer.reconciliationStatus === 'reviewNeeded' || offer.importStatus === 'reviewNeeded' || offer.importStatus === 'unassigned').length;
+    return `${archivedOrSkippedOffers} archived/skipped offer(s), ${reviewNeededOffers} review-needed offer(s)`;
+  }, [filteredCasinoOffers]);
 
   const toolContext = useMemo((): AgentToolContext => {
     console.log('[AgentX] Recalculating toolContext with latest data...');
@@ -330,6 +345,9 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
       selectedProfileLabel,
       selectedBrand,
       selectedProgram,
+      activeScopeLabel,
+      brandProgramLabel,
+      archiveContextLabel,
     });
     
     return {
@@ -347,7 +365,7 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
       getSessionAnalytics,
       getMachineAnalytics,
     };
-  }, [filteredCruises, filteredBookedCruises, filteredCasinoOffers, clubRoyalePoints, clubRoyaleTier, allMachines, myAtlasMachines, globalLibrary, encyclopedia, deckMappings, sessions, getSessionAnalytics, getMachineAnalytics, certificates.length, machineLogs.length, mode, filters, selectedProfileLabel, selectedBrand, selectedProgram]);
+  }, [filteredCruises, filteredBookedCruises, filteredCasinoOffers, clubRoyalePoints, clubRoyaleTier, allMachines, myAtlasMachines, globalLibrary, encyclopedia, deckMappings, sessions, getSessionAnalytics, getMachineAnalytics, certificates.length, machineLogs.length, mode, filters, selectedProfileLabel, selectedBrand, selectedProgram, activeScopeLabel, brandProgramLabel, archiveContextLabel]);
 
   const executeToolCall = useCallback((tool: string, params: unknown): string => {
     console.log('[AgentX] Executing tool:', tool, params);
@@ -480,11 +498,13 @@ User's current status (FRESH DATA - UPDATED ON EVERY REQUEST):
 - Active Profile Scope: ${selectedProfileLabel}
 - Active Brand Scope: ${getBrandLabel(selectedBrand)}
 - Active Program Scope: ${getProgramLabel(selectedProgram)}
+- Active Casino System: ${brandProgramLabel}
+- Archive / Review Context: ${archiveContextLabel}
 
 Completed Cruises with Points Earned:
   ${completedWithPoints || 'No points data recorded for completed cruises'}
 
-CRITICAL: The user has EXACTLY ${toolContext.userPoints.toLocaleString()} Club Royale points and is in ${toolContext.currentTier} tier. They have earned ${totalEarnedPoints.toLocaleString()} points from ${completedCruises.length} completed cruises. These numbers are from the live system. Use ONLY these values, not any cached or outdated information.
+CRITICAL: The user has EXACTLY ${toolContext.userPoints.toLocaleString()} casino program points in the active Royal/Celebrity scope and is in ${toolContext.currentTier} tier. They have earned ${totalEarnedPoints.toLocaleString()} points from ${completedCruises.length} completed cruises. These numbers are from the live system. Use ONLY these values, not any cached or outdated information.
 `;
 
       const systemPrompt = devAssistantRequest
@@ -497,6 +517,7 @@ CRITICAL: The user has EXACTLY ${toolContext.userPoints.toLocaleString()} Club R
             machineLogs,
             certificates,
             mode,
+            brandProgramLabel,
           });
       
       const messagesForAI = devAssistantRequest
@@ -520,20 +541,22 @@ CRITICAL: The user has EXACTLY ${toolContext.userPoints.toLocaleString()} Club R
             { 
               role: 'user' as const, 
               content: toolResult 
-                ? `AgentX mode: ${AGENT_MODE_LABELS[mode]}\nUser asked: "${content}"\n\nTool result:\n${toolResult}\n\nPlease summarize this information in a helpful, conversational way. Highlight the most important points and name the data source used.`
-                : `AgentX mode: ${AGENT_MODE_LABELS[mode]}\nUser asked: "${content}"\n\nPlease provide a helpful response based on the user's cruise data, active profile/filter context, and selected mode.`
+                ? `AgentX mode: ${AGENT_MODE_LABELS[mode]}\nActive context: ${activeScopeLabel}\nArchive/review context: ${archiveContextLabel}\nUser asked: "${content}"\n\nTool result:\n${toolResult}\n\nPlease summarize this information in a helpful, conversational way. Start by confirming the active profile, brand/program, mode, and archive/review context. Highlight the most important points and name the data source used.`
+                : `AgentX mode: ${AGENT_MODE_LABELS[mode]}\nActive context: ${activeScopeLabel}\nArchive/review context: ${archiveContextLabel}\nUser asked: "${content}"\n\nPlease provide a helpful response based on the user's cruise data, active profile/filter context, selected mode, and archive/review context. Start by confirming the active profile, brand/program, mode, and archive/review context.`
             },
           ];
       
       const aiResponse = await generateText({ messages: messagesForAI });
       
+      const contextConfirmation = `Context: ${AGENT_MODE_LABELS[mode]} • ${activeScopeLabel} • ${brandProgramLabel} • Archive/Review: ${archiveContextLabel}`;
       const assistantMessage: ChatMessage = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
         content: toolResult 
-          ? `${toolResult}\n\n---\n\n${aiResponse}` 
-          : aiResponse,
+          ? `${contextConfirmation}\n\n${toolResult}\n\n---\n\n${aiResponse}` 
+          : `${contextConfirmation}\n\n${aiResponse}`,
         timestamp: new Date(),
+        contextSummary: contextConfirmation,
       };
       
       setMessages(prev => prev.filter(m => m.id !== loadingMessage.id).concat(assistantMessage));
@@ -547,13 +570,14 @@ CRITICAL: The user has EXACTLY ${toolContext.userPoints.toLocaleString()} Club R
         role: 'assistant',
         content: 'I apologize, but I encountered an error processing your request. Please try again or rephrase your question.',
         timestamp: new Date(),
+        contextSummary: `Context: ${AGENT_MODE_LABELS[mode]} • ${activeScopeLabel} • ${brandProgramLabel} • Archive/Review: ${archiveContextLabel}`,
       };
       
       setMessages(prev => prev.filter(m => m.id !== loadingMessage.id).concat(errorMessage));
     } finally {
       setIsLoading(false);
     }
-  }, [messages, tier, isAdmin, toolContext, executeToolCall, globalLibrary, myAtlasMachines, sessions, deckMappings, machineLogs, certificates, mode, selectedProfileLabel, selectedBrand, selectedProgram]);
+  }, [messages, tier, isAdmin, toolContext, executeToolCall, globalLibrary, myAtlasMachines, sessions, deckMappings, machineLogs, certificates, mode, selectedProfileLabel, selectedBrand, selectedProgram, activeScopeLabel, brandProgramLabel, archiveContextLabel]);
 
   const clearMessages = useCallback(() => {
     console.log('[AgentX] Clearing messages');

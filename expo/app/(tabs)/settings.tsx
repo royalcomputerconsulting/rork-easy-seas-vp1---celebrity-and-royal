@@ -2156,7 +2156,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
               <View style={[styles.quickActionIconSmall, { backgroundColor: 'rgba(0, 112, 201, 0.1)' }]}>
                 <Ship size={16} color="#0070C9" />
               </View>
-              <Text style={styles.quickActionLabelInline}>Sync Club Royale</Text>
+              <Text style={styles.quickActionLabelInline}>Sync Royal / Celebrity Casino</Text>
               <ChevronRight size={16} color={CLEAN_THEME.text.secondary} />
             </TouchableOpacity>
             {isAdmin && (
@@ -2548,7 +2548,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
 
             </View>
             <Text style={styles.backupHint}>
-              Full backup includes all cruises, offers, events, casino sessions, certificates, user profile (name, C&A #, playing hours), Club Royale points, loyalty points, and settings.
+              Full backup includes all cruises, offers, events, casino sessions, certificates, user profile (name, C&A #, playing hours), casino program points, loyalty points, and settings.
             </Text>
             <Text style={styles.extensionHint}>
               The Chrome extension automatically syncs offers, bookings, and loyalty data from Royal Caribbean and Celebrity cruise websites.
@@ -2579,8 +2579,8 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
 
 STEP 2: Scrape Your Offers
 ━━━━━━━━━━━━━━━━━━━━━━━━━
-1. Sign in to Club Royale:
-   www.royalcaribbean.com/Club-Royale
+1. Sign in to the matching casino program:
+   Royal Caribbean Club Royale or Celebrity Blue Chip
 2. Look for two new buttons at the top of the page
 3. Click "SHOW ALL OFFERS" button
 4. Follow all prompts until you see the full grid

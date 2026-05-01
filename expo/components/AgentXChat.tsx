@@ -52,6 +52,7 @@ export interface ChatMessage {
   isLoading?: boolean;
   toolName?: string;
   toolInput?: unknown;
+  contextSummary?: string;
 }
 
 interface AgentXChatProps {
@@ -530,15 +531,23 @@ export const AgentXChat = React.memo(function AgentXChat({
                 </Text>
               </View>
             ) : (
-              <ScrollView 
-                style={styles.messageScrollView}
-                nestedScrollEnabled={true}
-                showsVerticalScrollIndicator={true}
-              >
-                <Text style={[styles.messageText, isUser && styles.userMessageText]}>
-                  {message.content}
-                </Text>
-              </ScrollView>
+              <>
+                {!isUser && message.contextSummary ? (
+                  <View style={styles.contextBadge} testID={`agentx-answer-context-${message.id}`}>
+                    <SlidersHorizontal size={12} color="#0F766E" />
+                    <Text style={styles.contextBadgeText}>{message.contextSummary}</Text>
+                  </View>
+                ) : null}
+                <ScrollView 
+                  style={styles.messageScrollView}
+                  nestedScrollEnabled={true}
+                  showsVerticalScrollIndicator={true}
+                >
+                  <Text style={[styles.messageText, isUser && styles.userMessageText]}>
+                    {message.content}
+                  </Text>
+                </ScrollView>
+              </>
             )}
             
             <View style={styles.messageFooter}>
@@ -1304,6 +1313,25 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(0, 31, 63, 0.15)',
     maxWidth: '100%',
     flex: 1,
+  },
+  contextBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(15, 118, 110, 0.08)',
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: 'rgba(15, 118, 110, 0.18)',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 6,
+    marginBottom: SPACING.xs,
+  },
+  contextBadgeText: {
+    flex: 1,
+    fontSize: 10,
+    fontWeight: '800' as const,
+    color: '#0F766E',
+    lineHeight: 14,
   },
   messageScrollView: {
     maxHeight: 200,

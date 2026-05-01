@@ -232,7 +232,7 @@ export function UserManualModal({ visible, onClose }: UserManualModalProps) {
 
             <Subsection title="Royal Caribbean and Celebrity sync">
               <Paragraph>
-                Open Settings → Quick Actions → Sync Club Royale. Choose Royal Caribbean or Celebrity, sign in when prompted, run data extraction, review logs, then confirm the final sync into the app.
+                Open Settings → Quick Actions → Sync Royal / Celebrity Casino. Choose Royal Caribbean or Celebrity, sign in when prompted, run data extraction, review logs, then confirm the final sync into the app.
               </Paragraph>
               <ButtonList items={[
                 { button: 'LOGIN', description: 'Opens the cruise website sign-in flow in the embedded browser on mobile.' },
@@ -545,7 +545,7 @@ export function UserManualModal({ visible, onClose }: UserManualModalProps) {
 
             <Subsection title="Quick Actions">
               <ButtonList items={[
-                { button: 'Sync Club Royale', description: 'Opens Royal Caribbean/Celebrity sync.' },
+                { button: 'Sync Royal / Celebrity Casino', description: 'Opens Royal Caribbean/Celebrity casino sync.' },
                 { button: 'Sync Carnival Cruises', description: 'Admin-enabled Carnival sync.' },
                 { button: 'Pricing Summary & History', description: 'Opens pricing summaries and historical tracking.' },
                 { button: 'Load Import Offers.CSV', description: 'Shortcut to import an Offers CSV file.' },
@@ -559,7 +559,7 @@ export function UserManualModal({ visible, onClose }: UserManualModalProps) {
                 { field: 'Name', description: 'Used for personalization.' },
                 { field: 'Email', description: 'Used for signed-in identity and data scoping.' },
                 { field: 'Crown & Anchor Number', description: 'Royal Caribbean loyalty number.' },
-                { field: 'Club Royale Points', description: 'Casino loyalty points for tier progress.' },
+                { field: 'Casino Program Points', description: 'Club Royale or Blue Chip casino loyalty points for tier progress.' },
                 { field: 'Crown & Anchor Points', description: 'Cruise loyalty points/nights for level progress.' },
                 { field: 'Playing Hours', description: 'Preferred casino play windows used by casino timing and planning tools.' },
               ]} />

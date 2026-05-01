@@ -232,9 +232,9 @@ export function LoginScreen() {
               
               <Text style={styles.modalHeading}>⚡ AUTOMATIC DATA INGESTION (THE CORE POWER){"\n\n"}</Text>
               
-              <Text style={styles.modalBold}>🎰 Club Royale Offers — Fully Parsed{"\n\n"}</Text>
+              <Text style={styles.modalBold}>🎰 Royal/Celebrity Casino Offers — Fully Parsed{"\n\n"}</Text>
               
-              With one click, EasySeas automatically imports everything from the Club Royale offers page:{"\n\n"}
+              With one click, EasySeas imports supported Royal Caribbean Club Royale and Celebrity Blue Chip offer data:{"\n\n"}
               
               ✔ All current casino offers{"\n"}
               ✔ Every eligible sailing per offer{"\n"}
@@ -292,7 +292,7 @@ export function LoginScreen() {
               
               <Text style={styles.modalBold}>🧠 Ask EasySeas:{"\n\n"}</Text>
               
-              &quot;Which Club Royale cruises fit my schedule next quarter?&quot;{"\n"}
+              &quot;Which Royal or Celebrity casino cruises fit my schedule next quarter?&quot;{"\n"}
               &quot;Which offers give me the best value for my tier?&quot;{"\n"}
               &quot;What sailings maximize sea days without overlapping work?&quot;{"\n"}
               &quot;Which ships historically give me the best ROI?&quot;{"\n\n"}

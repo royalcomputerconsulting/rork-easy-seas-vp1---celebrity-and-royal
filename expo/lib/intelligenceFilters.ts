@@ -60,6 +60,25 @@ export function getProgramLabel(program: ProgramFilterValue | string): string {
   return PROGRAM_LABELS[program] ?? program;
 }
 
+export function getProfileScopeLabel(profileId: ProfileFilterValue, profiles: UserProfile[]): string {
+  if (profileId === 'all') return 'All Profiles';
+  if (profileId === 'unassigned') return 'Unassigned Imports';
+  return getProfileDisplayName(profiles.find((profile) => profile.id === profileId));
+}
+
+export function buildIntelligenceScopeLabel(filters: IntelligenceFilterStateSnapshot, profiles: UserProfile[]): string {
+  return `Profile: ${getProfileScopeLabel(filters.selectedProfileId, profiles)} • Brand: ${getBrandLabel(filters.selectedBrand)} • Program: ${getProgramLabel(filters.selectedProgram)}`;
+}
+
+export function getBrandProgramSystemLabel(brand: BrandFilterValue | string, program: ProgramFilterValue | string): string {
+  const brandLabel = getBrandLabel(brand);
+  const programLabel = getProgramLabel(program);
+  if (brand === 'all' && program === 'all') return 'Royal/Celebrity casino programs';
+  if (brand === 'royal' || program === 'clubRoyale') return 'Royal Caribbean / Club Royale';
+  if (brand === 'celebrity' || program === 'blueChip') return 'Celebrity / Blue Chip';
+  return `${brandLabel} / ${programLabel}`;
+}
+
 export function inferRecordBrand(record: FilterableRecord): TravelBrand | 'unknown' {
   const explicit = normalize(record.brand || record.cruiseSource || record.offerSource);
   if (explicit.includes('celebrity')) return 'celebrity';
@@ -88,7 +107,7 @@ export function inferRecordProgram(record: FilterableRecord): CasinoProgram {
 }
 
 function getProfileEmails(profile: UserProfile): string[] {
-  return [profile.email, profile.celebrityEmail]
+  return [profile.email, profile.celebrityEmail, profile.silverseaEmail]
     .map(normalizeEmail)
     .filter((email): email is string => email !== null);
 }
