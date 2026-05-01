@@ -5,6 +5,7 @@ import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BookOpen, Calculator, ClipboardCheck, Gamepad2, Gift, GraduationCap, HeartHandshake, Ship, Sparkles, X } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOW } from '@/constants/theme';
+import { EASYSEAS_FEATURE_COVERAGE_CHECKLIST } from '@/constants/easySeasFeatureCoverage';
 
 interface LearningTopic {
   id: string;
@@ -117,6 +118,12 @@ const TOPICS: LearningTopic[] = [
 export default function LearnSystemScreen() {
   const router = useRouter();
   const topicCount = useMemo(() => TOPICS.length, []);
+  const coverageSummary = useMemo(() => {
+    const represented = EASYSEAS_FEATURE_COVERAGE_CHECKLIST.filter((item) => item.status === 'represented').length;
+    const partial = EASYSEAS_FEATURE_COVERAGE_CHECKLIST.filter((item) => item.status === 'partial').length;
+    const deficiencies = EASYSEAS_FEATURE_COVERAGE_CHECKLIST.reduce((sum, item) => sum + item.deficiencies.length, 0);
+    return { represented, partial, deficiencies };
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -169,6 +176,41 @@ export default function LearnSystemScreen() {
               </View>
             );
           })}
+
+          <View style={styles.coverageCard} testID="learn-system-feature-coverage-checklist">
+            <View style={styles.coverageHeader}>
+              <ClipboardCheck size={20} color="#0F766E" />
+              <View style={styles.coverageHeaderCopy}>
+                <Text style={styles.coverageTitle}>18-feature coverage checklist</Text>
+                <Text style={styles.coverageSubtitle}>{coverageSummary.represented} represented • {coverageSummary.partial} partial • {coverageSummary.deficiencies} deficiencies to close</Text>
+              </View>
+            </View>
+            <View style={styles.coverageList}>
+              {EASYSEAS_FEATURE_COVERAGE_CHECKLIST.map((feature) => (
+                <View key={feature.id} style={styles.coverageItem} testID={`feature-coverage-${feature.id}`}>
+                  <View style={styles.coverageItemTopRow}>
+                    <Text style={styles.coverageItemTitle}>{feature.id}. {feature.title}</Text>
+                    <View style={[styles.coverageStatusPill, feature.status === 'represented' ? styles.coverageStatusRepresented : styles.coverageStatusPartial]}>
+                      <Text style={[styles.coverageStatusText, feature.status === 'represented' ? styles.coverageStatusTextRepresented : styles.coverageStatusTextPartial]}>{feature.status === 'represented' ? 'Represented' : 'Partial'}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.coverageRepresentedText}>In system: {feature.representedIn.join(' • ')}</Text>
+                  {feature.deficiencies.length > 0 ? (
+                    <View style={styles.deficiencyList}>
+                      {feature.deficiencies.map((deficiency) => (
+                        <View key={deficiency} style={styles.deficiencyRow}>
+                          <View style={styles.deficiencyDot} />
+                          <Text style={styles.deficiencyText}>{deficiency}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  ) : (
+                    <Text style={styles.noDeficiencyText}>No deficiency found in this audit.</Text>
+                  )}
+                </View>
+              ))}
+            </View>
+          </View>
 
           <View style={styles.bookCard} testID="learn-system-books">
             <BookOpen size={20} color="#D97706" />
@@ -323,6 +365,114 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#334155',
     lineHeight: 19,
+  },
+  coverageCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    ...SHADOW.sm,
+  },
+  coverageHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
+  coverageHeaderCopy: {
+    flex: 1,
+  },
+  coverageTitle: {
+    fontSize: 16,
+    fontWeight: '900' as const,
+    color: COLORS.navyDeep,
+  },
+  coverageSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  coverageList: {
+    gap: SPACING.sm,
+  },
+  coverageItem: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  coverageItemTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: SPACING.sm,
+    marginBottom: 6,
+  },
+  coverageItemTitle: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '900' as const,
+    color: COLORS.navyDeep,
+    lineHeight: 18,
+  },
+  coverageStatusPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  coverageStatusRepresented: {
+    backgroundColor: '#DCFCE7',
+    borderColor: '#86EFAC',
+  },
+  coverageStatusPartial: {
+    backgroundColor: '#FEF3C7',
+    borderColor: '#FDE68A',
+  },
+  coverageStatusText: {
+    fontSize: 10,
+    fontWeight: '900' as const,
+  },
+  coverageStatusTextRepresented: {
+    color: '#166534',
+  },
+  coverageStatusTextPartial: {
+    color: '#92400E',
+  },
+  coverageRepresentedText: {
+    fontSize: 12,
+    color: '#475569',
+    lineHeight: 17,
+  },
+  deficiencyList: {
+    marginTop: 8,
+    gap: 5,
+  },
+  deficiencyRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 7,
+  },
+  deficiencyDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: '#D97706',
+    marginTop: 7,
+  },
+  deficiencyText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#7C2D12',
+    lineHeight: 17,
+  },
+  noDeficiencyText: {
+    marginTop: 7,
+    fontSize: 12,
+    fontWeight: '800' as const,
+    color: '#166534',
   },
   bookCard: {
     flexDirection: 'row',
