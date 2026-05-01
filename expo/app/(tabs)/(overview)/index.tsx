@@ -10,6 +10,8 @@ import {
   ActivityIndicator,
   Animated,
   Image,
+  Modal,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -25,6 +27,12 @@ import {
   Ship,
   Calendar,
   Coins,
+  Gauge,
+  FileText,
+  Calculator,
+  Archive,
+  CheckCircle,
+  Clock,
 } from 'lucide-react-native';
 
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
@@ -54,6 +62,16 @@ import { CertificateExplorerModal } from '@/components/CertificateExplorerModal'
 
 import type { Cruise, BookedCruise, CasinoOffer } from '@/types/models';
 import { getCabinPriceFromEntity, GUEST_COUNT_DEFAULT } from '@/lib/valueCalculator';
+import { formatCurrency } from '@/lib/format';
+import {
+  buildWarRoomBuckets,
+  calculateOfferIntelligenceScore,
+  decodeOffer,
+  getOfferDisplayCode,
+  type DecodedOffer,
+  type WarRoomBucket,
+  type WarRoomOffer,
+} from '@/lib/offerIntelligence';
 
 function AnimatedEmptyState({ onImportPress }: { onImportPress: () => void }) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -135,6 +153,7 @@ interface CasinoOfferCardData {
   freePlay?: number;
   obc?: number;
   perks?: string[];
+  representativeOffer?: CasinoOffer;
   cruises: Cruise[];
 }
 
@@ -173,7 +192,7 @@ function isOfferLinkedCruiseInProgress(cruise: BookedCruise, today: Date): boole
 
 function OverviewScreenContent() {
   const router = useRouter();
-  const { cruises, bookedCruises: allBookedCruises, casinoOffers, clubRoyaleProfile } = useCoreData();
+  const { cruises, bookedCruises: allBookedCruises, casinoOffers, clubRoyaleProfile, updateCasinoOffer } = useCoreData();
   const { currentUser } = useUser();
   const { logout } = useAuth();
   const { messages, isLoading: agentLoading, sendMessage, isVisible, setVisible, toggleExpanded, isExpanded, refreshAnalysis } = useAgentX();
@@ -185,6 +204,7 @@ function OverviewScreenContent() {
   const [showCertificateModal, setShowCertificateModal] = useState(false);
   const [showCertificateExplorerModal, setShowCertificateExplorerModal] = useState(false);
   const [showAlertsModal, setShowAlertsModal] = useState(false);
+  const [decodedOffer, setDecodedOffer] = useState<DecodedOffer | null>(null);
   const [heroSignatureFailed, setHeroSignatureFailed] = useState<boolean>(false);
   const { 
     certificates, 
@@ -265,7 +285,8 @@ function OverviewScreenContent() {
       }
 
       const normalizedStatus = offer.status?.trim().toLowerCase();
-      const hasBlockedStatus = normalizedStatus === 'used' || normalizedStatus === 'booked' || normalizedStatus === 'expired';
+      const normalizedArchiveStatus = offer.archiveStatus?.trim().toLowerCase();
+      const hasBlockedStatus = normalizedStatus === 'used' || normalizedStatus === 'booked' || normalizedStatus === 'expired' || normalizedStatus === 'archived' || normalizedStatus === 'replaced' || normalizedStatus === 'skipped' || normalizedArchiveStatus === 'archived' || normalizedArchiveStatus === 'replaced';
       const isLinkedToInProgressCruise = !!offer.offerCode && inProgressOfferKeys.has(normalizeOfferKey(offer.offerCode));
 
       if (hasBlockedStatus || isLinkedToInProgressCruise) {
@@ -338,6 +359,7 @@ function OverviewScreenContent() {
           freePlay: offer.freePlay ?? offer.freeplayAmount ?? 0,
           obc,
           perks: offer.perks ?? [],
+          representativeOffer: offer,
           cruises: [],
         });
         return;
@@ -366,6 +388,7 @@ function OverviewScreenContent() {
           obc: shouldUpgradeOBC ? obc : existing.obc,
           freePlay: shouldUpgradeFreePlay ? (offer.freePlay ?? offer.freeplayAmount ?? 0) : existing.freePlay,
           perks: shouldUpgradePerks ? (offer.perks ?? []) : existing.perks,
+          representativeOffer: existing.representativeOffer ?? offer,
         });
       }
     });
@@ -433,6 +456,35 @@ function OverviewScreenContent() {
     });
     return count;
   }, [groupedOffers]);
+
+  const currentTravelerProfile = useMemo(() => {
+    if (!currentUser) return null;
+    return {
+      id: currentUser.id,
+      displayName: currentUser.displayName || currentUser.name,
+      email: currentUser.email,
+      royalCaribbeanNumber: currentUser.royalCaribbeanNumber || currentUser.crownAnchorNumber,
+      clubRoyaleId: currentUser.clubRoyaleId,
+      celebrityCaptainsClubNumber: currentUser.celebrityCaptainsClubNumber,
+      blueChipId: currentUser.blueChipId,
+      active: currentUser.active,
+      defaultProfile: currentUser.defaultProfile,
+      createdAt: currentUser.createdAt,
+      updatedAt: currentUser.updatedAt,
+    };
+  }, [currentUser]);
+
+  const warRoomBuckets = useMemo((): WarRoomBucket[] => {
+    return buildWarRoomBuckets(offersData, cruisesData, certificates, currentTravelerProfile);
+  }, [offersData, cruisesData, certificates, currentTravelerProfile]);
+
+  const warRoomTotalCount = useMemo(() => {
+    return warRoomBuckets.reduce((sum, bucket) => sum + bucket.offers.length, 0);
+  }, [warRoomBuckets]);
+
+  const topWarRoomBuckets = useMemo(() => {
+    return warRoomBuckets.filter((bucket) => bucket.offers.length > 0).slice(0, 3);
+  }, [warRoomBuckets]);
 
   const [sortMode, setSortMode] = useState<'soonest' | 'highestValue'>('soonest');
 
@@ -558,6 +610,34 @@ function OverviewScreenContent() {
     }
   }, [router]);
 
+  const handleDecodeOffer = useCallback((offer: CasinoOffer) => {
+    console.log('[Overview] Decode offer pressed:', offer.offerCode);
+    setDecodedOffer(decodeOffer(offer, cruisesData, currentTravelerProfile));
+  }, [cruisesData, currentTravelerProfile]);
+
+  const handleWarRoomAction = useCallback((action: 'view' | 'decode' | 'compare' | 'archive' | 'skip', item: WarRoomOffer) => {
+    const offerCodeForLog = getOfferDisplayCode(item.offer);
+    console.log('[Overview] War Room action:', { action, offerCode: offerCodeForLog });
+    if (action === 'view') {
+      router.push(`/offer-details?offerCode=${encodeURIComponent(getOfferDisplayCode(item.offer))}` as any);
+      return;
+    }
+    if (action === 'decode') {
+      handleDecodeOffer(item.offer);
+      return;
+    }
+    if (action === 'compare') {
+      setVisible(true);
+      void sendMessage(`Compare offer ${getOfferDisplayCode(item.offer)} against my other active offers using score, expiration, casino-paid value, certificate fit, and profile ownership.`);
+      return;
+    }
+    if (action === 'archive') {
+      updateCasinoOffer(item.offer.id, { status: 'archived', archiveStatus: 'archived' });
+      return;
+    }
+    updateCasinoOffer(item.offer.id, { status: 'skipped' });
+  }, [handleDecodeOffer, router, sendMessage, setVisible, updateCasinoOffer]);
+
   const handleCruiseItemPress = useCallback((cruiseId: string) => {
     console.log('[Overview] Cruise item pressed:', cruiseId);
     router.push(`/cruise-details?id=${cruiseId}` as any);
@@ -682,6 +762,8 @@ function OverviewScreenContent() {
           />
         )}
 
+        {renderWarRoom()}
+
         <View style={styles.sectionHeader}>
           <View style={styles.sectionTitleRow}>
             <Tag size={18} color={COLORS.navyDeep} />
@@ -699,6 +781,88 @@ function OverviewScreenContent() {
       </View>
     </ResponsiveContainer>
   );
+
+  const renderWarRoom = () => {
+    if (warRoomTotalCount === 0) {
+      return null;
+    }
+
+    return (
+      <View style={styles.warRoomCard} testID="offer-expiration-war-room">
+        <LinearGradient
+          colors={['#172554', '#0F766E']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.warRoomGradient}
+        >
+          <View style={styles.warRoomHeader}>
+            <View style={styles.warRoomTitleRow}>
+              <Clock size={18} color="#FDE68A" />
+              <Text style={styles.warRoomTitle}>Expiration War Room</Text>
+            </View>
+            <View style={styles.warRoomCountPill}>
+              <Text style={styles.warRoomCountText}>{warRoomTotalCount}</Text>
+            </View>
+          </View>
+          <Text style={styles.warRoomSubtitle}>Profile-aware urgent offers, review flags, and recently expired comps.</Text>
+
+          {topWarRoomBuckets.map((bucket) => (
+            <View key={bucket.id} style={styles.warRoomBucket}>
+              <View style={styles.warRoomBucketHeader}>
+                <Text style={styles.warRoomBucketTitle}>{bucket.title}</Text>
+                <Text style={styles.warRoomBucketSubtitle}>{bucket.offers.length} item{bucket.offers.length === 1 ? '' : 's'}</Text>
+              </View>
+              {bucket.offers.slice(0, 2).map((item) => (
+                <View key={item.offer.id} style={styles.warRoomOfferRow}>
+                  <View style={styles.warRoomScoreBubble}>
+                    <Gauge size={14} color="#A7F3D0" />
+                    <Text style={styles.warRoomScoreText}>{item.intelligence.score}</Text>
+                  </View>
+                  <View style={styles.warRoomOfferCopy}>
+                    <Text style={styles.warRoomOfferTitle} numberOfLines={1}>{item.offer.offerName || item.offer.title || item.offer.offerCode || 'Casino Offer'}</Text>
+                    <Text style={styles.warRoomOfferMeta} numberOfLines={1}>{item.intelligence.rating} · {item.intelligence.daysUntilExpiration === null ? 'No expiry found' : `${item.intelligence.daysUntilExpiration} days`} · {formatCurrency(item.intelligence.casinoPaysFor.casinoCoveredValue)}</Text>
+                  </View>
+                  <View style={styles.warRoomActions}>
+                    <TouchableOpacity style={styles.warRoomAction} onPress={() => handleWarRoomAction('view', item)} testID="war-room-view">
+                      <Text style={styles.warRoomActionText}>View</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.warRoomAction} onPress={() => handleWarRoomAction('decode', item)} testID="war-room-decode">
+                      <Text style={styles.warRoomActionText}>Decode</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.warRoomActionsWide}>
+                    <TouchableOpacity style={styles.warRoomActionMuted} onPress={() => handleWarRoomAction('compare', item)} testID="war-room-compare">
+                      <Calculator size={12} color="#CBD5E1" />
+                      <Text style={styles.warRoomActionMutedText}>Compare</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.warRoomActionMuted} onPress={() => handleWarRoomAction('archive', item)} testID="war-room-archive">
+                      <Archive size={12} color="#CBD5E1" />
+                      <Text style={styles.warRoomActionMutedText}>Archive</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.warRoomActionMuted} onPress={() => handleWarRoomAction('skip', item)} testID="war-room-skip">
+                      <CheckCircle size={12} color="#CBD5E1" />
+                      <Text style={styles.warRoomActionMutedText}>Mark skipped</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.warRoomActionMuted}
+                      onPress={() => {
+                        setVisible(true);
+                        void sendMessage(`Advise me on offer ${getOfferDisplayCode(item.offer)} using the current profile and filters.`);
+                      }}
+                      testID="war-room-ask-agentx"
+                    >
+                      <Bot size={12} color="#CBD5E1" />
+                      <Text style={styles.warRoomActionMutedText}>Ask</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+            </View>
+          ))}
+        </LinearGradient>
+      </View>
+    );
+  };
 
   const renderFooter = () => (
     <ResponsiveContainer>
@@ -797,6 +961,10 @@ function OverviewScreenContent() {
 
   const renderOfferCard = useCallback(({ item, index }: { item: CasinoOfferCardData | Cruise; index: number }) => {
     if ('cruises' in item) {
+      const intelligence = item.representativeOffer
+        ? calculateOfferIntelligenceScore(item.representativeOffer, cruisesData, certificates, currentTravelerProfile)
+        : undefined;
+
       return (
         <ResponsiveContainer>
           <CasinoOfferCard
@@ -811,6 +979,10 @@ function OverviewScreenContent() {
           onCruisePress={handleCruiseItemPress}
           bookedCruiseIds={bookedCruiseIds}
           isBestValue={index === 0}
+          intelligenceScore={intelligence?.score}
+          intelligenceRating={intelligence?.rating}
+          intelligenceExplanation={intelligence?.explanation}
+          onDecodePress={item.representativeOffer ? () => handleDecodeOffer(item.representativeOffer as CasinoOffer) : undefined}
           />
         </ResponsiveContainer>
       );
@@ -838,7 +1010,7 @@ function OverviewScreenContent() {
         />
       </ResponsiveContainer>
     );
-  }, [handleOfferPress, handleCruiseItemPress, bookedCruiseIds, cruisesData, offerNameByCode]);
+  }, [handleOfferPress, handleCruiseItemPress, bookedCruiseIds, cruisesData, offerNameByCode, certificates, currentTravelerProfile, handleDecodeOffer]);
 
   const keyExtractor = useCallback((item: CasinoOfferCardData | Cruise) => item.id, []);
 
@@ -862,6 +1034,36 @@ function OverviewScreenContent() {
         visible={showAlertsModal}
         onClose={() => setShowAlertsModal(false)}
       />
+
+      <Modal
+        visible={decodedOffer !== null}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setDecodedOffer(null)}
+      >
+        <View style={styles.decodeOverlay}>
+          <View style={styles.decodeCard} testID="decoded-offer-modal">
+            <LinearGradient colors={['#ECFEFF', '#F8FAFC']} style={styles.decodeHeader}>
+              <View style={styles.decodeTitleRow}>
+                <FileText size={20} color={COLORS.navyDeep} />
+                <Text style={styles.decodeTitle}>{decodedOffer?.title ?? 'Decoded Offer'}</Text>
+              </View>
+              <TouchableOpacity style={styles.decodeClose} onPress={() => setDecodedOffer(null)} testID="decoded-offer-close">
+                <Text style={styles.decodeCloseText}>Close</Text>
+              </TouchableOpacity>
+            </LinearGradient>
+            <ScrollView style={styles.decodeScroll} contentContainerStyle={styles.decodeScrollContent}>
+              {decodedOffer?.bullets.map((bullet, index) => (
+                <View key={`${bullet}-${index}`} style={styles.decodeBulletRow}>
+                  <Calculator size={15} color="#0F766E" />
+                  <Text style={styles.decodeBulletText}>{bullet}</Text>
+                </View>
+              ))}
+              <Text style={styles.decodeDisclaimer}>{decodedOffer?.disclaimer}</Text>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
       
       {isVisible && (
         <View style={styles.agentChatOverlay}>
@@ -1292,6 +1494,224 @@ const styles = StyleSheet.create({
   agentChatExpanded: {
     top: 0,
     bottom: 0,
+  },
+  warRoomCard: {
+    borderRadius: BORDER_RADIUS.xl,
+    overflow: 'hidden',
+    marginBottom: SPACING.md,
+    ...SHADOW.lg,
+  },
+  warRoomGradient: {
+    padding: SPACING.md,
+  },
+  warRoomHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  warRoomTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  warRoomTitle: {
+    fontSize: 18,
+    fontWeight: '900' as const,
+    color: '#FFFFFF',
+  },
+  warRoomCountPill: {
+    minWidth: 34,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(253, 230, 138, 0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: SPACING.sm,
+  },
+  warRoomCountText: {
+    fontSize: 14,
+    fontWeight: '900' as const,
+    color: '#FDE68A',
+  },
+  warRoomSubtitle: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.78)',
+    lineHeight: 17,
+    marginBottom: SPACING.sm,
+  },
+  warRoomBucket: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+    marginTop: SPACING.sm,
+  },
+  warRoomBucketHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.xs,
+  },
+  warRoomBucketTitle: {
+    fontSize: 13,
+    fontWeight: '800' as const,
+    color: '#FFFFFF',
+  },
+  warRoomBucketSubtitle: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.68)',
+  },
+  warRoomOfferRow: {
+    backgroundColor: 'rgba(15, 23, 42, 0.28)',
+    borderRadius: BORDER_RADIUS.sm,
+    padding: SPACING.sm,
+    marginTop: SPACING.xs,
+  },
+  warRoomScoreBubble: {
+    position: 'absolute',
+    top: SPACING.sm,
+    left: SPACING.sm,
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  warRoomScoreText: {
+    fontSize: 13,
+    fontWeight: '900' as const,
+    color: '#FFFFFF',
+  },
+  warRoomOfferCopy: {
+    marginLeft: 52,
+    marginRight: 0,
+    marginBottom: SPACING.sm,
+  },
+  warRoomOfferTitle: {
+    fontSize: 13,
+    fontWeight: '800' as const,
+    color: '#FFFFFF',
+  },
+  warRoomOfferMeta: {
+    fontSize: 11,
+    color: '#BAE6FD',
+    marginTop: 2,
+  },
+  warRoomActions: {
+    flexDirection: 'row',
+    gap: SPACING.xs,
+    marginLeft: 52,
+  },
+  warRoomActionsWide: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.xs,
+    marginLeft: 52,
+    marginTop: SPACING.xs,
+  },
+  warRoomAction: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: BORDER_RADIUS.sm,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 6,
+  },
+  warRoomActionText: {
+    fontSize: 12,
+    fontWeight: '800' as const,
+    color: COLORS.navyDeep,
+  },
+  warRoomActionMuted: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: BORDER_RADIUS.sm,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 5,
+  },
+  warRoomActionMutedText: {
+    fontSize: 11,
+    fontWeight: '700' as const,
+    color: '#CBD5E1',
+  },
+  decodeOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(2, 6, 23, 0.62)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: SPACING.lg,
+  },
+  decodeCard: {
+    width: '100%',
+    maxWidth: 520,
+    maxHeight: '82%',
+    borderRadius: BORDER_RADIUS.xl,
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
+    ...SHADOW.lg,
+  },
+  decodeHeader: {
+    padding: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  decodeTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    paddingRight: 82,
+  },
+  decodeTitle: {
+    flex: 1,
+    fontSize: 17,
+    fontWeight: '900' as const,
+    color: COLORS.navyDeep,
+  },
+  decodeClose: {
+    position: 'absolute',
+    top: SPACING.md,
+    right: SPACING.md,
+    backgroundColor: COLORS.navyDeep,
+    borderRadius: BORDER_RADIUS.round,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 7,
+  },
+  decodeCloseText: {
+    fontSize: 12,
+    fontWeight: '800' as const,
+    color: '#FFFFFF',
+  },
+  decodeScroll: {
+    maxHeight: 520,
+  },
+  decodeScrollContent: {
+    padding: SPACING.md,
+    gap: SPACING.sm,
+  },
+  decodeBulletRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING.sm,
+    backgroundColor: '#F8FAFC',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  decodeBulletText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#1E293B',
+    lineHeight: 19,
+  },
+  decodeDisclaimer: {
+    fontSize: 12,
+    color: '#64748B',
+    lineHeight: 18,
+    marginTop: SPACING.sm,
   },
   casinoHistorySection: {
     backgroundColor: 'rgba(255,255,255,0.95)',

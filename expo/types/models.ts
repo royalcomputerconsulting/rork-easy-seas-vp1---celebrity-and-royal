@@ -2,7 +2,7 @@ export type TravelBrand = 'royal' | 'celebrity' | 'carnival' | 'silversea' | 'un
 export type CasinoProgram = 'clubRoyale' | 'blueChip' | 'playersClub' | 'venetianSociety' | 'none' | 'unknown';
 export type ImportReviewStatus = 'assigned' | 'unassigned' | 'reviewNeeded' | 'matched' | 'overlap' | 'error';
 export type OfferArchiveStatus = 'active' | 'expiringSoon' | 'expired' | 'archived' | 'reviewNeeded' | 'replaced';
-export type DataRecordStatus = 'active' | 'available' | 'booked' | 'completed' | 'cancelled' | 'Courtesy Hold' | 'expired' | 'used' | 'archived' | 'reviewNeeded' | 'replaced';
+export type DataRecordStatus = 'active' | 'available' | 'booked' | 'completed' | 'cancelled' | 'Courtesy Hold' | 'expired' | 'used' | 'archived' | 'reviewNeeded' | 'replaced' | 'skipped';
 
 export interface TravelerProfile {
   id: string;
@@ -310,7 +310,7 @@ export interface CasinoOffer extends SharedOwnershipFields {
   validFrom?: string;
   validUntil?: string;
   
-  status?: 'active' | 'expired' | 'used' | 'booked' | 'archived' | 'reviewNeeded' | 'replaced';
+  status?: 'active' | 'expired' | 'used' | 'booked' | 'archived' | 'reviewNeeded' | 'replaced' | 'skipped';
   has2025Badge?: boolean;
   
   termsConditions?: string;

@@ -22,6 +22,10 @@ import {
   Archive,
   BedDouble,
   Users,
+  Gauge,
+  FileText,
+  Layers,
+  Calculator,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
@@ -32,6 +36,13 @@ import { useCoreData } from '@/state/CoreDataProvider';
 import { calculateCasinoAvailabilityForCruise, calculatePersonalizedPlayEstimate, getCasinoStatusBadge } from '@/lib/casinoAvailability';
 import { useUser, DEFAULT_PLAYING_HOURS } from '@/state/UserProvider';
 import { createDateFromString, getDaysUntil, formatDate } from '@/lib/date';
+import { useCertificates } from '@/state/CertificatesProvider';
+import { formatCurrency } from '@/lib/format';
+import {
+  buildCertificateStackingNotes,
+  calculateOfferIntelligenceScore,
+  decodeOffer,
+} from '@/lib/offerIntelligence';
 import type { Cruise, BookedCruise, CasinoOffer } from '@/types/models';
 
 type SortOption = 'soonest' | 'highest-value' | 'lowest-price' | 'longest' | 'shortest';
@@ -42,7 +53,9 @@ export default function OfferDetailsScreen() {
   const { localData } = useAppState();
   const { cruises: storeCruises, bookedCruises: storeBookedCruises, casinoOffers: storeOffers, updateCasinoOffer, removeCasinoOffer } = useCoreData();
   const { currentUser } = useUser();
+  const { certificates } = useCertificates();
   const [sortBy, setSortBy] = useState<SortOption>('soonest');
+  const [showDecodedOffer, setShowDecodedOffer] = useState<boolean>(false);
 
   const playingHoursConfig = useMemo(() => {
     const userPlayingHours = currentUser?.playingHours || DEFAULT_PLAYING_HOURS;
@@ -284,6 +297,38 @@ export default function OfferDetailsScreen() {
       maxRetailValue: 0,
     };
   }, [offerData, offerCode]);
+
+  const currentTravelerProfile = useMemo(() => {
+    if (!currentUser) return null;
+    return {
+      id: currentUser.id,
+      displayName: currentUser.displayName || currentUser.name,
+      email: currentUser.email,
+      royalCaribbeanNumber: currentUser.royalCaribbeanNumber || currentUser.crownAnchorNumber,
+      clubRoyaleId: currentUser.clubRoyaleId,
+      celebrityCaptainsClubNumber: currentUser.celebrityCaptainsClubNumber,
+      blueChipId: currentUser.blueChipId,
+      active: currentUser.active,
+      defaultProfile: currentUser.defaultProfile,
+      createdAt: currentUser.createdAt,
+      updatedAt: currentUser.updatedAt,
+    };
+  }, [currentUser]);
+
+  const offerIntelligence = useMemo(() => {
+    if (!offerData.offer) return null;
+    return calculateOfferIntelligenceScore(offerData.offer, offerData.cruises, certificates, currentTravelerProfile);
+  }, [offerData.offer, offerData.cruises, certificates, currentTravelerProfile]);
+
+  const decodedOffer = useMemo(() => {
+    if (!offerData.offer) return null;
+    return decodeOffer(offerData.offer, offerData.cruises, currentTravelerProfile);
+  }, [offerData.offer, offerData.cruises, currentTravelerProfile]);
+
+  const certificateStackingNotes = useMemo(() => {
+    if (!offerData.offer) return [];
+    return buildCertificateStackingNotes(offerData.offer, certificates, offerData.cruises).slice(0, 3);
+  }, [offerData.offer, certificates, offerData.cruises]);
 
   const daysUntilExpiry = offerInfo.expiryDate ? getDaysUntil(offerInfo.expiryDate) : null;
   const isExpiringSoon = daysUntilExpiry !== null && daysUntilExpiry > 0 && daysUntilExpiry <= 7;
@@ -560,7 +605,6 @@ export default function OfferDetailsScreen() {
             </View>
           )}
 
-          {/* Stats Row - Expiry, Cruises */}
           <View style={styles.statsRow}>
             {offerInfo.expiryDate ? (
               <View style={styles.statItem}>
@@ -583,7 +627,72 @@ export default function OfferDetailsScreen() {
             </View>
           </View>
 
-          {/* Status Actions */}
+          {offerIntelligence ? (
+            <View style={styles.intelligencePanel} testID="offer-details-intelligence-panel">
+              <View style={styles.intelligenceHeaderRow}>
+                <View style={styles.intelligenceScoreBadge}>
+                  <Gauge size={18} color="#0F766E" />
+                  <Text style={styles.intelligenceScoreText}>{offerIntelligence.score}</Text>
+                </View>
+                <View style={styles.intelligenceCopy}>
+                  <Text style={styles.intelligenceTitle}>Offer Intelligence Score</Text>
+                  <Text style={styles.intelligenceSubtitle}>{offerIntelligence.rating} · {offerIntelligence.brandLabel}</Text>
+                </View>
+              </View>
+              <Text style={styles.intelligenceExplanation}>{offerIntelligence.explanation}</Text>
+              <View style={styles.calculatorGrid} testID="casino-pays-for-calculator">
+                <View style={styles.calculatorCell}>
+                  <Text style={styles.calculatorLabel}>Casino Pays</Text>
+                  <Text style={styles.calculatorValue}>{formatCurrency(offerIntelligence.casinoPaysFor.casinoCoveredValue)}</Text>
+                </View>
+                <View style={styles.calculatorCell}>
+                  <Text style={styles.calculatorLabel}>You Pay</Text>
+                  <Text style={styles.calculatorValue}>{formatCurrency(offerIntelligence.casinoPaysFor.userOutOfPocket)}</Text>
+                </View>
+                <View style={styles.calculatorCell}>
+                  <Text style={styles.calculatorLabel}>Savings</Text>
+                  <Text style={styles.calculatorValue}>{offerIntelligence.casinoPaysFor.effectiveSavingsPercentage}%</Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={styles.decodeButton}
+                onPress={() => setShowDecodedOffer((current) => !current)}
+                activeOpacity={0.8}
+                testID="offer-details-decode-offer"
+              >
+                <FileText size={16} color={COLORS.white} />
+                <Text style={styles.decodeButtonText}>{showDecodedOffer ? 'Hide Decoded Offer' : 'Decode Offer'}</Text>
+              </TouchableOpacity>
+              {showDecodedOffer && decodedOffer ? (
+                <View style={styles.decodedPanel}>
+                  {decodedOffer.bullets.map((bullet, index) => (
+                    <View key={`${bullet}-${index}`} style={styles.decodedBulletRow}>
+                      <Calculator size={14} color="#0F766E" />
+                      <Text style={styles.decodedBulletText}>{bullet}</Text>
+                    </View>
+                  ))}
+                  <Text style={styles.decodedDisclaimer}>{decodedOffer.disclaimer}</Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
+          {certificateStackingNotes.length > 0 ? (
+            <View style={styles.stackingPanel} testID="certificate-stacking-notes">
+              <View style={styles.stackingHeaderRow}>
+                <Layers size={17} color={COLORS.navyDeep} />
+                <Text style={styles.stackingTitle}>Certificate Stacking Notes</Text>
+              </View>
+              {certificateStackingNotes.map((note) => (
+                <View key={note.certificateId} style={styles.stackingItem}>
+                  <Text style={styles.stackingLabel}>{note.label}</Text>
+                  <Text style={styles.stackingAction}>{note.recommendedAction}</Text>
+                  <Text style={styles.stackingWarning}>{note.poorUseWarnings[0]}</Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+
           {offerInfo.offerCode && offerData.offer && offerData.offer.status !== 'used' && offerData.offer.status !== 'booked' && (
             <View style={styles.statusActionsRow}>
               <TouchableOpacity
@@ -1184,6 +1293,165 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700' as const,
     color: '#1E40AF',
+  },
+  intelligencePanel: {
+    marginTop: SPACING.md,
+    backgroundColor: 'rgba(255,255,255,0.86)',
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: 'rgba(15, 118, 110, 0.18)',
+  },
+  intelligenceHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    marginBottom: SPACING.sm,
+  },
+  intelligenceScoreBadge: {
+    width: 58,
+    minHeight: 58,
+    borderRadius: 18,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  intelligenceScoreText: {
+    fontSize: 20,
+    fontWeight: '900' as const,
+    color: '#0F766E',
+    marginTop: 2,
+  },
+  intelligenceCopy: {
+    flex: 1,
+  },
+  intelligenceTitle: {
+    fontSize: 12,
+    fontWeight: '900' as const,
+    color: COLORS.navyDeep,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase' as const,
+  },
+  intelligenceSubtitle: {
+    fontSize: 13,
+    fontWeight: '700' as const,
+    color: '#0F766E',
+    marginTop: 2,
+  },
+  intelligenceExplanation: {
+    fontSize: 13,
+    color: '#334155',
+    lineHeight: 19,
+    marginBottom: SPACING.sm,
+  },
+  calculatorGrid: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    marginBottom: SPACING.sm,
+  },
+  calculatorCell: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  calculatorLabel: {
+    fontSize: 10,
+    fontWeight: '800' as const,
+    color: '#64748B',
+    marginBottom: 3,
+  },
+  calculatorValue: {
+    fontSize: 14,
+    fontWeight: '900' as const,
+    color: COLORS.navyDeep,
+  },
+  decodeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.xs,
+    backgroundColor: COLORS.navyDeep,
+    borderRadius: BORDER_RADIUS.md,
+    paddingVertical: SPACING.sm,
+    marginTop: SPACING.xs,
+  },
+  decodeButtonText: {
+    fontSize: 13,
+    fontWeight: '900' as const,
+    color: COLORS.white,
+  },
+  decodedPanel: {
+    marginTop: SPACING.sm,
+    gap: SPACING.xs,
+  },
+  decodedBulletRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING.xs,
+    backgroundColor: '#F8FAFC',
+    borderRadius: BORDER_RADIUS.sm,
+    padding: SPACING.sm,
+  },
+  decodedBulletText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#1E293B',
+    lineHeight: 18,
+  },
+  decodedDisclaimer: {
+    fontSize: 11,
+    color: '#64748B',
+    lineHeight: 16,
+    marginTop: SPACING.xs,
+  },
+  stackingPanel: {
+    marginTop: SPACING.md,
+    backgroundColor: 'rgba(255,255,255,0.76)',
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: 'rgba(30, 64, 175, 0.14)',
+  },
+  stackingHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    marginBottom: SPACING.sm,
+  },
+  stackingTitle: {
+    fontSize: 13,
+    fontWeight: '900' as const,
+    color: COLORS.navyDeep,
+  },
+  stackingItem: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+    marginTop: SPACING.xs,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  stackingLabel: {
+    fontSize: 13,
+    fontWeight: '900' as const,
+    color: COLORS.navyDeep,
+  },
+  stackingAction: {
+    fontSize: 12,
+    color: '#0F766E',
+    lineHeight: 17,
+    marginTop: 3,
+  },
+  stackingWarning: {
+    fontSize: 11,
+    color: '#B45309',
+    lineHeight: 16,
+    marginTop: 3,
   },
   statusActionsRow: {
     flexDirection: 'row',
