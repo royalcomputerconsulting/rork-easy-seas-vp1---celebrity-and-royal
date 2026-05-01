@@ -1,6 +1,7 @@
 import type { CasinoOffer, Cruise, TravelerProfile } from '@/types/models';
 import { getCabinPriceFromEntity, GUEST_COUNT_DEFAULT } from '@/lib/valueCalculator';
-import { createDateFromString, getDaysUntil, formatDate } from '@/lib/date';
+import { getDaysUntil, formatDate } from '@/lib/date';
+import { calculateSeaDayDensityScore, buildPortTracker, calculateShipFamiliarityScore } from '@/lib/cruisePlanningIntelligence';
 
 export type OfferRatingLabel = 'Excellent' | 'Strong' | 'Average' | 'Weak' | 'Poor Use';
 export type WarRoomBucketId = 'expires7' | 'expires14' | 'expires30' | 'recentlyExpired' | 'needsReview';
@@ -187,12 +188,25 @@ function getCertificateFit(offer: CasinoOffer, certificates: CertificateLike[]):
 
 function getSeaDayDensityScore(cruises: Cruise[]): number {
   if (cruises.length === 0) return 0;
-  const scores = cruises.map((cruise) => {
-    const nights = Math.max(1, cruise.nights || 1);
-    const explicitSeaDays = cruise.seaDays ?? cruise.itinerary?.filter((day) => day.isSeaDay).length ?? cruise.ports?.filter((port) => normalizeLower(port).includes('sea')).length ?? 0;
-    return clamp(Math.round((explicitSeaDays / nights) * 10), 0, 10);
-  });
-  return Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length);
+  const scores = cruises.map((cruise) => calculateSeaDayDensityScore(cruise).casinoOpportunityScore);
+  return Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length / 10);
+}
+
+function getPlanningIntelligenceBoost(cruises: Cruise[], offer: CasinoOffer, profile?: Partial<TravelerProfile> | null): { score: number; reasons: string[] } {
+  if (cruises.length === 0) return { score: 0, reasons: [] };
+  const seaScores = cruises.map((cruise) => calculateSeaDayDensityScore(cruise).casinoOpportunityScore);
+  const averageSeaScore = seaScores.reduce((sum, score) => sum + score, 0) / seaScores.length;
+  const portTrackers = cruises.map((cruise) => buildPortTracker(cruises, cruise, profile));
+  const bestNovelty = portTrackers.reduce((best, tracker) => Math.max(best, tracker.itineraryNoveltyScore), 0);
+  const shipScores = cruises.map((cruise) => calculateShipFamiliarityScore(cruise.shipName, cruises, [offer], profile).score);
+  const bestShipScore = shipScores.reduce((best, score) => Math.max(best, score), 0);
+  const score = clamp(Math.round(averageSeaScore * 0.08 + bestNovelty * 0.04 + bestShipScore * 0.04), 0, 14);
+  const reasons: string[] = [];
+  if (averageSeaScore >= 65) reasons.push('Strong sea-day density improves casino opportunity.');
+  if (bestNovelty >= 50) reasons.push('Itinerary includes meaningful new-port value.');
+  if (bestShipScore >= 55) reasons.push('Ship familiarity supports easier planning.');
+  console.log('[OfferIntelligence] Phase 3 planning boost:', { offerCode: offer.offerCode, averageSeaScore, bestNovelty, bestShipScore, score });
+  return { score, reasons };
 }
 
 export function calculateOfferIntelligenceScore(
@@ -214,6 +228,8 @@ export function calculateOfferIntelligenceScore(
   if (casinoPaysFor.retailCabinValue >= 3000) score += 8;
   else if (casinoPaysFor.retailCabinValue >= 1500) score += 5;
   score += getSeaDayDensityScore(associatedCruises);
+  const planningBoost = getPlanningIntelligenceBoost(associatedCruises, offer, profile);
+  score += planningBoost.score;
   const certFit = getCertificateFit(offer, certificates);
   score += certFit.score;
   if (daysUntilExpiration !== null) {
@@ -236,6 +252,7 @@ export function calculateOfferIntelligenceScore(
   if (daysUntilExpiration !== null && daysUntilExpiration < 0) reasons.push('This offer is expired and should not be prioritized unless restored by the cruise line.');
   if (certFit.count > 0) reasons.push(`${certFit.count} available certificate${certFit.count === 1 ? '' : 's'} may fit, but stackability should be verified.`);
   if (!profileMatch) reasons.push('This offer appears to belong to a different selected profile or source email.');
+  planningBoost.reasons.forEach((reason) => reasons.push(reason));
   if (casinoPaysFor.missingInputs.length > 0) reasons.push(`Missing ${casinoPaysFor.missingInputs.join(', ')}; score uses safe estimates.`);
   const explanation = `${rating} (${finalScore}/100): ${reasons[0] ?? 'Score is based on available cabin value, expiration, FreePlay, OBC, and profile ownership.'}`;
   console.log('[OfferIntelligence] Score calculated:', { offerCode: offer.offerCode, finalScore, rating, reasons });

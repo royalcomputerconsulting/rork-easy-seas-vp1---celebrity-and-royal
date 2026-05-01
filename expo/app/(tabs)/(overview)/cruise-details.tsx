@@ -15,6 +15,12 @@ import { useUser, DEFAULT_PLAYING_HOURS } from '@/state/UserProvider';
 import { getCasinoStatusBadge, calculatePersonalizedPlayEstimate, PersonalizedPlayEstimate, PlayingHoursConfig } from '@/lib/casinoAvailability';
 import { getEstimatedCabinPrices } from '@/lib/valueCalculator';
 import { getUniqueImageForCruise, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
+import {
+  buildPortTracker,
+  calculateSeaDayDensityScore,
+  calculateShipFamiliarityScore,
+  findCruiseReplacementCandidates,
+} from '@/lib/cruisePlanningIntelligence';
 
 type CompactFactProps = {
   icon: React.ComponentType<{ size?: number; color?: string }>;
@@ -431,6 +437,52 @@ export default function CruiseDetailsScreen() {
     if (!cruise) return null;
     return getCruiseCasinoAvailability(cruise);
   }, [cruise, getCruiseCasinoAvailability]);
+
+  const currentTravelerProfile = useMemo(() => {
+    if (!currentUser) return null;
+    return {
+      id: currentUser.id,
+      displayName: currentUser.displayName || currentUser.name,
+      email: currentUser.email,
+      royalCaribbeanNumber: currentUser.royalCaribbeanNumber || currentUser.crownAnchorNumber,
+      clubRoyaleId: currentUser.clubRoyaleId,
+      celebrityCaptainsClubNumber: currentUser.celebrityCaptainsClubNumber,
+      blueChipId: currentUser.blueChipId,
+    };
+  }, [currentUser]);
+
+  const allCruiseRecords = useMemo(() => {
+    return [
+      ...(storeBookedCruises || []),
+      ...(storeCruises || []),
+      ...(localData.booked || []),
+      ...(localData.cruises || []),
+    ] as Cruise[];
+  }, [localData.booked, localData.cruises, storeBookedCruises, storeCruises]);
+
+  const allOfferRecords = useMemo(() => {
+    return [...(storeOffers || []), ...(localData.offers || [])];
+  }, [localData.offers, storeOffers]);
+
+  const seaDayDensity = useMemo(() => {
+    if (!cruise) return null;
+    return calculateSeaDayDensityScore(cruise);
+  }, [cruise]);
+
+  const portTracker = useMemo(() => {
+    if (!cruise) return null;
+    return buildPortTracker(allCruiseRecords, cruise, currentTravelerProfile);
+  }, [allCruiseRecords, cruise, currentTravelerProfile]);
+
+  const shipFamiliarity = useMemo(() => {
+    if (!cruise) return null;
+    return calculateShipFamiliarityScore(cruise.shipName, allCruiseRecords, allOfferRecords, currentTravelerProfile);
+  }, [allCruiseRecords, allOfferRecords, cruise, currentTravelerProfile]);
+
+  const replacementCandidates = useMemo(() => {
+    if (!cruise) return [];
+    return findCruiseReplacementCandidates(cruise, allCruiseRecords, allOfferRecords, allCruiseRecords, currentTravelerProfile).slice(0, 3);
+  }, [allCruiseRecords, allOfferRecords, cruise, currentTravelerProfile]);
 
   const casinoStatusBadge = useMemo(() => {
     if (!casinoAvailability) return null;
@@ -1163,6 +1215,60 @@ export default function CruiseDetailsScreen() {
                   </View>
                 )}
               </View>
+            </View>
+          )}
+
+          {seaDayDensity && portTracker && shipFamiliarity && (
+            <View style={styles.planningIntelligenceCard} testID="cruise-details-phase3-planning-intelligence">
+              <View style={styles.sectionHeaderCompact}>
+                <Target size={16} color={COLORS.beigeWarm} />
+                <Text style={styles.sectionTitleCompact}>Cruise Planning Intelligence</Text>
+              </View>
+              <View style={styles.planningScoreRow}>
+                <View style={styles.planningScoreCell}>
+                  <Text style={styles.planningScoreLabel}>Casino Opportunity</Text>
+                  <Text style={styles.planningScoreValue}>{seaDayDensity.casinoOpportunityScore}</Text>
+                  <Text style={styles.planningScoreMeta}>{seaDayDensity.likelyCasinoOpenDays}/{seaDayDensity.sailingLength} days</Text>
+                </View>
+                <View style={styles.planningScoreCell}>
+                  <Text style={styles.planningScoreLabel}>New Port</Text>
+                  <Text style={styles.planningScoreValue}>{portTracker.itineraryNoveltyScore}</Text>
+                  <Text style={styles.planningScoreMeta}>{portTracker.newPorts.length} new</Text>
+                </View>
+                <View style={styles.planningScoreCell}>
+                  <Text style={styles.planningScoreLabel}>Ship</Text>
+                  <Text style={styles.planningScoreValue}>{shipFamiliarity.score}</Text>
+                  <Text style={styles.planningScoreMeta}>{shipFamiliarity.rating}</Text>
+                </View>
+              </View>
+              <Text style={styles.planningExplanation}>{seaDayDensity.explanation}</Text>
+              <Text style={styles.planningExplanation}>{shipFamiliarity.explanation}</Text>
+              {portTracker.newPorts.length > 0 ? (
+                <Text style={styles.planningHighlight}>New ports: {portTracker.newPorts.slice(0, 4).join(', ')}</Text>
+              ) : (
+                <Text style={styles.planningMuted}>No clear new-port gain detected from current history.</Text>
+              )}
+              {replacementCandidates.length > 0 ? (
+                <View style={styles.replacementList} testID="cruise-replacement-finder">
+                  <Text style={styles.replacementTitle}>Replacement Finder</Text>
+                  {replacementCandidates.map((candidate) => (
+                    <TouchableOpacity
+                      key={candidate.cruise.id}
+                      style={styles.replacementItem}
+                      onPress={() => router.push(`/cruise-details?id=${candidate.cruise.id}` as any)}
+                      activeOpacity={0.75}
+                    >
+                      <View style={styles.replacementTopRow}>
+                        <Text style={styles.replacementShip} numberOfLines={1}>{candidate.cruise.shipName}</Text>
+                        <Text style={styles.replacementScore}>{Math.round(candidate.rankScore)}</Text>
+                      </View>
+                      <Text style={styles.replacementMeta} numberOfLines={2}>{candidate.offerCode} · Offer {candidate.offerScore} · Sea {candidate.seaDayDensityScore}</Text>
+                      <Text style={styles.replacementReason} numberOfLines={2}>{candidate.reasonBetterWorse}</Text>
+                      {candidate.warnings[0] ? <Text style={styles.replacementWarning}>{candidate.warnings[0]}</Text> : null}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : null}
             </View>
           )}
 
@@ -2216,6 +2322,111 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
     color: COLORS.textPrimary,
+  },
+  planningIntelligenceCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: 'rgba(15, 118, 110, 0.18)',
+    ...SHADOW.sm,
+  },
+  planningScoreRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    marginBottom: SPACING.sm,
+  },
+  planningScoreCell: {
+    flex: 1,
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.sm,
+    padding: SPACING.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 31, 63, 0.08)',
+  },
+  planningScoreLabel: {
+    fontSize: 10,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.textSecondary,
+    textTransform: 'uppercase' as const,
+    marginBottom: 3,
+  },
+  planningScoreValue: {
+    fontSize: 22,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  planningScoreMeta: {
+    fontSize: 11,
+    color: '#0F766E',
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+  },
+  planningExplanation: {
+    fontSize: 12,
+    color: '#334155',
+    lineHeight: 17,
+    marginTop: 3,
+  },
+  planningHighlight: {
+    fontSize: 12,
+    color: '#0F766E',
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    marginTop: SPACING.xs,
+  },
+  planningMuted: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: SPACING.xs,
+  },
+  replacementList: {
+    marginTop: SPACING.md,
+    gap: SPACING.sm,
+  },
+  replacementTitle: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  replacementItem: {
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.sm,
+    padding: SPACING.sm,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  replacementTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: SPACING.sm,
+  },
+  replacementShip: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  replacementScore: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#0F766E',
+  },
+  replacementMeta: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  replacementReason: {
+    fontSize: 12,
+    color: '#334155',
+    lineHeight: 16,
+    marginTop: 4,
+  },
+  replacementWarning: {
+    fontSize: 11,
+    color: COLORS.error,
+    marginTop: 4,
   },
   compactCasinoCard: {
     backgroundColor: COLORS.white,

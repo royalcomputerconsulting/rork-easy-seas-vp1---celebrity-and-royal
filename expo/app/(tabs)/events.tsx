@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { CalendarDays, ChevronLeft, ChevronRight, Ship, Plane, User, Plus, AlertTriangle, Ban } from 'lucide-react-native';
+import { CalendarDays, ChevronLeft, ChevronRight, Ship, Plane, User, Plus, AlertTriangle, Ban, Gift, Award, MapPin, Clock } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { IMAGES } from '@/constants/images';
 import { useAppState } from '@/state/AppStateProvider';
@@ -13,8 +13,11 @@ import { CrewRecognitionSection } from '@/components/crew-recognition/CrewRecogn
 import { TimeZoneConverter } from '@/components/TimeZoneConverter';
 import { getCalendarEventsWithGeneratedCruiseEvents, getNormalizedCruiseDateRange } from '@/lib/calendar/cruiseEvents';
 import { ResponsiveContainer } from '@/components/ResponsiveContainer';
+import { useCertificates } from '@/state/CertificatesProvider';
+import { deriveCruiseDayPlan } from '@/lib/cruisePlanningIntelligence';
 
-type ViewMode = 'events' | 'week' | 'month' | '90days';
+type ViewMode = 'events' | 'week' | 'month' | '90days' | 'passenger';
+type PassengerDayKind = 'sea' | 'port' | 'land' | 'gap' | 'expiration' | 'tier' | 'personal';
 
 interface DayData {
   date: Date;
@@ -32,13 +35,32 @@ const EVENT_COLORS = {
   cruise: '#22C55E',
   travel: '#3B82F6', 
   personal: '#A855F7',
+  sea: '#2563EB',
+  port: '#16A34A',
+  gap: '#DC2626',
+  expiration: '#D97706',
+  tier: '#7C3AED',
+  land: '#94A3B8',
+  passengerPersonal: '#EA580C',
 };
+
+interface PassengerDayItem {
+  id: string;
+  date: string;
+  kind: PassengerDayKind;
+  title: string;
+  subtitle: string;
+  color: string;
+  cruiseId?: string;
+  sharedType?: 'Shared' | 'Solo';
+}
 
 export default function EventsScreen() {
   const router = useRouter();
   const { localData } = useAppState();
   const coreData = useCoreData();
   const { bookedCruises } = coreData;
+  const { certificates } = useCertificates();
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [refreshKey, setRefreshKey] = useState(0);
@@ -57,17 +79,19 @@ export default function EventsScreen() {
       .filter((cruise): cruise is BookedCruise => cruise !== null);
   }, [bookedCruises]);
 
+  const sourceCalendarEvents = useMemo(() => [...(localData.calendar || []), ...(localData.tripit || [])], [localData.calendar, localData.tripit]);
+
   const calendarEvents = useMemo(() => {
     const mergedEvents = getCalendarEventsWithGeneratedCruiseEvents(
       normalizedBookedCruises,
-      [...(localData.calendar || []), ...(localData.tripit || [])]
+      sourceCalendarEvents
     );
     console.log('[Events] Calendar events updated:', {
       mergedEvents: mergedEvents.length,
       bookedCruises: normalizedBookedCruises.length,
     });
     return mergedEvents;
-  }, [normalizedBookedCruises, localData.calendar, localData.tripit]);
+  }, [normalizedBookedCruises, sourceCalendarEvents]);
 
   useEffect(() => {
     console.log('[Events] Data changed - calendar:', calendarEvents.length, 'cruises:', normalizedBookedCruises.length);
@@ -419,6 +443,159 @@ export default function EventsScreen() {
   const featuredEvents = upcomingEvents.length > 0 ? upcomingEvents : recentEvents;
   const hasFutureEvents = upcomingEvents.length > 0;
 
+  const formatDateOnly = useCallback((date: Date): string => {
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${date.getFullYear()}-${month}-${day}`;
+  }, []);
+
+  const passengerDayItems = useMemo((): PassengerDayItem[] => {
+    const items = new Map<string, PassengerDayItem>();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const yearStart = new Date(today.getFullYear(), 0, 1);
+    const yearEnd = new Date(today.getFullYear(), 11, 31);
+
+    const addItem = (item: PassengerDayItem) => {
+      const existing = items.get(item.id);
+      if (!existing) {
+        items.set(item.id, item);
+      }
+    };
+
+    normalizedBookedCruises.forEach((cruise) => {
+      const sailDate = createDateFromString(cruise.sailDate);
+      const dayPlan = deriveCruiseDayPlan(cruise);
+      const sharedType: 'Shared' | 'Solo' = (cruise.guestNames?.length ?? cruise.guests ?? 1) > 1 ? 'Shared' : 'Solo';
+      dayPlan.forEach((plan) => {
+        const dayDate = new Date(sailDate);
+        dayDate.setDate(sailDate.getDate() + plan.day - 1);
+        const date = formatDateOnly(dayDate);
+        const isSea = plan.isSeaDay;
+        addItem({
+          id: `passenger-${cruise.id}-${plan.day}`,
+          date,
+          kind: isSea ? 'sea' : 'port',
+          title: isSea ? 'Day at Sea' : plan.isEmbarkation ? 'Embarkation Day' : plan.isDisembarkation ? 'Disembarkation Day' : 'Port Day',
+          subtitle: `${cruise.shipName} • ${plan.port || cruise.departurePort || 'Cruise'} • ${sharedType}`,
+          color: isSea ? EVENT_COLORS.sea : EVENT_COLORS.port,
+          cruiseId: cruise.id,
+          sharedType,
+        });
+      });
+    });
+
+    const sortedCruises = [...normalizedBookedCruises].sort((left, right) => createDateFromString(left.sailDate).getTime() - createDateFromString(right.sailDate).getTime());
+    sortedCruises.forEach((cruise, index) => {
+      const nextCruise = sortedCruises[index + 1];
+      if (!nextCruise) return;
+      const returnDate = createDateFromString(cruise.returnDate || cruise.sailDate);
+      const nextSailDate = createDateFromString(nextCruise.sailDate);
+      const gapStart = new Date(returnDate);
+      gapStart.setDate(returnDate.getDate() + 1);
+      const gapEnd = new Date(nextSailDate);
+      gapEnd.setDate(nextSailDate.getDate() - 1);
+      if (gapStart <= gapEnd) {
+        addItem({
+          id: `gap-${cruise.id}-${nextCruise.id}`,
+          date: formatDateOnly(gapStart),
+          kind: 'gap',
+          title: 'Travel Gap',
+          subtitle: `${Math.ceil((gapEnd.getTime() - gapStart.getTime()) / (1000 * 60 * 60 * 24)) + 1} land day(s) before ${nextCruise.shipName}`,
+          color: EVENT_COLORS.gap,
+        });
+      }
+    });
+
+    sourceCalendarEvents.forEach((event) => {
+      const date = (event.startDate || event.start || '').split('T')[0];
+      if (!date) return;
+      addItem({
+        id: `personal-${event.id}`,
+        date,
+        kind: 'personal',
+        title: event.title,
+        subtitle: event.location || event.type,
+        color: EVENT_COLORS.passengerPersonal,
+      });
+    });
+
+    (localData.offers || []).forEach((offer) => {
+      const expiry = offer.expiryDate || offer.expires || offer.offerExpiryDate;
+      if (!expiry) return;
+      const date = expiry.split('T')[0];
+      addItem({
+        id: `offer-expiration-${offer.id}`,
+        date,
+        kind: 'expiration',
+        title: 'Offer Expiration',
+        subtitle: offer.offerCode || offer.offerName || offer.title || 'Casino offer',
+        color: EVENT_COLORS.expiration,
+      });
+    });
+
+    certificates.forEach((certificate) => {
+      if (!certificate.expiryDate) return;
+      addItem({
+        id: `certificate-expiration-${certificate.id}`,
+        date: certificate.expiryDate.split('T')[0],
+        kind: 'expiration',
+        title: 'Certificate Expiration',
+        subtitle: certificate.label || certificate.type,
+        color: EVENT_COLORS.expiration,
+      });
+    });
+
+    normalizedBookedCruises.forEach((cruise) => {
+      const points = cruise.earnedPoints || cruise.casinoPoints || 0;
+      if (points <= 0) return;
+      addItem({
+        id: `tier-milestone-${cruise.id}`,
+        date: cruise.returnDate || cruise.sailDate,
+        kind: 'tier',
+        title: 'Tier Milestone',
+        subtitle: `${points.toLocaleString()} casino points from ${cruise.shipName}`,
+        color: EVENT_COLORS.tier,
+        cruiseId: cruise.id,
+      });
+    });
+
+    for (let cursor = new Date(yearStart); cursor <= yearEnd; cursor.setDate(cursor.getDate() + 1)) {
+      const date = formatDateOnly(cursor);
+      const hasLifeAtSeaItem = Array.from(items.values()).some((item) => item.date === date && (item.kind === 'sea' || item.kind === 'port'));
+      if (!hasLifeAtSeaItem && cursor >= today) {
+        addItem({
+          id: `land-${date}`,
+          date,
+          kind: 'land',
+          title: 'Land Day',
+          subtitle: 'No sailing loaded for this date',
+          color: EVENT_COLORS.land,
+        });
+      }
+    }
+
+    const sortedItems = Array.from(items.values()).sort((left, right) => left.date.localeCompare(right.date));
+    console.log('[Events] Permanent Passenger View items built:', {
+      items: sortedItems.length,
+      sea: sortedItems.filter((item) => item.kind === 'sea').length,
+      port: sortedItems.filter((item) => item.kind === 'port').length,
+      expirations: sortedItems.filter((item) => item.kind === 'expiration').length,
+    });
+    return sortedItems;
+  }, [certificates, formatDateOnly, localData.offers, normalizedBookedCruises, sourceCalendarEvents]);
+
+  const passengerSummary = useMemo(() => {
+    return {
+      sea: passengerDayItems.filter((item) => item.kind === 'sea').length,
+      port: passengerDayItems.filter((item) => item.kind === 'port').length,
+      land: passengerDayItems.filter((item) => item.kind === 'land').length,
+      expirations: passengerDayItems.filter((item) => item.kind === 'expiration').length,
+      shared: passengerDayItems.filter((item) => item.sharedType === 'Shared').length,
+      solo: passengerDayItems.filter((item) => item.sharedType === 'Solo').length,
+    };
+  }, [passengerDayItems]);
+
   const handleJumpToEventMonth = useCallback((date: Date) => {
     setCurrentDate(new Date(date.getFullYear(), date.getMonth(), 1));
   }, []);
@@ -508,7 +685,7 @@ export default function EventsScreen() {
           </View>
 
           <View style={styles.viewToggleContainer}>
-            {(['events', 'week', 'month', '90days'] as ViewMode[]).map((mode) => (
+            {(['events', 'week', 'month', '90days', 'passenger'] as ViewMode[]).map((mode) => (
               <TouchableOpacity
                 key={mode}
                 style={[
@@ -522,7 +699,7 @@ export default function EventsScreen() {
                   styles.viewToggleText,
                   viewMode === mode && styles.viewToggleTextActive,
                 ]}>
-                  {mode === 'events' ? 'Events' : mode === 'week' ? 'Week' : mode === 'month' ? 'Month' : '90 Days'}
+                  {mode === 'events' ? 'Events' : mode === 'week' ? 'Week' : mode === 'month' ? 'Month' : mode === '90days' ? '90 Days' : 'Passenger'}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -655,6 +832,49 @@ export default function EventsScreen() {
             </View>
           )}
 
+          {viewMode === 'passenger' && (
+            <View style={styles.passengerViewCard} testID="permanent-passenger-calendar-view">
+              <View style={styles.passengerHeaderRow}>
+                <View>
+                  <Text style={styles.passengerTitle}>Permanent Passenger View</Text>
+                  <Text style={styles.passengerSubtitle}>Life-at-sea timeline for this year</Text>
+                </View>
+                <View style={styles.passengerCountBadge}>
+                  <Text style={styles.passengerCountText}>{passengerDayItems.length}</Text>
+                </View>
+              </View>
+              <View style={styles.passengerStatsGrid}>
+                <View style={styles.passengerStat}><Text style={styles.passengerStatValue}>{passengerSummary.sea}</Text><Text style={styles.passengerStatLabel}>At sea</Text></View>
+                <View style={styles.passengerStat}><Text style={styles.passengerStatValue}>{passengerSummary.port}</Text><Text style={styles.passengerStatLabel}>Port</Text></View>
+                <View style={styles.passengerStat}><Text style={styles.passengerStatValue}>{passengerSummary.land}</Text><Text style={styles.passengerStatLabel}>Land</Text></View>
+                <View style={styles.passengerStat}><Text style={styles.passengerStatValue}>{passengerSummary.expirations}</Text><Text style={styles.passengerStatLabel}>Expiry</Text></View>
+              </View>
+              <View style={styles.passengerList}>
+                {passengerDayItems.slice(0, 80).map((item) => {
+                  const ItemIcon = item.kind === 'sea' ? Ship : item.kind === 'port' ? MapPin : item.kind === 'expiration' ? Gift : item.kind === 'tier' ? Award : item.kind === 'gap' ? Plane : item.kind === 'personal' ? User : Clock;
+                  return (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={styles.passengerItem}
+                      activeOpacity={0.75}
+                      onPress={() => item.cruiseId ? router.push({ pathname: '/(tabs)/(overview)/cruise-details' as any, params: { id: item.cruiseId } }) : undefined}
+                    >
+                      <View style={[styles.passengerItemRail, { backgroundColor: item.color }]} />
+                      <View style={[styles.passengerIconBadge, { backgroundColor: `${item.color}22` }]}>
+                        <ItemIcon size={15} color={item.color} />
+                      </View>
+                      <View style={styles.passengerItemCopy}>
+                        <Text style={styles.passengerItemTitle} numberOfLines={1}>{item.title}</Text>
+                        <Text style={styles.passengerItemSubtitle} numberOfLines={1}>{item.subtitle}</Text>
+                      </View>
+                      <Text style={styles.passengerItemDate}>{item.date.slice(5)}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+
           <View style={styles.legendContainer}>
             <View style={styles.legendItem}>
               <View style={[styles.legendDot, { backgroundColor: EVENT_COLORS.cruise }]} />
@@ -667,6 +887,14 @@ export default function EventsScreen() {
             <View style={styles.legendItem}>
               <View style={[styles.legendDot, { backgroundColor: EVENT_COLORS.personal }]} />
               <Text style={styles.legendText}>Personal</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: EVENT_COLORS.sea }]} />
+              <Text style={styles.legendText}>Sea</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: EVENT_COLORS.expiration }]} />
+              <Text style={styles.legendText}>Expiry</Text>
             </View>
           </View>
 
@@ -978,6 +1206,114 @@ const styles = StyleSheet.create({
     height: 5,
     borderRadius: 3,
   },
+  passengerViewCard: {
+    backgroundColor: 'rgba(255,255,255,0.94)',
+    borderRadius: BORDER_RADIUS.lg,
+    marginHorizontal: SPACING.md,
+    marginBottom: SPACING.md,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: 'rgba(0,31,63,0.1)',
+    ...SHADOW.sm,
+  },
+  passengerHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.md,
+  },
+  passengerTitle: {
+    fontSize: TYPOGRAPHY.fontSizeLG,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  passengerSubtitle: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.navyDeep,
+    opacity: 0.68,
+    marginTop: 2,
+  },
+  passengerCountBadge: {
+    backgroundColor: COLORS.navyDeep,
+    borderRadius: BORDER_RADIUS.round,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 6,
+  },
+  passengerCountText: {
+    color: COLORS.white,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  passengerStatsGrid: {
+    flexDirection: 'row',
+    gap: SPACING.xs,
+    marginBottom: SPACING.md,
+  },
+  passengerStat: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  passengerStatValue: {
+    fontSize: TYPOGRAPHY.fontSizeLG,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  passengerStatLabel: {
+    fontSize: 10,
+    color: COLORS.navyDeep,
+    opacity: 0.66,
+    marginTop: 2,
+  },
+  passengerList: {
+    gap: SPACING.xs,
+  },
+  passengerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    overflow: 'hidden',
+  },
+  passengerItemRail: {
+    width: 5,
+    alignSelf: 'stretch',
+  },
+  passengerIconBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: SPACING.sm,
+  },
+  passengerItemCopy: {
+    flex: 1,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.sm,
+  },
+  passengerItemTitle: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  passengerItemSubtitle: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: COLORS.navyDeep,
+    opacity: 0.68,
+    marginTop: 2,
+  },
+  passengerItemDate: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+    paddingRight: SPACING.sm,
+  },
   legendContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -988,7 +1324,8 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
     borderWidth: 1,
     borderColor: 'rgba(0, 31, 63, 0.1)',
-    gap: SPACING.lg,
+    gap: SPACING.md,
+    flexWrap: 'wrap',
     ...SHADOW.sm,
   },
   legendItem: {

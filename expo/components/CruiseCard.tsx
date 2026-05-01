@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Animated, Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { Calendar, ChevronRight, Users, Ship, Heart, Sparkles, Anchor, Ticket } from 'lucide-react-native';
+import { Calendar, ChevronRight, Users, Ship, Heart, Sparkles, Anchor, Ticket, Gauge } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 
@@ -9,6 +9,7 @@ import { createDateFromString } from '@/lib/date';
 
 import { getUniqueImageForCruise, getImageForDestination, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
 import type { Cruise, BookedCruise, ItineraryDay } from '@/types/models';
+import { calculateSeaDayDensityScore } from '@/lib/cruisePlanningIntelligence';
 
 interface CruiseCardProps {
   cruise: Cruise | BookedCruise;
@@ -164,6 +165,10 @@ export const CruiseCard = React.memo(function CruiseCard({
 
   const statusBadge = getStatusBadge();
 
+  const seaDayDensity = useMemo(() => {
+    return calculateSeaDayDensityScore(cruise);
+  }, [cruise]);
+
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   const handlePressIn = useCallback(() => {
@@ -257,6 +262,11 @@ export const CruiseCard = React.memo(function CruiseCard({
             </View>
           </View>
           <Text style={styles.miniItinerary} numberOfLines={1}>{getItineraryName()}</Text>
+          <View style={styles.miniPlanningRow} testID="cruise-card-mini-sea-day-score">
+            <Gauge size={10} color="#0F766E" />
+            <Text style={styles.miniPlanningText}>Casino Opp {seaDayDensity.casinoOpportunityScore}</Text>
+            <Text style={styles.miniPlanningMuted}>{seaDayDensity.seaDays} sea • {seaDayDensity.portDays} port</Text>
+          </View>
           <Text style={styles.miniDestination} numberOfLines={1}>
             {cruise.departurePort ? `From ${cruise.departurePort}` : cruise.destination}
           </Text>
@@ -546,6 +556,14 @@ export const CruiseCard = React.memo(function CruiseCard({
           </View>
         ) : null}
 
+        <View style={styles.planningBadgeRow} testID="cruise-card-sea-day-score">
+          <View style={styles.planningBadge}>
+            <Gauge size={13} color="#0F766E" />
+            <Text style={styles.planningBadgeText}>Casino Opportunity {seaDayDensity.casinoOpportunityScore}</Text>
+          </View>
+          <Text style={styles.planningBadgeMeta}>{seaDayDensity.seaDays} sea • {seaDayDensity.portDays} port</Text>
+        </View>
+
         <View style={styles.dateGuestRow}>
           <View style={styles.dateInfo}>
             <Calendar size={14} color="#6B7280" />
@@ -709,6 +727,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: COLORS.navyDeep,
     marginBottom: 2,
+  },
+  miniPlanningRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 3,
+  },
+  miniPlanningText: {
+    fontSize: 10,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#0F766E',
+  },
+  miniPlanningMuted: {
+    fontSize: 10,
+    color: '#64748B',
   },
   miniPorts: {
     fontSize: 11,
@@ -1101,6 +1134,34 @@ const styles = StyleSheet.create({
     color: COLORS.points,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
     marginTop: 4,
+  },
+  planningBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: SPACING.sm,
+    backgroundColor: '#ECFDF5',
+    borderRadius: BORDER_RADIUS.sm,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 7,
+    marginBottom: SPACING.sm,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  planningBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    flex: 1,
+  },
+  planningBadgeText: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#0F766E',
+  },
+  planningBadgeMeta: {
+    fontSize: 11,
+    color: '#475569',
   },
   dateGuestRow: {
     flexDirection: 'row',
