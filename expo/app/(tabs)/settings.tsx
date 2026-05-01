@@ -12,6 +12,7 @@ import {
   TextInput,
   Image,
   Platform,
+  Modal,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -89,10 +90,18 @@ import { RENDER_BACKEND_URL, trpc } from '@/lib/trpc';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import * as XLSX from 'xlsx';
-import type { BookedCruise } from '@/types/models';
+import type { BookedCruise, CasinoOffer, Cruise, ImportReconciliationSummary } from '@/types/models';
 import { getCalendarEventsWithGeneratedCruiseEvents, getDayAgendaEventCountForYear } from '@/lib/calendar/cruiseEvents';
 import { getImportAssignmentReviewItems } from '@/lib/importAssignmentReview';
 import { applyFoundationFields } from '@/lib/dataFoundation';
+import {
+  buildBookedImportReviewRows,
+  buildOffersImportReviewRows,
+  combineReconciliationSummaries,
+  createSimpleReconciliationSummary,
+  getSmartImportActionLabel,
+  type SmartImportReviewRow,
+} from '@/lib/importReconciliationReview';
 
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import { UserProfileCard } from '@/components/ui/UserProfileCard';
@@ -121,6 +130,15 @@ function normalizeAccountEmail(email: string | null | undefined): string | null 
 function isAdminAccountEmail(email: string): boolean {
   return ADMIN_EMAILS.includes(email.toLowerCase().trim() as typeof ADMIN_EMAILS[number]);
 }
+
+type PendingSmartImportReview = {
+  title: string;
+  fileName: string;
+  summary: ImportReconciliationSummary;
+  rows: SmartImportReviewRow[];
+  applyLabel: string;
+  onApply: () => Promise<void>;
+};
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -172,6 +190,7 @@ export default function SettingsScreen() {
   const [isPublishingFeed, setIsPublishingFeed] = useState(false);
   const [feedLastUpdated, setFeedLastUpdated] = useState<string | null>(null);
   const [isCopied, setIsCopied] = useState(false);
+  const [pendingSmartImportReview, setPendingSmartImportReview] = useState<PendingSmartImportReview | null>(null);
 
   const { myAtlasMachines, exportMachinesJSON, importMachinesJSON, reload: reloadMachines } = useSlotMachineLibrary();
   const { reload: reloadCasinoSessions } = useCasinoSessions();
@@ -466,34 +485,55 @@ export default function SettingsScreen() {
         offerReconciliation: offersMergeResult.reconciliation,
       });
 
-      await setCruises(mergedCruises);
-      await setCasinoOffers(mergedOffers);
-      await setLocalData({
-        cruises: mergedCruises,
-        offers: mergedOffers,
-      });
-
-      await AsyncStorage.setItem('easyseas_has_launched_before', 'true');
-      console.log('[Settings] Set HAS_LAUNCHED_BEFORE flag to prevent data wipe on restart');
-
       const sourceLabel = getImportedSourceLabel(importedSource);
       const healNote = healingReport.fieldsFixed.length > 0 ? `\n\nData healing fixed ${healingReport.fieldsFixed.length} field(s).` : '';
       const reconciliationNote = reviewNeededCount > 0 || overlapCount > 0 || suggestedArchiveCount > 0
         ? `\n\nReconciliation: ${reviewNeededCount} item(s) need review, ${overlapCount} overlapping sailing(s) were preserved, ${suggestedArchiveCount} missing row(s) were flagged instead of deleted.`
         : '';
       const assignmentNote = assignmentReviewCount > 0 ? `\n\nImport Assignment: ${assignmentReviewCount} item(s) need account/profile assignment.` : '';
-      setLastImportResult({ type: 'offers', count: parsedCruises.length });
-      Alert.alert(
-        'Import Successful',
-        `${sourceLabel} import updated ${parsedCruises.length} cruises and ${parsedOffers.length} offers from ${result.fileName}.${healNote}${reconciliationNote}${assignmentNote}`,
-        assignmentReviewCount > 0
-          ? [
-              { text: 'Later', style: 'cancel' },
-              { text: 'Review Assignments', onPress: () => router.push('/import-review' as any) },
-            ]
-          : undefined
-      );
-      console.log('[Settings] Import complete:', parsedCruises.length, 'cruises,', parsedOffers.length, 'offers');
+      setPendingSmartImportReview({
+        title: `${sourceLabel} Offers Import Review`,
+        fileName: result.fileName,
+        summary: combineReconciliationSummaries([cruisesMergeResult.reconciliation, offersMergeResult.reconciliation]),
+        rows: buildOffersImportReviewRows({
+          existingCruises,
+          importedCruises: parsedCruises,
+          existingOffers,
+          importedOffers: parsedOffers,
+          mergedCruises,
+          mergedOffers,
+        }),
+        applyLabel: `Apply ${parsedCruises.length + parsedOffers.length} row(s)`,
+        onApply: async () => {
+          try {
+            setIsImporting(true);
+            console.log('[Settings] Applying reviewed offers import:', { fileName: result.fileName, cruises: parsedCruises.length, offers: parsedOffers.length });
+            await setCruises(mergedCruises);
+            await setCasinoOffers(mergedOffers);
+            await setLocalData({ cruises: mergedCruises, offers: mergedOffers });
+            await AsyncStorage.setItem('easyseas_has_launched_before', 'true');
+            setLastImportResult({ type: 'offers', count: parsedCruises.length });
+            setPendingSmartImportReview(null);
+            Alert.alert(
+              'Import Applied',
+              `${sourceLabel} import updated ${parsedCruises.length} cruises and ${parsedOffers.length} offers from ${result.fileName}.${healNote}${reconciliationNote}${assignmentNote}`,
+              assignmentReviewCount > 0
+                ? [
+                    { text: 'Later', style: 'cancel' },
+                    { text: 'Review Assignments', onPress: () => router.push('/import-review' as any) },
+                  ]
+                : undefined
+            );
+            console.log('[Settings] Reviewed import applied:', parsedCruises.length, 'cruises,', parsedOffers.length, 'offers');
+          } catch (applyError) {
+            console.error('[Settings] Failed to apply reviewed offers import:', applyError);
+            Alert.alert('Apply Failed', 'The reviewed import could not be applied. Please try again.');
+          } finally {
+            setIsImporting(false);
+          }
+        },
+      });
+      console.log('[Settings] Prepared smart import review:', parsedCruises.length, 'cruises,', parsedOffers.length, 'offers');
     } catch (error) {
       console.error('[Settings] Import error:', error);
       
@@ -871,14 +911,6 @@ export default function SettingsScreen() {
         reconciliation: bookedMergeResult.reconciliation,
       });
 
-      await setBookedCruises(mergedBooked);
-      await setLocalData({
-        booked: mergedBooked,
-      });
-
-      await AsyncStorage.setItem('easyseas_has_launched_before', 'true');
-      console.log('[Settings] Set HAS_LAUNCHED_BEFORE flag to prevent data wipe on restart');
-
       const sourceLabel = getImportedSourceLabel(importedSource);
       const bookedAssignmentReviewCount = getImportAssignmentReviewItems({
         offers: [],
@@ -891,19 +923,46 @@ export default function SettingsScreen() {
         ? ` ${bookedMergeResult.reconciliation.reviewNeededItems} item(s) need review and ${bookedMergeResult.reconciliation.duplicateOverlappingSailings} overlapping sailing(s) were preserved.`
         : '';
       const bookedAssignmentNote = bookedAssignmentReviewCount > 0 ? ` ${bookedAssignmentReviewCount} item(s) need account assignment review.` : '';
-      setLastImportResult({ type: 'booked', count: parsedBooked.length });
-      
-      Alert.alert(
-        'Import Successful',
-        `${sourceLabel} booked cruises updated from ${result.fileName}. Imported ${parsedBooked.length} cruise row(s).${bookedReconciliationNote}${bookedAssignmentNote}`,
-        bookedAssignmentReviewCount > 0
-          ? [
-              { text: 'Later', style: 'cancel' },
-              { text: 'Review Assignments', onPress: () => router.push('/import-review' as any) },
-            ]
-          : undefined
-      );
-      console.log('[Settings] Booked import complete:', parsedBooked.length, 'cruise rows imported');
+      setPendingSmartImportReview({
+        title: `${sourceLabel} Booked Cruise Import Review`,
+        fileName: result.fileName,
+        summary: bookedMergeResult.reconciliation,
+        rows: buildBookedImportReviewRows({
+          existingBooked,
+          importedBooked: parsedBooked,
+          mergedBooked,
+          kind: 'Booked Cruise',
+        }),
+        applyLabel: `Apply ${parsedBooked.length} booked row(s)`,
+        onApply: async () => {
+          try {
+            setIsImporting(true);
+            console.log('[Settings] Applying reviewed booked import:', { fileName: result.fileName, bookedRows: parsedBooked.length });
+            await setBookedCruises(mergedBooked);
+            await setLocalData({ booked: mergedBooked });
+            await AsyncStorage.setItem('easyseas_has_launched_before', 'true');
+            setLastImportResult({ type: 'booked', count: parsedBooked.length });
+            setPendingSmartImportReview(null);
+            Alert.alert(
+              'Import Applied',
+              `${sourceLabel} booked cruises updated from ${result.fileName}. Imported ${parsedBooked.length} cruise row(s).${bookedReconciliationNote}${bookedAssignmentNote}`,
+              bookedAssignmentReviewCount > 0
+                ? [
+                    { text: 'Later', style: 'cancel' },
+                    { text: 'Review Assignments', onPress: () => router.push('/import-review' as any) },
+                  ]
+                : undefined
+            );
+            console.log('[Settings] Reviewed booked import applied:', parsedBooked.length, 'cruise rows imported');
+          } catch (applyError) {
+            console.error('[Settings] Failed to apply reviewed booked import:', applyError);
+            Alert.alert('Apply Failed', 'The reviewed booked import could not be applied. Please try again.');
+          } finally {
+            setIsImporting(false);
+          }
+        },
+      });
+      console.log('[Settings] Prepared smart booked import review:', parsedBooked.length, 'cruise rows');
     } catch (error) {
       console.error('[Settings] Booked import error:', error);
       
@@ -1159,22 +1218,54 @@ export default function SettingsScreen() {
         users,
       }).length;
       const merged = [...existingBooked, ...preparedImportedCruises];
-      await setBookedCruises(merged);
-      await setLocalData({ booked: merged });
-      await AsyncStorage.setItem('easyseas_has_launched_before', 'true');
+      const completedSummary = createSimpleReconciliationSummary({
+        addedRows: preparedImportedCruises.length,
+        updatedRows: 0,
+        removedMissingRows: skippedCount,
+        suggestedArchiveRows: 0,
+        reviewNeededItems: completedAssignmentReviewCount,
+      });
 
-      setLastImportResult({ type: 'completed', count: importedCruises.length });
-      Alert.alert(
-        'Import Successful',
-        `Imported ${importedCruises.length} completed cruise${importedCruises.length !== 1 ? 's' : ''} from ${asset.name}.${completedAssignmentReviewCount > 0 ? ` ${completedAssignmentReviewCount} item(s) need account assignment review.` : ''}`,
-        completedAssignmentReviewCount > 0
-          ? [
-              { text: 'Later', style: 'cancel' },
-              { text: 'Review Assignments', onPress: () => router.push('/import-review' as any) },
-            ]
-          : undefined
-      );
-      console.log('[Settings] XLSX import complete:', importedCruises.length, 'new completed cruises');
+      setPendingSmartImportReview({
+        title: 'Completed Cruise Import Review',
+        fileName: asset.name,
+        summary: completedSummary,
+        rows: buildBookedImportReviewRows({
+          existingBooked,
+          importedBooked: preparedImportedCruises,
+          mergedBooked: merged,
+          kind: 'Completed Cruise',
+        }),
+        applyLabel: `Apply ${preparedImportedCruises.length} completed row(s)`,
+        onApply: async () => {
+          try {
+            setIsImporting(true);
+            console.log('[Settings] Applying reviewed completed cruises import:', { fileName: asset.name, completedRows: preparedImportedCruises.length });
+            await setBookedCruises(merged);
+            await setLocalData({ booked: merged });
+            await AsyncStorage.setItem('easyseas_has_launched_before', 'true');
+            setLastImportResult({ type: 'completed', count: importedCruises.length });
+            setPendingSmartImportReview(null);
+            Alert.alert(
+              'Import Applied',
+              `Imported ${importedCruises.length} completed cruise${importedCruises.length !== 1 ? 's' : ''} from ${asset.name}.${completedAssignmentReviewCount > 0 ? ` ${completedAssignmentReviewCount} item(s) need account assignment review.` : ''}`,
+              completedAssignmentReviewCount > 0
+                ? [
+                    { text: 'Later', style: 'cancel' },
+                    { text: 'Review Assignments', onPress: () => router.push('/import-review' as any) },
+                  ]
+                : undefined
+            );
+            console.log('[Settings] Reviewed completed import applied:', importedCruises.length, 'new completed cruises');
+          } catch (applyError) {
+            console.error('[Settings] Failed to apply reviewed completed import:', applyError);
+            Alert.alert('Apply Failed', 'The reviewed completed-cruise import could not be applied. Please try again.');
+          } finally {
+            setIsImporting(false);
+          }
+        },
+      });
+      console.log('[Settings] Prepared completed cruises smart import review:', importedCruises.length, 'new completed cruises');
     } catch (error) {
       console.error('[Settings] XLSX import error:', error);
       Alert.alert('Import Error', 'Failed to import the XLSX file. Please check the file format and try again.');
@@ -1951,6 +2042,27 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
       </View>
     </LinearGradient>
   );
+
+  const renderSmartImportReviewRow = useCallback((row: SmartImportReviewRow) => (
+    <View key={row.id} style={styles.smartImportRow} testID={`smart-import-review-row-${row.id}`}>
+      <View style={styles.smartImportRowTop}>
+        <View style={styles.smartImportKindPill}>
+          <Text style={styles.smartImportKindText}>{row.kind}</Text>
+        </View>
+        <View style={[
+          styles.smartImportActionPill,
+          row.action === 'add' ? styles.smartImportActionAdd : row.action === 'update' ? styles.smartImportActionUpdate : row.action === 'preserve' ? styles.smartImportActionPreserve : styles.smartImportActionReview,
+        ]}>
+          <Text style={styles.smartImportActionText}>{getSmartImportActionLabel(row.action)}</Text>
+        </View>
+      </View>
+      <Text style={styles.smartImportRowTitle} numberOfLines={1}>{row.title}</Text>
+      <Text style={styles.smartImportRowSubtitle} numberOfLines={2}>{row.subtitle}</Text>
+      <Text style={styles.smartImportRowMeta} numberOfLines={2}>{row.meta}</Text>
+      {row.before ? <Text style={styles.smartImportDiffText} numberOfLines={2}>Before: {row.before}</Text> : null}
+      {row.after ? <Text style={styles.smartImportDiffText} numberOfLines={2}>After: {row.after}</Text> : null}
+    </View>
+  ), []);
 
   return (
     <View style={styles.container}>
@@ -2856,6 +2968,71 @@ STEP 4: Optional Calendar Import
         visible={isUserManualVisible}
         onClose={() => setIsUserManualVisible(false)}
       />
+
+      <Modal
+        visible={pendingSmartImportReview !== null}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setPendingSmartImportReview(null)}
+      >
+        <View style={styles.smartImportModalBackdrop}>
+          <View style={styles.smartImportModalCard} testID="smart-import-pre-apply-review">
+            <View style={styles.smartImportModalHeader}>
+              <View style={styles.smartImportHeaderIcon}>
+                <FileSpreadsheet size={20} color="#A7F3D0" />
+              </View>
+              <View style={styles.smartImportHeaderCopy}>
+                <Text style={styles.smartImportModalTitle}>{pendingSmartImportReview?.title ?? 'Smart Import Review'}</Text>
+                <Text style={styles.smartImportModalSubtitle} numberOfLines={1}>{pendingSmartImportReview?.fileName ?? 'Pending file'}</Text>
+              </View>
+              <TouchableOpacity style={styles.smartImportCloseButton} onPress={() => setPendingSmartImportReview(null)} activeOpacity={0.75} testID="smart-import-review-close">
+                <X size={18} color={COLORS.white} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.smartImportSummaryGrid}>
+              <View style={styles.smartImportSummaryCell}>
+                <Text style={styles.smartImportSummaryValue}>{pendingSmartImportReview?.summary.addedRows ?? 0}</Text>
+                <Text style={styles.smartImportSummaryLabel}>Add</Text>
+              </View>
+              <View style={styles.smartImportSummaryCell}>
+                <Text style={styles.smartImportSummaryValue}>{pendingSmartImportReview?.summary.updatedRows ?? 0}</Text>
+                <Text style={styles.smartImportSummaryLabel}>Update</Text>
+              </View>
+              <View style={styles.smartImportSummaryCell}>
+                <Text style={styles.smartImportSummaryValue}>{pendingSmartImportReview?.summary.reviewNeededItems ?? 0}</Text>
+                <Text style={styles.smartImportSummaryLabel}>Review</Text>
+              </View>
+              <View style={styles.smartImportSummaryCell}>
+                <Text style={styles.smartImportSummaryValue}>{pendingSmartImportReview?.summary.suggestedArchiveRows ?? 0}</Text>
+                <Text style={styles.smartImportSummaryLabel}>Preserve</Text>
+              </View>
+            </View>
+
+            <Text style={styles.smartImportReviewIntro}>Review each imported row before applying. Nothing is written until you tap Apply.</Text>
+
+            <ScrollView style={styles.smartImportRowsScroll} contentContainerStyle={styles.smartImportRowsContent} showsVerticalScrollIndicator={true}>
+              {(pendingSmartImportReview?.rows ?? []).map(renderSmartImportReviewRow)}
+            </ScrollView>
+
+            <View style={styles.smartImportFooter}>
+              <TouchableOpacity style={styles.smartImportCancelButton} onPress={() => setPendingSmartImportReview(null)} activeOpacity={0.8} testID="smart-import-review-cancel">
+                <Text style={styles.smartImportCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.smartImportApplyButton, isImporting && styles.smartImportApplyButtonDisabled]}
+                onPress={() => { void pendingSmartImportReview?.onApply(); }}
+                activeOpacity={0.86}
+                disabled={isImporting || pendingSmartImportReview === null}
+                testID="smart-import-review-apply"
+              >
+                {isImporting ? <ActivityIndicator size="small" color={COLORS.white} /> : <CheckCircle size={16} color={COLORS.white} />}
+                <Text style={styles.smartImportApplyText}>{pendingSmartImportReview?.applyLabel ?? 'Apply Import'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -3648,6 +3825,214 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeXS,
     color: 'rgba(255, 255, 255, 0.9)',
     marginTop: 2,
+  },
+  smartImportModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(2, 6, 23, 0.72)',
+    justifyContent: 'flex-end',
+  },
+  smartImportModalCard: {
+    maxHeight: '88%',
+    backgroundColor: '#F8FAFC',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    overflow: 'hidden',
+  },
+  smartImportModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    padding: SPACING.md,
+    backgroundColor: COLORS.navyDeep,
+  },
+  smartImportHeaderIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(167, 243, 208, 0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(167, 243, 208, 0.25)',
+  },
+  smartImportHeaderCopy: {
+    flex: 1,
+  },
+  smartImportModalTitle: {
+    fontSize: TYPOGRAPHY.fontSizeLG,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.white,
+  },
+  smartImportModalSubtitle: {
+    marginTop: 2,
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: 'rgba(255,255,255,0.74)',
+  },
+  smartImportCloseButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+  },
+  smartImportSummaryGrid: {
+    flexDirection: 'row',
+    gap: SPACING.xs,
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.md,
+  },
+  smartImportSummaryCell: {
+    flex: 1,
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.md,
+    paddingVertical: SPACING.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(3, 105, 161, 0.12)',
+  },
+  smartImportSummaryValue: {
+    fontSize: 20,
+    fontWeight: '900' as const,
+    color: COLORS.navyDeep,
+  },
+  smartImportSummaryLabel: {
+    marginTop: 2,
+    fontSize: 10,
+    fontWeight: '800' as const,
+    color: '#64748B',
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.6,
+  },
+  smartImportReviewIntro: {
+    marginHorizontal: SPACING.md,
+    marginTop: SPACING.sm,
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: '#475569',
+    lineHeight: 19,
+  },
+  smartImportRowsScroll: {
+    marginTop: SPACING.sm,
+  },
+  smartImportRowsContent: {
+    paddingHorizontal: SPACING.md,
+    paddingBottom: SPACING.md,
+    gap: SPACING.sm,
+  },
+  smartImportRow: {
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...SHADOW.sm,
+  },
+  smartImportRowTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.xs,
+  },
+  smartImportKindPill: {
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: BORDER_RADIUS.round,
+    backgroundColor: '#E0F2FE',
+  },
+  smartImportKindText: {
+    fontSize: 10,
+    fontWeight: '900' as const,
+    color: '#075985',
+  },
+  smartImportActionPill: {
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: BORDER_RADIUS.round,
+    borderWidth: 1,
+  },
+  smartImportActionAdd: {
+    backgroundColor: '#DCFCE7',
+    borderColor: '#86EFAC',
+  },
+  smartImportActionUpdate: {
+    backgroundColor: '#FEF3C7',
+    borderColor: '#FDE68A',
+  },
+  smartImportActionPreserve: {
+    backgroundColor: '#EDE9FE',
+    borderColor: '#C4B5FD',
+  },
+  smartImportActionReview: {
+    backgroundColor: '#FEE2E2',
+    borderColor: '#FECACA',
+  },
+  smartImportActionText: {
+    fontSize: 10,
+    fontWeight: '900' as const,
+    color: '#0F172A',
+  },
+  smartImportRowTitle: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  smartImportRowSubtitle: {
+    marginTop: 3,
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: '#334155',
+    lineHeight: 18,
+  },
+  smartImportRowMeta: {
+    marginTop: 5,
+    fontSize: 11,
+    color: '#64748B',
+    lineHeight: 15,
+  },
+  smartImportDiffText: {
+    marginTop: 5,
+    fontSize: 11,
+    color: '#0F766E',
+    lineHeight: 16,
+  },
+  smartImportFooter: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    padding: SPACING.md,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    backgroundColor: COLORS.white,
+  },
+  smartImportCancelButton: {
+    flex: 0.85,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingVertical: 13,
+  },
+  smartImportCancelText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#334155',
+  },
+  smartImportApplyButton: {
+    flex: 1.4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.xs,
+    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: '#0F766E',
+    paddingVertical: 13,
+  },
+  smartImportApplyButtonDisabled: {
+    opacity: 0.7,
+  },
+  smartImportApplyText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.white,
   },
   quickActionsBody: {
     padding: 12,

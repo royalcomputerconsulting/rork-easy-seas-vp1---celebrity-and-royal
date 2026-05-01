@@ -5,7 +5,6 @@ import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BookOpen, Calculator, ClipboardCheck, Gamepad2, Gift, GraduationCap, HeartHandshake, Ship, Sparkles, X } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOW } from '@/constants/theme';
-import { EASYSEAS_FEATURE_COVERAGE_CHECKLIST } from '@/constants/easySeasFeatureCoverage';
 
 interface LearningTopic {
   id: string;
@@ -118,13 +117,6 @@ const TOPICS: LearningTopic[] = [
 export default function LearnSystemScreen() {
   const router = useRouter();
   const topicCount = useMemo(() => TOPICS.length, []);
-  const coverageSummary = useMemo(() => {
-    const represented = EASYSEAS_FEATURE_COVERAGE_CHECKLIST.filter((item) => item.status === 'represented').length;
-    const partial = EASYSEAS_FEATURE_COVERAGE_CHECKLIST.filter((item) => item.status === 'partial').length;
-    const deficiencies = EASYSEAS_FEATURE_COVERAGE_CHECKLIST.reduce((sum, item) => sum + item.deficiencies.length, 0);
-    return { represented, partial, deficiencies };
-  }, []);
-
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
@@ -176,41 +168,6 @@ export default function LearnSystemScreen() {
               </View>
             );
           })}
-
-          <View style={styles.coverageCard} testID="learn-system-feature-coverage-checklist">
-            <View style={styles.coverageHeader}>
-              <ClipboardCheck size={20} color="#0F766E" />
-              <View style={styles.coverageHeaderCopy}>
-                <Text style={styles.coverageTitle}>18-feature coverage checklist</Text>
-                <Text style={styles.coverageSubtitle}>{coverageSummary.represented} represented • {coverageSummary.partial} partial • {coverageSummary.deficiencies} deficiencies to close</Text>
-              </View>
-            </View>
-            <View style={styles.coverageList}>
-              {EASYSEAS_FEATURE_COVERAGE_CHECKLIST.map((feature) => (
-                <View key={feature.id} style={styles.coverageItem} testID={`feature-coverage-${feature.id}`}>
-                  <View style={styles.coverageItemTopRow}>
-                    <Text style={styles.coverageItemTitle}>{feature.id}. {feature.title}</Text>
-                    <View style={[styles.coverageStatusPill, feature.status === 'represented' ? styles.coverageStatusRepresented : styles.coverageStatusPartial]}>
-                      <Text style={[styles.coverageStatusText, feature.status === 'represented' ? styles.coverageStatusTextRepresented : styles.coverageStatusTextPartial]}>{feature.status === 'represented' ? 'Represented' : 'Partial'}</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.coverageRepresentedText}>In system: {feature.representedIn.join(' • ')}</Text>
-                  {feature.deficiencies.length > 0 ? (
-                    <View style={styles.deficiencyList}>
-                      {feature.deficiencies.map((deficiency) => (
-                        <View key={deficiency} style={styles.deficiencyRow}>
-                          <View style={styles.deficiencyDot} />
-                          <Text style={styles.deficiencyText}>{deficiency}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  ) : (
-                    <Text style={styles.noDeficiencyText}>No deficiency found in this audit.</Text>
-                  )}
-                </View>
-              ))}
-            </View>
-          </View>
 
           <View style={styles.bookCard} testID="learn-system-books">
             <BookOpen size={20} color="#D97706" />

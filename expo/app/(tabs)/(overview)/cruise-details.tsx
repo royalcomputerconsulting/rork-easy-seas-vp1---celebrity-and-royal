@@ -1,7 +1,7 @@
 import React, { memo, useMemo, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, Switch, Image } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import type { ItineraryDay, BookedCruise, CasinoOffer } from '@/types/models';
+import type { ItineraryDay, BookedCruise, CasinoOffer, Cruise } from '@/types/models';
 import { Ship, Calendar, MapPin, Clock, DollarSign, Gift, Star, Users, Anchor, Tag, ArrowLeft, Edit3, X, Save, TrendingUp, Dice5, AlertCircle, Target, Trash2, Sparkles } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
@@ -20,7 +20,74 @@ import {
   calculateSeaDayDensityScore,
   calculateShipFamiliarityScore,
   findCruiseReplacementCandidates,
+  type ReplacementCandidate,
 } from '@/lib/cruisePlanningIntelligence';
+
+type ReplacementGoalId = 'bestValue' | 'lowerCost' | 'seaDays' | 'backToBack' | 'expiringOffer' | 'newPorts' | 'shipFamiliarity' | 'tierProgress';
+
+type ReplacementGoal = {
+  id: ReplacementGoalId;
+  label: string;
+  subtitle: string;
+};
+
+const REPLACEMENT_GOALS: ReplacementGoal[] = [
+  { id: 'bestValue', label: 'Best value', subtitle: 'Balanced score' },
+  { id: 'lowerCost', label: 'Lower cost', subtitle: 'Cash saver' },
+  { id: 'seaDays', label: 'Sea days', subtitle: 'Casino time' },
+  { id: 'backToBack', label: 'B2B fit', subtitle: 'Calendar gap' },
+  { id: 'expiringOffer', label: 'Use expiring', subtitle: 'Before it lapses' },
+  { id: 'newPorts', label: 'New ports', subtitle: 'Fresh itinerary' },
+  { id: 'shipFamiliarity', label: 'Known ship', subtitle: 'Comfort pick' },
+  { id: 'tierProgress', label: 'Tier push', subtitle: 'Points upside' },
+];
+
+function estimateReplacementOutOfPocket(cruise: Cruise, offers: CasinoOffer[]): number {
+  const matchingOffer = offers.find((offer) => offer.cruiseId === cruise.id || offer.cruiseIds?.includes(cruise.id) || (offer.offerCode && cruise.offerCode && offer.offerCode === cruise.offerCode) || (offer.shipName === cruise.shipName && offer.sailingDate === cruise.sailDate));
+  const taxes = cruise.taxes ?? matchingOffer?.taxesFees ?? matchingOffer?.portCharges ?? Math.round((cruise.nights || matchingOffer?.nights || 7) * 60);
+  const cabin = cruise.price ?? cruise.totalPrice ?? 0;
+  return Math.max(0, taxes + cabin);
+}
+
+function getReplacementOffer(cruise: Cruise, offers: CasinoOffer[]): CasinoOffer | undefined {
+  return offers.find((offer) => offer.cruiseId === cruise.id || offer.cruiseIds?.includes(cruise.id) || (offer.offerCode && cruise.offerCode && offer.offerCode === cruise.offerCode) || (offer.shipName === cruise.shipName && offer.sailingDate === cruise.sailDate));
+}
+
+function getDateGapDays(first: string | undefined, second: string | undefined): number | null {
+  if (!first || !second) return null;
+  const firstDate = createDateFromString(first);
+  const secondDate = createDateFromString(second);
+  if (Number.isNaN(firstDate.getTime()) || Number.isNaN(secondDate.getTime())) return null;
+  return Math.round((secondDate.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function scoreReplacementForGoal(candidate: ReplacementCandidate, currentCruise: Cruise, goal: ReplacementGoalId, offers: CasinoOffer[], history: Cruise[], profile: { id: string; email?: string } | null): number {
+  if (goal === 'bestValue') return candidate.rankScore;
+  if (goal === 'seaDays') return candidate.seaDayDensityScore;
+  if (goal === 'tierProgress') return candidate.seaDayDensityScore + Math.min(20, (candidate.cruise.nights || 0) * 2) + Math.min(12, candidate.offerScore * 0.12);
+  if (goal === 'lowerCost') {
+    const currentCost = estimateReplacementOutOfPocket(currentCruise, offers);
+    const candidateCost = estimateReplacementOutOfPocket(candidate.cruise, offers);
+    return Math.max(0, Math.min(100, 50 + ((currentCost - candidateCost) / 40)));
+  }
+  if (goal === 'backToBack') {
+    const gapAfterCurrent = getDateGapDays(currentCruise.returnDate, candidate.cruise.sailDate);
+    const gapBeforeCurrent = getDateGapDays(candidate.cruise.returnDate, currentCruise.sailDate);
+    const possibleGaps = [gapAfterCurrent, gapBeforeCurrent].filter((gap): gap is number => gap !== null && gap >= 0);
+    const bestGap = possibleGaps.length > 0 ? Math.min(...possibleGaps) : 99;
+    return Math.max(0, 100 - bestGap * 16);
+  }
+  if (goal === 'expiringOffer') {
+    const offer = getReplacementOffer(candidate.cruise, offers);
+    const expiryDate = offer?.expiryDate || offer?.expires || offer?.offerExpiryDate || candidate.cruise.offerExpiry;
+    if (!expiryDate) return candidate.offerScore * 0.4;
+    const daysUntilExpiry = getDaysUntil(expiryDate);
+    if (daysUntilExpiry < 0) return candidate.offerScore * 0.4;
+    return Math.max(0, Math.min(100, 95 - daysUntilExpiry * 1.8 + candidate.offerScore * 0.18));
+  }
+  if (goal === 'newPorts') return buildPortTracker(history, candidate.cruise, profile).itineraryNoveltyScore;
+  return calculateShipFamiliarityScore(candidate.cruise.shipName, history, offers, profile).score;
+}
 
 type CompactFactProps = {
   icon: React.ComponentType<{ size?: number; color?: string }>;
@@ -109,6 +176,7 @@ export default function CruiseDetailsScreen() {
   
   const [heroImageUri, setHeroImageUri] = useState<string>(DEFAULT_CRUISE_IMAGE);
   const [unbookModalVisible, setUnbookModalVisible] = useState<boolean>(false);
+  const [selectedReplacementGoal, setSelectedReplacementGoal] = useState<ReplacementGoalId>('bestValue');
   
   const playingHoursConfig: PlayingHoursConfig = useMemo(() => {
     const userPlayingHours = currentUser?.playingHours || DEFAULT_PLAYING_HOURS;
@@ -481,8 +549,17 @@ export default function CruiseDetailsScreen() {
 
   const replacementCandidates = useMemo(() => {
     if (!cruise) return [];
-    return findCruiseReplacementCandidates(cruise, allCruiseRecords, allOfferRecords, allCruiseRecords, currentTravelerProfile).slice(0, 3);
-  }, [allCruiseRecords, allOfferRecords, cruise, currentTravelerProfile]);
+    const candidates = findCruiseReplacementCandidates(cruise, allCruiseRecords, allOfferRecords, allCruiseRecords, currentTravelerProfile);
+    const ranked = candidates
+      .map((candidate) => ({
+        candidate,
+        goalScore: scoreReplacementForGoal(candidate, cruise, selectedReplacementGoal, allOfferRecords, allCruiseRecords, currentTravelerProfile),
+      }))
+      .sort((left, right) => right.goalScore - left.goalScore || right.candidate.rankScore - left.candidate.rankScore)
+      .map((entry) => entry.candidate);
+    console.log('[CruiseDetails] Replacement Finder goal ranking:', { selectedReplacementGoal, candidates: ranked.length });
+    return ranked.slice(0, 3);
+  }, [allCruiseRecords, allOfferRecords, cruise, currentTravelerProfile, selectedReplacementGoal]);
 
   const casinoStatusBadge = useMemo(() => {
     if (!casinoAvailability) return null;
@@ -1248,10 +1325,28 @@ export default function CruiseDetailsScreen() {
               ) : (
                 <Text style={styles.planningMuted}>No clear new-port gain detected from current history.</Text>
               )}
-              {replacementCandidates.length > 0 ? (
-                <View style={styles.replacementList} testID="cruise-replacement-finder">
-                  <Text style={styles.replacementTitle}>Replacement Finder</Text>
-                  {replacementCandidates.map((candidate) => (
+              <View style={styles.replacementList} testID="cruise-replacement-finder">
+                <Text style={styles.replacementTitle}>Replacement Finder</Text>
+                <Text style={styles.replacementGoalIntro}>Pick what you want this replacement to optimize for.</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.replacementGoalRow} testID="cruise-replacement-goal-picker">
+                  {REPLACEMENT_GOALS.map((goal) => {
+                    const isSelected = selectedReplacementGoal === goal.id;
+                    return (
+                      <TouchableOpacity
+                        key={goal.id}
+                        style={[styles.replacementGoalChip, isSelected && styles.replacementGoalChipSelected]}
+                        onPress={() => setSelectedReplacementGoal(goal.id)}
+                        activeOpacity={0.78}
+                        testID={`replacement-goal-${goal.id}`}
+                      >
+                        <Text style={[styles.replacementGoalLabel, isSelected && styles.replacementGoalLabelSelected]}>{goal.label}</Text>
+                        <Text style={[styles.replacementGoalSubtitle, isSelected && styles.replacementGoalSubtitleSelected]}>{goal.subtitle}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+                {replacementCandidates.length > 0 ? (
+                  replacementCandidates.map((candidate) => (
                     <TouchableOpacity
                       key={candidate.cruise.id}
                       style={styles.replacementItem}
@@ -1260,15 +1355,17 @@ export default function CruiseDetailsScreen() {
                     >
                       <View style={styles.replacementTopRow}>
                         <Text style={styles.replacementShip} numberOfLines={1}>{candidate.cruise.shipName}</Text>
-                        <Text style={styles.replacementScore}>{Math.round(candidate.rankScore)}</Text>
+                        <Text style={styles.replacementScore}>{Math.round(scoreReplacementForGoal(candidate, cruise, selectedReplacementGoal, allOfferRecords, allCruiseRecords, currentTravelerProfile))}</Text>
                       </View>
                       <Text style={styles.replacementMeta} numberOfLines={2}>{candidate.offerCode} · Offer {candidate.offerScore} · Sea {candidate.seaDayDensityScore}</Text>
                       <Text style={styles.replacementReason} numberOfLines={2}>{candidate.reasonBetterWorse}</Text>
                       {candidate.warnings[0] ? <Text style={styles.replacementWarning}>{candidate.warnings[0]}</Text> : null}
                     </TouchableOpacity>
-                  ))}
-                </View>
-              ) : null}
+                  ))
+                ) : (
+                  <Text style={styles.replacementEmpty}>No replacement sailings match this goal yet.</Text>
+                )}
+              </View>
             </View>
           )}
 
@@ -2388,6 +2485,44 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: COLORS.navyDeep,
   },
+  replacementGoalIntro: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    lineHeight: 16,
+  },
+  replacementGoalRow: {
+    gap: SPACING.xs,
+    paddingVertical: SPACING.xs,
+  },
+  replacementGoalChip: {
+    minWidth: 112,
+    backgroundColor: '#F8FAFC',
+    borderRadius: BORDER_RADIUS.md,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 9,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  replacementGoalChipSelected: {
+    backgroundColor: '#0F766E',
+    borderColor: '#0F766E',
+  },
+  replacementGoalLabel: {
+    fontSize: 12,
+    fontWeight: '900' as const,
+    color: COLORS.navyDeep,
+  },
+  replacementGoalLabelSelected: {
+    color: COLORS.white,
+  },
+  replacementGoalSubtitle: {
+    marginTop: 2,
+    fontSize: 10,
+    color: COLORS.textSecondary,
+  },
+  replacementGoalSubtitleSelected: {
+    color: 'rgba(255,255,255,0.78)',
+  },
   replacementItem: {
     backgroundColor: COLORS.white,
     borderRadius: BORDER_RADIUS.sm,
@@ -2427,6 +2562,15 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.error,
     marginTop: 4,
+  },
+  replacementEmpty: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    backgroundColor: '#F8FAFC',
+    borderRadius: BORDER_RADIUS.sm,
+    padding: SPACING.sm,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   compactCasinoCard: {
     backgroundColor: COLORS.white,
