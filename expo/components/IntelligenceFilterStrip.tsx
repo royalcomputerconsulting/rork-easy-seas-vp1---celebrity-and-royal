@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { SlidersHorizontal, UserRound } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { useIntelligenceFilters, type BrandFilterValue, type ProfileFilterValue, type ProgramFilterValue } from '@/state/IntelligenceFiltersProvider';
@@ -42,14 +43,20 @@ export const IntelligenceFilterStrip = React.memo(function IntelligenceFilterStr
   }, [users]);
 
   return (
-    <View style={[styles.container, compact && styles.containerCompact]} testID={`${contextLabel.toLowerCase().replace(/\s+/g, '-')}-intelligence-filters`}>
+    <LinearGradient
+      colors={[COLORS.navyDeep, COLORS.oceanicBlueMedium, '#0E7490']}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={[styles.container, compact && styles.containerCompact]}
+      testID={`${contextLabel.toLowerCase().replace(/\s+/g, '-')}-intelligence-filters`}
+    >
       <View style={styles.headerRow}>
         <View style={styles.titleRow}>
           <View style={styles.iconBadge}>
-            <SlidersHorizontal size={13} color={COLORS.navyDeep} />
+            <SlidersHorizontal size={13} color={COLORS.goldAccent} />
           </View>
           <View>
-            <Text style={styles.title}>{contextLabel} filters</Text>
+            <Text style={styles.title}>Filtering</Text>
             <Text style={styles.subtitle}>Profile, account, brand, and program scope</Text>
           </View>
         </View>
@@ -62,7 +69,7 @@ export const IntelligenceFilterStrip = React.memo(function IntelligenceFilterStr
 
       <View style={styles.group}>
         <View style={styles.groupLabelRow}>
-          <UserRound size={12} color="#64748B" />
+          <UserRound size={12} color="rgba(255,255,255,0.72)" />
           <Text style={styles.groupLabel}>Profile / account</Text>
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
@@ -126,19 +133,19 @@ export const IntelligenceFilterStrip = React.memo(function IntelligenceFilterStr
           </View>
         ) : null}
       </View>
-    </View>
+    </LinearGradient>
   );
 });
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: 'rgba(255,255,255,0.96)',
-    borderRadius: BORDER_RADIUS.lg,
+    borderRadius: BORDER_RADIUS.xl,
     padding: SPACING.md,
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(15, 118, 110, 0.16)',
-    ...SHADOW.sm,
+    borderColor: 'rgba(212, 160, 10, 0.42)',
+    overflow: 'hidden',
+    ...SHADOW.md,
   },
   containerCompact: {
     padding: SPACING.sm,
@@ -162,33 +169,33 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#E0F2FE',
+    backgroundColor: 'rgba(212, 160, 10, 0.16)',
     borderWidth: 1,
-    borderColor: '#BAE6FD',
+    borderColor: 'rgba(212, 160, 10, 0.34)',
   },
   title: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: '800' as const,
-    color: COLORS.navyDeep,
+    color: COLORS.white,
     letterSpacing: 0.2,
   },
   subtitle: {
     fontSize: 11,
-    color: '#64748B',
+    color: 'rgba(255,255,255,0.68)',
     marginTop: 1,
   },
   clearButton: {
     paddingHorizontal: SPACING.sm,
     paddingVertical: 6,
     borderRadius: BORDER_RADIUS.round,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: 'rgba(255,255,255,0.12)',
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: 'rgba(255,255,255,0.22)',
   },
   clearButtonText: {
     fontSize: 11,
     fontWeight: '800' as const,
-    color: COLORS.navyDeep,
+    color: COLORS.white,
   },
   group: {
     marginBottom: SPACING.sm,
@@ -202,7 +209,7 @@ const styles = StyleSheet.create({
   groupLabel: {
     fontSize: 11,
     fontWeight: '800' as const,
-    color: '#475569',
+    color: 'rgba(255,255,255,0.72)',
     textTransform: 'uppercase' as const,
     letterSpacing: 0.8,
     marginBottom: 6,
@@ -220,21 +227,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingVertical: 8,
     borderRadius: BORDER_RADIUS.round,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: 'rgba(255,255,255,0.10)',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.18)',
   },
   chipActive: {
-    backgroundColor: COLORS.navyDeep,
-    borderColor: COLORS.navyDeep,
+    backgroundColor: COLORS.goldAccent,
+    borderColor: COLORS.goldAccent,
   },
   chipText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: '700' as const,
-    color: '#334155',
+    color: 'rgba(255,255,255,0.84)',
   },
   chipTextActive: {
-    color: COLORS.white,
+    color: COLORS.navyDeep,
   },
   dualGroupRow: {
     gap: SPACING.sm,
@@ -246,21 +253,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.sm,
     paddingVertical: 7,
     borderRadius: BORDER_RADIUS.round,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: 'rgba(255,255,255,0.10)',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255,255,255,0.18)',
   },
   brandChipActive: {
-    backgroundColor: '#0F766E',
-    borderColor: '#0F766E',
+    backgroundColor: COLORS.aquaAccent,
+    borderColor: COLORS.aquaAccent,
   },
   programChipActive: {
-    backgroundColor: '#1D4ED8',
-    borderColor: '#1D4ED8',
+    backgroundColor: COLORS.goldAccent,
+    borderColor: COLORS.goldAccent,
   },
   smallChipText: {
     fontSize: 11,
     fontWeight: '800' as const,
-    color: '#334155',
+    color: 'rgba(255,255,255,0.84)',
   },
 });
