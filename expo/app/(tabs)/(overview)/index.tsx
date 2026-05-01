@@ -54,7 +54,6 @@ import { OfferCard } from '@/components/OfferCard';
 import { ResponsiveContainer } from '@/components/ResponsiveContainer';
 import { CasinoOfferCard, OfferSummaryCard } from '@/components/CasinoOfferCard';
 import { AlertsManagerModal } from '@/components/AlertsManagerModal';
-import { AgentXAnalysisCard } from '@/components/AgentXAnalysisCard';
 import { QuickActionsFAB } from '@/components/ui/QuickActionsFAB';
 import { createDateFromString, getDaysUntil, isDateInPast, formatDate } from '@/lib/date';
 import { isActiveBookedCruise } from '@/lib/bookedCruiseStatus';
@@ -200,7 +199,7 @@ function OverviewScreenContent() {
   const { currentUser, users } = useUser();
   const { selectedProfileId, selectedBrand, selectedProgram } = useIntelligenceFilters();
   const { logout } = useAuth();
-  const { sendMessage, refreshAnalysis, setMode: setAgentMode } = useAgentX();
+  const { sendMessage, setMode: setAgentMode } = useAgentX();
   const { summary } = useAlerts();
   
   usePriceTrackingSync();
@@ -752,18 +751,6 @@ function OverviewScreenContent() {
 
         <IntelligenceFilterStrip contextLabel="Offers" />
 
-        <CollapsibleSection
-          title="AI Analysis"
-          subtitle="Performance insights"
-          icon={<Bot size={18} color="#FFFFFF" />}
-          defaultExpanded={true}
-          showBorder={false}
-        >
-          <AgentXAnalysisCard
-            onViewDetails={() => router.push('/ask-my-data' as any)}
-            onRefresh={refreshAnalysis}
-          />
-        </CollapsibleSection>
 
         <TouchableOpacity
           style={styles.learnSystemCard}
