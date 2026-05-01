@@ -1,9 +1,9 @@
-import React, { useMemo } from 'react';
-import { ScrollView, StyleSheet, Text, View, TouchableOpacity } from 'react-native';
+import React, { useCallback, useMemo } from 'react';
+import { Alert, Linking, ScrollView, StyleSheet, Text, View, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { BookOpen, Calculator, ClipboardCheck, Gamepad2, Gift, GraduationCap, HeartHandshake, Ship, Sparkles, X } from 'lucide-react-native';
+import { BookOpen, Calculator, ChevronRight, ClipboardCheck, ExternalLink, Gamepad2, Gift, GraduationCap, HeartHandshake, Ship, Sparkles, X } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOW } from '@/constants/theme';
 
 interface LearningTopic {
@@ -14,6 +14,11 @@ interface LearningTopic {
   accent: string;
   icon: typeof BookOpen;
 }
+
+const BOOK_LINKS = {
+  authorPage: 'https://www.amazon.com/stores/Scott-Astin/author/B0GCQ1S8MH',
+  smoothSailing: 'https://www.amazon.com/Smooth-Sailing-Rough-Waters-Consistently/dp/B0G4NMSM31/ref=sr_1_1?crid=BWS5ZWAQCC46&dib=eyJ2IjoiMSJ9.pTShQ0uJgtzeHg_EAFai2a6YTAan0h_35hcv7ZH0QKfGjHj071QN20LucGBJIEps.F_tIgnCOSc3EqGF6wUtOWK_hXH-5Ti3Miy6KYQ_JaLY&dib_tag=se&keywords=smooth+sailing+in+rough+waters&qid=1766758613&s=books&sprefix=smooth+sailing+in+rough+water%2Cstripbooks%2C189&sr=1-1',
+} as const;
 
 const TOPICS: LearningTopic[] = [
   {
@@ -117,6 +122,21 @@ const TOPICS: LearningTopic[] = [
 export default function LearnSystemScreen() {
   const router = useRouter();
   const topicCount = useMemo(() => TOPICS.length, []);
+
+  const handleOpenBookLink = useCallback(async (url: string) => {
+    try {
+      const canOpen = await Linking.canOpenURL(url);
+      if (!canOpen) {
+        Alert.alert('Unable to Open Link', 'This device cannot open the selected book link right now.');
+        return;
+      }
+      await Linking.openURL(url);
+    } catch (error) {
+      console.error('[LearnSystem] Failed to open book link:', error);
+      Alert.alert('Unable to Open Link', 'Please try again from Settings or your browser.');
+    }
+  }, []);
+
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
@@ -169,12 +189,40 @@ export default function LearnSystemScreen() {
             );
           })}
 
-          <View style={styles.bookCard} testID="learn-system-books">
-            <BookOpen size={20} color="#D97706" />
-            <View style={styles.bookCopy}>
-              <Text style={styles.bookTitle}>Books by Scott Astin</Text>
-              <Text style={styles.bookBody}>Use the Settings links for Scott Astin’s books and companion material. The app keeps learning content separate from official cruise-line terms.</Text>
+          <View style={styles.bookCompanionCard} testID="learn-system-books">
+            <View style={styles.bookCompanionHeader}>
+              <View style={styles.bookCompanionIcon}>
+                <BookOpen size={22} color="#A7F3D0" />
+              </View>
+              <View style={styles.bookCopy}>
+                <Text style={styles.bookEyebrow}>Book + App Companion</Text>
+                <Text style={styles.bookTitle}>Scott Astin learning shelf</Text>
+                <Text style={styles.bookBody}>Open the book links here while using EasySeas as the companion workspace for offers, casino value, calendar planning, and responsible decision checks.</Text>
+              </View>
             </View>
+
+            <TouchableOpacity
+              style={styles.bookLinkButton}
+              onPress={() => handleOpenBookLink(BOOK_LINKS.smoothSailing)}
+              activeOpacity={0.82}
+              testID="learn-system-open-smooth-sailing"
+            >
+              <View style={styles.bookLinkCopy}>
+                <Text style={styles.bookLinkTitle}>Smooth Sailing (In Rough Waters)</Text>
+                <Text style={styles.bookLinkSubtitle}>Open the Amazon book page</Text>
+              </View>
+              <ExternalLink size={17} color={COLORS.white} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.secondaryBookLinkButton}
+              onPress={() => handleOpenBookLink(BOOK_LINKS.authorPage)}
+              activeOpacity={0.82}
+              testID="learn-system-open-author-page"
+            >
+              <Text style={styles.secondaryBookLinkText}>Check out Scott Astin’s other books</Text>
+              <ChevronRight size={16} color="#A7F3D0" />
+            </TouchableOpacity>
           </View>
 
           <View style={styles.disclaimerCard} testID="learn-system-disclaimer">
@@ -431,28 +479,91 @@ const styles = StyleSheet.create({
     fontWeight: '800' as const,
     color: '#166534',
   },
-  bookCard: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-    backgroundColor: '#FFFBEB',
-    borderRadius: BORDER_RADIUS.lg,
+  bookCompanionCard: {
+    backgroundColor: 'rgba(15, 36, 57, 0.94)',
+    borderRadius: BORDER_RADIUS.xl,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: '#FDE68A',
+    borderColor: 'rgba(167, 243, 208, 0.24)',
+    gap: SPACING.sm,
+    ...SHADOW.lg,
+  },
+  bookCompanionHeader: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+  },
+  bookCompanionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(167, 243, 208, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(167, 243, 208, 0.24)',
   },
   bookCopy: {
     flex: 1,
   },
-  bookTitle: {
-    fontSize: 15,
+  bookEyebrow: {
+    fontSize: 10,
     fontWeight: '900' as const,
-    color: COLORS.navyDeep,
+    color: '#A7F3D0',
+    letterSpacing: 0.9,
+    textTransform: 'uppercase' as const,
+    marginBottom: 3,
+  },
+  bookTitle: {
+    fontSize: 16,
+    fontWeight: '900' as const,
+    color: COLORS.white,
     marginBottom: 4,
   },
   bookBody: {
     fontSize: 13,
-    color: '#713F12',
+    color: 'rgba(255,255,255,0.76)',
     lineHeight: 19,
+  },
+  bookLinkButton: {
+    marginTop: SPACING.xs,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    borderRadius: BORDER_RADIUS.lg,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.md,
+    backgroundColor: '#0F766E',
+  },
+  bookLinkCopy: {
+    flex: 1,
+  },
+  bookLinkTitle: {
+    fontSize: 14,
+    fontWeight: '900' as const,
+    color: COLORS.white,
+  },
+  bookLinkSubtitle: {
+    marginTop: 2,
+    fontSize: 11,
+    fontWeight: '700' as const,
+    color: 'rgba(255,255,255,0.72)',
+  },
+  secondaryBookLinkButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: BORDER_RADIUS.lg,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(167, 243, 208, 0.18)',
+  },
+  secondaryBookLinkText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '900' as const,
+    color: '#A7F3D0',
   },
   disclaimerCard: {
     backgroundColor: 'rgba(15, 23, 42, 0.78)',

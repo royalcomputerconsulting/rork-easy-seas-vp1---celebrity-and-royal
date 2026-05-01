@@ -117,23 +117,23 @@ export const EASYSEAS_FEATURE_COVERAGE_CHECKLIST: EasySeasFeatureCoverageItem[] 
   {
     id: 16,
     title: 'Smart Import Reconciliation',
-    status: 'partial',
-    representedIn: ['Import merge reconciliation summaries', 'Duplicate/overlap detection', 'Review-needed flags', 'CSV import success summaries'],
-    deficiencies: ['Imports are merged immediately after reconciliation instead of presenting a pre-apply review screen.', 'Changed field-level diffs are summarized but not exposed in a dedicated row-by-row reconciliation UI.'],
+    status: 'represented',
+    representedIn: ['Import merge reconciliation summaries', 'Duplicate/overlap detection', 'Review-needed flags', 'Smart Import pre-apply review modal', 'Calendar import review', 'Field-by-field row diffs'],
+    deficiencies: [],
   },
   {
     id: 17,
     title: 'Ask My Data / Natural Language Search',
-    status: 'partial',
-    representedIn: ['AgentX Ask My Data tool', 'Natural-language data search parser', 'Ranked result formatting'],
-    deficiencies: ['There is no standalone search screen outside AgentX.', 'Current selected profile and brand filters are not consistently passed into the search function.', 'The parser handles common queries but is not a full semantic query engine.'],
+    status: 'represented',
+    representedIn: ['AgentX Ask My Data tool', 'Standalone Ask My Data screen', 'Scoped profile/brand/program filters', 'Semantic query parser', 'Confidence labels', 'Match reasons', 'Follow-up search prompts'],
+    deficiencies: [],
   },
   {
     id: 18,
     title: 'Learn the System / Book + App Companion',
     status: 'represented',
-    representedIn: ['Learn the System screen', 'Dashboard entry card', 'Responsible-use and legal note', 'Scott Astin books companion card'],
-    deficiencies: ['Book links depend on Settings companion links and are not duplicated inside the Learn screen.'],
+    representedIn: ['Learn the System screen', 'Dashboard entry card', 'Responsible-use and legal note', 'Scott Astin books companion card', 'Direct book and author links inside Learn the System'],
+    deficiencies: [],
   },
 ];
 
