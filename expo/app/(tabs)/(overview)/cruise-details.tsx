@@ -2,7 +2,7 @@ import React, { memo, useMemo, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, Switch, Image } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { ItineraryDay, BookedCruise, CasinoOffer, Cruise } from '@/types/models';
-import { Ship, Calendar, MapPin, Clock, DollarSign, Gift, Star, Users, Anchor, Tag, ArrowLeft, Edit3, X, Save, TrendingUp, Dice5, AlertCircle, Target, Trash2, Sparkles } from 'lucide-react-native';
+import { Ship, Calendar, MapPin, Clock, DollarSign, Gift, Star, Users, Anchor, Tag, ArrowLeft, Edit3, X, Save, TrendingUp, Dice5, AlertCircle, Target, Trash2, Sparkles, ChevronRight } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { formatCurrency, formatNights } from '@/lib/format';
@@ -1307,11 +1307,19 @@ export default function CruiseDetailsScreen() {
                   <Text style={styles.planningScoreValue}>{seaDayDensity.casinoOpportunityScore}</Text>
                   <Text style={styles.planningScoreMeta}>{seaDayDensity.likelyCasinoOpenDays}/{seaDayDensity.sailingLength} days</Text>
                 </View>
-                <View style={styles.planningScoreCell}>
-                  <Text style={styles.planningScoreLabel}>New Port</Text>
+                <TouchableOpacity
+                  style={[styles.planningScoreCell, styles.planningScoreCellButton]}
+                  onPress={() => router.push({ pathname: '/port-history' as any, params: { cruiseId: cruise.id } })}
+                  activeOpacity={0.78}
+                  testID="open-port-history-from-cruise"
+                >
+                  <View style={styles.planningScoreButtonTopRow}>
+                    <Text style={styles.planningScoreLabel}>New Port</Text>
+                    <ChevronRight size={13} color="#0F766E" />
+                  </View>
                   <Text style={styles.planningScoreValue}>{portTracker.itineraryNoveltyScore}</Text>
                   <Text style={styles.planningScoreMeta}>{portTracker.newPorts.length} new</Text>
-                </View>
+                </TouchableOpacity>
                 <View style={styles.planningScoreCell}>
                   <Text style={styles.planningScoreLabel}>Ship</Text>
                   <Text style={styles.planningScoreValue}>{shipFamiliarity.score}</Text>
@@ -1325,6 +1333,16 @@ export default function CruiseDetailsScreen() {
               ) : (
                 <Text style={styles.planningMuted}>No clear new-port gain detected from current history.</Text>
               )}
+              <TouchableOpacity
+                style={styles.portHistoryLink}
+                onPress={() => router.push({ pathname: '/port-history' as any, params: { cruiseId: cruise.id } })}
+                activeOpacity={0.78}
+                testID="open-port-history-detail"
+              >
+                <MapPin size={14} color="#0F766E" />
+                <Text style={styles.portHistoryLinkText}>Open port history: visited ports, countries, repeats</Text>
+                <ChevronRight size={14} color="#0F766E" />
+              </TouchableOpacity>
               <View style={styles.replacementList} testID="cruise-replacement-finder">
                 <Text style={styles.replacementTitle}>Replacement Finder</Text>
                 <Text style={styles.replacementGoalIntro}>Pick what you want this replacement to optimize for.</Text>
@@ -2442,6 +2460,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(0, 31, 63, 0.08)',
   },
+  planningScoreCellButton: {
+    borderColor: 'rgba(15, 118, 110, 0.22)',
+    backgroundColor: '#F0FDFA',
+  },
+  planningScoreButtonTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 4,
+  },
   planningScoreLabel: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.fontWeightBold,
@@ -2475,6 +2503,24 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textSecondary,
     marginTop: SPACING.xs,
+  },
+  portHistoryLink: {
+    marginTop: SPACING.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    backgroundColor: '#F0FDFA',
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: '#CCFBF1',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 9,
+  },
+  portHistoryLinkText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '900' as const,
+    color: '#0F766E',
   },
   replacementList: {
     marginTop: SPACING.md,

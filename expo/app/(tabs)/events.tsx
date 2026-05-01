@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { CalendarDays, ChevronLeft, ChevronRight, Ship, Plane, User, Plus, AlertTriangle, Ban, Gift, Award, MapPin, Clock } from 'lucide-react-native';
+import { CalendarDays, ChevronLeft, ChevronRight, Ship, Plane, User, Users, Plus, AlertTriangle, Ban, Gift, Award, MapPin, Clock } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { IMAGES } from '@/constants/images';
 import { useAppState } from '@/state/AppStateProvider';
@@ -713,6 +713,23 @@ export default function EventsScreen() {
 
           <IntelligenceFilterStrip contextLabel="Calendar" />
 
+          <TouchableOpacity
+            style={styles.passengerPermanentButton}
+            onPress={() => router.push('/passenger-calendar' as any)}
+            activeOpacity={0.84}
+            testID="open-passenger-calendar-drilldown"
+          >
+            <View style={styles.passengerPermanentIcon}>
+              <Users size={20} color="#A7F3D0" />
+            </View>
+            <View style={styles.passengerPermanentCopy}>
+              <Text style={styles.passengerPermanentEyebrow}>Permanent passenger calendar</Text>
+              <Text style={styles.passengerPermanentTitle}>Open full passenger drill-down</Text>
+              <Text style={styles.passengerPermanentSubtitle}>Sea days, port days, gaps, expirations, shared/solo travel</Text>
+            </View>
+            <ChevronRight size={20} color={COLORS.white} />
+          </TouchableOpacity>
+
           <View style={styles.viewToggleContainer}>
             {(['events', 'week', 'month', '90days', 'passenger'] as ViewMode[]).map((mode) => (
               <TouchableOpacity
@@ -864,10 +881,19 @@ export default function EventsScreen() {
           {viewMode === 'passenger' && (
             <View style={styles.passengerViewCard} testID="permanent-passenger-calendar-view">
               <View style={styles.passengerHeaderRow}>
-                <View>
+                <View style={styles.passengerHeaderCopy}>
                   <Text style={styles.passengerTitle}>Permanent Passenger View</Text>
                   <Text style={styles.passengerSubtitle}>Life-at-sea timeline for this year</Text>
                 </View>
+                <TouchableOpacity
+                  style={styles.passengerDrillButton}
+                  onPress={() => router.push('/passenger-calendar' as any)}
+                  activeOpacity={0.78}
+                  testID="passenger-view-open-full-drilldown"
+                >
+                  <Text style={styles.passengerDrillButtonText}>Drill-down</Text>
+                  <ChevronRight size={14} color={COLORS.white} />
+                </TouchableOpacity>
                 <View style={styles.passengerCountBadge}>
                   <Text style={styles.passengerCountText}>{passengerDayItems.length}</Text>
                 </View>
@@ -1044,6 +1070,49 @@ const styles = StyleSheet.create({
     height: 100,
     marginTop: 14,
     opacity: 0.8,
+  },
+  passengerPermanentButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    marginHorizontal: SPACING.md,
+    marginBottom: SPACING.md,
+    padding: SPACING.md,
+    borderRadius: 22,
+    backgroundColor: COLORS.navyDeep,
+    borderWidth: 1,
+    borderColor: 'rgba(167, 243, 208, 0.24)',
+    ...SHADOW.md,
+  },
+  passengerPermanentIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(167, 243, 208, 0.12)',
+  },
+  passengerPermanentCopy: {
+    flex: 1,
+  },
+  passengerPermanentEyebrow: {
+    fontSize: 10,
+    fontWeight: '900' as const,
+    color: '#A7F3D0',
+    letterSpacing: 0.7,
+    textTransform: 'uppercase' as const,
+  },
+  passengerPermanentTitle: {
+    marginTop: 2,
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: '900' as const,
+    color: COLORS.white,
+  },
+  passengerPermanentSubtitle: {
+    marginTop: 2,
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: 'rgba(255,255,255,0.72)',
+    lineHeight: 16,
   },
   viewToggleContainer: {
     flexDirection: 'row',
@@ -1249,7 +1318,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: SPACING.sm,
     marginBottom: SPACING.md,
+  },
+  passengerHeaderCopy: {
+    flex: 1,
+  },
+  passengerDrillButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: COLORS.navyDeep,
+    borderRadius: BORDER_RADIUS.round,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 7,
+  },
+  passengerDrillButtonText: {
+    fontSize: 11,
+    fontWeight: '900' as const,
+    color: COLORS.white,
   },
   passengerTitle: {
     fontSize: TYPOGRAPHY.fontSizeLG,
