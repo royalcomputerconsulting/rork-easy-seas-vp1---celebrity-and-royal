@@ -1513,7 +1513,11 @@ export default function SettingsScreen() {
       setIsExportingAll(true);
       console.log('[Settings] Starting full data export...');
       
-      const result = await exportAllDataToFile(authenticatedEmail);
+      const result = await exportAllDataToFile(authenticatedEmail, {
+        authenticatedEmail,
+        activeProfileId: currentUser?.id ?? null,
+        activeProfileEmail: currentUser?.email ?? authenticatedEmail ?? null,
+      });
       
       if (result.success) {
         Alert.alert(
@@ -1529,14 +1533,18 @@ export default function SettingsScreen() {
     } finally {
       setIsExportingAll(false);
     }
-  }, [authenticatedEmail]);
+  }, [authenticatedEmail, currentUser?.email, currentUser?.id]);
 
   const handleImportAllData = useCallback(async () => {
     try {
       setIsImportingAll(true);
       console.log('[Settings] Starting full data import...');
       
-      const result = await importAllDataFromFile(authenticatedEmail);
+      const result = await importAllDataFromFile(authenticatedEmail, {
+        authenticatedEmail,
+        activeProfileId: currentUser?.id ?? null,
+        activeProfileEmail: currentUser?.email ?? authenticatedEmail ?? null,
+      });
       
       if (!result.success) {
         if (result.error !== 'Import cancelled') {
@@ -1615,7 +1623,7 @@ export default function SettingsScreen() {
     } finally {
       setIsImportingAll(false);
     }
-  }, [authenticatedEmail, coreData, forceProfileSyncNow, reloadCasinoSessions, reloadMachines, setLocalData, syncLoyaltyFromStorage, syncUserFromStorage]);
+  }, [authenticatedEmail, coreData, currentUser?.email, currentUser?.id, forceProfileSyncNow, reloadCasinoSessions, reloadMachines, setLocalData, syncLoyaltyFromStorage, syncUserFromStorage]);
 
   const handleDownloadExtension = useCallback(async () => {
     try {

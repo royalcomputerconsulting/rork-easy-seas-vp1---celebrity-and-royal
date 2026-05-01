@@ -2,7 +2,7 @@ import { Platform } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { File as ExpoFile, Paths as ExpoPaths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import { getAllStoredData, importAllData, type FullAppDataBundle } from '../dataBundle/bundleOperations';
+import { getAllStoredData, importAllData, type DataProfileGate, type FullAppDataBundle } from '../dataBundle/bundleOperations';
 
 type LegacyFullDataBundle = Partial<FullAppDataBundle> & {
   offers?: unknown;
@@ -258,15 +258,19 @@ function normalizeImportedBackup(rawBundle: LegacyFullDataBundle): FullAppDataBu
   };
 }
 
-export async function exportAllDataToFile(email?: string | null): Promise<{
+export async function exportAllDataToFile(email?: string | null, profileGate?: DataProfileGate): Promise<{
   success: boolean;
   fileName?: string;
   error?: string;
 }> {
   try {
-    console.log('[DataFileIO] Exporting all data to file for email:', email || '(none)');
+    console.log('[DataFileIO] Exporting all data to file for email/profile gate:', {
+      email: email || '(none)',
+      activeProfileId: profileGate?.activeProfileId,
+      activeProfileEmail: profileGate?.activeProfileEmail,
+    });
     
-    const bundle = await getAllStoredData(email);
+    const bundle = await getAllStoredData(email, profileGate);
     const jsonContent = JSON.stringify(bundle, null, 2);
     
     const now = new Date();
@@ -313,7 +317,7 @@ export async function exportAllDataToFile(email?: string | null): Promise<{
   }
 }
 
-export async function importAllDataFromFile(email?: string | null): Promise<{
+export async function importAllDataFromFile(email?: string | null, profileGate?: DataProfileGate): Promise<{
   success: boolean;
   imported?: {
     cruises: number;
@@ -431,7 +435,7 @@ export async function importAllDataFromFile(email?: string | null): Promise<{
       w2gRecords: bundle.casinoData?.w2gRecords?.length || 0,
     });
 
-    const importResult = await importAllData(bundle, email ?? null);
+    const importResult = await importAllData(bundle, email ?? null, profileGate);
     
     if (importResult.errors.length > 0) {
       console.log('[DataFileIO] Import completed with errors:', importResult.errors);
