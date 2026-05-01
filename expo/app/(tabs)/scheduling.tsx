@@ -8,7 +8,6 @@ import {
   RefreshControl,
   Platform,
   ActivityIndicator,
-  Modal,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -34,9 +33,7 @@ import { isDateInPast, getDaysUntil, createDateFromString } from '@/lib/date';
 import { CruiseCard } from '@/components/CruiseCard';
 import type { Cruise, BookedCruise, CasinoOffer } from '@/types/models';
 import { calculateCruiseValue } from '@/lib/valueCalculator';
-import { useAgentX } from '@/state/AgentXProvider';
 import { getRecommendedCruises, type RecommendationScore } from '@/lib/recommendationEngine';
-import { AgentXChat } from '@/components/AgentXChat';
 import { AlertsManagerModal } from '@/components/AlertsManagerModal';
 import { ResponsiveContainer } from '@/components/ResponsiveContainer';
 import { FavoriteStateroomsSection } from '@/components/favorite-staterooms/FavoriteStateroomsSection';
@@ -79,7 +76,6 @@ export default function SchedulingScreen() {
   const { bookedCruises: storedBookedCruises } = useCoreData();
   const { currentUser, users } = useUser();
   const { selectedProfileId, selectedBrand, selectedProgram } = useIntelligenceFilters();
-  const { messages, isLoading: agentLoading, sendMessage, isVisible, setVisible, isExpanded, toggleExpanded, mode: agentMode, setMode: setAgentMode } = useAgentX();
 
   const [activeTab, setActiveTab] = useState<ViewTab>('available');
   const [filters, setFilters] = useState<FilterState>({
@@ -830,13 +826,9 @@ export default function SchedulingScreen() {
     );
   };
 
-  const handleAgentClose = useCallback(() => {
-    setVisible(false);
-  }, [setVisible]);
-
-  const handleAgentToggle = useCallback(() => {
-    setVisible(!isVisible);
-  }, [isVisible, setVisible]);
+  const handleAskMyDataOpen = useCallback(() => {
+    router.push('/ask-my-data' as any);
+  }, [router]);
 
   if (appLoading) {
     return (
@@ -904,53 +896,20 @@ export default function SchedulingScreen() {
         )}
       </SafeAreaView>
 
-      {/* Agent X Floating Button */}
+      {/* Ask My Data assistant entry */}
       <TouchableOpacity
         style={styles.agentFab}
-        onPress={handleAgentToggle}
+        onPress={handleAskMyDataOpen}
         activeOpacity={0.85}
+        testID="scheduling-open-ask-my-data"
       >
         <LinearGradient
           colors={[COLORS.goldAccent, COLORS.beigeWarm]}
           style={styles.agentFabGradient}
         >
-          {isVisible ? (
-            <X size={24} color={COLORS.navyDeep} />
-          ) : (
-            <Bot size={24} color={COLORS.navyDeep} />
-          )}
+          <Bot size={24} color={COLORS.navyDeep} />
         </LinearGradient>
       </TouchableOpacity>
-
-      {/* Agent X Chat Modal */}
-      <Modal
-        visible={isVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={handleAgentClose}
-      >
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity 
-            style={styles.modalBackdrop} 
-            activeOpacity={1} 
-            onPress={handleAgentClose}
-          />
-          <View style={[styles.agentChatContainer, isExpanded && styles.agentChatExpanded]}>
-            <AgentXChat
-              messages={messages}
-              onSendMessage={sendMessage}
-              isLoading={agentLoading}
-              isExpanded={isExpanded}
-              onToggleExpand={toggleExpanded}
-              onClose={handleAgentClose}
-              showHeader={true}
-              placeholder="Ask about cruises, tier progress, offers..."
-              mode={agentMode}
-              onModeChange={setAgentMode}
-            />
-          </View>
-        </View>
-      </Modal>
 
       {/* Alerts Manager Modal */}
       <AlertsManagerModal
@@ -1607,23 +1566,6 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  modalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
-  agentChatContainer: {
-    height: '70%',
-    borderTopLeftRadius: BORDER_RADIUS.xl,
-    borderTopRightRadius: BORDER_RADIUS.xl,
-    overflow: 'hidden',
-  },
-  agentChatExpanded: {
-    height: '95%',
   },
   b2bSetCard: {
     backgroundColor: COLORS.white,

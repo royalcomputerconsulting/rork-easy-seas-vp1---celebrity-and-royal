@@ -78,7 +78,7 @@ const AGENT_MODE_LABELS: Record<AgentXMode, string> = {
 };
 
 function buildSystemPrompt(context: { globalLibrary?: any[], myAtlasMachines?: any[], sessions?: any[], deckMappings?: any[], machineLogs?: any[], certificates?: any[], mode: AgentXMode; brandProgramLabel: string }): string {
-  return `You are Agent X in ${AGENT_MODE_LABELS[context.mode]} mode, an intelligent cruise and casino advisor for Easy Seas users managing Royal Caribbean / Club Royale and Celebrity / Blue Chip casino cruise data. The active casino system is: ${context.brandProgramLabel}. You help users:
+  return `You are the Ask My Data assistant in ${AGENT_MODE_LABELS[context.mode]} mode, an intelligent cruise and casino advisor for Easy Seas users managing Royal Caribbean / Club Royale and Celebrity / Blue Chip casino cruise data. The active casino system is: ${context.brandProgramLabel}. You help users:
 - Search and filter available cruises
 - Analyze bookings and calculate ROI
 - Track casino program tier progress using the selected Royal/Celebrity scope
@@ -396,6 +396,7 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
   const filteredBookedCruises = useMemo(() => filterRecordsByIntelligence(bookedCruises, intelligenceFilterSnapshot, users), [bookedCruises, intelligenceFilterSnapshot, users]);
   const filteredCasinoOffers = useMemo(() => filterRecordsByIntelligence(casinoOffers, intelligenceFilterSnapshot, users), [casinoOffers, intelligenceFilterSnapshot, users]);
   const filteredCalendarEvents = useMemo(() => filterRecordsByIntelligence(calendarEvents, intelligenceFilterSnapshot, users), [calendarEvents, intelligenceFilterSnapshot, users]);
+  const filteredCertificates = useMemo(() => filterRecordsByIntelligence(certificates, intelligenceFilterSnapshot, users), [certificates, intelligenceFilterSnapshot, users]);
   const archiveContextLabel = useMemo(() => {
     const archivedOrSkippedOffers = filteredCasinoOffers.filter((offer) => offer.status === 'archived' || offer.status === 'skipped' || offer.archiveStatus === 'archived' || offer.archiveStatus === 'replaced').length;
     const reviewNeededOffers = filteredCasinoOffers.filter((offer) => offer.status === 'reviewNeeded' || offer.archiveStatus === 'reviewNeeded' || offer.reconciliationStatus === 'reviewNeeded' || offer.importStatus === 'reviewNeeded' || offer.importStatus === 'unassigned').length;
@@ -469,13 +470,13 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
         return executeMachineRecommendations(params as MachineRecommendationInput, toolContext);
       case 'askMyData': {
         const query = typeof (params as { query?: unknown }).query === 'string' ? (params as { query: string }).query : '';
-        const response = askMyDataSearch({ query, offers: filteredCasinoOffers, cruises: [...filteredCruises, ...filteredBookedCruises], certificates, calendarEvents: filteredCalendarEvents });
+        const response = askMyDataSearch({ query, offers: filteredCasinoOffers, cruises: [...filteredCruises, ...filteredBookedCruises], certificates: filteredCertificates, calendarEvents: filteredCalendarEvents });
         return formatAskMyDataResponse(response);
       }
       default:
         return `Unknown tool: ${tool}`;
     }
-  }, [toolContext, filteredCasinoOffers, filteredCruises, filteredBookedCruises, certificates, filteredCalendarEvents]);
+  }, [toolContext, filteredCasinoOffers, filteredCruises, filteredBookedCruises, filteredCertificates, filteredCalendarEvents]);
 
   const sendMessage = useCallback(async (content: string) => {
     console.log('[AgentX] User message:', content, 'mode:', mode);
@@ -488,7 +489,7 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
       const deniedMessage: ChatMessage = {
         id: `denied-${Date.now()}`,
         role: 'assistant',
-        content: 'Agent X is a Pro-only feature. Upgrade to Pro to access AI-powered cruise analysis and recommendations.',
+        content: 'Ask My Data assistant is a Pro-only feature. Upgrade to Pro to access AI-powered cruise analysis and recommendations.',
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, deniedMessage]);
@@ -595,7 +596,7 @@ CRITICAL: The user has EXACTLY ${toolContext.userPoints.toLocaleString()} casino
             sessions,
             deckMappings,
             machineLogs,
-            certificates,
+            certificates: filteredCertificates,
             mode,
             brandProgramLabel,
           });
@@ -621,8 +622,8 @@ CRITICAL: The user has EXACTLY ${toolContext.userPoints.toLocaleString()} casino
             { 
               role: 'user' as const, 
               content: toolResult 
-                ? `AgentX mode: ${AGENT_MODE_LABELS[mode]}\nActive context: ${activeScopeLabel}\nArchive/review context: ${archiveContextLabel}\nUser asked: "${content}"\n\nTool result:\n${toolResult}\n\nPlease summarize this information in a helpful, conversational way. Start by confirming the active profile, brand/program, mode, and archive/review context. Highlight the most important points and name the data source used.`
-                : `AgentX mode: ${AGENT_MODE_LABELS[mode]}\nActive context: ${activeScopeLabel}\nArchive/review context: ${archiveContextLabel}\nUser asked: "${content}"\n\nPlease provide a helpful response based on the user's cruise data, active profile/filter context, selected mode, and archive/review context. Start by confirming the active profile, brand/program, mode, and archive/review context.`
+                ? `Ask My Data mode: ${AGENT_MODE_LABELS[mode]}\nActive context: ${activeScopeLabel}\nArchive/review context: ${archiveContextLabel}\nUser asked: "${content}"\n\nTool result:\n${toolResult}\n\nPlease summarize this information in a helpful, conversational way. Start by confirming the active profile, brand/program, mode, and archive/review context. Highlight the most important points and name the data source used.`
+                : `Ask My Data mode: ${AGENT_MODE_LABELS[mode]}\nActive context: ${activeScopeLabel}\nArchive/review context: ${archiveContextLabel}\nUser asked: "${content}"\n\nPlease provide a helpful response based on the user's cruise data, active profile/filter context, selected mode, and archive/review context. Start by confirming the active profile, brand/program, mode, and archive/review context.`
             },
           ];
       
@@ -658,7 +659,7 @@ CRITICAL: The user has EXACTLY ${toolContext.userPoints.toLocaleString()} casino
     } finally {
       setIsLoading(false);
     }
-  }, [messages, tier, isAdmin, toolContext, executeToolCall, globalLibrary, myAtlasMachines, sessions, deckMappings, machineLogs, certificates, mode, selectedProfileLabel, selectedBrand, selectedProgram, activeScopeLabel, brandProgramLabel, archiveContextLabel]);
+  }, [messages, tier, isAdmin, toolContext, executeToolCall, globalLibrary, myAtlasMachines, sessions, deckMappings, machineLogs, filteredCertificates, mode, selectedProfileLabel, selectedBrand, selectedProgram, activeScopeLabel, brandProgramLabel, archiveContextLabel]);
 
   const clearMessages = useCallback(() => {
     console.log('[AgentX] Clearing messages');

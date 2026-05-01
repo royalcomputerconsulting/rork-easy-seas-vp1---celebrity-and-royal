@@ -25,7 +25,6 @@ import { useUser } from '@/state/UserProvider';
 import { useCertificates } from '@/state/CertificatesProvider';
 import { useAgentX } from '@/state/AgentXProvider';
 import { useIntelligenceFilters } from '@/state/IntelligenceFiltersProvider';
-import { AgentXChat } from '@/components/AgentXChat';
 import { IntelligenceFilterStrip } from '@/components/IntelligenceFilterStrip';
 import { filterRecordsByIntelligence, getRecordOwnerLabel } from '@/lib/intelligenceFilters';
 import {
@@ -207,14 +206,7 @@ export default function CommandCenterScreen() {
   const { certificates, updateCertificate } = useCertificates();
   const { selectedProfileId, selectedBrand, selectedProgram } = useIntelligenceFilters();
   const {
-    messages,
-    isLoading: agentLoading,
     sendMessage,
-    isVisible,
-    setVisible,
-    toggleExpanded,
-    isExpanded,
-    mode: agentMode,
     setMode: setAgentMode,
   } = useAgentX();
   const [decodedOffer, setDecodedOffer] = useState<DecodedOffer | null>(null);
@@ -240,7 +232,7 @@ export default function CommandCenterScreen() {
     return {
       id: 'archivedSkipped',
       title: 'Archived / skipped offer history',
-      subtitle: 'Restore, keep archived, or ask AgentX before returning old offers to active planning.',
+      subtitle: 'Restore, keep archived, or ask Ask My Data before returning old offers to active planning.',
       offers: inactiveOffers,
     };
   }, [certificates, filteredCruises, filteredOffers, travelerProfile]);
@@ -295,21 +287,21 @@ export default function CommandCenterScreen() {
 
   const handleAskAgentX = useCallback((offer: CasinoOffer) => {
     setAgentMode('casinoHost');
-    setVisible(true);
+    router.push('/ask-my-data' as any);
     void sendMessage(`Command Center review: advise me on offer ${getOfferDisplayCode(offer)}. Explain whether to view, decode, compare, keep active, archive, restore, or skip it using current profile, brand, and program filters.`);
-  }, [sendMessage, setAgentMode, setVisible]);
+  }, [router, sendMessage, setAgentMode]);
 
   const handleCompareOffer = useCallback((offer: CasinoOffer) => {
     setAgentMode('travelAgent');
-    setVisible(true);
+    router.push('/ask-my-data' as any);
     void sendMessage(`Compare offer ${getOfferDisplayCode(offer)} against my other urgent and active offers. Include Offer Intelligence Score, expiration urgency, owner profile, casino-paid value, and certificate fit.`);
-  }, [sendMessage, setAgentMode, setVisible]);
+  }, [router, sendMessage, setAgentMode]);
 
   const handleCertificateAsk = useCallback((certificate: CertificateReviewItem) => {
     setAgentMode('certificateAdvisor');
-    setVisible(true);
+    router.push('/ask-my-data' as any);
     void sendMessage(`Certificate Command Center review: explain best use, poor use warnings, and stacking considerations for certificate ${certificate.label || certificate.id}.`);
-  }, [sendMessage, setAgentMode, setVisible]);
+  }, [router, sendMessage, setAgentMode]);
 
   const handleMarkCertificateExpired = useCallback((certificate: CertificateReviewItem) => {
     updateCertificate(certificate.id, { status: 'expired' });
@@ -396,7 +388,7 @@ export default function CommandCenterScreen() {
           </TouchableOpacity>
           <TouchableOpacity style={styles.secondaryAction} onPress={() => handleAskAgentX(offer)} testID={`command-center-ask-${offer.id}`}>
             <Bot size={13} color="#CBD5E1" />
-            <Text style={styles.secondaryActionText}>Ask AgentX</Text>
+            <Text style={styles.secondaryActionText}>Ask My Data</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.secondaryAction} onPress={() => handleKeepActiveOffer(offer)} testID={`command-center-keep-${offer.id}`}>
             <ShieldCheck size={13} color="#CBD5E1" />
@@ -464,12 +456,12 @@ export default function CommandCenterScreen() {
         <Text style={styles.strategyLabel}>Best remaining use</Text>
         <Text style={styles.strategyText}>Use only when the certificate improves cabin entitlement, upgrade cost, OBC, FreePlay, or out-of-pocket math.</Text>
         <Text style={styles.strategyLabel}>Suggested action</Text>
-        <Text style={styles.strategyText}>{certificate.expiryDate && getDaysUntil(certificate.expiryDate) < 0 ? 'Keep for history or mark expired.' : 'Ask AgentX or verify stackability before applying it to a sailing.'}</Text>
+        <Text style={styles.strategyText}>{certificate.expiryDate && getDaysUntil(certificate.expiryDate) < 0 ? 'Keep for history or mark expired.' : 'Ask My Data or verify stackability before applying it to a sailing.'}</Text>
       </View>
       <View style={styles.actionGrid}>
         <TouchableOpacity style={styles.secondaryAction} onPress={() => handleCertificateAsk(certificate)} testID={`command-center-cert-ask-${certificate.id}`}>
           <Bot size={13} color="#CBD5E1" />
-          <Text style={styles.secondaryActionText}>Ask AgentX</Text>
+          <Text style={styles.secondaryActionText}>Ask My Data</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.secondaryAction} onPress={() => handleRestoreCertificate(certificate)} testID={`command-center-cert-restore-${certificate.id}`}>
           <RotateCcw size={13} color="#CBD5E1" />
@@ -519,7 +511,7 @@ export default function CommandCenterScreen() {
             <LinearGradient colors={['rgba(253, 230, 138, 0.18)', 'rgba(45, 212, 191, 0.12)']} style={StyleSheet.absoluteFill} />
             <Text style={styles.heroKicker}>Decision cockpit</Text>
             <Text style={styles.heroTitle}>{totalManagementCount} records are ready for timing decisions.</Text>
-            <Text style={styles.heroBody}>Grouped urgency queues show owner profile, brand/program, expiration, best use, suggested action, archive history, and AgentX controls without deleting uncertain data.</Text>
+            <Text style={styles.heroBody}>Grouped urgency queues show owner profile, brand/program, expiration, best use, suggested action, archive history, and Ask My Data controls without deleting uncertain data.</Text>
             <View style={styles.heroStatsRow}>
               <View style={styles.heroStat}>
                 <Text style={styles.heroStatValue}>{visibleOfferBuckets.length}</Text>
@@ -611,25 +603,6 @@ export default function CommandCenterScreen() {
         </View>
       </Modal>
 
-      <Modal visible={isVisible} animationType="slide" transparent={true} onRequestClose={() => setVisible(false)}>
-        <View style={styles.agentOverlay}>
-          <TouchableOpacity style={styles.agentBackdrop} activeOpacity={1} onPress={() => setVisible(false)} />
-          <View style={[styles.agentChatContainer, isExpanded && styles.agentChatExpanded]}>
-            <AgentXChat
-              messages={messages}
-              onSendMessage={sendMessage}
-              isLoading={agentLoading}
-              isExpanded={isExpanded}
-              onToggleExpand={toggleExpanded}
-              onClose={() => setVisible(false)}
-              showHeader={true}
-              placeholder="Ask AgentX about expiring offers and certificates..."
-              mode={agentMode}
-              onModeChange={setAgentMode}
-            />
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -1079,23 +1052,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     marginTop: SPACING.sm,
-  },
-  agentOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(2, 6, 23, 0.55)',
-    justifyContent: 'flex-end',
-  },
-  agentBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  agentChatContainer: {
-    height: '78%',
-    backgroundColor: COLORS.white,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    overflow: 'hidden',
-  },
-  agentChatExpanded: {
-    height: '96%',
   },
 });

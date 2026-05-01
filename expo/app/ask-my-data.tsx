@@ -3,13 +3,15 @@ import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Bot, ChevronRight, DatabaseZap, FileSearch, Search, Ship, Sparkles, Tag, Ticket, X, Wand2 } from 'lucide-react-native';
+import { Award, Bot, ChevronRight, DatabaseZap, FileSearch, Search, Ship, Sparkles, Tag, Ticket, X, Wand2 } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
+import { AgentXChat, type AgentXQuickAction } from '@/components/AgentXChat';
 import { IntelligenceFilterStrip } from '@/components/IntelligenceFilterStrip';
 import { ResponsiveContainer } from '@/components/ResponsiveContainer';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { useCertificates } from '@/state/CertificatesProvider';
 import { useUser } from '@/state/UserProvider';
+import { useAgentX } from '@/state/AgentXProvider';
 import { useIntelligenceFilters } from '@/state/IntelligenceFiltersProvider';
 import { filterRecordsByIntelligence, getBrandLabel, getProgramLabel, getProfileDisplayName } from '@/lib/intelligenceFilters';
 import { askMyDataSearch, type AskMyDataResult, type AskMyDataSource } from '@/lib/askMyData';
@@ -23,6 +25,15 @@ const SAMPLE_QUERIES = [
   'Find cruises that fit after my next sailing',
   'Show unassigned imports that need review',
   'Which certificates fit active offers?',
+];
+
+const ASK_MY_DATA_AGENT_ACTIONS: AgentXQuickAction[] = [
+  { id: 'search-my-data', label: 'Search My Data', icon: Search, prompt: 'Ask my data: show the most important offers, cruises, certificates, and calendar items that need attention.' },
+  { id: 'decode-best-offer', label: 'Decode Offer', icon: Tag, prompt: 'Decode my strongest active offer and explain what the casino is actually paying for.' },
+  { id: 'replacement-finder', label: 'Replacement Finder', icon: Ship, prompt: 'Find replacement cruises for my strongest active offer, prioritizing better value, lower out-of-pocket cost, and more sea days.' },
+  { id: 'certificate-fit', label: 'Certificate Fit', icon: Ticket, prompt: 'Which certificates fit my active offers? Include stacking notes, owner profile, and recommended action.' },
+  { id: 'tier-progress', label: 'Tier Progress', icon: Award, prompt: 'Show my tier progress and recommend the best next actions using the current profile and brand filters.' },
+  { id: 'import-audit', label: 'Import Audit', icon: FileSearch, prompt: 'Show unassigned imports, review-needed records, missing offers, duplicates, and archive suggestions.' },
 ];
 
 const SOURCE_STYLES: Record<AskMyDataSource, { label: string; color: string; icon: typeof Tag }> = {
@@ -47,6 +58,16 @@ export default function AskMyDataScreen() {
   const { certificates } = useCertificates();
   const { users } = useUser();
   const { selectedProfileId, selectedBrand, selectedProgram } = useIntelligenceFilters();
+  const {
+    messages,
+    isLoading: agentLoading,
+    sendMessage,
+    isExpanded,
+    toggleExpanded,
+    mode: agentMode,
+    setMode: setAgentMode,
+    clearMessages,
+  } = useAgentX();
   const [query, setQuery] = useState<string>('');
   const [submittedQuery, setSubmittedQuery] = useState<string>('');
 
@@ -90,7 +111,8 @@ export default function AskMyDataScreen() {
     console.log('[AskMyDataScreen] Search submitted:', { searchText, filterSnapshot });
     setQuery(searchText);
     setSubmittedQuery(searchText);
-  }, [filterSnapshot, query]);
+    void sendMessage(`Ask my data: ${searchText}`);
+  }, [filterSnapshot, query, sendMessage]);
 
   const clearSearch = useCallback(() => {
     console.log('[AskMyDataScreen] Search cleared');
@@ -192,14 +214,53 @@ export default function AskMyDataScreen() {
               <LinearGradient colors={['rgba(167,243,208,0.22)', 'rgba(56,189,248,0.10)']} style={StyleSheet.absoluteFill} />
               <View style={styles.heroKickerRow}>
                 <Sparkles size={14} color="#FDE68A" />
-                <Text style={styles.heroKicker}>Scoped data search</Text>
+                <Text style={styles.heroKicker}>Agent X unified assistant</Text>
               </View>
-              <Text style={styles.heroTitle}>Ask across offers, cruises, certificates, and calendar records.</Text>
-              <Text style={styles.heroBody}>Results respect the selected profile/account, brand, and program filters unless you change the scope below.</Text>
+              <Text style={styles.heroTitle}>Ask My Data now includes Agent X decision support.</Text>
+              <Text style={styles.heroBody}>Search records, decode offers, compare replacements, check tier progress, audit imports, and ask follow-up questions from one scoped assistant.</Text>
               <Text style={styles.scopeLabel}>{scopeLabel}</Text>
             </View>
 
             <IntelligenceFilterStrip contextLabel="Ask My Data" compact={true} />
+
+            <View style={styles.agentUnifiedCard} testID="ask-my-data-agentx-panel">
+              <View style={styles.agentUnifiedHeader}>
+                <View style={styles.agentUnifiedIcon}>
+                  <Bot size={18} color="#FDE68A" />
+                </View>
+                <View style={styles.agentUnifiedCopy}>
+                  <Text style={styles.agentUnifiedTitle}>Ask My Data Assistant</Text>
+                  <Text style={styles.agentUnifiedSubtitle}>Agent X modes, voice/manual chat, and scoped tools are now available here.</Text>
+                </View>
+                {messages.length > 0 ? (
+                  <TouchableOpacity style={styles.clearConversationButton} onPress={clearMessages} activeOpacity={0.75} testID="ask-my-data-clear-agentx">
+                    <Text style={styles.clearConversationText}>Clear</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+              <View style={[styles.agentChatFrame, isExpanded && styles.agentChatFrameExpanded]}>
+                <AgentXChat
+                  messages={messages}
+                  onSendMessage={sendMessage}
+                  isLoading={agentLoading}
+                  isExpanded={isExpanded}
+                  onToggleExpand={toggleExpanded}
+                  showHeader={false}
+                  placeholder="Ask my data, decode an offer, find replacements, or audit imports..."
+                  mode={agentMode}
+                  onModeChange={setAgentMode}
+                  contextLabel="Ask My Data"
+                  welcomeTitle="Ask My Data + Agent X"
+                  welcomeSubtitle="Use Agent X modes here to search your scoped records, explain offer math, find replacement cruises, check certificates, and answer follow-up questions."
+                  disclaimerText="Ask My Data uses your active profile, brand, and program filters. Verify final cruise terms directly with the cruise line."
+                  useSafeAreaPadding={false}
+                  showDevAssistant={false}
+                  showFilterStrip={false}
+                  quickActions={ASK_MY_DATA_AGENT_ACTIONS}
+                  defaultTtsEnabled={false}
+                />
+              </View>
+            </View>
 
             <View style={styles.statsGrid}>
               <View style={styles.statCard}>
@@ -218,6 +279,11 @@ export default function AskMyDataScreen() {
                 <Text style={styles.statValue}>{stats.calendar}</Text>
                 <Text style={styles.statLabel}>Calendar</Text>
               </View>
+            </View>
+
+            <View style={styles.lookupHeaderCard}>
+              <Text style={styles.lookupHeaderTitle}>Instant record lookup</Text>
+              <Text style={styles.lookupHeaderSubtitle}>Run a fast indexed search below while the assistant produces deeper Agent X guidance.</Text>
             </View>
 
             <View style={styles.searchCard}>
@@ -241,7 +307,7 @@ export default function AskMyDataScreen() {
               </View>
               <TouchableOpacity style={styles.searchButton} onPress={() => submitSearch()} activeOpacity={0.82} testID="ask-my-data-submit">
                 <Bot size={16} color={COLORS.white} />
-                <Text style={styles.searchButtonText}>Search My Data</Text>
+                <Text style={styles.searchButtonText}>Ask + Search My Data</Text>
               </TouchableOpacity>
             </View>
 
@@ -384,6 +450,91 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800' as const,
     marginTop: 12,
+  },
+  agentUnifiedCard: {
+    overflow: 'hidden',
+    borderRadius: 28,
+    backgroundColor: 'rgba(3, 7, 18, 0.66)',
+    borderWidth: 1,
+    borderColor: 'rgba(167, 243, 208, 0.18)',
+    marginTop: SPACING.sm,
+    marginBottom: SPACING.md,
+    ...SHADOW.md,
+  },
+  agentUnifiedHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.md,
+    backgroundColor: 'rgba(15, 118, 110, 0.22)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(167, 243, 208, 0.14)',
+  },
+  agentUnifiedIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(253, 230, 138, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(253, 230, 138, 0.22)',
+  },
+  agentUnifiedCopy: {
+    flex: 1,
+  },
+  agentUnifiedTitle: {
+    color: COLORS.white,
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: '900' as const,
+  },
+  agentUnifiedSubtitle: {
+    color: 'rgba(255,255,255,0.70)',
+    fontSize: 11,
+    lineHeight: 15,
+    marginTop: 2,
+    fontWeight: '700' as const,
+  },
+  clearConversationButton: {
+    borderRadius: BORDER_RADIUS.round,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 7,
+  },
+  clearConversationText: {
+    color: '#A7F3D0',
+    fontSize: 11,
+    fontWeight: '900' as const,
+  },
+  agentChatFrame: {
+    height: 640,
+    backgroundColor: 'rgba(224, 242, 254, 0.96)',
+  },
+  agentChatFrameExpanded: {
+    height: 760,
+  },
+  lookupHeaderCard: {
+    borderRadius: 18,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+  },
+  lookupHeaderTitle: {
+    color: COLORS.white,
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: '900' as const,
+  },
+  lookupHeaderSubtitle: {
+    color: 'rgba(255,255,255,0.68)',
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    lineHeight: 17,
+    marginTop: 4,
+    fontWeight: '700' as const,
   },
   statsGrid: {
     flexDirection: 'row',

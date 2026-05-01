@@ -49,7 +49,6 @@ import { CompactDashboardHeader } from '@/components/CompactDashboardHeader';
 import { CasinoCertificatesCard } from '@/components/CasinoCertificatesCard';
 import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
 import { CertificateManagerModal } from '@/components/CertificateManagerModal';
-import { AgentXChat } from '@/components/AgentXChat';
 import { useCertificates } from '@/state/CertificatesProvider';
 import { OfferCard } from '@/components/OfferCard';
 import { ResponsiveContainer } from '@/components/ResponsiveContainer';
@@ -201,7 +200,7 @@ function OverviewScreenContent() {
   const { currentUser, users } = useUser();
   const { selectedProfileId, selectedBrand, selectedProgram } = useIntelligenceFilters();
   const { logout } = useAuth();
-  const { messages, isLoading: agentLoading, sendMessage, isVisible, setVisible, toggleExpanded, isExpanded, refreshAnalysis, mode: agentMode, setMode: setAgentMode } = useAgentX();
+  const { sendMessage, refreshAnalysis, setMode: setAgentMode } = useAgentX();
   const { summary } = useAlerts();
   
   usePriceTrackingSync();
@@ -639,7 +638,8 @@ function OverviewScreenContent() {
       return;
     }
     if (action === 'compare') {
-      setVisible(true);
+      setAgentMode('travelAgent');
+      router.push('/ask-my-data' as any);
       void sendMessage(`Compare offer ${getOfferDisplayCode(item.offer)} against my other active offers using score, expiration, casino-paid value, certificate fit, and profile ownership.`);
       return;
     }
@@ -648,7 +648,7 @@ function OverviewScreenContent() {
       return;
     }
     updateCasinoOffer(item.offer.id, { status: 'skipped' });
-  }, [handleDecodeOffer, router, sendMessage, setVisible, updateCasinoOffer]);
+  }, [handleDecodeOffer, router, sendMessage, setAgentMode, updateCasinoOffer]);
 
   const handleCruiseItemPress = useCallback((cruiseId: string) => {
     console.log('[Overview] Cruise item pressed:', cruiseId);
@@ -760,7 +760,7 @@ function OverviewScreenContent() {
           showBorder={false}
         >
           <AgentXAnalysisCard
-            onViewDetails={() => setVisible(true)}
+            onViewDetails={() => router.push('/ask-my-data' as any)}
             onRefresh={refreshAnalysis}
           />
         </CollapsibleSection>
@@ -904,7 +904,8 @@ function OverviewScreenContent() {
                     <TouchableOpacity
                       style={styles.commandCenterActionMuted}
                       onPress={() => {
-                        setVisible(true);
+                        setAgentMode('casinoHost');
+                        router.push('/ask-my-data' as any);
                         void sendMessage(`Advise me on offer ${getOfferDisplayCode(item.offer)} using the current profile and filters.`);
                       }}
                       testID="command-center-ask-agentx"
@@ -1122,29 +1123,6 @@ function OverviewScreenContent() {
           </View>
         </View>
       </Modal>
-      
-      {isVisible && (
-        <View style={styles.agentChatOverlay}>
-          <TouchableOpacity 
-            style={styles.agentChatBackdrop} 
-            activeOpacity={1} 
-            onPress={() => setVisible(false)}
-          />
-          <View style={[styles.agentChatContainer, isExpanded && styles.agentChatExpanded]}>
-            <AgentXChat
-              messages={messages}
-              onSendMessage={sendMessage}
-              isLoading={agentLoading}
-              isExpanded={isExpanded}
-              onToggleExpand={toggleExpanded}
-              onClose={() => setVisible(false)}
-              showHeader={true}
-              mode={agentMode}
-              onModeChange={setAgentMode}
-            />
-          </View>
-        </View>
-      )}
       
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <QuickActionsFAB
@@ -1527,33 +1505,6 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
     color: COLORS.white,
-  },
-  agentChatOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 60,
-    zIndex: 1000,
-  },
-  agentChatBackdrop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'transparent',
-  },
-  agentChatContainer: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 0,
-    right: 0,
-  },
-  agentChatExpanded: {
-    top: 0,
-    bottom: 0,
   },
   learnSystemCard: {
     borderRadius: BORDER_RADIUS.xl,

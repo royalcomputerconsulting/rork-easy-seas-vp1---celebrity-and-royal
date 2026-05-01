@@ -146,7 +146,7 @@ export function AgentXAnalysisCard({ onViewDetails, onRefresh }: AgentXAnalysisC
                   <Bot size={18} color="#FFFFFF" />
                 </View>
                 <View>
-                  <Text style={styles.title}>AI Analysis</Text>
+                  <Text style={styles.title}>Ask My Data</Text>
                   <Text style={styles.subtitle}>No Recent Data</Text>
                 </View>
               </View>
@@ -194,7 +194,7 @@ export function AgentXAnalysisCard({ onViewDetails, onRefresh }: AgentXAnalysisC
                 <Bot size={18} color="#FFFFFF" />
               </View>
               <View>
-                <Text style={styles.title}>AI Analysis</Text>
+                <Text style={styles.title}>Ask My Data</Text>
                 <Text style={styles.subtitle}>
                   {analysis.totalBookedCount} Total • {analysis.cruiseCount} Completed • {analysis.totalPoints.toLocaleString()} Points
                 </Text>
@@ -242,7 +242,7 @@ export function AgentXAnalysisCard({ onViewDetails, onRefresh }: AgentXAnalysisC
                 activeOpacity={0.7}
               >
                 <MessageSquare size={14} color={COLORS.navyDeep} />
-                <Text style={styles.fullChatButtonText}>Full Chat</Text>
+                <Text style={styles.fullChatButtonText}>Ask My Data</Text>
               </TouchableOpacity>
             )}
             

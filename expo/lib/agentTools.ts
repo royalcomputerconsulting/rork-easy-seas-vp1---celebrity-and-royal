@@ -572,7 +572,7 @@ export function executeDecodeOffer(input: DecodeOfferInput, context: AgentToolCo
 
   if (selectedOffers.length === 0) {
     return query
-      ? `No active offer found matching "${input.offerCode || input.offerId || input.query}". Try opening the offer detail page or asking AgentX to show active offers first.`
+      ? `No active offer found matching "${input.offerCode || input.offerId || input.query}". Try opening the offer detail page or asking Ask My Data to show active offers first.`
       : 'No active offers are available to decode in the current profile/brand/program scope.';
   }
 
@@ -738,7 +738,7 @@ export function executeReplacementFinder(input: ReplacementFinderInput, context:
   });
 
   lines.push('### How to use this workspace');
-  lines.push('Tap another replacement goal chip in AgentX, or ask: “Find replacements that lower out-of-pocket” / “Find replacements with more sea days” / “Find B2B replacements.”');
+  lines.push('Tap another replacement goal chip in Ask My Data, or ask: “Find replacements that lower out-of-pocket” / “Find replacements with more sea days” / “Find B2B replacements.”');
   return lines.join('\n');
 }
 
