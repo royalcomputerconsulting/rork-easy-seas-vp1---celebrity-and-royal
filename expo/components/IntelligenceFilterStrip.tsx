@@ -44,7 +44,7 @@ export const IntelligenceFilterStrip = React.memo(function IntelligenceFilterStr
 
   return (
     <LinearGradient
-      colors={[COLORS.navyDeep, COLORS.oceanicBlueMedium, '#0E7490']}
+      colors={['rgba(255,255,255,0.96)', 'rgba(224,242,241,0.92)', 'rgba(0,172,193,0.10)']}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={[styles.container, compact && styles.containerCompact]}
@@ -53,7 +53,7 @@ export const IntelligenceFilterStrip = React.memo(function IntelligenceFilterStr
       <View style={styles.headerRow}>
         <View style={styles.titleRow}>
           <View style={styles.iconBadge}>
-            <SlidersHorizontal size={13} color={COLORS.goldAccent} />
+            <SlidersHorizontal size={13} color={COLORS.navyDeep} />
           </View>
           <View>
             <Text style={styles.title}>Filtering</Text>
@@ -69,7 +69,7 @@ export const IntelligenceFilterStrip = React.memo(function IntelligenceFilterStr
 
       <View style={styles.group}>
         <View style={styles.groupLabelRow}>
-          <UserRound size={12} color="rgba(255,255,255,0.72)" />
+          <UserRound size={12} color={COLORS.navyDeep} />
           <Text style={styles.groupLabel}>Profile / account</Text>
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
@@ -143,7 +143,7 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(212, 160, 10, 0.42)',
+    borderColor: 'rgba(30, 58, 95, 0.14)',
     overflow: 'hidden',
     ...SHADOW.md,
   },
@@ -169,33 +169,33 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(212, 160, 10, 0.16)',
+    backgroundColor: 'rgba(212, 160, 10, 0.18)',
     borderWidth: 1,
-    borderColor: 'rgba(212, 160, 10, 0.34)',
+    borderColor: 'rgba(30, 58, 95, 0.12)',
   },
   title: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: '800' as const,
-    color: COLORS.white,
+    color: COLORS.navyDeep,
     letterSpacing: 0.2,
   },
   subtitle: {
     fontSize: 11,
-    color: 'rgba(255,255,255,0.68)',
+    color: COLORS.textDarkGrey,
     marginTop: 1,
   },
   clearButton: {
     paddingHorizontal: SPACING.sm,
     paddingVertical: 6,
     borderRadius: BORDER_RADIUS.round,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: COLORS.white,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.22)',
+    borderColor: COLORS.borderLight,
   },
   clearButtonText: {
     fontSize: 11,
     fontWeight: '800' as const,
-    color: COLORS.white,
+    color: COLORS.navyDeep,
   },
   group: {
     marginBottom: SPACING.sm,
@@ -209,7 +209,7 @@ const styles = StyleSheet.create({
   groupLabel: {
     fontSize: 11,
     fontWeight: '800' as const,
-    color: 'rgba(255,255,255,0.72)',
+    color: COLORS.navyDeep,
     textTransform: 'uppercase' as const,
     letterSpacing: 0.8,
     marginBottom: 6,
@@ -227,9 +227,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingVertical: 8,
     borderRadius: BORDER_RADIUS.round,
-    backgroundColor: 'rgba(255,255,255,0.10)',
+    backgroundColor: 'rgba(30, 58, 95, 0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
+    borderColor: 'rgba(30, 58, 95, 0.13)',
   },
   chipActive: {
     backgroundColor: COLORS.goldAccent,
@@ -238,7 +238,7 @@ const styles = StyleSheet.create({
   chipText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: '700' as const,
-    color: 'rgba(255,255,255,0.84)',
+    color: COLORS.navyDeep,
   },
   chipTextActive: {
     color: COLORS.navyDeep,
@@ -253,9 +253,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.sm,
     paddingVertical: 7,
     borderRadius: BORDER_RADIUS.round,
-    backgroundColor: 'rgba(255,255,255,0.10)',
+    backgroundColor: 'rgba(30, 58, 95, 0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
+    borderColor: 'rgba(30, 58, 95, 0.13)',
   },
   brandChipActive: {
     backgroundColor: COLORS.aquaAccent,
@@ -268,6 +268,6 @@ const styles = StyleSheet.create({
   smallChipText: {
     fontSize: 11,
     fontWeight: '800' as const,
-    color: 'rgba(255,255,255,0.84)',
+    color: COLORS.navyDeep,
   },
 });
