@@ -360,6 +360,14 @@ function RootLayoutNav() {
         }} 
       />
       <Stack.Screen 
+        name="war-room" 
+        options={{ 
+          presentation: "modal",
+          headerShown: false,
+          animation: 'slide_from_bottom' as const,
+        }} 
+      />
+      <Stack.Screen 
         name="royal-caribbean-sync" 
         options={{ 
           headerShown: true,

@@ -836,6 +836,14 @@ function OverviewScreenContent() {
             </View>
           </View>
           <Text style={styles.warRoomSubtitle}>Profile-aware urgent offers, review flags, and recently expired comps.</Text>
+          <TouchableOpacity
+            style={styles.warRoomOpenButton}
+            onPress={() => router.push('/war-room' as any)}
+            activeOpacity={0.82}
+            testID="open-full-war-room"
+          >
+            <Text style={styles.warRoomOpenButtonText}>Open Full War Room</Text>
+          </TouchableOpacity>
 
           {topWarRoomBuckets.map((bucket) => (
             <View key={bucket.id} style={styles.warRoomBucket}>
@@ -1613,6 +1621,19 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.78)',
     lineHeight: 17,
     marginBottom: SPACING.sm,
+  },
+  warRoomOpenButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#FDE68A',
+    borderRadius: BORDER_RADIUS.round,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 8,
+    marginBottom: SPACING.sm,
+  },
+  warRoomOpenButtonText: {
+    color: '#172554',
+    fontSize: 12,
+    fontWeight: '900' as const,
   },
   warRoomBucket: {
     backgroundColor: 'rgba(255,255,255,0.1)',
