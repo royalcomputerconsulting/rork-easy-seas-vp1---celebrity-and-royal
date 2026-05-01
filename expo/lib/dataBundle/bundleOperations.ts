@@ -37,6 +37,32 @@ function dedupeByIdOrPayload<T extends object>(items: T[], label: string): T[] {
   }, label);
 }
 
+function normalizeBackupImportEmail(email: string | null | undefined): string | null {
+  if (!email) return null;
+  const normalizedEmail = email.toLowerCase().trim();
+  return normalizedEmail.length > 0 ? normalizedEmail : null;
+}
+
+function adoptBackupRecordsForActiveAccount<T extends object>(records: T[], email: string | null | undefined): T[] {
+  const normalizedEmail = normalizeBackupImportEmail(email);
+  const syncedAt = new Date().toISOString();
+
+  return records.map((record) => {
+    const nextRecord = { ...(record as Record<string, unknown>) };
+    delete nextRecord.dataOwnerScopeId;
+
+    if (normalizedEmail) {
+      nextRecord.dataOwnerEmail = normalizedEmail;
+      nextRecord.dataOwnerSyncedAt = syncedAt;
+    } else {
+      delete nextRecord.dataOwnerEmail;
+      delete nextRecord.dataOwnerSyncedAt;
+    }
+
+    return nextRecord as T;
+  });
+}
+
 export interface FullAppDataBundle {
   version: string;
   exportDate: string;
@@ -419,7 +445,8 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
 
   try {
     if (bundle.cruises && Array.isArray(bundle.cruises)) {
-      const foundationCruises = applyFoundationFields(bundle.cruises, {
+      const adoptedCruises = adoptBackupRecordsForActiveAccount(bundle.cruises, email);
+      const foundationCruises = applyFoundationFields(adoptedCruises, {
         fallbackOwnerProfileId: email ?? null,
         fallbackSourceEmail: email ?? null,
         markUnassigned: true,
@@ -436,7 +463,8 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
 
   try {
     if (bundle.bookedCruises && Array.isArray(bundle.bookedCruises)) {
-      const foundationBooked = applyFoundationFields(bundle.bookedCruises, {
+      const adoptedBooked = adoptBackupRecordsForActiveAccount(bundle.bookedCruises, email);
+      const foundationBooked = applyFoundationFields(adoptedBooked, {
         fallbackOwnerProfileId: email ?? null,
         fallbackSourceEmail: email ?? null,
         markUnassigned: true,
@@ -455,7 +483,8 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
 
   try {
     if (bundle.casinoOffers && Array.isArray(bundle.casinoOffers)) {
-      const foundationOffers = applyFoundationFields(bundle.casinoOffers, {
+      const adoptedOffers = adoptBackupRecordsForActiveAccount(bundle.casinoOffers, email);
+      const foundationOffers = applyFoundationFields(adoptedOffers, {
         fallbackOwnerProfileId: email ?? null,
         fallbackSourceEmail: email ?? null,
         markUnassigned: true,
@@ -473,7 +502,9 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
   try {
     if (bundle.calendarEvents && Array.isArray(bundle.calendarEvents)) {
       const generatedCruiseEvents = generateCruiseCalendarEvents(importedBookedForCalendar);
-      const foundationEvents = applyFoundationFields([...bundle.calendarEvents, ...generatedCruiseEvents], {
+      const adoptedCalendarEvents = adoptBackupRecordsForActiveAccount(bundle.calendarEvents, email);
+      const adoptedGeneratedCruiseEvents = adoptBackupRecordsForActiveAccount(generatedCruiseEvents, email);
+      const foundationEvents = applyFoundationFields([...adoptedCalendarEvents, ...adoptedGeneratedCruiseEvents], {
         fallbackOwnerProfileId: email ?? null,
         fallbackSourceEmail: email ?? null,
         markUnassigned: true,
@@ -493,7 +524,8 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
 
   try {
     if (bundle.casinoSessions && Array.isArray(bundle.casinoSessions)) {
-      const dedupedSessions = dedupeByIdOrPayload(bundle.casinoSessions, 'casinoSessions');
+      const adoptedSessions = adoptBackupRecordsForActiveAccount(bundle.casinoSessions, email);
+      const dedupedSessions = dedupeByIdOrPayload(adoptedSessions, 'casinoSessions');
       await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CASINO_SESSIONS), JSON.stringify(dedupedSessions));
       imported.casinoSessions = dedupedSessions.length;
       console.log('[DataBundle] Imported casino sessions:', imported.casinoSessions);
@@ -504,7 +536,8 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
 
   try {
     if (bundle.certificates && Array.isArray(bundle.certificates)) {
-      const dedupedCertificates = dedupeByIdOrPayload(bundle.certificates, 'certificates');
+      const adoptedCertificates = adoptBackupRecordsForActiveAccount(bundle.certificates, email);
+      const dedupedCertificates = dedupeByIdOrPayload(adoptedCertificates, 'certificates');
       await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CERTIFICATES), JSON.stringify(dedupedCertificates));
       imported.certificates = dedupedCertificates.length;
       console.log('[DataBundle] Imported certificates:', imported.certificates);
@@ -654,12 +687,14 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
   try {
     if (bundle.crewRecognition) {
       if (bundle.crewRecognition.entries && Array.isArray(bundle.crewRecognition.entries)) {
-        const dedupedCrewEntries = dedupeByIdOrPayload(bundle.crewRecognition.entries, 'crewRecognitionEntries');
+        const adoptedCrewEntries = adoptBackupRecordsForActiveAccount(bundle.crewRecognition.entries, email);
+        const dedupedCrewEntries = dedupeByIdOrPayload(adoptedCrewEntries, 'crewRecognitionEntries');
         await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_ENTRIES), JSON.stringify(dedupedCrewEntries));
         console.log('[DataBundle] Imported crew recognition entries:', dedupedCrewEntries.length);
       }
       if (bundle.crewRecognition.sailings && Array.isArray(bundle.crewRecognition.sailings)) {
-        const dedupedCrewSailings = dedupeByIdOrPayload(bundle.crewRecognition.sailings, 'crewRecognitionSailings');
+        const adoptedCrewSailings = adoptBackupRecordsForActiveAccount(bundle.crewRecognition.sailings, email);
+        const dedupedCrewSailings = dedupeByIdOrPayload(adoptedCrewSailings, 'crewRecognitionSailings');
         await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_SAILINGS), JSON.stringify(dedupedCrewSailings));
         console.log('[DataBundle] Imported crew recognition sailings:', dedupedCrewSailings.length);
       }
