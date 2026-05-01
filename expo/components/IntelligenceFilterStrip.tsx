@@ -223,13 +223,16 @@ const styles = StyleSheet.create({
     paddingRight: SPACING.sm,
   },
   chip: {
-    maxWidth: 150,
-    paddingHorizontal: SPACING.md,
+    width: 124,
+    minHeight: 36,
+    paddingHorizontal: SPACING.sm,
     paddingVertical: 8,
     borderRadius: BORDER_RADIUS.round,
-    backgroundColor: 'rgba(30, 58, 95, 0.06)',
+    backgroundColor: '#D8F1FF',
     borderWidth: 1,
-    borderColor: 'rgba(30, 58, 95, 0.13)',
+    borderColor: '#A9DDF8',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   chipActive: {
     backgroundColor: COLORS.goldAccent,
@@ -237,11 +240,12 @@ const styles = StyleSheet.create({
   },
   chipText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: '700' as const,
+    fontWeight: '800' as const,
     color: COLORS.navyDeep,
+    textAlign: 'center' as const,
   },
   chipTextActive: {
-    color: COLORS.navyDeep,
+    color: COLORS.white,
   },
   dualGroupRow: {
     gap: SPACING.sm,
@@ -250,16 +254,20 @@ const styles = StyleSheet.create({
     minHeight: 58,
   },
   smallChip: {
+    width: 124,
+    minHeight: 36,
     paddingHorizontal: SPACING.sm,
     paddingVertical: 7,
     borderRadius: BORDER_RADIUS.round,
-    backgroundColor: 'rgba(30, 58, 95, 0.06)',
+    backgroundColor: '#D8F1FF',
     borderWidth: 1,
-    borderColor: 'rgba(30, 58, 95, 0.13)',
+    borderColor: '#A9DDF8',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   brandChipActive: {
-    backgroundColor: COLORS.aquaAccent,
-    borderColor: COLORS.aquaAccent,
+    backgroundColor: COLORS.goldAccent,
+    borderColor: COLORS.goldAccent,
   },
   programChipActive: {
     backgroundColor: COLORS.goldAccent,
@@ -269,5 +277,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800' as const,
     color: COLORS.navyDeep,
+    textAlign: 'center' as const,
   },
 });
