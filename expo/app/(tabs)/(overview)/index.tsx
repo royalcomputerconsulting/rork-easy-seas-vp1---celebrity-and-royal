@@ -454,19 +454,6 @@ function OverviewScreenContent() {
     ];
   }, [getCertificatesByType]);
 
-  const expiringSoonCount = useMemo(() => {
-    let count = 0;
-    groupedOffers.forEach(offer => {
-      if (offer.expiryDate) {
-        const days = getDaysUntil(offer.expiryDate);
-        if (days > 0 && days <= 7) {
-          count++;
-        }
-      }
-    });
-    return count;
-  }, [groupedOffers]);
-
   const currentTravelerProfile = useMemo(() => {
     if (!currentUser) return null;
     return {
@@ -490,6 +477,23 @@ function OverviewScreenContent() {
 
   const commandCenterTotalCount = useMemo(() => {
     return commandCenterBuckets.reduce((sum, bucket) => sum + bucket.offers.length, 0);
+  }, [commandCenterBuckets]);
+
+  const commandCenterBucketCounts = useMemo(() => {
+    const getBucketCount = (id: CommandCenterBucket['id']): number => commandCenterBuckets.find((bucket) => bucket.id === id)?.offers.length ?? 0;
+    const expires7 = getBucketCount('expires7');
+    const expires14 = getBucketCount('expires14');
+    const expires30 = getBucketCount('expires30');
+    const recentlyExpired = getBucketCount('recentlyExpired');
+    const needsReview = getBucketCount('needsReview');
+    return {
+      expires7,
+      expires14,
+      expires30,
+      recentlyExpired,
+      needsReview,
+      urgentExpiring: expires7 + expires14,
+    };
   }, [commandCenterBuckets]);
 
   const topCommandCenterBuckets = useMemo(() => {
@@ -806,14 +810,6 @@ function OverviewScreenContent() {
             <Tag size={18} color={COLORS.navyDeep} />
             <Text style={styles.sectionTitle}>CASINO OFFERS</Text>
           </View>
-          {expiringSoonCount > 0 && (
-            <View style={styles.expiringAlert}>
-              <AlertTriangle size={14} color={COLORS.warning} />
-              <Text style={styles.expiringAlertText}>
-                {expiringSoonCount} expiring soon
-              </Text>
-            </View>
-          )}
         </View>
       </View>
     </ResponsiveContainer>
@@ -838,10 +834,33 @@ function OverviewScreenContent() {
               <Text style={styles.commandCenterTitle}>Expiration Command Center</Text>
             </View>
             <View style={styles.commandCenterCountPill}>
-              <Text style={styles.commandCenterCountText}>{commandCenterTotalCount}</Text>
+              <Text style={styles.commandCenterCountText}>{commandCenterBucketCounts.urgentExpiring}</Text>
+              <Text style={styles.commandCenterCountLabel}>expiring</Text>
             </View>
           </View>
-          <Text style={styles.commandCenterSubtitle}>Profile-aware urgent offers, review flags, and recently expired comps.</Text>
+          <Text style={styles.commandCenterSubtitle}>
+            {commandCenterBucketCounts.urgentExpiring} casino offer{commandCenterBucketCounts.urgentExpiring === 1 ? '' : 's'} expire in the next 14 days; {commandCenterTotalCount} total timing item{commandCenterTotalCount === 1 ? '' : 's'} need attention.
+          </Text>
+          <View style={styles.commandCenterSummaryRow} testID="command-center-expiring-summary">
+            <View style={styles.commandCenterUrgentChip}>
+              <AlertTriangle size={13} color="#172554" />
+              <Text style={styles.commandCenterUrgentChipText}>{commandCenterBucketCounts.urgentExpiring} expiring soon</Text>
+            </View>
+            <View style={styles.commandCenterMiniChip}>
+              <Text style={styles.commandCenterMiniChipValue}>{commandCenterBucketCounts.expires7}</Text>
+              <Text style={styles.commandCenterMiniChipLabel}>0-7 days</Text>
+            </View>
+            <View style={styles.commandCenterMiniChip}>
+              <Text style={styles.commandCenterMiniChipValue}>{commandCenterBucketCounts.expires14}</Text>
+              <Text style={styles.commandCenterMiniChipLabel}>8-14 days</Text>
+            </View>
+            {commandCenterBucketCounts.expires30 > 0 && (
+              <View style={styles.commandCenterMiniChipMuted}>
+                <Text style={styles.commandCenterMiniChipMutedValue}>{commandCenterBucketCounts.expires30}</Text>
+                <Text style={styles.commandCenterMiniChipMutedLabel}>15-30 days</Text>
+              </View>
+            )}
+          </View>
           <TouchableOpacity
             style={styles.commandCenterOpenButton}
             onPress={() => router.push('/command-center' as any)}
@@ -1560,24 +1579,95 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   commandCenterCountPill: {
-    minWidth: 34,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(253, 230, 138, 0.22)',
+    minWidth: 72,
+    minHeight: 32,
+    borderRadius: 16,
+    backgroundColor: '#FDE68A',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
   },
   commandCenterCountText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '900' as const,
-    color: '#FDE68A',
+    color: '#172554',
+    lineHeight: 17,
+  },
+  commandCenterCountLabel: {
+    fontSize: 9,
+    fontWeight: '900' as const,
+    color: '#172554',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase' as const,
   },
   commandCenterSubtitle: {
     fontSize: 12,
     color: 'rgba(255,255,255,0.78)',
     lineHeight: 17,
     marginBottom: SPACING.sm,
+  },
+  commandCenterSummaryRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.xs,
+    marginBottom: SPACING.sm,
+  },
+  commandCenterUrgentChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#FDE68A',
+    borderRadius: BORDER_RADIUS.round,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 7,
+  },
+  commandCenterUrgentChipText: {
+    fontSize: 12,
+    fontWeight: '900' as const,
+    color: '#172554',
+  },
+  commandCenterMiniChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(186, 230, 253, 0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(186, 230, 253, 0.3)',
+    borderRadius: BORDER_RADIUS.round,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 7,
+  },
+  commandCenterMiniChipValue: {
+    fontSize: 12,
+    fontWeight: '900' as const,
+    color: '#FFFFFF',
+  },
+  commandCenterMiniChipLabel: {
+    fontSize: 11,
+    fontWeight: '800' as const,
+    color: '#BAE6FD',
+  },
+  commandCenterMiniChipMuted: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    borderRadius: BORDER_RADIUS.round,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 7,
+  },
+  commandCenterMiniChipMutedValue: {
+    fontSize: 12,
+    fontWeight: '900' as const,
+    color: '#FFFFFF',
+  },
+  commandCenterMiniChipMutedLabel: {
+    fontSize: 11,
+    fontWeight: '800' as const,
+    color: 'rgba(255,255,255,0.68)',
   },
   commandCenterOpenButton: {
     alignSelf: 'flex-start',
