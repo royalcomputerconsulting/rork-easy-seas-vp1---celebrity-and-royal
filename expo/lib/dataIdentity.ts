@@ -19,11 +19,76 @@ function getSourceKey(value: { cruiseSource?: Cruise['cruiseSource']; offerSourc
   return normalizeKeyPart(value.brand ?? value.cruiseSource ?? value.offerSource);
 }
 
-function getOwnerKey(value: { ownerProfileId?: string; sourceEmail?: string; dataOwnerEmail?: string }): string {
+function getOwnerKey(value: { ownerProfileId?: string; sourceEmail?: string; dataOwnerEmail?: string; dataOwnerScopeId?: string }): string {
   return [
-    normalizeKeyPart(value.ownerProfileId),
+    normalizeKeyPart(value.ownerProfileId ?? value.dataOwnerScopeId),
     normalizeKeyPart(value.sourceEmail ?? value.dataOwnerEmail),
   ].join('|');
+}
+
+function hasOwnerOrSource(value: { ownerProfileId?: string; sourceEmail?: string; dataOwnerEmail?: string; dataOwnerScopeId?: string; cruiseSource?: Cruise['cruiseSource']; brand?: string }): boolean {
+  return Boolean(
+    normalizeKeyPart(value.ownerProfileId ?? value.dataOwnerScopeId) ||
+    normalizeKeyPart(value.sourceEmail ?? value.dataOwnerEmail) ||
+    getSourceKey(value)
+  );
+}
+
+function getBookedReservationKey(cruise: BookedCruise): string {
+  return normalizeKeyPart(cruise.reservationNumber ?? cruise.bookingId ?? cruise.bwoNumber);
+}
+
+function getBookedSailingKey(cruise: BookedCruise, includeOwnerAndSource: boolean): string {
+  const ship = normalizeKeyPart(cruise.shipName);
+  const sailDate = normalizeDateKey(cruise.sailDate);
+  const returnDate = normalizeDateKey(cruise.returnDate);
+
+  if (!ship || !sailDate) {
+    return '';
+  }
+
+  const baseParts = [ship, sailDate, returnDate];
+  if (!includeOwnerAndSource) {
+    return `sailing:${baseParts.join('|')}`;
+  }
+
+  return `sailing:${[getOwnerKey(cruise), getSourceKey(cruise), ...baseParts].join('|')}`;
+}
+
+function isMeaningfulValue(value: unknown): boolean {
+  if (value === null || value === undefined) return false;
+  if (typeof value === 'string') return value.trim().length > 0;
+  if (Array.isArray(value)) return value.length > 0;
+  return true;
+}
+
+function mergeRecordPreferIncoming<T extends Record<string, unknown>>(existing: T, incoming: T): T {
+  const merged: Record<string, unknown> = { ...existing };
+  Object.entries(incoming).forEach(([key, value]) => {
+    if (isMeaningfulValue(value)) {
+      merged[key] = value;
+    }
+  });
+  return merged as T;
+}
+
+function shouldMergeBookedByLooseSailing(existing: BookedCruise, incoming: BookedCruise): boolean {
+  const existingLooseSailing = getBookedSailingKey(existing, false);
+  const incomingLooseSailing = getBookedSailingKey(incoming, false);
+  if (!existingLooseSailing || existingLooseSailing !== incomingLooseSailing) {
+    return false;
+  }
+
+  const existingReservation = getBookedReservationKey(existing);
+  const incomingReservation = getBookedReservationKey(incoming);
+  const sameOwner = getOwnerKey(existing) === getOwnerKey(incoming);
+  const oneRecordIsIncomplete =
+    !existingReservation ||
+    !incomingReservation ||
+    !hasOwnerOrSource(existing) ||
+    !hasOwnerOrSource(incoming);
+
+  return sameOwner || oneRecordIsIncomplete;
 }
 
 export function getCruiseIdentityKey(cruise: Cruise): string {
@@ -48,21 +113,14 @@ export function getCruiseIdentityKey(cruise: Cruise): string {
 export function getBookedCruiseIdentityKey(cruise: BookedCruise): string {
   const ownerKey = getOwnerKey(cruise);
   const sourceKey = getSourceKey(cruise);
-  const reservation = normalizeKeyPart(cruise.reservationNumber ?? cruise.bookingId ?? cruise.bwoNumber);
+  const reservation = getBookedReservationKey(cruise);
   if (reservation) {
     return `reservation:${ownerKey}|${sourceKey}|${reservation}`;
   }
 
-  const naturalParts = [
-    ownerKey,
-    sourceKey,
-    normalizeKeyPart(cruise.shipName),
-    normalizeDateKey(cruise.sailDate),
-    normalizeDateKey(cruise.returnDate),
-  ];
-
-  if (naturalParts[2] && naturalParts[3]) {
-    return `sailing:${naturalParts.join('|')}`;
+  const sailingKey = getBookedSailingKey(cruise, true);
+  if (sailingKey) {
+    return sailingKey;
   }
 
   const id = normalizeKeyPart(cruise.id);
@@ -126,7 +184,75 @@ export function dedupeCruises(items: Cruise[], label = 'cruises'): Cruise[] {
 }
 
 export function dedupeBookedCruises(items: BookedCruise[], label = 'booked cruises'): BookedCruise[] {
-  return dedupeByIdentity(items, getBookedCruiseIdentityKey, label);
+  const result: BookedCruise[] = [];
+  const identityToIndex = new Map<string, number>();
+  const reservationToIndex = new Map<string, number>();
+  const strictSailingToIndex = new Map<string, number>();
+  const looseSailingToIndexes = new Map<string, number[]>();
+
+  const rememberIndexes = (cruise: BookedCruise, index: number) => {
+    identityToIndex.set(getBookedCruiseIdentityKey(cruise), index);
+
+    const reservation = getBookedReservationKey(cruise);
+    if (reservation) {
+      reservationToIndex.set(reservation, index);
+    }
+
+    const strictSailing = getBookedSailingKey(cruise, true);
+    if (strictSailing) {
+      strictSailingToIndex.set(strictSailing, index);
+    }
+
+    const looseSailing = getBookedSailingKey(cruise, false);
+    if (looseSailing) {
+      const indexes = looseSailingToIndexes.get(looseSailing) ?? [];
+      if (!indexes.includes(index)) {
+        looseSailingToIndexes.set(looseSailing, [...indexes, index]);
+      }
+    }
+  };
+
+  items.forEach((item) => {
+    const identityKey = getBookedCruiseIdentityKey(item);
+    const reservationKey = getBookedReservationKey(item);
+    const strictSailingKey = getBookedSailingKey(item, true);
+    const looseSailingKey = getBookedSailingKey(item, false);
+
+    let matchedIndex = identityToIndex.get(identityKey);
+
+    if (matchedIndex === undefined && reservationKey) {
+      matchedIndex = reservationToIndex.get(reservationKey);
+    }
+
+    if (matchedIndex === undefined && strictSailingKey) {
+      matchedIndex = strictSailingToIndex.get(strictSailingKey);
+    }
+
+    if (matchedIndex === undefined && looseSailingKey) {
+      const candidates = looseSailingToIndexes.get(looseSailingKey) ?? [];
+      matchedIndex = candidates.find((candidateIndex) => shouldMergeBookedByLooseSailing(result[candidateIndex], item));
+    }
+
+    if (matchedIndex !== undefined) {
+      console.log('[DataIdentity] Deduped duplicate booked cruise:', {
+        label,
+        identityKey,
+        reservationKey,
+        sailingKey: looseSailingKey,
+        shipName: item.shipName,
+        sailDate: item.sailDate,
+      });
+      result[matchedIndex] = mergeRecordPreferIncoming(result[matchedIndex] as unknown as Record<string, unknown>, item as unknown as Record<string, unknown>) as unknown as BookedCruise;
+      rememberIndexes(result[matchedIndex], matchedIndex);
+      return;
+    }
+
+    const nextIndex = result.length;
+    result.push(item);
+    rememberIndexes(item, nextIndex);
+  });
+
+  return result;
 }
 
 export function dedupeCasinoOffers(items: CasinoOffer[], label = 'casino offers'): CasinoOffer[] {
