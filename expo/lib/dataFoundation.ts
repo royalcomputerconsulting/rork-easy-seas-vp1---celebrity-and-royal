@@ -12,6 +12,13 @@ import type {
 
 export type PhaseOneRecord = Cruise | BookedCruise | CasinoOffer | CalendarEvent | Record<string, unknown>;
 
+export interface FoundationOwnerProfile {
+  id: string;
+  email?: string;
+  celebrityEmail?: string;
+  silverseaEmail?: string;
+}
+
 type WithFoundationFields = {
   ownerProfileId?: string;
   sourceEmail?: string;
@@ -41,6 +48,17 @@ function normalizeLower(value: unknown): string {
 export function normalizeEmail(value: unknown): string | undefined {
   const normalized = normalizeLower(value);
   return normalized.includes('@') ? normalized : undefined;
+}
+
+function getProfileEmails(profile: FoundationOwnerProfile): string[] {
+  return [profile.email, profile.celebrityEmail, profile.silverseaEmail]
+    .map(normalizeEmail)
+    .filter((email): email is string => email !== undefined);
+}
+
+function resolveKnownProfileIdForEmail(sourceEmail: string | undefined, profiles: FoundationOwnerProfile[] | undefined): string | undefined {
+  if (!sourceEmail || !profiles || profiles.length === 0) return undefined;
+  return profiles.find((profile) => getProfileEmails(profile).includes(sourceEmail))?.id;
 }
 
 export function normalizeBrand(value: unknown): TravelBrand | undefined {
@@ -118,20 +136,31 @@ export function applyFoundationFields<T extends PhaseOneRecord>(
     fallbackBrand?: TravelBrand | string | null;
     fallbackCasinoProgram?: CasinoProgram | null;
     markUnassigned?: boolean;
+    knownProfiles?: FoundationOwnerProfile[];
   },
 ): T[] {
   const fallbackEmail = normalizeEmail(options.fallbackSourceEmail);
   const fallbackBrand = normalizeBrand(options.fallbackBrand);
+  const fallbackOwnerProfileId = normalizeString(options.fallbackOwnerProfileId);
 
   return records.map((record) => {
     const item = record as T & WithFoundationFields;
     const inferredBrand = inferRecordBrand(item) ?? fallbackBrand;
-    const sourceEmail = normalizeEmail(item.sourceEmail) ?? fallbackEmail;
-    const ownerProfileId = normalizeString(item.ownerProfileId) || normalizeString(options.fallbackOwnerProfileId) || sourceEmail;
+    const explicitSourceEmail = normalizeEmail(item.sourceEmail);
+    const sourceEmail = explicitSourceEmail ?? fallbackEmail;
+    const existingOwnerProfileId = normalizeString(item.ownerProfileId);
+    const matchedOwnerProfileId = resolveKnownProfileIdForEmail(sourceEmail, options.knownProfiles);
+    const sourceEmailMatchesFallback = Boolean(sourceEmail && fallbackEmail && sourceEmail === fallbackEmail);
+    const ownerProfileId = existingOwnerProfileId
+      || matchedOwnerProfileId
+      || (sourceEmail ? (sourceEmailMatchesFallback ? (fallbackOwnerProfileId || sourceEmail) : '') : fallbackOwnerProfileId);
     const casinoProgram = item.casinoProgram ?? options.fallbackCasinoProgram ?? normalizeCasinoProgram((item as Record<string, unknown>).casinoProgram, inferredBrand);
     const importStatus: ImportReviewStatus = ownerProfileId
-      ? (item.importStatus ?? 'assigned')
+      ? (item.importStatus === 'reviewNeeded' || item.importStatus === 'unassigned' ? 'assigned' : item.importStatus ?? 'assigned')
       : (options.markUnassigned ? 'unassigned' : item.importStatus ?? 'reviewNeeded');
+    const reconciliationStatus: ImportReviewStatus = ownerProfileId
+      ? (item.reconciliationStatus === 'reviewNeeded' || item.reconciliationStatus === 'unassigned' ? 'matched' : item.reconciliationStatus ?? 'matched')
+      : (item.reconciliationStatus ?? 'reviewNeeded');
 
     const nextRecord: T & WithFoundationFields = {
       ...item,
@@ -140,7 +169,7 @@ export function applyFoundationFields<T extends PhaseOneRecord>(
       brand: inferredBrand ?? item.brand,
       casinoProgram,
       importStatus,
-      reconciliationStatus: item.reconciliationStatus ?? importStatus,
+      reconciliationStatus,
     };
 
     if ('offerType' in nextRecord || 'offerCode' in nextRecord) {

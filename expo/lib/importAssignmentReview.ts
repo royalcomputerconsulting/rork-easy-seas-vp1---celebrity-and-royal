@@ -95,7 +95,7 @@ function isReviewNeeded(record: ImportAssignmentRecord, users: UserProfile[]): b
   const hasNoResolvedOwner = !resolvedProfile;
   const hasOwnershipClue = Boolean(record.ownerProfileId || record.sourceEmail);
 
-  return hasReviewStatus || hasNoResolvedOwner || (hasOwnershipClue && !resolvedProfile);
+  return hasReviewStatus || (hasOwnershipClue && hasNoResolvedOwner);
 }
 
 function formatDateLabel(value: string | undefined): string | undefined {
@@ -222,10 +222,10 @@ export function groupImportAssignmentReviewItems(items: ImportAssignmentReviewIt
   return Array.from(groups.values()).sort((a, b) => b.items.length - a.items.length);
 }
 
-export function buildImportAssignmentPatch(profile: UserProfile): Partial<ImportAssignmentRecord> {
+export function buildImportAssignmentPatch(profile: UserProfile, sourceEmail?: string): Partial<ImportAssignmentRecord> {
   return {
     ownerProfileId: profile.id,
-    sourceEmail: normalizeReviewEmail(profile.email) ?? profile.email,
+    sourceEmail: normalizeReviewEmail(sourceEmail) ?? normalizeReviewEmail(profile.email) ?? profile.email,
     importStatus: 'assigned',
     reconciliationStatus: 'matched',
   };

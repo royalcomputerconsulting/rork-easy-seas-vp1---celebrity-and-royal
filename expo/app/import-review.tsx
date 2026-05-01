@@ -78,7 +78,7 @@ export default function ImportReviewScreen() {
   const assignGroupToProfile = useCallback(async (group: ImportAssignmentReviewGroup, profile: UserProfile) => {
     try {
       setProcessingKey(`${group.key}:${profile.id}`);
-      const patch = buildImportAssignmentPatch(profile);
+      const patch = buildImportAssignmentPatch(profile, group.sourceEmail);
       group.items.forEach((item) => applyPatchToItem(item, patch as Partial<CasinoOffer & Cruise & BookedCruise & CalendarEvent>));
       console.log('[ImportReview] Assigned import group:', { group: group.key, profileId: profile.id, itemCount: group.items.length });
     } catch (error) {
@@ -99,7 +99,7 @@ export default function ImportReviewScreen() {
       setProcessingKey(`${group.key}:create`);
       const existingProfile = activeProfiles.find((profile) => profile.email.toLowerCase().trim() === group.sourceEmail?.toLowerCase().trim() || profile.celebrityEmail?.toLowerCase().trim() === group.sourceEmail?.toLowerCase().trim());
       const profile = existingProfile ?? await addUser({ name: getSuggestedProfileName(group.sourceEmail), email: group.sourceEmail });
-      const patch = buildImportAssignmentPatch(profile);
+      const patch = buildImportAssignmentPatch(profile, group.sourceEmail);
       group.items.forEach((item) => applyPatchToItem(item, patch as Partial<CasinoOffer & Cruise & BookedCruise & CalendarEvent>));
       console.log('[ImportReview] Created/matched profile and assigned import group:', { group: group.key, profileId: profile.id, itemCount: group.items.length });
     } catch (error) {

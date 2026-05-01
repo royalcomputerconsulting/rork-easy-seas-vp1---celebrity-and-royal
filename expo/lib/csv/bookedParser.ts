@@ -104,6 +104,11 @@ function inferCruiseSourceFromText(...values: string[]): BookedCruise['cruiseSou
   return undefined;
 }
 
+function normalizeSourceEmail(value: string): string | undefined {
+  const normalized = value.toLowerCase().trim();
+  return normalized.includes('@') ? normalized : undefined;
+}
+
 function inferCruiseSourceFromShipName(shipName: string): BookedCruise['cruiseSource'] | undefined {
   const normalizedShipName = shipName.toLowerCase().trim();
   if (!normalizedShipName) return undefined;
@@ -255,6 +260,7 @@ export function parseBookedCSV(content: string, existingCruises: BookedCruise[] 
     totalCasinoDiscount: getColumnIndex(headerMap, ['totalcasinodiscount', 'total casino discount', 'total_casino_discount', 'casino discount', 'casinodiscount', 'discount', 'offer value']),
     portTaxesFees: getColumnIndex(headerMap, ['port taxes & fees', 'port taxes and fees', 'porttaxes', 'port_taxes', 'taxes & fees', 'taxes and fees', 'taxes', 'fees', 'port charges', 'portcharges']),
     source: getColumnIndex(headerMap, ['cruise line', 'cruiseline', 'brand', 'line']),
+    sourceEmail: getColumnIndex(headerMap, ['source email', 'sourceemail', 'account email', 'accountemail', 'owner email', 'owneremail', 'traveler email', 'traveleremail', 'profile email', 'profileemail', 'email']),
   };
 
   console.log('[BookedParser] Booked column indices:', colIndices);
@@ -327,6 +333,7 @@ export function parseBookedCSV(content: string, existingCruises: BookedCruise[] 
     const bookingId = getValue(colIndices.bookingId) || reservationNumber;
     const isBookedValue = getValue(colIndices.isBooked);
     const sourceValue = getValue(colIndices.source);
+    const sourceEmail = normalizeSourceEmail(getValue(colIndices.sourceEmail));
     const parsedState = parseBookedState(isBookedValue);
     const winningsBroughtHome = getNumericValue(colIndices.winningsBroughtHome);
     const cruisePointsEarned = getNumericValue(colIndices.cruisePointsEarned);
@@ -390,6 +397,9 @@ export function parseBookedCSV(content: string, existingCruises: BookedCruise[] 
       totalCasinoDiscount: totalCasinoDiscount > 0 ? totalCasinoDiscount : undefined,
       taxes: portTaxesFees > 0 ? portTaxesFees : undefined,
       cruiseSource: parsedSource,
+      sourceEmail,
+      importStatus: sourceEmail ? 'unassigned' : undefined,
+      reconciliationStatus: sourceEmail ? 'reviewNeeded' : undefined,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };

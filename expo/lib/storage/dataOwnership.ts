@@ -145,15 +145,26 @@ export function stampRecordsForOwner<T extends object>(records: T[], ownerScopeI
 
   return records.map((record) => {
     const existing = record as Record<string, unknown>;
+    const existingOwnerProfileId = typeof existing.ownerProfileId === 'string' && existing.ownerProfileId.trim().length > 0 ? existing.ownerProfileId : undefined;
+    const existingSourceEmail = typeof existing.sourceEmail === 'string' && existing.sourceEmail.trim().length > 0 ? existing.sourceEmail.toLowerCase().trim() : undefined;
+    const existingImportStatus = typeof existing.importStatus === 'string' ? existing.importStatus : undefined;
+    const existingReconciliationStatus = typeof existing.reconciliationStatus === 'string' ? existing.reconciliationStatus : undefined;
+    const assignmentNeedsReview = existingImportStatus === 'unassigned'
+      || existingImportStatus === 'reviewNeeded'
+      || existingReconciliationStatus === 'unassigned'
+      || existingReconciliationStatus === 'reviewNeeded';
+    const nextOwnerProfileId = existingOwnerProfileId ?? (assignmentNeedsReview ? undefined : normalizedEmail);
+    const nextSourceEmail = existingSourceEmail ?? (assignmentNeedsReview ? undefined : normalizedEmail);
+
     return {
       ...record,
       dataOwnerScopeId: normalizedScope,
       dataOwnerEmail: normalizedEmail,
       dataOwnerSyncedAt: syncedAt,
-      ownerProfileId: typeof existing.ownerProfileId === 'string' && existing.ownerProfileId.trim().length > 0 ? existing.ownerProfileId : normalizedEmail,
-      sourceEmail: typeof existing.sourceEmail === 'string' && existing.sourceEmail.trim().length > 0 ? existing.sourceEmail.toLowerCase().trim() : normalizedEmail,
-      importStatus: typeof existing.importStatus === 'string' ? existing.importStatus : 'assigned',
-      reconciliationStatus: typeof existing.reconciliationStatus === 'string' ? existing.reconciliationStatus : 'matched',
+      ownerProfileId: nextOwnerProfileId,
+      sourceEmail: nextSourceEmail,
+      importStatus: existingImportStatus ?? (nextOwnerProfileId ? 'assigned' : 'unassigned'),
+      reconciliationStatus: existingReconciliationStatus ?? (nextOwnerProfileId ? 'matched' : 'reviewNeeded'),
     };
   });
 }

@@ -7,13 +7,14 @@ import {
   getCruiseIdentityKey,
   getOfferIdentityKey,
 } from '@/lib/dataIdentity';
-import { applyFoundationFields, buildReconciliationSummary } from '@/lib/dataFoundation';
+import { applyFoundationFields, buildReconciliationSummary, type FoundationOwnerProfile } from '@/lib/dataFoundation';
 
 type SyncSource = NonNullable<Cruise['cruiseSource']>;
 
 export interface ImportMergeOptions {
   ownerProfileId?: string | null;
   sourceEmail?: string | null;
+  knownProfiles?: FoundationOwnerProfile[];
 }
 
 export interface ImportMergeResult<T> {
@@ -68,6 +69,7 @@ export function mergeImportedCruisesWithReconciliation(existingCruises: Cruise[]
     fallbackSourceEmail: options.sourceEmail,
     fallbackBrand: getImportedSource({ cruises: importedCruises }),
     markUnassigned: true,
+    knownProfiles: options.knownProfiles,
   });
   const merged = dedupeCruises([...existingCruises, ...preparedImported], 'merged imported cruises');
   return {
@@ -86,6 +88,7 @@ export function mergeImportedOffersWithReconciliation(existingOffers: CasinoOffe
     fallbackSourceEmail: options.sourceEmail,
     fallbackBrand: getImportedSource({ offers: importedOffers }),
     markUnassigned: true,
+    knownProfiles: options.knownProfiles,
   });
   const importedKeys = new Set(preparedImported.map(getOfferIdentityKey));
   const preparedExisting = existingOffers.map((offer) => {
@@ -112,6 +115,7 @@ export function mergeImportedBookedCruisesWithReconciliation(existingCruises: Bo
     fallbackSourceEmail: options.sourceEmail,
     fallbackBrand: getImportedSource({ bookedCruises: importedCruises }),
     markUnassigned: true,
+    knownProfiles: options.knownProfiles,
   });
   const importSource = getImportedSource({ bookedCruises: preparedImported });
   const importedKeys = new Set(preparedImported.map(getBookedCruiseIdentityKey));

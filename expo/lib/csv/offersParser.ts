@@ -45,6 +45,11 @@ function inferCruiseSourceFromText(...values: string[]): Cruise['cruiseSource'] 
   return undefined;
 }
 
+function normalizeSourceEmail(value: string): string | undefined {
+  const normalized = value.toLowerCase().trim();
+  return normalized.includes('@') ? normalized : undefined;
+}
+
 function inferCruiseSourceFromShipName(shipName: string): Cruise['cruiseSource'] | undefined {
   const normalizedShipName = shipName.toLowerCase().trim();
   if (!normalizedShipName) return undefined;
@@ -138,6 +143,7 @@ export function parseOffersCSV(content: string): { cruises: Cruise[]; offers: Ca
     nights: getColumnIndex(headerMap, ['nights', 'number of nights', 'total nights', 'duration', 'length']),
     departurePort: getColumnIndex(headerMap, ['departure port', 'departureport', 'depart port', 'home port', 'embarkation port', 'departs', 'port']),
     sourcePage: getColumnIndex(headerMap, ['source page', 'sourcepage', 'source']),
+    sourceEmail: getColumnIndex(headerMap, ['source email', 'sourceemail', 'account email', 'accountemail', 'owner email', 'owneremail', 'traveler email', 'traveleremail', 'profile email', 'profileemail', 'email']),
   };
 
   console.log('[OffersParser] Column indices:', colIndices);
@@ -190,6 +196,7 @@ export function parseOffersCSV(content: string): { cruises: Cruise[]; offers: Ca
     const nights = getNumericValue(colIndices.nights) || 7;
     const departurePort = getValue(colIndices.departurePort);
     const sourcePage = getValue(colIndices.sourcePage);
+    const sourceEmail = normalizeSourceEmail(getValue(colIndices.sourceEmail));
     const parsedSource = inferCruiseSourceFromShipName(shipName)
       ?? inferCruiseSourceFromText(sourcePage, offerName, offerType, perks, itinerary, departurePort)
       ?? detectedSourceFromHeaders;
@@ -240,6 +247,9 @@ export function parseOffersCSV(content: string): { cruises: Cruise[]; offers: Ca
       status: 'available',
       category: finalShipClass,
       cruiseSource: parsedSource,
+      sourceEmail,
+      importStatus: sourceEmail ? 'unassigned' : undefined,
+      reconciliationStatus: sourceEmail ? 'reviewNeeded' : undefined,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -275,6 +285,9 @@ export function parseOffersCSV(content: string): { cruises: Cruise[]; offers: Ca
         taxesFees,
         status: 'active',
         offerSource: parsedSource,
+        sourceEmail,
+        importStatus: sourceEmail ? 'unassigned' : undefined,
+        reconciliationStatus: sourceEmail ? 'reviewNeeded' : undefined,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };

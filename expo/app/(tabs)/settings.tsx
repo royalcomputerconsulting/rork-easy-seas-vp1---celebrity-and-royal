@@ -92,6 +92,7 @@ import * as XLSX from 'xlsx';
 import type { BookedCruise } from '@/types/models';
 import { getCalendarEventsWithGeneratedCruiseEvents, getDayAgendaEventCountForYear } from '@/lib/calendar/cruiseEvents';
 import { getImportAssignmentReviewItems } from '@/lib/importAssignmentReview';
+import { applyFoundationFields } from '@/lib/dataFoundation';
 
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import { UserProfileCard } from '@/components/ui/UserProfileCard';
@@ -436,11 +437,19 @@ export default function SettingsScreen() {
       const importOwnerOptions = {
         ownerProfileId: currentUser?.id ?? normalizedAuthenticatedEmail,
         sourceEmail: authenticatedEmail ?? currentUser?.email ?? normalizedAuthenticatedEmail,
+        knownProfiles: users,
       };
       const cruisesMergeResult = mergeImportedCruisesWithReconciliation(existingCruises, parsedCruises, importOwnerOptions);
       const offersMergeResult = mergeImportedOffersWithReconciliation(existingOffers, parsedOffers, importOwnerOptions);
       const mergedCruises = cruisesMergeResult.merged;
       const mergedOffers = offersMergeResult.merged;
+      const assignmentReviewCount = getImportAssignmentReviewItems({
+        offers: mergedOffers,
+        cruises: mergedCruises,
+        bookedCruises: [],
+        calendarEvents: [],
+        users,
+      }).length;
       const reviewNeededCount = cruisesMergeResult.reconciliation.reviewNeededItems + offersMergeResult.reconciliation.reviewNeededItems;
       const overlapCount = cruisesMergeResult.reconciliation.duplicateOverlappingSailings + offersMergeResult.reconciliation.duplicateOverlappingSailings;
       const suggestedArchiveCount = cruisesMergeResult.reconciliation.suggestedArchiveRows + offersMergeResult.reconciliation.suggestedArchiveRows;
@@ -472,10 +481,17 @@ export default function SettingsScreen() {
       const reconciliationNote = reviewNeededCount > 0 || overlapCount > 0 || suggestedArchiveCount > 0
         ? `\n\nReconciliation: ${reviewNeededCount} item(s) need review, ${overlapCount} overlapping sailing(s) were preserved, ${suggestedArchiveCount} missing row(s) were flagged instead of deleted.`
         : '';
+      const assignmentNote = assignmentReviewCount > 0 ? `\n\nImport Assignment: ${assignmentReviewCount} item(s) need account/profile assignment.` : '';
       setLastImportResult({ type: 'offers', count: parsedCruises.length });
       Alert.alert(
-        'Import Successful', 
-        `${sourceLabel} import updated ${parsedCruises.length} cruises and ${parsedOffers.length} offers from ${result.fileName}.${healNote}${reconciliationNote}`
+        'Import Successful',
+        `${sourceLabel} import updated ${parsedCruises.length} cruises and ${parsedOffers.length} offers from ${result.fileName}.${healNote}${reconciliationNote}${assignmentNote}`,
+        assignmentReviewCount > 0
+          ? [
+              { text: 'Later', style: 'cancel' },
+              { text: 'Review Assignments', onPress: () => router.push('/import-review' as any) },
+            ]
+          : undefined
       );
       console.log('[Settings] Import complete:', parsedCruises.length, 'cruises,', parsedOffers.length, 'offers');
     } catch (error) {
@@ -500,7 +516,7 @@ export default function SettingsScreen() {
     } finally {
       setIsImporting(false);
     }
-  }, [authenticatedEmail, casinoOffers, cruises, currentUser?.email, currentUser?.id, localData.cruises, localData.offers, normalizedAuthenticatedEmail, setCruises, setCasinoOffers, setLocalData]);
+  }, [authenticatedEmail, casinoOffers, cruises, currentUser?.email, currentUser?.id, localData.cruises, localData.offers, normalizedAuthenticatedEmail, router, setCruises, setCasinoOffers, setLocalData, users]);
 
   const fetchICSMutation = trpc.calendar.fetchICS.useMutation();
   const saveCalendarFeedMutation = trpc.calendar.saveCalendarFeed.useMutation();
@@ -675,7 +691,12 @@ export default function SettingsScreen() {
                 
                 console.log('[Settings] Fetched', content.length, 'characters via backend');
                 
-                const events = parseICSFile(content);
+                const events = applyFoundationFields(parseICSFile(content), {
+                  fallbackOwnerProfileId: currentUser?.id ?? normalizedAuthenticatedEmail,
+                  fallbackSourceEmail: authenticatedEmail ?? currentUser?.email ?? normalizedAuthenticatedEmail,
+                  markUnassigned: true,
+                  knownProfiles: users,
+                });
                 
                 if (events.length === 0) {
                   Alert.alert('Import Failed', 'No valid events found in the ICS file. Please check the URL and file format.');
@@ -687,10 +708,23 @@ export default function SettingsScreen() {
                   calendar: [...(localData.calendar || []), ...events],
                 });
 
+                const calendarAssignmentReviewCount = getImportAssignmentReviewItems({
+                  offers: [],
+                  cruises: [],
+                  bookedCruises: [],
+                  calendarEvents: events,
+                  users,
+                }).length;
                 setLastImportResult({ type: 'calendar', count: events.length });
                 Alert.alert(
-                  'Import Successful', 
-                  `Imported ${events.length} calendar events from URL`
+                  'Import Successful',
+                  `Imported ${events.length} calendar events from URL${calendarAssignmentReviewCount > 0 ? `. ${calendarAssignmentReviewCount} event(s) need account assignment review.` : ''}`,
+                  calendarAssignmentReviewCount > 0
+                    ? [
+                        { text: 'Later', style: 'cancel' },
+                        { text: 'Review Assignments', onPress: () => router.push('/import-review' as any) },
+                      ]
+                    : undefined
                 );
                 console.log('[Settings] Import complete:', events.length, 'events');
               } catch (error) {
@@ -714,7 +748,7 @@ export default function SettingsScreen() {
       Alert.alert('Import Error', 'Failed to start import. Please try again.');
       setIsImporting(false);
     }
-  }, [setLocalData, localData.calendar, fetchICSMutation]);
+  }, [authenticatedEmail, currentUser?.email, currentUser?.id, fetchICSMutation, localData.calendar, normalizedAuthenticatedEmail, router, setLocalData, users]);
 
   const handleImportCalendarFromFile = useCallback(async () => {
     try {
@@ -730,7 +764,12 @@ export default function SettingsScreen() {
       }
 
       console.log('[Settings] File selected:', result.fileName);
-      const events = parseICSFile(result.content);
+      const events = applyFoundationFields(parseICSFile(result.content), {
+        fallbackOwnerProfileId: currentUser?.id ?? normalizedAuthenticatedEmail,
+        fallbackSourceEmail: authenticatedEmail ?? currentUser?.email ?? normalizedAuthenticatedEmail,
+        markUnassigned: true,
+        knownProfiles: users,
+      });
       
       if (events.length === 0) {
         Alert.alert('Import Failed', 'No valid events found in the ICS file. Please check the file format.');
@@ -742,10 +781,23 @@ export default function SettingsScreen() {
         calendar: [...(localData.calendar || []), ...events],
       });
 
+      const calendarAssignmentReviewCount = getImportAssignmentReviewItems({
+        offers: [],
+        cruises: [],
+        bookedCruises: [],
+        calendarEvents: events,
+        users,
+      }).length;
       setLastImportResult({ type: 'calendar', count: events.length });
       Alert.alert(
-        'Import Successful', 
-        `Imported ${events.length} calendar events from ${result.fileName}`
+        'Import Successful',
+        `Imported ${events.length} calendar events from ${result.fileName}${calendarAssignmentReviewCount > 0 ? `. ${calendarAssignmentReviewCount} event(s) need account assignment review.` : ''}`,
+        calendarAssignmentReviewCount > 0
+          ? [
+              { text: 'Later', style: 'cancel' },
+              { text: 'Review Assignments', onPress: () => router.push('/import-review' as any) },
+            ]
+          : undefined
       );
       console.log('[Settings] Import complete:', events.length, 'events');
     } catch (error) {
@@ -754,7 +806,7 @@ export default function SettingsScreen() {
     } finally {
       setIsImporting(false);
     }
-  }, [setLocalData, localData.calendar]);
+  }, [authenticatedEmail, currentUser?.email, currentUser?.id, localData.calendar, normalizedAuthenticatedEmail, router, setLocalData, users]);
 
   const handleImportCalendarICS = useCallback(() => {
     Alert.alert(
@@ -808,6 +860,7 @@ export default function SettingsScreen() {
       const bookedMergeResult = mergeImportedBookedCruisesWithReconciliation(existingBooked, parsedBooked, {
         ownerProfileId: currentUser?.id ?? normalizedAuthenticatedEmail,
         sourceEmail: authenticatedEmail ?? currentUser?.email ?? normalizedAuthenticatedEmail,
+        knownProfiles: users,
       });
       const mergedBooked = bookedMergeResult.merged;
       console.log('[Settings] Merged booked cruises:', {
@@ -827,14 +880,28 @@ export default function SettingsScreen() {
       console.log('[Settings] Set HAS_LAUNCHED_BEFORE flag to prevent data wipe on restart');
 
       const sourceLabel = getImportedSourceLabel(importedSource);
+      const bookedAssignmentReviewCount = getImportAssignmentReviewItems({
+        offers: [],
+        cruises: [],
+        bookedCruises: mergedBooked,
+        calendarEvents: [],
+        users,
+      }).length;
       const bookedReconciliationNote = bookedMergeResult.reconciliation.reviewNeededItems > 0 || bookedMergeResult.reconciliation.duplicateOverlappingSailings > 0
         ? ` ${bookedMergeResult.reconciliation.reviewNeededItems} item(s) need review and ${bookedMergeResult.reconciliation.duplicateOverlappingSailings} overlapping sailing(s) were preserved.`
         : '';
+      const bookedAssignmentNote = bookedAssignmentReviewCount > 0 ? ` ${bookedAssignmentReviewCount} item(s) need account assignment review.` : '';
       setLastImportResult({ type: 'booked', count: parsedBooked.length });
       
       Alert.alert(
-        'Import Successful', 
-        `${sourceLabel} booked cruises updated from ${result.fileName}. Imported ${parsedBooked.length} cruise row(s).${bookedReconciliationNote}`
+        'Import Successful',
+        `${sourceLabel} booked cruises updated from ${result.fileName}. Imported ${parsedBooked.length} cruise row(s).${bookedReconciliationNote}${bookedAssignmentNote}`,
+        bookedAssignmentReviewCount > 0
+          ? [
+              { text: 'Later', style: 'cancel' },
+              { text: 'Review Assignments', onPress: () => router.push('/import-review' as any) },
+            ]
+          : undefined
       );
       console.log('[Settings] Booked import complete:', parsedBooked.length, 'cruise rows imported');
     } catch (error) {
@@ -859,7 +926,7 @@ export default function SettingsScreen() {
     } finally {
       setIsImporting(false);
     }
-  }, [authenticatedEmail, bookedCruises, currentUser?.email, currentUser?.id, localData.booked, normalizedAuthenticatedEmail, setBookedCruises, setLocalData]);
+  }, [authenticatedEmail, bookedCruises, currentUser?.email, currentUser?.id, localData.booked, normalizedAuthenticatedEmail, router, setBookedCruises, setLocalData, users]);
 
   const handleImportCompletedCruisesXLSX = useCallback(async () => {
     try {
@@ -954,6 +1021,7 @@ export default function SettingsScreen() {
       const colPrice = findCol(['price', 'cost', 'paid', 'amount']);
       const colWinnings = findCol(['winnings', 'casino win']);
       const colProgram = findCol(['program', 'charter']);
+      const colSourceEmail = findCol(['source email', 'account email', 'owner email', 'traveler email', 'profile email', 'email']);
 
       console.log('[Settings] XLSX mapped columns:', {
         ship: colShip, sailDate: colSailDate, returnDate: colReturnDate,
@@ -986,6 +1054,7 @@ export default function SettingsScreen() {
         const price = getCol(colPrice);
         const winnings = getCol(colWinnings);
         const program = getCol(colProgram);
+        const sourceEmail = normalizeAccountEmail(getCol(colSourceEmail)) ?? undefined;
 
         if (!shipName && !sailDateRaw) continue;
 
@@ -1054,6 +1123,9 @@ export default function SettingsScreen() {
           status: 'completed',
           completionState: 'completed',
           cruiseSource,
+          sourceEmail,
+          importStatus: sourceEmail ? 'unassigned' : undefined,
+          reconciliationStatus: sourceEmail ? 'reviewNeeded' : undefined,
           createdAt: new Date().toISOString(),
         };
 
@@ -1073,7 +1145,20 @@ export default function SettingsScreen() {
         return;
       }
 
-      const merged = [...existingBooked, ...importedCruises];
+      const preparedImportedCruises = applyFoundationFields(importedCruises, {
+        fallbackOwnerProfileId: currentUser?.id ?? normalizedAuthenticatedEmail,
+        fallbackSourceEmail: authenticatedEmail ?? currentUser?.email ?? normalizedAuthenticatedEmail,
+        markUnassigned: true,
+        knownProfiles: users,
+      });
+      const completedAssignmentReviewCount = getImportAssignmentReviewItems({
+        offers: [],
+        cruises: [],
+        bookedCruises: preparedImportedCruises,
+        calendarEvents: [],
+        users,
+      }).length;
+      const merged = [...existingBooked, ...preparedImportedCruises];
       await setBookedCruises(merged);
       await setLocalData({ booked: merged });
       await AsyncStorage.setItem('easyseas_has_launched_before', 'true');
@@ -1081,7 +1166,13 @@ export default function SettingsScreen() {
       setLastImportResult({ type: 'completed', count: importedCruises.length });
       Alert.alert(
         'Import Successful',
-        `Imported ${importedCruises.length} completed cruise${importedCruises.length !== 1 ? 's' : ''} from ${asset.name}.`
+        `Imported ${importedCruises.length} completed cruise${importedCruises.length !== 1 ? 's' : ''} from ${asset.name}.${completedAssignmentReviewCount > 0 ? ` ${completedAssignmentReviewCount} item(s) need account assignment review.` : ''}`,
+        completedAssignmentReviewCount > 0
+          ? [
+              { text: 'Later', style: 'cancel' },
+              { text: 'Review Assignments', onPress: () => router.push('/import-review' as any) },
+            ]
+          : undefined
       );
       console.log('[Settings] XLSX import complete:', importedCruises.length, 'new completed cruises');
     } catch (error) {
@@ -1090,7 +1181,7 @@ export default function SettingsScreen() {
     } finally {
       setIsImporting(false);
     }
-  }, [bookedCruises, localData.booked, setBookedCruises, setLocalData]);
+  }, [authenticatedEmail, bookedCruises, currentUser?.email, currentUser?.id, localData.booked, normalizedAuthenticatedEmail, router, setBookedCruises, setLocalData, users]);
 
   const handleExportBookedCSV = useCallback(async () => {
     try {
