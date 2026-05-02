@@ -116,7 +116,7 @@ import { useEntitlement } from '@/state/EntitlementProvider';
 import { useCrewRecognition } from '@/state/CrewRecognitionProvider';
 import { useUserDataSync } from '@/state/UserDataSyncProvider';
 import { useIntelligenceFilters } from '@/state/IntelligenceFiltersProvider';
-import { getProfileDisplayName, getSecondProfileForUnassignedRecords } from '@/lib/intelligenceFilters';
+import { getSecondProfileForUnassignedRecords } from '@/lib/intelligenceFilters';
 
 function normalizeAccountEmail(email: string | null | undefined): string | null {
   if (!email) {
@@ -245,8 +245,7 @@ export default function SettingsScreen() {
     return selectedSettingsProfile;
   }, [normalizedAuthenticatedEmail, normalizedSelectedProfileEmail, primaryProfileUser?.id, selectedSettingsProfile]);
   const isPrimaryProfileSelected = profileDisplayUser?.id === primaryProfileUser?.id;
-  const isLinkedProfileSelected = Boolean(linkedSecondProfile && profileDisplayUser?.id === linkedSecondProfile.id);
-  const linkedProfileLabel = linkedSecondProfile ? getProfileDisplayName(linkedSecondProfile) : 'Unassigned';
+  const activeProfileSlot = linkedSecondProfile && profileDisplayUser?.id === linkedSecondProfile.id ? 'secondary' : 'primary';
   const isProfileDisplayReady = true;
 
 
@@ -287,7 +286,7 @@ export default function SettingsScreen() {
     }
 
     linkedProfileEnsuredRef.current = true;
-    addUser({ name: 'Unassigned', email: authenticatedEmail })
+    addUser({ name: 'Second User', email: authenticatedEmail })
       .then((createdProfile) => {
         console.log('[Settings] Created linked second profile for filtering:', createdProfile.id);
         if (selectedProfileId === 'unassigned') {
@@ -300,15 +299,30 @@ export default function SettingsScreen() {
       });
   }, [addUser, authenticatedEmail, isUserLoading, linkedSecondProfile, primaryProfileUser, selectedProfileId, setSelectedProfileId]);
 
-  const handleLinkedProfilePress = useCallback(() => {
-    setSelectedProfileId(linkedSecondProfile?.id ?? 'unassigned');
-  }, [linkedSecondProfile?.id, setSelectedProfileId]);
+  useEffect(() => {
+    if (!linkedSecondProfile || linkedSecondProfile.name !== 'Unassigned') {
+      return;
+    }
 
-  const handlePrimaryProfileBrandPress = useCallback(() => {
+    updateUser(linkedSecondProfile.id, {
+      name: 'Second User',
+      displayName: 'Second User',
+      relationshipLabel: 'Second User',
+    }).catch((error) => {
+      console.error('[Settings] Failed to rename linked second profile:', error);
+    });
+  }, [linkedSecondProfile, updateUser]);
+
+  const handleProfileSlotPress = useCallback((slot: 'primary' | 'secondary') => {
+    if (slot === 'secondary') {
+      setSelectedProfileId(linkedSecondProfile?.id ?? 'unassigned');
+      return;
+    }
+
     if (primaryProfileUser) {
       setSelectedProfileId(primaryProfileUser.id);
     }
-  }, [primaryProfileUser, setSelectedProfileId]);
+  }, [linkedSecondProfile?.id, primaryProfileUser, setSelectedProfileId]);
 
   const handleAddToWhitelist = async () => {
     if (!newWhitelistEmail.trim() || !newWhitelistEmail.includes('@')) {
@@ -363,7 +377,7 @@ export default function SettingsScreen() {
     celebrityCaptainsClubNumber: profileDisplayUser?.celebrityCaptainsClubNumber || '',
     celebrityCaptainsClubPoints: profileDisplayUser?.celebrityCaptainsClubPoints || 0,
     celebrityBlueChipPoints: profileDisplayUser?.celebrityBlueChipPoints || 0,
-    celebrityBlueChipTier: 'Pearl',
+    celebrityBlueChipTier: profileDisplayUser?.celebrityBlueChipTier || 'Pearl',
     celebrityCaptainsClubLevel: 'Preview',
     preferredBrand: profileDisplayUser?.preferredBrand || 'royal',
     silverseaEmail: profileDisplayUser?.silverseaEmail || '',
@@ -1912,6 +1926,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
           celebrityCaptainsClubNumber: profileData.celebrityCaptainsClubNumber,
           celebrityCaptainsClubPoints: profileData.celebrityCaptainsClubPoints,
           celebrityBlueChipPoints: profileData.celebrityBlueChipPoints,
+          celebrityBlueChipTier: profileData.celebrityBlueChipTier,
           preferredBrand: profileData.preferredBrand,
           silverseaEmail: profileData.silverseaEmail,
           silverseaVenetianNumber: profileData.silverseaVenetianNumber,
@@ -2390,10 +2405,11 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
             enrichmentData={enrichmentData}
             onSave={handleSaveProfile}
             isSaving={isSaving}
-            linkedProfileLabel={linkedProfileLabel}
-            linkedProfileActive={isLinkedProfileSelected}
-            onLinkedProfilePress={handleLinkedProfilePress}
-            onPrimaryProfileBrandPress={handlePrimaryProfileBrandPress}
+            primaryProfileLabel="User"
+            secondaryProfileLabel="Second User"
+            activeProfileSlot={activeProfileSlot}
+            onProfileSlotPress={handleProfileSlotPress}
+            showProfileSwitch={true}
           />
 
           <View style={styles.section}>

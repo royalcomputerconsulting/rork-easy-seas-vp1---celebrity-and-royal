@@ -14,8 +14,8 @@ interface IntelligenceFilterStripProps {
   variant?: 'default' | 'bookedCruises';
 }
 
-const BRAND_OPTIONS: BrandFilterValue[] = ['all', 'royal', 'celebrity'];
-const PROGRAM_OPTIONS: ProgramFilterValue[] = ['all', 'clubRoyale', 'blueChip'];
+const BRAND_OPTIONS: BrandFilterValue[] = ['all', 'royal', 'celebrity', 'silversea'];
+const PROGRAM_OPTIONS: ProgramFilterValue[] = ['all', 'clubRoyale', 'blueChip', 'venetianSociety'];
 
 function getBrandChipLabel(brand: BrandFilterValue): string {
   return brand === 'all' ? 'All' : getBrandLabel(brand);
@@ -46,11 +46,19 @@ export const IntelligenceFilterStrip = React.memo(function IntelligenceFilterStr
 
   const profileOptions = useMemo((): { id: ProfileFilterValue; label: string }[] => {
     const activeProfiles = users.filter((profile) => profile.active !== false);
-    const unassignedFallbackProfile = getSecondProfileForUnassignedRecords(activeProfiles);
+    const primaryProfile = activeProfiles.find((profile) => profile.isOwner) ?? activeProfiles[0];
+    const secondProfile = getSecondProfileForUnassignedRecords(activeProfiles);
     return [
       { id: 'all', label: 'All' },
-      ...activeProfiles.map((profile) => ({ id: profile.id, label: getProfileDisplayName(profile) })),
-      ...(unassignedFallbackProfile ? [] : [{ id: 'unassigned' as const, label: 'Unassigned' }]),
+      ...activeProfiles.map((profile) => ({
+        id: profile.id,
+        label: profile.id === primaryProfile?.id
+          ? 'User'
+          : profile.id === secondProfile?.id
+          ? 'Second User'
+          : getProfileDisplayName(profile),
+      })),
+      ...(secondProfile ? [] : [{ id: 'unassigned' as const, label: 'Second User' }]),
     ];
   }, [users]);
 

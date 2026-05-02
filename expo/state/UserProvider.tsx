@@ -59,6 +59,7 @@ export interface UserProfile {
   blueChipId?: string;
   celebrityCaptainsClubPoints?: number;
   celebrityBlueChipPoints?: number;
+  celebrityBlueChipTier?: string;
   preferredBrand?: 'royal' | 'celebrity' | 'silversea' | 'carnival';
   silverseaEmail?: string;
   silverseaVenetianNumber?: string;
@@ -103,6 +104,7 @@ const DEFAULT_OWNER = {
   celebrityCaptainsClubNumber: '',
   celebrityCaptainsClubPoints: 0,
   celebrityBlueChipPoints: 0,
+  celebrityBlueChipTier: '',
   preferredBrand: 'royal' as const,
   silverseaEmail: '',
   silverseaVenetianNumber: '',
@@ -150,6 +152,7 @@ function createOwnerProfile(email: string | null): UserProfile {
     blueChipId: '',
     celebrityCaptainsClubPoints: DEFAULT_OWNER.celebrityCaptainsClubPoints,
     celebrityBlueChipPoints: DEFAULT_OWNER.celebrityBlueChipPoints,
+    celebrityBlueChipTier: DEFAULT_OWNER.celebrityBlueChipTier,
     preferredBrand: DEFAULT_OWNER.preferredBrand,
     silverseaEmail: DEFAULT_OWNER.silverseaEmail,
     silverseaVenetianNumber: DEFAULT_OWNER.silverseaVenetianNumber,
@@ -231,6 +234,7 @@ function sanitizeUserProfile(user: unknown, fallbackEmail: string | null, index:
     blueChipId: typeof userRecord.blueChipId === 'string' ? userRecord.blueChipId : '',
     celebrityCaptainsClubPoints: typeof userRecord.celebrityCaptainsClubPoints === 'number' ? userRecord.celebrityCaptainsClubPoints : DEFAULT_OWNER.celebrityCaptainsClubPoints,
     celebrityBlueChipPoints: typeof userRecord.celebrityBlueChipPoints === 'number' ? userRecord.celebrityBlueChipPoints : DEFAULT_OWNER.celebrityBlueChipPoints,
+    celebrityBlueChipTier: typeof userRecord.celebrityBlueChipTier === 'string' ? userRecord.celebrityBlueChipTier : DEFAULT_OWNER.celebrityBlueChipTier,
     preferredBrand: userRecord.preferredBrand === 'royal' || userRecord.preferredBrand === 'celebrity' || userRecord.preferredBrand === 'silversea' || userRecord.preferredBrand === 'carnival'
       ? userRecord.preferredBrand
       : DEFAULT_OWNER.preferredBrand,
@@ -589,6 +593,7 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
         email: updates.email !== undefined ? (normalizeEmail(updates.email) ?? normalizedAuthenticatedEmail ?? DEFAULT_OWNER.email) : updates.email,
       };
 
+      const targetUserBeforeUpdate = currentUsers.find((user) => user.id === userId) ?? null;
       const updatedUsers = currentUsers.map((user) => (
         user.id === userId
           ? { ...user, ...normalizedUpdates, updatedAt: new Date().toISOString() }
@@ -598,7 +603,7 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
       await AsyncStorage.setItem(scopedKeys.USERS, JSON.stringify(updatedUsers));
 
       const normalizedTargetEmail = updates.email !== undefined ? normalizeEmail(updates.email) : normalizedAuthenticatedEmail;
-      if (normalizedTargetEmail && normalizedTargetEmail !== normalizedAuthenticatedEmail) {
+      if (targetUserBeforeUpdate?.isOwner === true && normalizedTargetEmail && normalizedTargetEmail !== normalizedAuthenticatedEmail) {
         const targetScopedKeys = getScopedUserKeys(normalizedTargetEmail);
         const targetScopedUsers = updatedUsers.map((user) => (
           user.id === userId
