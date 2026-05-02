@@ -5,7 +5,6 @@ import {
   StyleSheet, 
   ScrollView, 
   TouchableOpacity, 
-  Switch, 
   Alert, 
   Linking, 
   ActivityIndicator,
@@ -18,9 +17,6 @@ import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { 
   Settings as SettingsIcon, 
-  Bell, 
-  Moon, 
-  DollarSign, 
   Download, 
   Upload,
   Trash2, 
@@ -145,7 +141,7 @@ type PendingSmartImportReview = {
 export default function SettingsScreen() {
   const router = useRouter();
   const entitlement = useEntitlement();
-  const { settings, updateSettings, clearLocalData, setLocalData, localData } = useAppState();
+  const { clearLocalData, setLocalData, localData } = useAppState();
   const coreData = useCoreData();
   const { clearAllData, bookedCruises, setCruises, casinoOffers, setBookedCruises, setCasinoOffers } = coreData;
   const cruises = coreData.cruises;
@@ -2073,16 +2069,6 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
     </TouchableOpacity>
   );
 
-  const renderToggle = (value: boolean, onToggle: (val: boolean) => void) => (
-    <Switch
-      value={value}
-      onValueChange={onToggle}
-      trackColor={{ false: '#E5E7EB', true: 'rgba(0, 31, 63, 0.3)' }}
-      thumbColor={value ? COLORS.navyDeep : '#9CA3AF'}
-      ios_backgroundColor="#E5E7EB"
-    />
-  );
-
   const renderSectionHeader = (
     icon: React.ReactNode,
     title: string,
@@ -2332,43 +2318,6 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
             onSave={handleSaveProfile}
             isSaving={isSaving}
           />
-
-          <View style={styles.section}>
-            <View style={styles.sectionCard}>
-              {renderSectionHeader(<Moon size={18} color={COLORS.white} />, 'Display Preferences', 'Customize how data appears')}
-              {renderSettingRow(
-                <DollarSign size={18} color={COLORS.navyDeep} />,
-                'Show Taxes in List',
-                renderToggle(settings.showTaxesInList, (val) => updateSettings({ showTaxesInList: val }))
-              )}
-              {renderSettingRow(
-                <DollarSign size={18} color={COLORS.navyDeep} />,
-                'Price Per Night',
-                renderToggle(settings.showPricePerNight, (val) => updateSettings({ showPricePerNight: val }))
-              )}
-              {renderSettingRow(
-                <Moon size={18} color={COLORS.navyDeep} />,
-                'Theme',
-                settings.theme === 'dark' ? 'Dark' : settings.theme === 'light' ? 'Light' : 'System'
-              )}
-            </View>
-          </View>
-
-          <View style={styles.section}>
-            <View style={styles.sectionCard}>
-              {renderSectionHeader(<Bell size={18} color={COLORS.white} />, 'Notifications', 'Alert preferences')}
-              {renderSettingRow(
-                <Bell size={18} color={COLORS.navyDeep} />,
-                'Price Drop Alerts',
-                renderToggle(settings.priceDropAlerts, (val) => updateSettings({ priceDropAlerts: val }))
-              )}
-              {renderSettingRow(
-                <Bell size={18} color={COLORS.navyDeep} />,
-                'Daily Summary',
-                renderToggle(settings.dailySummaryNotifications || false, (val) => updateSettings({ dailySummaryNotifications: val }))
-              )}
-            </View>
-          </View>
 
           <View style={styles.section}>
             <View style={styles.sectionCard}>

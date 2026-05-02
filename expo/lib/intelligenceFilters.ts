@@ -1,4 +1,4 @@
-import type { CasinoProgram, TravelBrand } from '@/types/models';
+import type { CasinoProgram, ImportReviewStatus, TravelBrand } from '@/types/models';
 import type { BrandFilterValue, ProfileFilterValue, ProgramFilterValue } from '@/state/IntelligenceFiltersProvider';
 import type { UserProfile } from '@/state/UserProvider';
 
@@ -17,6 +17,8 @@ type FilterableRecord = {
   offerSource?: string;
   shipName?: string;
   cruiseLines?: string[];
+  importStatus?: ImportReviewStatus;
+  reconciliationStatus?: ImportReviewStatus;
 };
 
 const BRAND_LABELS: Record<string, string> = {
@@ -62,7 +64,10 @@ export function getProgramLabel(program: ProgramFilterValue | string): string {
 
 export function getProfileScopeLabel(profileId: ProfileFilterValue, profiles: UserProfile[]): string {
   if (profileId === 'all') return 'All Profiles';
-  if (profileId === 'unassigned') return 'Unassigned Imports';
+  if (profileId === 'unassigned') {
+    const fallbackProfile = getSecondProfileForUnassignedRecords(profiles);
+    return fallbackProfile ? getProfileDisplayName(fallbackProfile) : 'Unassigned Imports';
+  }
   return getProfileDisplayName(profiles.find((profile) => profile.id === profileId));
 }
 
@@ -112,42 +117,59 @@ function getProfileEmails(profile: UserProfile): string[] {
     .filter((email): email is string => email !== null);
 }
 
-export function getRecordOwnerLabel(record: FilterableRecord, profiles: UserProfile[]): string {
-  if (record.ownerProfileId) {
-    const profile = profiles.find((item) => item.id === record.ownerProfileId);
-    if (profile) return getProfileDisplayName(profile);
-  }
+/**
+ * Returns the linked second traveler profile used as the owner for records that were previously surfaced as Unassigned.
+ */
+export function getSecondProfileForUnassignedRecords(profiles: UserProfile[]): UserProfile | undefined {
+  return profiles.filter((profile) => profile.active !== false)[1];
+}
 
+function getMatchedProfile(record: FilterableRecord, profiles: UserProfile[]): UserProfile | undefined {
+  const ownerProfileId = normalize(record.ownerProfileId);
+  const ownerEmail = normalizeEmail(record.ownerProfileId);
   const recordEmail = normalizeEmail(record.sourceEmail);
-  if (recordEmail) {
-    const profile = profiles.find((item) => getProfileEmails(item).includes(recordEmail));
-    if (profile) return getProfileDisplayName(profile);
-    return recordEmail;
+
+  if (ownerProfileId) {
+    const byId = profiles.find((profile) => profile.id === ownerProfileId);
+    if (byId) return byId;
   }
 
-  return 'Unassigned';
+  const candidateEmails = [recordEmail, ownerEmail].filter((email): email is string => email !== null);
+  if (candidateEmails.length === 0) return undefined;
+
+  return profiles.find((profile) => getProfileEmails(profile).some((email) => candidateEmails.includes(email)));
+}
+
+export function getRecordOwnerLabel(record: FilterableRecord, profiles: UserProfile[]): string {
+  const matchedProfile = getMatchedProfile(record, profiles);
+  if (matchedProfile) return getProfileDisplayName(matchedProfile);
+
+  const recordEmail = normalizeEmail(record.sourceEmail) ?? normalizeEmail(record.ownerProfileId);
+  if (recordEmail) return recordEmail;
+
+  const fallbackProfile = getSecondProfileForUnassignedRecords(profiles);
+  return fallbackProfile ? getProfileDisplayName(fallbackProfile) : 'Unassigned';
 }
 
 function recordMatchesProfile(record: FilterableRecord, selectedProfileId: ProfileFilterValue, profiles: UserProfile[]): boolean {
   if (selectedProfileId === 'all') return true;
 
-  const recordEmail = normalizeEmail(record.sourceEmail);
-  const matchedProfile = record.ownerProfileId
-    ? profiles.find((profile) => profile.id === record.ownerProfileId)
-    : recordEmail
-      ? profiles.find((profile) => getProfileEmails(profile).includes(recordEmail))
-      : undefined;
+  const matchedProfile = getMatchedProfile(record, profiles);
+  const unassignedFallbackProfile = getSecondProfileForUnassignedRecords(profiles);
 
   if (selectedProfileId === 'unassigned') {
+    if (unassignedFallbackProfile) {
+      return !matchedProfile || matchedProfile.id === unassignedFallbackProfile.id;
+    }
+
     return !matchedProfile;
   }
 
   const selectedProfile = profiles.find((profile) => profile.id === selectedProfileId);
   if (!selectedProfile) return true;
 
-  if (record.ownerProfileId === selectedProfile.id) return true;
-  if (!recordEmail) return false;
-  return getProfileEmails(selectedProfile).includes(recordEmail);
+  if (matchedProfile) return matchedProfile.id === selectedProfile.id;
+  return unassignedFallbackProfile?.id === selectedProfile.id;
 }
 
 export function recordMatchesIntelligenceFilters(record: FilterableRecord, filters: IntelligenceFilterStateSnapshot, profiles: UserProfile[]): boolean {

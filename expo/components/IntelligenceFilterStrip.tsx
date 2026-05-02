@@ -5,7 +5,7 @@ import { Building2, SlidersHorizontal, Trophy, UserRound } from 'lucide-react-na
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { useIntelligenceFilters, type BrandFilterValue, type ProfileFilterValue, type ProgramFilterValue } from '@/state/IntelligenceFiltersProvider';
 import { useUser } from '@/state/UserProvider';
-import { getBrandLabel, getProfileDisplayName, getProgramLabel } from '@/lib/intelligenceFilters';
+import { getBrandLabel, getProfileDisplayName, getProgramLabel, getSecondProfileForUnassignedRecords } from '@/lib/intelligenceFilters';
 
 interface IntelligenceFilterStripProps {
   contextLabel: string;
@@ -46,10 +46,11 @@ export const IntelligenceFilterStrip = React.memo(function IntelligenceFilterStr
 
   const profileOptions = useMemo((): { id: ProfileFilterValue; label: string }[] => {
     const activeProfiles = users.filter((profile) => profile.active !== false);
+    const unassignedFallbackProfile = getSecondProfileForUnassignedRecords(activeProfiles);
     return [
       { id: 'all', label: 'All' },
       ...activeProfiles.map((profile) => ({ id: profile.id, label: getProfileDisplayName(profile) })),
-      { id: 'unassigned', label: 'Unassigned' },
+      ...(unassignedFallbackProfile ? [] : [{ id: 'unassigned' as const, label: 'Unassigned' }]),
     ];
   }, [users]);
 
