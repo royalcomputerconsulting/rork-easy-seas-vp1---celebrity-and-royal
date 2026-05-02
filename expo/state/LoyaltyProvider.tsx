@@ -21,6 +21,18 @@ import { ALL_STORAGE_KEYS, getUserScopedKey } from "@/lib/storage/storageKeys";
 import type { ExtendedLoyaltyData } from "@/lib/royalCaribbean/types";
 import { mergeExtendedLoyaltyData } from "@/lib/royalCaribbean/loyaltyConverter";
 
+interface PinnacleFutureCruiseBreakdownItem {
+  shipName: string;
+  sailDate: string;
+  returnDate: string;
+  nights: number;
+  pointsEarned: number;
+  pointsMultiplier: number;
+  runningTotal: number;
+  pointsRemainingAfterCruise: number;
+  reachesPinnacle: boolean;
+}
+
 interface LoyaltyState {
   clubRoyalePoints: number;
   clubRoyaleTier: ClubRoyaleTier;
@@ -66,6 +78,8 @@ interface LoyaltyState {
     projectedPointsAtPinnacle: number;
     pointsFromBookedToPinnacle: number;
     bookedNightsToPinnacle: number;
+    startingPoints: number;
+    futureCruiseBreakdown: PinnacleFutureCruiseBreakdownItem[];
   };
   
   mastersProgress: {
@@ -450,6 +464,7 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
       sailDate: Date;
       returnDate: Date;
       sailDateStr: string;
+      returnDateStr: string;
       nights: number;
       shipName: string;
       estimatedCasinoPoints: number;
@@ -515,6 +530,7 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
           sailDate,
           returnDate,
           sailDateStr: cruise.sailDate,
+          returnDateStr: cruise.returnDate || cruise.sailDate,
           nights,
           shipName: cruise.shipName,
           estimatedCasinoPoints: 0,
@@ -654,6 +670,32 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
       projectedPinnacleDate.setMonth(projectedPinnacleDate.getMonth() + monthsNeeded);
     }
 
+    const futureCruiseBreakdown: PinnacleFutureCruiseBreakdownItem[] = [];
+    let breakdownRunningTotal = effectiveCrownAnchorPoints;
+    let hasReachedPinnacleInBreakdown = effectiveCrownAnchorPoints >= pinnacleThreshold;
+
+    for (const cruise of upcomingBookedCruises) {
+      if (hasReachedPinnacleInBreakdown) break;
+
+      breakdownRunningTotal += cruise.crownAnchorPoints;
+      const reachesPinnacle = breakdownRunningTotal >= pinnacleThreshold;
+      futureCruiseBreakdown.push({
+        shipName: cruise.shipName,
+        sailDate: cruise.sailDateStr,
+        returnDate: cruise.returnDateStr,
+        nights: cruise.nights,
+        pointsEarned: cruise.crownAnchorPoints,
+        pointsMultiplier: cruise.nights > 0 ? cruise.crownAnchorPoints / cruise.nights : 0,
+        runningTotal: breakdownRunningTotal,
+        pointsRemainingAfterCruise: Math.max(0, pinnacleThreshold - breakdownRunningTotal),
+        reachesPinnacle,
+      });
+
+      if (reachesPinnacle) {
+        hasReachedPinnacleInBreakdown = true;
+      }
+    }
+
     const projectedPointsNeededAfterBooked = Math.max(0, pinnacleThreshold - projectedCrownAnchorPoints);
     const pinnacleProgress = {
       nightsToNext: pointsNeededForPinnacle,
@@ -670,6 +712,8 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
       projectedPointsAtPinnacle,
       pointsFromBookedToPinnacle,
       bookedNightsToPinnacle,
+      startingPoints: effectiveCrownAnchorPoints,
+      futureCruiseBreakdown,
     };
 
     let averageCasinoPointsPerNight = 150;
