@@ -30,6 +30,7 @@ import { containsKnownForeignPersonalData, filterRecordsForOwner, isOwnerScopeFo
 import { updateAllCruiseLifecycles } from "@/lib/lifecycleManager";
 import { dedupeBookedCruises, dedupeCalendarEvents, dedupeCasinoOffers, dedupeCruises } from "@/lib/dataIdentity";
 import { generateCruiseCalendarEvents } from "@/lib/calendar/cruiseEvents";
+import { annotateOverlappingCruises, applyKnownBookingCorrectionsToCruise, isKnownInvalidBookedCruise } from "@/lib/cruiseOverlapGuards";
 
 const getMockCruises = (): { BOOKED_CRUISES_DATA: BookedCruise[]; COMPLETED_CRUISES_DATA: BookedCruise[] } => {
   try {
@@ -496,7 +497,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       ]);
       
       const parsedCruises = dedupeCruises(prepareOwnedRecords<Cruise>(cruisesData ? JSON.parse(cruisesData) as Cruise[] : [], ownerScopeId, authenticatedEmail, 'backend-sync available cruises'), 'backend-sync available cruises');
-      const parsedBooked = dedupeBookedCruises(prepareOwnedRecords<BookedCruise>(bookedData ? JSON.parse(bookedData) as BookedCruise[] : [], ownerScopeId, authenticatedEmail, 'backend-sync booked cruises'), 'backend-sync booked cruises');
+      const parsedBooked = annotateOverlappingCruises(dedupeBookedCruises(prepareOwnedRecords<BookedCruise>(bookedData ? JSON.parse(bookedData) as BookedCruise[] : [], ownerScopeId, authenticatedEmail, 'backend-sync booked cruises'), 'backend-sync booked cruises'));
       const parsedOffers = dedupeCasinoOffers(prepareOwnedRecords<CasinoOffer>(offersData ? JSON.parse(offersData) as CasinoOffer[] : [], ownerScopeId, authenticatedEmail, 'backend-sync casino offers'), 'backend-sync casino offers');
       const parsedEvents = dedupeCalendarEvents(prepareOwnedRecords<CalendarEvent>(eventsData ? JSON.parse(eventsData) as CalendarEvent[] : [], ownerScopeId, authenticatedEmail, 'backend-sync calendar events'), 'backend-sync calendar events');
       const parsedSettings = settingsData ? sanitizeForeignValue(JSON.parse(settingsData) as Record<string, unknown>, authenticatedEmail, 'backend-sync settings') : undefined;
@@ -644,7 +645,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
           return false;
         }
         const ownedBackendCruises = dedupeCruises(prepareOwnedRecords<Cruise>((userData.cruises ?? []) as Cruise[], ownerScopeId, authenticatedEmail, 'backend-restore available cruises'), 'backend-restore available cruises');
-        const ownedBackendBookedCruises = dedupeBookedCruises(prepareOwnedRecords<BookedCruise>((userData.bookedCruises ?? []) as BookedCruise[], ownerScopeId, authenticatedEmail, 'backend-restore booked cruises'), 'backend-restore booked cruises');
+        const ownedBackendBookedCruises = annotateOverlappingCruises(dedupeBookedCruises(prepareOwnedRecords<BookedCruise>((userData.bookedCruises ?? []) as BookedCruise[], ownerScopeId, authenticatedEmail, 'backend-restore booked cruises'), 'backend-restore booked cruises'));
         const ownedBackendOffers = dedupeCasinoOffers(prepareOwnedRecords<CasinoOffer>((userData.casinoOffers ?? []) as CasinoOffer[], ownerScopeId, authenticatedEmail, 'backend-restore casino offers'), 'backend-restore casino offers');
         const ownedBackendEvents = dedupeCalendarEvents(prepareOwnedRecords<CalendarEvent>((userData.calendarEvents ?? []) as CalendarEvent[], ownerScopeId, authenticatedEmail, 'backend-restore calendar events'), 'backend-restore calendar events');
         const scopedKeys = getScopedStorageKeys(authenticatedEmail);
@@ -838,7 +839,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       }
 
       const bookedResult = await processBookedCruises(ownedStatus, snapshot, getMockCruises, getFirstTimeUserSampleData, authenticatedEmail);
-      const ownedBookedCruises = dedupeBookedCruises(prepareOwnedRecords<BookedCruise>(bookedResult.bookedCruises, ownerScopeId, authenticatedEmail, 'processed booked cruises'), 'processed booked cruises');
+      const ownedBookedCruises = annotateOverlappingCruises(dedupeBookedCruises(prepareOwnedRecords<BookedCruise>(bookedResult.bookedCruises, ownerScopeId, authenticatedEmail, 'processed booked cruises'), 'processed booked cruises'));
       const ownedOffersOverride = bookedResult.offersOverride
         ? prepareOwnedRecords<CasinoOffer>(bookedResult.offersOverride, ownerScopeId, authenticatedEmail, 'processed casino offers')
         : undefined;
@@ -1171,7 +1172,8 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       !cruise.id?.includes('booked-virtual') &&
       cruise.reservationNumber !== 'DEMO123' &&
       cruise.reservationNumber !== 'DEMO456' &&
-      cruise.shipName !== 'Virtually a Ship of the Seas'
+      cruise.shipName !== 'Virtually a Ship of the Seas' &&
+      !isKnownInvalidBookedCruise(cruise)
     );
     
     console.log('[CoreData] Setting booked cruises:', { 
@@ -1184,7 +1186,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     const withFreeplayOBC = applyFreeplayOBCData(withKnownRetail);
     const enrichedCruises = enrichCruisesWithReceiptData(withFreeplayOBC);
     const lifecycleResult = updateAllCruiseLifecycles(enrichedCruises);
-    const normalizedCruises = dedupeBookedCruises(prepareOwnedRecords<BookedCruise>(lifecycleResult.updatedCruises, ownerScopeId, authenticatedEmail, 'normalized booked cruises'), 'normalized booked cruises');
+    const normalizedCruises = annotateOverlappingCruises(dedupeBookedCruises(prepareOwnedRecords<BookedCruise>(lifecycleResult.updatedCruises, ownerScopeId, authenticatedEmail, 'normalized booked cruises'), 'normalized booked cruises'));
     console.log('[CoreData] Normalized booked cruise lifecycle before persist:', {
       total: normalizedCruises.length,
       upcoming: lifecycleResult.report.upcomingCount,
@@ -1222,12 +1224,13 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   }), []);
 
   const addBookedCruise = useCallback((cruise: BookedCruise) => {
+    const correctedCruise = applyKnownBookingCorrectionsToCruise(cruise);
     setBookedCruisesState(prev => {
-      const updated = [...prev, cruise];
+      const updated = annotateOverlappingCruises([...prev, correctedCruise]);
       void persistData(skRef.current.BOOKED_CRUISES, updated);
       return updated;
     });
-    const calEvent = buildCalendarEventFromCruise(cruise);
+    const calEvent = buildCalendarEventFromCruise(correctedCruise);
     setCalendarEventsState(prev => {
       const filtered = prev.filter(e => e.id !== calEvent.id);
       const updated = [...filtered, calEvent];
@@ -1239,7 +1242,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
 
   const updateBookedCruise = useCallback((id: string, updates: Partial<BookedCruise>) => {
     setBookedCruisesState(prev => {
-      const updated = prev.map(c => c.id === id ? { ...c, ...updates } : c);
+      const updated = annotateOverlappingCruises(prev.map(c => c.id === id ? applyKnownBookingCorrectionsToCruise({ ...c, ...updates }) : c));
       void persistData(skRef.current.BOOKED_CRUISES, updated);
       
       if (updates.earnedPoints !== undefined) {

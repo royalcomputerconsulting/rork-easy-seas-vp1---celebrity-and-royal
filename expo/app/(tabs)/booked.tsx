@@ -40,15 +40,12 @@ import { LoyaltyPill } from '@/components/ui/LoyaltyPill';
 import { useAppState } from '@/state/AppStateProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { useUser } from '@/state/UserProvider';
-import { ADMIN_EMAILS, useAuth } from '@/state/AuthProvider';
+import { useAuth } from '@/state/AuthProvider';
 import { MinimalistFilterBar } from '@/components/ui/MinimalistFilterBar';
-import { isDateInPast, createDateFromString } from '@/lib/date';
+import { createDateFromString } from '@/lib/date';
 import { CruiseCard } from '@/components/CruiseCard';
 import type { BookedCruise } from '@/types/models';
 import { dedupeBookedCruises } from '@/lib/dataIdentity';
-import { BOOKED_CRUISES_DATA } from '@/mocks/bookedCruises';
-import { COMPLETED_CRUISES_DATA } from '@/mocks/completedCruises';
-import { CRUISE_HISTORY_SUPPLEMENT_DATA } from '@/mocks/cruiseHistorySupplement';
 import { AddBookedCruiseModal } from '@/components/AddBookedCruiseModal';
 import { MarineAlertsPanel } from '@/components/MarineAlertsPanel';
 import { ResponsiveContainer } from '@/components/ResponsiveContainer';
@@ -62,30 +59,19 @@ import { IntelligenceFilterStrip } from '@/components/IntelligenceFilterStrip';
 import { useIntelligenceFilters } from '@/state/IntelligenceFiltersProvider';
 import { filterRecordsByIntelligence } from '@/lib/intelligenceFilters';
 import { buildCruiseEconomicsSummary } from '@/lib/casinoCruiseEconomics';
+import { applyKnownBookingCorrections, findOverlappingBookedCruises } from '@/lib/cruiseOverlapGuards';
+import { isActiveBookedCruise, isCompletedBookedCruise } from '@/lib/bookedCruiseStatus';
 
 type FilterType = 'all' | 'upcoming' | 'completed' | 'celebrity';
 type SortType = 'next' | 'newest' | 'oldest' | 'ship' | 'nights';
 type ViewMode = 'list' | 'timeline' | 'points';
 
 function isCruiseCompleted(cruise: BookedCruise): boolean {
-  if (cruise.completionState === 'completed' || cruise.status === 'completed') {
-    return true;
-  }
-  if (cruise.returnDate) {
-    return isDateInPast(cruise.returnDate);
-  }
-  if (cruise.sailDate && cruise.nights) {
-    const sailDate = createDateFromString(cruise.sailDate);
-    const estimatedReturn = new Date(sailDate);
-    estimatedReturn.setDate(estimatedReturn.getDate() + cruise.nights);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return estimatedReturn < today;
-  }
-  if (cruise.sailDate) {
-    return isDateInPast(cruise.sailDate);
-  }
-  return false;
+  return isCompletedBookedCruise(cruise);
+}
+
+function isCruiseUpcomingBooking(cruise: BookedCruise): boolean {
+  return isActiveBookedCruise(cruise);
 }
 
 const FILTER_OPTIONS: { label: string; value: FilterType }[] = [
@@ -104,7 +90,7 @@ const SORT_OPTIONS: { label: string; value: SortType }[] = [
 ];
 
 function mergeCruiseData(primaryCruises: BookedCruise[], fallbackCruises: BookedCruise[]): BookedCruise[] {
-  return dedupeBookedCruises([...fallbackCruises, ...primaryCruises], 'booked screen merged cruises');
+  return applyKnownBookingCorrections(dedupeBookedCruises([...fallbackCruises, ...primaryCruises], 'booked screen merged cruises'));
 }
 
 export default function BookedScreen() {
@@ -142,13 +128,11 @@ export default function BookedScreen() {
     const storedScoped = filterRecordsByIntelligence(storedBooked, intelligenceFilterSnapshot, users);
     const baseCruises = localBooked.length > 0 ? localBooked : storedScoped;
     const normalizedEmail = authenticatedEmail?.toLowerCase().trim() ?? null;
-    const shouldIncludeKnownAdminCruises = !!normalizedEmail && ADMIN_EMAILS.includes(normalizedEmail as typeof ADMIN_EMAILS[number]);
-    const knownAdminCruises = shouldIncludeKnownAdminCruises ? [...COMPLETED_CRUISES_DATA, ...BOOKED_CRUISES_DATA, ...CRUISE_HISTORY_SUPPLEMENT_DATA] : [];
-    const mergedCruises = filterRecordsByIntelligence(mergeCruiseData(baseCruises, knownAdminCruises), intelligenceFilterSnapshot, users);
+    const mergedCruises = filterRecordsByIntelligence(mergeCruiseData(baseCruises, []), intelligenceFilterSnapshot, users);
     console.log('[Booked] Resolved booked cruise source:', {
       authenticatedEmail: normalizedEmail,
       baseCruises: baseCruises.length,
-      knownAdminCruises: knownAdminCruises.length,
+      knownAdminCruises: 0,
       mergedCruises: mergedCruises.length,
     });
     return mergedCruises;
@@ -158,7 +142,7 @@ export default function BookedScreen() {
     let result = [...bookedCruises];
 
     if (filter === 'upcoming') {
-      result = result.filter(cruise => !isCruiseCompleted(cruise));
+      result = result.filter(cruise => isCruiseUpcomingBooking(cruise));
     } else if (filter === 'completed') {
       result = result.filter(cruise => isCruiseCompleted(cruise));
     } else if (filter === 'celebrity') {
@@ -221,7 +205,7 @@ export default function BookedScreen() {
   const casinoCardTheme = useMemo(() => createLoyaltyCardTheme(clubRoyaleTierColor), [clubRoyaleTierColor]);
 
   const stats = useMemo(() => {
-    const upcoming = bookedCruises.filter(c => !isCruiseCompleted(c)).length;
+    const upcoming = bookedCruises.filter(c => isCruiseUpcomingBooking(c)).length;
     const completed = bookedCruises.filter(c => isCruiseCompleted(c)).length;
     const withData = bookedCruises.filter(c => c.price && c.price > 0).length;
     const totalNights = crownAnchorPoints;
@@ -268,13 +252,18 @@ export default function BookedScreen() {
     };
   }, [casinoAnalytics.avgCoinInPerCruise, casinoAnalytics.totalCoinIn, cruiseEconomicsSummary]);
 
+  const overlapWarningsByCruiseId = useMemo(() => {
+    const warnings = findOverlappingBookedCruises(bookedCruises);
+    return new Map(warnings.map((warning) => [warning.cruiseId, warning.message]));
+  }, [bookedCruises]);
+
   const upcomingCruisesForAlerts = useMemo(() => {
-    return bookedCruises.filter((cruise) => !isCruiseCompleted(cruise));
+    return bookedCruises.filter((cruise) => isCruiseUpcomingBooking(cruise));
   }, [bookedCruises]);
 
   const nextCruise = useMemo(() => {
     const upcomingCruises = bookedCruises
-      .filter(c => !isCruiseCompleted(c))
+      .filter(c => isCruiseUpcomingBooking(c))
       .sort((a, b) => createDateFromString(a.sailDate).getTime() - createDateFromString(b.sailDate).getTime());
     return upcomingCruises[0] || null;
   }, [bookedCruises]);
@@ -342,15 +331,16 @@ export default function BookedScreen() {
           cruise={item}
           onPress={() => handleCruisePress(item)}
           variant={isPast ? 'completed' : 'booked'}
+          conflictWarning={overlapWarningsByCruiseId.get(item.id)}
           mini={true}
         />
       </ResponsiveContainer>
     );
-  }, [handleCruisePress]);
+  }, [handleCruisePress, overlapWarningsByCruiseId]);
 
   const renderTimelineView = () => {
     const upcomingCruises = filteredCruises
-      .filter(c => !isCruiseCompleted(c))
+      .filter(c => isCruiseUpcomingBooking(c))
       .sort((a, b) => createDateFromString(a.sailDate).getTime() - createDateFromString(b.sailDate).getTime());
     const completedCruises = filteredCruises
       .filter(c => isCruiseCompleted(c))

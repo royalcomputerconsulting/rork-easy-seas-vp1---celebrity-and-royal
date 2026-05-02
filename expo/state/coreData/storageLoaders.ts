@@ -7,6 +7,7 @@ import {
   applyFreeplayOBCData,
 } from "./dataEnrichment";
 import { updateAllCruiseLifecycles } from "@/lib/lifecycleManager";
+import { applyKnownBookingCorrectionsToCruise, isKnownInvalidBookedCruise } from "@/lib/cruiseOverlapGuards";
 import { STORAGE_KEYS, DEFAULT_SETTINGS, getScopedStorageKeys, type AppSettings } from "./storageConfig";
 import { quotaSafeGetItem } from "@/lib/storage/quotaSafeStorage";
 import { containsKnownForeignPersonalData } from "@/lib/storage/dataOwnership";
@@ -54,13 +55,16 @@ export interface ProcessedMetadata {
 }
 
 export function filterDemoCruises(cruises: BookedCruise[]): BookedCruise[] {
-  return cruises.filter((cruise) =>
-    !cruise.id?.includes('demo-') &&
-    !cruise.id?.includes('booked-virtual') &&
-    cruise.reservationNumber !== 'DEMO123' &&
-    cruise.reservationNumber !== 'DEMO456' &&
-    cruise.shipName !== 'Virtually a Ship of the Seas'
-  );
+  return cruises
+    .filter((cruise) =>
+      !cruise.id?.includes('demo-') &&
+      !cruise.id?.includes('booked-virtual') &&
+      cruise.reservationNumber !== 'DEMO123' &&
+      cruise.reservationNumber !== 'DEMO456' &&
+      cruise.shipName !== 'Virtually a Ship of the Seas' &&
+      !isKnownInvalidBookedCruise(cruise)
+    )
+    .map(applyKnownBookingCorrectionsToCruise);
 }
 
 export function filterDemoOffers(offers: CasinoOffer[]): CasinoOffer[] {
@@ -180,11 +184,12 @@ export async function processBookedCruises(
     const dedupedNonMockCruises = dedupeBookedCruises(nonMockCruises, 'processed booked cruises');
     const withNormalizedLifecycle = normalizeCruiseLifecycle(dedupedNonMockCruises);
     const enrichedBooked = enrichCruisePipeline(withNormalizedLifecycle);
+    const cleanedKnownData = parsedBookedData.length !== nonMockCruises.length || JSON.stringify(parsedBookedData) !== JSON.stringify(nonMockCruises);
 
     return {
       bookedCruises: enrichedBooked,
       finalBookedCount: enrichedBooked.length,
-      shouldPersistMergedCruises: dedupedNonMockCruises.length !== nonMockCruises.length,
+      shouldPersistMergedCruises: cleanedKnownData || dedupedNonMockCruises.length !== nonMockCruises.length,
       shouldPersistFirstTimeData: false,
     };
   }

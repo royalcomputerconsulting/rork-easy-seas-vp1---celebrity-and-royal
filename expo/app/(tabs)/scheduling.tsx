@@ -30,6 +30,7 @@ import { useUser } from '@/state/UserProvider';
 import { CompactDashboardHeader } from '@/components/CompactDashboardHeader';
 import { MinimalistFilterBar } from '@/components/ui/MinimalistFilterBar';
 import { isDateInPast, getDaysUntil, createDateFromString } from '@/lib/date';
+import { isActiveBookedCruise } from '@/lib/bookedCruiseStatus';
 import { CruiseCard } from '@/components/CruiseCard';
 import type { Cruise, BookedCruise, CasinoOffer } from '@/types/models';
 import { calculateCruiseValue } from '@/lib/valueCalculator';
@@ -278,7 +279,7 @@ export default function SchedulingScreen() {
       getBackToBackSets(enrichedCruises);
       return [];
     } else if (activeTab === 'booked') {
-      result = bookedCruisesData.filter(c => !isDateInPast(c.returnDate || c.sailDate)) as Cruise[];
+      result = bookedCruisesData.filter(c => isActiveBookedCruise(c)) as Cruise[];
     }
 
     if (filters.cabinType !== 'all') {
@@ -331,7 +332,7 @@ export default function SchedulingScreen() {
   const stats = useMemo(() => ({
     showing: filteredCruises.length,
     total: enrichedCruises.length,
-    booked: bookedCruisesData.length,
+    booked: bookedCruisesData.filter(c => isActiveBookedCruise(c)).length,
     available: enrichedCruises.filter(c => !isDateInPast(c.sailDate) && !bookedIds.has(c.id)).length,
   }), [filteredCruises, enrichedCruises, bookedIds, bookedCruisesData]);
 

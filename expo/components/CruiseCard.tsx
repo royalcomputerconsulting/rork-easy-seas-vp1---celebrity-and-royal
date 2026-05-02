@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Animated, Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { Calendar, ChevronRight, Users, Ship, Heart, Sparkles, Anchor, Ticket, Gauge } from 'lucide-react-native';
+import { Calendar, ChevronRight, Users, Ship, Heart, Sparkles, Anchor, Ticket, Gauge, AlertTriangle } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 
@@ -19,6 +19,7 @@ interface CruiseCardProps {
   mini?: boolean;
   variant?: 'default' | 'booked' | 'available' | 'completed';
   showRetailValue?: boolean;
+  conflictWarning?: string;
 }
 
 function getCruiseStatus(cruise: BookedCruise): 'upcoming' | 'completed' | 'active' {
@@ -45,6 +46,7 @@ export const CruiseCard = React.memo(function CruiseCard({
   mini = false,
   variant = 'default',
   showRetailValue = true,
+  conflictWarning,
 }: CruiseCardProps) {
   const isBooked = variant === 'booked' || variant === 'completed' || 'bookingId' in cruise || 'reservationNumber' in cruise;
   const bookedCruise = cruise as BookedCruise;
@@ -262,6 +264,12 @@ export const CruiseCard = React.memo(function CruiseCard({
             </View>
           </View>
           <Text style={styles.miniItinerary} numberOfLines={1}>{getItineraryName()}</Text>
+          {conflictWarning ? (
+            <View style={styles.miniConflictRow} testID="cruise-card-overlap-warning">
+              <AlertTriangle size={11} color="#92400E" />
+              <Text style={styles.miniConflictText} numberOfLines={2}>{conflictWarning}</Text>
+            </View>
+          ) : null}
           <View style={styles.miniPlanningRow} testID="cruise-card-mini-sea-day-score">
             <Gauge size={10} color="#0F766E" />
             <Text style={styles.miniPlanningText}>Casino Opp {seaDayDensity.casinoOpportunityScore}</Text>
@@ -535,6 +543,13 @@ export const CruiseCard = React.memo(function CruiseCard({
           <Text style={styles.routeValue}>{cruise.departurePort || cruise.destination}</Text>
         </View>
 
+        {conflictWarning ? (
+          <View style={styles.conflictRow} testID="cruise-card-overlap-warning">
+            <AlertTriangle size={14} color="#92400E" />
+            <Text style={styles.conflictText}>{conflictWarning}</Text>
+          </View>
+        ) : null}
+
         {bookedCruise.itinerary && bookedCruise.itinerary.length > 0 ? (
           <View style={styles.visitingSection}>
             <Text style={styles.visitingLabel}>VISITING:</Text>
@@ -727,6 +742,25 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: COLORS.navyDeep,
     marginBottom: 2,
+  },
+  miniConflictRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 5,
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 5,
+    marginBottom: 5,
+  },
+  miniConflictText: {
+    flex: 1,
+    fontSize: 10,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: '#78350F',
+    lineHeight: 13,
   },
   miniPlanningRow: {
     flexDirection: 'row',
@@ -1113,6 +1147,24 @@ const styles = StyleSheet.create({
   routeValue: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     color: '#1F2937',
+  },
+  conflictRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING.xs,
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+    borderRadius: BORDER_RADIUS.sm,
+    padding: SPACING.sm,
+    marginBottom: SPACING.sm,
+  },
+  conflictText: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: '#78350F',
+    lineHeight: 17,
   },
   visitingSection: {
     marginBottom: SPACING.sm,

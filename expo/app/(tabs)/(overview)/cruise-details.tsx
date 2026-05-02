@@ -10,6 +10,7 @@ import { formatDate, getDaysUntil, createDateFromString } from '@/lib/date';
 import { useAppState } from '@/state/AppStateProvider';
 import { useSimpleAnalytics } from '@/state/SimpleAnalyticsProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
+import { ADMIN_EMAILS, useAuth } from '@/state/AuthProvider';
 import { useUser, DEFAULT_PLAYING_HOURS } from '@/state/UserProvider';
 
 import { getCasinoStatusBadge, calculatePersonalizedPlayEstimate, PersonalizedPlayEstimate, PlayingHoursConfig, type CasinoAvailability } from '@/lib/casinoAvailability';
@@ -22,6 +23,10 @@ import {
   findCruiseReplacementCandidates,
   type ReplacementCandidate,
 } from '@/lib/cruisePlanningIntelligence';
+import { applyKnownBookingCorrections, applyKnownBookingCorrectionsToCruise, findOverlappingBookedCruises } from '@/lib/cruiseOverlapGuards';
+import { BOOKED_CRUISES_DATA } from '@/mocks/bookedCruises';
+import { COMPLETED_CRUISES_DATA } from '@/mocks/completedCruises';
+import { CRUISE_HISTORY_SUPPLEMENT_DATA } from '@/mocks/cruiseHistorySupplement';
 
 type ReplacementGoalId = 'bestValue' | 'lowerCost' | 'seaDays' | 'backToBack' | 'expiringOffer' | 'newPorts' | 'shipFamiliarity' | 'tierProgress';
 
@@ -199,6 +204,7 @@ export default function CruiseDetailsScreen() {
 
   const { bookedCruises: storeBookedCruises, cruises: storeCruises, casinoOffers: storeOffers, updateBookedCruise: updateCruiseInStore, updateCruise: updateCruiseInCruisesStore, removeBookedCruise, addBookedCruise } = useCoreData();
   const { currentUser } = useUser();
+  const { authenticatedEmail } = useAuth();
   
   const [heroImageUri, setHeroImageUri] = useState<string>(DEFAULT_CRUISE_IMAGE);
   const [unbookModalVisible, setUnbookModalVisible] = useState<boolean>(false);
@@ -230,12 +236,22 @@ export default function CruiseDetailsScreen() {
     console.log('[CruiseDetails] Cruise updated in store. LoyaltyProvider will recalculate automatically.');
   };
 
+  const knownAdminCruises = useMemo((): BookedCruise[] => {
+    const normalizedEmail = authenticatedEmail?.toLowerCase().trim() ?? null;
+    const hasStoredCruiseData = (storeBookedCruises?.length ?? 0) > 0 || ((localData.booked || []) as BookedCruise[]).length > 0;
+    if (!normalizedEmail || !ADMIN_EMAILS.includes(normalizedEmail as typeof ADMIN_EMAILS[number]) || hasStoredCruiseData) {
+      return [];
+    }
+    return applyKnownBookingCorrections([...COMPLETED_CRUISES_DATA, ...BOOKED_CRUISES_DATA, ...CRUISE_HISTORY_SUPPLEMENT_DATA]);
+  }, [authenticatedEmail, localData.booked, storeBookedCruises]);
+
   const cruise = useMemo(() => {
     const allCruises = [
-      ...(storeBookedCruises || []),
+      ...(storeBookedCruises || []).map(applyKnownBookingCorrectionsToCruise),
       ...(storeCruises || []),
-      ...(localData.booked || []),
+      ...(localData.booked || []).map((bookedCruise) => applyKnownBookingCorrectionsToCruise(bookedCruise as BookedCruise)),
       ...(localData.cruises || []),
+      ...knownAdminCruises,
     ];
     
     let found = allCruises.find(c => c.id === id);
@@ -303,7 +319,7 @@ export default function CruiseDetailsScreen() {
       taxes: found?.taxes,
     });
     return found;
-  }, [storeCruises, storeBookedCruises, storeOffers, localData.cruises, localData.booked, localData.offers, id]);
+  }, [storeCruises, storeBookedCruises, storeOffers, localData.cruises, localData.booked, localData.offers, knownAdminCruises, id]);
 
   useEffect(() => {
     if (cruise) {
@@ -560,12 +576,13 @@ export default function CruiseDetailsScreen() {
 
   const allCruiseRecords = useMemo(() => {
     return [
-      ...(storeBookedCruises || []),
+      ...(storeBookedCruises || []).map(applyKnownBookingCorrectionsToCruise),
       ...(storeCruises || []),
-      ...(localData.booked || []),
+      ...(localData.booked || []).map((bookedCruise) => applyKnownBookingCorrectionsToCruise(bookedCruise as BookedCruise)),
       ...(localData.cruises || []),
+      ...knownAdminCruises,
     ] as Cruise[];
-  }, [localData.booked, localData.cruises, storeBookedCruises, storeCruises]);
+  }, [knownAdminCruises, localData.booked, localData.cruises, storeBookedCruises, storeCruises]);
 
   const allOfferRecords = useMemo(() => {
     return [...(storeOffers || []), ...(localData.offers || [])];
@@ -585,6 +602,12 @@ export default function CruiseDetailsScreen() {
     if (!cruise) return null;
     return calculateShipFamiliarityScore(cruise.shipName, allCruiseRecords, allOfferRecords, currentTravelerProfile);
   }, [allCruiseRecords, allOfferRecords, cruise, currentTravelerProfile]);
+
+  const overlapWarning = useMemo(() => {
+    if (!cruise || !('reservationNumber' in cruise || 'bookingId' in cruise)) return null;
+    const warnings = findOverlappingBookedCruises(allCruiseRecords.filter((record): record is BookedCruise => 'reservationNumber' in record || 'bookingId' in record));
+    return warnings.find((warning) => warning.cruiseId === cruise.id)?.message ?? null;
+  }, [allCruiseRecords, cruise]);
 
   const replacementCandidates = useMemo(() => {
     if (!cruise) return [];
@@ -1025,6 +1048,16 @@ export default function CruiseDetailsScreen() {
           </View>
 
           {valueSummarySection}
+
+          {overlapWarning ? (
+            <View style={styles.overlapWarningCard} testID="cruise-overlap-warning">
+              <AlertCircle size={18} color="#B45309" />
+              <View style={styles.overlapWarningCopy}>
+                <Text style={styles.overlapWarningTitle}>Booking date conflict</Text>
+                <Text style={styles.overlapWarningText}>{overlapWarning}</Text>
+              </View>
+            </View>
+          ) : null}
 
           {isBooked && (
             <View style={styles.cruiseDetailsSection}>
@@ -4116,6 +4149,30 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: 'rgba(30, 64, 175, 0.4)',
+  },
+  overlapWarningCard: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+  },
+  overlapWarningCopy: {
+    flex: 1,
+  },
+  overlapWarningTitle: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#92400E',
+    marginBottom: 2,
+  },
+  overlapWarningText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: '#78350F',
+    lineHeight: 19,
   },
   cruiseDetailsSection: {
     borderRadius: BORDER_RADIUS.lg,

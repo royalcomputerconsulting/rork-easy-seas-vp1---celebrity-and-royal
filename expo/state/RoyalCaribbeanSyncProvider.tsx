@@ -711,20 +711,26 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             return 'Upcoming';
           }
           
+          const rcShipCodeMap: Record<string, string> = {
+            ST: 'Star of the Seas',
+            SG: 'Star of the Seas',
+          };
+
           const formattedCruises = msg.bookings.map((booking: any) => {
             const sailDate = booking.sailDate || booking.departureDate || '';
             const bStatus = booking.bookingStatus || 'BK';
             const status = getBookingStatus(sailDate, bStatus);
+            const shipCode = String(booking.shipCode || '').trim().toUpperCase();
             let shipName = booking.shipName || '';
-            if (!shipName && booking.shipCode) {
-              shipName = isCarnivalBookings ? `Carnival ${booking.shipCode}` : `${booking.shipCode} of the Seas`;
+            if (!shipName && shipCode) {
+              shipName = isCarnivalBookings ? `Carnival ${shipCode}` : (rcShipCodeMap[shipCode] || `${shipCode} of the Seas`);
             }
             const nights = booking.numberOfNights || booking.duration || 0;
             return {
               rawBooking: booking,
               sourcePage: status === 'Completed' ? 'Completed' : 'Upcoming',
               shipName,
-              shipCode: booking.shipCode || '',
+              shipCode,
               cruiseTitle: booking.cruiseTitle || (nights ? `${nights} Night Cruise` : 'Cruise'),
               sailingStartDate: sailDate,
               sailingEndDate: booking.sailingEndDate || booking.endDate || '',
@@ -1008,7 +1014,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
               'MR': 'Mariner of the Seas', 'NV': 'Navigator of the Seas', 'OA': 'Oasis of the Seas',
               'OV': 'Ovation of the Seas', 'OY': 'Odyssey of the Seas', 'QN': 'Quantum of the Seas',
               'RD': 'Radiance of the Seas', 'RH': 'Rhapsody of the Seas', 'SE': 'Serenade of the Seas',
-              'SP': 'Spectrum of the Seas', 'SY': 'Symphony of the Seas', 'UT': 'Utopia of the Seas',
+              'SP': 'Spectrum of the Seas', 'ST': 'Star of the Seas', 'SG': 'Star of the Seas', 'SY': 'Symphony of the Seas', 'UT': 'Utopia of the Seas',
               'VI': 'Vision of the Seas', 'VY': 'Voyager of the Seas', 'WN': 'Wonder of the Seas'
             };
             

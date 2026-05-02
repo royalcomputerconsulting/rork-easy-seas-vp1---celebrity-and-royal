@@ -52,6 +52,10 @@ interface LoyaltyState {
   
   pinnacleProgress: {
     nightsToNext: number;
+    currentPointsNeeded: number;
+    soloNightsToNext: number;
+    projectedPointsAfterBooked: number;
+    projectedPointsNeededAfterBooked: number;
     percentComplete: number;
     projectedDate: Date | null;
     pinnacleShip: string | null;
@@ -534,7 +538,9 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
       });
     }
     
-    const effectiveCrownAnchorPoints = manualCrownAnchorPoints ?? completedNights;
+    const liveCrownAnchorPoints = extendedLoyalty?.crownAndAnchorPointsFromApi;
+    const hasLiveCrownAnchorPoints = typeof liveCrownAnchorPoints === 'number' && Number.isFinite(liveCrownAnchorPoints);
+    const effectiveCrownAnchorPoints = hasLiveCrownAnchorPoints ? liveCrownAnchorPoints : (manualCrownAnchorPoints ?? completedNights);
     const crownAnchorLevel = getLevelByNights(effectiveCrownAnchorPoints) as CrownAnchorLevel;
     
     const projectedCrownAnchorPoints = effectiveCrownAnchorPoints + projectedBookedPoints;
@@ -612,8 +618,13 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
       projectedPinnacleDate.setMonth(projectedPinnacleDate.getMonth() + monthsNeeded);
     }
 
+    const projectedPointsNeededAfterBooked = Math.max(0, pinnacleThreshold - projectedCrownAnchorPoints);
     const pinnacleProgress = {
       nightsToNext: pointsNeededForPinnacle,
+      currentPointsNeeded: pointsNeededForPinnacle,
+      soloNightsToNext: Math.ceil(pointsNeededForPinnacle / 2),
+      projectedPointsAfterBooked: projectedCrownAnchorPoints,
+      projectedPointsNeededAfterBooked,
       percentComplete: Math.min(100, (effectiveCrownAnchorPoints / pinnacleThreshold) * 100),
       projectedDate: projectedPinnacleDate,
       pinnacleShip,

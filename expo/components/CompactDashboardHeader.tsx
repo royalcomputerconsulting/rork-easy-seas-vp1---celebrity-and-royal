@@ -68,6 +68,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
     pinnacleProgress,
     mastersProgress,
     projectedBookedPoints,
+    totalBookedNights,
   } = useLoyalty();
   const { currentUser } = useUser();
   const [activeBrand, setActiveBrand] = useState<BrandType>(currentUser?.preferredBrand || 'royal');
@@ -275,8 +276,9 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
                   ? 'Pinnacle achieved! Maximum loyalty level reached'
                   : (() => {
                       const bookedPoints = projectedBookedPoints || 0;
-                      const remainingAfterBooked = Math.max(0, nightsToNext - bookedPoints);
-                      return `Booked: ${bookedPoints} pts • Still need: ${remainingAfterBooked} pts`;
+                      const remainingAfterBooked = pinnacleProgress.projectedPointsNeededAfterBooked ?? Math.max(0, nightsToNext - bookedPoints);
+                      const soloNightsStillNeeded = Math.ceil(remainingAfterBooked / 2);
+                      return `Need: ${pinnacleProgress.currentPointsNeeded ?? nightsToNext} pts (${pinnacleProgress.soloNightsToNext ?? Math.ceil(nightsToNext / 2)} solo nights) • Booked: ${bookedPoints} pts from ${totalBookedNights} nights • Still need: ${remainingAfterBooked} pts (${soloNightsStillNeeded} solo nights)`;
                     })()
                 }
               </Text>

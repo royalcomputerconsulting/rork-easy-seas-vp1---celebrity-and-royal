@@ -336,7 +336,7 @@ function getContentJS(): string {
     HM: 'Harmony of the Seas', IC: 'Icon of the Seas', ID: 'Independence of the Seas', JW: 'Jewel of the Seas',
     LB: 'Liberty of the Seas', MR: 'Mariner of the Seas', NV: 'Navigator of the Seas', OA: 'Oasis of the Seas',
     OV: 'Ovation of the Seas', OY: 'Odyssey of the Seas', QN: 'Quantum of the Seas', RD: 'Radiance of the Seas',
-    RH: 'Rhapsody of the Seas', SE: 'Serenade of the Seas', SP: 'Spectrum of the Seas', SY: 'Symphony of the Seas',
+    RH: 'Rhapsody of the Seas', SE: 'Serenade of the Seas', SP: 'Spectrum of the Seas', ST: 'Star of the Seas', SG: 'Star of the Seas', SY: 'Symphony of the Seas',
     UT: 'Utopia of the Seas', VI: 'Vision of the Seas', VY: 'Voyager of the Seas', WN: 'Wonder of the Seas'
   };
 
