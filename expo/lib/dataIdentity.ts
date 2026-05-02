@@ -208,12 +208,18 @@ export function dedupeCruises(items: Cruise[], label = 'cruises'): Cruise[] {
 export function dedupeBookedCruises(items: BookedCruise[], label = 'booked cruises'): BookedCruise[] {
   const result: BookedCruise[] = [];
   const identityToIndex = new Map<string, number>();
+  const idToIndex = new Map<string, number>();
   const reservationToIndex = new Map<string, number>();
   const strictSailingToIndex = new Map<string, number>();
   const looseSailingToIndexes = new Map<string, number[]>();
 
   const rememberIndexes = (cruise: BookedCruise, index: number) => {
     identityToIndex.set(getBookedCruiseIdentityKey(cruise), index);
+
+    const id = normalizeKeyPart(cruise.id);
+    if (id) {
+      idToIndex.set(id, index);
+    }
 
     const reservation = getBookedReservationKey(cruise);
     if (reservation) {
@@ -236,11 +242,16 @@ export function dedupeBookedCruises(items: BookedCruise[], label = 'booked cruis
 
   items.forEach((item) => {
     const identityKey = getBookedCruiseIdentityKey(item);
+    const idKey = normalizeKeyPart(item.id);
     const reservationKey = getBookedReservationKey(item);
     const strictSailingKey = getBookedSailingKey(item, true);
     const looseSailingKey = getBookedSailingKey(item, false);
 
     let matchedIndex = identityToIndex.get(identityKey);
+
+    if (matchedIndex === undefined && idKey) {
+      matchedIndex = idToIndex.get(idKey);
+    }
 
     if (matchedIndex === undefined && reservationKey) {
       matchedIndex = reservationToIndex.get(reservationKey);
@@ -259,6 +270,7 @@ export function dedupeBookedCruises(items: BookedCruise[], label = 'booked cruis
       console.log('[DataIdentity] Deduped duplicate booked cruise:', {
         label,
         identityKey,
+        idKey,
         reservationKey,
         sailingKey: looseSailingKey,
         shipName: item.shipName,
