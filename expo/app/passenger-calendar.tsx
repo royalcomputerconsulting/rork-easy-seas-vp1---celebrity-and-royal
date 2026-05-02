@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, useWindowDimensions } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Award, CalendarDays, Clock, Gift, MapPin, Plane, Ship, User, Users } from 'lucide-react-native';
@@ -75,8 +75,9 @@ function buildPassengerDayItems(input: {
   const items = new Map<string, PassengerDayItem>();
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const yearStart = new Date(today.getFullYear(), 0, 1);
   const yearEnd = new Date(today.getFullYear(), 11, 31);
+  const todayString = formatDateOnly(today);
+  const yearEndString = formatDateOnly(yearEnd);
 
   const addItem = (item: PassengerDayItem) => {
     if (!items.has(item.id)) items.set(item.id, item);
@@ -179,10 +180,10 @@ function buildPassengerDayItems(input: {
     });
   });
 
-  for (let cursor = new Date(yearStart); cursor <= yearEnd; cursor.setDate(cursor.getDate() + 1)) {
+  for (let cursor = new Date(today); cursor <= yearEnd; cursor.setDate(cursor.getDate() + 1)) {
     const date = formatDateOnly(cursor);
     const hasSailing = Array.from(items.values()).some((item) => item.date === date && (item.kind === 'sea' || item.kind === 'port'));
-    if (!hasSailing && cursor >= today) {
+    if (!hasSailing) {
       addItem({
         id: `land-${date}`,
         date,
@@ -194,11 +195,14 @@ function buildPassengerDayItems(input: {
     }
   }
 
-  return Array.from(items.values()).sort((left, right) => left.date.localeCompare(right.date));
+  return Array.from(items.values())
+    .filter((item) => item.date >= todayString && item.date <= yearEndString)
+    .sort((left, right) => left.date.localeCompare(right.date));
 }
 
 export default function PassengerCalendarScreen() {
   const router = useRouter();
+  const { height: windowHeight } = useWindowDimensions();
   const { localData } = useAppState();
   const { bookedCruises } = useCoreData();
   const { certificates } = useCertificates();
@@ -258,6 +262,8 @@ export default function PassengerCalendarScreen() {
     shared: passengerItems.filter((item) => item.sharedType === 'Shared').length,
     solo: passengerItems.filter((item) => item.sharedType === 'Solo').length,
   }), [passengerItems]);
+
+  const timelineListMaxHeight = useMemo(() => Math.max(360, Math.min(640, windowHeight * 0.58)), [windowHeight]);
 
   const handleItemPress = useCallback((item: PassengerDayItem) => {
     if (item.cruiseId) {
@@ -322,25 +328,35 @@ export default function PassengerCalendarScreen() {
                   <Text style={styles.emptyTitle}>No passenger days found</Text>
                   <Text style={styles.emptyText}>Try another filter or import booked cruises and calendar data.</Text>
                 </View>
-              ) : groupedItems.map(([month, items]) => (
-                <View key={month} style={styles.monthGroup}>
-                  <Text style={styles.monthLabel}>{month}</Text>
-                  {items.map((item) => (
-                    <TouchableOpacity key={item.id} style={styles.timelineItem} onPress={() => handleItemPress(item)} activeOpacity={0.78} testID={`passenger-calendar-item-${item.id}`}>
-                      <View style={[styles.timelineRail, { backgroundColor: item.color }]} />
-                      <View style={[styles.timelineIcon, { backgroundColor: `${item.color}22` }]}>{renderIcon(item)}</View>
-                      <View style={styles.timelineCopy}>
-                        <View style={styles.timelineTitleRow}>
-                          <Text style={styles.itemTitle} numberOfLines={1}>{item.title}</Text>
-                          {item.sharedType ? <Text style={styles.sharedBadge}>{item.sharedType}</Text> : null}
-                        </View>
-                        <Text style={styles.itemSubtitle} numberOfLines={2}>{item.subtitle}</Text>
-                      </View>
-                      <Text style={styles.itemDate}>{item.date.slice(5)}</Text>
-                    </TouchableOpacity>
+              ) : (
+                <ScrollView
+                  style={[styles.timelineList, { maxHeight: timelineListMaxHeight }]}
+                  contentContainerStyle={styles.timelineListContent}
+                  nestedScrollEnabled
+                  showsVerticalScrollIndicator
+                  testID="passenger-calendar-scrollable-days"
+                >
+                  {groupedItems.map(([month, items]) => (
+                    <View key={month} style={styles.monthGroup}>
+                      <Text style={styles.monthLabel}>{month}</Text>
+                      {items.map((item) => (
+                        <TouchableOpacity key={item.id} style={styles.timelineItem} onPress={() => handleItemPress(item)} activeOpacity={0.78} testID={`passenger-calendar-item-${item.id}`}>
+                          <View style={[styles.timelineRail, { backgroundColor: item.color }]} />
+                          <View style={[styles.timelineIcon, { backgroundColor: `${item.color}22` }]}>{renderIcon(item)}</View>
+                          <View style={styles.timelineCopy}>
+                            <View style={styles.timelineTitleRow}>
+                              <Text style={styles.itemTitle} numberOfLines={1}>{item.title}</Text>
+                              {item.sharedType ? <Text style={styles.sharedBadge}>{item.sharedType}</Text> : null}
+                            </View>
+                            <Text style={styles.itemSubtitle} numberOfLines={2}>{item.subtitle}</Text>
+                          </View>
+                          <Text style={styles.itemDate}>{item.date.slice(5)}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
                   ))}
-                </View>
-              ))}
+                </ScrollView>
+              )}
             </View>
           </ResponsiveContainer>
         </ScrollView>
@@ -397,6 +413,8 @@ const styles = StyleSheet.create({
   timelineHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACING.md },
   timelineTitle: { fontSize: TYPOGRAPHY.fontSizeLG, fontWeight: '900' as const, color: COLORS.navyDeep },
   timelineCount: { overflow: 'hidden', backgroundColor: COLORS.navyDeep, color: COLORS.white, borderRadius: BORDER_RADIUS.round, paddingHorizontal: SPACING.md, paddingVertical: 4, fontWeight: '900' as const },
+  timelineList: { borderRadius: BORDER_RADIUS.lg },
+  timelineListContent: { paddingBottom: SPACING.sm },
   monthGroup: { marginBottom: SPACING.md },
   monthLabel: { fontSize: TYPOGRAPHY.fontSizeSM, fontWeight: '900' as const, color: COLORS.navyDeep, marginBottom: SPACING.sm, textTransform: 'uppercase' as const, letterSpacing: 0.7 },
   timelineItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.white, borderRadius: BORDER_RADIUS.md, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: SPACING.xs, overflow: 'hidden' },
