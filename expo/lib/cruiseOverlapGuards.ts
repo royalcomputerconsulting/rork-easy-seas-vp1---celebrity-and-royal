@@ -189,7 +189,29 @@ const CONFIRMED_PINNACLE_CRUISE_PLAN: BookedCruise[] = [
 function normalizeDateOnly(value?: string | null): string {
   if (!value) return '';
   const trimmed = value.trim();
-  return trimmed.includes('T') ? trimmed.split('T')[0] : trimmed;
+  if (!trimmed) return '';
+
+  const dateOnly = trimmed.includes('T') ? trimmed.split('T')[0] : trimmed;
+  const compactMatch = dateOnly.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (compactMatch) {
+    const [, year, month, day] = compactMatch;
+    return `${year}-${month}-${day}`;
+  }
+
+  const isoMatch = dateOnly.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (isoMatch) {
+    const [, year, month, day] = isoMatch;
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  }
+
+  const mdyMatch = dateOnly.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})$/);
+  if (mdyMatch) {
+    const [, month, day, yearPart] = mdyMatch;
+    const year = yearPart.length === 2 ? `20${yearPart}` : yearPart;
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  }
+
+  return dateOnly;
 }
 
 function addCorrectionNote(notes: string | undefined, note: string): string {

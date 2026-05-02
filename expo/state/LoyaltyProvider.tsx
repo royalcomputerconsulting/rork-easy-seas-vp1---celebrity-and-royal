@@ -20,6 +20,7 @@ import { isActiveBookedCruise, isCompletedBookedCruise } from "@/lib/bookedCruis
 import { ALL_STORAGE_KEYS, getUserScopedKey } from "@/lib/storage/storageKeys";
 import type { ExtendedLoyaltyData } from "@/lib/royalCaribbean/types";
 import { mergeExtendedLoyaltyData } from "@/lib/royalCaribbean/loyaltyConverter";
+import { dedupeBookedCruises } from "@/lib/dataIdentity";
 
 interface PinnacleFutureCruiseBreakdownItem {
   shipName: string;
@@ -161,7 +162,7 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
   const [isLoading, setIsLoading] = useState(true);
   
   const bookedCruises = useMemo((): BookedCruise[] => {
-    return storedBookedCruises || [];
+    return dedupeBookedCruises(storedBookedCruises || [], 'loyalty calculations booked cruises');
   }, [storedBookedCruises]);
 
   const userStorageKeys = useMemo(() => ({

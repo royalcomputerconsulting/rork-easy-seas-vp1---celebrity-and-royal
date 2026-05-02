@@ -12,7 +12,29 @@ function normalizeOfferCode(value: unknown): string {
 
 function normalizeDateKey(value: unknown): string {
   const normalized = normalizeKeyPart(value);
-  return normalized.includes('t') ? normalized.split('t')[0] : normalized;
+  if (!normalized) return '';
+
+  const dateOnly = normalized.includes('t') ? normalized.split('t')[0] : normalized;
+  const compactMatch = dateOnly.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (compactMatch) {
+    const [, year, month, day] = compactMatch;
+    return `${year}-${month}-${day}`;
+  }
+
+  const isoMatch = dateOnly.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (isoMatch) {
+    const [, year, month, day] = isoMatch;
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  }
+
+  const mdyMatch = dateOnly.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})$/);
+  if (mdyMatch) {
+    const [, month, day, yearPart] = mdyMatch;
+    const year = yearPart.length === 2 ? `20${yearPart}` : yearPart;
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  }
+
+  return dateOnly;
 }
 
 function getSourceKey(value: { cruiseSource?: Cruise['cruiseSource']; offerSource?: CasinoOffer['offerSource']; brand?: string }): string {
@@ -47,7 +69,7 @@ function getBookedSailingKey(cruise: BookedCruise, includeOwnerAndSource: boolea
     return '';
   }
 
-  const baseParts = [ship, sailDate, returnDate];
+  const baseParts = includeOwnerAndSource ? [ship, sailDate, returnDate] : [ship, sailDate];
   if (!includeOwnerAndSource) {
     return `sailing:${baseParts.join('|')}`;
   }
