@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SlidersHorizontal, UserRound } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
@@ -15,6 +15,14 @@ interface IntelligenceFilterStripProps {
 
 const BRAND_OPTIONS: BrandFilterValue[] = ['all', 'royal', 'celebrity'];
 const PROGRAM_OPTIONS: ProgramFilterValue[] = ['all', 'clubRoyale', 'blueChip'];
+
+function getBrandChipLabel(brand: BrandFilterValue): string {
+  return brand === 'all' ? 'All' : getBrandLabel(brand);
+}
+
+function getProgramChipLabel(program: ProgramFilterValue): string {
+  return program === 'all' ? 'All' : getProgramLabel(program);
+}
 
 export const IntelligenceFilterStrip = React.memo(function IntelligenceFilterStrip({
   contextLabel,
@@ -36,7 +44,7 @@ export const IntelligenceFilterStrip = React.memo(function IntelligenceFilterStr
   const profileOptions = useMemo((): { id: ProfileFilterValue; label: string }[] => {
     const activeProfiles = users.filter((profile) => profile.active !== false);
     return [
-      { id: 'all', label: 'All Profiles' },
+      { id: 'all', label: 'All' },
       ...activeProfiles.map((profile) => ({ id: profile.id, label: getProfileDisplayName(profile) })),
       { id: 'unassigned', label: 'Unassigned' },
     ];
@@ -72,7 +80,7 @@ export const IntelligenceFilterStrip = React.memo(function IntelligenceFilterStr
           <UserRound size={12} color={COLORS.navyDeep} />
           <Text style={styles.groupLabel}>Profile / account</Text>
         </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+        <View style={styles.chipRow}>
           {profileOptions.map((option) => {
             const active = selectedProfileId === option.id;
             return (
@@ -87,13 +95,13 @@ export const IntelligenceFilterStrip = React.memo(function IntelligenceFilterStr
               </TouchableOpacity>
             );
           })}
-        </ScrollView>
+        </View>
       </View>
 
       <View style={styles.dualGroupRow}>
         <View style={styles.flexGroup}>
           <Text style={styles.groupLabel}>Brand</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRowTight}>
+          <View style={styles.chipRowTight}>
             {BRAND_OPTIONS.map((brand) => {
               const active = selectedBrand === brand;
               return (
@@ -104,17 +112,17 @@ export const IntelligenceFilterStrip = React.memo(function IntelligenceFilterStr
                   activeOpacity={0.75}
                   testID={`brand-filter-${brand}`}
                 >
-                  <Text style={[styles.smallChipText, active && styles.chipTextActive]}>{getBrandLabel(brand)}</Text>
+                  <Text style={[styles.smallChipText, active && styles.chipTextActive]} numberOfLines={1}>{getBrandChipLabel(brand)}</Text>
                 </TouchableOpacity>
               );
             })}
-          </ScrollView>
+          </View>
         </View>
 
         {showProgram ? (
           <View style={styles.flexGroup}>
             <Text style={styles.groupLabel}>Program</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRowTight}>
+            <View style={styles.chipRowTight}>
               {PROGRAM_OPTIONS.map((program) => {
                 const active = selectedProgram === program;
                 return (
@@ -125,11 +133,11 @@ export const IntelligenceFilterStrip = React.memo(function IntelligenceFilterStr
                     activeOpacity={0.75}
                     testID={`program-filter-${program}`}
                   >
-                    <Text style={[styles.smallChipText, active && styles.chipTextActive]}>{getProgramLabel(program)}</Text>
+                    <Text style={[styles.smallChipText, active && styles.chipTextActive]} numberOfLines={1}>{getProgramChipLabel(program)}</Text>
                   </TouchableOpacity>
                 );
               })}
-            </ScrollView>
+            </View>
           </View>
         ) : null}
       </View>
@@ -215,15 +223,20 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
     gap: SPACING.xs,
-    paddingRight: SPACING.md,
   },
   chipRowTight: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
     gap: 6,
-    paddingRight: SPACING.sm,
   },
   chip: {
-    width: 124,
+    minWidth: 46,
+    maxWidth: 132,
     minHeight: 36,
     paddingHorizontal: SPACING.sm,
     paddingVertical: 8,
@@ -254,7 +267,8 @@ const styles = StyleSheet.create({
     minHeight: 58,
   },
   smallChip: {
-    width: 124,
+    minWidth: 46,
+    maxWidth: 112,
     minHeight: 36,
     paddingHorizontal: SPACING.sm,
     paddingVertical: 7,
