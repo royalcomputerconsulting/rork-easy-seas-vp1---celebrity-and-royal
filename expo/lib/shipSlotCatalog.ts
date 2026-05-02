@@ -1,11 +1,15 @@
-import { Platform } from 'react-native';
-import { Asset } from 'expo-asset';
-import * as FileSystem from 'expo-file-system';
-
-import { parseCSVLine } from '@/lib/csv/csvParser';
 import type { CabinetType, MachineEncyclopediaEntry, MachineVolatility, SlotManufacturer } from '@/types/models';
 
-const SHIP_SLOT_CSV_ASSET = require('../assets/ship2slot.csv');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const SHIP_SLOT_DATA = require('../assets/ship2slots.json') as {
+  sheets: Array<{
+    sheet_name: string;
+    headers: string[];
+    record_count: number;
+    records: Record<string, string | number | null>[];
+  }>;
+};
+
 const CATALOG_TIMESTAMP = '2026-05-02T00:00:00.000Z';
 
 type ShipAssignment = NonNullable<MachineEncyclopediaEntry['shipAssignments']>[number];
@@ -32,15 +36,17 @@ export interface ShipSlotRecord {
   normalizedMachineKey: string;
 }
 
-let recordsPromise: Promise<ShipSlotRecord[]> | null = null;
-let machineEntriesPromise: Promise<MachineEncyclopediaEntry[]> | null = null;
+let cachedRecords: ShipSlotRecord[] | null = null;
+let cachedMachineEntries: MachineEncyclopediaEntry[] | null = null;
 
-function cleanValue(value: string | undefined): string {
-  return (value ?? '').replace(/^\uFEFF/, '').trim();
+function str(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) return '';
+  return String(value).trim();
 }
 
-function parseNumber(value: string | undefined): number | null {
-  const parsed = Number(cleanValue(value));
+function num(value: string | number | null | undefined): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
 
@@ -93,77 +99,6 @@ function inferVolatility(records: ShipSlotRecord[]): MachineVolatility {
   if (maxAp >= 9) return 'Medium-High';
   if (maxAp >= 7) return 'Medium';
   return 'Medium';
-}
-
-async function readBundledCsv(): Promise<string> {
-  const asset = Asset.fromModule(SHIP_SLOT_CSV_ASSET);
-  await asset.downloadAsync();
-  const uri = asset.localUri ?? asset.uri;
-
-  if (!uri) {
-    throw new Error('ship2slot.csv asset URI could not be resolved');
-  }
-
-  if (Platform.OS === 'web') {
-    const response = await fetch(uri);
-    if (!response.ok) {
-      throw new Error(`ship2slot.csv fetch failed: ${response.status}`);
-    }
-    return response.text();
-  }
-
-  return FileSystem.readAsStringAsync(uri);
-}
-
-function parseShipSlotCsv(csvText: string): ShipSlotRecord[] {
-  const lines = csvText.replace(/^\uFEFF/, '').split(/\r?\n/).filter((line) => line.trim().length > 0);
-  const headerLine = lines[0];
-  if (!headerLine) return [];
-
-  const headers = parseCSVLine(headerLine).map(cleanValue);
-  const records: ShipSlotRecord[] = [];
-
-  for (let i = 1; i < lines.length; i += 1) {
-    const values = parseCSVLine(lines[i] ?? '');
-    const row: Record<string, string> = {};
-    headers.forEach((header, index) => {
-      row[header] = cleanValue(values[index]);
-    });
-
-    const shipName = row.Ship;
-    const machineTitle = row['Machine Title'];
-    const machineId = row['Machine ID'];
-    if (!shipName || !machineTitle || !machineId) continue;
-
-    const manufacturerRaw = row.Manufacturer || 'Other';
-    const variant = row.Variant || 'Standard';
-    const machineName = formatMachineName(machineTitle, variant);
-    const normalizedMachineKey = getMachineKey(manufacturerRaw, machineTitle, variant);
-
-    records.push({
-      id: `${slugify(shipName)}-${slugify(machineId)}`,
-      shipName,
-      shipClass: row.Class || 'Unknown',
-      estimatedShipSlotCount: parseNumber(row['Estimated Ship Slot Count']),
-      machineId,
-      manufacturerRaw,
-      manufacturer: normalizeManufacturer(manufacturerRaw),
-      machineTitle,
-      variant,
-      machineName,
-      family: row.Family || 'Video Slot',
-      bank: row.Bank || '',
-      seatInBank: row['Seat In Bank'] || '',
-      confidence: parseNumber(row.Confidence),
-      status: row.Status || 'Cataloged',
-      apVisibilityScore: parseNumber(row['AP Visibility Score']),
-      sourceBasis: row['Source Basis'] || '',
-      whitelistRule: row['Whitelist Rule'] || '',
-      normalizedMachineKey,
-    });
-  }
-
-  return records;
 }
 
 function buildDeckLocation(record: ShipSlotRecord): string {
@@ -237,20 +172,20 @@ function makeMachineEntry(records: ShipSlotRecord[]): MachineEncyclopediaEntry {
     globalMachineId: `ship-slot-${first.normalizedMachineKey}`,
     machineName: first.machineName,
     manufacturer: first.manufacturer,
-    gameSeries: isGenericVariant(first.variant) ? first.machineTitle : first.machineTitle,
+    gameSeries: first.machineTitle,
     volatility: inferVolatility(records),
     cabinetType: inferCabinetType(first.family, first.variant),
     releaseYear: null,
     theme: isGenericVariant(first.variant) ? first.family : first.variant,
-    description: `Ship slot catalog entry from ship2slot.csv. Found in ${totalLocations} slot location${totalLocations === 1 ? '' : 's'} across ${shipAssignments.length} ship${shipAssignments.length === 1 ? '' : 's'}.`,
+    description: `Ship slot catalog entry. Found in ${totalLocations} slot location${totalLocations === 1 ? '' : 's'} across ${shipAssignments.length} ship${shipAssignments.length === 1 ? '' : 's'}.`,
     denominationFamilies: [],
     apMetadata: {
       persistenceType: maxAp >= 8 ? 'Pseudo' : 'None',
       hasMustHitBy: false,
-      notesAndTips: `AP visibility score from ship2slot.csv: ${maxAp}/10. Source basis: ${sourceBasis || 'Ship slot catalog'}.`,
+      notesAndTips: `AP visibility score: ${maxAp}/10. Source basis: ${sourceBasis || 'Ship slot catalog'}.`,
     },
     shipAssignments,
-    shipNotes: `Loaded from bundled ship2slot.csv. This is shared ship-floor data, not user-specific notes.`,
+    shipNotes: `Loaded from bundled ship2slots.json. This is shared ship-floor data, not user-specific notes.`,
     source: 'ship-slot-csv',
     isInMyAtlas: true,
     createdAt: CATALOG_TIMESTAMP,
@@ -298,42 +233,75 @@ function findMatchingMachineIndex(machines: MachineEncyclopediaEntry[], catalogM
   });
 }
 
-export async function loadShipSlotRecords(): Promise<ShipSlotRecord[]> {
-  if (!recordsPromise) {
-    recordsPromise = readBundledCsv()
-      .then(parseShipSlotCsv)
-      .then((records) => {
-        console.log(`[ShipSlotCatalog] Loaded ${records.length} ship slot rows from CSV`);
-        return records;
-      })
-      .catch((error) => {
-        console.error('[ShipSlotCatalog] Failed to load ship2slot.csv:', error);
-        return [];
+/** Parse all records from the bundled JSON synchronously — no async I/O needed. */
+function parseJsonRecords(): ShipSlotRecord[] {
+  if (cachedRecords) return cachedRecords;
+
+  const records: ShipSlotRecord[] = [];
+
+  for (const sheet of SHIP_SLOT_DATA.sheets) {
+    for (const row of sheet.records) {
+      const shipName = str(row['Ship']);
+      const machineTitle = str(row['Machine Title']);
+      const machineId = str(row['Machine ID']);
+      if (!shipName || !machineTitle || !machineId) continue;
+
+      const manufacturerRaw = str(row['Manufacturer']) || 'Other';
+      const variant = str(row['Variant']) || 'Standard';
+      const machineName = formatMachineName(machineTitle, variant);
+      const normalizedMachineKey = getMachineKey(manufacturerRaw, machineTitle, variant);
+
+      records.push({
+        id: `${slugify(shipName)}-${slugify(machineId)}`,
+        shipName,
+        shipClass: str(row['Class']) || 'Unknown',
+        estimatedShipSlotCount: num(row['Estimated Ship Slot Count']),
+        machineId,
+        manufacturerRaw,
+        manufacturer: normalizeManufacturer(manufacturerRaw),
+        machineTitle,
+        variant,
+        machineName,
+        family: str(row['Family']) || 'Video Slot',
+        bank: str(row['Bank']),
+        seatInBank: str(row['Seat In Bank']),
+        confidence: num(row['Confidence']),
+        status: str(row['Status']) || 'Cataloged',
+        apVisibilityScore: num(row['AP Visibility Score']),
+        sourceBasis: str(row['Source Basis']),
+        whitelistRule: str(row['Whitelist Rule']),
+        normalizedMachineKey,
       });
+    }
   }
 
-  return recordsPromise;
+  cachedRecords = records;
+  console.log(`[ShipSlotCatalog] Loaded ${records.length} ship slot rows from JSON`);
+  return records;
+}
+
+export async function loadShipSlotRecords(): Promise<ShipSlotRecord[]> {
+  return parseJsonRecords();
 }
 
 export async function loadShipSlotMachineEntries(): Promise<MachineEncyclopediaEntry[]> {
-  if (!machineEntriesPromise) {
-    machineEntriesPromise = loadShipSlotRecords().then((records) => {
-      const grouped = new Map<string, ShipSlotRecord[]>();
-      records.forEach((record) => {
-        const group = grouped.get(record.normalizedMachineKey) ?? [];
-        group.push(record);
-        grouped.set(record.normalizedMachineKey, group);
-      });
+  if (cachedMachineEntries) return cachedMachineEntries;
 
-      const entries = Array.from(grouped.values())
-        .map(makeMachineEntry)
-        .sort((a, b) => a.machineName.localeCompare(b.machineName));
-      console.log(`[ShipSlotCatalog] Built ${entries.length} machine entries from ship slot CSV`);
-      return entries;
-    });
-  }
+  const records = parseJsonRecords();
+  const grouped = new Map<string, ShipSlotRecord[]>();
+  records.forEach((record) => {
+    const group = grouped.get(record.normalizedMachineKey) ?? [];
+    group.push(record);
+    grouped.set(record.normalizedMachineKey, group);
+  });
 
-  return machineEntriesPromise;
+  const entries = Array.from(grouped.values())
+    .map(makeMachineEntry)
+    .sort((a, b) => a.machineName.localeCompare(b.machineName));
+
+  cachedMachineEntries = entries;
+  console.log(`[ShipSlotCatalog] Built ${entries.length} machine entries from ship slot JSON`);
+  return entries;
 }
 
 export function mergeShipSlotMachinesIntoLibrary(
