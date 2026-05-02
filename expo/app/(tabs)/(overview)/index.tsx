@@ -58,6 +58,7 @@ import { QuickActionsFAB } from '@/components/ui/QuickActionsFAB';
 import { createDateFromString, getDaysUntil, isDateInPast, formatDate } from '@/lib/date';
 import { isActiveBookedCruise } from '@/lib/bookedCruiseStatus';
 import { MachineStrategyCard } from '@/components/MachineStrategyCard';
+import { ShipMachinesExplorer } from '@/components/ShipMachinesExplorer';
 import { CertificateExplorerModal } from '@/components/CertificateExplorerModal';
 import { IntelligenceFilterStrip } from '@/components/IntelligenceFilterStrip';
 import { useIntelligenceFilters } from '@/state/IntelligenceFiltersProvider';
@@ -969,6 +970,16 @@ function OverviewScreenContent() {
           showBorder={false}
         >
           <MachineStrategyCard />
+        </CollapsibleSection>
+
+        <CollapsibleSection
+          title="Ship Machine Explorer"
+          subtitle="Browse slots by ship across the fleet"
+          icon={<BookOpen size={18} color="#FFFFFF" />}
+          defaultExpanded={false}
+          showBorder={false}
+        >
+          <ShipMachinesExplorer />
         </CollapsibleSection>
 
         {cruisesWithCasinoData.length > 0 && (

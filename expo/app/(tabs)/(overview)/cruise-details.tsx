@@ -1,4 +1,5 @@
 import React, { memo, useMemo, useState, useEffect } from 'react';
+import { ShipMachinesPanel } from '@/components/ShipMachinesPanel';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, Switch, Image } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { ItineraryDay, BookedCruise, CasinoOffer, Cruise } from '@/types/models';
@@ -1660,6 +1661,8 @@ export default function CruiseDetailsScreen() {
               </View>
             </View>
           )}
+
+          <ShipMachinesPanel shipName={cruise.shipName ?? ''} />
 
           {false && valueBreakdown && (
             <View style={styles.valueSection}>
