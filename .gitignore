@@ -5,3 +5,8 @@ node_modules
 .git
 dist
 web-build
+expo/dist-build-check/
+expo/dist-build-check-android/
+expo/dist-build-check-ios/
+expo/dist-export-check/
+expo/dist-export-web-check/

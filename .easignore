@@ -10,6 +10,12 @@ web-build
 /expo/.expo
 /expo/dist
 /expo/web-build
+/expo/dist-build-check
+/expo/dist-build-check/**
+/expo/dist-build-check-android
+/expo/dist-build-check-android/**
+/expo/dist-build-check-ios
+/expo/dist-build-check-ios/**
 /expo/dist-export-check
 /expo/dist-export-check/**
 /expo/dist-export-web-check

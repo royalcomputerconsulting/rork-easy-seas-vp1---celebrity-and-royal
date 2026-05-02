@@ -2,6 +2,14 @@
 .rork/** export-ignore
 expo/.expo export-ignore
 expo/.expo/** export-ignore
+expo/node_modules export-ignore
+expo/node_modules/** export-ignore
+expo/dist-build-check export-ignore
+expo/dist-build-check/** export-ignore
+expo/dist-build-check-android export-ignore
+expo/dist-build-check-android/** export-ignore
+expo/dist-build-check-ios export-ignore
+expo/dist-build-check-ios/** export-ignore
 expo/dist-export-check export-ignore
 expo/dist-export-check/** export-ignore
 expo/dist-export-web-check export-ignore

@@ -7,6 +7,11 @@ node_modules/
 .expo/
 dist/
 web-build/
+dist-build-check/
+dist-build-check-android/
+dist-build-check-ios/
+dist-export-check/
+dist-export-web-check/
 expo-env.d.ts
 
 # Native
