@@ -624,7 +624,7 @@ export default function BookedScreen() {
         </LinearGradient>
       </View>
 
-      <IntelligenceFilterStrip contextLabel="Booked" />
+      <IntelligenceFilterStrip contextLabel="Booked" variant="bookedCruises" />
 
       <View style={styles.viewModeRow}>
         <View style={styles.viewModeToggle}>

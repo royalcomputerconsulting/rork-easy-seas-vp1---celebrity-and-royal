@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { SlidersHorizontal, UserRound } from 'lucide-react-native';
+import { Building2, SlidersHorizontal, Trophy, UserRound } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { useIntelligenceFilters, type BrandFilterValue, type ProfileFilterValue, type ProgramFilterValue } from '@/state/IntelligenceFiltersProvider';
 import { useUser } from '@/state/UserProvider';
@@ -11,6 +11,7 @@ interface IntelligenceFilterStripProps {
   contextLabel: string;
   showProgram?: boolean;
   compact?: boolean;
+  variant?: 'default' | 'bookedCruises';
 }
 
 const BRAND_OPTIONS: BrandFilterValue[] = ['all', 'royal', 'celebrity'];
@@ -28,7 +29,9 @@ export const IntelligenceFilterStrip = React.memo(function IntelligenceFilterStr
   contextLabel,
   showProgram = true,
   compact = false,
+  variant = 'default',
 }: IntelligenceFilterStripProps) {
+  const isBookedCruisesVariant = variant === 'bookedCruises';
   const { users } = useUser();
   const {
     selectedProfileId,
@@ -52,10 +55,10 @@ export const IntelligenceFilterStrip = React.memo(function IntelligenceFilterStr
 
   return (
     <LinearGradient
-      colors={['rgba(255,255,255,0.96)', 'rgba(224,242,241,0.92)', 'rgba(0,172,193,0.10)']}
+      colors={isBookedCruisesVariant ? ['#FFFFFF', '#F8FAFC'] : ['rgba(255,255,255,0.96)', 'rgba(224,242,241,0.92)', 'rgba(0,172,193,0.10)']}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
-      style={[styles.container, compact && styles.containerCompact]}
+      style={[styles.container, compact && styles.containerCompact, isBookedCruisesVariant && styles.bookedContainer]}
       testID={`${contextLabel.toLowerCase().replace(/\s+/g, '-')}-intelligence-filters`}
     >
       <View style={styles.headerRow}>
@@ -75,44 +78,51 @@ export const IntelligenceFilterStrip = React.memo(function IntelligenceFilterStr
         ) : null}
       </View>
 
-      <View style={styles.group}>
-        <View style={styles.groupLabelRow}>
-          <UserRound size={12} color={COLORS.navyDeep} />
-          <Text style={styles.groupLabel}>Profile / account</Text>
+      <View style={[styles.group, isBookedCruisesVariant && styles.bookedFilterGroup]}>
+        <View style={[styles.groupLabelRow, isBookedCruisesVariant && styles.bookedGroupLabelRow]}>
+          <View style={isBookedCruisesVariant ? styles.bookedGroupIconBadge : undefined}>
+            <UserRound size={isBookedCruisesVariant ? 14 : 12} color={COLORS.navyDeep} />
+          </View>
+          <Text style={[styles.groupLabel, isBookedCruisesVariant && styles.bookedGroupLabel]}>Profile / account</Text>
         </View>
-        <View style={styles.chipRow}>
+        <View style={[styles.chipRow, isBookedCruisesVariant && styles.bookedSegmentedRow]}>
           {profileOptions.map((option) => {
             const active = selectedProfileId === option.id;
             return (
               <TouchableOpacity
                 key={option.id}
-                style={[styles.chip, active && styles.chipActive]}
+                style={[isBookedCruisesVariant ? styles.bookedChip : styles.chip, active && (isBookedCruisesVariant ? styles.bookedChipActive : styles.chipActive)]}
                 onPress={() => setSelectedProfileId(option.id)}
                 activeOpacity={0.75}
                 testID={`profile-filter-${option.id}`}
               >
-                <Text style={[styles.chipText, active && styles.chipTextActive]} numberOfLines={1}>{option.label}</Text>
+                <Text style={[isBookedCruisesVariant ? styles.bookedChipText : styles.chipText, active && (isBookedCruisesVariant ? styles.bookedChipTextActive : styles.chipTextActive)]} numberOfLines={1}>{option.label}</Text>
               </TouchableOpacity>
             );
           })}
         </View>
       </View>
 
-      <View style={styles.dualGroupRow}>
-        <View style={styles.flexGroup}>
-          <Text style={styles.groupLabel}>Brand</Text>
-          <View style={styles.chipRowTight}>
+      <View style={[styles.dualGroupRow, isBookedCruisesVariant && styles.bookedDualGroupRow]}>
+        <View style={[styles.flexGroup, isBookedCruisesVariant && styles.bookedFilterGroup]}>
+          <View style={[styles.groupLabelRow, isBookedCruisesVariant && styles.bookedGroupLabelRow]}>
+            <View style={isBookedCruisesVariant ? styles.bookedGroupIconBadge : undefined}>
+              <Building2 size={isBookedCruisesVariant ? 14 : 12} color={COLORS.navyDeep} />
+            </View>
+            <Text style={[styles.groupLabel, isBookedCruisesVariant && styles.bookedGroupLabel]}>Brand</Text>
+          </View>
+          <View style={[styles.chipRowTight, isBookedCruisesVariant && styles.bookedSegmentedRow]}>
             {BRAND_OPTIONS.map((brand) => {
               const active = selectedBrand === brand;
               return (
                 <TouchableOpacity
                   key={brand}
-                  style={[styles.smallChip, active && styles.brandChipActive]}
+                  style={[isBookedCruisesVariant ? styles.bookedChip : styles.smallChip, active && (isBookedCruisesVariant ? styles.bookedChipActive : styles.brandChipActive)]}
                   onPress={() => setSelectedBrand(brand)}
                   activeOpacity={0.75}
                   testID={`brand-filter-${brand}`}
                 >
-                  <Text style={[styles.smallChipText, active && styles.chipTextActive]} numberOfLines={1}>{getBrandChipLabel(brand)}</Text>
+                  <Text style={[isBookedCruisesVariant ? styles.bookedChipText : styles.smallChipText, active && (isBookedCruisesVariant ? styles.bookedChipTextActive : styles.chipTextActive)]} numberOfLines={1}>{getBrandChipLabel(brand)}</Text>
                 </TouchableOpacity>
               );
             })}
@@ -120,20 +130,25 @@ export const IntelligenceFilterStrip = React.memo(function IntelligenceFilterStr
         </View>
 
         {showProgram ? (
-          <View style={styles.flexGroup}>
-            <Text style={styles.groupLabel}>Program</Text>
-            <View style={styles.chipRowTight}>
+          <View style={[styles.flexGroup, isBookedCruisesVariant && styles.bookedFilterGroup]}>
+            <View style={[styles.groupLabelRow, isBookedCruisesVariant && styles.bookedGroupLabelRow]}>
+              <View style={isBookedCruisesVariant ? styles.bookedGroupIconBadge : undefined}>
+                <Trophy size={isBookedCruisesVariant ? 14 : 12} color={COLORS.navyDeep} />
+              </View>
+              <Text style={[styles.groupLabel, isBookedCruisesVariant && styles.bookedGroupLabel]}>Program</Text>
+            </View>
+            <View style={[styles.chipRowTight, isBookedCruisesVariant && styles.bookedSegmentedRow]}>
               {PROGRAM_OPTIONS.map((program) => {
                 const active = selectedProgram === program;
                 return (
                   <TouchableOpacity
                     key={program}
-                    style={[styles.smallChip, active && styles.programChipActive]}
+                    style={[isBookedCruisesVariant ? styles.bookedChip : styles.smallChip, active && (isBookedCruisesVariant ? styles.bookedChipActive : styles.programChipActive)]}
                     onPress={() => setSelectedProgram(program)}
                     activeOpacity={0.75}
                     testID={`program-filter-${program}`}
                   >
-                    <Text style={[styles.smallChipText, active && styles.chipTextActive]} numberOfLines={1}>{getProgramChipLabel(program)}</Text>
+                    <Text style={[isBookedCruisesVariant ? styles.bookedChipText : styles.smallChipText, active && (isBookedCruisesVariant ? styles.bookedChipTextActive : styles.chipTextActive)]} numberOfLines={1}>{getProgramChipLabel(program)}</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -156,6 +171,11 @@ const styles = StyleSheet.create({
     ...SHADOW.md,
   },
   containerCompact: {
+    padding: SPACING.sm,
+  },
+  bookedContainer: {
+    borderRadius: BORDER_RADIUS.lg,
+    borderColor: COLORS.borderLight,
     padding: SPACING.sm,
   },
   headerRow: {
@@ -292,5 +312,66 @@ const styles = StyleSheet.create({
     fontWeight: '800' as const,
     color: COLORS.navyDeep,
     textAlign: 'center' as const,
+  },
+  bookedDualGroupRow: {
+    gap: SPACING.sm,
+  },
+  bookedFilterGroup: {
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    padding: SPACING.sm,
+    ...SHADOW.sm,
+  },
+  bookedGroupLabelRow: {
+    marginBottom: SPACING.xs,
+  },
+  bookedGroupIconBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 151, 167, 0.08)',
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+  },
+  bookedGroupLabel: {
+    marginBottom: 0,
+    fontSize: 12,
+    letterSpacing: 0.6,
+  },
+  bookedSegmentedRow: {
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.lg,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    gap: 4,
+  },
+  bookedChip: {
+    minWidth: 58,
+    flexGrow: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 9,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: CLEAN_THEME.tab.unselectedBg,
+  },
+  bookedChipActive: {
+    backgroundColor: COLORS.navyDeep,
+    ...SHADOW.tab,
+  },
+  bookedChipText: {
+    fontSize: 13,
+    fontWeight: '700' as const,
+    color: COLORS.textDarkGrey,
+    textAlign: 'center' as const,
+  },
+  bookedChipTextActive: {
+    color: COLORS.white,
+    fontWeight: '800' as const,
   },
 });
