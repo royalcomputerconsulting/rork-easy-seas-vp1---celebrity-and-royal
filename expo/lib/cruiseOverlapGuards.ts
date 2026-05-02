@@ -457,8 +457,27 @@ function rangesOverlap(left: CruiseDateRange, right: CruiseDateRange): boolean {
   return left.start.getTime() < right.end.getTime() && left.end.getTime() > right.start.getTime();
 }
 
+function isSameBookingRecord(left: BookedCruise, right: BookedCruise): boolean {
+  if (left === right) return true;
+  if (left.id && right.id && left.id === right.id) return true;
+
+  const leftReservation = getReservationKey(left);
+  const rightReservation = getReservationKey(right);
+  if (leftReservation && rightReservation && leftReservation === rightReservation) return true;
+
+  const sameSailing = normalizeCruiseKey(left.shipName, left.sailDate) === normalizeCruiseKey(right.shipName, right.sailDate);
+  if (!sameSailing) return false;
+
+  const leftReturnDate = normalizeDateOnly(left.returnDate);
+  const rightReturnDate = normalizeDateOnly(right.returnDate);
+  return !leftReturnDate || !rightReturnDate || leftReturnDate === rightReturnDate;
+}
+
 export function findOverlappingBookedCruises(cruises: BookedCruise[]): CruiseOverlapWarning[] {
-  const activeCruises = cruises.filter(isActiveBookedCruiseForOverlap);
+  const activeCruises = dedupeBookedCruises(
+    cruises.map(applyKnownBookingCorrectionsToCruise),
+    'booking overlap detection'
+  ).filter(isActiveBookedCruiseForOverlap);
   const warnings: CruiseOverlapWarning[] = [];
 
   for (let leftIndex = 0; leftIndex < activeCruises.length; leftIndex += 1) {
@@ -468,6 +487,7 @@ export function findOverlappingBookedCruises(cruises: BookedCruise[]): CruiseOve
 
     for (let rightIndex = leftIndex + 1; rightIndex < activeCruises.length; rightIndex += 1) {
       const right = activeCruises[rightIndex];
+      if (isSameBookingRecord(left, right)) continue;
       if (!canOverlapForSameTraveler(left, right)) continue;
       const rightRange = getBookedCruiseDateRange(right);
       if (!rightRange || !rangesOverlap(leftRange, rightRange)) continue;
