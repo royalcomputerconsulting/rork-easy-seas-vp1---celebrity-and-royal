@@ -517,6 +517,104 @@ function countOvernightPorts(days: CasinoAvailability[]): number {
   return overnightPorts;
 }
 
+function normalizePortForComparison(port: string | undefined): string {
+  return (port ?? '')
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\b(california|florida|texas|washington|british columbia|bc|usa|united states)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function portsLikelyMatch(left: string | undefined, right: string | undefined): boolean {
+  const normalizedLeft = normalizePortForComparison(left);
+  const normalizedRight = normalizePortForComparison(right);
+  if (!normalizedLeft || !normalizedRight) return false;
+  if (normalizedLeft === normalizedRight) return true;
+  if (normalizedLeft.includes(normalizedRight) || normalizedRight.includes(normalizedLeft)) return true;
+  if (normalizedLeft.includes('los angeles') && (normalizedRight.includes('los angeles') || normalizedRight.includes('san pedro'))) return true;
+  if (normalizedRight.includes('los angeles') && (normalizedLeft.includes('los angeles') || normalizedLeft.includes('san pedro'))) return true;
+  if (normalizedLeft.includes('port canaveral') && normalizedRight.includes('orlando')) return true;
+  if (normalizedRight.includes('port canaveral') && normalizedLeft.includes('orlando')) return true;
+  return false;
+}
+
+function buildInferredSeaDay(day: number): ItineraryDay {
+  return {
+    day,
+    port: 'At Sea',
+    isSeaDay: true,
+    notes: 'Inferred sea day to complete the sailing length.',
+  };
+}
+
+function normalizeKnownItineraryDay(day: ItineraryDay, dayNumber: number): ItineraryDay {
+  return {
+    ...day,
+    day: dayNumber,
+    isSeaDay: day.isSeaDay || determineSeaDay(day.port),
+  };
+}
+
+function expandItineraryToExpectedDays(
+  itinerary: ItineraryDay[],
+  expectedDays: number,
+  cruise: Cruise | BookedCruise
+): ItineraryDay[] {
+  if (expectedDays <= 0 || itinerary.length === 0) return itinerary;
+
+  const sortedItinerary = itinerary
+    .slice()
+    .sort((left: ItineraryDay, right: ItineraryDay) => left.day - right.day)
+    .map((day: ItineraryDay, index: number) => normalizeKnownItineraryDay(day, Number.isFinite(day.day) && day.day > 0 ? day.day : index + 1));
+
+  if (sortedItinerary.length >= expectedDays) return sortedItinerary;
+
+  const maxExistingDay = Math.max(...sortedItinerary.map((day: ItineraryDay) => day.day));
+  const hasExplicitDayGaps = sortedItinerary.some((day: ItineraryDay, index: number) => day.day !== index + 1) || maxExistingDay === expectedDays;
+
+  if (hasExplicitDayGaps && maxExistingDay <= expectedDays) {
+    const byDay = new Map<number, ItineraryDay>();
+    sortedItinerary.forEach((day: ItineraryDay) => byDay.set(day.day, day));
+    const expandedExplicitDays: ItineraryDay[] = [];
+    for (let dayNumber = 1; dayNumber <= expectedDays; dayNumber += 1) {
+      const exactDay = byDay.get(dayNumber);
+      expandedExplicitDays.push(exactDay ? normalizeKnownItineraryDay(exactDay, dayNumber) : buildInferredSeaDay(dayNumber));
+    }
+    return expandedExplicitDays;
+  }
+
+  const firstDay = sortedItinerary[0];
+  const lastDay = sortedItinerary[sortedItinerary.length - 1];
+  const lastLooksLikeDisembarkation = sortedItinerary.length > 1 && (
+    portsLikelyMatch(firstDay?.port, lastDay?.port) ||
+    portsLikelyMatch(lastDay?.port, cruise.departurePort)
+  );
+
+  if (lastLooksLikeDisembarkation && firstDay && lastDay) {
+    const expanded: ItineraryDay[] = [normalizeKnownItineraryDay(firstDay, 1)];
+    const middleDays = sortedItinerary.slice(1, -1);
+    middleDays.forEach((day: ItineraryDay, index: number) => {
+      const dayNumber = Math.min(index + 2, expectedDays - 1);
+      expanded.push(normalizeKnownItineraryDay(day, dayNumber));
+    });
+
+    for (let dayNumber = expanded.length + 1; dayNumber < expectedDays; dayNumber += 1) {
+      expanded.push(buildInferredSeaDay(dayNumber));
+    }
+
+    expanded.push(normalizeKnownItineraryDay(lastDay, expectedDays));
+    return expanded;
+  }
+
+  const expandedSequential = sortedItinerary.map((day: ItineraryDay, index: number) => normalizeKnownItineraryDay(day, index + 1));
+  for (let dayNumber = expandedSequential.length + 1; dayNumber <= expectedDays; dayNumber += 1) {
+    expandedSequential.push(buildInferredSeaDay(dayNumber));
+  }
+  return expandedSequential;
+}
+
 export function calculateCasinoAvailabilityForCruise(
   cruise: Cruise | BookedCruise,
   offers?: { offerCode?: string; portsAndTimes?: string; ports?: string[] }[]
@@ -599,6 +697,17 @@ export function calculateCasinoAvailabilityForCruise(
   const expectedDays = accurateNights + 1;
   
   if (itineraryToUse.length > 0) {
+    const expandedItinerary = expandItineraryToExpectedDays(itineraryToUse, expectedDays, cruise);
+    if (expandedItinerary.length !== itineraryToUse.length) {
+      console.log('[CasinoAvailability] Expanded itinerary to match sailing length:', {
+        cruiseId: cruise.id,
+        originalDays: itineraryToUse.length,
+        expectedDays,
+        expandedDays: expandedItinerary.length,
+      });
+    }
+    itineraryToUse = expandedItinerary;
+
     itineraryToUse.forEach((day: ItineraryDay, index: number) => {
       const isSeaDay = day.isSeaDay || determineSeaDay(day.port);
       const isDepartureDay = index === 0;
