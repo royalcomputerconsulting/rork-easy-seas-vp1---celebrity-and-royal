@@ -9,6 +9,7 @@ import {
 import type { GlobalSlotMachine } from '@/constants/globalSlotMachinesDatabase';
 import { permanentDB } from '@/lib/permanentMachineDatabase';
 import { machineIndexHelper, type MachineFullDetails } from '@/lib/machineIndexHelper';
+import { trpcClient } from '@/lib/trpc';
 import { useEntitlement } from '@/state/EntitlementProvider';
 import { useAuth } from '@/state/AuthProvider';
 import { getUserScopedKey } from '@/lib/storage/storageKeys';
@@ -18,6 +19,65 @@ const STORAGE_KEY_MY_ATLAS = 'easyseas_my_slot_atlas_v2_262_only';
 const STORAGE_KEY_INDEX_LOADED = 'easyseas_machine_index_loaded_v2_262_only';
 
 const FREE_USER_MACHINE_LIMIT = 4;
+
+const USER_SPECIFIC_MACHINE_FIELDS = new Set([
+  'isInMyAtlas',
+  'addedToAtlasAt',
+  'isFavorite',
+  'favoritedAt',
+  'userNotes',
+  'images',
+  'shipAssignments',
+  'ownerProfileId',
+  'sourceEmail',
+  'createdAt',
+  'updatedAt',
+]);
+
+function normalizeMachineText(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function slugifyMachineKey(value: string): string {
+  return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+
+function getSharedMachineId(machine: Record<string, any>): string | undefined {
+  const header = typeof machine.header === 'object' && machine.header !== null ? machine.header : {};
+  const explicitId = normalizeMachineText(machine.globalMachineId) ?? normalizeMachineText(machine.machineId) ?? normalizeMachineText(machine.id);
+  if (explicitId) return explicitId;
+
+  const machineName = normalizeMachineText(machine.machineName) ?? normalizeMachineText(machine.name) ?? normalizeMachineText(header.machineName);
+  const manufacturer = normalizeMachineText(machine.manufacturer) ?? normalizeMachineText(header.manufacturer) ?? 'Other';
+  if (!machineName) return undefined;
+  return `${slugifyMachineKey(manufacturer)}-${slugifyMachineKey(machineName)}`;
+}
+
+function toSharedMachineRecord(raw: any): Record<string, any> | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+
+  const header = typeof raw.header === 'object' && raw.header !== null ? raw.header : {};
+  const machineName = normalizeMachineText(raw.machineName) ?? normalizeMachineText(raw.name) ?? normalizeMachineText(header.machineName);
+  const machineId = getSharedMachineId(raw);
+  if (!machineName || !machineId) return null;
+
+  const shared: Record<string, any> = {};
+  Object.entries(raw).forEach(([key, value]) => {
+    if (USER_SPECIFIC_MACHINE_FIELDS.has(key)) return;
+    if (value === undefined) return;
+    shared[key] = value;
+  });
+
+  shared.id = machineId;
+  shared.globalMachineId = machineId;
+  shared.machineName = machineName;
+  shared.name = machineName;
+  shared.manufacturer = normalizeMachineText(raw.manufacturer) ?? normalizeMachineText(header.manufacturer) ?? 'Other';
+  shared.releaseYear = raw.releaseYear ?? raw.release_year ?? header.releaseYear ?? null;
+  shared.source = raw.source ?? 'shared-json';
+  shared.updatedAt = new Date().toISOString();
+  return shared;
+}
 
 function convertGlobalToEncyclopedia(global: GlobalSlotMachine, addedToAtlas: boolean = false): MachineEncyclopediaEntry {
   return {
@@ -69,11 +129,13 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
   const [isUserWhitelisted, setIsUserWhitelisted] = useState<boolean>(false);
   const encyclopediaKeyRef = useRef<string>(getUserScopedKey(STORAGE_KEY_ENCYCLOPEDIA, authenticatedEmail));
   const atlasKeyRef = useRef<string>(getUserScopedKey(STORAGE_KEY_MY_ATLAS, authenticatedEmail));
+  const sharedLibraryBackfillRef = useRef<string | null>(null);
 
   useEffect(() => {
     encyclopediaKeyRef.current = getUserScopedKey(STORAGE_KEY_ENCYCLOPEDIA, authenticatedEmail);
     atlasKeyRef.current = getUserScopedKey(STORAGE_KEY_MY_ATLAS, authenticatedEmail);
     proLoadTriggeredRef.current = false;
+    sharedLibraryBackfillRef.current = null;
     setEncyclopedia([]);
     setMyAtlasIds([]);
     setIndexLoadComplete(false);
@@ -298,6 +360,46 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
     }
   };
 
+  const saveSharedMachineJSON = useCallback(async (rawMachines: any[], source: 'import' | 'manual' | 'wizard') => {
+    const sharedMachines = rawMachines
+      .map(toSharedMachineRecord)
+      .filter((machine): machine is Record<string, any> => machine !== null);
+
+    if (sharedMachines.length === 0) {
+      console.log('[SlotMachineLibrary] No shared slot machine JSON records to save');
+      return;
+    }
+
+    try {
+      const uniqueMachines = Array.from(
+        new Map(sharedMachines.map((machine) => [machine.globalMachineId ?? machine.id, machine])).values()
+      );
+      const result = await trpcClient.machineLibrary.upsertMany.mutate({
+        machines: uniqueMachines,
+        source,
+      });
+      await machineIndexHelper.clearIndex();
+      await machineIndexHelper.clearDetailsCache();
+      console.log('[SlotMachineLibrary] Saved shared slot machine JSON library records:', result);
+    } catch (error) {
+      console.log('[SlotMachineLibrary] Shared slot machine JSON save unavailable; local user import still saved:', error instanceof Error ? error.message : String(error));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isLoading || encyclopedia.length === 0) return;
+
+    const backfillKey = `${authenticatedEmail ?? 'anonymous'}:${encyclopedia.length}`;
+    if (sharedLibraryBackfillRef.current === backfillKey) return;
+    sharedLibraryBackfillRef.current = backfillKey;
+
+    const timeout = setTimeout(() => {
+      void saveSharedMachineJSON(encyclopedia, 'import');
+    }, 1500);
+
+    return () => clearTimeout(timeout);
+  }, [authenticatedEmail, encyclopedia, isLoading, saveSharedMachineJSON]);
+
   const addMachineFromGlobal = async (globalMachineId: string) => {
     const allGlobalMachines = permanentDB.getAllMachines();
     const globalMachine = allGlobalMachines.find(m => m.id === globalMachineId);
@@ -366,6 +468,8 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
     };
 
     await permanentDB.addOrUpdateMachine(globalMachine, 'manual');
+    await permanentDB.persist();
+    await saveSharedMachineJSON([globalMachine], data.source === 'youtube' ? 'wizard' : 'manual');
     console.log('[SlotMachineLibrary] Added machine to permanent database');
 
     const newEntry: MachineEncyclopediaEntry = {
@@ -569,6 +673,7 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
       
       const result = await permanentDB.importFromJSON(jsonString);
       console.log('[SlotMachineLibrary] Permanent DB import result:', result);
+      await saveSharedMachineJSON(machines, 'import');
 
       const newEntries: MachineEncyclopediaEntry[] = [];
       const skippedEntries: string[] = [];

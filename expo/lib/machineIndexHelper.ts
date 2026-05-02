@@ -1,8 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { SlotManufacturer, MachineVolatility, CabinetType, PersistenceType } from '@/types/models';
+import { trpcClient } from '@/lib/trpc';
 
 const MACHINE_INDEX_KEY = '@easyseas/MACHINE_INDEX_V3_262_ONLY';
 const MACHINE_DETAILS_CACHE_PREFIX = '@easyseas/MACHINE_DETAIL_V3_';
+const SHARED_MACHINE_LIBRARY_CACHE_KEY = '@easyseas/SHARED_MACHINE_LIBRARY_CACHE_V1';
 
 export interface MachineIndexEntry {
   id: string;
@@ -47,9 +49,65 @@ import MACHINES_262_RAW from '@/assets/MACHINES_262.json';
 
 const _machinesData: any[] = (MACHINES_262_RAW as any[]) ?? [];
 
+function getMachineIdentity(machine: any): string | null {
+  const header = machine?.header ?? {};
+  const id = machine?.globalMachineId ?? machine?.machineId ?? machine?.id;
+  if (typeof id === 'string' && id.trim().length > 0) return id.trim();
+
+  const machineName = machine?.machineName ?? machine?.name ?? header?.machineName;
+  const manufacturer = machine?.manufacturer ?? header?.manufacturer ?? 'Other';
+  if (typeof machineName !== 'string' || machineName.trim().length === 0) return null;
+
+  return `${manufacturer}-${machineName}`.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+
+function mergeMachineData(baseMachines: any[], sharedMachines: any[]): any[] {
+  const merged = new Map<string, any>();
+
+  baseMachines.forEach((machine) => {
+    const key = getMachineIdentity(machine);
+    if (key) merged.set(key, machine);
+  });
+
+  sharedMachines.forEach((machine) => {
+    const key = getMachineIdentity(machine);
+    if (!key) return;
+    const existing = merged.get(key) ?? {};
+    merged.set(key, { ...existing, ...machine });
+  });
+
+  return Array.from(merged.values());
+}
+
+async function loadCachedSharedMachines(): Promise<any[]> {
+  try {
+    const cached = await AsyncStorage.getItem(SHARED_MACHINE_LIBRARY_CACHE_KEY);
+    const parsed = cached ? JSON.parse(cached) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.error('[MachineIndex] Failed to load shared machine cache:', error);
+    return [];
+  }
+}
+
+async function fetchSharedMachines(): Promise<any[]> {
+  try {
+    const result = await trpcClient.machineLibrary.getAll.query();
+    const machines = Array.isArray(result.machines) ? result.machines : [];
+    await AsyncStorage.setItem(SHARED_MACHINE_LIBRARY_CACHE_KEY, JSON.stringify(machines));
+    console.log(`[MachineIndex] Loaded ${machines.length} shared machines from cloud library`);
+    return machines;
+  } catch (error) {
+    console.log('[MachineIndex] Shared machine library unavailable, using cached/bundled machines only:', error instanceof Error ? error.message : String(error));
+    return loadCachedSharedMachines();
+  }
+}
+
 async function getMachinesData(): Promise<any[]> {
-  console.log(`[MachineIndex] Using ${_machinesData.length} machines from MACHINES_262.json`);
-  return _machinesData;
+  const sharedMachines = await fetchSharedMachines();
+  const mergedMachines = mergeMachineData(_machinesData, sharedMachines);
+  console.log(`[MachineIndex] Using ${mergedMachines.length} machines (${_machinesData.length} bundled + ${sharedMachines.length} shared)`);
+  return mergedMachines;
 }
 
 class MachineIndexHelper {
@@ -57,6 +115,7 @@ class MachineIndexHelper {
   private indexCache: MachineIndexEntry[] | null = null;
   private fullMachineMap: Map<string, any> = new Map();
   private mapInitialized = false;
+  private lastSharedSyncAt = 0;
 
   private constructor() {}
 
@@ -69,10 +128,10 @@ class MachineIndexHelper {
 
   private async ensureMapInitialized(): Promise<void> {
     if (this.mapInitialized) return;
-    console.log('[MachineIndex] Building machine lookup map from MACHINES_262 only...');
+    console.log('[MachineIndex] Building machine lookup map...');
     const allMachines = await getMachinesData();
     for (const machine of allMachines) {
-      const id = machine.id || `custom-${machine.name}-${machine.manufacturer}`;
+      const id = machine.globalMachineId || machine.id || `custom-${machine.name || machine.machineName}-${machine.manufacturer}`;
       this.fullMachineMap.set(id, machine);
     }
     this.mapInitialized = true;
@@ -80,42 +139,48 @@ class MachineIndexHelper {
   }
 
   async getOrCreateIndex(): Promise<MachineIndexEntry[]> {
-    if (this.indexCache) {
+    const shouldRefreshShared = Date.now() - this.lastSharedSyncAt > 5 * 60 * 1000;
+    if (this.indexCache && !shouldRefreshShared) {
       return this.indexCache;
     }
 
     try {
-      const stored = await AsyncStorage.getItem(MACHINE_INDEX_KEY);
-      
-      if (stored) {
-        console.log('[MachineIndex] Loading index from storage...');
-        this.indexCache = JSON.parse(stored);
-        console.log(`[MachineIndex] Loaded ${this.indexCache?.length} machines from index`);
-        return this.indexCache || [];
+      if (!shouldRefreshShared) {
+        const stored = await AsyncStorage.getItem(MACHINE_INDEX_KEY);
+        
+        if (stored) {
+          console.log('[MachineIndex] Loading index from storage...');
+          this.indexCache = JSON.parse(stored);
+          console.log(`[MachineIndex] Loaded ${this.indexCache?.length} machines from index`);
+          return this.indexCache || [];
+        }
       }
 
       console.log('[MachineIndex] Building new index...');
       const index = await this.buildIndex();
       await this.saveIndex(index);
       this.indexCache = index;
+      this.fullMachineMap.clear();
+      this.mapInitialized = false;
+      this.lastSharedSyncAt = Date.now();
       
       return index;
     } catch (error) {
       console.error('[MachineIndex] Error loading/building index:', error);
-      return [];
+      return this.indexCache ?? [];
     }
   }
 
   private async buildIndex(): Promise<MachineIndexEntry[]> {
     const allMachines = await getMachinesData();
-    console.log(`[MachineIndex] Building index from ${allMachines.length} machines (MACHINES_262 only)...`);
+    console.log(`[MachineIndex] Building index from ${allMachines.length} machines...`);
 
     const index: MachineIndexEntry[] = [];
 
     for (const machine of allMachines) {
       try {
         const entry: MachineIndexEntry = {
-          id: machine.id || `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          id: machine.globalMachineId || machine.id || `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           name: machine.name || machine.machineName || 'Unknown Machine',
           manufacturer: machine.manufacturer || 'Other',
           volatility: machine.volatility || 'Medium',
@@ -164,7 +229,7 @@ class MachineIndexHelper {
       }
 
       const details: MachineFullDetails = {
-        id: fullMachine.id || id,
+        id: fullMachine.globalMachineId || fullMachine.id || id,
         name: fullMachine.name || fullMachine.machineName || 'Unknown Machine',
         manufacturer: fullMachine.manufacturer || 'Other',
         volatility: fullMachine.volatility || 'Medium',
@@ -180,22 +245,22 @@ class MachineIndexHelper {
         jackpotTypes: fullMachine.jackpot_reset 
           ? Object.keys(fullMachine.jackpot_reset) 
           : (fullMachine.jackpotTypes || []),
-        denominationFamilies: fullMachine.denominationFamilies || [],
-        denominations: fullMachine.denominations || [],
+        denominationFamilies: fullMachine.denominationFamilies || fullMachine.denominations || [],
+        denominations: fullMachine.denominations || fullMachine.denominationFamilies || [],
         description: fullMachine.description,
-        simpleSummary: fullMachine.simpleSummary,
-        simple_summary: fullMachine.simpleSummary,
+        simpleSummary: fullMachine.simpleSummary || fullMachine.simple_summary,
+        simple_summary: fullMachine.simple_summary || fullMachine.simpleSummary,
         summary: fullMachine.summary,
-        ship_notes: fullMachine.shipNotes,
-        shipNotes: fullMachine.shipNotes,
-        ap_triggers: fullMachine.apTriggers,
-        apTriggers: fullMachine.apTriggers,
-        walk_away: fullMachine.walkAway,
-        walkAway: fullMachine.walkAway,
-        core_mechanics: fullMachine.coreMechanics,
-        coreMechanics: fullMachine.coreMechanics,
-        jackpot_reset: fullMachine.jackpotReset,
-        jackpotReset: fullMachine.jackpotReset,
+        ship_notes: fullMachine.shipNotes || fullMachine.ship_notes,
+        shipNotes: fullMachine.shipNotes || fullMachine.ship_notes,
+        ap_triggers: fullMachine.apTriggers || fullMachine.ap_triggers,
+        apTriggers: fullMachine.apTriggers || fullMachine.ap_triggers,
+        walk_away: fullMachine.walkAway || fullMachine.walk_away,
+        walkAway: fullMachine.walkAway || fullMachine.walk_away,
+        core_mechanics: fullMachine.coreMechanics || fullMachine.core_mechanics,
+        coreMechanics: fullMachine.coreMechanics || fullMachine.core_mechanics,
+        jackpot_reset: fullMachine.jackpotReset || fullMachine.jackpot_reset,
+        jackpotReset: fullMachine.jackpotReset || fullMachine.jackpot_reset,
         source: fullMachine.source,
         source_verbatim: fullMachine.source_verbatim,
       };
@@ -211,6 +276,9 @@ class MachineIndexHelper {
 
   async clearIndex(): Promise<void> {
     this.indexCache = null;
+    this.fullMachineMap.clear();
+    this.mapInitialized = false;
+    this.lastSharedSyncAt = 0;
     await AsyncStorage.removeItem(MACHINE_INDEX_KEY);
     console.log('[MachineIndex] Index cleared');
   }

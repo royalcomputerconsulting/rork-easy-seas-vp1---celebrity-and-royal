@@ -93,6 +93,22 @@ function mergeCruiseData(primaryCruises: BookedCruise[], fallbackCruises: Booked
   return applyKnownBookingCorrections(dedupeBookedCruises([...fallbackCruises, ...primaryCruises], 'booked screen merged cruises'));
 }
 
+function getBookedCruiseRenderKey(cruise: BookedCruise, index: number): string {
+  const keyParts = [
+    cruise.id,
+    cruise.ownerProfileId,
+    cruise.sourceEmail,
+    cruise.reservationNumber,
+    cruise.bookingId,
+    cruise.sailDate,
+    cruise.returnDate,
+  ]
+    .filter((part): part is string => typeof part === 'string' && part.trim().length > 0)
+    .map((part) => part.trim());
+
+  return `${keyParts.join('|') || 'booked-cruise'}|${index}`;
+}
+
 export default function BookedScreen() {
   const router = useRouter();
   const { localData, clubRoyaleProfile, isLoading: appLoading, refreshData } = useAppState();
@@ -366,10 +382,10 @@ export default function BookedScreen() {
             </View>
           ) : (
             <View style={styles.timelineVerticalList}>
-              {upcomingCruises.map((cruise) => {
+              {upcomingCruises.map((cruise, index) => {
                 const daysUntil = getDaysUntilCruise(cruise.sailDate);
                 return (
-                  <View key={cruise.id} style={styles.timelineItemWrapper}>
+                  <View key={getBookedCruiseRenderKey(cruise, index)} style={styles.timelineItemWrapper}>
                     {daysUntil !== null && (
                       <View style={styles.timelineDaysIndicator}>
                         <Text style={styles.timelineDaysNumber}>{daysUntil}</Text>
@@ -407,10 +423,10 @@ export default function BookedScreen() {
             </View>
           ) : (
             <View style={styles.timelineVerticalList}>
-              {completedCruises.map((cruise) => {
+              {completedCruises.map((cruise, index) => {
                 const points = cruise.earnedPoints || cruise.casinoPoints || 0;
                 return (
-                  <View key={cruise.id} style={styles.timelineItemWrapper}>
+                  <View key={getBookedCruiseRenderKey(cruise, index)} style={styles.timelineItemWrapper}>
                     {points > 0 && (
                       <View style={[styles.timelineDaysIndicator, styles.timelinePointsIndicator]}>
                         <Award size={14} color={COLORS.success} />
@@ -775,7 +791,7 @@ export default function BookedScreen() {
         <FlatList
           data={viewMode === 'list' ? filteredCruises : ([] as BookedCruise[])}
           renderItem={renderCruiseCard}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item, index) => getBookedCruiseRenderKey(item, index)}
           contentContainerStyle={styles.listContent}
           ListHeaderComponent={renderHeader}
           ListEmptyComponent={viewMode === 'list' ? renderEmpty : undefined}

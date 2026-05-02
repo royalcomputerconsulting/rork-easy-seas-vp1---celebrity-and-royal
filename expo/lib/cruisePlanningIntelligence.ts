@@ -273,13 +273,42 @@ export function calculateShipFamiliarityScore(shipName: string, cruises: Cruise[
   };
 }
 
-function findOfferForCruise(cruise: Cruise, offers: CasinoOffer[]): CasinoOffer | undefined {
+function isUsableReplacementOffer(offer: CasinoOffer, profile?: Partial<TravelerProfile> | null): boolean {
+  if (!profileMatches(offer, profile)) return false;
+  const status = normalizeLower(offer.status);
+  if (['expired', 'used', 'booked', 'archived', 'replaced', 'skipped'].includes(status)) return false;
+  const expiryDate = offer.expiryDate || offer.expires || offer.offerExpiryDate || offer.validUntil;
+  if (expiryDate) {
+    const parsedExpiry = createDateFromString(expiryDate);
+    if (!Number.isNaN(parsedExpiry.getTime()) && getDaysUntil(expiryDate) < 0) return false;
+  }
+  return true;
+}
+
+function isUsableReplacementCruise(cruise: Cruise, profile?: Partial<TravelerProfile> | null): boolean {
+  if (!profileMatches(cruise, profile)) return false;
+  const status = normalizeLower(cruise.status);
+  return !['booked', 'completed', 'cancelled', 'archived'].includes(status);
+}
+
+function findOfferForCruise(cruise: Cruise, offers: CasinoOffer[], profile?: Partial<TravelerProfile> | null): CasinoOffer | undefined {
   return offers.find((offer) => {
+    if (!isUsableReplacementOffer(offer, profile)) return false;
     if (offer.cruiseId === cruise.id) return true;
     if (offer.cruiseIds?.includes(cruise.id)) return true;
     if (offer.offerCode && cruise.offerCode && offer.offerCode === cruise.offerCode) return true;
     return normalizeLower(offer.shipName) === normalizeLower(cruise.shipName) && dateOnly(offer.sailingDate) === dateOnly(cruise.sailDate);
   });
+}
+
+type ReplacementSource = {
+  cruise: Cruise;
+  offer: CasinoOffer;
+};
+
+function isReplacementSource(source: { cruise: Cruise; offer?: CasinoOffer }, profile?: Partial<TravelerProfile> | null): source is ReplacementSource {
+  if (!source.offer) return false;
+  return isUsableReplacementCruise(source.cruise, profile) && isUsableReplacementOffer(source.offer, profile);
 }
 
 function estimateOutOfPocket(cruise: Cruise, offer?: CasinoOffer): number {
@@ -304,14 +333,17 @@ function estimateOfferScore(cruise: Cruise, offer?: CasinoOffer): number {
 
 export function findCruiseReplacementCandidates(currentCruise: Cruise, alternatives: Cruise[], offers: CasinoOffer[] = [], history: Cruise[] = [], profile?: Partial<TravelerProfile> | null): ReplacementCandidate[] {
   const currentSea = calculateSeaDayDensityScore(currentCruise);
-  const currentOutOfPocket = estimateOutOfPocket(currentCruise, findOfferForCruise(currentCruise, offers));
+  const currentOutOfPocket = estimateOutOfPocket(currentCruise, findOfferForCruise(currentCruise, offers, profile));
   const currentPorts = buildPortTracker(history, currentCruise, profile);
   const currentShip = calculateShipFamiliarityScore(currentCruise.shipName, history, offers, profile);
 
   const candidates = alternatives
-    .filter((cruise) => cruise.id !== currentCruise.id && !Number.isNaN(createDateFromString(cruise.sailDate).getTime()) && getDaysUntil(cruise.sailDate) >= 0)
-    .map((cruise) => {
-      const offer = findOfferForCruise(cruise, offers);
+    .map((cruise) => ({ cruise, offer: findOfferForCruise(cruise, offers, profile) }))
+    .filter((source): source is ReplacementSource => {
+      const sailDate = createDateFromString(source.cruise.sailDate);
+      return source.cruise.id !== currentCruise.id && !Number.isNaN(sailDate.getTime()) && getDaysUntil(source.cruise.sailDate) >= 0 && isReplacementSource(source, profile);
+    })
+    .map(({ cruise, offer }) => {
       const sea = calculateSeaDayDensityScore(cruise);
       const ports = buildPortTracker(history, cruise, profile);
       const ship = calculateShipFamiliarityScore(cruise.shipName, history, offers, profile);
@@ -323,9 +355,8 @@ export function findCruiseReplacementCandidates(currentCruise: Cruise, alternati
       const shipDelta = ship.score - currentShip.score;
       const rankScore = clamp(offerScore + betterSeaDays * 0.25 + Math.min(20, betterCash / 50) + newPortDelta * 0.12 + shipDelta * 0.08, 0, 100);
       const warnings: string[] = [];
-      if (outOfPocket > currentOutOfPocket) warnings.push(`Higher out-of-pocket by $${Math.round(outOfPocket - currentOutOfPocket).toLocaleString()}.`);
+      if (outOfPocket > currentOutOfPocket) warnings.push(`Higher out-of-pocket by USD ${Math.round(outOfPocket - currentOutOfPocket).toLocaleString()}.`);
       if (sea.casinoOpportunityScore < currentSea.casinoOpportunityScore) warnings.push('Lower sea-day casino opportunity than the current booking.');
-      if (!offer) warnings.push('No matching offer record found for this sailing.');
       const reasonParts = [
         betterSeaDays > 0 ? `better casino opportunity (+${Math.round(betterSeaDays)})` : betterSeaDays < 0 ? `lower casino opportunity (${Math.round(betterSeaDays)})` : 'similar sea-day profile',
         betterCash > 0 ? `lower out-of-pocket by $${Math.round(betterCash).toLocaleString()}` : betterCash < 0 ? `higher out-of-pocket by $${Math.round(Math.abs(betterCash)).toLocaleString()}` : 'similar out-of-pocket',
@@ -335,8 +366,8 @@ export function findCruiseReplacementCandidates(currentCruise: Cruise, alternati
 
       return {
         cruise,
-        offerOwner: offer?.sourceEmail || offer?.ownerProfileId || cruise.sourceEmail || cruise.ownerProfileId || 'Unassigned',
-        offerCode: offer?.offerCode || cruise.offerCode || 'No offer code',
+        offerOwner: offer.sourceEmail || offer.ownerProfileId || cruise.sourceEmail || cruise.ownerProfileId || 'Unassigned',
+        offerCode: offer.offerCode || cruise.offerCode || 'Offer record',
         offerScore,
         seaDayDensityScore: sea.casinoOpportunityScore,
         casinoPaysForSummary: `Casino opportunity ${sea.likelyCasinoOpenDays}/${sea.sailingLength}; estimated out-of-pocket ${Math.round(outOfPocket).toLocaleString()}.`,
@@ -348,6 +379,6 @@ export function findCruiseReplacementCandidates(currentCruise: Cruise, alternati
     .sort((left, right) => right.rankScore - left.rankScore)
     .slice(0, 6);
 
-  console.log('[CruisePlanning] Replacement candidates built:', { currentCruiseId: currentCruise.id, candidates: candidates.length });
+  console.log('[CruisePlanning] Replacement candidates built:', { currentCruiseId: currentCruise.id, candidates: candidates.length, source: 'usable-offer-records' });
   return candidates;
 }
