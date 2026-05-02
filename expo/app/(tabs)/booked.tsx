@@ -126,20 +126,20 @@ export default function BookedScreen() {
   const bookedCruises = useMemo(() => {
     const localBooked = filterRecordsByIntelligence((localData.booked || []) as BookedCruise[], intelligenceFilterSnapshot, users);
     const storedScoped = filterRecordsByIntelligence(storedBooked, intelligenceFilterSnapshot, users);
-    const baseCruises = localBooked.length > 0 ? localBooked : storedScoped;
+    const baseCruises = dedupeBookedCruises([...storedScoped, ...localBooked], 'booked screen scoped source merge');
     const normalizedEmail = authenticatedEmail?.toLowerCase().trim() ?? null;
     const mergedCruises = filterRecordsByIntelligence(mergeCruiseData(baseCruises, []), intelligenceFilterSnapshot, users);
     console.log('[Booked] Resolved booked cruise source:', {
       authenticatedEmail: normalizedEmail,
-      baseCruises: baseCruises.length,
-      knownAdminCruises: 0,
+      localBooked: localBooked.length,
+      storedBooked: storedScoped.length,
       mergedCruises: mergedCruises.length,
     });
     return mergedCruises;
   }, [authenticatedEmail, intelligenceFilterSnapshot, localData.booked, storedBooked, users]);
 
   const filteredCruises = useMemo(() => {
-    let result = [...bookedCruises];
+    let result = bookedCruises.filter((cruise) => isCruiseUpcomingBooking(cruise) || isCruiseCompleted(cruise));
 
     if (filter === 'upcoming') {
       result = result.filter(cruise => isCruiseUpcomingBooking(cruise));
@@ -205,17 +205,19 @@ export default function BookedScreen() {
   const casinoCardTheme = useMemo(() => createLoyaltyCardTheme(clubRoyaleTierColor), [clubRoyaleTierColor]);
 
   const stats = useMemo(() => {
-    const upcoming = bookedCruises.filter(c => isCruiseUpcomingBooking(c)).length;
-    const completed = bookedCruises.filter(c => isCruiseCompleted(c)).length;
-    const withData = bookedCruises.filter(c => c.price && c.price > 0).length;
+    const activeCruises = bookedCruises.filter((cruise) => isCruiseUpcomingBooking(cruise) || isCruiseCompleted(cruise));
+    const upcoming = activeCruises.filter(c => isCruiseUpcomingBooking(c)).length;
+    const completed = activeCruises.filter(c => isCruiseCompleted(c)).length;
+    const withData = activeCruises.filter(c => c.price && c.price > 0).length;
     const totalNights = crownAnchorPoints;
-    const totalPoints = bookedCruises.reduce((sum, c) => sum + (c.earnedPoints || c.casinoPoints || 0), 0);
-    const totalSpent = bookedCruises.reduce((sum, c) => sum + (c.totalPrice || c.price || 0), 0);
-    return { upcoming, completed, withData, total: bookedCruises.length, totalNights, totalPoints, totalSpent };
+    const totalPoints = activeCruises.reduce((sum, c) => sum + (c.earnedPoints || c.casinoPoints || 0), 0);
+    const totalSpent = activeCruises.reduce((sum, c) => sum + (c.totalPrice || c.price || 0), 0);
+    return { upcoming, completed, withData, total: activeCruises.length, totalNights, totalPoints, totalSpent };
   }, [bookedCruises, crownAnchorPoints]);
 
   const cruiseEconomicsSummary = useMemo(() => {
-    return buildCruiseEconomicsSummary(bookedCruises);
+    const activeCruises = bookedCruises.filter((cruise) => isCruiseUpcomingBooking(cruise) || isCruiseCompleted(cruise));
+    return buildCruiseEconomicsSummary(activeCruises);
   }, [bookedCruises]);
 
   const casinoStats = useMemo(() => {

@@ -66,7 +66,7 @@ import { filterRecordsByIntelligence } from '@/lib/intelligenceFilters';
 import type { Cruise, BookedCruise, CasinoOffer } from '@/types/models';
 import { getCabinPriceFromEntity, GUEST_COUNT_DEFAULT } from '@/lib/valueCalculator';
 
-const OFFERS_TITLE_LOGO_URL = 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/4hm4mwycibyktcoe3b7eo.png';
+const OFFERS_TITLE_LOGO_URL = 'https://r2-pub.rork.com/attachments/4hm4mwycibyktcoe3b7eo.png';
 import { formatCurrency } from '@/lib/format';
 import {
   buildCommandCenterBuckets,
@@ -851,20 +851,20 @@ function OverviewScreenContent() {
             </View>
           </View>
           <Text style={styles.commandCenterSubtitle}>
-            {commandCenterBucketCounts.urgentExpiring} casino offer{commandCenterBucketCounts.urgentExpiring === 1 ? '' : 's'} expire in the next 14 days; {commandCenterTotalCount} total timing item{commandCenterTotalCount === 1 ? '' : 's'} need attention.
+            Urgent expiring offers are now counted in one place: {commandCenterBucketCounts.urgentExpiring} total, with {commandCenterBucketCounts.expires7} expiring in 0-7 days and {commandCenterBucketCounts.expires14} expiring in 8-14 days. {commandCenterTotalCount} total timing item{commandCenterTotalCount === 1 ? '' : 's'} need attention.
           </Text>
           <View style={styles.commandCenterSummaryRow} testID="command-center-expiring-summary">
             <View style={styles.commandCenterUrgentChip}>
               <AlertTriangle size={13} color="#172554" />
-              <Text style={styles.commandCenterUrgentChipText}>{commandCenterBucketCounts.urgentExpiring} expiring soon</Text>
+              <Text style={styles.commandCenterUrgentChipText}>Urgent: {commandCenterBucketCounts.urgentExpiring} total</Text>
             </View>
             <View style={styles.commandCenterMiniChip}>
               <Text style={styles.commandCenterMiniChipValue}>{commandCenterBucketCounts.expires7}</Text>
-              <Text style={styles.commandCenterMiniChipLabel}>0-7 days</Text>
+              <Text style={styles.commandCenterMiniChipLabel}>expire in 0-7 days</Text>
             </View>
             <View style={styles.commandCenterMiniChip}>
               <Text style={styles.commandCenterMiniChipValue}>{commandCenterBucketCounts.expires14}</Text>
-              <Text style={styles.commandCenterMiniChipLabel}>8-14 days</Text>
+              <Text style={styles.commandCenterMiniChipLabel}>expire in 8-14 days</Text>
             </View>
             {commandCenterBucketCounts.expires30 > 0 && (
               <View style={styles.commandCenterMiniChipMuted}>

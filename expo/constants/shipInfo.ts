@@ -19,6 +19,15 @@ export const ROYAL_CARIBBEAN_SHIPS: Record<string, ShipInfo> = {
     homePort: 'Miami',
     typicalItineraries: ['Eastern Caribbean', 'Western Caribbean'],
   },
+  'Star of the Seas': {
+    name: 'Star of the Seas',
+    class: 'Icon Class',
+    passengerCapacity: 5610,
+    grossTonnage: 250800,
+    yearBuilt: 2025,
+    homePort: 'Port Canaveral',
+    typicalItineraries: ['Eastern Caribbean', 'Western Caribbean', 'Perfect Day at CocoCay'],
+  },
   'Wonder of the Seas': {
     name: 'Wonder of the Seas',
     class: 'Oasis Class',

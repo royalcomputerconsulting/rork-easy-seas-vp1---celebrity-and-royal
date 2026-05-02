@@ -16,6 +16,7 @@ import {
 } from "@/constants/crownAnchor";
 import { createDateFromString } from "@/lib/date";
 import { isRoyalCaribbeanShip } from "@/constants/shipInfo";
+import { isActiveBookedCruise, isCompletedBookedCruise } from "@/lib/bookedCruiseStatus";
 import { ALL_STORAGE_KEYS, getUserScopedKey } from "@/lib/storage/storageKeys";
 import type { ExtendedLoyaltyData } from "@/lib/royalCaribbean/types";
 import { mergeExtendedLoyaltyData } from "@/lib/royalCaribbean/loyaltyConverter";
@@ -107,6 +108,19 @@ const DEFAULT_LOYALTY = {
   clubRoyalePoints: 0,
   crownAnchorPoints: USER_CONFIRMED_CROWN_ANCHOR_BASELINE,
 };
+
+const CONFIRMED_PINNACLE_PLAN_RESERVATIONS = new Set(['871437', '3820089', '5455777', '3879193', '6173746', '4097701', 'NAV-20260724', 'STAR-20260705']);
+
+function hasConfirmedPinnacleBaseline(cruises: BookedCruise[]): boolean {
+  return cruises.some((cruise) => {
+    const reservation = String(cruise.reservationNumber ?? cruise.bookingId ?? cruise.bwoNumber ?? '').trim().toUpperCase();
+    const ship = cruise.shipName?.toLowerCase().trim() ?? '';
+    const sailDate = cruise.sailDate?.trim() ?? '';
+    return CONFIRMED_PINNACLE_PLAN_RESERVATIONS.has(reservation)
+      || (ship === 'icon of the seas' && sailDate === '2026-05-09')
+      || (ship === 'navigator of the seas' && sailDate === '2026-07-24');
+  });
+}
 
 export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState => {
   const { bookedCruises: storedBookedCruises, isLoading: cruisesLoading } = useCoreData();
@@ -448,7 +462,8 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
       const nights = cruise.nights || 0;
       const sailDate = cruise.sailDate ? createDateFromString(cruise.sailDate) : (cruise.returnDate ? createDateFromString(cruise.returnDate) : new Date());
       const returnDate = cruise.returnDate ? createDateFromString(cruise.returnDate) : sailDate;
-      const isCompleted = returnDate < today || cruise.completionState === 'completed';
+      const isCompleted = isCompletedBookedCruise(cruise, today);
+      const isActiveBooking = isActiveBookedCruise(cruise, today);
       
       // Only count Royal Caribbean ships for loyalty/casino calculations
       const isRCI = isRoyalCaribbeanShip(cruise.shipName);
@@ -472,7 +487,7 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
         if (earnedPoints > 0 && nights > 0) {
           completedCruisesData.push({ nights, earnedPoints });
         }
-      } else {
+      } else if (isActiveBooking) {
         bookedNights += nights;
         
         // Calculate Crown & Anchor points for booked cruises
@@ -548,7 +563,10 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
     const liveCrownAnchorPoints = extendedLoyalty?.crownAndAnchorPointsFromApi;
     const hasLiveCrownAnchorPoints = typeof liveCrownAnchorPoints === 'number' && Number.isFinite(liveCrownAnchorPoints);
     const rawCrownAnchorPoints = hasLiveCrownAnchorPoints ? liveCrownAnchorPoints : (manualCrownAnchorPoints ?? completedNights);
-    const effectiveCrownAnchorPoints = Math.max(USER_CONFIRMED_CROWN_ANCHOR_BASELINE, rawCrownAnchorPoints);
+    const shouldUseConfirmedPinnacleBaseline = hasConfirmedPinnacleBaseline(bookedCruises) && rawCrownAnchorPoints < CROWN_ANCHOR_LEVELS.Pinnacle.cruiseNights;
+    const effectiveCrownAnchorPoints = shouldUseConfirmedPinnacleBaseline
+      ? USER_CONFIRMED_CROWN_ANCHOR_BASELINE
+      : Math.max(USER_CONFIRMED_CROWN_ANCHOR_BASELINE, rawCrownAnchorPoints);
     const crownAnchorLevel = getLevelByNights(effectiveCrownAnchorPoints) as CrownAnchorLevel;
     
     const projectedCrownAnchorPoints = effectiveCrownAnchorPoints + projectedBookedPoints;

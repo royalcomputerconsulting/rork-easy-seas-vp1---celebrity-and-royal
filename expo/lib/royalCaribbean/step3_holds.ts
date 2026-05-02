@@ -26,6 +26,7 @@ const SHIP_CODE_MAP: Record<string, string> = {
   'SP': 'Spectrum of the Seas',
   'ST': 'Star of the Seas',
   'SG': 'Star of the Seas',
+  'SN': 'Star of the Seas',
   'SY': 'Symphony of the Seas',
   'UT': 'Utopia of the Seas',
   'VI': 'Vision of the Seas',

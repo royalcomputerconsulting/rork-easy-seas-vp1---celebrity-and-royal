@@ -259,7 +259,7 @@ function normalizeKnownShipAlias(cruise: BookedCruise): BookedCruise {
   const rawShipName = cruise.shipName?.trim() ?? '';
   const rawShipCode = String((cruise as { shipCode?: string }).shipCode ?? '').trim().toUpperCase();
   const normalizedShipName = rawShipName.toLowerCase();
-  const shouldUseStarName = rawShipCode === 'ST' || rawShipCode === 'SG' || normalizedShipName === 'st of the seas';
+  const shouldUseStarName = ['ST', 'SG', 'SN'].includes(rawShipCode) || ['st', 'sg', 'sn', 'st of the seas', 'sg of the seas', 'sn of the seas', 'st of seas', 'star'].includes(normalizedShipName);
 
   if (!shouldUseStarName || rawShipName === 'Star of the Seas') {
     return cruise;
@@ -278,21 +278,13 @@ export function isKnownInvalidBookedCruise(cruise: BookedCruise): boolean {
   const sailDate = normalizeDateOnly(cruise.sailDate);
   const returnDate = normalizeDateOnly(cruise.returnDate);
   const reservation = String(cruise.reservationNumber ?? cruise.bookingId ?? '').trim().toUpperCase();
-  const offerCode = String(cruise.offerCode ?? '').trim().toUpperCase();
-  const itinerary = cruise.itineraryName?.toLowerCase().trim() ?? '';
 
   const status = String(cruise.status ?? '').trim().toLowerCase();
   const isCompleted = cruise.completionState === 'completed' || status === 'completed' || status === 'past';
   const isFutureSupplementWithoutBooking = cruise.id?.startsWith('supp-') === true && !isCompleted && !reservation;
   const isBogusAllureCurrentSailing = ship === 'allure of the seas'
     && sailDate === '2026-04-29'
-    && (!returnDate || returnDate === '2026-05-02')
-    && (
-      cruise.id === 'booked-allure-apr29'
-      || reservation === 'A05-2512A07'
-      || offerCode === '2512A07 / A05'
-      || itinerary.includes('3 night bahamas')
-    );
+    && (!returnDate || returnDate === '2026-05-02');
 
   return isFutureSupplementWithoutBooking || isBogusAllureCurrentSailing;
 }
