@@ -598,7 +598,7 @@ export default function SchedulingScreen() {
         onOffersPress={() => setActiveTab('foryou')}
       />
 
-      <IntelligenceFilterStrip contextLabel="Cruises" />
+      <IntelligenceFilterStrip contextLabel="Cruises" variant="bookedCruises" />
 
       <MinimalistFilterBar
         tabs={TABS.map(tab => ({ key: tab.key, label: tab.label }))}

@@ -303,7 +303,7 @@ export default function BookedScreen() {
 
   const handleCruisePress = useCallback((cruise: BookedCruise) => {
     console.log('[Booked] Cruise pressed:', cruise.id);
-    router.push(`/cruise-details?id=${cruise.id}` as any);
+    router.push(`/cruise-details?id=${cruise.id}&source=booked` as any);
   }, [router]);
 
   const handleAddCruise = useCallback(() => {

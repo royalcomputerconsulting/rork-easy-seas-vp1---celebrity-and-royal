@@ -583,7 +583,12 @@ export async function getAllStoredData(email?: string | null, profileGate?: Data
     calendarEvents = dedupeCalendarEvents(filterRecordsForProfileGate(calendarEvents, 'export calendar events', resolvedGate, true), 'export calendar events');
     casinoSessions = filterRecordsForProfileGate(casinoSessions, 'export casino sessions', resolvedGate, true);
     certificates = filterRecordsForProfileGate(certificates, 'export certificates', resolvedGate, true);
-    users = users.filter((user) => userMatchesProfileGate(user, resolvedGate));
+    // Include ALL users stored under this account's key - the second user belongs to the primary account holder.
+    // Only filter when a specific activeProfileId is requested (single-profile export).
+    if (resolvedGate.activeProfileId) {
+      users = users.filter((user) => userMatchesProfileGate(user, resolvedGate));
+    }
+    console.log('[DataBundle] Including users in export:', users.length, users.map(u => ({ id: u.id, name: u.name, isOwner: u.isOwner })));
     const ownerUser = users.find(u => u.id === resolvedGate.activeProfileId) || users.find(u => u.isOwner) || users[0];
     const userProfile = ownerUser ? {
       name: ownerUser.name || '',
@@ -905,7 +910,13 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
     if (bundle.users && Array.isArray(bundle.users) && bundle.users.length > 0) {
       console.log('[DataBundle] Found users array with', bundle.users.length, 'users');
       console.log('[DataBundle] Users data:', JSON.stringify(bundle.users.map(u => ({ id: u.id, name: u.name, crownAnchorNumber: u.crownAnchorNumber, birthdate: u.birthdate, playingHours: !!u.playingHours }))));
-      usersToImport = bundle.users.filter((user) => userMatchesProfileGate(user, resolvedGate));
+      // Include ALL users from the bundle - the second user belongs to the primary account holder.
+      // Only filter when a specific activeProfileId is requested (single-profile import).
+      if (resolvedGate.activeProfileId) {
+        usersToImport = bundle.users.filter((user) => userMatchesProfileGate(user, resolvedGate));
+      } else {
+        usersToImport = bundle.users;
+      }
     } else if (bundle.userProfile && (bundle.userProfile.name || bundle.userProfile.crownAnchorNumber)) {
       console.log('[DataBundle] No users array, creating from userProfile:', JSON.stringify(bundle.userProfile));
       const now = new Date().toISOString();

@@ -70,19 +70,21 @@ export const IntelligenceFilterStrip = React.memo(function IntelligenceFilterStr
       style={[styles.container, compact && styles.containerCompact, isBookedCruisesVariant && styles.bookedContainer]}
       testID={`${contextLabel.toLowerCase().replace(/\s+/g, '-')}-intelligence-filters`}
     >
-      <View style={styles.headerRow}>
+      <View style={[styles.headerRow, isBookedCruisesVariant && styles.bookedHeaderRow]}>
         <View style={styles.titleRow}>
-          <View style={styles.iconBadge}>
-            <SlidersHorizontal size={13} color={COLORS.navyDeep} />
+          <View style={[styles.iconBadge, isBookedCruisesVariant && styles.bookedIconBadge]}>
+            <SlidersHorizontal size={isBookedCruisesVariant ? 9 : 13} color={COLORS.navyDeep} />
           </View>
           <View>
-            <Text style={styles.title}>Filtering</Text>
-            <Text style={styles.subtitle}>Profile, account, brand, and program scope</Text>
+            <Text style={[styles.title, isBookedCruisesVariant && styles.bookedTitle]}>Filtering</Text>
+            {!isBookedCruisesVariant && (
+              <Text style={styles.subtitle}>Profile, account, brand, and program scope</Text>
+            )}
           </View>
         </View>
         {activeFilterCount > 0 ? (
-          <TouchableOpacity style={styles.clearButton} onPress={clearIntelligenceFilters} activeOpacity={0.75} testID="clear-intelligence-filters">
-            <Text style={styles.clearButtonText}>Clear</Text>
+          <TouchableOpacity style={[styles.clearButton, isBookedCruisesVariant && styles.bookedClearButton]} onPress={clearIntelligenceFilters} activeOpacity={0.75} testID="clear-intelligence-filters">
+            <Text style={[styles.clearButtonText, isBookedCruisesVariant && styles.bookedClearButtonText]}>Clear</Text>
           </TouchableOpacity>
         ) : null}
       </View>
@@ -90,7 +92,7 @@ export const IntelligenceFilterStrip = React.memo(function IntelligenceFilterStr
       <View style={[styles.group, isBookedCruisesVariant && styles.bookedFilterGroup]}>
         <View style={[styles.groupLabelRow, isBookedCruisesVariant && styles.bookedGroupLabelRow]}>
           <View style={isBookedCruisesVariant ? styles.bookedGroupIconBadge : undefined}>
-            <UserRound size={isBookedCruisesVariant ? 14 : 12} color={COLORS.navyDeep} />
+            <UserRound size={isBookedCruisesVariant ? 10 : 12} color={COLORS.navyDeep} />
           </View>
           <Text style={[styles.groupLabel, isBookedCruisesVariant && styles.bookedGroupLabel]}>Profile / account</Text>
         </View>
@@ -116,7 +118,7 @@ export const IntelligenceFilterStrip = React.memo(function IntelligenceFilterStr
         <View style={[styles.flexGroup, isBookedCruisesVariant && styles.bookedFilterGroup]}>
           <View style={[styles.groupLabelRow, isBookedCruisesVariant && styles.bookedGroupLabelRow]}>
             <View style={isBookedCruisesVariant ? styles.bookedGroupIconBadge : undefined}>
-              <Building2 size={isBookedCruisesVariant ? 14 : 12} color={COLORS.navyDeep} />
+              <Building2 size={isBookedCruisesVariant ? 10 : 12} color={COLORS.navyDeep} />
             </View>
             <Text style={[styles.groupLabel, isBookedCruisesVariant && styles.bookedGroupLabel]}>Brand</Text>
           </View>
@@ -142,7 +144,7 @@ export const IntelligenceFilterStrip = React.memo(function IntelligenceFilterStr
           <View style={[styles.flexGroup, isBookedCruisesVariant && styles.bookedFilterGroup]}>
             <View style={[styles.groupLabelRow, isBookedCruisesVariant && styles.bookedGroupLabelRow]}>
               <View style={isBookedCruisesVariant ? styles.bookedGroupIconBadge : undefined}>
-                <Trophy size={isBookedCruisesVariant ? 14 : 12} color={COLORS.navyDeep} />
+                <Trophy size={isBookedCruisesVariant ? 10 : 12} color={COLORS.navyDeep} />
               </View>
               <Text style={[styles.groupLabel, isBookedCruisesVariant && styles.bookedGroupLabel]}>Program</Text>
             </View>
@@ -183,9 +185,9 @@ const styles = StyleSheet.create({
     padding: SPACING.sm,
   },
   bookedContainer: {
-    borderRadius: BORDER_RADIUS.lg,
+    borderRadius: BORDER_RADIUS.md,
     borderColor: COLORS.borderLight,
-    padding: SPACING.sm,
+    padding: 6,
   },
   headerRow: {
     flexDirection: 'row',
@@ -322,24 +324,46 @@ const styles = StyleSheet.create({
     color: COLORS.navyDeep,
     textAlign: 'center' as const,
   },
+  // Compact booked variant header (30% smaller)
+  bookedHeaderRow: {
+    marginBottom: 5,
+    gap: 5,
+  },
+  bookedIconBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+  },
+  bookedTitle: {
+    fontSize: 10,
+    letterSpacing: 0.1,
+  },
+  bookedClearButton: {
+    paddingHorizontal: 5,
+    paddingVertical: 3,
+  },
+  bookedClearButtonText: {
+    fontSize: 9,
+  },
+  // Compact group/chip styles for 30%-smaller booked variant
   bookedDualGroupRow: {
-    gap: SPACING.sm,
+    gap: 5,
   },
   bookedFilterGroup: {
     backgroundColor: COLORS.white,
     borderRadius: BORDER_RADIUS.md,
     borderWidth: 1,
     borderColor: COLORS.borderLight,
-    padding: SPACING.sm,
+    padding: 6,
     ...SHADOW.sm,
   },
   bookedGroupLabelRow: {
-    marginBottom: SPACING.xs,
+    marginBottom: 3,
   },
   bookedGroupIconBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0, 151, 167, 0.08)',
@@ -348,24 +372,24 @@ const styles = StyleSheet.create({
   },
   bookedGroupLabel: {
     marginBottom: 0,
-    fontSize: 12,
-    letterSpacing: 0.6,
+    fontSize: 9,
+    letterSpacing: 0.4,
   },
   bookedSegmentedRow: {
     backgroundColor: COLORS.white,
     borderRadius: BORDER_RADIUS.lg,
-    padding: 4,
+    padding: 3,
     borderWidth: 1,
     borderColor: COLORS.borderLight,
-    gap: 4,
+    gap: 3,
   },
   bookedChip: {
-    minWidth: 58,
+    minWidth: 40,
     flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 9,
-    paddingHorizontal: SPACING.sm,
+    paddingVertical: 6,
+    paddingHorizontal: 6,
     borderRadius: BORDER_RADIUS.md,
     backgroundColor: CLEAN_THEME.tab.unselectedBg,
   },
@@ -374,7 +398,7 @@ const styles = StyleSheet.create({
     ...SHADOW.tab,
   },
   bookedChipText: {
-    fontSize: 13,
+    fontSize: 9,
     fontWeight: '700' as const,
     color: COLORS.textDarkGrey,
     textAlign: 'center' as const,

@@ -1,7 +1,7 @@
 import React, { memo, useMemo, useState, useEffect } from 'react';
 import { ShipMachinesPanel } from '@/components/ShipMachinesPanel';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, Switch, Image } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import type { ItineraryDay, BookedCruise, CasinoOffer, Cruise } from '@/types/models';
 import { Ship, Calendar, MapPin, Clock, DollarSign, Gift, Star, Users, Anchor, Tag, ArrowLeft, Edit3, X, Save, TrendingUp, Dice5, AlertCircle, Target, Trash2, Sparkles, ChevronRight } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -166,8 +166,16 @@ interface EditFormData {
 }
 
 export default function CruiseDetailsScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, source } = useLocalSearchParams<{ id: string; source?: string }>();
   const router = useRouter();
+
+  const handleBack = useCallback(() => {
+    if (source === 'booked') {
+      router.push('/(tabs)/booked' as any);
+    } else {
+      router.back();
+    }
+  }, [router, source]);
   const { localData } = useAppState();
   const { getCruiseValueBreakdown, getCruiseCasinoAvailability, completedCruises } = useSimpleAnalytics();
 
@@ -808,7 +816,7 @@ export default function CruiseDetailsScreen() {
     
     console.log('[CruiseDetails] Booking cruise:', bookedCruise);
     addBookedCruise(bookedCruise);
-    router.back();
+    handleBack();
   };
 
   if (!cruise || !cruiseDetails) {
@@ -822,7 +830,7 @@ export default function CruiseDetailsScreen() {
           <Ship size={64} color={COLORS.beigeWarm} />
           <Text style={styles.notFoundTitle}>Cruise Not Found</Text>
           <Text style={styles.notFoundText}>The cruise you are looking for could not be found.</Text>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.backButton} onPress={handleBack}>
             <ArrowLeft size={20} color={COLORS.white} />
             <Text style={styles.backButtonText}>Go Back</Text>
           </TouchableOpacity>
@@ -950,6 +958,19 @@ export default function CruiseDetailsScreen() {
 
   return (
     <View style={styles.container}>
+      <Stack.Screen
+        options={{
+          headerLeft: source === 'booked' ? () => (
+            <TouchableOpacity
+              onPress={handleBack}
+              style={{ paddingHorizontal: 8, paddingVertical: 4 }}
+              activeOpacity={0.7}
+            >
+              <ArrowLeft size={22} color={COLORS.white} />
+            </TouchableOpacity>
+          ) : undefined,
+        }}
+      />
       <ScrollView 
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
@@ -2267,7 +2288,7 @@ export default function CruiseDetailsScreen() {
                     console.log('[CruiseDetails] Unbooking cruise:', cruise.id);
                     removeBookedCruise(cruise.id);
                     setUnbookModalVisible(false);
-                    router.back();
+                    handleBack();
                   }
                 }}
               >
