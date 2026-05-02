@@ -7,7 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { getUserScopedKey, ALL_STORAGE_KEYS } from '@/lib/storage/storageKeys';
 import { useAuth } from './AuthProvider';
-import { useUser } from './UserProvider';
+import { useUser, type UserProfile } from './UserProvider';
 import { 
   RoyalCaribbeanSyncState, 
   SyncStatus,
@@ -76,6 +76,54 @@ const INITIAL_STATE: RoyalCaribbeanSyncState = {
 
 const INITIAL_EXTENDED_LOYALTY: ExtendedLoyaltyData | null = null;
 
+type SyncTargetSlot = 'primary' | 'secondary';
+
+interface SyncTargetOptions {
+  targetProfileId?: string;
+  targetProfileSlot?: SyncTargetSlot;
+}
+
+function normalizeProfileText(value: string | undefined): string {
+  return value?.trim().toLowerCase() ?? '';
+}
+
+function hasProfileLoyaltyData(profile: UserProfile | null | undefined): boolean {
+  if (!profile) return false;
+  return Boolean(
+    profile.crownAnchorNumber?.trim() ||
+    profile.royalCaribbeanNumber?.trim() ||
+    profile.clubRoyaleId?.trim() ||
+    profile.clubRoyaleTier?.trim() ||
+    (profile.clubRoyalePoints ?? 0) > 0 ||
+    profile.crownAnchorLevel?.trim() ||
+    (profile.loyaltyPoints ?? 0) > 0 ||
+    profile.celebrityCaptainsClubNumber?.trim() ||
+    profile.blueChipId?.trim() ||
+    profile.celebrityBlueChipTier?.trim() ||
+    (profile.celebrityCaptainsClubPoints ?? 0) > 0 ||
+    (profile.celebrityBlueChipPoints ?? 0) > 0 ||
+    profile.silverseaVenetianNumber?.trim() ||
+    profile.silverseaVenetianTier?.trim() ||
+    (profile.silverseaVenetianPoints ?? 0) > 0 ||
+    profile.carnivalVifpNumber?.trim() ||
+    profile.carnivalVifpTier?.trim() ||
+    profile.carnivalPlayersClubTier?.trim() ||
+    (profile.carnivalPlayersClubPoints ?? 0) > 0
+  );
+}
+
+function isUnassignedProfile(profile: UserProfile | null | undefined, slot: SyncTargetSlot): boolean {
+  if (!profile) return true;
+  if (hasProfileLoyaltyData(profile)) return false;
+
+  const label = normalizeProfileText(profile.displayName || profile.name);
+  if (slot === 'secondary') {
+    return !label || label === 'unassigned' || label === 'second user' || label === 'secondary user';
+  }
+
+  return !label || label === 'unassigned' || label === 'player' || label === 'user';
+}
+
 const InitialCruiseLineContext = createContext<CruiseLine>('royal_caribbean');
 
 export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContextHook(() => {
@@ -87,7 +135,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   const [cruiseLine, setCruiseLine] = useState<CruiseLine>(initialCruiseLine);
   const [extendedLoyaltyData, setExtendedLoyaltyData] = useState<ExtendedLoyaltyData | null>(INITIAL_EXTENDED_LOYALTY);
   const [staySignedIn, setStaySignedIn] = useState(true);
-  const { currentUser, updateUser: updateUserProfile } = useUser();
+  const { currentUser, users, updateUser: updateUserProfile } = useUser();
   const carnivalUserDataRef = useRef<{ vifpNumber: string; vifpTier: string; firstName: string; lastName: string } | null>(null);
   const extractedOffersRef = useRef<OfferRow[]>([]);
   const webViewRef = useRef<WebView | null>(null);
@@ -2227,13 +2275,29 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     }
   }, []);
 
-  const syncToApp = useCallback(async (coreDataContext: any, loyaltyContext: any, providedExtendedLoyalty?: ExtendedLoyaltyData | null) => {
+  const syncToApp = useCallback(async (coreDataContext: any, loyaltyContext: any, providedExtendedLoyalty?: ExtendedLoyaltyData | null, targetOptions?: SyncTargetOptions) => {
     const loyaltyToSync = providedExtendedLoyalty ?? extendedLoyaltyData;
     const fallbackExtendedLoyaltyFromState = state.loyaltyData
       ? convertLoyaltyInfoToExtended(state.loyaltyData as unknown as LoyaltyApiInformation)
       : null;
     const effectiveExtendedLoyalty = loyaltyToSync ?? fallbackExtendedLoyaltyFromState;
     const syncSource = cruiseLine === 'carnival' ? 'carnival' : cruiseLine === 'celebrity' ? 'celebrity' : 'royal';
+    const activeProfiles = users.filter((profile) => profile.active !== false);
+    const primaryProfile = activeProfiles.find((profile) => profile.isOwner) ?? currentUser ?? activeProfiles[0] ?? null;
+    const secondaryProfile = activeProfiles.find((profile) => profile.id !== primaryProfile?.id) ?? null;
+    const requestedSlot = targetOptions?.targetProfileSlot ?? 'primary';
+    const requestedById = targetOptions?.targetProfileId
+      ? activeProfiles.find((profile) => profile.id === targetOptions.targetProfileId) ?? null
+      : null;
+    const requestedProfile = requestedById ?? (requestedSlot === 'secondary' ? secondaryProfile : primaryProfile);
+    const targetProfile = requestedSlot === 'secondary' && isUnassignedProfile(secondaryProfile, 'secondary')
+      ? primaryProfile
+      : requestedProfile ?? primaryProfile ?? currentUser;
+    const isPrimarySyncTarget = !primaryProfile || targetProfile?.id === primaryProfile.id;
+    const targetSlotLabel = isPrimarySyncTarget ? 'Primary User' : 'Second User';
+    const ownershipOptions = targetProfile
+      ? { ownerProfileId: targetProfile.id, sourceEmail: targetProfile.email || authenticatedEmail || undefined, includeUnownedRecords: isPrimarySyncTarget }
+      : undefined;
 
     console.log('[RoyalCaribbeanSync] ========================================');
     console.log('[RoyalCaribbeanSync] Loyalty sync input diagnostics:', {
@@ -2243,6 +2307,9 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       hasEffectiveExtendedLoyalty: !!effectiveExtendedLoyalty,
       clubRoyalePointsFromEffective: effectiveExtendedLoyalty?.clubRoyalePointsFromApi,
       crownAndAnchorPointsFromEffective: effectiveExtendedLoyalty?.crownAndAnchorPointsFromApi,
+      targetProfileId: targetProfile?.id,
+      targetSlotLabel,
+      isPrimarySyncTarget,
     });
     console.log('[RoyalCaribbeanSync] ========================================');
     console.log('[RoyalCaribbeanSync] ========================================');
@@ -2261,18 +2328,26 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       console.log('[RoyalCaribbeanSync] Step 1: Setting status to syncing...');
       setState(prev => ({ ...prev, status: 'syncing' }));
       addLog('🚀 Starting sync to app...', 'info');
+      addLog(`Sync target: ${targetSlotLabel}${targetProfile?.name ? ` (${targetProfile.name})` : ''}`, 'info');
 
       const persistenceFailures: string[] = [];
       
       console.log('[RoyalCaribbeanSync] Step 2: Creating sync preview...');
       addLog('Creating sync preview...', 'info');
 
-      const currentLoyalty = {
-        clubRoyalePoints: loyaltyContext.clubRoyalePoints,
-        clubRoyaleTier: loyaltyContext.clubRoyaleTier,
-        crownAndAnchorPoints: loyaltyContext.crownAnchorPoints,
-        crownAndAnchorLevel: loyaltyContext.crownAnchorLevel
-      };
+      const currentLoyalty = isPrimarySyncTarget
+        ? {
+            clubRoyalePoints: loyaltyContext.clubRoyalePoints,
+            clubRoyaleTier: loyaltyContext.clubRoyaleTier,
+            crownAndAnchorPoints: loyaltyContext.crownAnchorPoints,
+            crownAndAnchorLevel: loyaltyContext.crownAnchorLevel,
+          }
+        : {
+            clubRoyalePoints: targetProfile?.clubRoyalePoints ?? 0,
+            clubRoyaleTier: targetProfile?.clubRoyaleTier ?? '',
+            crownAndAnchorPoints: targetProfile?.loyaltyPoints ?? 0,
+            crownAndAnchorLevel: targetProfile?.crownAnchorLevel ?? '',
+          };
 
       console.log('[RoyalCaribbeanSync] Creating sync preview with:', {
         extractedOffers: state.extractedOffers.length,
@@ -2300,7 +2375,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         coreDataContext.cruises,
         coreDataContext.bookedCruises,
         currentLoyalty,
-        syncSource
+        syncSource,
+        ownershipOptions
       );
 
       console.log('[RoyalCaribbeanSync] Sync preview created successfully');
@@ -2335,6 +2411,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           allowOfferRemoval,
           allowCruiseRemoval,
           allowBookedCruiseRemoval,
+          targetOwnerProfileId: targetProfile?.id,
+          includeUnownedRecords: isPrimarySyncTarget,
         }
       );
 
@@ -2406,7 +2484,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         throw new Error(`Sync could not persist required data: ${persistenceFailures.join('; ')}`);
       }
 
-      if (syncSource !== 'carnival' && preview.loyalty) {
+      if (syncSource !== 'carnival' && isPrimarySyncTarget && preview.loyalty) {
         try {
           if (preview.loyalty.clubRoyalePoints.changed) {
             addLog(`Updating Club Royale points: ${preview.loyalty.clubRoyalePoints.current} → ${preview.loyalty.clubRoyalePoints.synced}`, 'info');
@@ -2421,9 +2499,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           console.error('[RoyalCaribbeanSync] Error updating loyalty points:', loyaltyError);
           addLog(`⚠️ Warning: Failed to update loyalty points: ${String(loyaltyError)}`, 'warning');
         }
+      } else if (syncSource !== 'carnival' && !isPrimarySyncTarget) {
+        addLog('Secondary profile selected — loyalty totals will be saved to that profile only', 'info');
       }
       
-      if (syncSource !== 'carnival' && effectiveExtendedLoyalty && loyaltyContext.setExtendedLoyaltyData) {
+      if (syncSource !== 'carnival' && isPrimarySyncTarget && effectiveExtendedLoyalty && loyaltyContext.setExtendedLoyaltyData) {
         try {
           addLog('Syncing extended loyalty data...', 'info');
           
@@ -2446,12 +2526,12 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           console.error('[RoyalCaribbeanSync] Error syncing extended loyalty:', extLoyaltyError);
           addLog(`⚠️ Warning: Failed to sync extended loyalty data: ${String(extLoyaltyError)}`, 'warning');
         }
-      } else if (syncSource !== 'carnival') {
+      } else if (syncSource !== 'carnival' && !effectiveExtendedLoyalty) {
         addLog('⚠️ No extended loyalty payload available at sync time', 'warning');
       }
 
       // Sync user profile data: name from passenger data + loyalty numbers/tiers
-      if (syncSource !== 'carnival' && currentUser && updateUserProfile) {
+      if (syncSource !== 'carnival' && targetProfile && updateUserProfile) {
         try {
           const profileUpdates: Record<string, unknown> = {};
 
@@ -2470,15 +2550,35 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
               .trim();
             if (fullName.length > 1) {
               profileUpdates.name = fullName;
+              profileUpdates.displayName = fullName;
               addLog(`  → Name: ${fullName}`, 'info');
             }
           }
 
           // Extract Crown & Anchor number from extended loyalty data
+          const syncedClubRoyalePoints = effectiveExtendedLoyalty?.clubRoyalePointsFromApi ?? (state.loyaltyData?.clubRoyalePoints ? parseInt(String(state.loyaltyData.clubRoyalePoints).replace(/,/g, ''), 10) : undefined);
+          if (typeof syncedClubRoyalePoints === 'number' && Number.isFinite(syncedClubRoyalePoints)) {
+            profileUpdates.clubRoyalePoints = syncedClubRoyalePoints;
+            addLog(`  → Club Royale points: ${syncedClubRoyalePoints.toLocaleString()}`, 'info');
+          }
+
+          const syncedClubRoyaleTier = effectiveExtendedLoyalty?.clubRoyaleTierFromApi ?? state.loyaltyData?.clubRoyaleTier;
+          if (syncedClubRoyaleTier && syncedClubRoyaleTier.trim().length > 0) {
+            profileUpdates.clubRoyaleTier = syncedClubRoyaleTier.trim();
+            addLog(`  → Club Royale tier: ${syncedClubRoyaleTier.trim()}`, 'info');
+          }
+
           const cAndAId = effectiveExtendedLoyalty?.crownAndAnchorId;
           if (cAndAId && cAndAId.trim().length > 0) {
             profileUpdates.crownAnchorNumber = cAndAId.trim();
+            profileUpdates.royalCaribbeanNumber = cAndAId.trim();
             addLog(`  → Crown & Anchor #: ${cAndAId.trim()}`, 'info');
+          }
+
+          const syncedCrownAnchorPoints = effectiveExtendedLoyalty?.crownAndAnchorPointsFromApi ?? (state.loyaltyData?.crownAndAnchorPoints ? parseInt(String(state.loyaltyData.crownAndAnchorPoints).replace(/,/g, ''), 10) : undefined);
+          if (typeof syncedCrownAnchorPoints === 'number' && Number.isFinite(syncedCrownAnchorPoints)) {
+            profileUpdates.loyaltyPoints = syncedCrownAnchorPoints;
+            addLog(`  → Crown & Anchor points: ${syncedCrownAnchorPoints.toLocaleString()}`, 'info');
           }
 
           const cAndALevel = effectiveExtendedLoyalty?.crownAndAnchorTier;
@@ -2493,9 +2593,16 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
               profileUpdates.celebrityCaptainsClubPoints = effectiveExtendedLoyalty.captainsClubPoints;
               addLog(`  → Captain's Club points: ${effectiveExtendedLoyalty.captainsClubPoints}`, 'info');
             }
+            if (effectiveExtendedLoyalty.captainsClubId) {
+              profileUpdates.celebrityCaptainsClubNumber = effectiveExtendedLoyalty.captainsClubId;
+            }
             if (typeof effectiveExtendedLoyalty.celebrityBlueChipPoints === 'number') {
               profileUpdates.celebrityBlueChipPoints = effectiveExtendedLoyalty.celebrityBlueChipPoints;
               addLog(`  → Blue Chip points: ${effectiveExtendedLoyalty.celebrityBlueChipPoints}`, 'info');
+            }
+            if (effectiveExtendedLoyalty.celebrityBlueChipTier) {
+              profileUpdates.celebrityBlueChipTier = effectiveExtendedLoyalty.celebrityBlueChipTier;
+              addLog(`  → Blue Chip tier: ${effectiveExtendedLoyalty.celebrityBlueChipTier}`, 'info');
             }
             if (effectiveExtendedLoyalty.venetianSocietyTier) {
               profileUpdates.silverseaVenetianTier = effectiveExtendedLoyalty.venetianSocietyTier;
@@ -2506,10 +2613,16 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             }
           }
 
+          if (syncSource === 'royal') {
+            profileUpdates.preferredBrand = 'royal';
+          } else if (syncSource === 'celebrity') {
+            profileUpdates.preferredBrand = 'celebrity';
+          }
+
           if (Object.keys(profileUpdates).length > 0) {
-            addLog('Syncing user profile from loyalty data...', 'info');
-            await updateUserProfile(currentUser.id, profileUpdates as any);
-            addLog('✅ User profile updated from sync', 'success');
+            addLog(`Syncing ${targetSlotLabel.toLowerCase()} profile from loyalty data...`, 'info');
+            await updateUserProfile(targetProfile.id, profileUpdates as any);
+            addLog(`✅ ${targetSlotLabel} profile updated from sync`, 'success');
           } else {
             addLog('ℹ️ No passenger or loyalty profile fields found to update', 'info');
           }
@@ -2628,7 +2741,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     } finally {
       syncToAppInFlightRef.current = false;
     }
-  }, [state.extractedOffers, state.extractedBookedCruises, state.loyaltyData, extendedLoyaltyData, addLog, cruiseLine, authenticatedEmail, currentUser, updateUserProfile, normalizeBookedCruiseRows, normalizeOfferRows]);
+  }, [state.extractedOffers, state.extractedBookedCruises, state.loyaltyData, extendedLoyaltyData, addLog, cruiseLine, authenticatedEmail, currentUser, users, updateUserProfile, normalizeBookedCruiseRows, normalizeOfferRows]);
 
   const cancelSync = useCallback(() => {
     ingestionInFlightRef.current = false;

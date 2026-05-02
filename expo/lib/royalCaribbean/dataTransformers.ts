@@ -3,6 +3,22 @@ import { CasinoOffer, BookedCruise, Cruise } from '@/types/models';
 
 export type SyncDataSource = NonNullable<Cruise['cruiseSource']>;
 
+export interface SyncOwnershipOptions {
+  ownerProfileId?: string;
+  sourceEmail?: string;
+  includeUnownedRecords?: boolean;
+}
+
+function getOwnershipFields(options?: SyncOwnershipOptions) {
+  const ownerProfileId = options?.ownerProfileId?.trim();
+  const sourceEmail = options?.sourceEmail?.trim();
+
+  return {
+    ...(ownerProfileId ? { ownerProfileId, importStatus: 'assigned' as const, reconciliationStatus: 'matched' as const } : {}),
+    ...(sourceEmail ? { sourceEmail } : {}),
+  };
+}
+
 function getBrandOfferFallback(source: SyncDataSource): string {
   if (source === 'celebrity') {
     return 'Celebrity Cruises Offer';
@@ -232,9 +248,11 @@ function extractTradeInValue(perks: string): number | undefined {
 export function transformOfferRowsToCruisesAndOffers(
   offerRows: OfferRow[],
   _loyaltyData: LoyaltyData | null,
-  source: SyncDataSource = 'royal'
+  source: SyncDataSource = 'royal',
+  ownershipOptions?: SyncOwnershipOptions
 ): { cruises: Cruise[]; offers: CasinoOffer[] } {
   const cruises: Cruise[] = [];
+  const ownershipFields = getOwnershipFields(ownershipOptions);
   const offerMap = new Map<string, CasinoOffer>();
   const cruiseIdsByOfferKey = new Map<string, string[]>();
 
@@ -294,6 +312,7 @@ export function transformOfferRowsToCruisesAndOffers(
       tradeInValue: extractTradeInValue(safePerks),
       perks: safePerks ? [safePerks] : [],
       cruiseSource: source,
+      ...ownershipFields,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -354,6 +373,7 @@ export function transformOfferRowsToCruisesAndOffers(
         status: 'active',
         offerSource: source,
         bookingLink: offer.bookingLink || undefined,
+        ...ownershipFields,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -425,17 +445,21 @@ export function transformOfferRowsToCruisesAndOffers(
 export function transformOffersToCasinoOffers(
   offers: OfferRow[],
   loyaltyData: LoyaltyData | null,
-  source: SyncDataSource = 'royal'
+  source: SyncDataSource = 'royal',
+  ownershipOptions?: SyncOwnershipOptions
 ): CasinoOffer[] {
-  const { offers: casinoOffers } = transformOfferRowsToCruisesAndOffers(offers, loyaltyData, source);
+  const { offers: casinoOffers } = transformOfferRowsToCruisesAndOffers(offers, loyaltyData, source, ownershipOptions);
   return casinoOffers;
 }
 
 export function transformBookedCruisesToAppFormat(
   cruises: BookedCruiseRow[],
   _loyaltyData: LoyaltyData | null,
-  source: SyncDataSource = 'royal'
+  source: SyncDataSource = 'royal',
+  ownershipOptions?: SyncOwnershipOptions
 ): BookedCruise[] {
+  const ownershipFields = getOwnershipFields(ownershipOptions);
+
   return cruises.map((cruise) => {
     const startDate = parseDate(cruise.sailingStartDate);
     const endDate = parseDate(cruise.sailingEndDate);
@@ -521,6 +545,7 @@ export function transformBookedCruisesToAppFormat(
       stateroomType: cruise.stateroomType,
       musterStation: cruise.musterStation,
       cruiseSource: source,
+      ...ownershipFields,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
