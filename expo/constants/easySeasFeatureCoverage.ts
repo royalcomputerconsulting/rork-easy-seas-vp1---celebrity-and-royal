@@ -88,7 +88,7 @@ export const EASYSEAS_FEATURE_COVERAGE_CHECKLIST: EasySeasFeatureCoverageItem[] 
   },
   {
     id: 12,
-    title: 'Permanent Passenger Calendar Button',
+    title: 'Sea View Calendar Button',
     status: 'partial',
     representedIn: ['Calendar Passenger view toggle', 'Life-at-sea timeline', 'Sea/port/land/expiration/tier/personal color coding'],
     deficiencies: ['The requested permanent button exists as a Passenger toggle, not a separate persistent button.', 'Profile/account filter support is not fully surfaced in the calendar view.', 'The visible timeline is capped for readability, so very large annual schedules need a fuller drill-down view.'],

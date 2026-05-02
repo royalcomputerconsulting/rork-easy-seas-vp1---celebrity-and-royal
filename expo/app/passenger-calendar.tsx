@@ -289,7 +289,7 @@ export default function PassengerCalendarScreen() {
                 <ArrowLeft size={18} color={COLORS.white} />
               </TouchableOpacity>
               <View style={styles.heroIcon}><CalendarDays size={26} color="#A7F3D0" /></View>
-              <Text style={styles.heroEyebrow}>Permanent Passenger Calendar</Text>
+              <Text style={styles.heroEyebrow}>Sea View Calendar</Text>
               <Text style={styles.heroTitle}>Your year at sea, on land, and on deadline.</Text>
               <Text style={styles.heroSubtitle}>Full drill-down for passenger days, port days, expirations, gaps, shared sailings, and solo travel.</Text>
             </View>
