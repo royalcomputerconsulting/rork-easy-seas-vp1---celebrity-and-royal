@@ -770,24 +770,6 @@ function OverviewScreenContent() {
 
         <TouchableOpacity
           style={styles.learnSystemCard}
-          onPress={() => router.push('/learn-system' as any)}
-          activeOpacity={0.85}
-          testID="dashboard-learn-system"
-        >
-          <LinearGradient colors={['#0F2439', '#1E3A5F', '#0F766E']} style={styles.learnSystemGradient}>
-            <View style={styles.learnSystemIcon}>
-              <BookOpen size={20} color="#A7F3D0" />
-            </View>
-            <View style={styles.learnSystemCopy}>
-              <Text style={styles.learnSystemTitle}>Learn the System</Text>
-              <Text style={styles.learnSystemSubtitle}>Offer math, certificates, loyalty basics, machine logs, and EasySeas tutorials.</Text>
-            </View>
-            <Text style={styles.learnSystemAction}>Open</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.learnSystemCard}
           onPress={() => router.push('/ask-my-data' as any)}
           activeOpacity={0.85}
           testID="dashboard-ask-my-data"
@@ -960,6 +942,24 @@ function OverviewScreenContent() {
             onExaminePress={() => setShowCertificateExplorerModal(true)}
           />
         </CollapsibleSection>
+
+        <TouchableOpacity
+          style={styles.learnSystemCard}
+          onPress={() => router.push('/learn-system' as any)}
+          activeOpacity={0.85}
+          testID="dashboard-learn-system"
+        >
+          <LinearGradient colors={['#0F2439', '#1E3A5F', '#0F766E']} style={styles.learnSystemGradient}>
+            <View style={styles.learnSystemIcon}>
+              <BookOpen size={20} color="#A7F3D0" />
+            </View>
+            <View style={styles.learnSystemCopy}>
+              <Text style={styles.learnSystemTitle}>Learn the System</Text>
+              <Text style={styles.learnSystemSubtitle}>Offer math, certificates, loyalty basics, machine logs, and EasySeas tutorials.</Text>
+            </View>
+            <Text style={styles.learnSystemAction}>Open</Text>
+          </LinearGradient>
+        </TouchableOpacity>
 
         <CollapsibleSection
           title="Machine Strategy"
