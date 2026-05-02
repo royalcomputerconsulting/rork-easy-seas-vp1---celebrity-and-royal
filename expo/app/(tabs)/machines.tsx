@@ -16,7 +16,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Database, Search, X, Star, ChevronDown, ChevronUp, Plus, Download, Ship } from 'lucide-react-native';
+import { Database, Search, X, Star, ChevronDown, ChevronUp, Plus, Download } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS } from '@/constants/theme';
 import { IMAGES } from '@/constants/images';
 import { useSlotMachineLibrary } from '@/state/SlotMachineLibraryProvider';
@@ -425,15 +425,6 @@ export default function AtlasScreen() {
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState<{ current: number; total: number } | null>(null);
 
-  const availableShipFilters = useMemo((): string[] => {
-    const ships = new Set<string>();
-    myAtlasMachines.forEach((machine) => {
-      machine.shipAssignments?.forEach((assignment) => {
-        if (assignment.shipName) ships.add(assignment.shipName);
-      });
-    });
-    return Array.from(ships).sort((a, b) => a.localeCompare(b));
-  }, [myAtlasMachines]);
 
   const filteredMachines = useMemo(() => {
     let filtered = [...myAtlasMachines];
@@ -602,24 +593,7 @@ export default function AtlasScreen() {
     }
   }, [myAtlasMachines]);
 
-  const hasActiveFilters = Boolean(searchQuery || activeFilter !== 'all' || selectedManufacturer || selectedShip);
-
-  const machineFilterItems = useMemo((): { key: string; shipName?: string }[] => {
-    const items: { key: string; shipName?: string }[] = [
-      { key: 'all' },
-      { key: 'favorites' },
-    ];
-
-    availableShipFilters.forEach((shipName) => {
-      items.push({ key: `ship:${shipName}`, shipName });
-    });
-
-    if (hasActiveFilters) {
-      items.push({ key: 'clear' });
-    }
-
-    return items;
-  }, [availableShipFilters, hasActiveFilters]);
+  const hasActiveFilters = searchQuery || activeFilter !== 'all';
 
   const [uiError, setUiError] = useState<string | null>(null);
 
@@ -798,7 +772,11 @@ export default function AtlasScreen() {
 
         <View style={styles.filtersContainer}>
           <FlatList
-            data={machineFilterItems}
+            data={[
+              { key: 'all' as const },
+              { key: 'favorites' as const },
+              ...(hasActiveFilters ? [{ key: 'clear' as const }] : []),
+            ]}
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.filtersRow}
@@ -874,25 +852,6 @@ export default function AtlasScreen() {
                 );
               }
 
-              if (item.shipName) {
-                const isActiveShip = selectedShip === item.shipName;
-                return (
-                  <TouchableOpacity
-                    style={[styles.filterChip, isActiveShip && styles.filterChipActive]}
-                    onPress={() => {
-                      setActiveFilter('ship');
-                      setSelectedManufacturer('');
-                      setSelectedShip(item.shipName ?? '');
-                    }}
-                    activeOpacity={0.7}
-                    testID={`machines.filter.ship.${item.shipName.replace(/\s+/g, '-').toLowerCase()}`}
-                  >
-                    <Ship size={14} color={isActiveShip ? COLORS.white : COLORS.navyDeep} />
-                    <Text style={[styles.filterChipText, isActiveShip && styles.filterChipTextActive]}>{item.shipName}</Text>
-                  </TouchableOpacity>
-                );
-              }
-
               if (item.key === 'clear') {
                 return (
                   <TouchableOpacity
@@ -931,7 +890,7 @@ export default function AtlasScreen() {
     handleClearFilters,
     handleExportFavorites,
     handleExportAll,
-    machineFilterItems,
+    hasActiveFilters,
     isExporting,
     exportProgress,
     isLoading,
@@ -939,7 +898,6 @@ export default function AtlasScreen() {
     myAtlasMachines.length,
     reload,
     searchQuery,
-    selectedShip,
     sessions,
     showSessionsSection,
     uiError,

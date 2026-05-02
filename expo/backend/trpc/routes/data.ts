@@ -45,23 +45,6 @@ function prepareOwnedDataArray(value: any[] | undefined, fallback: any[] | undef
   return stampRecordsForOwner(filterRecordsForOwner(source, ownerScopeId, email, label), ownerScopeId, email);
 }
 
-function prepareOwnedUserProfiles(value: any[] | undefined, fallback: any[] | undefined, ownerScopeId: string, email: string, label: string): any[] {
-  const source = Array.isArray(value) ? value : Array.isArray(fallback) ? fallback : [];
-  const filteredProfiles = source.filter((profile) => !containsKnownForeignPersonalData(profile, email));
-
-  if (filteredProfiles.length !== source.length) {
-    console.warn('[API] Removed user profiles with known foreign personal data:', {
-      label,
-      original: source.length,
-      filtered: filteredProfiles.length,
-      removed: source.length - filteredProfiles.length,
-      email,
-    });
-  }
-
-  return stampRecordsForOwner(filteredProfiles, ownerScopeId, email);
-}
-
 function prepareOwnedCruises(value: any[] | undefined, fallback: any[] | undefined, ownerScopeId: string, email: string, label: string): any[] {
   return dedupeCruises(prepareOwnedDataArray(value, fallback, ownerScopeId, email, label), label);
 }
@@ -216,7 +199,7 @@ export const dataRouter = createTRPCRouter({
 
       const existingData = existingResults?.[0]?.[0];
       
-      const userProfiles = prepareOwnedUserProfiles(input.userProfiles, existingData?.userProfiles, ownerScopeId, normalizedEmail, 'api-save user profiles');
+      const userProfiles = prepareOwnedDataArray(input.userProfiles, existingData?.userProfiles, ownerScopeId, normalizedEmail, 'api-save user profiles');
       const userProfileIds = new Set(userProfiles.map((profile) => typeof profile?.id === 'string' ? profile.id : null).filter((id): id is string => id !== null));
       const currentUserId = input.currentUserId ?? existingData?.currentUserId ?? null;
 
@@ -349,7 +332,7 @@ export const dataRouter = createTRPCRouter({
           casinoOffers: prepareOwnedCasinoOffers(rawData.casinoOffers, undefined, ownerScopeId, normalizedEmail, 'api-restore casino offers'),
           calendarEvents: prepareOwnedCalendarEvents(rawData.calendarEvents, undefined, ownerScopeId, normalizedEmail, 'api-restore calendar events'),
           casinoSessions: prepareOwnedDataArray(rawData.casinoSessions, undefined, ownerScopeId, normalizedEmail, 'api-restore casino sessions'),
-          userProfiles: prepareOwnedUserProfiles(rawData.userProfiles, undefined, ownerScopeId, normalizedEmail, 'api-restore user profiles'),
+          userProfiles: prepareOwnedDataArray(rawData.userProfiles, undefined, ownerScopeId, normalizedEmail, 'api-restore user profiles'),
           clubRoyaleProfile: sanitizeForeignValue(rawData.clubRoyaleProfile, undefined, normalizedEmail, 'api-restore clubRoyaleProfile'),
           settings: sanitizeForeignValue(rawData.settings, undefined, normalizedEmail, 'api-restore settings'),
           loyaltyData: sanitizeForeignValue(rawData.loyaltyData, undefined, normalizedEmail, 'api-restore loyaltyData'),

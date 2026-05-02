@@ -1589,12 +1589,14 @@ export default function SettingsScreen() {
       
       const result = await exportAllDataToFile(authenticatedEmail, {
         authenticatedEmail,
+        activeProfileId: currentUser?.id ?? null,
+        activeProfileEmail: currentUser?.email ?? authenticatedEmail ?? null,
       });
       
       if (result.success) {
         Alert.alert(
           'Export Successful',
-          `All app data has been exported to ${result.fileName}. This includes cruises, offers, booked cruises, events, casino sessions, certificates, machines, crew members, both primary and second user profiles, loyalty/program data, playing hours, and settings.`
+          `All app data has been exported to ${result.fileName}. This includes cruises, offers, booked cruises, events, casino sessions, certificates, machines, crew members, user profile (name, C&A #, playing hours), Club Royale points, loyalty points, and settings.`
         );
       } else {
         Alert.alert('Export Failed', result.error || 'Failed to export data.');
@@ -1605,7 +1607,7 @@ export default function SettingsScreen() {
     } finally {
       setIsExportingAll(false);
     }
-  }, [authenticatedEmail]);
+  }, [authenticatedEmail, currentUser?.email, currentUser?.id]);
 
   const handleImportAllData = useCallback(async () => {
     try {
@@ -1614,6 +1616,8 @@ export default function SettingsScreen() {
       
       const result = await importAllDataFromFile(authenticatedEmail, {
         authenticatedEmail,
+        activeProfileId: currentUser?.id ?? null,
+        activeProfileEmail: currentUser?.email ?? authenticatedEmail ?? null,
       });
       
       if (!result.success) {
@@ -1684,7 +1688,7 @@ export default function SettingsScreen() {
         
         Alert.alert(
           'Import Successful',
-          `Imported:\n• ${importedCruises} cruises\n• ${importedBooked} booked cruises\n• ${importedOffers} offers\n• ${calendarEvents} events\n• ${importedSessions} casino sessions\n• ${certificates} certificates\n• ${importedMachines} machines\n• Crew members\n• Primary and second user profiles\n• Loyalty/program data and playing hours\n\nData has been loaded successfully.`
+          `Imported:\n• ${importedCruises} cruises\n• ${importedBooked} booked cruises\n• ${importedOffers} offers\n• ${calendarEvents} events\n• ${importedSessions} casino sessions\n• ${certificates} certificates\n• ${importedMachines} machines\n• Crew members\n• User profile (name, C&A #, playing hours)\n• Loyalty points\n\nData has been loaded successfully.`
         );
       }
     } catch (error) {
@@ -1693,7 +1697,7 @@ export default function SettingsScreen() {
     } finally {
       setIsImportingAll(false);
     }
-  }, [authenticatedEmail, coreData, forceProfileSyncNow, reloadCasinoSessions, reloadMachines, setLocalData, syncLoyaltyFromStorage, syncUserFromStorage]);
+  }, [authenticatedEmail, coreData, currentUser?.email, currentUser?.id, forceProfileSyncNow, reloadCasinoSessions, reloadMachines, setLocalData, syncLoyaltyFromStorage, syncUserFromStorage]);
 
   const handleDownloadExtension = useCallback(async () => {
     try {

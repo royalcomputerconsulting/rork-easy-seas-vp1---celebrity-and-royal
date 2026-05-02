@@ -42,11 +42,6 @@ export function AtlasCard({
             <Text style={styles.compactManufacturer}>
               {machine.manufacturer}
             </Text>
-            {shipCount > 0 ? (
-              <Text style={styles.compactShipLine} numberOfLines={1}>
-                Found on {shipCount} {shipCount === 1 ? 'ship' : 'ships'}
-              </Text>
-            ) : null}
           </View>
 
           <View style={styles.compactRight}>
@@ -450,12 +445,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500' as const,
     color: COLORS.textDarkGrey,
-  },
-  compactShipLine: {
-    fontSize: 11,
-    fontWeight: '700' as const,
-    color: COLORS.navyDeep,
-    marginTop: 2,
   },
   compactRight: {
     flexDirection: 'row',

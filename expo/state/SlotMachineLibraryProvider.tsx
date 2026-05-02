@@ -13,7 +13,6 @@ import { trpcClient } from '@/lib/trpc';
 import { useEntitlement } from '@/state/EntitlementProvider';
 import { useAuth } from '@/state/AuthProvider';
 import { getUserScopedKey } from '@/lib/storage/storageKeys';
-import { loadShipSlotMachineEntries, mergeShipSlotMachinesIntoLibrary } from '@/lib/shipSlotCatalog';
 
 const STORAGE_KEY_ENCYCLOPEDIA = 'easyseas_machine_encyclopedia_v2_262_only';
 const STORAGE_KEY_MY_ATLAS = 'easyseas_my_slot_atlas_v2_262_only';
@@ -124,7 +123,6 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isLoadingIndex] = useState<boolean>(false);
   const [indexLoadComplete, setIndexLoadComplete] = useState<boolean>(false);
-  const [shipSlotMachines, setShipSlotMachines] = useState<MachineEncyclopediaEntry[]>([]);
 
   const [wizardOpen, setWizardOpen] = useState<boolean>(false);
   const [wizardData, setWizardData] = useState<AddGameWizardData>({ step: 1 });
@@ -141,7 +139,6 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
     setEncyclopedia([]);
     setMyAtlasIds([]);
     setIndexLoadComplete(false);
-    setShipSlotMachines([]);
     console.log('[SlotMachineLibrary] Scoped storage keys updated for:', authenticatedEmail);
   }, [authenticatedEmail]);
 
@@ -300,13 +297,10 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
 
       const loadedEncyclopedia: MachineEncyclopediaEntry[] = encyclopediaStr ? JSON.parse(encyclopediaStr) : [];
       const loadedAtlasIds: string[] = atlasStr ? JSON.parse(atlasStr) : [];
-      const shipSlotCatalogMachines = await loadShipSlotMachineEntries();
-      const mergedEncyclopedia = mergeShipSlotMachinesIntoLibrary(loadedEncyclopedia, shipSlotCatalogMachines);
 
-      console.log(`[SlotMachineLibrary] Loaded ${loadedEncyclopedia.length} encyclopedia, ${loadedAtlasIds.length} atlas, ${shipSlotCatalogMachines.length} ship-slot catalog entries, indexFlag=${indexLoaded}`);
+      console.log(`[SlotMachineLibrary] Loaded ${loadedEncyclopedia.length} encyclopedia, ${loadedAtlasIds.length} atlas, indexFlag=${indexLoaded}`);
 
-      setShipSlotMachines(shipSlotCatalogMachines);
-      setEncyclopedia(mergedEncyclopedia);
+      setEncyclopedia(loadedEncyclopedia);
       setMyAtlasIds(loadedAtlasIds);
       setIndexLoadComplete(indexLoaded === 'true');
       setIsLoading(false);
@@ -318,9 +312,8 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
           try {
             const importResult = await loadMachinesFromIndex([], []);
             if (importResult.success) {
-              const mergedImport = mergeShipSlotMachinesIntoLibrary(importResult.encyclopedia, shipSlotCatalogMachines);
               console.log(`[SlotMachineLibrary] Deferred load: ${importResult.count} machines`);
-              setEncyclopedia(mergedImport);
+              setEncyclopedia(importResult.encyclopedia);
               setMyAtlasIds(importResult.atlasIds);
               setIndexLoadComplete(true);
               await AsyncStorage.setItem(STORAGE_KEY_INDEX_LOADED, 'true');
@@ -401,8 +394,7 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
     sharedLibraryBackfillRef.current = backfillKey;
 
     const timeout = setTimeout(() => {
-      const userImportableMachines = encyclopedia.filter(entry => entry.source !== 'ship-slot-csv');
-      void saveSharedMachineJSON(userImportableMachines, 'import');
+      void saveSharedMachineJSON(encyclopedia, 'import');
     }, 1500);
 
     return () => clearTimeout(timeout);
@@ -844,12 +836,12 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
       ensureEncyclopediaFullyLoadedForPro(encyclopediaRef.current, myAtlasIdsRef.current)
         .then((result) => {
           if (!result.didChange) return;
-          setEncyclopedia(mergeShipSlotMachinesIntoLibrary(result.encyclopedia, shipSlotMachines));
+          setEncyclopedia(result.encyclopedia);
         })
         .catch((e) => console.error('[SlotMachineLibrary] ensureEncyclopediaFullyLoadedForPro unhandled error', e));
     }, 2000);
     return () => clearTimeout(timeout);
-  }, [ensureEncyclopediaFullyLoadedForPro, hasFullAccess, isLoading, shipSlotMachines]);
+  }, [ensureEncyclopediaFullyLoadedForPro, hasFullAccess, isLoading]);
 
   const globalLibrary = useMemo(() => {
     if (hasFullAccess) {

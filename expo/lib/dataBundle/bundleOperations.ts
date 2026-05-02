@@ -74,7 +74,7 @@ function normalizeProfileId(value: string | null | undefined): string | null {
 
 function resolveDataProfileGate(email: string | null | undefined, gate?: DataProfileGate): ResolvedDataProfileGate {
   const activeProfileId = normalizeProfileId(gate?.activeProfileId);
-  const activeProfileEmail = normalizeBackupImportEmail(gate?.activeProfileEmail);
+  const activeProfileEmail = normalizeBackupImportEmail(gate?.activeProfileEmail) ?? normalizeBackupImportEmail(email);
   const authenticatedEmail = normalizeBackupImportEmail(gate?.authenticatedEmail) ?? normalizeBackupImportEmail(email);
 
   return {
@@ -211,7 +211,7 @@ async function mergeWithExistingOutsideProfileGate<T extends object>(
 function adoptBackupRecordsForActiveAccount<T extends object>(records: T[], email: string | null | undefined, gate?: ResolvedDataProfileGate): T[] {
   const normalizedEmail = normalizeBackupImportEmail(email);
   const activeProfileId = gate?.activeProfileId ?? null;
-  const activeProfileEmail = gate?.activeProfileEmail ?? null;
+  const activeProfileEmail = gate?.activeProfileEmail ?? normalizedEmail;
   const syncedAt = new Date().toISOString();
 
   return records.map((record) => {
@@ -934,16 +934,12 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
       const normalizedEmail = email ? email.toLowerCase().trim() : null;
       
       if (normalizedEmail) {
-        const ownerImportId = usersToImport.find((u) => u.isOwner)?.id ?? usersToImport[0]?.id ?? null;
-        usersToImport = usersToImport.map(u => {
-          const shouldAdoptPrimaryEmail = u.isOwner === true || (ownerImportId !== null && u.id === ownerImportId);
-          return {
-            ...u,
-            id: resolvedGate.activeProfileId ?? u.id,
-            email: resolvedGate.activeProfileEmail ?? (shouldAdoptPrimaryEmail ? normalizedEmail : (u.email || normalizedEmail)),
-            isOwner: resolvedGate.activeProfileId ? true : (u.isOwner || shouldAdoptPrimaryEmail),
-          };
-        });
+        usersToImport = usersToImport.map(u => ({
+          ...u,
+          id: resolvedGate.activeProfileId ?? u.id,
+          email: resolvedGate.activeProfileEmail ?? normalizedEmail,
+          isOwner: resolvedGate.activeProfileId ? true : u.isOwner,
+        }));
       }
 
       const scopedUsersKey = normalizedEmail
