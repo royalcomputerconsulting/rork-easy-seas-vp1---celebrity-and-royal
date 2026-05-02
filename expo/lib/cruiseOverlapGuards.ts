@@ -1,6 +1,7 @@
 import type { BookedCruise, ItineraryDay } from '@/types/models';
 import { createDateFromString } from '@/lib/date';
 import { dedupeBookedCruises } from '@/lib/dataIdentity';
+import { USER_CONFIRMED_BOOKED_CRUISE_MANIFEST } from '@/constants/confirmedBookedCruises';
 
 export interface CruiseOverlapWarning {
   cruiseId: string;
@@ -233,11 +234,45 @@ function getReservationKey(cruise: BookedCruise): string {
   return String(cruise.reservationNumber ?? cruise.bookingId ?? cruise.bwoNumber ?? '').trim().toUpperCase();
 }
 
+const USER_CONFIRMED_MANIFEST_RESERVATIONS = new Set(
+  USER_CONFIRMED_BOOKED_CRUISE_MANIFEST.map(getReservationKey).filter((reservation) => reservation.length > 0)
+);
+
+const USER_CONFIRMED_MANIFEST_SAILINGS = new Set(
+  USER_CONFIRMED_BOOKED_CRUISE_MANIFEST.map((cruise) => normalizeCruiseKey(cruise.shipName, cruise.sailDate))
+);
+
 function isScottPinnaclePlanningData(cruises: BookedCruise[]): boolean {
   return cruises.some((cruise) =>
     cruise.guestNames?.some((guest) => guest.toLowerCase().includes('scott')) === true
     || ['871437', '3820089', '5455777', '3879193', '6173746', '4097701'].includes(getReservationKey(cruise))
   );
+}
+
+function shouldApplyUserConfirmedManifest(cruises: BookedCruise[]): boolean {
+  return cruises.some((cruise) => {
+    const reservation = getReservationKey(cruise);
+    const sailing = normalizeCruiseKey(cruise.shipName, cruise.sailDate);
+    const ship = cruise.shipName?.toLowerCase().trim() ?? '';
+    const sailDate = normalizeDateOnly(cruise.sailDate);
+    const returnDate = normalizeDateOnly(cruise.returnDate);
+
+    return cruise.guestNames?.some((guest) => guest.toLowerCase().includes('scott')) === true
+      || USER_CONFIRMED_MANIFEST_RESERVATIONS.has(reservation)
+      || USER_CONFIRMED_MANIFEST_SAILINGS.has(sailing)
+      || isSymphonyMay2026Replacement(cruise)
+      || (ship === 'allure of the seas' && sailDate === '2026-04-29' && (!returnDate || returnDate === '2026-05-02'))
+      || (ship === 'st of the seas' || ship === 'sg of the seas');
+  });
+}
+
+function mergeUserConfirmedCruise(existing: BookedCruise | undefined, confirmed: BookedCruise): BookedCruise {
+  return {
+    ...(existing ?? {}),
+    ...confirmed,
+    id: confirmed.id,
+    reservationNumber: confirmed.reservationNumber,
+  };
 }
 
 function mergeConfirmedPlanCruise(existing: BookedCruise, confirmed: BookedCruise): BookedCruise {
@@ -338,11 +373,36 @@ export function applyKnownBookingCorrectionsToCruise(cruise: BookedCruise): Book
   };
 }
 
+/** Applies the user-confirmed booked-cruise manifest so stale imports cannot recreate duplicate or made-up sailings. */
+export function applyUserConfirmedBookedCruiseManifest(cruises: BookedCruise[]): BookedCruise[] {
+  const correctedInput = cruises
+    .filter((cruise) => !isKnownInvalidBookedCruise(cruise))
+    .map(applyKnownBookingCorrectionsToCruise);
+
+  if (!shouldApplyUserConfirmedManifest(cruises)) {
+    return dedupeBookedCruises(correctedInput, 'booked cruises without user-confirmed manifest');
+  }
+
+  const exactManifest = USER_CONFIRMED_BOOKED_CRUISE_MANIFEST.map((confirmedCruise) => {
+    const confirmedReservation = getReservationKey(confirmedCruise);
+    const confirmedSailingKey = normalizeCruiseKey(confirmedCruise.shipName, confirmedCruise.sailDate);
+    const existing = correctedInput.find((cruise) => {
+      const reservationMatches = confirmedReservation.length > 0 && getReservationKey(cruise) === confirmedReservation;
+      const sailingMatches = normalizeCruiseKey(cruise.shipName, cruise.sailDate) === confirmedSailingKey;
+      return reservationMatches || sailingMatches;
+    });
+
+    return mergeUserConfirmedCruise(existing, confirmedCruise);
+  });
+
+  return dedupeBookedCruises(exactManifest, 'user-confirmed booked cruise manifest');
+}
+
 /** Applies known booking corrections to a list without mutating the input records. */
 export function applyKnownBookingCorrections(cruises: BookedCruise[]): BookedCruise[] {
   const correctedCruises = cruises.filter((cruise) => !isKnownInvalidBookedCruise(cruise)).map(applyKnownBookingCorrectionsToCruise);
   return dedupeBookedCruises(
-    applyConfirmedPinnacleCruisePlan(correctedCruises),
+    applyUserConfirmedBookedCruiseManifest(correctedCruises),
     'known booking corrections'
   );
 }

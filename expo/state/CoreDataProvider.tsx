@@ -30,7 +30,7 @@ import { containsKnownForeignPersonalData, filterRecordsForOwner, isOwnerScopeFo
 import { updateAllCruiseLifecycles } from "@/lib/lifecycleManager";
 import { dedupeBookedCruises, dedupeCalendarEvents, dedupeCasinoOffers, dedupeCruises } from "@/lib/dataIdentity";
 import { generateCruiseCalendarEvents } from "@/lib/calendar/cruiseEvents";
-import { annotateOverlappingCruises, applyConfirmedPinnacleCruisePlan, applyKnownBookingCorrectionsToCruise, isKnownInvalidBookedCruise } from "@/lib/cruiseOverlapGuards";
+import { annotateOverlappingCruises, applyKnownBookingCorrectionsToCruise, applyUserConfirmedBookedCruiseManifest, isKnownInvalidBookedCruise } from "@/lib/cruiseOverlapGuards";
 
 const getMockCruises = (): { BOOKED_CRUISES_DATA: BookedCruise[]; COMPLETED_CRUISES_DATA: BookedCruise[] } => {
   try {
@@ -863,7 +863,12 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         console.log('[CoreData] First-time user data persisted');
       }
 
-      const eventsResult = processCalendarEvents(snapshot, ownedStatus, bookedResult.finalBookedCount);
+      const eventsResult = bookedResult.shouldPersistMergedCruises
+        ? {
+            events: generateCruiseCalendarEvents(ownedBookedCruises),
+            shouldPersist: true,
+          }
+        : processCalendarEvents(snapshot, ownedStatus, bookedResult.finalBookedCount);
       const ownedEvents = dedupeCalendarEvents(prepareOwnedRecords<CalendarEvent>(eventsResult.events, ownerScopeId, authenticatedEmail, 'local calendar events'), 'local calendar events');
       if (eventsResult.shouldPersist) {
         await persistData(skRef.current.CALENDAR_EVENTS, ownedEvents);
@@ -1181,8 +1186,8 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       nonMock: nonMockCruises.length 
     });
     
-    const withConfirmedPinnaclePlan = applyConfirmedPinnacleCruisePlan(nonMockCruises.map(applyKnownBookingCorrectionsToCruise));
-    const withItineraries = enrichCruisesWithMockItineraries(withConfirmedPinnaclePlan);
+    const withConfirmedManifest = applyUserConfirmedBookedCruiseManifest(nonMockCruises.map(applyKnownBookingCorrectionsToCruise));
+    const withItineraries = enrichCruisesWithMockItineraries(withConfirmedManifest);
     const withKnownRetail = applyKnownRetailValues(withItineraries);
     const withFreeplayOBC = applyFreeplayOBCData(withKnownRetail);
     const enrichedCruises = enrichCruisesWithReceiptData(withFreeplayOBC);

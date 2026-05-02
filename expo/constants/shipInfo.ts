@@ -28,6 +28,15 @@ export const ROYAL_CARIBBEAN_SHIPS: Record<string, ShipInfo> = {
     homePort: 'Port Canaveral',
     typicalItineraries: ['Eastern Caribbean', 'Western Caribbean', 'Perfect Day at CocoCay'],
   },
+  'Hero of the Seas': {
+    name: 'Hero of the Seas',
+    class: 'Icon Class',
+    passengerCapacity: 5610,
+    grossTonnage: 250800,
+    yearBuilt: 2027,
+    homePort: 'Port Canaveral',
+    typicalItineraries: ['Perfect Day at CocoCay', 'Western Caribbean'],
+  },
   'Wonder of the Seas': {
     name: 'Wonder of the Seas',
     class: 'Oasis Class',

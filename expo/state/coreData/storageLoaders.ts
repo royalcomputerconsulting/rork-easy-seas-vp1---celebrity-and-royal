@@ -7,7 +7,7 @@ import {
   applyFreeplayOBCData,
 } from "./dataEnrichment";
 import { updateAllCruiseLifecycles } from "@/lib/lifecycleManager";
-import { applyConfirmedPinnacleCruisePlan, applyKnownBookingCorrectionsToCruise, isKnownInvalidBookedCruise } from "@/lib/cruiseOverlapGuards";
+import { applyKnownBookingCorrectionsToCruise, applyUserConfirmedBookedCruiseManifest, isKnownInvalidBookedCruise } from "@/lib/cruiseOverlapGuards";
 import { STORAGE_KEYS, DEFAULT_SETTINGS, getScopedStorageKeys, type AppSettings } from "./storageConfig";
 import { quotaSafeGetItem } from "@/lib/storage/quotaSafeStorage";
 import { containsKnownForeignPersonalData } from "@/lib/storage/dataOwnership";
@@ -55,7 +55,7 @@ export interface ProcessedMetadata {
 }
 
 export function filterDemoCruises(cruises: BookedCruise[]): BookedCruise[] {
-  return applyConfirmedPinnacleCruisePlan(
+  return applyUserConfirmedBookedCruiseManifest(
     cruises
       .filter((cruise) =>
         !cruise.id?.includes('demo-') &&
