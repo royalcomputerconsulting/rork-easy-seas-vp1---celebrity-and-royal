@@ -5,7 +5,7 @@ import * as FileSystem from 'expo-file-system';
 import { parseCSVLine } from '@/lib/csv/csvParser';
 import type { CabinetType, MachineEncyclopediaEntry, MachineVolatility, SlotManufacturer } from '@/types/models';
 
-const SHIP_SLOT_CSV_ASSET = require('@/assets/ship2slot.csv');
+const SHIP_SLOT_CSV_ASSET = require('../assets/ship2slot.csv');
 const CATALOG_TIMESTAMP = '2026-05-02T00:00:00.000Z';
 
 type ShipAssignment = NonNullable<MachineEncyclopediaEntry['shipAssignments']>[number];
