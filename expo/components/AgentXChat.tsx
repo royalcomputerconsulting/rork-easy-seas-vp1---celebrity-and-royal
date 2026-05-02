@@ -683,26 +683,28 @@ export const AgentXChat = React.memo(function AgentXChat({
         </View>
       ) : null}
       
-      <View style={styles.quickActionsContainer}>
-        <Text style={styles.quickActionsLabel}>Quick Actions</Text>
-        <View style={styles.quickActionsGrid}>
-          {quickActions.map((action) => (
-            <TouchableOpacity
-              key={action.id}
-              style={styles.quickActionButton}
-              onPress={() => handleQuickAction(action.prompt)}
-              activeOpacity={0.7}
-            >
-              <View
-                style={styles.quickActionGradient}
+      {quickActions.length > 0 ? (
+        <View style={styles.quickActionsContainer}>
+          <Text style={styles.quickActionsLabel}>Quick Actions</Text>
+          <View style={styles.quickActionsGrid}>
+            {quickActions.map((action) => (
+              <TouchableOpacity
+                key={action.id}
+                style={styles.quickActionButton}
+                onPress={() => handleQuickAction(action.prompt)}
+                activeOpacity={0.7}
               >
-                <action.icon size={18} color={COLORS.white} />
-                <Text style={styles.quickActionText}>{action.label}</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
+                <View
+                  style={styles.quickActionGradient}
+                >
+                  <action.icon size={18} color={COLORS.white} />
+                  <Text style={styles.quickActionText}>{action.label}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
-      </View>
+      ) : null}
     </View>
   );
 

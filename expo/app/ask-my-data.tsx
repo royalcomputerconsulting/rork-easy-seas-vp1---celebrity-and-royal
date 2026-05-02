@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Award, Bot, ChevronRight, DatabaseZap, FileSearch, Search, Ship, Sparkles, Tag, Ticket, X, Wand2 } from 'lucide-react-native';
+import { Award, Bot, ChevronRight, DatabaseZap, FileSearch, Search, Ship, SlidersHorizontal, Tag, Ticket, X, Wand2 } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { AgentXChat, type AgentXQuickAction } from '@/components/AgentXChat';
 import { IntelligenceFilterStrip } from '@/components/IntelligenceFilterStrip';
@@ -17,15 +17,6 @@ import { filterRecordsByIntelligence, getBrandLabel, getProgramLabel, getProfile
 import { askMyDataSearch, type AskMyDataResult, type AskMyDataSource } from '@/lib/askMyData';
 import type { BookedCruise, CalendarEvent, CasinoOffer, Cruise } from '@/types/models';
 import type { Certificate } from '@/components/CertificateManagerModal';
-
-const SAMPLE_QUERIES = [
-  'Show me balcony offers longer than seven nights',
-  'What offer expires soon but has the highest value?',
-  'Which sailings are booked or reserved?',
-  'Find cruises that fit after my next sailing',
-  'Show unassigned imports that need review',
-  'Which certificates fit active offers?',
-];
 
 const ASK_MY_DATA_AGENT_ACTIONS: AgentXQuickAction[] = [
   { id: 'search-my-data', label: 'Search My Data', icon: Search, prompt: 'Ask my data: show the most important offers, cruises, certificates, and calendar items that need attention.' },
@@ -70,6 +61,7 @@ export default function AskMyDataScreen() {
   } = useAgentX();
   const [query, setQuery] = useState<string>('');
   const [submittedQuery, setSubmittedQuery] = useState<string>('');
+  const [filtersOpen, setFiltersOpen] = useState<boolean>(false);
 
   const filterSnapshot = useMemo(() => ({
     selectedProfileId,
@@ -119,6 +111,11 @@ export default function AskMyDataScreen() {
     setQuery('');
     setSubmittedQuery('');
   }, []);
+
+  const runAgentTool = useCallback((prompt: string) => {
+    console.log('[AskMyDataScreen] Agent tool selected');
+    void sendMessage(prompt);
+  }, [sendMessage]);
 
   const openResult = useCallback((result: AskMyDataResult) => {
     if (!result.actionRoute) return;
@@ -210,18 +207,66 @@ export default function AskMyDataScreen() {
 
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           <ResponsiveContainer>
-            <View style={styles.heroCard} testID="ask-my-data-hero">
-              <LinearGradient colors={['rgba(167,243,208,0.22)', 'rgba(56,189,248,0.10)']} style={StyleSheet.absoluteFill} />
-              <View style={styles.heroKickerRow}>
-                <Sparkles size={14} color="#FDE68A" />
-                <Text style={styles.heroKicker}>Agent X unified assistant</Text>
+            <View style={styles.commandCard} testID="ask-my-data-hero">
+              <LinearGradient colors={['rgba(167,243,208,0.24)', 'rgba(56,189,248,0.10)', 'rgba(15,118,110,0.18)']} style={StyleSheet.absoluteFill} />
+              <View style={styles.commandHeaderRow}>
+                <View style={styles.commandIcon}>
+                  <Bot size={20} color="#FDE68A" />
+                </View>
+                <View style={styles.commandCopy}>
+                  <Text style={styles.commandTitle}>Ask anything about your data</Text>
+                  <Text style={styles.commandSubtitle}>{scopeLabel}</Text>
+                </View>
               </View>
-              <Text style={styles.heroTitle}>Ask My Data now includes Agent X decision support.</Text>
-              <Text style={styles.heroBody}>Search records, decode offers, compare replacements, check tier progress, audit imports, and ask follow-up questions from one scoped assistant.</Text>
-              <Text style={styles.scopeLabel}>{scopeLabel}</Text>
+
+              <View style={styles.searchInputRow}>
+                <Search size={18} color="#64748B" />
+                <TextInput
+                  style={styles.searchInput}
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder="Type a question about offers, cruises, certificates, imports, or tier progress..."
+                  placeholderTextColor="#94A3B8"
+                  returnKeyType="search"
+                  onSubmitEditing={() => submitSearch()}
+                  testID="ask-my-data-input"
+                />
+                {query.length > 0 ? (
+                  <TouchableOpacity onPress={clearSearch} activeOpacity={0.75} testID="ask-my-data-clear">
+                    <X size={18} color="#64748B" />
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+              <TouchableOpacity style={styles.searchButton} onPress={() => submitSearch()} activeOpacity={0.82} testID="ask-my-data-submit">
+                <Bot size={16} color={COLORS.white} />
+                <Text style={styles.searchButtonText}>Ask My Data</Text>
+              </TouchableOpacity>
+
+              <View style={styles.toolStrip}>
+                {ASK_MY_DATA_AGENT_ACTIONS.map((action) => {
+                  const ActionIcon = action.icon;
+                  return (
+                    <TouchableOpacity key={action.id} style={styles.toolChip} onPress={() => runAgentTool(action.prompt)} activeOpacity={0.78} testID={`ask-my-data-tool-${action.id}`}>
+                      <ActionIcon size={13} color="#A7F3D0" />
+                      <Text style={styles.toolChipText}>{action.label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             </View>
 
-            <IntelligenceFilterStrip contextLabel="Ask My Data" compact={true} />
+            <View style={styles.scopeCard}>
+              <View style={styles.scopeSummary}>
+                <Text style={styles.scopeSummaryLabel}>Current scope</Text>
+                <Text style={styles.scopeSummaryText}>{stats.offers} offers • {stats.cruises} cruises • {stats.certificates} certs • {stats.calendar} calendar</Text>
+              </View>
+              <TouchableOpacity style={styles.filterToggleButton} onPress={() => setFiltersOpen((open) => !open)} activeOpacity={0.78} testID="ask-my-data-toggle-filters">
+                <SlidersHorizontal size={14} color={COLORS.navyDeep} />
+                <Text style={styles.filterToggleText}>{filtersOpen ? 'Hide filters' : 'Filters'}</Text>
+              </TouchableOpacity>
+            </View>
+
+            {filtersOpen ? <IntelligenceFilterStrip contextLabel="Ask My Data" compact={true} /> : null}
 
             <View style={styles.agentUnifiedCard} testID="ask-my-data-agentx-panel">
               <View style={styles.agentUnifiedHeader}>
@@ -229,8 +274,8 @@ export default function AskMyDataScreen() {
                   <Bot size={18} color="#FDE68A" />
                 </View>
                 <View style={styles.agentUnifiedCopy}>
-                  <Text style={styles.agentUnifiedTitle}>Ask My Data Assistant</Text>
-                  <Text style={styles.agentUnifiedSubtitle}>Agent X modes, voice/manual chat, and scoped tools are now available here.</Text>
+                  <Text style={styles.agentUnifiedTitle}>Conversation</Text>
+                  <Text style={styles.agentUnifiedSubtitle}>Agent X tools are active here. Ask naturally or use voice.</Text>
                 </View>
                 {messages.length > 0 ? (
                   <TouchableOpacity style={styles.clearConversationButton} onPress={clearMessages} activeOpacity={0.75} testID="ask-my-data-clear-agentx">
@@ -246,78 +291,20 @@ export default function AskMyDataScreen() {
                   isExpanded={isExpanded}
                   onToggleExpand={toggleExpanded}
                   showHeader={false}
-                  placeholder="Ask my data, decode an offer, find replacements, or audit imports..."
+                  placeholder="Ask anything about your EasySeas data..."
                   mode={agentMode}
                   onModeChange={setAgentMode}
                   contextLabel="Ask My Data"
-                  welcomeTitle="Ask My Data + Agent X"
-                  welcomeSubtitle="Use Agent X modes here to search your scoped records, explain offer math, find replacement cruises, check certificates, and answer follow-up questions."
-                  disclaimerText="Ask My Data uses your active profile, brand, and program filters. Verify final cruise terms directly with the cruise line."
+                  welcomeTitle="Ready when you are"
+                  welcomeSubtitle="Ask anything about your saved offers, cruises, certificates, calendar, imports, tier progress, or replacement options."
+                  disclaimerText="Uses your selected profile, brand, and program scope. Verify final cruise terms directly with the cruise line."
                   useSafeAreaPadding={false}
                   showDevAssistant={false}
                   showFilterStrip={false}
-                  quickActions={ASK_MY_DATA_AGENT_ACTIONS}
+                  quickActions={[]}
                   defaultTtsEnabled={false}
                 />
               </View>
-            </View>
-
-            <View style={styles.statsGrid}>
-              <View style={styles.statCard}>
-                <Text style={styles.statValue}>{stats.offers}</Text>
-                <Text style={styles.statLabel}>Offers</Text>
-              </View>
-              <View style={styles.statCard}>
-                <Text style={styles.statValue}>{stats.cruises}</Text>
-                <Text style={styles.statLabel}>Cruises</Text>
-              </View>
-              <View style={styles.statCard}>
-                <Text style={styles.statValue}>{stats.certificates}</Text>
-                <Text style={styles.statLabel}>Certs</Text>
-              </View>
-              <View style={styles.statCard}>
-                <Text style={styles.statValue}>{stats.calendar}</Text>
-                <Text style={styles.statLabel}>Calendar</Text>
-              </View>
-            </View>
-
-            <View style={styles.lookupHeaderCard}>
-              <Text style={styles.lookupHeaderTitle}>Instant record lookup</Text>
-              <Text style={styles.lookupHeaderSubtitle}>Run a fast indexed search below while the assistant produces deeper Agent X guidance.</Text>
-            </View>
-
-            <View style={styles.searchCard}>
-              <View style={styles.searchInputRow}>
-                <Search size={18} color="#64748B" />
-                <TextInput
-                  style={styles.searchInput}
-                  value={query}
-                  onChangeText={setQuery}
-                  placeholder="Ask: Which offers expire soon?"
-                  placeholderTextColor="#94A3B8"
-                  returnKeyType="search"
-                  onSubmitEditing={() => submitSearch()}
-                  testID="ask-my-data-input"
-                />
-                {query.length > 0 ? (
-                  <TouchableOpacity onPress={clearSearch} activeOpacity={0.75} testID="ask-my-data-clear">
-                    <X size={18} color="#64748B" />
-                  </TouchableOpacity>
-                ) : null}
-              </View>
-              <TouchableOpacity style={styles.searchButton} onPress={() => submitSearch()} activeOpacity={0.82} testID="ask-my-data-submit">
-                <Bot size={16} color={COLORS.white} />
-                <Text style={styles.searchButtonText}>Ask + Search My Data</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.samplesWrap}>
-              <Text style={styles.samplesLabel}>Try asking</Text>
-              {SAMPLE_QUERIES.map((sample) => (
-                <TouchableOpacity key={sample} style={styles.sampleChip} onPress={() => submitSearch(sample)} activeOpacity={0.78} testID={`ask-my-data-sample-${sample.replace(/\s+/g, '-').toLowerCase()}`}>
-                  <Text style={styles.sampleChipText}>{sample}</Text>
-                </TouchableOpacity>
-              ))}
             </View>
 
             {response ? (
@@ -325,7 +312,7 @@ export default function AskMyDataScreen() {
                 <View style={styles.interpretationCard} testID="ask-my-data-interpreted-intent">
                   <View style={styles.interpretationTopRow}>
                     <Wand2 size={15} color="#A7F3D0" />
-                    <Text style={styles.interpretationLabel}>Interpreted search</Text>
+                    <Text style={styles.interpretationLabel}>Indexed matches</Text>
                   </View>
                   <Text style={styles.interpretationText}>{response.interpretedIntent}</Text>
                 </View>
@@ -340,17 +327,6 @@ export default function AskMyDataScreen() {
                     <Text style={styles.emptyBody}>{response.noResultsExplanation}</Text>
                   </View>
                 )}
-                {response.suggestedQueries.length > 0 ? (
-                  <View style={styles.followUpCard} testID="ask-my-data-followups">
-                    <Text style={styles.followUpTitle}>Follow-up searches</Text>
-                    {response.suggestedQueries.map((suggestion) => (
-                      <TouchableOpacity key={suggestion} style={styles.followUpChip} onPress={() => submitSearch(suggestion)} activeOpacity={0.78}>
-                        <Sparkles size={12} color="#FDE68A" />
-                        <Text style={styles.followUpText}>{suggestion}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                ) : null}
               </View>
             ) : null}
           </ResponsiveContainer>
@@ -412,44 +388,112 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingBottom: 42,
   },
-  heroCard: {
+  commandCard: {
     overflow: 'hidden',
     borderRadius: 28,
-    padding: SPACING.lg,
-    marginBottom: SPACING.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
     borderWidth: 1,
-    borderColor: 'rgba(167, 243, 208, 0.22)',
+    borderColor: 'rgba(167, 243, 208, 0.24)',
+    ...SHADOW.md,
   },
-  heroKickerRow: {
+  commandHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
+  commandIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(253, 230, 138, 0.13)',
+    borderWidth: 1,
+    borderColor: 'rgba(253, 230, 138, 0.24)',
+  },
+  commandCopy: {
+    flex: 1,
+  },
+  commandTitle: {
+    color: COLORS.white,
+    fontSize: 22,
+    lineHeight: 26,
+    fontWeight: '900' as const,
+  },
+  commandSubtitle: {
+    color: '#A7F3D0',
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '800' as const,
+    marginTop: 3,
+  },
+  toolStrip: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.xs,
+    marginTop: SPACING.sm,
+  },
+  toolChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderRadius: BORDER_RADIUS.round,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 8,
+  },
+  toolChipText: {
+    color: COLORS.white,
+    fontSize: 11,
+    fontWeight: '900' as const,
+  },
+  scopeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: SPACING.sm,
+    borderRadius: 18,
+    padding: SPACING.sm,
+    marginBottom: SPACING.sm,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderWidth: 1,
+    borderColor: 'rgba(226,232,240,0.70)',
+  },
+  scopeSummary: {
+    flex: 1,
+  },
+  scopeSummaryLabel: {
+    color: '#64748B',
+    fontSize: 10,
+    fontWeight: '900' as const,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.8,
+  },
+  scopeSummaryText: {
+    color: COLORS.navyDeep,
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: '900' as const,
+    marginTop: 2,
+  },
+  filterToggleButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 8,
+    borderRadius: BORDER_RADIUS.round,
+    backgroundColor: '#D8F1FF',
+    borderWidth: 1,
+    borderColor: '#A9DDF8',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 9,
   },
-  heroKicker: {
-    color: '#FDE68A',
+  filterToggleText: {
+    color: COLORS.navyDeep,
     fontSize: 11,
     fontWeight: '900' as const,
-    letterSpacing: 1,
-    textTransform: 'uppercase' as const,
-  },
-  heroTitle: {
-    color: COLORS.white,
-    fontSize: 24,
-    lineHeight: 29,
-    fontWeight: '900' as const,
-  },
-  heroBody: {
-    color: 'rgba(255,255,255,0.74)',
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    lineHeight: 20,
-    marginTop: 8,
-  },
-  scopeLabel: {
-    color: '#A7F3D0',
-    fontSize: 12,
-    fontWeight: '800' as const,
-    marginTop: 12,
   },
   agentUnifiedCard: {
     overflow: 'hidden',
@@ -510,11 +554,11 @@ const styles = StyleSheet.create({
     fontWeight: '900' as const,
   },
   agentChatFrame: {
-    height: 640,
+    height: 540,
     backgroundColor: 'rgba(224, 242, 254, 0.96)',
   },
   agentChatFrameExpanded: {
-    height: 760,
+    height: 700,
   },
   lookupHeaderCard: {
     borderRadius: 18,
