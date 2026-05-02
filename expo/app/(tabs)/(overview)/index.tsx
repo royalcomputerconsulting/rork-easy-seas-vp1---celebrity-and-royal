@@ -65,6 +65,8 @@ import { filterRecordsByIntelligence } from '@/lib/intelligenceFilters';
 
 import type { Cruise, BookedCruise, CasinoOffer } from '@/types/models';
 import { getCabinPriceFromEntity, GUEST_COUNT_DEFAULT } from '@/lib/valueCalculator';
+
+const OFFERS_TITLE_LOGO_URL = 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/4hm4mwycibyktcoe3b7eo.png';
 import { formatCurrency } from '@/lib/format';
 import {
   buildCommandCenterBuckets,
@@ -699,6 +701,16 @@ function OverviewScreenContent() {
   const renderHeader = () => (
     <ResponsiveContainer>
       <View style={styles.headerContent}>
+        <View style={styles.titleLogoCard}>
+          <Image
+            source={{ uri: OFFERS_TITLE_LOGO_URL }}
+            style={styles.titleLogoImage}
+            resizeMode="contain"
+            accessibilityLabel="Any Day Aboard Ship is a Great Day Aboard Ship logo"
+            testID="offers-title-logo-card-image"
+          />
+        </View>
+
         <View style={styles.heroCard}>
           <LinearGradient
             colors={['#3AAFA9', '#2B7A78', '#17A398', '#1E8C82', '#3AAFA9']}
@@ -1225,6 +1237,25 @@ const styles = StyleSheet.create({
   },
   headerContent: {
     marginBottom: SPACING.md,
+  },
+  titleLogoCard: {
+    marginTop: SPACING.sm,
+    marginBottom: SPACING.md,
+    borderRadius: BORDER_RADIUS.xl,
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: '#D4AF37',
+    minHeight: 245,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.sm,
+    ...SHADOW.card,
+  },
+  titleLogoImage: {
+    width: '100%',
+    height: 230,
   },
   footerContent: {
     marginTop: SPACING.md,
