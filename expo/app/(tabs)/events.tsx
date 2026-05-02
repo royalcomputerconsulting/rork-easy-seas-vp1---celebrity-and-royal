@@ -711,7 +711,7 @@ export default function EventsScreen() {
             </View>
           </View>
 
-          <IntelligenceFilterStrip contextLabel="Calendar" />
+          <IntelligenceFilterStrip contextLabel="Calendar" variant="bookedCruises" />
 
           <TouchableOpacity
             style={styles.passengerPermanentButton}
