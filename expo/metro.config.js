@@ -3,9 +3,7 @@ const { withRorkMetro } = require("@rork-ai/toolkit-sdk/metro");
 
 const config = getDefaultConfig(__dirname);
 
-config.resolver = {
-  ...config.resolver,
-  assetExts: Array.from(new Set([...(config.resolver?.assetExts ?? []), "csv"])),
-};
+// Allow CSV files to be bundled as static assets
+config.resolver.assetExts = [...(config.resolver.assetExts ?? []), "csv"];
 
 module.exports = withRorkMetro(config);
