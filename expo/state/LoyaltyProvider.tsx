@@ -21,6 +21,7 @@ import { ALL_STORAGE_KEYS, getUserScopedKey } from "@/lib/storage/storageKeys";
 import type { ExtendedLoyaltyData } from "@/lib/royalCaribbean/types";
 import { mergeExtendedLoyaltyData } from "@/lib/royalCaribbean/loyaltyConverter";
 import { dedupeBookedCruises } from "@/lib/dataIdentity";
+import { applyUserConfirmedBookedCruiseManifest } from "@/lib/cruiseOverlapGuards";
 
 interface PinnacleFutureCruiseBreakdownItem {
   shipName: string;
@@ -162,7 +163,8 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
   const [isLoading, setIsLoading] = useState(true);
   
   const bookedCruises = useMemo((): BookedCruise[] => {
-    return dedupeBookedCruises(storedBookedCruises || [], 'loyalty calculations booked cruises');
+    const dedupedCruises = dedupeBookedCruises(storedBookedCruises || [], 'loyalty calculations booked cruises');
+    return applyUserConfirmedBookedCruiseManifest(dedupedCruises);
   }, [storedBookedCruises]);
 
   const userStorageKeys = useMemo(() => ({
@@ -622,10 +624,13 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
           pointsFromBookedToPinnacle = bookedPointsThroughCurrent;
           bookedNightsToPinnacle = bookedNightsThroughCurrent;
 
-          if (upcomingBookedCruises[i + 1]) {
-            const earningCruise = upcomingBookedCruises[i + 1];
-            pinnacleShip = earningCruise.shipName;
-            pinnacleSailDate = earningCruise.sailDateStr;
+          const firstCruiseAfterPinnacle = upcomingBookedCruises.find((candidate, candidateIndex) =>
+            candidateIndex > i && candidate.sailDate.getTime() >= cruise.returnDate.getTime()
+          ) ?? upcomingBookedCruises[i + 1];
+
+          if (firstCruiseAfterPinnacle) {
+            pinnacleShip = firstCruiseAfterPinnacle.shipName;
+            pinnacleSailDate = firstCruiseAfterPinnacle.sailDateStr;
           } else {
             pinnacleShip = null;
             pinnacleSailDate = null;
@@ -642,7 +647,7 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
             effectiveSailDate: pinnacleSailDate,
             milestoneDateISO: projectedPinnacleDate?.toISOString(),
             i,
-            hasNextCruise: Boolean(upcomingBookedCruises[i + 1]),
+            hasNextCruise: Boolean(firstCruiseAfterPinnacle),
           });
           break;
         }
