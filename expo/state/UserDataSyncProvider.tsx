@@ -146,8 +146,25 @@ function prepareOwnedRecords<T extends object>(records: T[], ownerScopeId: strin
   return stampRecordsForOwner(filterRecordsForOwner(records, ownerScopeId, email, label), ownerScopeId, email);
 }
 
+function prepareOwnedUserProfileRecords(records: Record<string, unknown>[], ownerScopeId: string | null | undefined, email: string | null | undefined, label: string): Record<string, unknown>[] {
+  const filteredProfiles = records.filter((profile) => !containsKnownForeignPersonalData(profile, email));
+  if (filteredProfiles.length !== records.length) {
+    console.warn('[UserDataSync] Removed user profiles with known foreign personal data:', {
+      label,
+      original: records.length,
+      filtered: filteredProfiles.length,
+    });
+  }
+
+  return stampRecordsForOwner(filteredProfiles, ownerScopeId, email);
+}
+
 function prepareOwnedUnknownArray(value: unknown, ownerScopeId: string | null | undefined, email: string | null | undefined, label: string): unknown[] {
   return prepareOwnedRecords<Record<string, unknown>>(asArray(value).filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeId, email, label);
+}
+
+function prepareOwnedUserProfileArray(value: unknown, ownerScopeId: string | null | undefined, email: string | null | undefined, label: string): unknown[] {
+  return prepareOwnedUserProfileRecords(asArray(value).filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeId, email, label);
 }
 
 function sanitizeForeignValue<T>(value: T, email: string | null | undefined, label: string): T | null {
@@ -526,7 +543,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
           }
         : null;
 
-      const parsedUserProfiles = prepareOwnedRecords<Record<string, unknown>>(
+      const parsedUserProfiles = prepareOwnedUserProfileRecords(
         parseStoredUnknownArray(usersRaw, 'userProfiles').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)),
         ownerScopeIdRef.current,
         emailRef.current,
@@ -666,7 +683,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       }
       const cloudSettingsRecord = asNullableRecord(cloudData.settings);
       const restoredUserProfilesRaw = hasDefinedProperty(cloudData, 'userProfiles') ? cloudData.userProfiles : cloudSettingsRecord?.[SETTINGS_USER_PROFILES_SYNC_KEY];
-      const restoredUserProfiles = prepareOwnedUnknownArray(restoredUserProfilesRaw, currentOwnerScopeId, currentEmail, 'cloud-restore user profiles');
+      const restoredUserProfiles = prepareOwnedUserProfileArray(restoredUserProfilesRaw, currentOwnerScopeId, currentEmail, 'cloud-restore user profiles');
       const restoredUserProfileIds = new Set(restoredUserProfiles.map((profile) => asRecord(profile).id).filter((id): id is string => typeof id === 'string'));
       const restoredCurrentUserIdRaw = hasDefinedProperty(cloudData, 'currentUserId') ? cloudData.currentUserId : cloudSettingsRecord?.[SETTINGS_CURRENT_USER_ID_SYNC_KEY];
       const restoredCurrentUserId = typeof restoredCurrentUserIdRaw === 'string' && (restoredUserProfileIds.size === 0 || restoredUserProfileIds.has(restoredCurrentUserIdRaw)) ? restoredCurrentUserIdRaw : null;

@@ -57,6 +57,20 @@ function parseOptionalStoredNumber(value: string | null): number | null {
   return Number.isNaN(parsedValue) ? null : parsedValue;
 }
 
+function prepareOwnedUserProfileRecords(records: Record<string, unknown>[], ownerScopeId: string, email: string, label: string): Record<string, unknown>[] {
+  const filteredProfiles = records.filter((profile) => !containsKnownForeignPersonalData(profile, email));
+
+  if (filteredProfiles.length !== records.length) {
+    console.warn('[CoreData] Removed user profiles with known foreign personal data:', {
+      label,
+      original: records.length,
+      filtered: filteredProfiles.length,
+    });
+  }
+
+  return stampRecordsForOwner(filteredProfiles, ownerScopeId, email);
+}
+
 function normalizeLoyaltySyncPayload(loyaltyData: unknown): {
   extendedLoyaltyData: unknown;
   manualClubRoyalePoints: number | null;
@@ -501,7 +515,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       const parsedOffers = dedupeCasinoOffers(prepareOwnedRecords<CasinoOffer>(offersData ? JSON.parse(offersData) as CasinoOffer[] : [], ownerScopeId, authenticatedEmail, 'backend-sync casino offers'), 'backend-sync casino offers');
       const parsedEvents = dedupeCalendarEvents(prepareOwnedRecords<CalendarEvent>(eventsData ? JSON.parse(eventsData) as CalendarEvent[] : [], ownerScopeId, authenticatedEmail, 'backend-sync calendar events'), 'backend-sync calendar events');
       const parsedSettings = settingsData ? sanitizeForeignValue(JSON.parse(settingsData) as Record<string, unknown>, authenticatedEmail, 'backend-sync settings') : undefined;
-      const parsedUsers = prepareOwnedRecords<Record<string, unknown>>(
+      const parsedUsers = prepareOwnedUserProfileRecords(
         usersData ? (JSON.parse(usersData) as unknown[]).filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)) : [],
         ownerScopeId,
         authenticatedEmail,
