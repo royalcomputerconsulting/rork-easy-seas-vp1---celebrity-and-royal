@@ -67,6 +67,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
     crownAnchorLevel,
     pinnacleProgress,
     mastersProgress,
+    captainsClub,
     projectedBookedPoints,
     totalBookedNights,
   } = useLoyalty();
@@ -85,7 +86,8 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
 
   const celebrityCaptainsClubPoints = currentUser?.celebrityCaptainsClubPoints || 0;
   const celebrityBlueChipPoints = currentUser?.celebrityBlueChipPoints || 0;
-  const celebrityLevel = getCelebrityCaptainsClubLevelByPoints(celebrityCaptainsClubPoints);
+  const hasRoyalPinnacleReciprocity = crownAnchorLevel === 'Pinnacle' || captainsClub.tier === 'Zenith';
+  const celebrityLevel = hasRoyalPinnacleReciprocity ? 'Zenith' : getCelebrityCaptainsClubLevelByPoints(celebrityCaptainsClubPoints);
   const celebrityTier = getCelebrityBlueChipTierByLevel(1);
   const silverseaTier = currentUser?.silverseaVenetianTier || getSilverseaTierByDays(currentUser?.silverseaVenetianPoints || 0);
   const silverseaPoints = currentUser?.silverseaVenetianPoints || 0;
@@ -318,12 +320,17 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
                       <Text style={styles.pinnaclePText}>P</Text>
                     </View>
                     <View style={styles.pinnacleDetailContent}>
-                      <Text style={[styles.pinnacleDetailLabel, progressMetaStyle]}>First Cruise AS Pinnacle:</Text>
+                      <Text style={[styles.pinnacleDetailLabel, progressMetaStyle]}>First Cruise With Top-Tier Status:</Text>
                       <Text style={[styles.pinnacleDetailValue, styles.pinnacleHighlightWhite]} numberOfLines={1}>
                         {pinnacleProgress.pinnacleShip && pinnacleProgress.pinnacleSailDate
                           ? `${pinnacleProgress.pinnacleShip} • ${formatCruiseDate(pinnacleProgress.pinnacleSailDate)}`
                           : 'Reached at end of this sailing'}
                       </Text>
+                      {pinnacleProgress.pinnacleStatusLabel ? (
+                        <Text style={[styles.pinnacleTapHint, progressMetaStyle]} numberOfLines={2}>
+                          {pinnacleProgress.pinnacleStatusLabel}
+                        </Text>
+                      ) : null}
                     </View>
                   </View>
                 </View>
@@ -500,7 +507,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
               <View style={styles.progressHeader}>
                 <Text style={[styles.progressLabel, progressLabelStyle]}>
                   {isZenith 
-                    ? `Zenith (${celebrityCaptainsClubPoints}/3,000)`
+                    ? (hasRoyalPinnacleReciprocity ? 'Zenith via Royal Caribbean Pinnacle reciprocity' : `Zenith (${celebrityCaptainsClubPoints}/3,000)`)
                     : `${celebrityLevel} → ${nextLevel} (${celebrityCaptainsClubPoints}/${nextThreshold})`
                   }
                 </Text>
@@ -522,7 +529,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
               </View>
               <Text style={[styles.progressEta, progressMetaStyle]}>
                 {isZenith 
-                  ? 'Zenith achieved! Maximum Captain\'s Club level'
+                  ? (hasRoyalPinnacleReciprocity ? 'Royal Caribbean Pinnacle automatically maps to Celebrity Zenith.' : 'Zenith achieved! Maximum Captain\'s Club level')
                   : `${pointsToNext} pts to ${nextLevel}`
                 }
               </Text>
@@ -585,8 +592,8 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         </View>
         <View style={[styles.statDivider, progressDividerStyle]} />
         <View style={styles.statItem}>
-          <Text style={[styles.statValue, progressLabelStyle]}>{Math.max(0, 3000 - celebrityCaptainsClubPoints)}</Text>
-          <Text style={[styles.statLabel, progressMetaStyle]}>To Zenith</Text>
+          <Text style={[styles.statValue, progressLabelStyle]}>{hasRoyalPinnacleReciprocity ? 0 : Math.max(0, 3000 - celebrityCaptainsClubPoints)}</Text>
+          <Text style={[styles.statLabel, progressMetaStyle]}>{hasRoyalPinnacleReciprocity ? 'Via Pinnacle' : 'To Zenith'}</Text>
         </View>
       </View>
 
