@@ -38,6 +38,35 @@ function getCruiseStatus(cruise: BookedCruise): 'upcoming' | 'completed' | 'acti
   return 'upcoming';
 }
 
+type FutureTopTierBadge = {
+  text: 'PINNACLE' | 'ZENITH';
+  bg: string;
+  textColor: string;
+};
+
+const TOP_TIER_BADGE_START_DATE = new Date(2026, 6, 24);
+
+function getFutureTopTierBadge(cruise: Cruise | BookedCruise, isBooked: boolean): FutureTopTierBadge | null {
+  if (!isBooked || !cruise.sailDate) return null;
+
+  const sailDate = createDateFromString(cruise.sailDate);
+  sailDate.setHours(0, 0, 0, 0);
+
+  if (sailDate.getTime() <= TOP_TIER_BADGE_START_DATE.getTime()) return null;
+
+  const brandIdentifier = `${cruise.brand ?? ''} ${cruise.cruiseSource ?? ''} ${cruise.shipName ?? ''}`.toLowerCase();
+
+  if (brandIdentifier.includes('celebrity')) {
+    return { text: 'ZENITH', bg: '#2B2930', textColor: COLORS.white };
+  }
+
+  if (brandIdentifier.includes('royal')) {
+    return { text: 'PINNACLE', bg: COLORS.tierPinnacle, textColor: COLORS.white };
+  }
+
+  return null;
+}
+
 export const CruiseCard = React.memo(function CruiseCard({ 
   cruise, 
   onPress, 
@@ -166,6 +195,10 @@ export const CruiseCard = React.memo(function CruiseCard({
   };
 
   const statusBadge = getStatusBadge();
+  const futureTopTierBadge = useMemo(
+    () => getFutureTopTierBadge(cruise, isBooked),
+    [cruise.sailDate, cruise.brand, cruise.cruiseSource, cruise.shipName, isBooked]
+  );
 
   const seaDayDensity = useMemo(() => {
     return calculateSeaDayDensityScore(cruise);
@@ -252,15 +285,22 @@ export const CruiseCard = React.memo(function CruiseCard({
               <Ship size={13} color={COLORS.navyDeep} />
               <Text style={styles.miniShipName} numberOfLines={1}>{cruise.shipName}</Text>
             </View>
-            <View style={[styles.miniStatusBadge, { backgroundColor: statusBadge.bg }]}>
-              <Text style={[
-                styles.miniStatusBadgeText,
-                statusBadge.bg === COLORS.goldAccent || statusBadge.bg === COLORS.aquaAccent 
-                  ? { color: COLORS.navyDeep } 
-                  : { color: COLORS.white }
-              ]}>
-                {statusBadge.text}
-              </Text>
+            <View style={styles.miniBadgeStack}>
+              <View style={[styles.miniStatusBadge, { backgroundColor: statusBadge.bg }]}>
+                <Text style={[
+                  styles.miniStatusBadgeText,
+                  statusBadge.bg === COLORS.goldAccent || statusBadge.bg === COLORS.aquaAccent 
+                    ? { color: COLORS.navyDeep } 
+                    : { color: COLORS.white }
+                ]}>
+                  {statusBadge.text}
+                </Text>
+              </View>
+              {futureTopTierBadge ? (
+                <View style={[styles.miniTopTierBadge, { backgroundColor: futureTopTierBadge.bg }]} testID="cruise-card-top-tier-badge">
+                  <Text style={[styles.miniTopTierBadgeText, { color: futureTopTierBadge.textColor }]}>{futureTopTierBadge.text}</Text>
+                </View>
+              ) : null}
             </View>
           </View>
           <Text style={styles.miniItinerary} numberOfLines={1}>{getItineraryName()}</Text>
@@ -520,15 +560,22 @@ export const CruiseCard = React.memo(function CruiseCard({
           <View style={styles.shipInfo}>
             <Ship size={16} color={COLORS.navyDeep} />
             <Text style={styles.shipName}>{cruise.shipName}</Text>
-            <View style={[styles.inlineStatusBadge, { backgroundColor: statusBadge.bg }]}>
-              <Text style={[
-                styles.inlineStatusBadgeText,
-                statusBadge.bg === COLORS.goldAccent || statusBadge.bg === COLORS.aquaAccent 
-                  ? { color: COLORS.navyDeep } 
-                  : { color: COLORS.white }
-              ]}>
-                {statusBadge.text}
-              </Text>
+            <View style={styles.inlineBadgeStack}>
+              <View style={[styles.inlineStatusBadge, { backgroundColor: statusBadge.bg }]}>
+                <Text style={[
+                  styles.inlineStatusBadgeText,
+                  statusBadge.bg === COLORS.goldAccent || statusBadge.bg === COLORS.aquaAccent 
+                    ? { color: COLORS.navyDeep } 
+                    : { color: COLORS.white }
+                ]}>
+                  {statusBadge.text}
+                </Text>
+              </View>
+              {futureTopTierBadge ? (
+                <View style={[styles.inlineTopTierBadge, { backgroundColor: futureTopTierBadge.bg }]} testID="cruise-card-top-tier-badge">
+                  <Text style={[styles.inlineTopTierBadgeText, { color: futureTopTierBadge.textColor }]}>{futureTopTierBadge.text}</Text>
+                </View>
+              ) : null}
             </View>
           </View>
           <View style={styles.actionIcons}>
@@ -728,6 +775,11 @@ const styles = StyleSheet.create({
     color: '#000000',
     marginBottom: 2,
   },
+  miniBadgeStack: {
+    alignItems: 'flex-end',
+    gap: 3,
+    marginLeft: 6,
+  },
   miniStatusBadge: {
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -737,6 +789,18 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     letterSpacing: 0.3,
+  },
+  miniTopTierBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    minWidth: 54,
+    alignItems: 'center',
+  },
+  miniTopTierBadgeText: {
+    fontSize: 9,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    letterSpacing: 0.5,
   },
   miniDestination: {
     fontSize: 13,
@@ -1311,16 +1375,32 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
     color: COLORS.navyDeep,
   },
+  inlineBadgeStack: {
+    alignItems: 'flex-start',
+    gap: 3,
+    marginLeft: SPACING.xs,
+  },
   inlineStatusBadge: {
     paddingHorizontal: SPACING.xs,
     paddingVertical: 2,
     borderRadius: BORDER_RADIUS.xs,
-    marginLeft: SPACING.xs,
   },
   inlineStatusBadgeText: {
     fontSize: 9,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     letterSpacing: 0.3,
+  },
+  inlineTopTierBadge: {
+    paddingHorizontal: SPACING.xs,
+    paddingVertical: 2,
+    borderRadius: BORDER_RADIUS.xs,
+    minWidth: 58,
+    alignItems: 'center',
+  },
+  inlineTopTierBadgeText: {
+    fontSize: 8,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    letterSpacing: 0.5,
   },
   offerSection: {
     flexDirection: 'row',
