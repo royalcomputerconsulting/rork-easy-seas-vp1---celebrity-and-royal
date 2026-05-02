@@ -765,7 +765,7 @@ function OverviewScreenContent() {
           onOffersPress={() => console.log('Active offers pressed')}
         />
 
-        <IntelligenceFilterStrip contextLabel="Offers" />
+        <IntelligenceFilterStrip contextLabel="Offers" variant="bookedCruises" />
 
 
         <TouchableOpacity
