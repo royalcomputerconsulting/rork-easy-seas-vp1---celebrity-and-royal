@@ -49,7 +49,10 @@ export interface UserProfile {
   crownAnchorNumber?: string;
   royalCaribbeanNumber?: string;
   clubRoyaleId?: string;
+  clubRoyalePoints?: number;
+  clubRoyaleTier?: string;
   crownAnchorLevel?: string;
+  loyaltyPoints?: number;
   playingHours?: PlayingHours;
   celebrityEmail?: string;
   celebrityCaptainsClubNumber?: string;
@@ -93,6 +96,9 @@ const DEFAULT_OWNER = {
   email: 'player@easyseas.app',
   crownAnchorNumber: '',
   crownAnchorLevel: '',
+  loyaltyPoints: 0,
+  clubRoyalePoints: 0,
+  clubRoyaleTier: '',
   celebrityEmail: '',
   celebrityCaptainsClubNumber: '',
   celebrityCaptainsClubPoints: 0,
@@ -135,7 +141,10 @@ function createOwnerProfile(email: string | null): UserProfile {
     crownAnchorNumber: DEFAULT_OWNER.crownAnchorNumber,
     royalCaribbeanNumber: DEFAULT_OWNER.crownAnchorNumber,
     clubRoyaleId: '',
+    clubRoyalePoints: DEFAULT_OWNER.clubRoyalePoints,
+    clubRoyaleTier: DEFAULT_OWNER.clubRoyaleTier,
     crownAnchorLevel: DEFAULT_OWNER.crownAnchorLevel,
+    loyaltyPoints: DEFAULT_OWNER.loyaltyPoints,
     celebrityEmail: DEFAULT_OWNER.celebrityEmail,
     celebrityCaptainsClubNumber: DEFAULT_OWNER.celebrityCaptainsClubNumber,
     blueChipId: '',
@@ -212,7 +221,10 @@ function sanitizeUserProfile(user: unknown, fallbackEmail: string | null, index:
     crownAnchorNumber: typeof userRecord.crownAnchorNumber === 'string' ? userRecord.crownAnchorNumber : DEFAULT_OWNER.crownAnchorNumber,
     royalCaribbeanNumber: typeof userRecord.royalCaribbeanNumber === 'string' ? userRecord.royalCaribbeanNumber : (typeof userRecord.crownAnchorNumber === 'string' ? userRecord.crownAnchorNumber : DEFAULT_OWNER.crownAnchorNumber),
     clubRoyaleId: typeof userRecord.clubRoyaleId === 'string' ? userRecord.clubRoyaleId : '',
+    clubRoyalePoints: typeof userRecord.clubRoyalePoints === 'number' ? userRecord.clubRoyalePoints : DEFAULT_OWNER.clubRoyalePoints,
+    clubRoyaleTier: typeof userRecord.clubRoyaleTier === 'string' ? userRecord.clubRoyaleTier : DEFAULT_OWNER.clubRoyaleTier,
     crownAnchorLevel: typeof userRecord.crownAnchorLevel === 'string' ? userRecord.crownAnchorLevel : DEFAULT_OWNER.crownAnchorLevel,
+    loyaltyPoints: typeof userRecord.loyaltyPoints === 'number' ? userRecord.loyaltyPoints : DEFAULT_OWNER.loyaltyPoints,
     playingHours: sanitizePlayingHours(userRecord.playingHours),
     celebrityEmail: typeof userRecord.celebrityEmail === 'string' ? userRecord.celebrityEmail : DEFAULT_OWNER.celebrityEmail,
     celebrityCaptainsClubNumber: typeof userRecord.celebrityCaptainsClubNumber === 'string' ? userRecord.celebrityCaptainsClubNumber : DEFAULT_OWNER.celebrityCaptainsClubNumber,

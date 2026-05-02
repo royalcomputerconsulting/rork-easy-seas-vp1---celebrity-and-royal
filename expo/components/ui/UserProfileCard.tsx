@@ -80,6 +80,10 @@ interface UserProfileCardProps {
   enrichmentData?: EnrichmentData | null;
   onSave: (data: UserProfileData) => void | Promise<void>;
   isSaving?: boolean;
+  linkedProfileLabel?: string;
+  linkedProfileActive?: boolean;
+  onLinkedProfilePress?: () => void;
+  onPrimaryProfileBrandPress?: () => void;
 }
 
 export function UserProfileCard({
@@ -87,6 +91,10 @@ export function UserProfileCard({
   enrichmentData,
   onSave,
   isSaving = false,
+  linkedProfileLabel,
+  linkedProfileActive = false,
+  onLinkedProfilePress,
+  onPrimaryProfileBrandPress,
 }: UserProfileCardProps) {
   const entitlement = useEntitlement();
   const [formData, setFormData] = useState<UserProfileData>(currentValues);
@@ -129,6 +137,7 @@ export function UserProfileCard({
   };
 
   const handleBrandToggle = (brand: BrandType) => {
+    onPrimaryProfileBrandPress?.();
     setActiveBrand(brand);
   };
 
@@ -608,7 +617,15 @@ export function UserProfileCard({
       </LinearGradient>
 
       <View style={styles.brandToggleContainer}>
-        <BrandToggle activeBrand={activeBrand} onToggle={handleBrandToggle} showSilversea={true} />
+        <BrandToggle
+          activeBrand={activeBrand}
+          onToggle={handleBrandToggle}
+          showSilversea={true}
+          showCarnival={!linkedProfileLabel}
+          customFourthLabel={linkedProfileLabel}
+          customFourthActive={linkedProfileActive}
+          onCustomFourthPress={onLinkedProfilePress}
+        />
       </View>
 
       <View style={styles.currentValuesSection}>

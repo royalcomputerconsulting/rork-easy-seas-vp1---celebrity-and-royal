@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useMemo, useEffect } from 'react';
+import React, { useCallback, useState, useMemo, useEffect, useRef } from 'react';
 import { 
   View, 
   Text, 
@@ -115,6 +115,8 @@ import { ResponsiveContainer } from '@/components/ResponsiveContainer';
 import { useEntitlement } from '@/state/EntitlementProvider';
 import { useCrewRecognition } from '@/state/CrewRecognitionProvider';
 import { useUserDataSync } from '@/state/UserDataSyncProvider';
+import { useIntelligenceFilters } from '@/state/IntelligenceFiltersProvider';
+import { getProfileDisplayName, getSecondProfileForUnassignedRecords } from '@/lib/intelligenceFilters';
 
 function normalizeAccountEmail(email: string | null | undefined): string | null {
   if (!email) {
@@ -148,6 +150,7 @@ export default function SettingsScreen() {
   const {
     currentUser,
     updateUser,
+    addUser,
     ensureOwner,
     syncFromStorage: syncUserFromStorage,
     isLoading: isUserLoading,
@@ -195,24 +198,55 @@ export default function SettingsScreen() {
   const { isAdmin, getWhitelist, addToWhitelist, removeFromWhitelist, updateEmail, authenticatedEmail } = useAuth();
   const { stats: crewStats } = useCrewRecognition();
   const { forceSyncNow: forceProfileSyncNow } = useUserDataSync();
+  const { selectedProfileId, setSelectedProfileId } = useIntelligenceFilters();
+  const linkedProfileEnsuredRef = useRef(false);
 
   const normalizedAuthenticatedEmail = useMemo(() => normalizeAccountEmail(authenticatedEmail), [authenticatedEmail]);
-  const normalizedCurrentUserEmail = useMemo(() => normalizeAccountEmail(currentUser?.email), [currentUser?.email]);
+  const activeUserProfiles = useMemo(() => users.filter((profile) => profile.active !== false), [users]);
+  const primaryProfileUser = useMemo(() => {
+    if (currentUser) {
+      return currentUser;
+    }
+
+    return activeUserProfiles.find((profile) => profile.isOwner || normalizeAccountEmail(profile.email) === normalizedAuthenticatedEmail)
+      ?? activeUserProfiles[0]
+      ?? null;
+  }, [activeUserProfiles, currentUser, normalizedAuthenticatedEmail]);
+  const linkedSecondProfile = useMemo(() => getSecondProfileForUnassignedRecords(activeUserProfiles), [activeUserProfiles]);
+  const selectedSettingsProfile = useMemo(() => {
+    if (selectedProfileId !== 'all' && selectedProfileId !== 'unassigned') {
+      const explicitProfile = activeUserProfiles.find((profile) => profile.id === selectedProfileId);
+      if (explicitProfile) {
+        return explicitProfile;
+      }
+    }
+
+    if (selectedProfileId === 'unassigned' && linkedSecondProfile) {
+      return linkedSecondProfile;
+    }
+
+    return primaryProfileUser;
+  }, [activeUserProfiles, linkedSecondProfile, primaryProfileUser, selectedProfileId]);
+  const normalizedSelectedProfileEmail = useMemo(() => normalizeAccountEmail(selectedSettingsProfile?.email), [selectedSettingsProfile?.email]);
   const profileDisplayUser = useMemo(() => {
-    if (!currentUser) {
+    if (!selectedSettingsProfile) {
       return null;
     }
 
-    if (normalizedAuthenticatedEmail && normalizedCurrentUserEmail && normalizedCurrentUserEmail !== normalizedAuthenticatedEmail) {
+    const isPrimaryProfile = selectedSettingsProfile.id === primaryProfileUser?.id;
+    if (isPrimaryProfile && normalizedAuthenticatedEmail && normalizedSelectedProfileEmail && normalizedSelectedProfileEmail !== normalizedAuthenticatedEmail) {
       console.log('[Settings] Hiding stale profile values while account storage catches up:', {
         authenticatedEmail: normalizedAuthenticatedEmail,
-        profileEmail: normalizedCurrentUserEmail,
+        profileEmail: normalizedSelectedProfileEmail,
       });
       return null;
     }
 
-    return currentUser;
-  }, [currentUser, normalizedAuthenticatedEmail, normalizedCurrentUserEmail]);
+    return selectedSettingsProfile;
+  }, [normalizedAuthenticatedEmail, normalizedSelectedProfileEmail, primaryProfileUser?.id, selectedSettingsProfile]);
+  const isPrimaryProfileSelected = profileDisplayUser?.id === primaryProfileUser?.id;
+  const isLinkedProfileSelected = Boolean(linkedSecondProfile && profileDisplayUser?.id === linkedSecondProfile.id);
+  const linkedProfileLabel = linkedSecondProfile ? getProfileDisplayName(linkedSecondProfile) : 'Unassigned';
   const isProfileDisplayReady = true;
 
 
@@ -246,6 +280,35 @@ export default function SettingsScreen() {
       console.error('[Settings] Failed to ensure owner profile:', error);
     });
   }, [authenticatedEmail, currentUser, ensureOwner, isUserLoading]);
+
+  useEffect(() => {
+    if (isUserLoading || !authenticatedEmail || !primaryProfileUser || linkedSecondProfile || linkedProfileEnsuredRef.current) {
+      return;
+    }
+
+    linkedProfileEnsuredRef.current = true;
+    addUser({ name: 'Unassigned', email: authenticatedEmail })
+      .then((createdProfile) => {
+        console.log('[Settings] Created linked second profile for filtering:', createdProfile.id);
+        if (selectedProfileId === 'unassigned') {
+          setSelectedProfileId(createdProfile.id);
+        }
+      })
+      .catch((error) => {
+        linkedProfileEnsuredRef.current = false;
+        console.error('[Settings] Failed to create linked second profile:', error);
+      });
+  }, [addUser, authenticatedEmail, isUserLoading, linkedSecondProfile, primaryProfileUser, selectedProfileId, setSelectedProfileId]);
+
+  const handleLinkedProfilePress = useCallback(() => {
+    setSelectedProfileId(linkedSecondProfile?.id ?? 'unassigned');
+  }, [linkedSecondProfile?.id, setSelectedProfileId]);
+
+  const handlePrimaryProfileBrandPress = useCallback(() => {
+    if (primaryProfileUser) {
+      setSelectedProfileId(primaryProfileUser.id);
+    }
+  }, [primaryProfileUser, setSelectedProfileId]);
 
   const handleAddToWhitelist = async () => {
     if (!newWhitelistEmail.trim() || !newWhitelistEmail.includes('@')) {
@@ -292,10 +355,10 @@ export default function SettingsScreen() {
     name: profileDisplayUser?.name || '',
     email: profileDisplayUser?.email || authenticatedEmail || '',
     crownAnchorNumber: profileDisplayUser?.crownAnchorNumber || '',
-    clubRoyalePoints: loyaltyClubRoyalePoints,
-    clubRoyaleTier: loyaltyClubRoyaleTier,
-    loyaltyPoints: loyaltyCrownAnchorPoints,
-    crownAnchorLevel: loyaltyCrownAnchorLevel,
+    clubRoyalePoints: isPrimaryProfileSelected ? loyaltyClubRoyalePoints : (profileDisplayUser?.clubRoyalePoints ?? 0),
+    clubRoyaleTier: isPrimaryProfileSelected ? loyaltyClubRoyaleTier : (profileDisplayUser?.clubRoyaleTier || ''),
+    loyaltyPoints: isPrimaryProfileSelected ? loyaltyCrownAnchorPoints : (profileDisplayUser?.loyaltyPoints ?? 0),
+    crownAnchorLevel: isPrimaryProfileSelected ? loyaltyCrownAnchorLevel : (profileDisplayUser?.crownAnchorLevel || ''),
     celebrityEmail: profileDisplayUser?.celebrityEmail || '',
     celebrityCaptainsClubNumber: profileDisplayUser?.celebrityCaptainsClubNumber || '',
     celebrityCaptainsClubPoints: profileDisplayUser?.celebrityCaptainsClubPoints || 0,
@@ -317,6 +380,7 @@ export default function SettingsScreen() {
     loyaltyClubRoyalePoints,
     loyaltyClubRoyaleTier,
     loyaltyCrownAnchorLevel,
+    isPrimaryProfileSelected,
     loyaltyCrownAnchorPoints,
     profileDisplayUser,
   ]);
@@ -324,8 +388,8 @@ export default function SettingsScreen() {
 
 
   const enrichmentData = useMemo(() => {
-    if (!isProfileDisplayReady) return null;
-    if (!extendedLoyalty && !currentUser?.carnivalVifpNumber) return null;
+    if (!isProfileDisplayReady || !isPrimaryProfileSelected) return null;
+    if (!extendedLoyalty && !profileDisplayUser?.carnivalVifpNumber) return null;
 
     return {
       accountId: extendedLoyalty?.accountId,
@@ -361,16 +425,16 @@ export default function SettingsScreen() {
       venetianSocietyEnrolled: venetianSociety?.enrolled || extendedLoyalty?.venetianSocietyEnrolled,
       venetianSocietyLoyaltyMatchTier: extendedLoyalty?.venetianSocietyLoyaltyMatchTier,
 
-      carnivalVifpTier: currentUser?.carnivalVifpTier,
-      carnivalVifpNumber: currentUser?.carnivalVifpNumber,
-      carnivalPlayersClubTier: currentUser?.carnivalPlayersClubTier,
-      carnivalPlayersClubPoints: currentUser?.carnivalPlayersClubPoints,
+      carnivalVifpTier: profileDisplayUser?.carnivalVifpTier,
+      carnivalVifpNumber: profileDisplayUser?.carnivalVifpNumber,
+      carnivalPlayersClubTier: profileDisplayUser?.carnivalPlayersClubTier,
+      carnivalPlayersClubPoints: profileDisplayUser?.carnivalPlayersClubPoints,
 
       hasCoBrandCard: extendedLoyalty?.hasCoBrandCard,
       coBrandCardStatus: extendedLoyalty?.coBrandCardStatus,
       coBrandCardErrorMessage: extendedLoyalty?.coBrandCardErrorMessage,
     };
-  }, [captainsClub, currentUser, extendedLoyalty, isProfileDisplayReady, venetianSociety]);
+  }, [captainsClub, extendedLoyalty, isPrimaryProfileSelected, isProfileDisplayReady, profileDisplayUser, venetianSociety]);
 
   const dataStats = useMemo(() => {
     const allOffers = casinoOffers.length > 0 ? casinoOffers : (localData.offers || []);
@@ -1738,7 +1802,8 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
       
       const oldEmail = profileDisplayUser?.email?.toLowerCase().trim() || authenticatedEmail?.toLowerCase().trim();
       const newEmail = profileData.email.toLowerCase().trim();
-      const emailChanged = oldEmail && oldEmail !== newEmail;
+      const profileEmailChanged = Boolean(oldEmail && oldEmail !== newEmail);
+      const emailChanged = isPrimaryProfileSelected && profileEmailChanged;
       
       console.log('[Settings] Email change check:', { oldEmail, newEmail, emailChanged });
       
@@ -1839,6 +1904,10 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
           name: profileData.name,
           email: profileData.email,
           crownAnchorNumber: profileData.crownAnchorNumber,
+          clubRoyalePoints: profileData.clubRoyalePoints,
+          clubRoyaleTier: profileData.clubRoyaleTier,
+          crownAnchorLevel: profileData.crownAnchorLevel,
+          loyaltyPoints: profileData.loyaltyPoints,
           celebrityEmail: profileData.celebrityEmail,
           celebrityCaptainsClubNumber: profileData.celebrityCaptainsClubNumber,
           celebrityCaptainsClubPoints: profileData.celebrityCaptainsClubPoints,
@@ -1855,10 +1924,12 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
           birthdate: profileData.birthdate || undefined,
         });
       
-      // Update Royal Caribbean loyalty data
-      await setManualClubRoyalePoints(profileData.clubRoyalePoints);
-      await setManualCrownAnchorPoints(profileData.loyaltyPoints);
+      if (isPrimaryProfileSelected) {
+        await setManualClubRoyalePoints(profileData.clubRoyalePoints);
+        await setManualCrownAnchorPoints(profileData.loyaltyPoints);
+      }
       console.log('[Settings] ✓ Updated Royal Caribbean loyalty:', {
+        profileId: editableUser.id,
         clubRoyale: profileData.clubRoyalePoints,
         crownAnchor: profileData.loyaltyPoints
       });
@@ -1883,7 +1954,9 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
       });
       
       await syncUserFromStorage();
-      await syncLoyaltyFromStorage();
+      if (isPrimaryProfileSelected) {
+        await syncLoyaltyFromStorage();
+      }
       await forceProfileSyncNow();
       
       if (emailChanged) {
@@ -2312,11 +2385,15 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
           </View>
 
           <UserProfileCard
-            key={`profile-${normalizedAuthenticatedEmail ?? 'guest'}`}
+            key={`profile-${profileDisplayUser?.id ?? normalizedAuthenticatedEmail ?? 'guest'}`}
             currentValues={currentProfileValues}
             enrichmentData={enrichmentData}
             onSave={handleSaveProfile}
             isSaving={isSaving}
+            linkedProfileLabel={linkedProfileLabel}
+            linkedProfileActive={isLinkedProfileSelected}
+            onLinkedProfilePress={handleLinkedProfilePress}
+            onPrimaryProfileBrandPress={handlePrimaryProfileBrandPress}
           />
 
           <View style={styles.section}>
