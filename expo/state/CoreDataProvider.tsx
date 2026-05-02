@@ -30,7 +30,7 @@ import { containsKnownForeignPersonalData, filterRecordsForOwner, isOwnerScopeFo
 import { updateAllCruiseLifecycles } from "@/lib/lifecycleManager";
 import { dedupeBookedCruises, dedupeCalendarEvents, dedupeCasinoOffers, dedupeCruises } from "@/lib/dataIdentity";
 import { generateCruiseCalendarEvents } from "@/lib/calendar/cruiseEvents";
-import { annotateOverlappingCruises, applyKnownBookingCorrectionsToCruise, isKnownInvalidBookedCruise } from "@/lib/cruiseOverlapGuards";
+import { annotateOverlappingCruises, applyConfirmedPinnacleCruisePlan, applyKnownBookingCorrectionsToCruise, isKnownInvalidBookedCruise } from "@/lib/cruiseOverlapGuards";
 
 const getMockCruises = (): { BOOKED_CRUISES_DATA: BookedCruise[]; COMPLETED_CRUISES_DATA: BookedCruise[] } => {
   try {
@@ -1181,7 +1181,8 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       nonMock: nonMockCruises.length 
     });
     
-    const withItineraries = enrichCruisesWithMockItineraries(nonMockCruises);
+    const withConfirmedPinnaclePlan = applyConfirmedPinnacleCruisePlan(nonMockCruises.map(applyKnownBookingCorrectionsToCruise));
+    const withItineraries = enrichCruisesWithMockItineraries(withConfirmedPinnaclePlan);
     const withKnownRetail = applyKnownRetailValues(withItineraries);
     const withFreeplayOBC = applyFreeplayOBCData(withKnownRetail);
     const enrichedCruises = enrichCruisesWithReceiptData(withFreeplayOBC);

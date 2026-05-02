@@ -33,6 +33,159 @@ const ICON_MAY_2026_PORTS: string[] = [
   'Miami, Florida',
 ];
 
+const CONFIRMED_PINNACLE_CRUISE_PLAN: BookedCruise[] = [
+  {
+    id: 'booked-icon-2026-05-09',
+    reservationNumber: '871437',
+    shipName: 'Icon of the Seas',
+    sailDate: '2026-05-09',
+    returnDate: '2026-05-16',
+    departurePort: 'Miami, Florida',
+    destination: 'Western Caribbean & Perfect Day',
+    itineraryName: '7 Night Western Caribbean Cruise',
+    nights: 7,
+    cabinType: 'OV Balcony (2D)',
+    cabinNumber: '7616',
+    guestNames: ['Scott Merlis'],
+    guests: 1,
+    singleOccupancy: true,
+    status: 'booked',
+    completionState: 'upcoming',
+    ports: ICON_MAY_2026_PORTS,
+    itinerary: ICON_MAY_2026_ITINERARY,
+    seaDays: 2,
+    portDays: 4,
+    casinoOpenDays: 7,
+  },
+  {
+    id: 'booked-3820089',
+    reservationNumber: '3820089',
+    shipName: 'Symphony of the Seas',
+    sailDate: '2026-05-17',
+    returnDate: '2026-05-24',
+    departurePort: 'Galveston, Texas',
+    destination: 'Western Caribbean',
+    itineraryName: '7 Night Western Caribbean Cruise',
+    nights: 7,
+    cabinType: 'OV Balcony GTY',
+    guestNames: ['Scott Merlis'],
+    guests: 1,
+    singleOccupancy: true,
+    status: 'booked',
+    completionState: 'upcoming',
+    ports: ['Galveston, Texas', 'Cozumel, Mexico', 'Roatan, Honduras', 'Puerto Costa Maya, Mexico'],
+  },
+  {
+    id: 'booked-5455777',
+    reservationNumber: '5455777',
+    shipName: 'Navigator of the Seas',
+    sailDate: '2026-05-29',
+    returnDate: '2026-06-05',
+    departurePort: 'Los Angeles, California',
+    destination: 'Mexican Riviera',
+    itineraryName: '7 Night Ensenada, Cabo & Mazatlan',
+    nights: 7,
+    cabinType: 'OV GTY',
+    guestNames: ['Scott Merlis'],
+    guests: 1,
+    singleOccupancy: true,
+    status: 'booked',
+    completionState: 'upcoming',
+    ports: ['Los Angeles, California', 'Ensenada, Mexico', 'Cabo San Lucas, Mexico', 'Mazatlan, Mexico'],
+  },
+  {
+    id: 'booked-3879193',
+    reservationNumber: '3879193',
+    shipName: 'Quantum of the Seas',
+    sailDate: '2026-06-05',
+    returnDate: '2026-06-12',
+    departurePort: 'Los Angeles, California',
+    destination: 'Mexican Riviera',
+    itineraryName: '7 Night Cabo Overnight, Catalina & Ensenada',
+    nights: 7,
+    cabinType: 'GTY',
+    guestNames: ['Scott Merlis'],
+    guests: 1,
+    singleOccupancy: true,
+    status: 'booked',
+    completionState: 'upcoming',
+    ports: ['Los Angeles, California', 'Catalina Island, California', 'Cabo San Lucas, Mexico', 'Cabo San Lucas, Mexico', 'Ensenada, Mexico'],
+  },
+  {
+    id: 'booked-6173746',
+    reservationNumber: '6173746',
+    shipName: 'Quantum of the Seas',
+    sailDate: '2026-06-19',
+    returnDate: '2026-06-26',
+    departurePort: 'Los Angeles, California',
+    destination: 'Mexican Riviera',
+    itineraryName: '7 Night Cabo Overnight & Ensenada',
+    nights: 7,
+    cabinType: 'GTY',
+    guestNames: ['Scott Merlis'],
+    guests: 1,
+    singleOccupancy: true,
+    status: 'booked',
+    completionState: 'upcoming',
+    ports: ['Los Angeles, California', 'Cabo San Lucas, Mexico', 'Cabo San Lucas, Mexico', 'Ensenada, Mexico'],
+  },
+  {
+    id: 'booked-star-2026-07-05',
+    reservationNumber: 'STAR-20260705',
+    shipName: 'Star of the Seas',
+    sailDate: '2026-07-05',
+    returnDate: '2026-07-12',
+    departurePort: 'Port Canaveral, Florida',
+    destination: 'Caribbean',
+    itineraryName: '7 Night Caribbean from Port Canaveral, Florida',
+    nights: 7,
+    cabinType: 'Balcony',
+    guestNames: ['Scott Merlis'],
+    guests: 1,
+    singleOccupancy: true,
+    status: 'booked',
+    completionState: 'upcoming',
+    ports: ['Port Canaveral, Florida', 'Caribbean', 'Port Canaveral, Florida'],
+  },
+  {
+    id: 'booked-4097701',
+    reservationNumber: '4097701',
+    shipName: 'Navigator of the Seas',
+    sailDate: '2026-07-17',
+    returnDate: '2026-07-24',
+    departurePort: 'Los Angeles, California',
+    destination: 'Mexican Riviera',
+    itineraryName: '7 Night Cabo Overnight & Ensenada',
+    nights: 7,
+    cabinType: 'Balcony',
+    cabinNumber: '10718',
+    guestNames: ['Scott Merlis'],
+    guests: 1,
+    singleOccupancy: true,
+    status: 'booked',
+    completionState: 'upcoming',
+    ports: ['Los Angeles, California', 'Cabo San Lucas, Mexico', 'Cabo San Lucas, Mexico', 'Ensenada, Mexico'],
+  },
+  {
+    id: 'booked-navigator-2026-07-24',
+    reservationNumber: 'NAV-20260724',
+    shipName: 'Navigator of the Seas',
+    sailDate: '2026-07-24',
+    returnDate: '2026-07-31',
+    departurePort: 'Los Angeles, California',
+    destination: 'Mexican Riviera',
+    itineraryName: '7 Night Cabo Overnight & Ensenada',
+    nights: 7,
+    cabinType: 'Balcony',
+    guestNames: ['Scott Merlis'],
+    guests: 1,
+    singleOccupancy: true,
+    status: 'booked',
+    completionState: 'upcoming',
+    ports: ['Los Angeles, California', 'Cabo San Lucas, Mexico', 'Cabo San Lucas, Mexico', 'Ensenada, Mexico'],
+  },
+];
+
 function normalizeDateOnly(value?: string | null): string {
   if (!value) return '';
   const trimmed = value.trim();
@@ -48,6 +201,58 @@ function isSymphonyMay2026Replacement(cruise: BookedCruise): boolean {
   return cruise.shipName?.toLowerCase().trim() === 'symphony of the seas'
     && normalizeDateOnly(cruise.sailDate) === '2026-05-10'
     && (!cruise.returnDate || normalizeDateOnly(cruise.returnDate) === '2026-05-17');
+}
+
+function normalizeCruiseKey(shipName?: string, sailDate?: string): string {
+  return `${(shipName ?? '').trim().toLowerCase()}|${normalizeDateOnly(sailDate)}`;
+}
+
+function getReservationKey(cruise: BookedCruise): string {
+  return String(cruise.reservationNumber ?? cruise.bookingId ?? cruise.bwoNumber ?? '').trim().toUpperCase();
+}
+
+function isScottPinnaclePlanningData(cruises: BookedCruise[]): boolean {
+  return cruises.some((cruise) =>
+    cruise.guestNames?.some((guest) => guest.toLowerCase().includes('scott')) === true
+    || ['871437', '3820089', '5455777', '3879193', '6173746', '4097701'].includes(getReservationKey(cruise))
+  );
+}
+
+function mergeConfirmedPlanCruise(existing: BookedCruise, confirmed: BookedCruise): BookedCruise {
+  return {
+    ...existing,
+    ...confirmed,
+    id: existing.id || confirmed.id,
+    reservationNumber: existing.reservationNumber || confirmed.reservationNumber,
+    notes: existing.notes,
+  };
+}
+
+/** Ensures the user-confirmed 590 → 702 Pinnacle plan is present and uses solo double C&A points. */
+export function applyConfirmedPinnacleCruisePlan(cruises: BookedCruise[]): BookedCruise[] {
+  if (!isScottPinnaclePlanningData(cruises)) {
+    return cruises;
+  }
+
+  const result = [...cruises];
+
+  CONFIRMED_PINNACLE_CRUISE_PLAN.forEach((confirmedCruise) => {
+    const confirmedReservation = getReservationKey(confirmedCruise);
+    const confirmedSailingKey = normalizeCruiseKey(confirmedCruise.shipName, confirmedCruise.sailDate);
+    const existingIndex = result.findIndex((cruise) => {
+      const reservationMatches = confirmedReservation.length > 0 && getReservationKey(cruise) === confirmedReservation;
+      const sailingMatches = normalizeCruiseKey(cruise.shipName, cruise.sailDate) === confirmedSailingKey;
+      return reservationMatches || sailingMatches;
+    });
+
+    if (existingIndex >= 0) {
+      result[existingIndex] = mergeConfirmedPlanCruise(result[existingIndex], confirmedCruise);
+    } else {
+      result.push(confirmedCruise);
+    }
+  });
+
+  return dedupeBookedCruises(result, 'confirmed pinnacle cruise plan');
 }
 
 function normalizeKnownShipAlias(cruise: BookedCruise): BookedCruise {
@@ -121,8 +326,9 @@ export function applyKnownBookingCorrectionsToCruise(cruise: BookedCruise): Book
 
 /** Applies known booking corrections to a list without mutating the input records. */
 export function applyKnownBookingCorrections(cruises: BookedCruise[]): BookedCruise[] {
+  const correctedCruises = cruises.filter((cruise) => !isKnownInvalidBookedCruise(cruise)).map(applyKnownBookingCorrectionsToCruise);
   return dedupeBookedCruises(
-    cruises.filter((cruise) => !isKnownInvalidBookedCruise(cruise)).map(applyKnownBookingCorrectionsToCruise),
+    applyConfirmedPinnacleCruisePlan(correctedCruises),
     'known booking corrections'
   );
 }

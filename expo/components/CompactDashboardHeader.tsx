@@ -275,10 +275,12 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
                 {isPinnacle 
                   ? 'Pinnacle achieved! Maximum loyalty level reached'
                   : (() => {
-                      const bookedPoints = projectedBookedPoints || 0;
-                      const remainingAfterBooked = pinnacleProgress.projectedPointsNeededAfterBooked ?? Math.max(0, nightsToNext - bookedPoints);
+                      const bookedPointsToPinnacle = pinnacleProgress.pointsFromBookedToPinnacle || projectedBookedPoints || 0;
+                      const bookedNightsToPinnacle = pinnacleProgress.bookedNightsToPinnacle || totalBookedNights;
+                      const remainingAfterBooked = pinnacleProgress.projectedPointsNeededAfterBooked ?? Math.max(0, nightsToNext - bookedPointsToPinnacle);
                       const soloNightsStillNeeded = Math.ceil(remainingAfterBooked / 2);
-                      return `Need: ${pinnacleProgress.currentPointsNeeded ?? nightsToNext} pts (${pinnacleProgress.soloNightsToNext ?? Math.ceil(nightsToNext / 2)} solo nights) • Booked: ${bookedPoints} pts from ${totalBookedNights} nights • Still need: ${remainingAfterBooked} pts (${soloNightsStillNeeded} solo nights)`;
+                      const milestoneTotal = pinnacleProgress.thresholdCrossedShip ? ` • Milestone total: ${pinnacleProgress.projectedPointsAtPinnacle} pts` : '';
+                      return `Need: ${pinnacleProgress.currentPointsNeeded ?? nightsToNext} pts (${pinnacleProgress.soloNightsToNext ?? Math.ceil(nightsToNext / 2)} solo nights) • Booked path: +${bookedPointsToPinnacle} pts from ${bookedNightsToPinnacle} nights${milestoneTotal} • Still need: ${remainingAfterBooked} pts (${soloNightsStillNeeded} solo nights)`;
                     })()
                 }
               </Text>
@@ -290,7 +292,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
                       <Target size={10} color="#DC2626" />
                     </View>
                     <View style={styles.pinnacleDetailContent}>
-                      <Text style={[styles.pinnacleDetailLabel, progressMetaStyle]}>Threshold Crossed On:</Text>
+                      <Text style={[styles.pinnacleDetailLabel, progressMetaStyle]}>Pinnacle Reached On:</Text>
                       <Text style={[styles.pinnacleDetailValue, progressLabelStyle]} numberOfLines={1}>
                         {`${pinnacleProgress.thresholdCrossedShip} • ${formatCruiseDate(pinnacleProgress.thresholdCrossedSailDate)}`}
                       </Text>
@@ -305,7 +307,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
                       <Text style={[styles.pinnacleDetailValue, styles.pinnacleHighlightWhite]} numberOfLines={1}>
                         {pinnacleProgress.pinnacleShip && pinnacleProgress.pinnacleSailDate
                           ? `${pinnacleProgress.pinnacleShip} • ${formatCruiseDate(pinnacleProgress.pinnacleSailDate)}`
-                          : 'Not booked yet'}
+                          : 'Reached at end of this sailing'}
                       </Text>
                     </View>
                   </View>

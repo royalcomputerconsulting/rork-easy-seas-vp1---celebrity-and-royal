@@ -91,8 +91,8 @@ export function ClubRoyalePoints({
         <>
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>{pinnacleProgress.nightsToNext}</Text>
-              <Text style={styles.statLabel}>Nights to Pinnacle</Text>
+              <Text style={styles.statValue}>{pinnacleProgress.currentPointsNeeded}</Text>
+              <Text style={styles.statLabel}>Pts to Pinnacle</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
@@ -113,15 +113,15 @@ export function ClubRoyalePoints({
                 gradientColors={[COLORS.points, COLORS.pointsLight]}
                 surfaceTone="light"
               />
-              {pinnacleProgress.pinnacleShip && pinnacleProgress.pinnacleSailDate && pinnacleProgress.nightsToNext > 0 && (
+              {pinnacleProgress.thresholdCrossedShip && pinnacleProgress.thresholdCrossedSailDate && pinnacleProgress.nightsToNext > 0 && (
                 <View style={styles.pinnacleAchievementBadge}>
                   <Text style={styles.pinnacleAchievementText}>
-                    ⭐ {pinnacleProgress.pinnacleShip} - {String(pinnacleProgress.pinnacleSailDate || '').match(/^(\d{4})-(\d{1,2})-(\d{1,2})/) ? (() => {
-                      const m = String(pinnacleProgress.pinnacleSailDate).match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-                      if (!m) return pinnacleProgress.pinnacleSailDate;
+                    Pinnacle path: {crownAnchorPoints} → {pinnacleProgress.projectedPointsAtPinnacle} by {String(pinnacleProgress.thresholdCrossedSailDate || '').match(/^(\d{4})-(\d{1,2})-(\d{1,2})/) ? (() => {
+                      const m = String(pinnacleProgress.thresholdCrossedSailDate).match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+                      if (!m) return pinnacleProgress.thresholdCrossedSailDate;
                       const [, y, mo, da] = m;
                       return `${String(mo).padStart(2, '0')}/${String(da).padStart(2, '0')}/${y}`;
-                    })() : pinnacleProgress.pinnacleSailDate}
+                    })() : pinnacleProgress.thresholdCrossedSailDate}
                   </Text>
                 </View>
               )}

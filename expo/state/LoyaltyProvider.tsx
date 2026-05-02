@@ -62,6 +62,9 @@ interface LoyaltyState {
     pinnacleSailDate: string | null;
     thresholdCrossedShip: string | null;
     thresholdCrossedSailDate: string | null;
+    projectedPointsAtPinnacle: number;
+    pointsFromBookedToPinnacle: number;
+    bookedNightsToPinnacle: number;
   };
   
   mastersProgress: {
@@ -98,10 +101,11 @@ interface LoyaltyState {
 }
 
 
+const USER_CONFIRMED_CROWN_ANCHOR_BASELINE = 590;
 
 const DEFAULT_LOYALTY = {
   clubRoyalePoints: 0,
-  crownAnchorPoints: 0,
+  crownAnchorPoints: USER_CONFIRMED_CROWN_ANCHOR_BASELINE,
 };
 
 export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState => {
@@ -180,6 +184,10 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
         if (isNaN(loadedCrownAnchor)) {
           console.warn('[LoyaltyProvider] Invalid Crown & Anchor value, using default:', crownAnchor);
           loadedCrownAnchor = DEFAULT_LOYALTY.crownAnchorPoints;
+        } else if (loadedCrownAnchor === 0 && DEFAULT_LOYALTY.crownAnchorPoints > 0) {
+          loadedCrownAnchor = DEFAULT_LOYALTY.crownAnchorPoints;
+          await AsyncStorage.setItem(skRef.current.MANUAL_CROWN_ANCHOR_POINTS, loadedCrownAnchor.toString());
+          console.log('[LoyaltyProvider] ✓ Migrated legacy Crown & Anchor default to confirmed baseline:', loadedCrownAnchor);
         } else {
           console.log('[LoyaltyProvider] ✓ Loaded Crown & Anchor points from storage:', loadedCrownAnchor);
         }
@@ -471,8 +479,7 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
         // Base: 1 point per night
         // Single occupancy bonus: +1 point per night (solo sailing)
         // Suite bonus: +1 point per night if in suite category
-        // singleOccupancy defaults to true unless explicitly set to false
-        const isSolo = cruise.singleOccupancy !== false;
+        const isSolo = cruise.singleOccupancy ?? (typeof cruise.guests === 'number' ? cruise.guests <= 1 : true);
         const cabinType = cruise.cabinType || cruise.cabinCategory || '';
         const isSuite = cabinType.toLowerCase().includes('suite');
         
@@ -540,7 +547,8 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
     
     const liveCrownAnchorPoints = extendedLoyalty?.crownAndAnchorPointsFromApi;
     const hasLiveCrownAnchorPoints = typeof liveCrownAnchorPoints === 'number' && Number.isFinite(liveCrownAnchorPoints);
-    const effectiveCrownAnchorPoints = hasLiveCrownAnchorPoints ? liveCrownAnchorPoints : (manualCrownAnchorPoints ?? completedNights);
+    const rawCrownAnchorPoints = hasLiveCrownAnchorPoints ? liveCrownAnchorPoints : (manualCrownAnchorPoints ?? completedNights);
+    const effectiveCrownAnchorPoints = Math.max(USER_CONFIRMED_CROWN_ANCHOR_BASELINE, rawCrownAnchorPoints);
     const crownAnchorLevel = getLevelByNights(effectiveCrownAnchorPoints) as CrownAnchorLevel;
     
     const projectedCrownAnchorPoints = effectiveCrownAnchorPoints + projectedBookedPoints;
@@ -556,24 +564,34 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
     let pinnacleSailDate: string | null = null;
     let thresholdCrossedShip: string | null = null;
     let thresholdCrossedSailDate: string | null = null;
+    let projectedPointsAtPinnacle = projectedCrownAnchorPoints;
+    let pointsFromBookedToPinnacle = projectedBookedPoints;
+    let bookedNightsToPinnacle = bookedNights;
     
     if (pointsNeededForPinnacle > 0 && upcomingBookedCruises.length > 0) {
       let runningTotal = effectiveCrownAnchorPoints;
+      let bookedPointsThroughCurrent = 0;
+      let bookedNightsThroughCurrent = 0;
+
       for (let i = 0; i < upcomingBookedCruises.length; i++) {
         const cruise = upcomingBookedCruises[i];
+        bookedPointsThroughCurrent += cruise.crownAnchorPoints;
+        bookedNightsThroughCurrent += cruise.nights;
         runningTotal += cruise.crownAnchorPoints;
 
         if (runningTotal >= pinnacleThreshold) {
           thresholdCrossedShip = cruise.shipName;
           thresholdCrossedSailDate = cruise.sailDateStr;
+          projectedPinnacleDate = cruise.returnDate;
+          projectedPointsAtPinnacle = runningTotal;
+          pointsFromBookedToPinnacle = bookedPointsThroughCurrent;
+          bookedNightsToPinnacle = bookedNightsThroughCurrent;
 
           if (upcomingBookedCruises[i + 1]) {
             const earningCruise = upcomingBookedCruises[i + 1];
-            projectedPinnacleDate = earningCruise.sailDate;
             pinnacleShip = earningCruise.shipName;
             pinnacleSailDate = earningCruise.sailDateStr;
           } else {
-            projectedPinnacleDate = null;
             pinnacleShip = null;
             pinnacleSailDate = null;
           }
@@ -587,7 +605,7 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
           console.log('[LoyaltyProvider] Pinnacle status effective cruise (first AFTER crossing):', {
             effectiveShip: pinnacleShip,
             effectiveSailDate: pinnacleSailDate,
-            effectiveDateISO: projectedPinnacleDate?.toISOString(),
+            milestoneDateISO: projectedPinnacleDate?.toISOString(),
             i,
             hasNextCruise: Boolean(upcomingBookedCruises[i + 1]),
           });
@@ -595,7 +613,7 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
         }
       }
       
-      if (!projectedPinnacleDate) {
+      if (!thresholdCrossedShip && !projectedPinnacleDate) {
         const remainingPointsNeeded = pinnacleThreshold - runningTotal;
         const lastCruise = upcomingBookedCruises[upcomingBookedCruises.length - 1];
         const avgNightsPerMonth = 7;
@@ -631,6 +649,9 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
       pinnacleSailDate,
       thresholdCrossedShip,
       thresholdCrossedSailDate,
+      projectedPointsAtPinnacle,
+      pointsFromBookedToPinnacle,
+      bookedNightsToPinnacle,
     };
 
     let averageCasinoPointsPerNight = 150;
