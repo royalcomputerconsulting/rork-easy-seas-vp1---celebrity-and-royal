@@ -24,8 +24,134 @@ type ImportedCalendarEvent = FullAppDataBundle['calendarEvents'][number];
 type ImportedBookedCruise = FullAppDataBundle['bookedCruises'][number];
 type CasinoDataBundle = NonNullable<FullAppDataBundle['casinoData']>;
 
+export interface ExportAllDataSummary {
+  cruiseSailings: number;
+  bookedCruises: number;
+  casinoOffers: number;
+  calendarEvents: number;
+  casinoSessions: number;
+  certificates: number;
+  machineEncyclopedia: number;
+  savedAtlasMachines: number;
+  customSlotMachines: number;
+  deckPlanLocations: number;
+  crewMembers: number;
+  crewRecognitionEntries: number;
+  crewSailings: number;
+  userProfiles: number;
+  primaryUserProfiles: number;
+  appSettingsRecords: number;
+  clubRoyaleProfiles: number;
+  playingHoursRecords: number;
+  loyaltyPointFields: number;
+  extendedLoyaltyFields: number;
+  bankrollLimits: number;
+  bankrollAlerts: number;
+  casinoOpenHourRecords: number;
+  compItems: number;
+  w2gRecords: number;
+}
+
 function normalizeImportedArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? value as T[] : [];
+}
+
+function hasObjectFields(value: unknown): boolean {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value as Record<string, unknown>).length > 0);
+}
+
+function countUniqueCrewMembers(entries: FullAppDataBundle['crewRecognition']['entries']): number {
+  const uniqueCrew = new Set<string>();
+
+  entries.forEach((entry, index) => {
+    const record = entry as unknown as Record<string, unknown>;
+    const crewMemberId = typeof record.crewMemberId === 'string' ? record.crewMemberId.trim().toLowerCase() : '';
+    const fullName = typeof record.fullName === 'string' ? record.fullName.trim().toLowerCase() : '';
+    const department = typeof record.department === 'string' ? record.department.trim().toLowerCase() : '';
+    const roleTitle = typeof record.roleTitle === 'string' ? record.roleTitle.trim().toLowerCase() : '';
+    const fallbackKey = [fullName, department, roleTitle].filter(Boolean).join('|');
+    uniqueCrew.add(crewMemberId || fallbackKey || `crew-entry-${index}`);
+  });
+
+  return uniqueCrew.size;
+}
+
+function formatCount(count: number, singular: string, plural?: string): string {
+  return `${count.toLocaleString()} ${count === 1 ? singular : plural ?? `${singular}s`}`;
+}
+
+/** Builds exact counts from the backup bundle that is actually written to disk. */
+export function buildExportAllDataSummary(bundle: FullAppDataBundle): ExportAllDataSummary {
+  const casinoData = bundle.casinoData;
+  const loyaltyData = bundle.loyaltyData;
+
+  return {
+    cruiseSailings: bundle.cruises.length,
+    bookedCruises: bundle.bookedCruises.length,
+    casinoOffers: bundle.casinoOffers.length,
+    calendarEvents: bundle.calendarEvents.length,
+    casinoSessions: bundle.casinoSessions.length,
+    certificates: bundle.certificates.length,
+    machineEncyclopedia: bundle.machines.encyclopedia.length,
+    savedAtlasMachines: bundle.machines.atlasIds.length,
+    customSlotMachines: bundle.machines.userMachines?.length ?? 0,
+    deckPlanLocations: bundle.machines.deckLocations?.length ?? 0,
+    crewMembers: countUniqueCrewMembers(bundle.crewRecognition.entries),
+    crewRecognitionEntries: bundle.crewRecognition.entries.length,
+    crewSailings: bundle.crewRecognition.sailings.length,
+    userProfiles: bundle.users.length,
+    primaryUserProfiles: bundle.userProfile ? 1 : 0,
+    appSettingsRecords: bundle.settings ? 1 : 0,
+    clubRoyaleProfiles: bundle.clubRoyaleProfile ? 1 : 0,
+    playingHoursRecords: bundle.playingHours ? 1 : 0,
+    loyaltyPointFields: Object.values(loyaltyData).filter((value) => value !== null && value !== undefined).length,
+    extendedLoyaltyFields: hasObjectFields(bundle.extendedLoyaltyData) ? Object.keys(bundle.extendedLoyaltyData as Record<string, unknown>).length : 0,
+    bankrollLimits: casinoData?.bankrollLimits.length ?? 0,
+    bankrollAlerts: casinoData?.bankrollAlerts.length ?? 0,
+    casinoOpenHourRecords: casinoData?.casinoOpenHours ? Object.keys(casinoData.casinoOpenHours).length : 0,
+    compItems: casinoData?.compItems.length ?? 0,
+    w2gRecords: casinoData?.w2gRecords.length ?? 0,
+  };
+}
+
+/** Formats a user-facing backup summary with only counts derived from the exported file contents. */
+export function formatExportAllDataSummary(summary: ExportAllDataSummary, fileName: string): string {
+  return [
+    `Exported to ${fileName}:`,
+    '',
+    'Cruises & offers:',
+    `• ${formatCount(summary.cruiseSailings, 'cruise sailing record')}`,
+    `• ${formatCount(summary.bookedCruises, 'booked cruise')}`,
+    `• ${formatCount(summary.casinoOffers, 'casino offer')}`,
+    `• ${formatCount(summary.calendarEvents, 'calendar event')}`,
+    `• ${formatCount(summary.certificates, 'certificate')}`,
+    '',
+    'Casino tracking:',
+    `• ${formatCount(summary.casinoSessions, 'casino session')}`,
+    `• ${formatCount(summary.bankrollLimits, 'bankroll limit')}`,
+    `• ${formatCount(summary.bankrollAlerts, 'bankroll alert')}`,
+    `• ${formatCount(summary.casinoOpenHourRecords, 'casino-open-hours record')}`,
+    `• ${formatCount(summary.compItems, 'comp item')}`,
+    `• ${formatCount(summary.w2gRecords, 'W-2G record')}`,
+    '',
+    'Machines & crew:',
+    `• ${formatCount(summary.machineEncyclopedia, 'machine encyclopedia record')}`,
+    `• ${formatCount(summary.savedAtlasMachines, 'saved atlas machine')}`,
+    `• ${formatCount(summary.customSlotMachines, 'custom slot machine')}`,
+    `• ${formatCount(summary.deckPlanLocations, 'deck-plan location')}`,
+    `• ${formatCount(summary.crewMembers, 'unique crew member')}`,
+    `• ${formatCount(summary.crewRecognitionEntries, 'crew recognition entry', 'crew recognition entries')}`,
+    `• ${formatCount(summary.crewSailings, 'crew sailing')}`,
+    '',
+    'Profiles & settings:',
+    `• ${formatCount(summary.userProfiles, 'user profile')}`,
+    `• ${formatCount(summary.primaryUserProfiles, 'primary user profile snapshot')}`,
+    `• ${formatCount(summary.appSettingsRecords, 'app settings record')}`,
+    `• ${formatCount(summary.clubRoyaleProfiles, 'Club Royale profile')}`,
+    `• ${formatCount(summary.playingHoursRecords, 'playing-hours record')}`,
+    `• ${formatCount(summary.loyaltyPointFields, 'loyalty point field')}`,
+    `• ${formatCount(summary.extendedLoyaltyFields, 'extended loyalty field')}`,
+  ].join('\n');
 }
 
 function normalizeImportedDateOnly(value: unknown): string {
@@ -261,6 +387,8 @@ function normalizeImportedBackup(rawBundle: LegacyFullDataBundle): FullAppDataBu
 export async function exportAllDataToFile(email?: string | null, profileGate?: DataProfileGate): Promise<{
   success: boolean;
   fileName?: string;
+  summary?: ExportAllDataSummary;
+  summaryText?: string;
   error?: string;
 }> {
   try {
@@ -271,6 +399,7 @@ export async function exportAllDataToFile(email?: string | null, profileGate?: D
     });
     
     const bundle = await getAllStoredData(email, profileGate);
+    const summary = buildExportAllDataSummary(bundle);
     const jsonContent = JSON.stringify(bundle, null, 2);
     
     const now = new Date();
@@ -280,6 +409,7 @@ export async function exportAllDataToFile(email?: string | null, profileGate?: D
     const timestamp = `${month}.${day}.${year}`;
     
     const fileName = `Easy Seas - Backup ${timestamp}.json`;
+    const summaryText = formatExportAllDataSummary(summary, fileName);
 
     if (Platform.OS === 'web') {
       const blob = new Blob([jsonContent], { type: 'application/json' });
@@ -291,8 +421,8 @@ export async function exportAllDataToFile(email?: string | null, profileGate?: D
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      console.log('[DataFileIO] Web download initiated');
-      return { success: true, fileName };
+      console.log('[DataFileIO] Web download initiated', summary);
+      return { success: true, fileName, summary, summaryText };
     }
 
     const file = new ExpoFile(ExpoPaths.cache, fileName);
@@ -306,8 +436,8 @@ export async function exportAllDataToFile(email?: string | null, profileGate?: D
       });
     }
 
-    console.log('[DataFileIO] File exported successfully');
-    return { success: true, fileName };
+    console.log('[DataFileIO] File exported successfully', summary);
+    return { success: true, fileName, summary, summaryText };
   } catch (error) {
     console.error('[DataFileIO] Export error:', error);
     return { 

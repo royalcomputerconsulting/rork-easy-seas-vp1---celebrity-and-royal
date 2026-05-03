@@ -1596,7 +1596,7 @@ export default function SettingsScreen() {
       if (result.success) {
         Alert.alert(
           'Export Successful',
-          `All app data has been exported to ${result.fileName}. This includes cruises, offers, booked cruises, events, casino sessions, certificates, machines, crew members, user profile (name, C&A #, playing hours), Club Royale points, loyalty points, and settings.`
+          result.summaryText ?? `All app data has been exported to ${result.fileName ?? 'backup file'}.`
         );
       } else {
         Alert.alert('Export Failed', result.error || 'Failed to export data.');
