@@ -124,6 +124,7 @@ interface CruiseEconomicsSummaryOptions {
   minimumTotalPoints?: number;
   pointsAdjustmentNote?: string;
   useKnownAnnualReportFacts?: boolean;
+  scope?: 'annualCompletedRoyal' | 'allCruises';
 }
 
 const ANNUAL_SCOPE_START = '2025-04-01' as const;
@@ -260,20 +261,9 @@ function inAnnualScope(cruise: BookedCruise, today: Date): boolean {
     && sailDate <= ANNUAL_SCOPE_END;
 }
 
-function applyRetailOverrides(ship: string, nights: number, retailValue: number | null): number | null {
-  if (ship === 'Star of the Seas') {
-    return 6500;
-  }
-
-  if (ship === 'Harmony of the Seas') {
-    return 4650;
-  }
-
-  if (ship === 'Liberty of the Seas' && nights === 9) {
-    return 3500;
-  }
-
-  return retailValue;
+function applyRetailOverrides(ship: string, sailDate: string, retailValue: number | null): number | null {
+  const annualFact = ANNUAL_CASINO_REPORT_FACTS_BY_KEY.get(getAnnualFactKey(ship, sailDate));
+  return annualFact?.retailValue ?? retailValue;
 }
 
 function getAnnualCasinoFact(cruise: BookedCruise): AnnualCasinoHistoricalFact | undefined {
@@ -530,6 +520,15 @@ function getEstimatedWinnings(cruise: BookedCruise): { value: number; isActual: 
     };
   }
 
+  const isFutureBookedCruise = cruise.status === 'booked' || cruise.completionState === 'upcoming' || cruise.bookingStatus === 'booked';
+  if (isFutureBookedCruise) {
+    return {
+      value: 0,
+      isActual: false,
+      note: 'No winnings entered yet for this booked cruise; casino value is not pre-estimated.',
+    };
+  }
+
   const estimatedWinnings = (cruise.nights || 0) <= 3 ? 300 : 700;
 
   return {
@@ -598,6 +597,7 @@ function buildCruiseEconomicsRow(cruise: BookedCruise): CruiseEconomicsRow {
   const brand = getCruiseBrand(cruiseForEconomics);
   const status = cruiseForEconomics.status === 'completed' || cruiseForEconomics.completionState === 'completed' ? 'completed' : cruiseForEconomics.status === 'booked' ? 'booked' : 'other';
 
+  const matchedAnnualFact = getAnnualCasinoFact(cruiseForEconomics);
   const rawRetailValue = getFirstNumber(
     cruiseForEconomics.retailValue,
     cruiseForEconomics.totalRetailCost,
@@ -605,8 +605,8 @@ function buildCruiseEconomicsRow(cruise: BookedCruise): CruiseEconomicsRow {
     breakdown.totalRetailValue,
     breakdown.cabinValueForTwo,
   );
-  const retailValue = applyRetailOverrides(ship, nights, rawRetailValue);
-  const retailIsActual = isNumber(rawRetailValue) || ship === 'Star of the Seas' || ship === 'Harmony of the Seas' || (ship === 'Liberty of the Seas' && nights === 9);
+  const retailValue = applyRetailOverrides(ship, sailDate, rawRetailValue);
+  const retailIsActual = isNumber(rawRetailValue) || Boolean(matchedAnnualFact);
 
   const taxesFeesInfo = getTaxesFeesEstimate(cruiseForEconomics, breakdown);
   const taxesFeesEstimate = taxesFeesInfo.value;
@@ -642,7 +642,6 @@ function buildCruiseEconomicsRow(cruise: BookedCruise): CruiseEconomicsRow {
   const pointsPerHour = isNumber(hoursPlayed) ? calcPointsPerHour(pointsInfo.value, hoursPlayed) : null;
   const valuePerHour = isNumber(hoursPlayed) ? calcValuePerHour(totalEconomicValue, hoursPlayed) : null;
 
-  const matchedAnnualFact = getAnnualCasinoFact(cruiseForEconomics);
   const estimationFlags = [
     !retailIsActual,
     !paidInfo.isActual,
@@ -743,9 +742,14 @@ export function buildCruiseEconomicsSummary(
     includeKnownAnnualFacts: options?.useKnownAnnualReportFacts ?? false,
   });
 
-  const scopedRows = sourceCruises
-    .filter((cruise) => inAnnualScope(cruise, today))
-    .filter((cruise) => !options?.useKnownAnnualReportFacts || Boolean(getAnnualCasinoFact(cruise)))
+  const scope = options?.scope ?? 'annualCompletedRoyal';
+  const scopedCruises = scope === 'allCruises'
+    ? sourceCruises
+    : sourceCruises
+      .filter((cruise) => inAnnualScope(cruise, today))
+      .filter((cruise) => !options?.useKnownAnnualReportFacts || Boolean(getAnnualCasinoFact(cruise)));
+
+  const scopedRows = scopedCruises
     .map(buildCruiseEconomicsRow)
     .sort((a, b) => createDateFromString(a.sailDate).getTime() - createDateFromString(b.sailDate).getTime());
 

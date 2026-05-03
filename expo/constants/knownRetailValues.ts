@@ -6,6 +6,7 @@ export interface KnownRetailValue {
 }
 
 export const KNOWN_RETAIL_VALUES: KnownRetailValue[] = [
+  { cruiseId: '2656334', ship: 'Star of the Seas', departureDate: '2026-07-05', retailCabinValue: 5596 },
   { cruiseId: '2665774', ship: 'Star of the Seas', departureDate: '2025-08-27', retailCabinValue: 6580 },
   { cruiseId: '7836829', ship: 'Radiance of the Seas', departureDate: '2025-09-26', retailCabinValue: 4480 },
   { cruiseId: '6242276', ship: 'Navigator of the Seas', departureDate: '2025-08-01', retailCabinValue: 2880 },

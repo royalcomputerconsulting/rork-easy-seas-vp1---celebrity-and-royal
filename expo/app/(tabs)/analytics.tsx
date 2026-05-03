@@ -136,7 +136,7 @@ function parseNumberInput(value: string): number {
 }
 
 function calculateCruiseROI(cruise: BookedCruise): { roi: number; valuePerDollar: number } {
-  const summary = buildCruiseEconomicsSummary([cruise]);
+  const summary = buildCruiseEconomicsSummary([cruise], new Date(), { scope: 'allCruises' });
   const row = summary.rows[0];
 
   if (row) {
@@ -535,7 +535,7 @@ export default function AnalyticsScreen() {
     const certificateValue = parseNumberInput(performanceForm.instantCertificateValue);
     const instantCertificateWon = performanceForm.instantCertificateWon;
     const now = new Date().toISOString();
-    const selectedSummary = buildCruiseEconomicsSummary([selectedPerformanceCruise]);
+    const selectedSummary = buildCruiseEconomicsSummary([selectedPerformanceCruise], new Date(), { scope: 'allCruises' });
     const selectedEconomicsRow = selectedSummary.rows[0];
     const retailValue = selectedEconomicsRow?.retail ?? selectedPerformanceCruise.retailValue ?? selectedPerformanceCruise.totalRetailCost ?? selectedPerformanceCruise.originalPrice ?? 0;
     const netEffectivePaid = selectedEconomicsRow?.paid ?? selectedPerformanceCruise.netEffectivePaid ?? selectedPerformanceCruise.amountPaid ?? selectedPerformanceCruise.pricePaid ?? selectedPerformanceCruise.totalPrice ?? selectedPerformanceCruise.price ?? 0;

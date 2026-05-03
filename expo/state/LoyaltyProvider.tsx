@@ -144,7 +144,7 @@ const DEFAULT_LOYALTY = {
   crownAnchorPoints: USER_CONFIRMED_CROWN_ANCHOR_BASELINE,
 };
 
-const CONFIRMED_PINNACLE_PLAN_RESERVATIONS = new Set(['871437', '3820089', '5455777', '3879193', '6173746', '4097701', 'NAV-20260724', 'STAR-20260705']);
+const CONFIRMED_PINNACLE_PLAN_RESERVATIONS = new Set(['871437', '3820089', '5455777', '3879193', '6173746', '4097701', 'NAV-20260724', '2656334']);
 
 function hasConfirmedPinnacleBaseline(cruises: BookedCruise[]): boolean {
   return cruises.some((cruise) => {

@@ -233,7 +233,7 @@ export default function BookedScreen() {
 
   const cruiseEconomicsSummary = useMemo(() => {
     const activeCruises = bookedCruises.filter((cruise) => isCruiseUpcomingBooking(cruise) || isCruiseCompleted(cruise));
-    return buildCruiseEconomicsSummary(activeCruises);
+    return buildCruiseEconomicsSummary(activeCruises, new Date(), { scope: 'allCruises' });
   }, [bookedCruises]);
 
   const casinoStats = useMemo(() => {
