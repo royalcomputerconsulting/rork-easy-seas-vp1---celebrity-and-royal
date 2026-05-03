@@ -1,4 +1,4 @@
-import React, { memo, useMemo, useState, useEffect } from 'react';
+import React, { memo, useCallback, useMemo, useState, useEffect } from 'react';
 import { ShipMachinesPanel } from '@/components/ShipMachinesPanel';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, Switch, Image } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
