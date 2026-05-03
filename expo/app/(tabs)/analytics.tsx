@@ -58,7 +58,7 @@ import {
 import { 
   getLevelProgress
 } from '@/constants/crownAnchor';
-import type { BookedCruise } from '@/types/models';
+import { DOLLARS_PER_POINT, type BookedCruise } from '@/types/models';
 import { isRoyalCaribbeanShip } from '@/constants/shipInfo';
 import { getImageForDestination, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
 import { TierProgressionChart } from '@/components/charts/TierProgressionChart';
@@ -101,6 +101,7 @@ import { buildCruiseEconomicsSummary, normalizeCruisesWithCasinoEconomics, type 
 import { CONFIRMED_CLUB_ROYALE_2025_POINTS, getKnownCasinoProfileCruises, isKnownCasinoProfile } from '@/lib/knownProfileFallback';
 import { dedupeBookedCruises } from '@/lib/dataIdentity';
 import {
+  DEFAULT_ESTIMATED_POINTS_PER_PLAY_HOUR,
   buildCurrentSeasonCasinoMetrics,
   getBookedCruiseCasinoPoints,
   normalizeCruiseCasinoPerformance,
@@ -594,7 +595,7 @@ export default function AnalyticsScreen() {
     return buildCruiseEconomicsSummary(bookedCruises, new Date(), {
       useKnownAnnualReportFacts: isKnownCasinoProfile(authenticatedEmail),
       minimumTotalPoints: isKnownCasinoProfile(authenticatedEmail) ? CONFIRMED_CLUB_ROYALE_2025_POINTS : undefined,
-      pointsAdjustmentNote: 'Historical Club Royale points use the confirmed 58,500-point 2025 season floor when imported per-cruise rows do not contain every point transaction.',
+      pointsAdjustmentNote: 'Historical Club Royale points use the confirmed 58,680-point 2025 season floor when imported per-cruise rows do not contain every point transaction.',
     });
   }, [authenticatedEmail, bookedCruises]);
 
@@ -2016,104 +2017,170 @@ export default function AnalyticsScreen() {
     if (activeTab !== 'calcs') return [] as { id: number; label: string; value: string; description: string; color: string; icon: any }[];
 
     const isHistorical = calcsMode === 'historical';
-    const DOLLARS_PER_POINT = 5;
-
-    const sessionCoinIn = sessions.reduce((sum, s) => sum + ((s.pointsEarned || 0) * DOLLARS_PER_POINT), 0);
-    const hasSessionData = sessions.length > 0 && sessionCoinIn > 0;
-
-    const sessionBuyInTotal = sessions.reduce((sum, s) => sum + (s.buyIn || 0), 0);
-    const estimatedCoinInFromBuyIns = sessionBuyInTotal > 0 ? sessionBuyInTotal * 4 : 0;
-    const estimatedCoinInFromNights = historicalCruiseData.totalNights > 0 ? historicalCruiseData.totalNights * 1500 : 0;
-
-    const rawTotalCoinIn = isHistorical
-      ? cruiseEconomicsSummary.totals.totalCoinIn
-      : (hasSessionData ? sessionCoinIn : cruiseEconomicsSummary.totals.totalCoinIn);
-
-    const totalCoinIn = rawTotalCoinIn > 0
-      ? rawTotalCoinIn
-      : (estimatedCoinInFromBuyIns > 0 ? estimatedCoinInFromBuyIns : estimatedCoinInFromNights);
-    const coinInIsEstimated = rawTotalCoinIn <= 0 && totalCoinIn > 0;
-
-    const totalSessions = isHistorical
-      ? historicalCruiseData.totalSessions
-      : (hasSessionData ? sessions.length : historicalCruiseData.totalSessions || Math.max(1, casinoAnalytics.completedCruisesCount * 2));
-
-    const totalProfit = realAnalytics.completedEconomicValue;
-    const totalHours = sessionAnalytics.totalPlayTimeMinutes / 60;
-    const _totalRetailValue = realAnalytics.completedRetailValue;
-    const totalTaxesFees = realAnalytics.completedTaxesFees;
-
-    const sessionNetWinLoss = hasSessionData ? sessionAnalytics.netWinLoss : realAnalytics.completedCashResult;
-    const totalWinLoss = isHistorical ? realAnalytics.completedCashResult : sessionNetWinLoss;
+    const assumedHold = 0.08;
+    const pointDollarValue = 0.01;
+    const roundMetric = (value: number): number => Math.round((value + Number.EPSILON) * 100) / 100;
 
     const defaultAvgSessionMinutes = 90;
     const avgSessionLength = sessionAnalytics.avgSessionLength > 0 ? sessionAnalytics.avgSessionLength : defaultAvgSessionMinutes;
-    const modeLabel = isHistorical ? 'historical' : (hasSessionData ? 'per session' : 'per session (est.)');
-    const historicalTotalPoints = cruiseEconomicsSummary.totals.totalPoints;
-    const completedCruiseCount = cruiseEconomicsSummary.totals.cruises;
-    const avgCashResultPerCruise = completedCruiseCount > 0 ? realAnalytics.completedCashResult / completedCruiseCount : 0;
-    const divisorLabel = isHistorical
-      ? `${historicalCruiseData.totalSessions} sessions across ${completedCruiseCount} cruises`
-      : (hasSessionData ? `${sessions.length} tracked sessions` : `${totalSessions} est. sessions from ${completedCruiseCount} cruises`);
+    const avgSessionHours = avgSessionLength > 0 ? avgSessionLength / 60 : 1.5;
 
-    console.log('[Calcs] Mode:', calcsMode, 'hasSessionData:', hasSessionData, 'totalCoinIn:', totalCoinIn, 'rawTotalCoinIn:', rawTotalCoinIn, 'coinInIsEstimated:', coinInIsEstimated, 'totalSessions:', totalSessions, 'economics.totalCoinIn:', cruiseEconomicsSummary.totals.totalCoinIn);
+    const actualSessionMinutes = sessions.reduce((sum, s) => sum + Math.max(0, s.durationMinutes || 0), 0);
+    const actualSessionHours = roundMetric(actualSessionMinutes / 60);
+    const actualSessionPoints = sessions.reduce((sum, s) => sum + (s.pointsEarned || 0), 0);
+    const actualSessionCoinIn = roundMetric(actualSessionPoints * DOLLARS_PER_POINT);
+    const actualSessionPointValue = roundMetric(actualSessionPoints * pointDollarValue);
+    const actualSessionValue = roundMetric(sessionAnalytics.netWinLoss + actualSessionPointValue);
+    const hasSessionData = sessions.length > 0 && (actualSessionMinutes > 0 || actualSessionPoints > 0 || sessionAnalytics.netWinLoss !== 0);
+    const useCurrentSeasonFallback = !isHistorical && !hasSessionData && currentSeasonMetrics.points > 0;
+
+    const historicalHours = cruiseEconomicsSummary.totals.totalHours;
+    const totalCoinIn = isHistorical
+      ? cruiseEconomicsSummary.totals.totalCoinIn
+      : (hasSessionData ? actualSessionCoinIn : currentSeasonMetrics.coinIn);
+    const totalPointsForMode = isHistorical
+      ? cruiseEconomicsSummary.totals.totalPoints
+      : (hasSessionData ? actualSessionPoints : currentSeasonMetrics.points);
+    const totalHoursForMode = isHistorical
+      ? historicalHours
+      : (hasSessionData ? actualSessionHours : currentSeasonMetrics.estimatedPlayHours);
+    const totalProfit = isHistorical
+      ? cruiseEconomicsSummary.totals.totalEconomicValue
+      : (hasSessionData ? actualSessionValue : currentSeasonMetrics.winningsBroughtHome);
+    const totalWinLoss = isHistorical
+      ? cruiseEconomicsSummary.totals.totalCashResult
+      : (hasSessionData ? sessionAnalytics.netWinLoss : currentSeasonMetrics.winningsBroughtHome);
+    const totalTaxesFees = isHistorical ? cruiseEconomicsSummary.totals.totalPaid : sessionAnalytics.totalBuyIn;
+
+    const completedCruiseCount = cruiseEconomicsSummary.totals.cruises;
+    const estimatedHistoricalSessions = historicalHours > 0 ? Math.max(1, Math.round(historicalHours / avgSessionHours)) : historicalCruiseData.totalSessions;
+    const totalSessions = isHistorical
+      ? (historicalCruiseData.totalSessions > 0 ? historicalCruiseData.totalSessions : estimatedHistoricalSessions)
+      : (hasSessionData ? sessions.length : Math.max(1, currentSeasonMetrics.cruises));
+    const coinInIsEstimated = isHistorical ? cruiseEconomicsSummary.totals.hasEstimates : useCurrentSeasonFallback;
+    const modeLabel = isHistorical ? 'historical annual' : (hasSessionData ? 'tracked session' : 'current season known-cruise');
+    const historicalTotalPoints = totalPointsForMode;
+    const avgCashResultPerCruise = completedCruiseCount > 0 ? cruiseEconomicsSummary.totals.totalCashResult / completedCruiseCount : 0;
+    const divisorLabel = isHistorical
+      ? `${totalSessions} ${historicalCruiseData.totalSessions > 0 ? 'tracked/derived' : 'estimated'} sessions across ${completedCruiseCount} cruises`
+      : (hasSessionData ? `${sessions.length} tracked sessions` : `${currentSeasonMetrics.cruises} current-season cruises`);
+
+    console.log('[Calcs] Mode:', calcsMode, 'hasSessionData:', hasSessionData, 'totalCoinIn:', totalCoinIn, 'coinInIsEstimated:', coinInIsEstimated, 'totalHoursForMode:', totalHoursForMode, 'totalSessions:', totalSessions, 'economics.totalCoinIn:', cruiseEconomicsSummary.totals.totalCoinIn);
 
     const coinInPerUnit = totalSessions > 0 ? totalCoinIn / totalSessions : 0;
-    
-    const assumedHold = 0.08;
     const theoPerUnit = coinInPerUnit * assumedHold;
-    
-    const morningSessionsData = sessions.filter(s => {
-      const hour = parseInt(s.startTime.split(':')[0]);
-      return hour >= 5 && hour < 12;
-    });
-    const eveningSessionsData = sessions.filter(s => {
-      const hour = parseInt(s.startTime.split(':')[0]);
-      return hour >= 17 || hour < 2;
-    });
-    
-    const morningCoinIn = morningSessionsData.reduce((sum, s) => sum + ((s.pointsEarned || 0) * DOLLARS_PER_POINT), 0);
-    const eveningCoinIn = eveningSessionsData.reduce((sum, s) => sum + ((s.pointsEarned || 0) * DOLLARS_PER_POINT), 0);
 
-    let morningTheo: number;
-    let eveningTheo: number;
-    if (isHistorical || !hasSessionData) {
-      const morningRatio = sessions.length > 0 ? morningSessionsData.length / Math.max(sessions.length, 1) : 0.4;
-      const eveningRatio = sessions.length > 0 ? eveningSessionsData.length / Math.max(sessions.length, 1) : 0.6;
-      morningTheo = (totalCoinIn * morningRatio) * assumedHold;
-      eveningTheo = (totalCoinIn * eveningRatio) * assumedHold;
-    } else {
-      morningTheo = morningCoinIn * assumedHold;
-      eveningTheo = eveningCoinIn * assumedHold;
-    }
-    const theoPerTimeBlock = morningTheo > eveningTheo ? 'Morning' : 'Evening';
-    const theoTimeBlockValue = Math.max(morningTheo, eveningTheo);
-    
-    const cruiseDates = new Set(sessions.map(s => s.date));
-    const theoValues = Array.from(cruiseDates).map(date => {
-      const daySessions = sessions.filter(s => s.date === date);
-      const dayCoinIn = daySessions.reduce((sum, s) => sum + ((s.pointsEarned || 0) * DOLLARS_PER_POINT), 0);
-      return dayCoinIn * assumedHold;
+    const parseSessionStartMinutes = (value: string): number | null => {
+      const timeMatch = value.match(/^(\d{1,2}):(\d{2})/);
+      if (timeMatch) {
+        const hours = Number(timeMatch[1]);
+        const minutes = Number(timeMatch[2]);
+        return Number.isFinite(hours) && Number.isFinite(minutes) ? (hours * 60) + minutes : null;
+      }
+
+      const parsedDate = new Date(value);
+      if (!Number.isNaN(parsedDate.getTime())) {
+        return (parsedDate.getHours() * 60) + parsedDate.getMinutes();
+      }
+
+      return null;
+    };
+
+    const blockDefinitions = [
+      { label: 'Late Night', start: 0, end: 300 },
+      { label: 'Morning', start: 300, end: 720 },
+      { label: 'Afternoon', start: 720, end: 1020 },
+      { label: 'Evening', start: 1020, end: 1380 },
+      { label: 'Late Night', start: 1380, end: 1440 },
+      { label: 'Late Night', start: 1440, end: 1740 },
+      { label: 'Morning', start: 1740, end: 2160 },
+      { label: 'Afternoon', start: 2160, end: 2460 },
+      { label: 'Evening', start: 2460, end: 2820 },
+      { label: 'Late Night', start: 2820, end: 2880 },
+    ];
+
+    const timeBlockMetrics = new Map<string, { label: string; minutes: number; points: number; coinIn: number; theoretical: number; theoreticalPerHour: number }>([
+      ['Late Night', { label: 'Late Night', minutes: 0, points: 0, coinIn: 0, theoretical: 0, theoreticalPerHour: 0 }],
+      ['Morning', { label: 'Morning', minutes: 0, points: 0, coinIn: 0, theoretical: 0, theoreticalPerHour: 0 }],
+      ['Afternoon', { label: 'Afternoon', minutes: 0, points: 0, coinIn: 0, theoretical: 0, theoreticalPerHour: 0 }],
+      ['Evening', { label: 'Evening', minutes: 0, points: 0, coinIn: 0, theoretical: 0, theoreticalPerHour: 0 }],
+    ]);
+
+    const historicalCruiseIds = new Set(cruiseEconomicsSummary.rows.map((row) => row.cruiseId));
+    const sessionsForBlocks = isHistorical ? sessions.filter((session) => session.cruiseId && historicalCruiseIds.has(session.cruiseId)) : sessions;
+    sessionsForBlocks.forEach((session) => {
+      const startMinutes = parseSessionStartMinutes(session.startTime);
+      const durationMinutes = Math.max(0, session.durationMinutes || 0);
+      if (startMinutes === null || durationMinutes <= 0) {
+        return;
+      }
+
+      const sessionEndMinutes = startMinutes + durationMinutes;
+      const sessionPoints = session.pointsEarned || 0;
+      blockDefinitions.forEach((block) => {
+        const overlapMinutes = Math.max(0, Math.min(sessionEndMinutes, block.end) - Math.max(startMinutes, block.start));
+        if (overlapMinutes <= 0) {
+          return;
+        }
+
+        const metric = timeBlockMetrics.get(block.label);
+        if (!metric) {
+          return;
+        }
+
+        const allocatedPoints = sessionPoints * (overlapMinutes / durationMinutes);
+        metric.minutes += overlapMinutes;
+        metric.points += allocatedPoints;
+        metric.coinIn += allocatedPoints * DOLLARS_PER_POINT;
+      });
     });
+
+    const blockMetrics = Array.from(timeBlockMetrics.values()).map((metric) => {
+      const theoretical = roundMetric(metric.coinIn * assumedHold);
+      const hours = metric.minutes / 60;
+      return {
+        ...metric,
+        points: roundMetric(metric.points),
+        coinIn: roundMetric(metric.coinIn),
+        theoretical,
+        theoreticalPerHour: hours > 0 ? roundMetric(theoretical / hours) : 0,
+      };
+    });
+    const bestTheoBlock = blockMetrics
+      .filter((metric) => metric.minutes > 0 && metric.theoretical > 0)
+      .sort((a, b) => b.theoreticalPerHour - a.theoreticalPerHour)[0];
+    const theoPerTimeBlock = bestTheoBlock?.label ?? 'No block data';
+    const theoTimeBlockValue = bestTheoBlock?.theoreticalPerHour ?? 0;
+    const theoTimeBlockDescription = bestTheoBlock
+      ? `${formatCurrency(bestTheoBlock.theoretical)} theo over ${(bestTheoBlock.minutes / 60).toFixed(1)} hrs; based only on sessions with points + duration`
+      : 'Add session start time, duration, and points to calculate exact block-level theo.';
+
+    const theoValues = isHistorical && sessionsForBlocks.length === 0
+      ? cruiseEconomicsSummary.rows.map((row) => row.theoreticalLoss ?? 0).filter((value) => value > 0)
+      : Array.from(new Set(sessionsForBlocks.map((session) => session.date))).map((date) => {
+          const daySessions = sessionsForBlocks.filter((session) => session.date === date);
+          const dayCoinIn = daySessions.reduce((sum, session) => sum + ((session.pointsEarned || 0) * DOLLARS_PER_POINT), 0);
+          return dayCoinIn * assumedHold;
+        }).filter((value) => value > 0);
     const avgTheo = theoValues.length > 0 ? theoValues.reduce((a, b) => a + b, 0) / theoValues.length : 0;
-    const theoVariance = theoValues.length > 0 
-      ? theoValues.reduce((sum, v) => sum + Math.pow(v - avgTheo, 2), 0) / theoValues.length 
+    const theoVariance = theoValues.length > 0
+      ? theoValues.reduce((sum, v) => sum + Math.pow(v - avgTheo, 2), 0) / theoValues.length
       : 0;
     const theoStdDev = Math.sqrt(theoVariance);
     const adtSmoothingFactor = avgTheo > 0 ? (theoStdDev / avgTheo) : 0;
-    
+
     const totalEconomicRoiPercentage = totalTaxesFees > 0 ? (totalProfit / totalTaxesFees) * 100 : 0;
     void totalEconomicRoiPercentage;
     const profitPerUnit = totalSessions > 0 ? totalProfit / totalSessions : (totalProfit !== 0 ? totalProfit : 0);
-    
+
     const stopGap = 200;
     const riskPerHour = avgSessionLength > 0 ? (stopGap / (avgSessionLength / 60)) : 0;
-    
+
     const winSessions = sessions.filter(s => (s.winLoss || 0) > 0);
     const totalWinnings = winSessions.reduce((sum, s) => sum + (s.winLoss || 0), 0);
     const pressExposure = winSessions.reduce((sum, s) => sum + ((s.buyIn || 0) * 0.3), 0);
     const pressEfficiencyRatio = pressExposure > 0 ? totalWinnings / pressExposure : 0;
-    
+
     const sessionWinLoss = sessions.map(s => s.winLoss || 0);
     const avgWinLoss = sessionWinLoss.length > 0 ? sessionWinLoss.reduce((a, b) => a + b, 0) / sessionWinLoss.length : 0;
     const winLossVariance = sessionWinLoss.length > 0
@@ -2121,26 +2188,19 @@ export default function AnalyticsScreen() {
       : 0;
     const winLossStdDev = Math.sqrt(winLossVariance);
     const consistencyScore = avgWinLoss !== 0 ? (avgWinLoss / Math.max(winLossStdDev, 1)) : 0;
-    const spikeRisk = sessionWinLoss.length > 0 ? (Math.max(...sessionWinLoss.map(Math.abs)) / Math.max(avgWinLoss, 1)) : 0;
+    const spikeRisk = sessionWinLoss.length > 0 ? (Math.max(...sessionWinLoss.map(Math.abs)) / Math.max(Math.abs(avgWinLoss), 1)) : 0;
     const offerSafetyIndex = consistencyScore > 0 && spikeRisk > 0 ? consistencyScore / spikeRisk : 0;
-    
-    const totalHistoricalHours = isHistorical
-      ? (historicalCruiseData.totalSessions * avgSessionLength) / 60
-      : (totalHours > 0 ? totalHours : (totalSessions * avgSessionLength) / 60);
+
+    const totalHistoricalHours = totalHoursForMode;
     const valuePerHourPlayed = totalHistoricalHours > 0 ? totalProfit / totalHistoricalHours : 0;
-    
+
     const recentProfit = sessions.slice(-10).reduce((sum, s) => sum + (s.winLoss || 0), 0);
     const earlyProfit = sessions.slice(0, 10).reduce((sum, s) => sum + (s.winLoss || 0), 0);
     const trendScore = earlyProfit !== 0 ? (recentProfit / Math.max(Math.abs(earlyProfit), 1)) : 1;
     const variabilityScore = 1 - Math.min(adtSmoothingFactor, 1);
     const sustainabilityScore = (trendScore * 0.6 + variabilityScore * 0.4) * 100;
 
-    const sessionPointsTotal = sessions.reduce((sum, s) => sum + (s.pointsEarned || 0), 0);
-    const pointsPerSession = isHistorical && historicalCruiseData.totalSessions > 0
-      ? historicalTotalPoints / historicalCruiseData.totalSessions
-      : (hasSessionData && sessionPointsTotal > 0)
-        ? sessionPointsTotal / sessions.length
-        : (historicalTotalPoints > 0 && totalSessions > 0 ? historicalTotalPoints / totalSessions : 0);
+    const pointsPerSession = totalSessions > 0 ? totalPointsForMode / totalSessions : 0;
 
     return [
       {
@@ -2148,7 +2208,7 @@ export default function AnalyticsScreen() {
         label: isHistorical ? 'Coin-in (historical avg)' : 'Coin-in per session',
         value: formatCurrency(coinInPerUnit) + (coinInIsEstimated ? ' (est.)' : ''),
         description: coinInIsEstimated
-          ? (estimatedCoinInFromBuyIns > 0 ? 'Estimated from session buy-ins × 4' : 'Estimated from cruise nights × $1,500')
+          ? `Coin-in derived from points at ${formatCurrency(DOLLARS_PER_POINT)}/point; missing hours use ${DEFAULT_ESTIMATED_POINTS_PER_PLAY_HOUR} PPH`
           : (isHistorical ? `Total coin-in ÷ ${divisorLabel}` : 'Total coin-in ÷ total sessions'),
         color: COLORS.navyDeep,
         icon: Coins,
@@ -2163,9 +2223,9 @@ export default function AnalyticsScreen() {
       },
       {
         id: 3,
-        label: isHistorical ? 'Theo per time block (hist.)' : 'Theo per time block',
-        value: `${theoPerTimeBlock}: ${formatCurrency(theoTimeBlockValue)}`,
-        description: isHistorical ? 'Scaled morning vs evening from cruise history' : 'Morning vs evening efficiency',
+        label: isHistorical ? 'Best theo/hour block (hist.)' : 'Best theo/hour block',
+        value: theoTimeBlockValue > 0 ? `${formatCurrency(theoTimeBlockValue)}/hr • ${theoPerTimeBlock}` : '—',
+        description: theoTimeBlockDescription,
         color: '#F59E0B',
         icon: Dices,
       },
@@ -2211,9 +2271,11 @@ export default function AnalyticsScreen() {
       },
       {
         id: 9,
-        label: isHistorical ? 'Value/hr (historical)' : 'Value per hour played',
-        value: formatCurrency(valuePerHourPlayed),
-        description: isHistorical ? `Total economic value ÷ est. ${totalHistoricalHours.toFixed(0)} total hours` : 'Total economic value ÷ total hours',
+        label: isHistorical ? 'Total economic value/hr' : 'Casino value/hr',
+        value: totalHistoricalHours > 0 ? formatCurrency(valuePerHourPlayed) : '—',
+        description: isHistorical
+          ? `Total economic value ÷ ${totalHistoricalHours.toFixed(2)} play hours from points/session data`
+          : (hasSessionData ? 'Session cash result + point value ÷ tracked play hours' : `Known current-season winnings ÷ ${totalHistoricalHours.toFixed(2)} estimated play hours`),
         color: COLORS.goldDark,
         icon: DollarSign,
       },
@@ -2222,7 +2284,7 @@ export default function AnalyticsScreen() {
         label: isHistorical ? 'Points per session (hist.)' : 'Sustainability score',
         value: isHistorical ? formatNumber(Math.round(pointsPerSession)) + ' pts' : `${sustainabilityScore.toFixed(1)}%`,
         description: isHistorical
-          ? `${formatNumber(historicalTotalPoints)} pts ÷ ${historicalCruiseData.totalSessions} sessions`
+          ? `${formatNumber(historicalTotalPoints)} pts ÷ ${totalSessions} sessions`
           : 'Likelihood offers persist unchanged',
         color: isHistorical ? '#8B5CF6' : (sustainabilityScore >= 70 ? COLORS.success : sustainabilityScore >= 40 ? '#F59E0B' : COLORS.error),
         icon: isHistorical ? Award : BarChart3,
@@ -2246,7 +2308,7 @@ export default function AnalyticsScreen() {
         },
       ] : []),
     ];
-  }, [activeTab, calcsMode, cruiseEconomicsSummary, sessions, realAnalytics, sessionAnalytics, historicalCruiseData]);
+  }, [activeTab, calcsMode, cruiseEconomicsSummary, sessions, sessionAnalytics, historicalCruiseData, currentSeasonMetrics]);
 
   const renderCalcsTab = () => (
     <View style={styles.tabContent}>

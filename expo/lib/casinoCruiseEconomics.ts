@@ -3,7 +3,14 @@ import { createDateFromString } from '@/lib/date';
 import { calculateCruiseValue, type ValueBreakdown } from '@/lib/valueCalculator';
 import type { BookedCruise } from '@/types/models';
 import { DOLLARS_PER_POINT } from '@/types/models';
-import { normalizeCruiseCasinoPerformance } from '@/lib/casinoPointTruth';
+import {
+  CONFIRMED_CLUB_ROYALE_2025_COIN_IN,
+  CONFIRMED_CLUB_ROYALE_2025_NET_CASH_RESULT,
+  CONFIRMED_CLUB_ROYALE_2025_POINTS,
+  CONFIRMED_CLUB_ROYALE_2025_WINNINGS_HOME,
+  DEFAULT_ESTIMATED_POINTS_PER_PLAY_HOUR,
+  normalizeCruiseCasinoPerformance,
+} from '@/lib/casinoPointTruth';
 
 export type CruiseEconomicsStatus = 'actual' | 'estimated' | 'mixed';
 
@@ -123,6 +130,8 @@ const ANNUAL_SCOPE_START = '2025-04-01' as const;
 const ANNUAL_SCOPE_END = '2026-04-01' as const;
 const DEFAULT_HOUSE_EDGE = 0.08;
 const DEFAULT_POINT_DOLLAR_VALUE = 0.01;
+const CONFIRMED_CLUB_ROYALE_2025_RETAIL_VALUE = 47774;
+const CONFIRMED_CLUB_ROYALE_2025_PAID = 4238.41;
 const DEFAULT_PORT_FEE_PER_PERSON_FOR_7_NIGHTS = 162;
 const TWO_PERSON_PORT_FEE_THRESHOLD = 200;
 
@@ -615,7 +624,11 @@ function buildCruiseEconomicsRow(cruise: BookedCruise): CruiseEconomicsRow {
   const coinInWasEstimated = !isNumber(explicitCoinIn);
 
   const houseEdge = round2(getFirstNumber(cruiseForEconomics.houseEdge, DEFAULT_HOUSE_EDGE) ?? DEFAULT_HOUSE_EDGE);
-  const hoursPlayed = getFirstNumber(cruiseForEconomics.hoursPlayed);
+  const explicitHoursPlayed = getFirstNumber(cruiseForEconomics.hoursPlayed);
+  const hoursPlayed = isNumber(explicitHoursPlayed)
+    ? round2(explicitHoursPlayed)
+    : (pointsInfo.value > 0 ? round2(pointsInfo.value / DEFAULT_ESTIMATED_POINTS_PER_PLAY_HOUR) : null);
+  const hoursWereEstimated = !isNumber(explicitHoursPlayed) && isNumber(hoursPlayed);
   const theoreticalLoss = calcTheoreticalLoss(coinIn, houseEdge);
   const netTheoretical = calcNetTheoretical(pointValueEarned, theoreticalLoss);
 
@@ -636,13 +649,16 @@ function buildCruiseEconomicsRow(cruise: BookedCruise): CruiseEconomicsRow {
     !winningsInfo.isActual,
     !pointsInfo.isActual,
     coinInWasEstimated,
+    hoursWereEstimated,
   ];
   const estimatedCount = estimationFlags.filter(Boolean).length;
-  const calculationConfidence: CruiseEconomicsStatus = matchedAnnualFact?.calculationConfidence ?? (estimatedCount === 0
-    ? 'actual'
-    : estimatedCount === estimationFlags.length
-      ? 'estimated'
-      : 'mixed');
+  const calculationConfidence: CruiseEconomicsStatus = matchedAnnualFact?.calculationConfidence === 'actual' && hoursWereEstimated
+    ? 'mixed'
+    : matchedAnnualFact?.calculationConfidence ?? (estimatedCount === 0
+      ? 'actual'
+      : estimatedCount === estimationFlags.length
+        ? 'estimated'
+        : 'mixed');
 
   const notes = [
     taxesFeesInfo.note,
@@ -650,6 +666,7 @@ function buildCruiseEconomicsRow(cruise: BookedCruise): CruiseEconomicsRow {
     winningsInfo.note,
     pointsInfo.note,
     coinInWasEstimated ? 'Coin-in derived from points at $5 coin-in per point.' : null,
+    hoursWereEstimated ? `Hours played estimated from points at ${DEFAULT_ESTIMATED_POINTS_PER_PLAY_HOUR} points/hour.` : null,
     !isNumber(hoursPlayed) ? 'Hours played not available for this row.' : null,
     matchedAnnualFact?.notes ?? null,
   ].filter((note): note is string => Boolean(note));
@@ -796,10 +813,12 @@ export function buildCruiseEconomicsSummary(
   if (minimumTotalPoints > totals.totalPoints) {
     const adjustmentPoints = Math.round(minimumTotalPoints - totals.totalPoints);
     const adjustmentCoinIn = round2(adjustmentPoints * DOLLARS_PER_POINT);
+    const adjustmentHours = round2(adjustmentPoints / DEFAULT_ESTIMATED_POINTS_PER_PLAY_HOUR);
     const adjustmentPointValue = calcPointValue(adjustmentPoints, DEFAULT_POINT_DOLLAR_VALUE);
     const adjustmentTheoreticalLoss = calcTheoreticalLoss(adjustmentCoinIn, DEFAULT_HOUSE_EDGE);
     totals.totalPoints += adjustmentPoints;
     totals.totalCoinIn = round2(totals.totalCoinIn + adjustmentCoinIn);
+    totals.totalHours = round2(totals.totalHours + adjustmentHours);
     totals.totalPointValueEarned = round2(totals.totalPointValueEarned + adjustmentPointValue);
     totals.totalTheoreticalLoss = round2(totals.totalTheoreticalLoss + adjustmentTheoreticalLoss);
     totals.totalNetTheoretical = round2(totals.totalNetTheoretical + calcNetTheoretical(adjustmentPointValue, adjustmentTheoreticalLoss));
@@ -808,7 +827,37 @@ export function buildCruiseEconomicsSummary(
     console.log('[CasinoCruiseEconomics] Applied confirmed historical points floor', {
       originalTotalPoints: totals.totalPoints - adjustmentPoints,
       adjustmentPoints,
+      adjustmentHours,
       finalTotalPoints: totals.totalPoints,
+    });
+  }
+
+  if (options?.useKnownAnnualReportFacts && totals.cruises > 0) {
+    totals.totalRetail = CONFIRMED_CLUB_ROYALE_2025_RETAIL_VALUE;
+    totals.totalRetailValue = CONFIRMED_CLUB_ROYALE_2025_RETAIL_VALUE;
+    totals.totalPaid = CONFIRMED_CLUB_ROYALE_2025_PAID;
+    totals.totalWinningsHome = CONFIRMED_CLUB_ROYALE_2025_WINNINGS_HOME;
+    totals.totalNetCash = CONFIRMED_CLUB_ROYALE_2025_NET_CASH_RESULT;
+    totals.totalCashResult = CONFIRMED_CLUB_ROYALE_2025_NET_CASH_RESULT;
+    totals.totalDiscount = calcCruiseValueCaptured(totals.totalRetailValue, totals.totalPaid);
+    totals.totalCruiseValueCaptured = totals.totalDiscount;
+    totals.totalEconomicValue = calcTotalEconomicValue(totals.totalRetailValue, totals.totalWinningsHome, totals.totalPaid);
+    totals.totalPoints = CONFIRMED_CLUB_ROYALE_2025_POINTS;
+    totals.totalCoinIn = CONFIRMED_CLUB_ROYALE_2025_COIN_IN;
+    totals.totalHours = round2(CONFIRMED_CLUB_ROYALE_2025_POINTS / DEFAULT_ESTIMATED_POINTS_PER_PLAY_HOUR);
+    totals.totalPointValueEarned = calcPointValue(totals.totalPoints, DEFAULT_POINT_DOLLAR_VALUE);
+    totals.totalTheoreticalLoss = calcTheoreticalLoss(totals.totalCoinIn, DEFAULT_HOUSE_EDGE);
+    totals.totalNetTheoretical = calcNetTheoretical(totals.totalPointValueEarned, totals.totalTheoreticalLoss);
+    totals.totalRowsWithEstimatedValues = Math.max(totals.totalRowsWithEstimatedValues, 1);
+    totals.hasEstimates = true;
+    console.log('[CasinoCruiseEconomics] Reconciled known annual casino totals', {
+      totalRetailValue: totals.totalRetailValue,
+      totalPaid: totals.totalPaid,
+      totalWinningsHome: totals.totalWinningsHome,
+      totalCashResult: totals.totalCashResult,
+      totalPoints: totals.totalPoints,
+      totalCoinIn: totals.totalCoinIn,
+      totalHours: totals.totalHours,
     });
   }
 
@@ -850,6 +899,7 @@ export function buildCruiseEconomicsSummary(
   const footnotes = totals.hasEstimates
     ? [
         options?.pointsAdjustmentNote,
+        options?.useKnownAnnualReportFacts ? 'Known annual casino totals are reconciled to the confirmed 2025 Royal Caribbean season: $47,774 retail, $4,238.41 paid, $19,457 winnings home, 58,680 points, and $293,400 coin-in. Coin-In remains gaming volume only.' : null,
         'Annual totals include estimated values where paid amount, winnings, points, coin-in, or hours were missing. Coin-In is gaming volume only and is excluded from Cash Result and Total Economic Value.',
       ].filter((note): note is string => Boolean(note))
     : [];
