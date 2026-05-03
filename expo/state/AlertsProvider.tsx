@@ -39,6 +39,38 @@ const BASE_ALERTS_KEY = '@easy_seas_alerts';
 const BASE_RULES_KEY = '@easy_seas_alert_rules';
 const BASE_DISMISSED_IDS_KEY = '@easy_seas_dismissed_alerts';
 const BASE_DISMISSED_ENTITIES_KEY = '@easy_seas_dismissed_entities';
+const MAX_STORED_ALERTS = 250;
+const MAX_STORED_DISMISSED_IDS = 500;
+const MAX_STORED_DISMISSED_ENTITIES = 500;
+
+function describeAlertsStorageError(error: unknown): string {
+  if (error instanceof Error) {
+    return `${error.name}: ${error.message}`;
+  }
+  if (error && typeof error === 'object') {
+    const record = error as { name?: unknown; message?: unknown; code?: unknown; nativeEvent?: { message?: unknown } };
+    const parts = [record.name, record.message, record.nativeEvent?.message]
+      .filter((part): part is string => typeof part === 'string' && part.length > 0);
+    if (typeof record.code === 'string' || typeof record.code === 'number') {
+      parts.push(`code=${String(record.code)}`);
+    }
+    if (parts.length > 0) return parts.join(': ');
+  }
+  return String(error);
+}
+
+function pruneAlertsForStorage(nextAlerts: Alert[]): Alert[] {
+  return [...nextAlerts]
+    .sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime())
+    .slice(0, MAX_STORED_ALERTS)
+    .reverse();
+}
+
+function trimStoredStrings(values: Iterable<string>, maxCount: number): string[] {
+  return Array.from(new Set(values))
+    .filter((value) => typeof value === 'string' && value.trim().length > 0)
+    .slice(-maxCount);
+}
 
 interface AlertsState {
   alerts: Alert[];
@@ -126,7 +158,7 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
         quotaSafeGetItem(scopedKeys.DISMISSED_ENTITIES),
       ]);
 
-      const parsedAlerts = storedAlerts ? JSON.parse(storedAlerts) as Alert[] : [];
+      const parsedAlerts = pruneAlertsForStorage(storedAlerts ? JSON.parse(storedAlerts) as Alert[] : []);
       setAlerts(parsedAlerts);
       console.log('[AlertsProvider] Loaded scoped alerts:', { email: authenticatedEmail, count: parsedAlerts.length });
 
@@ -134,15 +166,15 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
       setRules(parsedRules);
       console.log('[AlertsProvider] Loaded scoped rules:', { email: authenticatedEmail, count: parsedRules.length });
 
-      const parsedDismissed = storedDismissed ? JSON.parse(storedDismissed) as string[] : [];
+      const parsedDismissed = trimStoredStrings(storedDismissed ? JSON.parse(storedDismissed) as string[] : [], MAX_STORED_DISMISSED_IDS);
       setDismissedIds(new Set(parsedDismissed));
       console.log('[AlertsProvider] Loaded scoped dismissed IDs:', { email: authenticatedEmail, count: parsedDismissed.length });
 
-      const parsedDismissedEntities = storedDismissedEntities ? JSON.parse(storedDismissedEntities) as string[] : [];
+      const parsedDismissedEntities = trimStoredStrings(storedDismissedEntities ? JSON.parse(storedDismissedEntities) as string[] : [], MAX_STORED_DISMISSED_ENTITIES);
       setDismissedEntities(new Set(parsedDismissedEntities));
       console.log('[AlertsProvider] Loaded scoped dismissed entities:', { email: authenticatedEmail, count: parsedDismissedEntities.length });
     } catch (error) {
-      console.error('[AlertsProvider] Error loading scoped stored data:', error);
+      console.error('[AlertsProvider] Error loading scoped stored data:', describeAlertsStorageError(error));
       setAlerts([]);
       setRules(DEFAULT_ALERT_RULES);
       setDismissedIds(new Set());
@@ -192,9 +224,9 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
   useEffect(() => {
     const saveAlerts = async () => {
       try {
-        await quotaSafeSetJsonItem(skRef.current.ALERTS, alerts);
+        await quotaSafeSetJsonItem(skRef.current.ALERTS, pruneAlertsForStorage(alerts));
       } catch (error) {
-        console.error('[AlertsProvider] Error saving alerts:', error);
+        console.error('[AlertsProvider] Error saving alerts:', describeAlertsStorageError(error));
       }
     };
 
@@ -208,7 +240,7 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
       try {
         await quotaSafeSetJsonItem(skRef.current.RULES, serializeAlertRulesForStorage(rules));
       } catch (error) {
-        console.error('[AlertsProvider] Error saving rules:', error);
+        console.error('[AlertsProvider] Error saving rules:', describeAlertsStorageError(error));
       }
     };
 
@@ -218,9 +250,9 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
   useEffect(() => {
     const saveDismissed = async () => {
       try {
-        await quotaSafeSetJsonItem(skRef.current.DISMISSED_IDS, [...dismissedIds]);
+        await quotaSafeSetJsonItem(skRef.current.DISMISSED_IDS, trimStoredStrings(dismissedIds, MAX_STORED_DISMISSED_IDS));
       } catch (error) {
-        console.error('[AlertsProvider] Error saving dismissed IDs:', error);
+        console.error('[AlertsProvider] Error saving dismissed IDs:', describeAlertsStorageError(error));
       }
     };
 
@@ -230,9 +262,9 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
   useEffect(() => {
     const saveDismissedEntities = async () => {
       try {
-        await quotaSafeSetJsonItem(skRef.current.DISMISSED_ENTITIES, [...dismissedEntities]);
+        await quotaSafeSetJsonItem(skRef.current.DISMISSED_ENTITIES, trimStoredStrings(dismissedEntities, MAX_STORED_DISMISSED_ENTITIES));
       } catch (error) {
-        console.error('[AlertsProvider] Error saving dismissed entities:', error);
+        console.error('[AlertsProvider] Error saving dismissed entities:', describeAlertsStorageError(error));
       }
     };
 
@@ -290,7 +322,7 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
       });
 
       if (filteredNewAlerts.length > 0) {
-        setAlerts(prev => [...prev, ...filteredNewAlerts]);
+        setAlerts(prev => pruneAlertsForStorage([...prev, ...filteredNewAlerts]));
       }
 
       setLastDetectionRun(new Date().toISOString());
@@ -300,7 +332,7 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
         newAlerts: filteredNewAlerts.length,
       });
     } catch (error) {
-      console.error('[AlertsProvider] Detection error:', error);
+      console.error('[AlertsProvider] Detection error:', describeAlertsStorageError(error));
     } finally {
       setIsLoading(false);
     }
@@ -320,10 +352,10 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
     const alertToRemove = alerts.find(a => a.id === alertId);
     if (alertToRemove) {
       const entityKey = `${alertToRemove.type}_${alertToRemove.relatedEntityId || 'global'}`;
-      setDismissedEntities(prev => new Set([...prev, entityKey]));
+      setDismissedEntities(prev => new Set(trimStoredStrings([...prev, entityKey], MAX_STORED_DISMISSED_ENTITIES)));
     }
     setAlerts(prev => prev.filter(a => a.id !== alertId));
-    setDismissedIds(prev => new Set([...prev, alertId]));
+    setDismissedIds(prev => new Set(trimStoredStrings([...prev, alertId], MAX_STORED_DISMISSED_IDS)));
     console.log('[AlertsProvider] Dismissed and removed alert:', alertId);
   }, [alerts]);
 
@@ -346,14 +378,14 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
     const allEntityKeys = alerts.map(a => `${a.type}_${a.relatedEntityId || 'global'}`);
     
     setAlerts([]);
-    setDismissedIds(new Set(allIds));
-    setDismissedEntities(prev => new Set([...prev, ...allEntityKeys]));
+    setDismissedIds(new Set(trimStoredStrings(allIds, MAX_STORED_DISMISSED_IDS)));
+    setDismissedEntities(prev => new Set(trimStoredStrings([...prev, ...allEntityKeys], MAX_STORED_DISMISSED_ENTITIES)));
     
     try {
       await quotaSafeSetJsonItem(skRef.current.ALERTS, []);
       console.log('[AlertsProvider] Cleared all alerts from storage');
     } catch (error) {
-      console.error('[AlertsProvider] Error clearing alerts from storage:', error);
+      console.error('[AlertsProvider] Error clearing alerts from storage:', describeAlertsStorageError(error));
     }
     
     console.log('[AlertsProvider] Cleared all alerts:', allIds.length);

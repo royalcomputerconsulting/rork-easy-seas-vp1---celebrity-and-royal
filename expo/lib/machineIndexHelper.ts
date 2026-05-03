@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { SlotManufacturer, MachineVolatility, CabinetType, PersistenceType } from '@/types/models';
 import { trpcClient } from '@/lib/trpc';
+import { quotaSafeGetItem, quotaSafeSetJsonItem, quotaSafeRemoveItem } from '@/lib/storage/quotaSafeStorage';
 
 const MACHINE_INDEX_KEY = '@easyseas/MACHINE_INDEX_V3_262_ONLY';
 const MACHINE_DETAILS_CACHE_PREFIX = '@easyseas/MACHINE_DETAIL_V3_';
@@ -81,7 +82,7 @@ function mergeMachineData(baseMachines: any[], sharedMachines: any[]): any[] {
 
 async function loadCachedSharedMachines(): Promise<any[]> {
   try {
-    const cached = await AsyncStorage.getItem(SHARED_MACHINE_LIBRARY_CACHE_KEY);
+    const cached = await quotaSafeGetItem(SHARED_MACHINE_LIBRARY_CACHE_KEY);
     const parsed = cached ? JSON.parse(cached) : [];
     return Array.isArray(parsed) ? parsed : [];
   } catch (error) {
@@ -94,7 +95,7 @@ async function fetchSharedMachines(): Promise<any[]> {
   try {
     const result = await trpcClient.machineLibrary.getAll.query();
     const machines = Array.isArray(result.machines) ? result.machines : [];
-    await AsyncStorage.setItem(SHARED_MACHINE_LIBRARY_CACHE_KEY, JSON.stringify(machines));
+    await quotaSafeSetJsonItem(SHARED_MACHINE_LIBRARY_CACHE_KEY, machines);
     console.log(`[MachineIndex] Loaded ${machines.length} shared machines from cloud library`);
     return machines;
   } catch (error) {
@@ -146,7 +147,7 @@ class MachineIndexHelper {
 
     try {
       if (!shouldRefreshShared) {
-        const stored = await AsyncStorage.getItem(MACHINE_INDEX_KEY);
+        const stored = await quotaSafeGetItem(MACHINE_INDEX_KEY);
         
         if (stored) {
           console.log('[MachineIndex] Loading index from storage...');
@@ -204,7 +205,7 @@ class MachineIndexHelper {
 
   private async saveIndex(index: MachineIndexEntry[]): Promise<void> {
     try {
-      await AsyncStorage.setItem(MACHINE_INDEX_KEY, JSON.stringify(index));
+      await quotaSafeSetJsonItem(MACHINE_INDEX_KEY, index);
       console.log(`[MachineIndex] Saved index with ${index.length} entries`);
     } catch (error) {
       console.error('[MachineIndex] Error saving index:', error);
@@ -214,7 +215,7 @@ class MachineIndexHelper {
   async getMachineDetails(id: string): Promise<MachineFullDetails | null> {
     try {
       const cacheKey = `${MACHINE_DETAILS_CACHE_PREFIX}${id}`;
-      const cached = await AsyncStorage.getItem(cacheKey);
+      const cached = await quotaSafeGetItem(cacheKey);
       
       if (cached) {
         return JSON.parse(cached);
@@ -265,7 +266,7 @@ class MachineIndexHelper {
         source_verbatim: fullMachine.source_verbatim,
       };
 
-      await AsyncStorage.setItem(cacheKey, JSON.stringify(details));
+      await quotaSafeSetJsonItem(cacheKey, details);
       
       return details;
     } catch (error) {
@@ -279,7 +280,7 @@ class MachineIndexHelper {
     this.fullMachineMap.clear();
     this.mapInitialized = false;
     this.lastSharedSyncAt = 0;
-    await AsyncStorage.removeItem(MACHINE_INDEX_KEY);
+    await quotaSafeRemoveItem(MACHINE_INDEX_KEY);
     console.log('[MachineIndex] Index cleared');
   }
 

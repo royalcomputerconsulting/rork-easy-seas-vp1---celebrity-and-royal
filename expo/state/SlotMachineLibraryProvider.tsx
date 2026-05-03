@@ -13,6 +13,7 @@ import { trpcClient } from '@/lib/trpc';
 import { useEntitlement } from '@/state/EntitlementProvider';
 import { useAuth } from '@/state/AuthProvider';
 import { getUserScopedKey } from '@/lib/storage/storageKeys';
+import { quotaSafeGetItem, quotaSafeSetJsonItem } from '@/lib/storage/quotaSafeStorage';
 
 const STORAGE_KEY_ENCYCLOPEDIA = 'easyseas_machine_encyclopedia_v2_262_only';
 const STORAGE_KEY_MY_ATLAS = 'easyseas_my_slot_atlas_v2_262_only';
@@ -189,7 +190,7 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
       console.log('[SlotMachineLibrary] Created', newEntries.length, 'new entries from index');
 
       const updatedEncyclopedia = [...currentEncyclopedia, ...newEntries];
-      await AsyncStorage.setItem(encyclopediaKeyRef.current, JSON.stringify(updatedEncyclopedia));
+      await quotaSafeSetJsonItem(encyclopediaKeyRef.current, updatedEncyclopedia);
 
       return {
         success: true,
@@ -258,7 +259,7 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
       }
 
       const updated = [...currentEncyclopedia, ...newEntries];
-      await AsyncStorage.setItem(encyclopediaKeyRef.current, JSON.stringify(updated));
+      await quotaSafeSetJsonItem(encyclopediaKeyRef.current, updated);
       await AsyncStorage.setItem(STORAGE_KEY_INDEX_LOADED, 'true');
 
       console.log('[SlotMachineLibrary] ensureEncyclopediaFullyLoadedForPro: added entries', {
@@ -287,8 +288,8 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
 
       try {
         [encyclopediaStr, atlasStr, indexLoaded] = await Promise.all([
-          AsyncStorage.getItem(encyclopediaKeyRef.current),
-          AsyncStorage.getItem(atlasKeyRef.current),
+          quotaSafeGetItem(encyclopediaKeyRef.current),
+          quotaSafeGetItem(atlasKeyRef.current),
           AsyncStorage.getItem(STORAGE_KEY_INDEX_LOADED),
         ]);
       } catch (storageError) {
@@ -344,7 +345,7 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
 
   const saveEncyclopedia = async (data: MachineEncyclopediaEntry[]) => {
     try {
-      await AsyncStorage.setItem(encyclopediaKeyRef.current, JSON.stringify(data));
+      await quotaSafeSetJsonItem(encyclopediaKeyRef.current, data);
       console.log(`[SlotMachineLibrary] Saved ${data.length} encyclopedia entries`);
     } catch (error) {
       console.error('[SlotMachineLibrary] Error saving encyclopedia:', error);
@@ -353,7 +354,7 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
 
   const saveAtlas = async (ids: string[]) => {
     try {
-      await AsyncStorage.setItem(atlasKeyRef.current, JSON.stringify(ids));
+      await quotaSafeSetJsonItem(atlasKeyRef.current, ids);
       console.log(`[SlotMachineLibrary] Saved ${ids.length} atlas IDs`);
     } catch (error) {
       console.error('[SlotMachineLibrary] Error saving atlas:', error);

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
 import type { ItineraryDay } from '@/types/models';
 import { getUserScopedKey } from '@/lib/storage/storageKeys';
+import { quotaSafeGetItem, quotaSafeSetJsonItem, quotaSafeRemoveItem } from '@/lib/storage/quotaSafeStorage';
 import { useAuth } from './AuthProvider';
 
 const BASE_STORAGE_KEY = '@easy_seas_sailing_weather_cache_v1';
@@ -722,7 +722,7 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
 
     const loadCache = async () => {
       try {
-        const stored = await AsyncStorage.getItem(storageKeyRef.current);
+        const stored = await quotaSafeGetItem(storageKeyRef.current);
         if (!stored) {
           setCache({});
           setIsHydrated(true);
@@ -760,7 +760,7 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
           cacheRef.current = pruned;
           return;
         }
-        await AsyncStorage.setItem(storageKeyRef.current, JSON.stringify(pruned));
+        await quotaSafeSetJsonItem(storageKeyRef.current, pruned);
         console.log('[SailingWeather] Persisted cached forecasts:', Object.keys(pruned).length);
       } catch (error) {
         logSailingWeather('error', '[SailingWeather] Failed to persist weather cache', {
@@ -1132,7 +1132,7 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
     setCache({});
     cacheRef.current = {};
     try {
-      await AsyncStorage.removeItem(storageKeyRef.current);
+      await quotaSafeRemoveItem(storageKeyRef.current);
       console.log('[SailingWeather] Cleared all cached forecasts');
     } catch (error) {
       logSailingWeather('error', '[SailingWeather] Failed to clear weather cache', {
