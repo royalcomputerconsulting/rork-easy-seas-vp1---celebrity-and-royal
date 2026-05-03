@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
 import type { 
   Alert, 
@@ -32,6 +31,7 @@ import { useEntitlement } from './EntitlementProvider';
 import { useAuth } from './AuthProvider';
 import { useLoyalty } from './LoyaltyProvider';
 import { getUserScopedKey } from '@/lib/storage/storageKeys';
+import { quotaSafeGetItem, quotaSafeSetJsonItem } from '@/lib/storage/quotaSafeStorage';
 
 const BASE_ALERTS_KEY = '@easy_seas_alerts';
 const BASE_RULES_KEY = '@easy_seas_alert_rules';
@@ -118,10 +118,10 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
       };
       skRef.current = scopedKeys;
       const [storedAlerts, storedRules, storedDismissed, storedDismissedEntities] = await Promise.all([
-        AsyncStorage.getItem(scopedKeys.ALERTS),
-        AsyncStorage.getItem(scopedKeys.RULES),
-        AsyncStorage.getItem(scopedKeys.DISMISSED_IDS),
-        AsyncStorage.getItem(scopedKeys.DISMISSED_ENTITIES),
+        quotaSafeGetItem(scopedKeys.ALERTS),
+        quotaSafeGetItem(scopedKeys.RULES),
+        quotaSafeGetItem(scopedKeys.DISMISSED_IDS),
+        quotaSafeGetItem(scopedKeys.DISMISSED_ENTITIES),
       ]);
 
       const parsedAlerts = storedAlerts ? JSON.parse(storedAlerts) as Alert[] : [];
@@ -190,7 +190,7 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
   useEffect(() => {
     const saveAlerts = async () => {
       try {
-        await AsyncStorage.setItem(skRef.current.ALERTS, JSON.stringify(alerts));
+        await quotaSafeSetJsonItem(skRef.current.ALERTS, alerts);
       } catch (error) {
         console.error('[AlertsProvider] Error saving alerts:', error);
       }
@@ -204,7 +204,7 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
   useEffect(() => {
     const saveRules = async () => {
       try {
-        await AsyncStorage.setItem(skRef.current.RULES, JSON.stringify(rules));
+        await quotaSafeSetJsonItem(skRef.current.RULES, rules);
       } catch (error) {
         console.error('[AlertsProvider] Error saving rules:', error);
       }
@@ -216,7 +216,7 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
   useEffect(() => {
     const saveDismissed = async () => {
       try {
-        await AsyncStorage.setItem(skRef.current.DISMISSED_IDS, JSON.stringify([...dismissedIds]));
+        await quotaSafeSetJsonItem(skRef.current.DISMISSED_IDS, [...dismissedIds]);
       } catch (error) {
         console.error('[AlertsProvider] Error saving dismissed IDs:', error);
       }
@@ -228,7 +228,7 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
   useEffect(() => {
     const saveDismissedEntities = async () => {
       try {
-        await AsyncStorage.setItem(skRef.current.DISMISSED_ENTITIES, JSON.stringify([...dismissedEntities]));
+        await quotaSafeSetJsonItem(skRef.current.DISMISSED_ENTITIES, [...dismissedEntities]);
       } catch (error) {
         console.error('[AlertsProvider] Error saving dismissed entities:', error);
       }
@@ -348,7 +348,7 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
     setDismissedEntities(prev => new Set([...prev, ...allEntityKeys]));
     
     try {
-      await AsyncStorage.setItem(skRef.current.ALERTS, JSON.stringify([]));
+      await quotaSafeSetJsonItem(skRef.current.ALERTS, []);
       console.log('[AlertsProvider] Cleared all alerts from storage');
     } catch (error) {
       console.error('[AlertsProvider] Error clearing alerts from storage:', error);
