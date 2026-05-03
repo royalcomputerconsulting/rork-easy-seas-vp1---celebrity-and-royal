@@ -14,6 +14,7 @@ import {
   calculateCasinoAvailabilityForCruise,
   type CruiseCasinoSummary 
 } from "@/lib/casinoAvailability";
+import { buildCruiseEconomicsSummary } from "@/lib/casinoCruiseEconomics";
 
 export interface CasinoAnalytics {
   totalCoinIn: number;
@@ -147,28 +148,33 @@ export const [SimpleAnalyticsProvider, useSimpleAnalytics] = createContextHook((
 
   const casinoAnalytics = useMemo((): CasinoAnalytics => {
     const currentPointBalance = loyaltyClubRoyalePoints || 0;
+    const economicsSummary = buildCruiseEconomicsSummary(bookedCruises);
+    const hasEconomicsRows = economicsSummary.rows.length > 0;
     let cruisePointsSum = 0;
-    let totalWinLoss = 0;
+    let totalWinnings = 0;
+    let totalCashResult = 0;
 
     completedCruises.forEach((cruise: BookedCruise) => {
-      const points = cruise.earnedPoints || cruise.casinoPoints || 0;
+      const points = cruise.pointsEarned ?? cruise.earnedPoints ?? cruise.casinoPoints ?? 0;
       cruisePointsSum += points;
-
-      const winnings = cruise.winnings || 0;
-      totalWinLoss += winnings;
+      totalWinnings += cruise.winningsBroughtHome ?? cruise.winnings ?? 0;
+      totalCashResult += cruise.cashResult ?? ((cruise.winningsBroughtHome ?? cruise.winnings ?? 0) - (cruise.netEffectivePaid ?? cruise.amountPaid ?? cruise.pricePaid ?? 0));
     });
 
-    const historicalPointsEarned = clubRoyaleHistoricalPoints > 0 ? clubRoyaleHistoricalPoints : cruisePointsSum;
+    const count = hasEconomicsRows ? economicsSummary.totals.cruises : completedCruises.length;
+    const historicalPointsEarned = clubRoyaleHistoricalPoints > 0
+      ? clubRoyaleHistoricalPoints
+      : (hasEconomicsRows ? economicsSummary.totals.totalPoints : cruisePointsSum);
     const totalPointsEarned = historicalPointsEarned;
-    const totalCoinIn = historicalPointsEarned * DOLLARS_PER_POINT;
-    const netResult = totalWinLoss;
-    const count = completedCruises.length;
+    const totalCoinIn = hasEconomicsRows ? economicsSummary.totals.totalCoinIn : historicalPointsEarned * DOLLARS_PER_POINT;
+    const totalWinLoss = hasEconomicsRows ? economicsSummary.totals.totalWinningsHome : totalWinnings;
+    const netResult = hasEconomicsRows ? economicsSummary.totals.totalCashResult : totalCashResult;
     const avgPointsPerCruise = count > 0 ? historicalPointsEarned / count : 0;
-    const avgCoinInPerCruise = avgPointsPerCruise * DOLLARS_PER_POINT;
+    const avgCoinInPerCruise = count > 0 ? totalCoinIn / count : 0;
     const seasonStartDate = clubRoyaleSeasonStartDate.toISOString();
     const nextResetDate = clubRoyaleNextResetDate.toISOString();
 
-    console.log('[CasinoAnalytics] Calculated:', {
+    console.log('[CasinoAnalytics] Calculated with separated economics:', {
       completedCruisesCount: count,
       currentPointBalance,
       historicalPointsEarned,
@@ -197,11 +203,12 @@ export const [SimpleAnalyticsProvider, useSimpleAnalytics] = createContextHook((
       nextResetDate,
       netResult,
       avgCoinInPerCruise,
-      avgWinLossPerCruise: count > 0 ? totalWinLoss / count : 0,
+      avgWinLossPerCruise: count > 0 ? netResult / count : 0,
       avgPointsPerCruise,
       completedCruisesCount: count,
     };
   }, [
+    bookedCruises,
     clubRoyaleHistoricalPoints,
     clubRoyaleHistoricalTier,
     clubRoyaleNextResetDate,
@@ -330,6 +337,23 @@ export const [SimpleAnalyticsProvider, useSimpleAnalytics] = createContextHook((
     if (completedCruises.length === 0) {
       return DEFAULT_PORTFOLIO_METRICS;
     }
+
+    const economicsSummary = buildCruiseEconomicsSummary(bookedCruises);
+    if (economicsSummary.rows.length > 0) {
+      const avgROI = economicsSummary.totals.totalPaid > 0
+        ? (economicsSummary.totals.totalCashResult / economicsSummary.totals.totalPaid) * 100
+        : 0;
+      const metrics = {
+        totalRetailValue: economicsSummary.totals.totalRetailValue,
+        totalAmountPaid: economicsSummary.totals.totalPaid,
+        totalCompValue: economicsSummary.totals.totalCruiseValueCaptured,
+        totalSavings: economicsSummary.totals.totalCruiseValueCaptured,
+        totalCoinIn: economicsSummary.totals.totalCoinIn,
+        avgROI,
+      };
+      console.log('[SimpleAnalytics] Portfolio metrics calculated from casino economics:', metrics);
+      return metrics;
+    }
     
     const portfolioValue = calculatePortfolioValue(completedCruises);
     
@@ -343,7 +367,7 @@ export const [SimpleAnalyticsProvider, useSimpleAnalytics] = createContextHook((
       totalCoinIn: portfolioValue.totalCoinIn,
       avgROI: portfolioValue.avgROI,
     };
-  }, [completedCruises]);
+  }, [bookedCruises, completedCruises]);
 
   const getTotalCruises = useCallback(() => analytics.totalCruises, [analytics.totalCruises]);
   const getTotalNights = useCallback(() => analytics.totalNights, [analytics.totalNights]);

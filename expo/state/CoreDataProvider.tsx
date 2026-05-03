@@ -31,6 +31,8 @@ import { updateAllCruiseLifecycles } from "@/lib/lifecycleManager";
 import { dedupeBookedCruises, dedupeCalendarEvents, dedupeCasinoOffers, dedupeCruises } from "@/lib/dataIdentity";
 import { generateCruiseCalendarEvents } from "@/lib/calendar/cruiseEvents";
 import { annotateOverlappingCruises, applyKnownBookingCorrectionsToCruise, applyUserConfirmedBookedCruiseManifest, isKnownInvalidBookedCruise } from "@/lib/cruiseOverlapGuards";
+import { isKnownCasinoProfile } from "@/lib/knownProfileFallback";
+import { normalizeCruisesWithCasinoEconomics } from "@/lib/casinoCruiseEconomics";
 
 const getMockCruises = (): { BOOKED_CRUISES_DATA: BookedCruise[]; COMPLETED_CRUISES_DATA: BookedCruise[] } => {
   try {
@@ -481,11 +483,12 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         MANUAL_CLUB_ROYALE_POINTS: getUserScopedKey(ALL_STORAGE_KEYS.MANUAL_CLUB_ROYALE_POINTS, authenticatedEmail),
         MANUAL_CROWN_ANCHOR_POINTS: getUserScopedKey(ALL_STORAGE_KEYS.MANUAL_CROWN_ANCHOR_POINTS, authenticatedEmail),
       };
-      const [cruisesData, bookedData, offersData, eventsData, settingsData, pointsData, profileData, usersData, currentUserIdData, extendedLoyaltyDataRaw, manualClubRoyalePointsRaw, manualCrownAnchorPointsRaw] = await Promise.all([
+      const [cruisesData, bookedData, offersData, eventsData, sessionsData, settingsData, pointsData, profileData, usersData, currentUserIdData, extendedLoyaltyDataRaw, manualClubRoyalePointsRaw, manualCrownAnchorPointsRaw] = await Promise.all([
         quotaSafeGetItem(scopedKeys.CRUISES),
         quotaSafeGetItem(scopedKeys.BOOKED_CRUISES),
         quotaSafeGetItem(scopedKeys.CASINO_OFFERS),
         quotaSafeGetItem(scopedKeys.CALENDAR_EVENTS),
+        quotaSafeGetItem(getUserScopedKey(ALL_STORAGE_KEYS.CASINO_SESSIONS, authenticatedEmail)),
         quotaSafeGetItem(scopedKeys.SETTINGS),
         quotaSafeGetItem(scopedKeys.USER_POINTS),
         quotaSafeGetItem(scopedKeys.CLUB_PROFILE),
@@ -497,9 +500,13 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       ]);
       
       const parsedCruises = dedupeCruises(prepareOwnedRecords<Cruise>(cruisesData ? JSON.parse(cruisesData) as Cruise[] : [], ownerScopeId, authenticatedEmail, 'backend-sync available cruises'), 'backend-sync available cruises');
-      const parsedBooked = annotateOverlappingCruises(dedupeBookedCruises(prepareOwnedRecords<BookedCruise>(bookedData ? JSON.parse(bookedData) as BookedCruise[] : [], ownerScopeId, authenticatedEmail, 'backend-sync booked cruises'), 'backend-sync booked cruises'));
+      const parsedBooked = normalizeCruisesWithCasinoEconomics(
+        annotateOverlappingCruises(dedupeBookedCruises(prepareOwnedRecords<BookedCruise>(bookedData ? JSON.parse(bookedData) as BookedCruise[] : [], ownerScopeId, authenticatedEmail, 'backend-sync booked cruises'), 'backend-sync booked cruises')),
+        { includeKnownAnnualFacts: isKnownCasinoProfile(authenticatedEmail) },
+      );
       const parsedOffers = dedupeCasinoOffers(prepareOwnedRecords<CasinoOffer>(offersData ? JSON.parse(offersData) as CasinoOffer[] : [], ownerScopeId, authenticatedEmail, 'backend-sync casino offers'), 'backend-sync casino offers');
       const parsedEvents = dedupeCalendarEvents(prepareOwnedRecords<CalendarEvent>(eventsData ? JSON.parse(eventsData) as CalendarEvent[] : [], ownerScopeId, authenticatedEmail, 'backend-sync calendar events'), 'backend-sync calendar events');
+      const parsedSessions = sessionsData ? (JSON.parse(sessionsData) as unknown[]).filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)) : [];
       const parsedSettings = settingsData ? sanitizeForeignValue(JSON.parse(settingsData) as Record<string, unknown>, authenticatedEmail, 'backend-sync settings') : undefined;
       const parsedUsers = prepareOwnedRecords<Record<string, unknown>>(
         usersData ? (JSON.parse(usersData) as unknown[]).filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)) : [],
@@ -549,6 +556,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         bookedCruises: parsedBooked,
         casinoOffers: parsedOffers,
         calendarEvents: parsedEvents,
+        casinoSessions: parsedSessions,
         userProfiles: parsedUsers,
         currentUserId: parsedCurrentUserId,
         settings: syncableSettings,
@@ -645,7 +653,10 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
           return false;
         }
         const ownedBackendCruises = dedupeCruises(prepareOwnedRecords<Cruise>((userData.cruises ?? []) as Cruise[], ownerScopeId, authenticatedEmail, 'backend-restore available cruises'), 'backend-restore available cruises');
-        const ownedBackendBookedCruises = annotateOverlappingCruises(dedupeBookedCruises(prepareOwnedRecords<BookedCruise>((userData.bookedCruises ?? []) as BookedCruise[], ownerScopeId, authenticatedEmail, 'backend-restore booked cruises'), 'backend-restore booked cruises'));
+        const ownedBackendBookedCruises = normalizeCruisesWithCasinoEconomics(
+          annotateOverlappingCruises(dedupeBookedCruises(prepareOwnedRecords<BookedCruise>((userData.bookedCruises ?? []) as BookedCruise[], ownerScopeId, authenticatedEmail, 'backend-restore booked cruises'), 'backend-restore booked cruises')),
+          { includeKnownAnnualFacts: isKnownCasinoProfile(authenticatedEmail) },
+        );
         const ownedBackendOffers = dedupeCasinoOffers(prepareOwnedRecords<CasinoOffer>((userData.casinoOffers ?? []) as CasinoOffer[], ownerScopeId, authenticatedEmail, 'backend-restore casino offers'), 'backend-restore casino offers');
         const ownedBackendEvents = dedupeCalendarEvents(prepareOwnedRecords<CalendarEvent>((userData.calendarEvents ?? []) as CalendarEvent[], ownerScopeId, authenticatedEmail, 'backend-restore calendar events'), 'backend-restore calendar events');
         const scopedKeys = getScopedStorageKeys(authenticatedEmail);
@@ -729,6 +740,9 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         }
         if (userData.calendarEvents) {
           savePromises.push(quotaSafeSetJsonItem(scopedKeys.CALENDAR_EVENTS, ownedBackendEvents));
+        }
+        if (userData.casinoSessions) {
+          savePromises.push(quotaSafeSetJsonItem(getUserScopedKey(ALL_STORAGE_KEYS.CASINO_SESSIONS, authenticatedEmail), userData.casinoSessions));
         }
         if (userData.settings) {
           const sanitizedSettings = sanitizeForeignValue(userData.settings, authenticatedEmail, 'backend-restore settings');
@@ -839,7 +853,10 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       }
 
       const bookedResult = await processBookedCruises(ownedStatus, snapshot, getMockCruises, getFirstTimeUserSampleData, authenticatedEmail);
-      const ownedBookedCruises = annotateOverlappingCruises(dedupeBookedCruises(prepareOwnedRecords<BookedCruise>(bookedResult.bookedCruises, ownerScopeId, authenticatedEmail, 'processed booked cruises'), 'processed booked cruises'));
+      const ownedBookedCruises = normalizeCruisesWithCasinoEconomics(
+        annotateOverlappingCruises(dedupeBookedCruises(prepareOwnedRecords<BookedCruise>(bookedResult.bookedCruises, ownerScopeId, authenticatedEmail, 'processed booked cruises'), 'processed booked cruises')),
+        { includeKnownAnnualFacts: isKnownCasinoProfile(authenticatedEmail) },
+      );
       const ownedOffersOverride = bookedResult.offersOverride
         ? prepareOwnedRecords<CasinoOffer>(bookedResult.offersOverride, ownerScopeId, authenticatedEmail, 'processed casino offers')
         : undefined;

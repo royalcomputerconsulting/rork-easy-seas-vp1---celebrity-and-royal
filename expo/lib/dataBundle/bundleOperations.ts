@@ -29,6 +29,8 @@ import {
 } from '../dataIdentity';
 import { generateCruiseCalendarEvents } from '../calendar/cruiseEvents';
 import { applyFoundationFields } from '../dataFoundation';
+import { isKnownCasinoProfile } from '../knownProfileFallback';
+import { normalizeCruisesWithCasinoEconomics } from '../casinoCruiseEconomics';
 
 const CURRENT_MACHINE_ENCYCLOPEDIA_KEY = 'easyseas_machine_encyclopedia_v2_262_only';
 const CURRENT_MY_SLOT_ATLAS_KEY = 'easyseas_my_slot_atlas_v2_262_only';
@@ -578,7 +580,10 @@ export async function getAllStoredData(email?: string | null, profileGate?: Data
     }
 
     cruises = dedupeCruises(filterRecordsForProfileGate(cruises, 'export cruises', resolvedGate, true), 'export cruises');
-    bookedCruises = dedupeBookedCruises(filterRecordsForProfileGate(bookedCruises, 'export booked cruises', resolvedGate, true), 'export booked cruises');
+    bookedCruises = normalizeCruisesWithCasinoEconomics(
+      dedupeBookedCruises(filterRecordsForProfileGate(bookedCruises, 'export booked cruises', resolvedGate, true), 'export booked cruises'),
+      { includeKnownAnnualFacts: isKnownCasinoProfile(email) },
+    );
     casinoOffers = dedupeCasinoOffers(filterRecordsForProfileGate(casinoOffers, 'export casino offers', resolvedGate, true), 'export casino offers');
     calendarEvents = dedupeCalendarEvents(filterRecordsForProfileGate(calendarEvents, 'export calendar events', resolvedGate, true), 'export calendar events');
     casinoSessions = filterRecordsForProfileGate(casinoSessions, 'export casino sessions', resolvedGate, true);
@@ -762,7 +767,10 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
         markUnassigned: true,
       });
       const dedupedBooked = dedupeBookedCruises(foundationBooked, 'backup booked cruises');
-      const enrichedBooked = applyKnownRetailValuesToBooked(dedupedBooked);
+      const enrichedBooked = normalizeCruisesWithCasinoEconomics(
+        applyKnownRetailValuesToBooked(dedupedBooked),
+        { includeKnownAnnualFacts: isKnownCasinoProfile(email) },
+      );
       const mergedBooked = await mergeWithExistingOutsideProfileGate(sk(ALL_STORAGE_KEYS.BOOKED_CRUISES), enrichedBooked, resolvedGate, 'backup booked cruises');
       importedBookedForCalendar = enrichedBooked;
       await quotaSafeSetJsonItem(sk(ALL_STORAGE_KEYS.BOOKED_CRUISES), mergedBooked);

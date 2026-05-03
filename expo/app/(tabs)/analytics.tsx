@@ -97,7 +97,7 @@ import { CompactDashboardHeader } from '@/components/CompactDashboardHeader';
 import { ResponsiveContainer } from '@/components/ResponsiveContainer';
 import { useEntitlement } from '@/state/EntitlementProvider';
 import { useCrewRecognition } from '@/state/CrewRecognitionProvider';
-import { buildCruiseEconomicsSummary, type CruiseEconomicsRow } from '@/lib/casinoCruiseEconomics';
+import { buildCruiseEconomicsSummary, normalizeCruisesWithCasinoEconomics, type CruiseEconomicsRow } from '@/lib/casinoCruiseEconomics';
 import { CONFIRMED_CLUB_ROYALE_2025_POINTS, getKnownCasinoProfileCruises, isKnownCasinoProfile } from '@/lib/knownProfileFallback';
 import { dedupeBookedCruises } from '@/lib/dataIdentity';
 
@@ -130,6 +130,16 @@ function parseNumberInput(value: string): number {
 }
 
 function calculateCruiseROI(cruise: BookedCruise): { roi: number; valuePerDollar: number } {
+  const summary = buildCruiseEconomicsSummary([cruise]);
+  const row = summary.rows[0];
+
+  if (row) {
+    return {
+      roi: row.paid > 0 ? (row.netCash / row.paid) * 100 : (row.netCash > 0 ? 1000 : 0),
+      valuePerDollar: row.paid > 0 ? row.totalEconomic / row.paid : (row.totalEconomic > 0 ? 9999 : 0),
+    };
+  }
+
   const breakdown = calculateCruiseValue(cruise);
   return {
     roi: breakdown.trueOutOfPocket > 0 
@@ -230,15 +240,18 @@ export default function AnalyticsScreen() {
 
     if (knownProfileCruises.length > 0) {
       const mergedCruises = dedupeBookedCruises([...knownProfileCruises, ...primaryBooked], 'analytics known-profile cruise merge');
+      const normalizedMergedCruises = normalizeCruisesWithCasinoEconomics(mergedCruises, {
+        includeKnownAnnualFacts: isKnownCasinoProfile(authenticatedEmail),
+      });
       console.log('[Analytics] Using known profile cruise history merge:', {
         primary: primaryBooked.length,
         knownProfile: knownProfileCruises.length,
-        merged: mergedCruises.length,
+        merged: normalizedMergedCruises.length,
       });
-      return mergedCruises;
+      return normalizedMergedCruises;
     }
 
-    if (primaryBooked.length > 0) return primaryBooked;
+    if (primaryBooked.length > 0) return normalizeCruisesWithCasinoEconomics(primaryBooked);
     console.log('[Analytics] No booked cruises available, using empty array');
     return [];
   }, [authenticatedEmail, localData.booked, storedBookedCruises]);
@@ -514,16 +527,29 @@ export default function AnalyticsScreen() {
     const certificateValue = parseNumberInput(performanceForm.instantCertificateValue);
     const instantCertificateWon = performanceForm.instantCertificateWon;
     const now = new Date().toISOString();
+    const selectedSummary = buildCruiseEconomicsSummary([selectedPerformanceCruise]);
+    const selectedEconomicsRow = selectedSummary.rows[0];
+    const retailValue = selectedEconomicsRow?.retail ?? selectedPerformanceCruise.retailValue ?? selectedPerformanceCruise.totalRetailCost ?? selectedPerformanceCruise.originalPrice ?? 0;
+    const netEffectivePaid = selectedEconomicsRow?.paid ?? selectedPerformanceCruise.netEffectivePaid ?? selectedPerformanceCruise.amountPaid ?? selectedPerformanceCruise.pricePaid ?? selectedPerformanceCruise.totalPrice ?? selectedPerformanceCruise.price ?? 0;
+    const cruiseValueCaptured = Math.round((retailValue - netEffectivePaid + Number.EPSILON) * 100) / 100;
+    const cashResult = Math.round((winLoss - netEffectivePaid + Number.EPSILON) * 100) / 100;
+    const totalEconomicValue = Math.round((retailValue + winLoss - netEffectivePaid + Number.EPSILON) * 100) / 100;
     const updates: Partial<BookedCruise> = {
       earnedPoints: pointsEarned,
       casinoPoints: pointsEarned,
       pointsEarned,
       coinIn: pointsEarned * 5,
+      retailValue,
+      totalRetailCost: retailValue,
+      amountPaid: netEffectivePaid,
+      netEffectivePaid,
       winnings: winLoss,
       winningsBroughtHome: winLoss,
       totalWinnings: winLoss,
       netResult: winLoss,
-      cashResult: winLoss,
+      cashResult,
+      cruiseValueCaptured,
+      totalEconomicValue,
       instantCertificateWon,
       instantCertificateOfferCode: instantCertificateWon ? performanceForm.instantCertificateOfferCode.trim() : '',
       instantCertificateValue: instantCertificateWon ? certificateValue : 0,
@@ -559,6 +585,7 @@ export default function AnalyticsScreen() {
 
   const cruiseEconomicsSummary = useMemo(() => {
     return buildCruiseEconomicsSummary(bookedCruises, new Date(), {
+      useKnownAnnualReportFacts: isKnownCasinoProfile(authenticatedEmail),
       minimumTotalPoints: isKnownCasinoProfile(authenticatedEmail) ? CONFIRMED_CLUB_ROYALE_2025_POINTS : undefined,
       pointsAdjustmentNote: 'Historical Club Royale points use the confirmed 58,500-point 2025 season floor when imported per-cruise rows do not contain every point transaction.',
     });
@@ -1607,19 +1634,21 @@ export default function AnalyticsScreen() {
     setIsGeneratingSessions(true);
     try {
       const today = new Date();
+      const annualEconomicsRows = cruiseEconomicsSummary.rows;
+      const annualEconomicsIds = new Set(annualEconomicsRows.map((row) => row.cruiseId));
       const completedCruises = bookedCruises.filter(cruise => {
         const returnDate = cruise.returnDate ? createDateFromString(cruise.returnDate) : null;
         const isCompleted = returnDate ? returnDate < today : cruise.completionState === 'completed';
-        const hasPointsData = cruise.earnedPoints || cruise.casinoPoints;
+        const hasPointsData = cruise.pointsEarned || cruise.earnedPoints || cruise.casinoPoints || annualEconomicsIds.has(cruise.id);
         
         if (isCompleted && hasPointsData) {
           console.log('[Analytics] Found completed cruise with points:', {
             id: cruise.id,
             shipName: cruise.shipName,
             sailDate: cruise.sailDate,
-            earnedPoints: cruise.earnedPoints || cruise.casinoPoints,
-            winnings: cruise.winnings,
-            actualSpend: cruise.actualSpend,
+            earnedPoints: cruise.pointsEarned || cruise.earnedPoints || cruise.casinoPoints,
+            winningsBroughtHome: cruise.winningsBroughtHome ?? cruise.winnings,
+            cashResult: cruise.cashResult,
           });
         }
         
@@ -1665,7 +1694,7 @@ export default function AnalyticsScreen() {
     } finally {
       setIsGeneratingSessions(false);
     }
-  }, [bookedCruises, generateHistoricalSessions, haptics, sessions]);
+  }, [bookedCruises, cruiseEconomicsSummary.rows, generateHistoricalSessions, haptics, sessions]);
 
   const renderSessionTab = () => (
     <View style={styles.tabContent}>
@@ -1777,6 +1806,7 @@ export default function AnalyticsScreen() {
             }
             return false;
           })}
+          cruiseEconomicsSummary={cruiseEconomicsSummary}
         />
       </View>
 
@@ -1919,44 +1949,33 @@ export default function AnalyticsScreen() {
 
   const historicalCruiseData = useMemo(() => {
     if (activeTab !== 'calcs') return { totalCruises: 0, totalPoints: 0, totalSessions: 0, totalNights: 0, totalCoinIn: 0, totalWinLoss: 0, totalRetailValue: 0, totalTaxesFees: 0, totalProfit: 0, cruises: [] as { id: string; shipName: string; sailDate: string; points: number; sessionCount: number; nights: number }[] };
-    const today = new Date();
-    const cruiseData = bookedCruises
-      .filter(cruise => {
-        const returnDate = cruise.returnDate ? createDateFromString(cruise.returnDate) : null;
-        const isCompleted = returnDate ? returnDate < today : cruise.completionState === 'completed';
-        const hasPoints = (cruise.earnedPoints || cruise.casinoPoints || 0) > 0;
-        return isCompleted && hasPoints;
-      })
-      .map(cruise => {
-        const cruiseSessions = sessions.filter(s => s.cruiseId === cruise.id);
-        const points = cruise.earnedPoints || cruise.casinoPoints || 0;
-        return {
-          id: cruise.id,
-          shipName: cruise.shipName || 'Unknown',
-          sailDate: cruise.sailDate || '',
-          points,
-          sessionCount: cruiseSessions.length > 0 ? cruiseSessions.length : Math.max(1, (cruise.nights || 1) * 2),
-          nights: cruise.nights || 1,
-        };
-      });
+    const cruiseData = cruiseEconomicsSummary.rows.map((row) => {
+      const cruiseSessions = sessions.filter(s => s.cruiseId === row.cruiseId);
+      return {
+        id: row.cruiseId,
+        shipName: row.ship,
+        sailDate: row.sailDate,
+        points: row.points,
+        sessionCount: cruiseSessions.length > 0 ? cruiseSessions.length : Math.max(1, row.nights * 2),
+        nights: row.nights || 1,
+      };
+    });
 
-    const totalPoints = cruiseData.reduce((sum, c) => sum + c.points, 0);
     const totalSessions = cruiseData.reduce((sum, c) => sum + c.sessionCount, 0);
-    const totalNights = cruiseData.reduce((sum, c) => sum + c.nights, 0);
 
     return {
-      totalCruises: cruiseData.length,
-      totalPoints,
+      totalCruises: cruiseEconomicsSummary.totals.cruises,
+      totalPoints: cruiseEconomicsSummary.totals.totalPoints,
       totalSessions,
-      totalNights,
-      totalCoinIn: casinoAnalytics.totalCoinIn,
-      totalWinLoss: realAnalytics.completedCashResult,
-      totalRetailValue: realAnalytics.completedRetailValue,
-      totalTaxesFees: realAnalytics.completedTaxesFees,
-      totalProfit: realAnalytics.completedEconomicValue,
+      totalNights: cruiseEconomicsSummary.totals.totalNights,
+      totalCoinIn: cruiseEconomicsSummary.totals.totalCoinIn,
+      totalWinLoss: cruiseEconomicsSummary.totals.totalCashResult,
+      totalRetailValue: cruiseEconomicsSummary.totals.totalRetailValue,
+      totalTaxesFees: cruiseEconomicsSummary.totals.totalPaid,
+      totalProfit: cruiseEconomicsSummary.totals.totalEconomicValue,
       cruises: cruiseData,
     };
-  }, [activeTab, bookedCruises, sessions, casinoAnalytics, realAnalytics]);
+  }, [activeTab, cruiseEconomicsSummary, sessions]);
 
   const highValueCalculations = useMemo(() => {
     if (activeTab !== 'calcs') return [] as { id: number; label: string; value: string; description: string; color: string; icon: any }[];
@@ -1972,8 +1991,8 @@ export default function AnalyticsScreen() {
     const estimatedCoinInFromNights = historicalCruiseData.totalNights > 0 ? historicalCruiseData.totalNights * 1500 : 0;
 
     const rawTotalCoinIn = isHistorical
-      ? casinoAnalytics.totalCoinIn
-      : (hasSessionData ? sessionCoinIn : casinoAnalytics.totalCoinIn);
+      ? cruiseEconomicsSummary.totals.totalCoinIn
+      : (hasSessionData ? sessionCoinIn : cruiseEconomicsSummary.totals.totalCoinIn);
 
     const totalCoinIn = rawTotalCoinIn > 0
       ? rawTotalCoinIn
@@ -1995,14 +2014,14 @@ export default function AnalyticsScreen() {
     const defaultAvgSessionMinutes = 90;
     const avgSessionLength = sessionAnalytics.avgSessionLength > 0 ? sessionAnalytics.avgSessionLength : defaultAvgSessionMinutes;
     const modeLabel = isHistorical ? 'historical' : (hasSessionData ? 'per session' : 'per session (est.)');
-    const historicalTotalPoints = casinoAnalytics.totalPointsEarned;
-    const completedCruiseCount = casinoAnalytics.completedCruisesCount;
+    const historicalTotalPoints = cruiseEconomicsSummary.totals.totalPoints;
+    const completedCruiseCount = cruiseEconomicsSummary.totals.cruises;
     const avgCashResultPerCruise = completedCruiseCount > 0 ? realAnalytics.completedCashResult / completedCruiseCount : 0;
     const divisorLabel = isHistorical
       ? `${historicalCruiseData.totalSessions} sessions across ${completedCruiseCount} cruises`
       : (hasSessionData ? `${sessions.length} tracked sessions` : `${totalSessions} est. sessions from ${completedCruiseCount} cruises`);
 
-    console.log('[Calcs] Mode:', calcsMode, 'hasSessionData:', hasSessionData, 'totalCoinIn:', totalCoinIn, 'rawTotalCoinIn:', rawTotalCoinIn, 'coinInIsEstimated:', coinInIsEstimated, 'totalSessions:', totalSessions, 'casinoAnalytics.totalCoinIn:', casinoAnalytics.totalCoinIn);
+    console.log('[Calcs] Mode:', calcsMode, 'hasSessionData:', hasSessionData, 'totalCoinIn:', totalCoinIn, 'rawTotalCoinIn:', rawTotalCoinIn, 'coinInIsEstimated:', coinInIsEstimated, 'totalSessions:', totalSessions, 'economics.totalCoinIn:', cruiseEconomicsSummary.totals.totalCoinIn);
 
     const coinInPerUnit = totalSessions > 0 ? totalCoinIn / totalSessions : 0;
     
@@ -2177,7 +2196,7 @@ export default function AnalyticsScreen() {
         {
           id: 11,
           label: 'Avg Coin-In / Cruise',
-          value: formatCurrency(casinoAnalytics.avgCoinInPerCruise),
+          value: formatCurrency(completedCruiseCount > 0 ? cruiseEconomicsSummary.totals.totalCoinIn / completedCruiseCount : 0),
           description: `${formatCurrency(totalCoinIn)} ÷ ${completedCruiseCount} completed cruises`,
           color: COLORS.navyDeep,
           icon: Ship,
@@ -2192,7 +2211,7 @@ export default function AnalyticsScreen() {
         },
       ] : []),
     ];
-  }, [activeTab, calcsMode, casinoAnalytics, sessions, realAnalytics, sessionAnalytics, historicalCruiseData]);
+  }, [activeTab, calcsMode, cruiseEconomicsSummary, sessions, realAnalytics, sessionAnalytics, historicalCruiseData]);
 
   const renderCalcsTab = () => (
     <View style={styles.tabContent}>
@@ -2241,10 +2260,10 @@ export default function AnalyticsScreen() {
             </TouchableOpacity>
           </View>
 
-          {calcsMode === 'historical' && casinoAnalytics.completedCruisesCount > 0 && (
+          {calcsMode === 'historical' && cruiseEconomicsSummary.totals.cruises > 0 && (
             <View style={styles.calcsModeSummary}>
               <Text style={styles.calcsModeSummaryText}>
-                Historical: {formatNumber(casinoAnalytics.historicalPointsEarned)} pts ({formatCurrency(casinoAnalytics.totalCoinIn)} coin-in) • Current season: {formatNumber(casinoAnalytics.currentPointBalance)} pts • Status: {casinoAnalytics.currentStatusTier} • {realAnalytics.completedCashResult >= 0 ? '+' : ''}{formatCurrency(realAnalytics.completedCashResult)} cash result • {casinoAnalytics.completedCruisesCount} cruises
+                Historical: {formatNumber(cruiseEconomicsSummary.totals.totalPoints)} pts ({formatCurrency(cruiseEconomicsSummary.totals.totalCoinIn)} coin-in) • Current season: {formatNumber(casinoAnalytics.currentPointBalance)} pts • Status: {casinoAnalytics.currentStatusTier} • {realAnalytics.completedCashResult >= 0 ? '+' : ''}{formatCurrency(realAnalytics.completedCashResult)} cash result • {cruiseEconomicsSummary.totals.cruises} cruises
               </Text>
             </View>
           )}

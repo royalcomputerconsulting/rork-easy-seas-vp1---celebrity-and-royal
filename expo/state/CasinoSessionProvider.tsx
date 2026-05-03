@@ -86,6 +86,7 @@ export interface SessionAnalytics {
   totalCashOut: number;
   netWinLoss: number;
   totalPointsEarned: number;
+  totalCoinIn: number;
   avgSessionLength: number;
   avgBuyIn: number;
   avgWinLoss: number;
@@ -541,6 +542,7 @@ export const [CasinoSessionProvider, useCasinoSessions] = createContextHook((): 
     const totalCashOut = sessions.reduce((sum, s) => sum + (s.cashOut || 0), 0);
     const netWinLoss = sessions.reduce((sum, s) => sum + (s.winLoss || 0), 0);
     const totalPointsEarned = sessions.reduce((sum, s) => sum + (s.pointsEarned || 0), 0);
+    const totalCoinIn = totalPointsEarned * 5;
 
     const avgSessionLength = totalSessions > 0 ? totalPlayTimeMinutes / totalSessions : 0;
     const avgBuyIn = totalSessions > 0 ? totalBuyIn / totalSessions : 0;
@@ -644,7 +646,7 @@ export const [CasinoSessionProvider, useCasinoSessions] = createContextHook((): 
     });
 
     const avgHouseEdge = 0.08;
-    const theoreticalLoss = totalBuyIn * avgHouseEdge;
+    const theoreticalLoss = totalCoinIn * avgHouseEdge;
     const actualLoss = netWinLoss < 0 ? Math.abs(netWinLoss) : -netWinLoss;
     const theoVariance = actualLoss - theoreticalLoss;
     const theoVariancePercent = theoreticalLoss > 0 ? (theoVariance / theoreticalLoss) * 100 : 0;
@@ -691,6 +693,7 @@ export const [CasinoSessionProvider, useCasinoSessions] = createContextHook((): 
       totalCashOut,
       netWinLoss,
       totalPointsEarned,
+      totalCoinIn,
       avgSessionLength,
       avgBuyIn,
       avgWinLoss,
