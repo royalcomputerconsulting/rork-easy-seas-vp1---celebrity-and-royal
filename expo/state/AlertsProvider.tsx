@@ -18,6 +18,8 @@ import {
 } from '@/lib/anomalyDetection';
 import { 
   DEFAULT_ALERT_RULES,
+  normalizeAlertRulesFromStorage,
+  serializeAlertRulesForStorage,
   processAnomaliesWithRules,
   filterActiveAlerts,
   sortAlertsByPriority,
@@ -128,7 +130,7 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
       setAlerts(parsedAlerts);
       console.log('[AlertsProvider] Loaded scoped alerts:', { email: authenticatedEmail, count: parsedAlerts.length });
 
-      const parsedRules = storedRules ? JSON.parse(storedRules) as AlertRule[] : DEFAULT_ALERT_RULES;
+      const parsedRules = storedRules ? normalizeAlertRulesFromStorage(JSON.parse(storedRules)) : DEFAULT_ALERT_RULES;
       setRules(parsedRules);
       console.log('[AlertsProvider] Loaded scoped rules:', { email: authenticatedEmail, count: parsedRules.length });
 
@@ -204,7 +206,7 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
   useEffect(() => {
     const saveRules = async () => {
       try {
-        await quotaSafeSetJsonItem(skRef.current.RULES, rules);
+        await quotaSafeSetJsonItem(skRef.current.RULES, serializeAlertRulesForStorage(rules));
       } catch (error) {
         console.error('[AlertsProvider] Error saving rules:', error);
       }

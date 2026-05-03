@@ -8,6 +8,7 @@ import { clearUserSpecificData } from "@/lib/storage/storageOperations";
 import { quotaSafeGetItem, quotaSafeSetItem, quotaSafeSetJsonItem, quotaSafeRemoveItem } from "@/lib/storage/quotaSafeStorage";
 import { buildOwnerScopeId, getInstallationId } from "@/lib/storage/installationId";
 import { containsKnownForeignPersonalData, filterRecordsForOwner, isOwnerScopeForEmail, isScopedDynamicKeyForOwner, stampRecordsForOwner, toOwnerScopedDynamicKey } from "@/lib/storage/dataOwnership";
+import { normalizeAlertRulesFromStorage, serializeAlertRulesForStorage } from "@/lib/alertRules";
 
 const _BASE_LAST_SYNC_KEY = "easyseas_last_cloud_sync";
 const MAX_RETRY_ATTEMPTS = 1;
@@ -95,6 +96,19 @@ function parseStoredRecord(value: string | null, label: string): Record<string, 
 
 function parseStoredUnknownArray(value: string | null, label: string): unknown[] {
   return parseStoredJson<unknown[]>(value, [], label);
+}
+
+function parseStoredAlertRules(value: string | null, label: string): Record<string, unknown>[] {
+  if (!value) {
+    return [];
+  }
+
+  try {
+    return normalizeAlertRulesFromStorage(JSON.parse(value)) as unknown as Record<string, unknown>[];
+  } catch (error) {
+    console.error(`[UserDataSync] Failed to parse ${label}:`, error);
+    return [];
+  }
 }
 
 function parseStoredUnknown(value: string | null, label: string): unknown {
@@ -572,7 +586,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         userPoints: parseStoredInteger(userPointsRaw, 0),
         certificates: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(certificatesRaw, 'certificates').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync certificates'),
         alerts: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(alertsRaw, 'alerts').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync alerts'),
-        alertRules: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(alertRulesRaw, 'alertRules').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync alert rules'),
+        alertRules: prepareOwnedRecords<Record<string, unknown>>(parseStoredAlertRules(alertRulesRaw, 'alertRules'), ownerScopeIdRef.current, emailRef.current, 'cloud-sync alert rules'),
         dismissedAlertIds: parseStoredStringArray(dismissedAlertIdsRaw, 'dismissedAlertIds'),
         dismissedAlertEntities: parseStoredStringArray(dismissedAlertEntitiesRaw, 'dismissedAlertEntities'),
         slotAtlas: asStringArray(parseStoredUnknownArray(currentMyAtlasRaw ?? slotAtlasRaw, 'slotAtlas')),
@@ -688,7 +702,8 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         savePromises.push(...buildDualJsonSetPromises(scopedAlertsKey, sk(ALL_STORAGE_KEYS.ALERTS), prepareOwnedUnknownArray(cloudData.alerts, currentOwnerScopeId, currentEmail, 'cloud-restore alerts')));
       }
       if (hasDefinedProperty(cloudData, 'alertRules')) {
-        savePromises.push(...buildDualJsonSetPromises(scopedAlertRulesKey, sk(ALL_STORAGE_KEYS.ALERT_RULES), prepareOwnedUnknownArray(cloudData.alertRules, currentOwnerScopeId, currentEmail, 'cloud-restore alert rules')));
+        const restoredAlertRules = serializeAlertRulesForStorage(normalizeAlertRulesFromStorage(cloudData.alertRules));
+        savePromises.push(...buildDualJsonSetPromises(scopedAlertRulesKey, sk(ALL_STORAGE_KEYS.ALERT_RULES), restoredAlertRules));
       }
       if (hasDefinedProperty(cloudData, 'dismissedAlertIds')) {
         appendPromise(savePromises, buildJsonSetPromise(scopedDismissedAlertIdsKey, asArray(cloudData.dismissedAlertIds)));
