@@ -12,26 +12,38 @@ function canUseIndexedDb(): boolean {
   return typeof globalThis !== 'undefined' && typeof globalThis.indexedDB !== 'undefined';
 }
 
-function isQuotaError(error: unknown): boolean {
-  const name = error && typeof error === 'object' && 'name' in error ? String((error as { name?: unknown }).name ?? '') : '';
-  const message = error instanceof Error ? error.message : String(error);
-  return name.includes('Quota') || message.includes('QuotaExceededError') || message.includes('exceeded the quota') || message.includes('quota');
-}
-
 function getValueLength(value: string): number {
   return value.length;
 }
 
-function describeStorageError(error: unknown): string {
+function describeStorageError(error: unknown, seen: WeakSet<object> = new WeakSet<object>()): string {
   if (error instanceof Error) {
-    return `${error.name}: ${error.message}`;
+    const code = 'code' in error ? String((error as Error & { code?: unknown }).code ?? '') : '';
+    return code.length > 0 ? `${error.name}: ${error.message} code=${code}` : `${error.name}: ${error.message}`;
   }
 
   if (error && typeof error === 'object') {
-    const record = error as { name?: unknown; message?: unknown; code?: unknown; target?: { error?: unknown } };
-    const targetError = record.target?.error;
-    if (targetError instanceof Error) {
-      return `${targetError.name}: ${targetError.message}`;
+    if (seen.has(error)) {
+      return '[Circular storage error]';
+    }
+    seen.add(error);
+
+    const record = error as {
+      name?: unknown;
+      message?: unknown;
+      code?: unknown;
+      error?: unknown;
+      cause?: unknown;
+      target?: { error?: unknown };
+      nativeEvent?: { error?: unknown; message?: unknown };
+    };
+
+    const nestedError = record.target?.error ?? record.nativeEvent?.error ?? record.error ?? record.cause;
+    if (nestedError) {
+      const nestedDescription = describeStorageError(nestedError, seen);
+      if (nestedDescription && nestedDescription !== Object.prototype.toString.call(nestedError)) {
+        return nestedDescription;
+      }
     }
 
     const parts: string[] = [];
@@ -41,14 +53,31 @@ function describeStorageError(error: unknown): string {
     if (typeof record.message === 'string' && record.message.length > 0) {
       parts.push(record.message);
     }
+    if (typeof record.nativeEvent?.message === 'string' && record.nativeEvent.message.length > 0) {
+      parts.push(record.nativeEvent.message);
+    }
     if (typeof record.code === 'number' || typeof record.code === 'string') {
       parts.push(`code=${String(record.code)}`);
     }
 
-    return parts.length > 0 ? parts.join(': ') : Object.prototype.toString.call(error);
+    if (parts.length > 0) {
+      return parts.join(': ');
+    }
+
+    try {
+      const json = JSON.stringify(error);
+      return json && json !== '{}' ? json : Object.prototype.toString.call(error);
+    } catch {
+      return Object.prototype.toString.call(error);
+    }
   }
 
   return String(error);
+}
+
+function isQuotaError(error: unknown): boolean {
+  const description = describeStorageError(error).toLowerCase();
+  return description.includes('quota') || description.includes('quotaexceedederror') || description.includes('exceeded the quota');
 }
 
 function hasObjectStore(db: IDBDatabase): boolean {
@@ -169,23 +198,36 @@ async function idbSetItem(key: string, value: string): Promise<boolean> {
   }
 
   return new Promise<boolean>((resolve) => {
+    let settled = false;
+    const finish = (stored: boolean): void => {
+      if (!settled) {
+        settled = true;
+        resolve(stored);
+      }
+    };
+
     try {
       const transaction = db.transaction(STORE_NAME, 'readwrite');
       const store = transaction.objectStore(STORE_NAME);
       const request = store.put(value, key);
 
-      request.onsuccess = () => resolve(true);
       request.onerror = () => {
         console.error('[QuotaSafeStorage] IndexedDB set failed:', { key, error: describeStorageError(request.error) });
-        resolve(false);
+        finish(false);
       };
+      transaction.oncomplete = () => finish(true);
       transaction.onerror = () => {
         console.error('[QuotaSafeStorage] IndexedDB transaction failed:', { key, error: describeStorageError(transaction.error) });
+        finish(false);
+      };
+      transaction.onabort = () => {
+        console.error('[QuotaSafeStorage] IndexedDB transaction aborted:', { key, error: describeStorageError(transaction.error) });
+        finish(false);
       };
     } catch (error) {
       console.error('[QuotaSafeStorage] IndexedDB set threw:', { key, error: describeStorageError(error) });
       resetDbCache();
-      resolve(false);
+      finish(false);
     }
   });
 }
@@ -219,7 +261,7 @@ async function storeInFallback(key: string, value: string, reason: string): Prom
   const stored = await idbSetItem(key, value);
   if (stored) {
     await AsyncStorage.removeItem(key).catch((error) => {
-      console.error('[QuotaSafeStorage] Failed to remove AsyncStorage copy after fallback write:', { key, error });
+      console.error('[QuotaSafeStorage] Failed to remove AsyncStorage copy after fallback write:', { key, error: describeStorageError(error) });
     });
     console.log('[QuotaSafeStorage] Stored key in IndexedDB fallback:', { key, reason, chars: getValueLength(value) });
     return;
@@ -235,7 +277,7 @@ export async function quotaSafeGetItem(key: string): Promise<string | null> {
       return value;
     }
   } catch (error) {
-    console.error('[QuotaSafeStorage] AsyncStorage get failed, trying fallback:', { key, error });
+    console.error('[QuotaSafeStorage] AsyncStorage get failed, trying fallback:', { key, error: describeStorageError(error) });
   }
 
   return idbGetItem(key);
@@ -253,7 +295,8 @@ export async function quotaSafeSetItem(key: string, value: string): Promise<void
     await AsyncStorage.setItem(key, value);
     await idbRemoveItem(key);
   } catch (error) {
-    console.error('[QuotaSafeStorage] AsyncStorage set failed:', { key, error });
+    const errorDescription = describeStorageError(error);
+    console.error('[QuotaSafeStorage] AsyncStorage set failed:', { key, error: errorDescription, chars: getValueLength(value) });
     if (canUseIndexedDb() || isQuotaError(error)) {
       await storeInFallback(key, value, isQuotaError(error) ? 'quota-exceeded' : 'async-storage-error');
       return;
@@ -269,7 +312,7 @@ export async function quotaSafeSetJsonItem(key: string, value: unknown): Promise
 export async function quotaSafeRemoveItem(key: string): Promise<void> {
   await Promise.all([
     AsyncStorage.removeItem(key).catch((error) => {
-      console.error('[QuotaSafeStorage] AsyncStorage remove failed:', { key, error });
+      console.error('[QuotaSafeStorage] AsyncStorage remove failed:', { key, error: describeStorageError(error) });
     }),
     idbRemoveItem(key),
   ]);
