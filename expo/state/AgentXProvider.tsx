@@ -151,10 +151,6 @@ function parseToolCall(message: string): { tool: string; params: unknown } | nul
   const offerMatch = message.match(/offer|expiring|freeplay|trade.*in|casino.*offer/i);
   const machineMatch = message.match(/slot.*machine|machine.*recommend|what.*machine|which.*machine|slot.*play|best.*machine|machine.*on|ap.*machine|advantage.*play/i);
 
-  if (askDataMatch) {
-    return { tool: 'askMyData', params: { query: message } };
-  }
-
   if (certificateMatch && !decodeOfferMatch) {
     const params: CertificateLevelSearchInput = { query: message };
     return { tool: 'searchCertificateLevels', params };
@@ -310,6 +306,10 @@ function parseToolCall(message: string): { tool: string; params: unknown } | nul
     }
     
     return { tool: 'recommendMachines', params };
+  }
+
+  if (askDataMatch) {
+    return { tool: 'askMyData', params: { query: message } };
   }
 
   return null;
@@ -627,14 +627,20 @@ CRITICAL: The user has EXACTLY ${toolContext.userPoints.toLocaleString()} casino
             },
           ];
       
-      const aiResponse = await generateText({ messages: messagesForAI });
-      
       const contextConfirmation = `Context: ${AGENT_MODE_LABELS[mode]} • ${activeScopeLabel} • ${brandProgramLabel} • Archive/Review: ${archiveContextLabel}`;
+      let aiResponse = '';
+      try {
+        aiResponse = await generateText({ messages: messagesForAI });
+      } catch (aiErr) {
+        console.warn('[AgentX] AI summarization failed; returning deterministic tool result when available:', aiErr);
+        if (!toolResult) throw aiErr;
+      }
+      
       const assistantMessage: ChatMessage = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
         content: toolResult 
-          ? `${contextConfirmation}\n\n${toolResult}\n\n---\n\n${aiResponse}` 
+          ? `${contextConfirmation}\n\n${toolResult}${aiResponse ? `\n\n---\n\n${aiResponse}` : ''}` 
           : `${contextConfirmation}\n\n${aiResponse}`,
         timestamp: new Date(),
         contextSummary: contextConfirmation,
@@ -650,7 +656,7 @@ CRITICAL: The user has EXACTLY ${toolContext.userPoints.toLocaleString()} casino
       const errorMessage: ChatMessage = {
         id: `error-${Date.now()}`,
         role: 'assistant',
-        content: 'I apologize, but I encountered an error processing your request. Please try again or rephrase your question.',
+        content: `I could not complete that request because the assistant service failed before returning an answer. Active context: ${AGENT_MODE_LABELS[mode]} • ${activeScopeLabel} • ${brandProgramLabel}. Try again, or use one of the tool chips so I can return local data-backed results without the summarization step.`,
         timestamp: new Date(),
         contextSummary: `Context: ${AGENT_MODE_LABELS[mode]} • ${activeScopeLabel} • ${brandProgramLabel} • Archive/Review: ${archiveContextLabel}`,
       };

@@ -77,6 +77,97 @@ export interface OfferAnalysisInput {
   sortBy?: 'value' | 'expiry' | 'freeplay' | 'cabin';
 }
 
+const CLUB_ROYALE_TIER_SEQUENCE: { tier: ClubRoyaleTier; threshold: number }[] = [
+  { tier: 'Choice', threshold: 0 },
+  { tier: 'Prime', threshold: 2501 },
+  { tier: 'Signature', threshold: 25001 },
+  { tier: 'Masters', threshold: 100001 },
+];
+
+function getClubRoyaleTierByPoints(points: number): ClubRoyaleTier {
+  for (let index = CLUB_ROYALE_TIER_SEQUENCE.length - 1; index >= 0; index -= 1) {
+    const tierInfo = CLUB_ROYALE_TIER_SEQUENCE[index];
+    if (points >= tierInfo.threshold) return tierInfo.tier;
+  }
+  return 'Choice';
+}
+
+function normalizeClubRoyaleTier(tier: ClubRoyaleTier | string | undefined, points: number): ClubRoyaleTier {
+  return CLUB_ROYALE_TIER_SEQUENCE.some((item) => item.tier === tier)
+    ? tier as ClubRoyaleTier
+    : getClubRoyaleTierByPoints(points);
+}
+
+function getBookedCruisePoints(cruise: BookedCruise): number {
+  const explicitPoints = cruise.earnedPoints ?? cruise.casinoPoints ?? cruise.pointsEarned;
+  if (typeof explicitPoints === 'number' && Number.isFinite(explicitPoints) && explicitPoints > 0) return explicitPoints;
+  const estimatedFromCoinIn = typeof cruise.coinIn === 'number' && Number.isFinite(cruise.coinIn) && cruise.coinIn > 0
+    ? Math.round(cruise.coinIn / 5)
+    : 0;
+  if (estimatedFromCoinIn > 0) return estimatedFromCoinIn;
+  return Math.round(Math.max(0, cruise.nights || 0) * 500);
+}
+
+function getCompletedBookedCruises(bookedCruises: BookedCruise[]): BookedCruise[] {
+  return bookedCruises.filter((cruise) => {
+    const isCompleted = cruise.completionState === 'completed' || cruise.status === 'completed';
+    if (isCompleted) return true;
+    if (!cruise.returnDate) return false;
+    return isDateInPast(cruise.returnDate);
+  });
+}
+
+function getUpcomingBookedCruises(bookedCruises: BookedCruise[]): BookedCruise[] {
+  return bookedCruises.filter((cruise) => {
+    if (cruise.completionState === 'completed' || cruise.status === 'completed') return false;
+    return !isDateInPast(cruise.sailDate);
+  });
+}
+
+function calculateAveragePointsPerCruise(bookedCruises: BookedCruise[], fallbackPointsPerNight = 500): number {
+  const cruisesWithActualPoints = bookedCruises
+    .map((cruise) => cruise.earnedPoints ?? cruise.casinoPoints ?? cruise.pointsEarned)
+    .filter((points): points is number => typeof points === 'number' && Number.isFinite(points) && points > 0);
+  if (cruisesWithActualPoints.length > 0) {
+    return cruisesWithActualPoints.reduce((sum, points) => sum + points, 0) / cruisesWithActualPoints.length;
+  }
+  const avgNights = bookedCruises.length > 0
+    ? bookedCruises.reduce((sum, cruise) => sum + Math.max(0, cruise.nights || 0), 0) / bookedCruises.length
+    : 4;
+  return Math.max(1000, avgNights * fallbackPointsPerNight);
+}
+
+function buildTierActionCruiseRecommendations(context: AgentToolContext, pointsStillNeeded: number, limit = 3): string[] {
+  const bookedIds = new Set(context.bookedCruises.map((cruise) => cruise.id));
+  const availableCruises = context.cruises
+    .filter((cruise) => !bookedIds.has(cruise.id) && !isDateInPast(cruise.sailDate))
+    .map((cruise) => {
+      const sea = calculateSeaDayDensityScore(cruise);
+      const value = calculateCruiseValue(cruise);
+      const estimatedPoints = Math.round(Math.max(0, cruise.nights || 0) * 500);
+      const offer = context.offers.find((item) => item.cruiseId === cruise.id || item.cruiseIds?.includes(cruise.id) || (item.offerCode && item.offerCode === cruise.offerCode));
+      const expiringSoonBoost = (offer?.expires || offer?.expiryDate || offer?.offerExpiryDate)
+        ? Math.max(0, 20 - Math.max(0, getDaysUntil(offer.expires || offer.expiryDate || offer.offerExpiryDate!)))
+        : 0;
+      const score = estimatedPoints + sea.casinoOpportunityScore * 18 + value.coverageFraction * 450 + expiringSoonBoost * 30;
+      return { cruise, estimatedPoints, sea, value, offer, score };
+    })
+    .sort((left, right) => right.score - left.score)
+    .slice(0, limit);
+
+  if (availableCruises.length === 0) {
+    return ['• Import more eligible sailings or broaden profile/brand filters; there are no unbooked future cruises in the active scope to rank for tier progress.'];
+  }
+
+  return availableCruises.map(({ cruise, estimatedPoints, sea, value, offer }, index) => {
+    const progressText = pointsStillNeeded > 0
+      ? `${Math.min(100, Math.round((estimatedPoints / pointsStillNeeded) * 100))}% of remaining gap`
+      : 'extra buffer above the next tier';
+    const offerText = offer?.offerCode || cruise.offerCode ? ` • offer ${offer?.offerCode || cruise.offerCode}` : '';
+    return `${index + 1}. **${cruise.shipName}** — ${formatDate(cruise.sailDate, 'medium')} • ${cruise.nights} nights • est. +${estimatedPoints.toLocaleString()} pts (${progressText}) • sea score ${sea.casinoOpportunityScore} • coverage ${(value.coverageFraction * 100).toFixed(0)}%${offerText}`;
+  });
+}
+
 export interface DecodeOfferInput {
   offerId?: string;
   offerCode?: string;
@@ -380,153 +471,127 @@ export function executePortfolioOptimizer(input: PortfolioOptimizerInput, contex
 export function executeTierProgress(input: TierProgressInput, context: AgentToolContext): string {
   console.log('[AgentTools] Tier progress input:', input);
   
-  const currentPoints = context.userPoints;
-  const currentTier = context.currentTier;
-  
-  const tiers: { tier: ClubRoyaleTier; threshold: number }[] = [
-    { tier: 'Choice', threshold: 0 },
-    { tier: 'Prime', threshold: 2501 },
-    { tier: 'Signature', threshold: 25001 },
-    { tier: 'Masters', threshold: 100001 },
-  ];
-  
-  const currentTierIndex = tiers.findIndex(t => t.tier === currentTier);
-  const nextTier = currentTierIndex < tiers.length - 1 ? tiers[currentTierIndex + 1] : null;
-  
-  // Get all completed cruises
-  const allCompletedCruises = context.bookedCruises.filter(c => {
-    const isCompleted = c.completionState === 'completed' || c.status === 'completed';
-    if (!isCompleted && c.returnDate) {
-      const returnDate = createDateFromString(c.returnDate);
-      const today = new Date();
-      return returnDate < today;
-    }
-    return isCompleted;
+  const currentPoints = Number.isFinite(context.userPoints) ? Math.max(0, context.userPoints) : 0;
+  const currentTier = normalizeClubRoyaleTier(context.currentTier, currentPoints);
+  const currentTierIndex = Math.max(0, CLUB_ROYALE_TIER_SEQUENCE.findIndex((item) => item.tier === currentTier));
+  const currentTierInfo = CLUB_ROYALE_TIER_SEQUENCE[currentTierIndex];
+  const nextTier = currentTierIndex < CLUB_ROYALE_TIER_SEQUENCE.length - 1 ? CLUB_ROYALE_TIER_SEQUENCE[currentTierIndex + 1] : null;
+  const allCompletedCruises = getCompletedBookedCruises(context.bookedCruises);
+  const upcomingCruises = getUpcomingBookedCruises(context.bookedCruises);
+  const totalEarnedFromCompleted = allCompletedCruises.reduce((sum, cruise) => sum + getBookedCruisePoints(cruise), 0);
+  const completedCruisesInLast90Days = allCompletedCruises.filter((cruise) => {
+    if (!cruise.returnDate) return false;
+    const returnDate = createDateFromString(cruise.returnDate);
+    const today = new Date();
+    const daysAgo = Math.floor((today.getTime() - returnDate.getTime()) / (1000 * 60 * 60 * 24));
+    return daysAgo >= 0 && daysAgo <= 90;
   });
-  
-  // Total earned points from ALL completed cruises
-  const totalEarnedFromCompleted = allCompletedCruises
-    .reduce((sum, c) => sum + (c.earnedPoints || c.casinoPoints || 0), 0);
-  
-  console.log('[AgentTools] All completed cruises:', allCompletedCruises.length, 'Total earned points:', totalEarnedFromCompleted);
-  
-  // Filter to last 90 days for recent performance
-  const completedCruisesInLast90Days = allCompletedCruises
-    .filter(c => {
-      const returnDate = createDateFromString(c.returnDate);
-      const today = new Date();
-      const daysAgo = Math.floor((today.getTime() - returnDate.getTime()) / (1000 * 60 * 60 * 24));
-      return daysAgo >= 0 && daysAgo <= 90;
-    });
-  
-  const completedPoints = completedCruisesInLast90Days
-    .reduce((sum, c) => sum + (c.earnedPoints || c.casinoPoints || 0), 0);
-  
-  console.log('[AgentTools] Completed cruises in last 90 days:', completedCruisesInLast90Days.length, 'Points:', completedPoints);
-  
-  // Log individual completed cruises for debugging
-  allCompletedCruises.forEach(c => {
-    console.log(`[AgentTools] Completed: ${c.shipName} - ${c.sailDate} - earnedPoints: ${c.earnedPoints}, casinoPoints: ${c.casinoPoints}`);
-  });
-  
-  const upcomingCruises = context.bookedCruises.filter(c => c.completionState === 'upcoming');
-  const bookedPoints = upcomingCruises
-    .reduce((sum, c) => sum + (c.earnedPoints || c.casinoPoints || Math.round(c.nights * 500)), 0);
-  
+  const completedPoints = completedCruisesInLast90Days.reduce((sum, cruise) => sum + getBookedCruisePoints(cruise), 0);
+  const bookedPoints = upcomingCruises.reduce((sum, cruise) => sum + getBookedCruisePoints(cruise), 0);
+  const avgPointsPerCruise = calculateAveragePointsPerCruise(allCompletedCruises.length > 0 ? allCompletedCruises : context.bookedCruises);
+  const projectedTotal = currentPoints + bookedPoints;
+  const pointsToNext = nextTier ? Math.max(0, nextTier.threshold - currentPoints) : 0;
+  const pointsStillNeededAfterBooked = nextTier ? Math.max(0, nextTier.threshold - projectedTotal) : 0;
   const progressToNext = nextTier
-    ? ((currentPoints - tiers[currentTierIndex].threshold) / (nextTier.threshold - tiers[currentTierIndex].threshold)) * 100
+    ? Math.min(100, Math.max(0, ((currentPoints - currentTierInfo.threshold) / Math.max(1, nextTier.threshold - currentTierInfo.threshold)) * 100))
     : 100;
+  const projectedProgressToNext = nextTier
+    ? Math.min(100, Math.max(0, ((projectedTotal - currentTierInfo.threshold) / Math.max(1, nextTier.threshold - currentTierInfo.threshold)) * 100))
+    : 100;
+  const filledBars = Math.min(20, Math.max(0, Math.round(progressToNext / 5)));
+  const upcomingCount = upcomingCruises.length;
+  const completedCount = completedCruisesInLast90Days.length;
+  const lifetimeNights = allCompletedCruises.reduce((sum, cruise) => sum + Math.max(0, cruise.nights || 0), 0);
+  const averageCompletedPointsPerNight = totalEarnedFromCompleted > 0 && lifetimeNights > 0
+    ? Math.round(totalEarnedFromCompleted / lifetimeNights)
+    : 0;
   
-  const avgPointsPerCruise = context.bookedCruises.length > 0
-    ? context.bookedCruises.reduce((sum, c) => sum + (c.earnedPoints || c.casinoPoints || 0), 0) / context.bookedCruises.length
-    : 2000;
-  
+  console.log('[AgentTools] Tier progress resolved:', {
+    currentTier,
+    currentPoints,
+    nextTier: nextTier?.tier ?? null,
+    completedCruises: allCompletedCruises.length,
+    upcomingCruises: upcomingCruises.length,
+    bookedPoints,
+    pointsToNext,
+  });
+
   const lines = [
     '## Club Royale Tier Progress',
     '',
-    `**Current Tier:** ${currentTier} ${CLUB_ROYALE_TIERS[currentTier]?.color || '🔵'}`,
+    `**Current Tier:** ${currentTier}`,
     `**Current Points:** ${currentPoints.toLocaleString()}`,
+    `**Active Scope Records Used:** ${context.bookedCruises.length} booked cruise(s), ${context.cruises.length} available cruise(s), ${context.offers.length} active offer(s)`,
     '',
   ];
   
   if (nextTier) {
-    const pointsToNext = nextTier.threshold - currentPoints;
     lines.push(`### Progress to ${nextTier.tier}`);
     lines.push(`• Target: ${nextTier.threshold.toLocaleString()} points`);
-    lines.push(`• Points Needed: ${pointsToNext.toLocaleString()}`);
-    lines.push(`• Progress: ${progressToNext.toFixed(1)}%`);
-    lines.push(`• Progress Bar: ${'█'.repeat(Math.floor(progressToNext / 5))}${'░'.repeat(20 - Math.floor(progressToNext / 5))} ${progressToNext.toFixed(0)}%`);
+    lines.push(`• Points Needed Now: ${pointsToNext.toLocaleString()}`);
+    lines.push(`• Current Progress: ${progressToNext.toFixed(1)}%`);
+    lines.push(`• Progress Bar: ${'█'.repeat(filledBars)}${'░'.repeat(20 - filledBars)} ${progressToNext.toFixed(0)}%`);
     lines.push('');
   } else {
-    lines.push('🎉 **Congratulations! You have reached Masters tier - the highest level!**');
+    lines.push('### Top Tier Status');
+    lines.push('• You are already at Masters, so the best next action is protecting offer quality and choosing high-value sailings rather than chasing another Club Royale tier.');
     lines.push('');
   }
   
-  const upcomingCount = upcomingCruises.length;
-  const completedCount = completedCruisesInLast90Days.length;
-  
-  // Show lifetime completed stats first
-  const lifetimeNights = allCompletedCruises.reduce((sum, c) => sum + c.nights, 0);
-  
-  if (allCompletedCruises.length > 0 && totalEarnedFromCompleted > 0) {
-    lines.push('### Lifetime Completed Cruises');
-    lines.push(`• Total Completed: ${allCompletedCruises.length} cruises`);
-    lines.push(`• Total Points Earned: ${totalEarnedFromCompleted.toLocaleString()}`);
+  if (allCompletedCruises.length > 0) {
+    lines.push('### Completed Cruise Evidence');
+    lines.push(`• Lifetime Completed in Scope: ${allCompletedCruises.length} cruise(s)`);
+    lines.push(`• Total Points Earned / Estimated: ${totalEarnedFromCompleted.toLocaleString()}`);
     lines.push(`• Total Nights: ${lifetimeNights}`);
-    lines.push(`• Avg Points per Night: ${Math.round(totalEarnedFromCompleted / lifetimeNights).toLocaleString()}`);
+    lines.push(`• Avg Points per Night: ${averageCompletedPointsPerNight > 0 ? averageCompletedPointsPerNight.toLocaleString() : 'N/A'}`);
     lines.push('');
   }
   
   lines.push('### Recent Performance (Last 90 Days)');
   if (completedCount > 0) {
+    const totalNights = completedCruisesInLast90Days.reduce((sum, cruise) => sum + Math.max(0, cruise.nights || 0), 0);
     lines.push(`• Completed Cruises: ${completedCount}`);
-    lines.push(`• Points Earned: ${completedPoints.toLocaleString()}`);
-    const totalNights = completedCruisesInLast90Days.reduce((sum, c) => sum + c.nights, 0);
+    lines.push(`• Points Earned / Estimated: ${completedPoints.toLocaleString()}`);
     lines.push(`• Total Nights: ${totalNights}`);
-    if (completedPoints > 0 && totalNights > 0) {
-      lines.push(`• Avg Points per Night: ${Math.round(completedPoints / totalNights).toLocaleString()}`);
-    } else {
-      lines.push(`• Avg Points per Night: N/A (no points data recorded)`);
-    }
+    lines.push(`• Avg Points per Night: ${completedPoints > 0 && totalNights > 0 ? Math.round(completedPoints / totalNights).toLocaleString() : 'N/A'}`);
   } else {
-    lines.push('• No completed cruises in the last 90 days');
+    lines.push('• No completed cruises in the last 90 days in the active profile/brand/program scope.');
   }
   lines.push('');
   
-  lines.push('### Booked Cruises Contribution');
+  lines.push('### Booked Cruise Contribution');
   lines.push(`• Upcoming Cruises: ${upcomingCount}`);
   lines.push(`• Estimated Points from Booked: ${bookedPoints.toLocaleString()}`);
-  lines.push(`• Projected Total After Booked: ${(currentPoints + bookedPoints).toLocaleString()}`);
+  lines.push(`• Projected Total After Booked: ${projectedTotal.toLocaleString()}`);
+  if (nextTier) {
+    lines.push(`• Projected Progress to ${nextTier.tier}: ${projectedProgressToNext.toFixed(1)}%`);
+  }
   
   if (input.includeProjections && nextTier) {
-    const pointsStillNeeded = Math.max(0, nextTier.threshold - currentPoints - bookedPoints);
-    const cruisesNeeded = Math.ceil(pointsStillNeeded / (avgPointsPerCruise || 2000));
-    
     const avgNightsPerCruise = context.bookedCruises.length > 0
-      ? context.bookedCruises.reduce((sum, c) => sum + c.nights, 0) / context.bookedCruises.length
-      : 5;
-    
-    const estimatedMonths = Math.ceil(cruisesNeeded / 2);
+      ? context.bookedCruises.reduce((sum, cruise) => sum + Math.max(0, cruise.nights || 0), 0) / context.bookedCruises.length
+      : 4;
+    const cruisesNeeded = pointsStillNeededAfterBooked > 0 ? Math.ceil(pointsStillNeededAfterBooked / Math.max(1, avgPointsPerCruise)) : 0;
+    const estimatedMonths = cruisesNeeded > 0 ? Math.ceil(cruisesNeeded / 2) : 0;
     
     lines.push('');
-    lines.push('### Projections');
-    lines.push(`• Points Still Needed: ${pointsStillNeeded.toLocaleString()}`);
+    lines.push('### Projection');
+    lines.push(`• Points Still Needed After Booked: ${pointsStillNeededAfterBooked.toLocaleString()}`);
     lines.push(`• Est. Additional Cruises Needed: ${cruisesNeeded}`);
     lines.push(`• Est. Additional Nights Needed: ${Math.ceil(cruisesNeeded * avgNightsPerCruise)}`);
-    lines.push(`• Est. Timeframe: ${estimatedMonths} month${estimatedMonths !== 1 ? 's' : ''}`);
+    lines.push(`• Est. Timeframe: ${estimatedMonths === 0 ? 'covered by current booked cruises / current balance' : `${estimatedMonths} month${estimatedMonths !== 1 ? 's' : ''}`}`);
   }
   
   if (input.targetTier) {
-    const targetTierInfo = tiers.find(t => t.tier === input.targetTier);
+    const targetTierInfo = CLUB_ROYALE_TIER_SEQUENCE.find((item) => item.tier === input.targetTier);
     if (targetTierInfo) {
       const pointsToTarget = Math.max(0, targetTierInfo.threshold - currentPoints);
-      const cruisesToTarget = Math.ceil(pointsToTarget / (avgPointsPerCruise || 2000));
+      const cruisesToTarget = pointsToTarget > 0 ? Math.ceil(pointsToTarget / Math.max(1, avgPointsPerCruise)) : 0;
       
       lines.push('');
       lines.push(`### Path to ${input.targetTier}`);
-      
       if (pointsToTarget <= 0) {
-        lines.push(`✅ You have already achieved ${input.targetTier} tier!`);
+        lines.push(`• Already achieved ${input.targetTier}.`);
       } else {
         lines.push(`• Target Threshold: ${targetTierInfo.threshold.toLocaleString()} points`);
         lines.push(`• Points Needed: ${pointsToTarget.toLocaleString()}`);
@@ -534,6 +599,21 @@ export function executeTierProgress(input: TierProgressInput, context: AgentTool
       }
     }
   }
+
+  lines.push('');
+  lines.push('### Best Next Actions');
+  if (nextTier && pointsStillNeededAfterBooked === 0) {
+    lines.push(`1. Current points plus booked cruises appear sufficient for ${nextTier.tier}; focus on completing those sailings and verifying actual casino points after each cruise.`);
+  } else if (nextTier) {
+    lines.push(`1. Close the ${pointsStillNeededAfterBooked.toLocaleString()}-point remaining gap by prioritizing cruises with more casino-open/sea days and strong offer coverage.`);
+  } else {
+    lines.push('1. Since Masters is already reached, prioritize high comp value, preferred itineraries, and low out-of-pocket offers.');
+  }
+  lines.push('2. Use expiring high-value offers first so tier progress does not come at the cost of losing certificate or comp value.');
+  lines.push('3. After each completed cruise, record actual earned casino points so the projection becomes more precise.');
+  lines.push('');
+  lines.push('### Ranked Tier-Push Cruise Options');
+  buildTierActionCruiseRecommendations(context, nextTier ? Math.max(1, pointsStillNeededAfterBooked || pointsToNext) : 1, 3).forEach((recommendation) => lines.push(recommendation));
   
   return lines.join('\n');
 }
