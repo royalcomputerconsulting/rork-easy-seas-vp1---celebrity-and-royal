@@ -1444,32 +1444,60 @@ export default function AnalyticsScreen() {
             <PieChart size={16} color={COLORS.goldDark} />
             <Text style={styles.cleanCardTitle}>Historical Annual Casino Summary</Text>
           </View>
-          <View style={styles.compactMetricsGrid}>
-            <View style={styles.compactMetric}>
-              <Text style={styles.compactMetricValue}>{formatCurrency(cruiseEconomicsSummary.totals.totalWinningsHome)}</Text>
-              <Text style={styles.compactMetricLabel}>Winnings Home</Text>
-            </View>
-            <View style={styles.compactMetric}>
-              <Text style={[styles.compactMetricValue, { color: cruiseEconomicsSummary.totals.totalCashResult >= 0 ? COLORS.success : COLORS.error }]}>
-                {formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalCashResult)}
+          <View style={styles.annualSummaryHero}>
+            <Text style={styles.annualSummaryHeroLabel}>Cash Result</Text>
+            <Text
+              style={[
+                styles.annualSummaryHeroValue,
+                { color: cruiseEconomicsSummary.totals.totalCashResult >= 0 ? COLORS.success : COLORS.error },
+              ]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+            >
+              {formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalCashResult)}
+            </Text>
+            <Text style={styles.annualSummaryHeroSubtext}>
+              {formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalWinningsHome)} winnings home minus {formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalPaid)} paid
+            </Text>
+          </View>
+
+          <View style={styles.annualSummaryGrid}>
+            <View style={styles.annualSummaryMetric}>
+              <Text style={styles.annualSummaryMetricLabel}>Retail Value</Text>
+              <Text style={styles.annualSummaryMetricValue} numberOfLines={1} adjustsFontSizeToFit>
+                {formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalRetailValue)}
               </Text>
-              <Text style={styles.compactMetricLabel}>Cash Result</Text>
             </View>
-            <View style={styles.compactMetric}>
-              <Text style={[styles.compactMetricValue, { color: cruiseEconomicsSummary.totals.totalEconomicValue >= 0 ? COLORS.success : COLORS.error }]}>
-                {formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalEconomicValue)}
+            <View style={styles.annualSummaryMetric}>
+              <Text style={styles.annualSummaryMetricLabel}>Value Captured</Text>
+              <Text style={styles.annualSummaryMetricValue} numberOfLines={1} adjustsFontSizeToFit>
+                {formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalCruiseValueCaptured)}
               </Text>
-              <Text style={styles.compactMetricLabel}>Total Econ</Text>
             </View>
-            <View style={styles.compactMetric}>
-              <Text style={styles.compactMetricValue}>{formatNumber(cruiseEconomicsSummary.totals.totalPoints)}</Text>
-              <Text style={styles.compactMetricLabel}>Total Pts</Text>
+            <View style={styles.annualSummaryMetric}>
+              <Text style={styles.annualSummaryMetricLabel}>Economic Value</Text>
+              <Text style={[styles.annualSummaryMetricValue, { color: COLORS.success }]} numberOfLines={1} adjustsFontSizeToFit>
+                {formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalEconomicValue)}
+              </Text>
+            </View>
+            <View style={styles.annualSummaryMetric}>
+              <Text style={styles.annualSummaryMetricLabel}>Total Points</Text>
+              <Text style={styles.annualSummaryMetricValue} numberOfLines={1} adjustsFontSizeToFit>
+                {formatNumber(cruiseEconomicsSummary.totals.totalPoints)}
+              </Text>
             </View>
           </View>
           {cruiseEconomicsSummary.totals.cruises > 0 && (
-            <View style={styles.avgStatsRow}>
-              <Text style={styles.avgStatText}>Avg/Cruise: {formatCurrencyDetailed(cruiseEconomicsSummary.averages.paidPerCruise)} paid • {formatCurrencyDetailed(cruiseEconomicsSummary.averages.winningsPerCruise)} winnings • {formatSignedCurrencyDetailed(cruiseEconomicsSummary.averages.netCashPerCruise)} cash result</Text>
-              <Text style={styles.avgStatText}>Historical totals stay fixed after the April 1 point reset. Only the current-season point balance resets.</Text>
+            <View style={styles.annualSummaryDetails}>
+              <View style={styles.annualSummaryDetailRow}>
+                <Text style={styles.annualSummaryDetailLabel}>Per cruise average</Text>
+                <Text style={styles.annualSummaryDetailValue}>
+                  {formatCurrencyDetailed(cruiseEconomicsSummary.averages.paidPerCruise)} paid • {formatCurrencyDetailed(cruiseEconomicsSummary.averages.winningsPerCruise)} won • {formatSignedCurrencyDetailed(cruiseEconomicsSummary.averages.netCashPerCruise)} cash
+                </Text>
+              </View>
+              <Text style={styles.annualSummaryFootnote}>
+                Historical totals stay fixed after the April 1 reset. Only the current-season point balance resets.
+              </Text>
             </View>
           )}
         </View>
@@ -2852,6 +2880,93 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#64748B',
     marginTop: 2,
+  },
+  annualSummaryHero: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: BORDER_RADIUS.md,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.md,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+  },
+  annualSummaryHeroLabel: {
+    fontSize: 11,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#64748B',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  annualSummaryHeroValue: {
+    fontSize: 28,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  annualSummaryHeroSubtext: {
+    marginTop: 6,
+    fontSize: 11,
+    lineHeight: 16,
+    color: '#64748B',
+    textAlign: 'center',
+  },
+  annualSummaryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+    marginTop: SPACING.sm,
+  },
+  annualSummaryMetric: {
+    flexGrow: 1,
+    flexBasis: '47%',
+    minWidth: 132,
+    backgroundColor: '#FFFFFF',
+    borderRadius: BORDER_RADIUS.sm,
+    padding: SPACING.sm,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  annualSummaryMetricLabel: {
+    fontSize: 10,
+    color: '#64748B',
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    marginBottom: 5,
+  },
+  annualSummaryMetricValue: {
+    fontSize: 16,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  annualSummaryDetails: {
+    marginTop: SPACING.sm,
+    paddingTop: SPACING.sm,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    gap: SPACING.xs,
+  },
+  annualSummaryDetailRow: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: BORDER_RADIUS.sm,
+    padding: SPACING.sm,
+  },
+  annualSummaryDetailLabel: {
+    fontSize: 10,
+    color: '#64748B',
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    marginBottom: 3,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  annualSummaryDetailValue: {
+    fontSize: 11,
+    lineHeight: 16,
+    color: COLORS.navyDeep,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+  },
+  annualSummaryFootnote: {
+    fontSize: 11,
+    lineHeight: 16,
+    color: '#64748B',
+    textAlign: 'center',
   },
   avgStatsRow: {
     marginTop: SPACING.sm,
