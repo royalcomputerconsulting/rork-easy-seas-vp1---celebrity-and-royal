@@ -1,8 +1,9 @@
 import type { CalendarEvent, CasinoOffer, Cruise } from '@/types/models';
 import type { Certificate } from '@/components/CertificateManagerModal';
 import { calculateOfferIntelligenceScore } from '@/lib/offerIntelligence';
+import type { AskMyDataOverview } from '@/lib/askMyDataOverview';
 
-export type AskMyDataSource = 'offers' | 'cruises' | 'certificates' | 'calendar';
+export type AskMyDataSource = 'overview' | 'offers' | 'cruises' | 'certificates' | 'calendar';
 export type AskMyDataConfidence = 'high' | 'medium' | 'low';
 
 export interface AskMyDataResult {
@@ -19,6 +20,7 @@ export interface AskMyDataResult {
   confidence: AskMyDataConfidence;
   matchedTerms: string[];
   matchReasons: string[];
+  detail?: string;
 }
 
 export interface AskMyDataResponse {
@@ -165,6 +167,7 @@ function parseQueryIntent(query: string): QueryIntent {
   const tokens = tokenize(query);
   const expandedTerms = expandTokens(tokens, normalizedQuery);
   const sourceMentions: SourceIntent = {
+    overview: false,
     offers: hasAny(normalizedQuery, SYNONYMS.offer),
     cruises: hasAny(normalizedQuery, SYNONYMS.cruise),
     certificates: hasAny(normalizedQuery, SYNONYMS.certificate),
@@ -309,6 +312,8 @@ function getInterpretedIntent(intent: QueryIntent): string {
 
 function buildSuggestedQueries(intent: QueryIntent): string[] {
   const suggestions = [
+    'Give me my casino and ROI overview',
+    'Show current Signature tier progress',
     'Show expiring high value offers with free play',
     'Find booked balcony cruises longer than seven nights',
     'Show unassigned imports that need review',
@@ -320,16 +325,36 @@ function buildSuggestedQueries(intent: QueryIntent): string[] {
   return unique(suggestions).slice(0, 5);
 }
 
+function wantsOverviewResult(intent: QueryIntent): boolean {
+  return intent.wantsAllSources || /overview|summary|annual|historical|current season|season|roi|cash result|value capture|economic value|coin.?in|tier|signature|masters|points|casino|context|latest/.test(intent.normalizedQuery);
+}
+
 export function askMyDataSearch(params: {
   query: string;
   offers: CasinoOffer[];
   cruises: Cruise[];
   certificates: Certificate[];
   calendarEvents: CalendarEvent[];
+  overview?: AskMyDataOverview;
 }): AskMyDataResponse {
   const intent = parseQueryIntent(params.query);
   const filtersApplied: string[] = [getInterpretedIntent(intent)];
   const results: AskMyDataResult[] = [];
+
+  if (params.overview && wantsOverviewResult(intent)) {
+    results.push({
+      id: 'overview-casino-roi-context',
+      source: 'overview',
+      title: 'Casino / ROI Overview',
+      subtitle: `${params.overview.currentSeason.points.toLocaleString()} current-season points · ${params.overview.currentSeason.pointsNeededForSignature.toLocaleString()} to keep Signature · ${params.overview.annual.totals.totalPoints.toLocaleString()} annual points`,
+      score: 140,
+      actionLabel: 'Use this context',
+      confidence: 'high',
+      matchedTerms: intent.expandedTerms,
+      matchReasons: ['loaded latest saved cruise/casino context', 'uses corrected ROI formulas', 'coin-in isolated to gaming activity'],
+      detail: params.overview.text,
+    });
+  }
 
   if (intent.sources.offers || intent.wantsAllSources) {
     params.offers.forEach((offer) => {
@@ -497,7 +522,8 @@ export function formatAskMyDataResponse(response: AskMyDataResponse): string {
     const offerScore = result.offerScore !== undefined ? ` · offer score ${result.offerScore}` : '';
     const certificateFit = result.certificateFit ? ` · ${result.certificateFit}` : '';
     const reasons = result.matchReasons.length > 0 ? ` · why: ${result.matchReasons.slice(0, 3).join('; ')}` : '';
-    return `${index + 1}. [${result.source}/${result.confidence}] ${result.title} — ${result.subtitle}${owner}${offerScore}${certificateFit}${reasons}. Action: ${result.actionLabel}.`;
+    const detail = result.detail ? `\n${result.detail}` : '';
+    return `${index + 1}. [${result.source}/${result.confidence}] ${result.title} — ${result.subtitle}${owner}${offerScore}${certificateFit}${reasons}. Action: ${result.actionLabel}.${detail}`;
   });
 
   return `Ask My Data interpreted your query as: ${response.interpretedIntent}.\n\n${lines.join('\n')}\n\nTry next: ${response.suggestedQueries.slice(0, 3).join(' | ')}`;

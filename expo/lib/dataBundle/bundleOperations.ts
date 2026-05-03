@@ -32,6 +32,7 @@ import { applyFoundationFields } from '../dataFoundation';
 import { isKnownCasinoProfile } from '../knownProfileFallback';
 import { normalizeCruisesWithCasinoEconomics } from '../casinoCruiseEconomics';
 import { getBookedCruiseCasinoPoints, normalizeCruiseCasinoPerformance } from '../casinoPointTruth';
+import { buildAskMyDataOverview, type AskMyDataOverview } from '../askMyDataOverview';
 
 const CURRENT_MACHINE_ENCYCLOPEDIA_KEY = 'easyseas_machine_encyclopedia_v2_262_only';
 const CURRENT_MY_SLOT_ATLAS_KEY = 'easyseas_my_slot_atlas_v2_262_only';
@@ -339,6 +340,7 @@ export interface FullAppDataBundle {
       totalCasinoCoinIn: number;
       cruisesWithCasinoPoints: number;
     };
+    askMyDataOverview?: AskMyDataOverview;
   };
   metadata: {
     totalCruises: number;
@@ -633,6 +635,14 @@ export async function getAllStoredData(email?: string | null, profileGate?: Data
       totalCasinoCoinIn: totalCasinoPoints * 5,
       cruisesWithCasinoPoints: bookedCruises.filter((cruise) => getBookedCruiseCasinoPoints(cruise) > 0).length,
     };
+    const askMyDataOverview = buildAskMyDataOverview({
+      bookedCruises,
+      casinoSessions,
+      currentTier: clubRoyaleProfile?.tier ?? null,
+      currentPoints: clubRoyalePoints,
+      pointBalanceSource: 'backup-export',
+      useKnownAnnualReportFacts: isKnownCasinoProfile(email),
+    });
 
     const bundle: FullAppDataBundle = {
       version: '2.2.0',
@@ -677,6 +687,7 @@ export async function getAllStoredData(email?: string | null, profileGate?: Data
         compItems,
         w2gRecords,
         casinoPointSummary,
+        askMyDataOverview,
       },
       metadata: {
         totalCruises: cruises.length,

@@ -13,8 +13,13 @@ import { useCertificates } from '@/state/CertificatesProvider';
 import { useUser } from '@/state/UserProvider';
 import { useAgentX } from '@/state/AgentXProvider';
 import { useIntelligenceFilters } from '@/state/IntelligenceFiltersProvider';
+import { useCasinoSessions } from '@/state/CasinoSessionProvider';
+import { useLoyalty } from '@/state/LoyaltyProvider';
+import { useAuth } from '@/state/AuthProvider';
 import { filterRecordsByIntelligence, getBrandLabel, getProgramLabel, getProfileDisplayName } from '@/lib/intelligenceFilters';
 import { askMyDataSearch, type AskMyDataResult, type AskMyDataSource } from '@/lib/askMyData';
+import { buildAskMyDataOverview } from '@/lib/askMyDataOverview';
+import { isKnownCasinoProfile } from '@/lib/knownProfileFallback';
 import type { BookedCruise, CalendarEvent, CasinoOffer, Cruise } from '@/types/models';
 import type { Certificate } from '@/components/CertificateManagerModal';
 
@@ -28,6 +33,7 @@ const ASK_MY_DATA_AGENT_ACTIONS: AgentXQuickAction[] = [
 ];
 
 const SOURCE_STYLES: Record<AskMyDataSource, { label: string; color: string; icon: typeof Tag }> = {
+  overview: { label: 'Overview', color: '#0369A1', icon: DatabaseZap },
   offers: { label: 'Offer', color: '#0F766E', icon: Tag },
   cruises: { label: 'Cruise', color: '#1D4ED8', icon: Ship },
   certificates: { label: 'Certificate', color: '#B45309', icon: Ticket },
@@ -48,6 +54,14 @@ export default function AskMyDataScreen() {
   const { cruises, bookedCruises, casinoOffers, calendarEvents } = useCoreData();
   const { certificates } = useCertificates();
   const { users } = useUser();
+  const { sessions } = useCasinoSessions();
+  const { authenticatedEmail } = useAuth();
+  const {
+    clubRoyalePoints,
+    clubRoyaleTier,
+    clubRoyalePointsSource,
+    clubRoyaleSyncDiscrepancy,
+  } = useLoyalty();
   const { selectedProfileId, selectedBrand, selectedProgram } = useIntelligenceFilters();
   const {
     messages,
@@ -77,6 +91,16 @@ export default function AskMyDataScreen() {
 
   const scopeLabel = useMemo(() => buildScopeLabel(selectedProfileId, users, selectedBrand, selectedProgram), [selectedBrand, selectedProfileId, selectedProgram, users]);
 
+  const askMyDataOverview = useMemo(() => buildAskMyDataOverview({
+    bookedCruises: scopedBookedCruises as BookedCruise[],
+    casinoSessions: sessions,
+    currentTier: clubRoyaleTier,
+    currentPoints: clubRoyalePoints,
+    pointBalanceSource: clubRoyalePointsSource,
+    clubRoyaleSyncDiscrepancy,
+    useKnownAnnualReportFacts: isKnownCasinoProfile(authenticatedEmail),
+  }), [authenticatedEmail, clubRoyalePoints, clubRoyalePointsSource, clubRoyaleSyncDiscrepancy, clubRoyaleTier, scopedBookedCruises, sessions]);
+
   const response = useMemo(() => {
     const activeQuery = submittedQuery.trim();
     if (!activeQuery) return null;
@@ -87,8 +111,9 @@ export default function AskMyDataScreen() {
       cruises: combinedCruises,
       certificates: scopedCertificates as Certificate[],
       calendarEvents: scopedCalendarEvents as CalendarEvent[],
+      overview: askMyDataOverview,
     });
-  }, [scopedBookedCruises, scopedCalendarEvents, scopedCertificates, scopedCruises, scopedOffers, submittedQuery]);
+  }, [askMyDataOverview, scopedBookedCruises, scopedCalendarEvents, scopedCertificates, scopedCruises, scopedOffers, submittedQuery]);
 
   const stats = useMemo(() => ({
     offers: scopedOffers.length,
@@ -172,6 +197,7 @@ export default function AskMyDataScreen() {
           </View>
         ) : null}
         {result.matchedTerms.length > 0 ? <Text style={styles.matchedTermsText}>Matched: {result.matchedTerms.slice(0, 8).join(', ')}</Text> : null}
+        {result.detail ? <Text style={styles.resultDetailText}>{result.detail}</Text> : null}
 
         <TouchableOpacity
           style={[styles.actionButton, !result.actionRoute && styles.actionButtonDisabled]}
@@ -857,6 +883,18 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700' as const,
     color: '#64748B',
+  },
+  resultDetailText: {
+    marginTop: SPACING.sm,
+    color: '#0F172A',
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: '700' as const,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
   },
   actionButton: {
     marginTop: SPACING.md,

@@ -345,6 +345,9 @@ function normalizeImportedBackup(rawBundle: LegacyFullDataBundle): FullAppDataBu
       : {},
     compItems: normalizeImportedArray<CasinoDataBundle['compItems'][number]>(rawCasinoData?.compItems),
     w2gRecords: normalizeImportedArray<CasinoDataBundle['w2gRecords'][number]>(rawCasinoData?.w2gRecords),
+    askMyDataOverview: rawCasinoData?.askMyDataOverview && typeof rawCasinoData.askMyDataOverview === 'object'
+      ? rawCasinoData.askMyDataOverview as CasinoDataBundle['askMyDataOverview']
+      : undefined,
   };
 
   return {

@@ -6,6 +6,9 @@ import { useLoyalty } from './LoyaltyProvider';
 import type { ChatMessage } from '@/components/AgentXChat';
 import type { AgentXMode } from '@/types/models';
 import { askMyDataSearch, formatAskMyDataResponse } from '@/lib/askMyData';
+import { buildAskMyDataOverview } from '@/lib/askMyDataOverview';
+import { isKnownCasinoProfile } from '@/lib/knownProfileFallback';
+import { getBookedCruiseCasinoPoints } from '@/lib/casinoPointTruth';
 import {
   AgentToolContext,
   executeCruiseSearch,
@@ -89,6 +92,7 @@ function buildSystemPrompt(context: { globalLibrary?: any[], myAtlasMachines?: a
 - Analyze slot machine session data and performance
 - Track machine locations and condition logs on specific ships
 - Provide careful educational guidance about offer math, certificates, loyalty, and responsible use
+- Answer Ask My Data questions from freshly loaded saved cruise, casino, session, loyalty, and import/export context
 
 You have FULL ACCESS to:
 1. **Cruise Data**: All available cruises, booked cruises, casino offers, tier information
@@ -110,8 +114,11 @@ Mode guidance:
 
 Key formulas:
 - Points: 1 point per $5 coin-in
-- ROI = (Retail Value + Winnings - Out of Pocket) / Out of Pocket × 100%
-- Cabin Value = Cabin Price × 2 (double occupancy) + Taxes & Fees`;
+- Cash Result = Winnings Brought Home - Net Effective Paid
+- Cruise Value Captured = Retail Value - Net Effective Paid
+- Total Economic Value = Retail Value + Winnings Brought Home - Net Effective Paid
+- Coin-In is gambling volume only. Never add Coin-In to Cash Result, Cruise Value Captured, Total Economic Value, ROI, or profit language.
+- App-entered cruise points are authoritative when Club Royale sync differs.`;
 }
 
 function buildDevAssistantSystemPrompt(): string {
@@ -357,11 +364,16 @@ function buildAgentSuggestedActions(tool: string | null, userContent: string): C
 
 export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => {
   const { tier } = useEntitlement();
-  const { isAdmin } = useAuth();
+  const { isAdmin, authenticatedEmail } = useAuth();
   const { cruises, bookedCruises, casinoOffers, calendarEvents, filters } = useCoreData();
   const { users } = useUser();
   const { selectedProfileId, selectedBrand, selectedProgram } = useIntelligenceFilters();
-  const { clubRoyalePoints, clubRoyaleTier } = useLoyalty();
+  const {
+    clubRoyalePoints,
+    clubRoyaleTier,
+    clubRoyalePointsSource,
+    clubRoyaleSyncDiscrepancy,
+  } = useLoyalty();
   const { allMachines } = useSlotMachines();
   const { myAtlasMachines, globalLibrary, encyclopedia } = useSlotMachineLibrary();
   const { mappings: deckMappings } = useDeckPlan();
@@ -403,6 +415,16 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
     return `${archivedOrSkippedOffers} archived/skipped offer(s), ${reviewNeededOffers} review-needed offer(s)`;
   }, [filteredCasinoOffers]);
 
+  const askMyDataOverview = useMemo(() => buildAskMyDataOverview({
+    bookedCruises: filteredBookedCruises,
+    casinoSessions: sessions,
+    currentTier: clubRoyaleTier,
+    currentPoints: clubRoyalePoints,
+    pointBalanceSource: clubRoyalePointsSource,
+    clubRoyaleSyncDiscrepancy,
+    useKnownAnnualReportFacts: isKnownCasinoProfile(authenticatedEmail),
+  }), [authenticatedEmail, clubRoyalePoints, clubRoyalePointsSource, clubRoyaleSyncDiscrepancy, clubRoyaleTier, filteredBookedCruises, sessions]);
+
   const toolContext = useMemo((): AgentToolContext => {
     console.log('[AgentX] Recalculating toolContext with latest data...');
     
@@ -425,6 +447,9 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
       activeScopeLabel,
       brandProgramLabel,
       archiveContextLabel,
+      askMyDataGeneratedAt: askMyDataOverview.generatedAt,
+      annualCashResult: askMyDataOverview.annual.totals.totalCashResult,
+      currentSeasonPoints: askMyDataOverview.currentSeason.points,
     });
     
     return {
@@ -442,7 +467,7 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
       getSessionAnalytics,
       getMachineAnalytics,
     };
-  }, [filteredCruises, filteredBookedCruises, filteredCasinoOffers, clubRoyalePoints, clubRoyaleTier, allMachines, myAtlasMachines, globalLibrary, encyclopedia, deckMappings, sessions, getSessionAnalytics, getMachineAnalytics, certificates.length, machineLogs.length, mode, filters, selectedProfileLabel, selectedBrand, selectedProgram, activeScopeLabel, brandProgramLabel, archiveContextLabel]);
+  }, [filteredCruises, filteredBookedCruises, filteredCasinoOffers, clubRoyalePoints, clubRoyaleTier, allMachines, myAtlasMachines, globalLibrary, encyclopedia, deckMappings, sessions, getSessionAnalytics, getMachineAnalytics, certificates.length, machineLogs.length, mode, filters, selectedProfileLabel, selectedBrand, selectedProgram, activeScopeLabel, brandProgramLabel, archiveContextLabel, askMyDataOverview]);
 
   const executeToolCall = useCallback((tool: string, params: unknown): string => {
     console.log('[AgentX] Executing tool:', tool, params);
@@ -470,13 +495,13 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
         return executeMachineRecommendations(params as MachineRecommendationInput, toolContext);
       case 'askMyData': {
         const query = typeof (params as { query?: unknown }).query === 'string' ? (params as { query: string }).query : '';
-        const response = askMyDataSearch({ query, offers: filteredCasinoOffers, cruises: [...filteredCruises, ...filteredBookedCruises], certificates: filteredCertificates, calendarEvents: filteredCalendarEvents });
+        const response = askMyDataSearch({ query, offers: filteredCasinoOffers, cruises: [...filteredCruises, ...filteredBookedCruises], certificates: filteredCertificates, calendarEvents: filteredCalendarEvents, overview: askMyDataOverview });
         return formatAskMyDataResponse(response);
       }
       default:
         return `Unknown tool: ${tool}`;
     }
-  }, [toolContext, filteredCasinoOffers, filteredCruises, filteredBookedCruises, filteredCertificates, filteredCalendarEvents]);
+  }, [toolContext, filteredCasinoOffers, filteredCruises, filteredBookedCruises, filteredCertificates, filteredCalendarEvents, askMyDataOverview]);
 
   const sendMessage = useCallback(async (content: string) => {
     console.log('[AgentX] User message:', content, 'mode:', mode);
@@ -549,13 +574,13 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
       
       // Calculate total earned points from completed cruises
       const totalEarnedPoints = completedCruises.reduce((sum, c) => 
-        sum + (c.earnedPoints || c.casinoPoints || 0), 0
+        sum + getBookedCruiseCasinoPoints(c), 0
       );
       
       // Build a summary of completed cruises with points
       const completedWithPoints = completedCruises
-        .filter(c => c.earnedPoints || c.casinoPoints)
-        .map(c => `${c.shipName} (${c.sailDate}): ${(c.earnedPoints || c.casinoPoints || 0).toLocaleString()} pts`)
+        .filter(c => getBookedCruiseCasinoPoints(c) > 0)
+        .map(c => `${c.shipName} (${c.sailDate}): ${getBookedCruiseCasinoPoints(c).toLocaleString()} pts`)
         .join('\n  ');
       
       console.log('[AgentX] Building context for AI with:', {
@@ -581,11 +606,15 @@ User's current status (FRESH DATA - UPDATED ON EVERY REQUEST):
 - Active Program Scope: ${getProgramLabel(selectedProgram)}
 - Active Casino System: ${brandProgramLabel}
 - Archive / Review Context: ${archiveContextLabel}
+- Ask My Data Overview Generated: ${askMyDataOverview.generatedAt}
+
+Corrected casino / ROI overview loaded for this request:
+${askMyDataOverview.text}
 
 Completed Cruises with Points Earned:
   ${completedWithPoints || 'No points data recorded for completed cruises'}
 
-CRITICAL: The user has EXACTLY ${toolContext.userPoints.toLocaleString()} casino program points in the active Royal/Celebrity scope and is in ${toolContext.currentTier} tier. They have earned ${totalEarnedPoints.toLocaleString()} points from ${completedCruises.length} completed cruises. These numbers are from the live system. Use ONLY these values, not any cached or outdated information.
+CRITICAL: The user has EXACTLY ${toolContext.userPoints.toLocaleString()} casino program points in the active Royal/Celebrity scope and is in ${toolContext.currentTier} tier. They have earned ${totalEarnedPoints.toLocaleString()} points from ${completedCruises.length} completed cruises. These numbers are from the live system. Use ONLY these values, not any cached or outdated information. Coin-In is included only as gaming volume, never as profit/value/cash result.
 `;
 
       const systemPrompt = devAssistantRequest
@@ -665,7 +694,7 @@ CRITICAL: The user has EXACTLY ${toolContext.userPoints.toLocaleString()} casino
     } finally {
       setIsLoading(false);
     }
-  }, [messages, tier, isAdmin, toolContext, executeToolCall, globalLibrary, myAtlasMachines, sessions, deckMappings, machineLogs, filteredCertificates, mode, selectedProfileLabel, selectedBrand, selectedProgram, activeScopeLabel, brandProgramLabel, archiveContextLabel]);
+  }, [messages, tier, isAdmin, toolContext, executeToolCall, globalLibrary, myAtlasMachines, sessions, deckMappings, machineLogs, filteredCertificates, mode, selectedProfileLabel, selectedBrand, selectedProgram, activeScopeLabel, brandProgramLabel, archiveContextLabel, askMyDataOverview]);
 
   const clearMessages = useCallback(() => {
     console.log('[AgentX] Clearing messages');
