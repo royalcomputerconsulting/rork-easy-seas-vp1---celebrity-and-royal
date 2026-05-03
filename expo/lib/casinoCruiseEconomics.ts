@@ -1,4 +1,5 @@
 import { isRoyalCaribbeanShip } from '@/constants/shipInfo';
+import { KNOWN_RETAIL_VALUES } from '@/constants/knownRetailValues';
 import { createDateFromString } from '@/lib/date';
 import { calculateCruiseValue, type ValueBreakdown } from '@/lib/valueCalculator';
 import type { BookedCruise } from '@/types/models';
@@ -136,7 +137,7 @@ const CONFIRMED_CLUB_ROYALE_2025_PAID = 4238.41;
 const DEFAULT_PORT_FEE_PER_PERSON_FOR_7_NIGHTS = 162;
 const TWO_PERSON_PORT_FEE_THRESHOLD = 200;
 const KNOWN_STAR_2026_SAIL_DATE = '2026-07-05';
-const KNOWN_STAR_2026_RETAIL_VALUE = 5596;
+const KNOWN_STAR_2026_RETAIL_VALUE = 5500;
 const KNOWN_STAR_2026_NET_EFFECTIVE_PAID = 150.92;
 
 interface TaxesFeesEstimateInfo {
@@ -186,6 +187,33 @@ export const ANNUAL_CASINO_REPORT_FACTS: AnnualCasinoHistoricalFact[] = [
 
 function getAnnualFactKey(ship: string | undefined, sailDate: string | undefined): string {
   return `${(ship ?? '').trim().toLowerCase()}|${(sailDate ?? '').trim()}`;
+}
+
+function getKnownRetailValueForCruise(cruise: Pick<BookedCruise, 'id' | 'bookingId' | 'reservationNumber' | 'shipName' | 'sailDate'>): number | null {
+  const normalizedShip = (cruise.shipName ?? '').toLowerCase().trim();
+  const knownValue = KNOWN_RETAIL_VALUES.find((value) => {
+    if (value.cruiseId === cruise.id || value.cruiseId === cruise.bookingId || value.cruiseId === cruise.reservationNumber) return true;
+
+    const normalizedKnownShip = value.ship.toLowerCase().trim();
+    const shipMatches = normalizedShip === normalizedKnownShip || normalizedShip.includes(normalizedKnownShip) || normalizedKnownShip.includes(normalizedShip);
+    return shipMatches && value.departureDate === cruise.sailDate;
+  });
+
+  return knownValue?.retailCabinValue ?? null;
+}
+
+function applyKnownRetailValueToCruise(cruise: BookedCruise): BookedCruise {
+  const knownRetailValue = getKnownRetailValueForCruise(cruise);
+  if (!isNumber(knownRetailValue)) {
+    return cruise;
+  }
+
+  return {
+    ...cruise,
+    retailValue: knownRetailValue,
+    totalRetailCost: knownRetailValue,
+    originalPrice: knownRetailValue,
+  };
 }
 
 const ANNUAL_CASINO_REPORT_FACTS_BY_KEY = new Map(
@@ -377,7 +405,7 @@ export function normalizeCruisesWithCasinoEconomics(
   cruises: BookedCruise[],
   options?: { includeKnownAnnualFacts?: boolean },
 ): BookedCruise[] {
-  const normalizedCruises = cruises.map((cruise) => applyAnnualCruiseOverrides(normalizeCruiseCasinoPerformance(cruise)));
+  const normalizedCruises = cruises.map((cruise) => applyAnnualCruiseOverrides(normalizeCruiseCasinoPerformance(applyKnownRetailValueToCruise(cruise))));
 
   if (!options?.includeKnownAnnualFacts) {
     return normalizedCruises;
@@ -639,8 +667,9 @@ function buildCruiseEconomicsRow(cruise: BookedCruise): CruiseEconomicsRow {
     breakdown.totalRetailValue,
     breakdown.cabinValueForTwo,
   );
-  const retailValue = applyRetailOverrides(ship, sailDate, rawRetailValue);
-  const retailIsActual = isNumber(rawRetailValue) || Boolean(matchedAnnualFact) || isKnownStar2026Booking;
+  const knownRetailValue = getKnownRetailValueForCruise(cruiseForEconomics);
+  const retailValue = applyRetailOverrides(ship, sailDate, knownRetailValue ?? rawRetailValue);
+  const retailIsActual = isNumber(knownRetailValue) || isNumber(rawRetailValue) || Boolean(matchedAnnualFact) || isKnownStar2026Booking;
 
   const taxesFeesInfo = getTaxesFeesEstimate(cruiseForEconomics, breakdown);
   const taxesFeesEstimate = taxesFeesInfo.value;
@@ -702,7 +731,7 @@ function buildCruiseEconomicsRow(cruise: BookedCruise): CruiseEconomicsRow {
     hoursWereEstimated ? `Hours played estimated from points at ${DEFAULT_ESTIMATED_POINTS_PER_PLAY_HOUR} points/hour.` : null,
     !isNumber(hoursPlayed) ? 'Hours played not available for this row.' : null,
     matchedAnnualFact?.notes ?? null,
-    isKnownStar2026Booking ? 'Star of the Seas 2026 value is locked to the confirmed $5,596 retail value and $150.92 net effective paid casino booking data.' : null,
+    isKnownStar2026Booking ? 'Star of the Seas 2026 value is locked to the user-updated $5,500 retail value and $150.92 net effective paid casino booking data.' : null,
   ].filter((note): note is string => Boolean(note));
 
   console.log('[CasinoCruiseEconomics] Row built', {

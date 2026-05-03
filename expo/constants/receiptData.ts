@@ -17,8 +17,8 @@ export const CRUISE_RECEIPTS: CruiseReceipt[] = [
     cabinNumber: '10518',
     roomType: 'Interior Stateroom Obstructed View',
     pricePaid: 150.92,
-    totalRetailCost: 5596,
-    totalCasinoDiscount: 5596,
+    totalRetailCost: 5500,
+    totalCasinoDiscount: 5500,
   },
   {
     ship: 'NAVIGATOR OF THE SEAS',
