@@ -249,6 +249,10 @@ export interface BookedCruise extends Cruise {
   netEffectivePaid?: number;
   winningsBroughtHome?: number;
   casinoChargesRoomBilled?: number;
+  instantCertificateWon?: boolean;
+  instantCertificateOfferCode?: string;
+  instantCertificateValue?: number;
+  instantCertificateNotes?: string;
   coinIn?: number;
   houseEdge?: number;
   pointsEarned?: number;

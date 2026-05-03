@@ -9,11 +9,14 @@ import {
   Image,
   Platform,
   ActivityIndicator,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { File as ExpoFile, Paths as ExpoPaths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Stack, useRouter } from 'expo-router';
+import { Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { 
   BarChart3, 
@@ -34,6 +37,9 @@ import {
   Dices,
   Calculator,
   Download,
+  Save,
+  X,
+  Ticket,
 } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME, SHADOW } from '@/constants/theme';
 import { useSimpleAnalytics } from '@/state/SimpleAnalyticsProvider';
@@ -98,6 +104,31 @@ import { dedupeBookedCruises } from '@/lib/dataIdentity';
 type AnalyticsTab = 'intelligence' | 'charts' | 'session' | 'calcs';
 type ROIFilter = 'all' | 'high' | 'medium' | 'low';
 
+type CruisePerformanceForm = {
+  winLoss: string;
+  pointsEarned: string;
+  instantCertificateWon: boolean;
+  instantCertificateOfferCode: string;
+  instantCertificateValue: string;
+  instantCertificateNotes: string;
+};
+
+const EMPTY_PERFORMANCE_FORM: CruisePerformanceForm = {
+  winLoss: '',
+  pointsEarned: '',
+  instantCertificateWon: false,
+  instantCertificateOfferCode: '',
+  instantCertificateValue: '',
+  instantCertificateNotes: '',
+};
+
+function parseNumberInput(value: string): number {
+  const cleaned = value.replace(/[$,\s]/g, '');
+  if (!cleaned || cleaned === '-' || cleaned === '.') return 0;
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function calculateCruiseROI(cruise: BookedCruise): { roi: number; valuePerDollar: number } {
   const breakdown = calculateCruiseValue(cruise);
   return {
@@ -115,7 +146,6 @@ function getCruiseROILevel(roi: number): 'high' | 'medium' | 'low' {
 }
 
 export default function AnalyticsScreen() {
-  const router = useRouter();
   useEntitlement();
   const { authenticatedEmail } = useAuth();
   const { analytics, casinoAnalytics } = useSimpleAnalytics();
@@ -128,7 +158,12 @@ export default function AnalyticsScreen() {
     runDetection,
   } = useAlerts();
   const { clubRoyaleProfile, localData } = useAppState();
-  const { bookedCruises: storedBookedCruises, isLoading: storeLoading } = useCoreData();
+  const {
+    bookedCruises: storedBookedCruises,
+    isLoading: storeLoading,
+    updateBookedCruise,
+    addBookedCruise,
+  } = useCoreData();
   const {
     clubRoyalePoints: loyaltyClubRoyalePoints,
     clubRoyaleTier: loyaltyClubRoyaleTier,
@@ -155,6 +190,8 @@ export default function AnalyticsScreen() {
   const [targetPPH, setTargetPPH] = useState(100);
   const [calcsMode, setCalcsMode] = useState<'per-session' | 'historical'>('per-session');
   const [isGeneratingSessions, setIsGeneratingSessions] = useState(false);
+  const [selectedPerformanceCruise, setSelectedPerformanceCruise] = useState<BookedCruise | null>(null);
+  const [performanceForm, setPerformanceForm] = useState<CruisePerformanceForm>(EMPTY_PERFORMANCE_FORM);
   
   const {
     sessions,
@@ -429,9 +466,96 @@ export default function AnalyticsScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookedCruises.length, sessions.length]);
 
-  const handleCruisePress = useCallback((cruiseId: string) => {
-    router.push({ pathname: '/(tabs)/(overview)/cruise-details' as any, params: { id: cruiseId } });
-  }, [router]);
+  const findCruiseForPerformanceEdit = useCallback((cruiseId: string): BookedCruise | null => {
+    return bookedCruises.find((cruise) => cruise.id === cruiseId) ?? null;
+  }, [bookedCruises]);
+
+  const openCruisePerformanceEditor = useCallback((cruise: BookedCruise) => {
+    const existingWinLoss = cruise.winningsBroughtHome ?? cruise.winnings ?? cruise.netResult ?? cruise.totalWinnings ?? cruise.cashResult;
+    const existingPoints = cruise.pointsEarned ?? cruise.earnedPoints ?? cruise.casinoPoints;
+    const hasInstantCertificate = Boolean(
+      cruise.instantCertificateWon ||
+      cruise.instantCertificateOfferCode ||
+      cruise.instantCertificateValue ||
+      cruise.instantCertificateNotes,
+    );
+
+    setSelectedPerformanceCruise(cruise);
+    setPerformanceForm({
+      winLoss: typeof existingWinLoss === 'number' && Number.isFinite(existingWinLoss) ? String(existingWinLoss) : '',
+      pointsEarned: typeof existingPoints === 'number' && Number.isFinite(existingPoints) ? String(existingPoints) : '',
+      instantCertificateWon: hasInstantCertificate,
+      instantCertificateOfferCode: cruise.instantCertificateOfferCode ?? '',
+      instantCertificateValue: typeof cruise.instantCertificateValue === 'number' && Number.isFinite(cruise.instantCertificateValue) ? String(cruise.instantCertificateValue) : '',
+      instantCertificateNotes: cruise.instantCertificateNotes ?? '',
+    });
+    void haptics.selection();
+  }, [haptics]);
+
+  const openCruisePerformanceEditorById = useCallback((cruiseId: string) => {
+    const cruise = findCruiseForPerformanceEdit(cruiseId);
+    if (!cruise) {
+      console.log('[Analytics] Cruise performance edit skipped; cruise not found:', cruiseId);
+      return;
+    }
+    openCruisePerformanceEditor(cruise);
+  }, [findCruiseForPerformanceEdit, openCruisePerformanceEditor]);
+
+  const closeCruisePerformanceEditor = useCallback(() => {
+    setSelectedPerformanceCruise(null);
+    setPerformanceForm(EMPTY_PERFORMANCE_FORM);
+  }, []);
+
+  const handleSaveCruisePerformance = useCallback(() => {
+    if (!selectedPerformanceCruise) return;
+
+    const pointsEarned = Math.round(parseNumberInput(performanceForm.pointsEarned));
+    const winLoss = parseNumberInput(performanceForm.winLoss);
+    const certificateValue = parseNumberInput(performanceForm.instantCertificateValue);
+    const instantCertificateWon = performanceForm.instantCertificateWon;
+    const now = new Date().toISOString();
+    const updates: Partial<BookedCruise> = {
+      earnedPoints: pointsEarned,
+      casinoPoints: pointsEarned,
+      pointsEarned,
+      coinIn: pointsEarned * 5,
+      winnings: winLoss,
+      winningsBroughtHome: winLoss,
+      totalWinnings: winLoss,
+      netResult: winLoss,
+      cashResult: winLoss,
+      instantCertificateWon,
+      instantCertificateOfferCode: instantCertificateWon ? performanceForm.instantCertificateOfferCode.trim() : '',
+      instantCertificateValue: instantCertificateWon ? certificateValue : 0,
+      instantCertificateNotes: instantCertificateWon ? performanceForm.instantCertificateNotes.trim() : '',
+      completionState: 'completed',
+      status: 'completed',
+      calculationConfidence: 'actual',
+      updatedAt: now,
+    };
+
+    const existsInStoredCruises = (storedBookedCruises ?? []).some((cruise) => cruise.id === selectedPerformanceCruise.id);
+    if (existsInStoredCruises) {
+      updateBookedCruise(selectedPerformanceCruise.id, updates);
+    } else {
+      addBookedCruise({
+        ...selectedPerformanceCruise,
+        ...updates,
+        id: selectedPerformanceCruise.id || `performance-${Date.now()}`,
+        createdAt: selectedPerformanceCruise.createdAt ?? now,
+      });
+    }
+
+    console.log('[Analytics] Saved cruise performance:', {
+      cruiseId: selectedPerformanceCruise.id,
+      pointsEarned,
+      winLoss,
+      instantCertificateWon,
+      hasCertificateCode: Boolean(updates.instantCertificateOfferCode),
+    });
+    void haptics.success();
+    closeCruisePerformanceEditor();
+  }, [addBookedCruise, closeCruisePerformanceEditor, haptics, performanceForm, selectedPerformanceCruise, storedBookedCruises, updateBookedCruise]);
 
   const cruiseEconomicsSummary = useMemo(() => {
     return buildCruiseEconomicsSummary(bookedCruises, new Date(), {
@@ -832,7 +956,7 @@ export default function AnalyticsScreen() {
       <TouchableOpacity
         key={cruise.id}
         style={styles.portfolioCard}
-        onPress={() => handleCruisePress(cruise.id)}
+        onPress={() => openCruisePerformanceEditorById(cruise.id)}
         activeOpacity={0.85}
       >
         <View style={styles.portfolioImageContainer}>
@@ -912,6 +1036,12 @@ export default function AnalyticsScreen() {
                 <View style={styles.portfolioOfferBadge}>
                   <Zap size={10} color={COLORS.goldDark} />
                   <Text style={styles.portfolioOfferCode}>{cruise.offerCode}</Text>
+                </View>
+              ) : null}
+              {cruise.instantCertificateWon ? (
+                <View style={styles.portfolioCertificateBadge}>
+                  <Ticket size={10} color="#047857" />
+                  <Text style={styles.portfolioCertificateText}>Cert won</Text>
                 </View>
               ) : null}
             </View>
@@ -1092,9 +1222,11 @@ export default function AnalyticsScreen() {
                       : 'Estimated';
 
                   return (
-                    <View
+                    <TouchableOpacity
                       key={row.cruiseId}
                       style={[styles.economicsTableRow, isLastVisibleRow && styles.economicsTableRowLast]}
+                      activeOpacity={0.75}
+                      onPress={() => openCruisePerformanceEditorById(row.cruiseId)}
                       testID={`casino-economics-row-${row.cruiseId}`}
                     >
                       <Text style={[styles.economicsCell, styles.economicsDateCell]}>{row.sailDate}</Text>
@@ -1110,7 +1242,7 @@ export default function AnalyticsScreen() {
                       <View style={[styles.economicsStatusPill, statusStyle]}>
                         <Text style={styles.economicsStatusText}>{confidenceLabel}</Text>
                       </View>
-                    </View>
+                    </TouchableOpacity>
                   );
                 })}
 
@@ -1290,6 +1422,7 @@ export default function AnalyticsScreen() {
 
       <View style={styles.section}>
         <Text style={styles.portfolioTitle}>Cruise Portfolio</Text>
+        <Text style={styles.portfolioHintText}>Tap any cruise row to add/edit win-loss, points earned, and instant certificate results.</Text>
         {renderROIFilterTabs()}
         
         {filteredCruises.length > 0 ? (
@@ -1378,10 +1511,16 @@ export default function AnalyticsScreen() {
               const dateStr = sailDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
               const _sourceColor = entry.cruiseSource === 'royal' ? COLORS.navyDeep : entry.cruiseSource === 'celebrity' ? '#1E3A5F' : '#0D47A1';
               return (
-                <View key={entry.id} style={styles.pointsBreakdownRow}>
+                <TouchableOpacity
+                  key={entry.id}
+                  style={styles.pointsBreakdownRow}
+                  activeOpacity={0.75}
+                  onPress={() => openCruisePerformanceEditorById(entry.id)}
+                  testID={`points-breakdown-row-${entry.id}`}
+                >
                   <View style={styles.pointsBreakdownShipCol}>
                     <Text style={styles.pointsBreakdownShipName} numberOfLines={1}>{entry.shipName}</Text>
-                    <Text style={styles.pointsBreakdownDate}>{dateStr} · {entry.nights}N</Text>
+                    <Text style={styles.pointsBreakdownDate}>{dateStr} · {entry.nights}N · Tap to edit casino results</Text>
                   </View>
                   <View style={styles.pointsBreakdownValuesCol}>
                     <View style={styles.pointsBreakdownValueRow}>
@@ -1395,7 +1534,7 @@ export default function AnalyticsScreen() {
                       <Text style={[styles.pointsBreakdownValue, { color: '#1D4ED8' }]}>{formatNumber(entry.loyaltyPoints)}</Text>
                     </View>
                   </View>
-                </View>
+                </TouchableOpacity>
               );
             })}
             {perCruisePointsBreakdown.length > 10 && (
@@ -2297,6 +2436,164 @@ export default function AnalyticsScreen() {
         </ScrollView>
       </SafeAreaView>
 
+      <Modal
+        visible={Boolean(selectedPerformanceCruise)}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={closeCruisePerformanceEditor}
+      >
+        <KeyboardAvoidingView
+          style={styles.performanceModalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <TouchableOpacity
+            style={styles.performanceModalBackdrop}
+            activeOpacity={1}
+            onPress={closeCruisePerformanceEditor}
+          />
+          <View style={styles.performanceModalCard}>
+            <View style={styles.performanceModalHandle} />
+            <View style={styles.performanceModalHeader}>
+              <View style={styles.performanceModalTitleBlock}>
+                <Text style={styles.performanceModalEyebrow}>Cruise casino results</Text>
+                <Text style={styles.performanceModalTitle} numberOfLines={1}>
+                  {selectedPerformanceCruise?.shipName || 'Selected Cruise'}
+                </Text>
+                <Text style={styles.performanceModalSubtitle} numberOfLines={1}>
+                  {selectedPerformanceCruise?.sailDate || 'No sail date'} · {selectedPerformanceCruise?.nights || 0} nights
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.performanceCloseButton}
+                onPress={closeCruisePerformanceEditor}
+                activeOpacity={0.7}
+                testID="close-cruise-performance-editor"
+              >
+                <X size={18} color={COLORS.navyDeep} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              style={styles.performanceModalScroll}
+              contentContainerStyle={styles.performanceModalContent}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              <View style={styles.performanceInputGrid}>
+                <View style={styles.performanceInputGroup}>
+                  <Text style={styles.performanceInputLabel}>Win / Loss total</Text>
+                  <TextInput
+                    style={styles.performanceTextInput}
+                    value={performanceForm.winLoss}
+                    onChangeText={(value) => setPerformanceForm((prev) => ({ ...prev, winLoss: value }))}
+                    placeholder="-1200 or 4500"
+                    placeholderTextColor="#94A3B8"
+                    keyboardType="numbers-and-punctuation"
+                    testID="cruise-performance-win-loss-input"
+                  />
+                  <Text style={styles.performanceInputHint}>Use a negative number for a loss.</Text>
+                </View>
+
+                <View style={styles.performanceInputGroup}>
+                  <Text style={styles.performanceInputLabel}>Points earned</Text>
+                  <TextInput
+                    style={styles.performanceTextInput}
+                    value={performanceForm.pointsEarned}
+                    onChangeText={(value) => setPerformanceForm((prev) => ({ ...prev, pointsEarned: value }))}
+                    placeholder="2500"
+                    placeholderTextColor="#94A3B8"
+                    keyboardType="number-pad"
+                    testID="cruise-performance-points-input"
+                  />
+                  <Text style={styles.performanceInputHint}>Feeds historical points, coin-in, and tier analytics.</Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={[styles.certificateToggle, performanceForm.instantCertificateWon && styles.certificateToggleActive]}
+                activeOpacity={0.8}
+                onPress={() => setPerformanceForm((prev) => ({ ...prev, instantCertificateWon: !prev.instantCertificateWon }))}
+                testID="cruise-performance-certificate-toggle"
+              >
+                <View style={[styles.certificateToggleIcon, performanceForm.instantCertificateWon && styles.certificateToggleIconActive]}>
+                  <Ticket size={18} color={performanceForm.instantCertificateWon ? COLORS.white : '#047857'} />
+                </View>
+                <View style={styles.certificateToggleTextBlock}>
+                  <Text style={styles.certificateToggleTitle}>Instant certificate / offer won</Text>
+                  <Text style={styles.certificateToggleSubtitle}>Track whether this sailing generated a new casino offer.</Text>
+                </View>
+                <View style={[styles.certificateTogglePill, performanceForm.instantCertificateWon && styles.certificateTogglePillActive]}>
+                  <Text style={[styles.certificateTogglePillText, performanceForm.instantCertificateWon && styles.certificateTogglePillTextActive]}>
+                    {performanceForm.instantCertificateWon ? 'Yes' : 'No'}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              {performanceForm.instantCertificateWon && (
+                <View style={styles.certificateDetailsCard}>
+                  <View style={styles.performanceInputGroup}>
+                    <Text style={styles.performanceInputLabel}>Certificate / offer code</Text>
+                    <TextInput
+                      style={styles.performanceTextInput}
+                      value={performanceForm.instantCertificateOfferCode}
+                      onChangeText={(value) => setPerformanceForm((prev) => ({ ...prev, instantCertificateOfferCode: value }))}
+                      placeholder="Example: 25RCLV123"
+                      placeholderTextColor="#94A3B8"
+                      autoCapitalize="characters"
+                      testID="cruise-performance-certificate-code-input"
+                    />
+                  </View>
+                  <View style={styles.performanceInputGroup}>
+                    <Text style={styles.performanceInputLabel}>Estimated certificate value</Text>
+                    <TextInput
+                      style={styles.performanceTextInput}
+                      value={performanceForm.instantCertificateValue}
+                      onChangeText={(value) => setPerformanceForm((prev) => ({ ...prev, instantCertificateValue: value }))}
+                      placeholder="750"
+                      placeholderTextColor="#94A3B8"
+                      keyboardType="number-pad"
+                      testID="cruise-performance-certificate-value-input"
+                    />
+                  </View>
+                  <View style={styles.performanceInputGroup}>
+                    <Text style={styles.performanceInputLabel}>Certificate notes</Text>
+                    <TextInput
+                      style={[styles.performanceTextInput, styles.performanceNotesInput]}
+                      value={performanceForm.instantCertificateNotes}
+                      onChangeText={(value) => setPerformanceForm((prev) => ({ ...prev, instantCertificateNotes: value }))}
+                      placeholder="Free balcony, freeplay, expiry, restrictions..."
+                      placeholderTextColor="#94A3B8"
+                      multiline={true}
+                      textAlignVertical="top"
+                      testID="cruise-performance-certificate-notes-input"
+                    />
+                  </View>
+                </View>
+              )}
+            </ScrollView>
+
+            <View style={styles.performanceModalActions}>
+              <TouchableOpacity
+                style={styles.performanceCancelButton}
+                activeOpacity={0.8}
+                onPress={closeCruisePerformanceEditor}
+              >
+                <Text style={styles.performanceCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.performanceSaveButton}
+                activeOpacity={0.85}
+                onPress={handleSaveCruisePerformance}
+                testID="save-cruise-performance"
+              >
+                <Save size={16} color={COLORS.white} />
+                <Text style={styles.performanceSaveText}>Save results</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
       <AddSessionModal
         visible={showAddSessionModal}
         onClose={() => setShowAddSessionModal(false)}
@@ -2829,6 +3126,13 @@ const styles = StyleSheet.create({
     color: '#64748B',
     fontStyle: 'italic' as const,
   },
+  portfolioHintText: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: '#475569',
+    marginTop: -4,
+    marginBottom: SPACING.sm,
+    lineHeight: 16,
+  },
   portfolioCard: {
     backgroundColor: COLORS.white,
     borderRadius: BORDER_RADIUS.md,
@@ -2991,6 +3295,22 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: '#92400E',
+  },
+  portfolioCertificateBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  portfolioCertificateText: {
+    fontSize: 10,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#047857',
   },
   viewMoreButton: {
     flexDirection: 'row',
@@ -3750,6 +4070,211 @@ const styles = StyleSheet.create({
   economicsNegativeValue: {
     color: COLORS.error,
     fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  performanceModalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  performanceModalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+  },
+  performanceModalCard: {
+    maxHeight: '88%',
+    backgroundColor: COLORS.white,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingTop: 10,
+    overflow: 'hidden',
+    ...SHADOW.md,
+  },
+  performanceModalHandle: {
+    width: 44,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: '#CBD5E1',
+    alignSelf: 'center',
+    marginBottom: SPACING.sm,
+  },
+  performanceModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.lg,
+    paddingBottom: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  performanceModalTitleBlock: {
+    flex: 1,
+    marginRight: SPACING.md,
+  },
+  performanceModalEyebrow: {
+    fontSize: 11,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#047857',
+    textTransform: 'uppercase',
+    letterSpacing: 0.7,
+    marginBottom: 3,
+  },
+  performanceModalTitle: {
+    fontSize: TYPOGRAPHY.fontSizeLG,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  performanceModalSubtitle: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: '#64748B',
+    marginTop: 3,
+  },
+  performanceCloseButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F1F5F9',
+  },
+  performanceModalScroll: {
+    maxHeight: 470,
+  },
+  performanceModalContent: {
+    padding: SPACING.lg,
+    gap: SPACING.md,
+  },
+  performanceInputGrid: {
+    gap: SPACING.md,
+  },
+  performanceInputGroup: {
+    gap: 6,
+  },
+  performanceInputLabel: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: COLORS.navyDeep,
+  },
+  performanceTextInput: {
+    minHeight: 48,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 10,
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: '#0F172A',
+  },
+  performanceNotesInput: {
+    minHeight: 92,
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+    lineHeight: 20,
+  },
+  performanceInputHint: {
+    fontSize: 11,
+    color: '#64748B',
+  },
+  certificateToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: BORDER_RADIUS.lg,
+    borderWidth: 1,
+    borderColor: '#D1FAE5',
+    backgroundColor: '#F8FAFC',
+    padding: SPACING.md,
+    gap: SPACING.sm,
+  },
+  certificateToggleActive: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#10B981',
+  },
+  certificateToggleIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#D1FAE5',
+  },
+  certificateToggleIconActive: {
+    backgroundColor: '#059669',
+  },
+  certificateToggleTextBlock: {
+    flex: 1,
+  },
+  certificateToggleTitle: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  certificateToggleSubtitle: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  certificateTogglePill: {
+    minWidth: 42,
+    alignItems: 'center',
+    borderRadius: BORDER_RADIUS.round,
+    backgroundColor: '#E2E8F0',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  certificateTogglePillActive: {
+    backgroundColor: '#047857',
+  },
+  certificateTogglePillText: {
+    fontSize: 11,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#475569',
+  },
+  certificateTogglePillTextActive: {
+    color: COLORS.white,
+  },
+  certificateDetailsCard: {
+    borderRadius: BORDER_RADIUS.lg,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    padding: SPACING.md,
+    gap: SPACING.md,
+  },
+  performanceModalActions: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    padding: SPACING.lg,
+    paddingTop: SPACING.md,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    backgroundColor: COLORS.white,
+  },
+  performanceCancelButton: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: BORDER_RADIUS.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F1F5F9',
+  },
+  performanceCancelText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  performanceSaveButton: {
+    flex: 1.4,
+    minHeight: 48,
+    borderRadius: BORDER_RADIUS.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.xs,
+    backgroundColor: COLORS.navyDeep,
+  },
+  performanceSaveText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.white,
   },
   economicsSummarySection: {
     marginTop: SPACING.md,
