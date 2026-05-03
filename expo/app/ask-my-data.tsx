@@ -49,6 +49,19 @@ function buildScopeLabel(profileId: string, users: ReturnType<typeof useUser>['u
   return `${profileLabel} • ${getBrandLabel(brand)} • ${getProgramLabel(program)}`;
 }
 
+function hasBookedCruiseOfferData(cruise: BookedCruise): boolean {
+  return Boolean(
+    cruise.offerCode ||
+    cruise.offerName ||
+    cruise.offerCategory ||
+    cruise.freePlay ||
+    cruise.freeOBC ||
+    cruise.compValue ||
+    cruise.totalCasinoDiscount ||
+    cruise.sourcePayload
+  );
+}
+
 export default function AskMyDataScreen() {
   const router = useRouter();
   const { cruises, bookedCruises, casinoOffers, calendarEvents } = useCoreData();
@@ -115,12 +128,18 @@ export default function AskMyDataScreen() {
     });
   }, [askMyDataOverview, scopedBookedCruises, scopedCalendarEvents, scopedCertificates, scopedCruises, scopedOffers, submittedQuery]);
 
+  const bookedCruiseOfferCount = useMemo(() => (
+    (scopedBookedCruises as BookedCruise[]).filter(hasBookedCruiseOfferData).length
+  ), [scopedBookedCruises]);
+
   const stats = useMemo(() => ({
-    offers: scopedOffers.length,
+    offers: scopedOffers.length + bookedCruiseOfferCount,
+    standaloneOffers: scopedOffers.length,
+    bookedCruiseOffers: bookedCruiseOfferCount,
     cruises: scopedCruises.length + scopedBookedCruises.length,
     certificates: scopedCertificates.length,
     calendar: scopedCalendarEvents.length,
-  }), [scopedBookedCruises.length, scopedCalendarEvents.length, scopedCertificates.length, scopedCruises.length, scopedOffers.length]);
+  }), [bookedCruiseOfferCount, scopedBookedCruises.length, scopedCalendarEvents.length, scopedCertificates.length, scopedCruises.length, scopedOffers.length]);
 
   const submitSearch = useCallback((nextQuery?: string) => {
     const searchText = (nextQuery ?? query).trim();
@@ -284,7 +303,7 @@ export default function AskMyDataScreen() {
             <View style={styles.scopeCard}>
               <View style={styles.scopeSummary}>
                 <Text style={styles.scopeSummaryLabel}>Current scope</Text>
-                <Text style={styles.scopeSummaryText}>{stats.offers} offers • {stats.cruises} cruises • {stats.certificates} certs • {stats.calendar} calendar</Text>
+                <Text style={styles.scopeSummaryText}>{stats.offers} offer records ({stats.standaloneOffers} standalone + {stats.bookedCruiseOffers} booked) • {stats.cruises} cruises • {stats.certificates} certs • {stats.calendar} calendar</Text>
               </View>
               <TouchableOpacity style={styles.filterToggleButton} onPress={() => setFiltersOpen((open) => !open)} activeOpacity={0.78} testID="ask-my-data-toggle-filters">
                 <SlidersHorizontal size={14} color={COLORS.navyDeep} />

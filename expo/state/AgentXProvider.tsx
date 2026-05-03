@@ -9,6 +9,7 @@ import { askMyDataSearch, formatAskMyDataResponse } from '@/lib/askMyData';
 import { buildAskMyDataOverview } from '@/lib/askMyDataOverview';
 import { isKnownCasinoProfile } from '@/lib/knownProfileFallback';
 import { getBookedCruiseCasinoPoints } from '@/lib/casinoPointTruth';
+import { calculateOfferIntelligenceScore } from '@/lib/offerIntelligence';
 import {
   AgentToolContext,
   executeCruiseSearch,
@@ -121,6 +122,56 @@ Key formulas:
 - App-entered cruise points are authoritative when Club Royale sync differs.`;
 }
 
+function hasNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function getFirstCruiseNumber(cruise: Record<string, unknown>, keys: string[]): number | null {
+  for (const key of keys) {
+    const value = cruise[key];
+    if (hasNumber(value)) return value;
+  }
+  return null;
+}
+
+function formatMoney(value: number | null): string {
+  if (value === null) return 'n/a';
+  return String.fromCharCode(36) + value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function buildBookedCruiseOfferContext(bookedCruises: ReturnType<typeof useCoreData>['bookedCruises']): string {
+  const offerBackedCruises = bookedCruises
+    .filter((cruise) => Boolean(cruise.offerCode || cruise.offerName || cruise.offerCategory || cruise.freePlay || cruise.freeOBC || cruise.compValue || cruise.totalCasinoDiscount || cruise.sourcePayload))
+    .sort((left, right) => (left.sailDate || '').localeCompare(right.sailDate || ''));
+
+  if (offerBackedCruises.length === 0) {
+    return 'No booked-cruise offer/value records are loaded in the active scope.';
+  }
+
+  return offerBackedCruises.slice(0, 24).map((cruise) => {
+    const record = cruise as Record<string, unknown>;
+    const retail = getFirstCruiseNumber(record, ['retailValue', 'totalRetailCost', 'originalPrice', 'totalValue']);
+    const paid = getFirstCruiseNumber(record, ['netEffectivePaid', 'pricePaid', 'amountPaid', 'taxesFeesEstimate', 'taxes']);
+    const comp = getFirstCruiseNumber(record, ['compValue', 'totalCasinoDiscount', 'cruiseValueCaptured']);
+    const points = getBookedCruiseCasinoPoints(cruise);
+    const offerLabel = cruise.offerCode || cruise.offerName || cruise.offerCategory || 'casino/comp booking';
+    return `- ${cruise.shipName} ${cruise.sailDate} (${cruise.nights} nights): ${offerLabel}; retail ${formatMoney(retail)}; paid/net ${formatMoney(paid)}; comp/value ${formatMoney(comp)}; points ${points.toLocaleString()}; status ${cruise.status ?? cruise.completionState ?? 'booked'}`;
+  }).join('\n');
+}
+
+function buildStandaloneOfferContext(offers: ReturnType<typeof useCoreData>['casinoOffers'], cruises: ReturnType<typeof useCoreData>['cruises'], certificates: unknown[]): string {
+  if (offers.length === 0) {
+    return 'No standalone casino offer rows are loaded in the active scope. Use booked-cruise offer/value records above when answering offer questions.';
+  }
+
+  return offers.slice(0, 24).map((offer) => {
+    const score = calculateOfferIntelligenceScore(offer, cruises, certificates as any[]).score;
+    const expiry = offer.expiryDate || offer.expires || offer.offerExpiryDate || offer.validUntil || 'no expiry';
+    const value = offer.totalValue ?? offer.offerValue ?? offer.value ?? offer.retailCabinValue ?? 0;
+    return `- ${offer.offerName || offer.title || offer.offerCode || 'Casino offer'} (${offer.offerCode || 'no code'}): ship ${offer.shipName || 'any'}; expires ${expiry}; value ${formatMoney(value)}; FreePlay ${formatMoney(offer.freePlay ?? offer.freeplayAmount ?? null)}; OBC ${formatMoney(offer.OBC ?? offer.obcAmount ?? null)}; score ${score}/100`;
+  }).join('\n');
+}
+
 function buildDevAssistantSystemPrompt(): string {
   return `You are AI Dev Assistant inside Easy Seas. Help the user design and implement voice-enabled assistant features with practical, production-minded guidance.
 
@@ -147,6 +198,10 @@ function isDevAssistantRequest(message: string): boolean {
 
 function parseToolCall(message: string): { tool: string; params: unknown } | null {
   const askDataMatch = message.match(/ask my data|search my data|find in my data|search everything|global search|natural language search|show me.*data|what .* do i have|which .* do i have/i);
+  if (askDataMatch) {
+    return { tool: 'askMyData', params: { query: message } };
+  }
+
   const certificateMatch = message.match(/certificate|certificates|levels?\s+of\s+certificates?|what\s+levels?|appears?\s+on.*certificate|a\s+or\s+c\s+certificate/i);
   const decodeOfferMatch = message.match(/decode\s+(?:my\s+)?offer|decode\s+(?:the\s+)?best\s+offer|explain\s+(?:my\s+)?offer|what\s+does\s+(?:this\s+)?offer\s+mean|break\s+down\s+(?:my\s+)?offer/i);
   const replacementMatch = message.match(/replacement|replace\s+(?:this|my)?\s*cruise|find\s+replacements?|compare\s+replacements?|better\s+replacement|alternate\s+sailing|alternative\s+cruise/i);
@@ -313,10 +368,6 @@ function parseToolCall(message: string): { tool: string; params: unknown } | nul
     }
     
     return { tool: 'recommendMachines', params };
-  }
-
-  if (askDataMatch) {
-    return { tool: 'askMyData', params: { query: message } };
   }
 
   return null;
@@ -614,7 +665,682 @@ ${askMyDataOverview.text}
 Completed Cruises with Points Earned:
   ${completedWithPoints || 'No points data recorded for completed cruises'}
 
-CRITICAL: The user has EXACTLY ${toolContext.userPoints.toLocaleString()} casino program points in the active Royal/Celebrity scope and is in ${toolContext.currentTier} tier. They have earned ${totalEarnedPoints.toLocaleString()} points from ${completedCruises.length} completed cruises. These numbers are from the live system. Use ONLY these values, not any cached or outdated information. Coin-In is included only as gaming volume, never as profit/value/cash result.
+Standalone offer rows loaded in active scope:
+${buildStandaloneOfferContext(filteredCasinoOffers, filteredCruises, filteredCertificates)}
+
+Booked-cruise casino offer/value records loaded in active scope:
+${buildBookedCruiseOfferContext(filteredBookedCruises)}
+
+CRITICAL: The user has EXACTLY ${toolContext.userPoints.toLocaleString()} casino program points in the active Royal/Celebrity scope and is in ${toolContext.currentTier} tier. They have earned ${totalEarnedPoints.toLocaleString()} points from ${completedCruises.length} completed cruises. These numbers are from the live system. Use ONLY these values, not any cached or outdated information. Coin-In is included only as gaming volume, never as profit/value/cash result. If standalone offers are empty, booked-cruise offer/value records are still actual saved offer data and must be used for Ask My Data offer answers.
+`;
+
+      const systemPrompt = devAssistantRequest
+        ? buildDevAssistantSystemPrompt()
+        : buildSystemPrompt({
+            globalLibrary,
+            myAtlasMachines,
+            sessions,
+            deckMappings,
+            machineLogs,
+            certificates: filteredCertificates,
+            mode,
+            brandProgramLabel,
+          });
+      
+      const messagesForAI = devAssistantRequest
+        ? [
+            { role: 'user' as const, content: systemPrompt },
+            ...messages.slice(-6).map(m => ({
+              role: m.role as 'user' | 'assistant',
+              content: m.content,
+            })),
+            {
+              role: 'user' as const,
+              content: `Help me with this development request:\n\n${content}`,
+            },
+          ]
+        : [
+            { role: 'user' as const, content: `${systemPrompt}\n\n${contextInfo}` },
+            ...messages.slice(-6).map(m => ({
+              role: m.role as 'user' | 'assistant',
+              content: m.content,
+            })),
+            { 
+              role: 'user' as const, 
+              content: toolResult 
+                ? `Ask My Data mode: ${AGENT_MODE_LABELS[mode]}\nActive context: ${activeScopeLabel}\nArchive/review context: ${archiveContextLabel}\nUser asked: "${content}"\n\nTool result:\n${toolResult}\n\nPlease summarize this information in a helpful, conversational way. Start by confirming the active profile, brand/program, mode, and archive/review context. Highlight the most important points and name the data source used.`
+                : `Ask My Data mode: ${AGENT_MODE_LABELS[mode]}\nActive context: ${activeScopeLabel}\nArchive/review context: ${archiveContextLabel}\nUser asked: "${content}"\n\nPlease provide a helpful response based on the user's cruise data, active profile/filter context, selected mode, and archive/review context. Start by confirming the active profile, brand/program, mode, and archive/review context.`
+            },
+          ];
+      
+      const contextConfirmation = `Context: ${AGENT_MODE_LABELS[mode]} • ${activeScopeLabel} • ${brandProgramLabel} • Archive/Review: ${archiveContextLabel}`;
+      let aiResponse = '';
+      try {
+        aiResponse = await generateText({ messages: messagesForAI });
+      } catch (aiErr) {
+        console.warn('[AgentX] AI summarization failed; returning deterministic tool result when available:', aiErr);
+        if (!toolResult) throw aiErr;
+      }
+      
+      const assistantMessage: ChatMessage = {
+        id: `assistant-${Date.now()}`,
+        role: 'assistant',
+        content: toolResult 
+          ? `${contextConfirmation}\n\n${toolResult}${aiResponse ? `\n\n---\n\n${aiResponse}` : ''}` 
+          : `${contextConfirmation}\n\n${aiResponse}`,
+        timestamp: new Date(),
+        contextSummary: contextConfirmation,
+        suggestedActions: buildAgentSuggestedActions(toolCall?.tool ?? null, content),
+      };
+      
+      setMessages(prev => prev.filter(m => m.id !== loadingMessage.id).concat(assistantMessage));
+      
+    } catch (err) {
+      console.error('[AgentX] Error:', err);
+      setError(err instanceof Error ? err.message : 'An error occurred');
+      
+      const errorMessage: ChatMessage = {
+        id: `error-${Date.now()}`,
+        role: 'assistant',
+        content: `I could not complete that request because the assistant service failed before returning an answer. Active context: ${AGENT_MODE_LABELS[mode]} • ${activeScopeLabel} • ${brandProgramLabel}. Try again, or use one of the tool chips so I can return local data-backed results without the summarization step.`,
+        timestamp: new Date(),
+        contextSummary: `Context: ${AGENT_MODE_LABELS[mode]} • ${activeScopeLabel} • ${brandProgramLabel} • Archive/Review: ${archiveContextLabel}`,
+      };
+      
+      setMessages(prev => prev.filter(m => m.id !== loadingMessage.id).concat(errorMessage));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [messages, tier, isAdmin, toolContext, executeToolCall, globalLibrary, myAtlasMachines, sessions, deckMappings, machineLogs, filteredCertificates, mode, selectedProfileLabel, selectedBrand, selectedProgram, activeScopeLabel, brandProgramLabel, archiveContextLabel, askMyDataOverview]);
+
+  const clearMessages = useCallback(() => {
+    console.log('[AgentX] Clearing messages');
+    setMessages([]);
+    setError(null);
+  }, []);
+
+  const toggleExpanded = useCallback(() => {
+    setIsExpanded(prev => !prev);
+  }, []);
+
+  const toggleVisible = useCallback(() => {
+    setIsVisible(prev => !prev);
+  }, []);
+
+  const setVisibleState = useCallback((visible: boolean) => {
+    setIsVisible(visible);
+  }, []);
+
+  const refreshAnalysis = useCallback(async () => {
+    console.log('[AgentX] Refreshing analysis...');
+    await sendMessage('Provide a comprehensive analysis of my cruise performance for the last 90 days including points earned, tier progress, and recommendations.');
+  }, [sendMessage]);
+
+  return useMemo(() => ({
+    messages,
+    isLoading,
+    isExpanded,
+    isVisible,
+    error,
+    mode,
+    sendMessage,
+    clearMessages,
+    toggleExpanded,
+    toggleVisible,
+    setVisible: setVisibleState,
+    setMode,
+    refreshAnalysis,
+  }), [
+    messages,
+    isLoading,
+    isExpanded,
+    isVisible,
+    error,
+    mode,
+    sendMessage,
+    clearMessages,
+    toggleExpanded,
+    toggleVisible,
+    setVisibleState,
+    refreshAnalysis,
+  ]);
+});
+ + value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function buildBookedCruiseOfferContext(bookedCruises: ReturnType<typeof useCoreData>['bookedCruises']): string {
+  const offerBackedCruises = bookedCruises
+    .filter((cruise) => Boolean(cruise.offerCode || cruise.offerName || cruise.offerCategory || cruise.freePlay || cruise.freeOBC || cruise.compValue || cruise.totalCasinoDiscount || cruise.sourcePayload))
+    .sort((left, right) => (left.sailDate || '').localeCompare(right.sailDate || ''));
+
+  if (offerBackedCruises.length === 0) {
+    return 'No booked-cruise offer/value records are loaded in the active scope.';
+  }
+
+  return offerBackedCruises.slice(0, 24).map((cruise) => {
+    const record = cruise as Record<string, unknown>;
+    const retail = getFirstCruiseNumber(record, ['retailValue', 'totalRetailCost', 'originalPrice', 'totalValue']);
+    const paid = getFirstCruiseNumber(record, ['netEffectivePaid', 'pricePaid', 'amountPaid', 'taxesFeesEstimate', 'taxes']);
+    const comp = getFirstCruiseNumber(record, ['compValue', 'totalCasinoDiscount', 'cruiseValueCaptured']);
+    const points = getBookedCruiseCasinoPoints(cruise);
+    const offerLabel = cruise.offerCode || cruise.offerName || cruise.offerCategory || 'casino/comp booking';
+    return `- ${cruise.shipName} ${cruise.sailDate} (${cruise.nights} nights): ${offerLabel}; retail ${formatMoney(retail)}; paid/net ${formatMoney(paid)}; comp/value ${formatMoney(comp)}; points ${points.toLocaleString()}; status ${cruise.status ?? cruise.completionState ?? 'booked'}`;
+  }).join('\n');
+}
+
+function buildStandaloneOfferContext(offers: ReturnType<typeof useCoreData>['casinoOffers'], cruises: ReturnType<typeof useCoreData>['cruises'], certificates: unknown[]): string {
+  if (offers.length === 0) {
+    return 'No standalone casino offer rows are loaded in the active scope. Use booked-cruise offer/value records above when answering offer questions.';
+  }
+
+  return offers.slice(0, 24).map((offer) => {
+    const score = calculateOfferIntelligenceScore(offer, cruises, certificates as any[]).score;
+    const expiry = offer.expiryDate || offer.expires || offer.offerExpiryDate || offer.validUntil || 'no expiry';
+    const value = offer.totalValue ?? offer.offerValue ?? offer.value ?? offer.retailCabinValue ?? 0;
+    return `- ${offer.offerName || offer.title || offer.offerCode || 'Casino offer'} (${offer.offerCode || 'no code'}): ship ${offer.shipName || 'any'}; expires ${expiry}; value ${formatMoney(value)}; FreePlay ${formatMoney(offer.freePlay ?? offer.freeplayAmount ?? null)}; OBC ${formatMoney(offer.OBC ?? offer.obcAmount ?? null)}; score ${score}/100`;
+  }).join('\n');
+}
+
+function buildDevAssistantSystemPrompt(): string {
+  return `You are AI Dev Assistant inside Easy Seas. Help the user design and implement voice-enabled assistant features with practical, production-minded guidance.
+
+Focus on:
+- Prompt-based app development and app scaffolding
+- Conversational AI architecture
+- GPT-4o, Anthropic Claude, and similar LLM integrations
+- Speech-to-text, text-to-speech, microphone UX, and voice pipelines
+- WebSocket-based real-time audio streaming
+- Backend integration points, security, and API key handling
+- Persona, memory, conversation tone, and refinement workflows
+
+When responding:
+- Be specific and implementation-oriented
+- Break architecture into frontend, backend, data flow, and UX
+- Call out tradeoffs and recommended defaults
+- Favor Expo-friendly and React Native-compatible approaches
+- Keep the answer actionable and easy to build from`;
+}
+
+function isDevAssistantRequest(message: string): boolean {
+  return /prompt-based development|voice-enabled assistant|conversational ai|conversational capabilities|app structure|ai dev assistant|api integration|gpt-4o|anthropic|claude|voice api|speech-to-text|text-to-speech|websocket|real-time audio|audio streaming|persona|conversational tone|system prompt|conversation memory|backend integration/i.test(message);
+}
+
+function parseToolCall(message: string): { tool: string; params: unknown } | null {
+  const askDataMatch = message.match(/ask my data|search my data|find in my data|search everything|global search|natural language search|show me.*data|what .* do i have|which .* do i have/i);
+  if (askDataMatch) {
+    return { tool: 'askMyData', params: { query: message } };
+  }
+
+  const certificateMatch = message.match(/certificate|certificates|levels?\s+of\s+certificates?|what\s+levels?|appears?\s+on.*certificate|a\s+or\s+c\s+certificate/i);
+  const decodeOfferMatch = message.match(/decode\s+(?:my\s+)?offer|decode\s+(?:the\s+)?best\s+offer|explain\s+(?:my\s+)?offer|what\s+does\s+(?:this\s+)?offer\s+mean|break\s+down\s+(?:my\s+)?offer/i);
+  const replacementMatch = message.match(/replacement|replace\s+(?:this|my)?\s*cruise|find\s+replacements?|compare\s+replacements?|better\s+replacement|alternate\s+sailing|alternative\s+cruise/i);
+  const searchMatch = message.match(/search.*cruise|find.*cruise|available.*cruise|cruise.*search/i);
+  const tierMatch = message.match(/tier.*progress|progress.*tier|points.*tier|signature|masters|pinnacle/i);
+  const recommendMatch = message.match(/recommend.*for.*me|for.*you|best.*for.*me|suggest.*for.*me|what.*should.*book|which.*cruise|recommended/i);
+  const optimizeMatch = message.match(/optimize|maximize.*points|maximize.*value/i);
+  const analyzeMatch = message.match(/analyze|roi|value.*breakdown|portfolio.*summary/i);
+  const offerMatch = message.match(/offer|expiring|freeplay|trade.*in|casino.*offer/i);
+  const machineMatch = message.match(/slot.*machine|machine.*recommend|what.*machine|which.*machine|slot.*play|best.*machine|machine.*on|ap.*machine|advantage.*play/i);
+
+  if (certificateMatch && !decodeOfferMatch) {
+    const params: CertificateLevelSearchInput = { query: message };
+    return { tool: 'searchCertificateLevels', params };
+  }
+
+  if (decodeOfferMatch) {
+    const codeMatch = message.match(/(?:offer|code|promo)\s+([A-Z0-9-]{3,})/i) || message.match(/\b([A-Z]{2,}[A-Z0-9-]{2,})\b/);
+    const params: DecodeOfferInput = { query: message, limit: 3 };
+    if (codeMatch?.[1]) params.offerCode = codeMatch[1];
+    return { tool: 'decodeOffer', params };
+  }
+
+  if (replacementMatch) {
+    const goal: ReplacementGoalId = message.match(/lower|cheaper|out[- ]of[- ]pocket|cash|cost/i)
+      ? 'lowerOutOfPocket'
+      : message.match(/sea day|casino day|more days/i)
+        ? 'addSeaDays'
+        : message.match(/back[- ]to[- ]back|b2b|gap|consecutive/i)
+          ? 'improveBackToBackFit'
+          : message.match(/expir|use.*offer/i)
+            ? 'useExpiringOffer'
+            : message.match(/new port|fresh port|countries|itinerary novelty/i)
+              ? 'addNewPorts'
+              : message.match(/familiar|known ship|same ship|home ship/i)
+                ? 'improveShipFamiliarity'
+                : message.match(/tier|points|progress|signature|masters|prime/i)
+                  ? 'improveTierProgress'
+                  : 'improveOfferValue';
+    const codeMatch = message.match(/(?:offer|code|promo)\s+([A-Z0-9-]{3,})/i) || message.match(/\b([A-Z]{2,}[A-Z0-9-]{2,})\b/);
+    const params: ReplacementFinderInput = { query: message, goal, limit: 5 };
+    if (codeMatch?.[1]) params.offerCode = codeMatch[1];
+    return { tool: 'findReplacements', params };
+  }
+
+  if (searchMatch) {
+    const params: CruiseSearchInput = { onlyAvailable: true, limit: 5 };
+    
+    const shipMatch = message.match(/(?:on|ship)\s+(\w+(?:\s+of\s+the\s+\w+)?)/i);
+    if (shipMatch) params.shipName = shipMatch[1];
+    
+    const destMatch = message.match(/(?:to|destination|going to)\s+(\w+(?:\s+\w+)?)/i);
+    if (destMatch) params.destination = destMatch[1];
+    
+    const nightsMatch = message.match(/(\d+)\s*night/i);
+    if (nightsMatch) {
+      params.minNights = parseInt(nightsMatch[1], 10);
+      params.maxNights = parseInt(nightsMatch[1], 10) + 2;
+    }
+    
+    const cabinMatch = message.match(/\b(interior|oceanview|balcony|suite)\b/i);
+    if (cabinMatch) {
+      const cabin = cabinMatch[1].toLowerCase();
+      params.cabinType = cabin.charAt(0).toUpperCase() + cabin.slice(1) as CruiseSearchInput['cabinType'];
+    }
+    
+    return { tool: 'searchCruises', params };
+  }
+
+  if (tierMatch) {
+    const params: TierProgressInput = { includeProjections: true };
+    
+    if (message.match(/signature/i)) params.targetTier = 'Signature';
+    else if (message.match(/masters/i)) params.targetTier = 'Masters';
+    else if (message.match(/prime/i)) params.targetTier = 'Prime';
+    
+    return { tool: 'checkTierProgress', params };
+  }
+
+  if (recommendMatch) {
+    const params: RecommendationInput = { limit: 10 };
+    
+    if (message.match(/points|gambling|casino/i)) params.prioritize = 'points';
+    else if (message.match(/value|deal/i)) params.prioritize = 'value';
+    else if (message.match(/urgent|expir|soon/i)) params.prioritize = 'urgency';
+    else if (message.match(/port|west.*coast|galveston|los.*angeles/i)) params.prioritize = 'port';
+    
+    const limitMatch = message.match(/top\s*(\d+)|show\s*(\d+)|(\d+)\s*cruise/i);
+    if (limitMatch) {
+      const limit = parseInt(limitMatch[1] || limitMatch[2] || limitMatch[3], 10);
+      if (limit > 0 && limit <= 20) params.limit = limit;
+    }
+    
+    return { tool: 'getRecommendations', params };
+  }
+
+  if (optimizeMatch) {
+    const params: PortfolioOptimizerInput = { maxCruises: 5, prioritize: 'value' };
+    
+    if (message.match(/points|tier/i)) params.prioritize = 'points';
+    else if (message.match(/roi|return/i)) params.prioritize = 'roi';
+    else if (message.match(/nights/i)) params.prioritize = 'nights';
+    
+    if (message.match(/signature/i)) params.targetTier = 'Signature';
+    else if (message.match(/masters/i)) params.targetTier = 'Masters';
+    
+    const budgetMatch = message.match(/budget.*\$?(\d+)/i);
+    if (budgetMatch) params.budgetMax = parseInt(budgetMatch[1], 10);
+    
+    const monthsMatch = message.match(/(\d+)\s*month/i);
+    if (monthsMatch) params.timeframeMonths = parseInt(monthsMatch[1], 10);
+    
+    return { tool: 'optimizePortfolio', params };
+  }
+
+  if (analyzeMatch) {
+    const params: BookingAnalysisInput = {
+      includeROI: true,
+      includeValueBreakdown: true,
+      compareWithPortfolio: message.match(/compare|portfolio/i) !== null,
+    };
+    
+    return { tool: 'analyzeBooking', params };
+  }
+
+  if (offerMatch) {
+    const params: OfferAnalysisInput = {
+      includeExpiring: message.match(/expir/i) !== null,
+      expiryDays: 14,
+      sortBy: 'expiry',
+    };
+    
+    if (message.match(/value/i)) params.sortBy = 'value';
+    else if (message.match(/freeplay/i)) params.sortBy = 'freeplay';
+    
+    return { tool: 'analyzeOffers', params };
+  }
+
+  if (machineMatch) {
+    const params: MachineRecommendationInput = { limit: 5 };
+    
+    const shipMatch = message.match(/(?:on|ship|aboard|quantum|harmony|ovation|navigator|odyssey|wonder|allure|oasis)(?:\s+of\s+the\s+seas)?\s*(\w+(?:\s+of\s+the\s+\w+)?)?/i);
+    if (shipMatch) {
+      const shipName = (shipMatch[0] || shipMatch[1] || '').trim();
+      if (shipName) params.shipName = shipName;
+    }
+    
+    if (message.match(/ap|advantage|persistence|must.*hit/i)) {
+      params.onlyAPMachines = true;
+      params.prioritize = 'ap-potential';
+    } else if (message.match(/win|payout/i)) {
+      params.prioritize = 'win-rate';
+    } else if (message.match(/points|hour/i)) {
+      params.prioritize = 'points-per-hour';
+    } else if (message.match(/low.*volatility|stable|safe/i)) {
+      params.prioritize = 'volatility';
+      params.maxVolatility = 'Medium';
+    }
+    
+    const limitMatch = message.match(/top\s*(\d+)|show\s*(\d+)|list\s*(\d+)/i);
+    if (limitMatch) {
+      const limit = parseInt(limitMatch[1] || limitMatch[2] || limitMatch[3], 10);
+      if (limit > 0 && limit <= 10) params.limit = limit;
+    }
+    
+    return { tool: 'recommendMachines', params };
+  }
+
+  return null;
+}
+
+function buildReplacementGoalActions(userContent: string): NonNullable<ChatMessage['suggestedActions']> {
+  const base = userContent.replace(/\s+/g, ' ').trim();
+  return [
+    { id: 'replacement-goal-value', label: 'Improve value', prompt: `Find replacement cruises for this using goal: improve offer value. Context: ${base}` },
+    { id: 'replacement-goal-cost', label: 'Lower cost', prompt: `Find replacement cruises for this using goal: lower out-of-pocket cost. Context: ${base}` },
+    { id: 'replacement-goal-sea-days', label: 'Add sea days', prompt: `Find replacement cruises for this using goal: add sea days. Context: ${base}` },
+    { id: 'replacement-goal-b2b', label: 'B2B fit', prompt: `Find replacement cruises for this using goal: improve back-to-back fit. Context: ${base}` },
+    { id: 'replacement-goal-expiring', label: 'Use expiring', prompt: `Find replacement cruises for this using goal: use expiring offer. Context: ${base}` },
+    { id: 'replacement-goal-new-ports', label: 'New ports', prompt: `Find replacement cruises for this using goal: add new ports. Context: ${base}` },
+    { id: 'replacement-goal-ship', label: 'Known ship', prompt: `Find replacement cruises for this using goal: improve ship familiarity. Context: ${base}` },
+    { id: 'replacement-goal-tier', label: 'Tier progress', prompt: `Find replacement cruises for this using goal: improve tier progress. Context: ${base}` },
+  ];
+}
+
+function buildAgentSuggestedActions(tool: string | null, userContent: string): ChatMessage['suggestedActions'] {
+  if (tool === 'findReplacements') return buildReplacementGoalActions(userContent);
+
+  if (tool === 'analyzeOffers') {
+    return [
+      { id: 'decode-best-offer', label: 'Decode best offer', prompt: 'Decode my best active offer and explain what the casino is actually paying for.' },
+      { id: 'compare-offer-replacements', label: 'Find replacements', prompt: 'Find replacement cruises for my strongest active offer, prioritizing better value and lower out-of-pocket cost.' },
+    ];
+  }
+
+  if (tool === 'decodeOffer') {
+    return [
+      { id: 'compare-decoded-offer', label: 'Compare replacements', prompt: `Find replacement cruises for this decoded offer: ${userContent}` },
+      { id: 'certificate-fit-decoded-offer', label: 'Check certificates', prompt: `Check certificate fit and stacking risk for this decoded offer: ${userContent}` },
+    ];
+  }
+
+  if (tool === 'getRecommendations' || tool === 'optimizePortfolio') {
+    return [
+      { id: 'decode-recommended-offer', label: 'Decode offer behind this', prompt: 'Decode the offer connected to the top recommendation and explain the casino-paid value.' },
+    ];
+  }
+
+  return undefined;
+}
+
+export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => {
+  const { tier } = useEntitlement();
+  const { isAdmin, authenticatedEmail } = useAuth();
+  const { cruises, bookedCruises, casinoOffers, calendarEvents, filters } = useCoreData();
+  const { users } = useUser();
+  const { selectedProfileId, selectedBrand, selectedProgram } = useIntelligenceFilters();
+  const {
+    clubRoyalePoints,
+    clubRoyaleTier,
+    clubRoyalePointsSource,
+    clubRoyaleSyncDiscrepancy,
+  } = useLoyalty();
+  const { allMachines } = useSlotMachines();
+  const { myAtlasMachines, globalLibrary, encyclopedia } = useSlotMachineLibrary();
+  const { mappings: deckMappings } = useDeckPlan();
+  const { sessions, getSessionAnalytics, getMachineAnalytics } = useCasinoSessions();
+  const { certificates } = useCertificates();
+  const { logs: machineLogs } = useMachineConditionLogs();
+  
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<AgentXMode>('travelAgent');
+
+  const intelligenceFilterSnapshot = useMemo(() => ({
+    selectedProfileId,
+    selectedBrand,
+    selectedProgram,
+  }), [selectedBrand, selectedProfileId, selectedProgram]);
+
+  const selectedProfileLabel = useMemo(() => {
+    if (selectedProfileId === 'all') return 'All Profiles';
+    if (selectedProfileId === 'unassigned') return 'Unassigned Imports';
+    const profile = users.find((item) => item.id === selectedProfileId);
+    return getProfileDisplayName(profile);
+  }, [selectedProfileId, users]);
+
+  const activeScopeLabel = useMemo(() => buildIntelligenceScopeLabel(intelligenceFilterSnapshot, users), [intelligenceFilterSnapshot, users]);
+  const brandProgramLabel = useMemo(() => getBrandProgramSystemLabel(selectedBrand, selectedProgram), [selectedBrand, selectedProgram]);
+
+  const filteredCruises = useMemo(() => filterRecordsByIntelligence(cruises, intelligenceFilterSnapshot, users), [cruises, intelligenceFilterSnapshot, users]);
+  const filteredBookedCruises = useMemo(() => filterRecordsByIntelligence(bookedCruises, intelligenceFilterSnapshot, users), [bookedCruises, intelligenceFilterSnapshot, users]);
+  const filteredCasinoOffers = useMemo(() => filterRecordsByIntelligence(casinoOffers, intelligenceFilterSnapshot, users), [casinoOffers, intelligenceFilterSnapshot, users]);
+  const filteredCalendarEvents = useMemo(() => filterRecordsByIntelligence(calendarEvents, intelligenceFilterSnapshot, users), [calendarEvents, intelligenceFilterSnapshot, users]);
+  const filteredCertificates = useMemo(() => filterRecordsByIntelligence(certificates, intelligenceFilterSnapshot, users), [certificates, intelligenceFilterSnapshot, users]);
+  const archiveContextLabel = useMemo(() => {
+    const archivedOrSkippedOffers = filteredCasinoOffers.filter((offer) => offer.status === 'archived' || offer.status === 'skipped' || offer.archiveStatus === 'archived' || offer.archiveStatus === 'replaced').length;
+    const reviewNeededOffers = filteredCasinoOffers.filter((offer) => offer.status === 'reviewNeeded' || offer.archiveStatus === 'reviewNeeded' || offer.reconciliationStatus === 'reviewNeeded' || offer.importStatus === 'reviewNeeded' || offer.importStatus === 'unassigned').length;
+    return `${archivedOrSkippedOffers} archived/skipped offer(s), ${reviewNeededOffers} review-needed offer(s)`;
+  }, [filteredCasinoOffers]);
+
+  const askMyDataOverview = useMemo(() => buildAskMyDataOverview({
+    bookedCruises: filteredBookedCruises,
+    casinoSessions: sessions,
+    currentTier: clubRoyaleTier,
+    currentPoints: clubRoyalePoints,
+    pointBalanceSource: clubRoyalePointsSource,
+    clubRoyaleSyncDiscrepancy,
+    useKnownAnnualReportFacts: isKnownCasinoProfile(authenticatedEmail),
+  }), [authenticatedEmail, clubRoyalePoints, clubRoyalePointsSource, clubRoyaleSyncDiscrepancy, clubRoyaleTier, filteredBookedCruises, sessions]);
+
+  const toolContext = useMemo((): AgentToolContext => {
+    console.log('[AgentX] Recalculating toolContext with latest data...');
+    
+    console.log('[AgentX] Current state:', {
+      bookedCruises: filteredBookedCruises.length,
+      clubRoyalePoints,
+      clubRoyaleTier,
+      slotMachines: allMachines.length,
+      myAtlasMachines: myAtlasMachines.length,
+      globalLibrary: globalLibrary.length,
+      sessions: sessions.length,
+      deckMappings: deckMappings.length,
+      certificates: certificates.length,
+      machineLogs: machineLogs.length,
+      mode,
+      filters,
+      selectedProfileLabel,
+      selectedBrand,
+      selectedProgram,
+      activeScopeLabel,
+      brandProgramLabel,
+      archiveContextLabel,
+      askMyDataGeneratedAt: askMyDataOverview.generatedAt,
+      annualCashResult: askMyDataOverview.annual.totals.totalCashResult,
+      currentSeasonPoints: askMyDataOverview.currentSeason.points,
+    });
+    
+    return {
+      cruises: filteredCruises,
+      bookedCruises: filteredBookedCruises,
+      offers: filteredCasinoOffers,
+      userPoints: clubRoyalePoints,
+      currentTier: clubRoyaleTier,
+      slotMachines: allMachines,
+      myAtlasMachines,
+      globalLibrary,
+      encyclopedia,
+      deckMappings,
+      casinoSessions: sessions,
+      getSessionAnalytics,
+      getMachineAnalytics,
+    };
+  }, [filteredCruises, filteredBookedCruises, filteredCasinoOffers, clubRoyalePoints, clubRoyaleTier, allMachines, myAtlasMachines, globalLibrary, encyclopedia, deckMappings, sessions, getSessionAnalytics, getMachineAnalytics, certificates.length, machineLogs.length, mode, filters, selectedProfileLabel, selectedBrand, selectedProgram, activeScopeLabel, brandProgramLabel, archiveContextLabel, askMyDataOverview]);
+
+  const executeToolCall = useCallback((tool: string, params: unknown): string => {
+    console.log('[AgentX] Executing tool:', tool, params);
+    
+    switch (tool) {
+      case 'searchCruises':
+        return executeCruiseSearch(params as CruiseSearchInput, toolContext);
+      case 'analyzeBooking':
+        return executeBookingAnalysis(params as BookingAnalysisInput, toolContext);
+      case 'optimizePortfolio':
+        return executePortfolioOptimizer(params as PortfolioOptimizerInput, toolContext);
+      case 'checkTierProgress':
+        return executeTierProgress(params as TierProgressInput, toolContext);
+      case 'analyzeOffers':
+        return executeOfferAnalysis(params as OfferAnalysisInput, toolContext);
+      case 'decodeOffer':
+        return executeDecodeOffer(params as DecodeOfferInput, toolContext);
+      case 'findReplacements':
+        return executeReplacementFinder(params as ReplacementFinderInput, toolContext);
+      case 'searchCertificateLevels':
+        return executeCertificateSearch(params as CertificateLevelSearchInput, toolContext);
+      case 'getRecommendations':
+        return executeRecommendations(params as RecommendationInput, toolContext);
+      case 'recommendMachines':
+        return executeMachineRecommendations(params as MachineRecommendationInput, toolContext);
+      case 'askMyData': {
+        const query = typeof (params as { query?: unknown }).query === 'string' ? (params as { query: string }).query : '';
+        const response = askMyDataSearch({ query, offers: filteredCasinoOffers, cruises: [...filteredCruises, ...filteredBookedCruises], certificates: filteredCertificates, calendarEvents: filteredCalendarEvents, overview: askMyDataOverview });
+        return formatAskMyDataResponse(response);
+      }
+      default:
+        return `Unknown tool: ${tool}`;
+    }
+  }, [toolContext, filteredCasinoOffers, filteredCruises, filteredBookedCruises, filteredCertificates, filteredCalendarEvents, askMyDataOverview]);
+
+  const sendMessage = useCallback(async (content: string) => {
+    console.log('[AgentX] User message:', content, 'mode:', mode);
+
+    const devAssistantRequest = isDevAssistantRequest(content);
+    const hasAgentAccess = tier === 'pro' || isAdmin || devAssistantRequest;
+    
+    if (!hasAgentAccess) {
+      console.log('[AgentX] Access denied. Tier:', tier, 'isAdmin:', isAdmin, 'devAssistantRequest:', devAssistantRequest);
+      const deniedMessage: ChatMessage = {
+        id: `denied-${Date.now()}`,
+        role: 'assistant',
+        content: 'Ask My Data assistant is a Pro-only feature. Upgrade to Pro to access AI-powered cruise analysis and recommendations.',
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, deniedMessage]);
+      return;
+    }
+    
+    setError(null);
+    
+    const userMessage: ChatMessage = {
+      id: `user-${Date.now()}`,
+      role: 'user',
+      content,
+      timestamp: new Date(),
+    };
+    
+    setMessages(prev => [...prev, userMessage]);
+    setIsLoading(true);
+    
+    const loadingMessage: ChatMessage = {
+      id: `loading-${Date.now()}`,
+      role: 'assistant',
+      content: '',
+      timestamp: new Date(),
+      isLoading: true,
+    };
+    
+    setMessages(prev => [...prev, loadingMessage]);
+    
+    try {
+      const toolCall = devAssistantRequest ? null : parseToolCall(content);
+      
+      let toolResult = '';
+      if (toolCall) {
+        console.log('[AgentX] Tool detected:', toolCall.tool);
+        
+        setMessages(prev => prev.map(m => 
+          m.id === loadingMessage.id 
+            ? { ...m, toolName: toolCall.tool }
+            : m
+        ));
+        
+        toolResult = executeToolCall(toolCall.tool, toolCall.params);
+      }
+      
+      // Get all completed cruises (by state OR by return date being in the past)
+      const completedCruises = toolContext.bookedCruises.filter(c => {
+        const isCompleted = c.completionState === 'completed' || c.status === 'completed';
+        if (!isCompleted && c.returnDate) {
+          const returnDate = new Date(c.returnDate);
+          const today = new Date();
+          return returnDate < today;
+        }
+        return isCompleted;
+      });
+      const upcomingCruises = toolContext.bookedCruises.filter(c => c.completionState === 'upcoming');
+      const availableCruises = toolContext.cruises.filter(c => new Date(c.sailDate) > new Date());
+      
+      // Calculate total earned points from completed cruises
+      const totalEarnedPoints = completedCruises.reduce((sum, c) => 
+        sum + getBookedCruiseCasinoPoints(c), 0
+      );
+      
+      // Build a summary of completed cruises with points
+      const completedWithPoints = completedCruises
+        .filter(c => getBookedCruiseCasinoPoints(c) > 0)
+        .map(c => `${c.shipName} (${c.sailDate}): ${getBookedCruiseCasinoPoints(c).toLocaleString()} pts`)
+        .join('\n  ');
+      
+      console.log('[AgentX] Building context for AI with:', {
+        tier: toolContext.currentTier,
+        points: toolContext.userPoints,
+        completedCruises: completedCruises.length,
+        upcomingCruises: upcomingCruises.length,
+        totalEarnedPoints,
+      });
+      
+      const contextInfo = `
+User's current status (FRESH DATA - UPDATED ON EVERY REQUEST):
+- Current Tier: ${toolContext.currentTier}
+- Current Points: ${toolContext.userPoints.toLocaleString()}
+- Total Booked Cruises: ${toolContext.bookedCruises.length}
+- Completed Cruises: ${completedCruises.length}
+- Total Points Earned from Completed Cruises: ${totalEarnedPoints.toLocaleString()}
+- Upcoming Cruises: ${upcomingCruises.length}
+- Available Cruises: ${availableCruises.length}
+- Active Casino Offers: ${toolContext.offers.length}
+- Active Profile Scope: ${selectedProfileLabel}
+- Active Brand Scope: ${getBrandLabel(selectedBrand)}
+- Active Program Scope: ${getProgramLabel(selectedProgram)}
+- Active Casino System: ${brandProgramLabel}
+- Archive / Review Context: ${archiveContextLabel}
+- Ask My Data Overview Generated: ${askMyDataOverview.generatedAt}
+
+Corrected casino / ROI overview loaded for this request:
+${askMyDataOverview.text}
+
+Completed Cruises with Points Earned:
+  ${completedWithPoints || 'No points data recorded for completed cruises'}
+
+Standalone offer rows loaded in active scope:
+${buildStandaloneOfferContext(filteredCasinoOffers, filteredCruises, filteredCertificates)}
+
+Booked-cruise casino offer/value records loaded in active scope:
+${buildBookedCruiseOfferContext(filteredBookedCruises)}
+
+CRITICAL: The user has EXACTLY ${toolContext.userPoints.toLocaleString()} casino program points in the active Royal/Celebrity scope and is in ${toolContext.currentTier} tier. They have earned ${totalEarnedPoints.toLocaleString()} points from ${completedCruises.length} completed cruises. These numbers are from the live system. Use ONLY these values, not any cached or outdated information. Coin-In is included only as gaming volume, never as profit/value/cash result. If standalone offers are empty, booked-cruise offer/value records are still actual saved offer data and must be used for Ask My Data offer answers.
 `;
 
       const systemPrompt = devAssistantRequest
