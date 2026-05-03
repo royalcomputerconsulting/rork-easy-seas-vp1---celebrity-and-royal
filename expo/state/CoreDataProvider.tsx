@@ -33,6 +33,7 @@ import { generateCruiseCalendarEvents } from "@/lib/calendar/cruiseEvents";
 import { annotateOverlappingCruises, applyKnownBookingCorrectionsToCruise, applyUserConfirmedBookedCruiseManifest, isKnownInvalidBookedCruise } from "@/lib/cruiseOverlapGuards";
 import { isKnownCasinoProfile } from "@/lib/knownProfileFallback";
 import { normalizeCruisesWithCasinoEconomics } from "@/lib/casinoCruiseEconomics";
+import { getBookedCruiseCasinoPoints, normalizeCruiseCasinoPerformance } from "@/lib/casinoPointTruth";
 
 const getMockCruises = (): { BOOKED_CRUISES_DATA: BookedCruise[]; COMPLETED_CRUISES_DATA: BookedCruise[] } => {
   try {
@@ -1094,7 +1095,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       setBookedCruisesState(prev => {
         const updated = prev.map(cruise => {
           if (cruise.id === cruiseId) {
-            const currentPoints = cruise.earnedPoints || 0;
+            const currentPoints = getBookedCruiseCasinoPoints(cruise);
             const newPoints = currentPoints + points;
             console.log('[CoreDataProvider] Updating cruise points:', {
               cruiseId,
@@ -1102,10 +1103,14 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
               addedPoints: points,
               newPoints,
             });
-            return {
+            return normalizeCruiseCasinoPerformance({
               ...cruise,
               earnedPoints: newPoints,
-            };
+              casinoPoints: newPoints,
+              pointsEarned: newPoints,
+              coinIn: newPoints * 5,
+              updatedAt: new Date().toISOString(),
+            });
           }
           return cruise;
         });
@@ -1209,7 +1214,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     const withFreeplayOBC = applyFreeplayOBCData(withKnownRetail);
     const enrichedCruises = enrichCruisesWithReceiptData(withFreeplayOBC);
     const lifecycleResult = updateAllCruiseLifecycles(enrichedCruises);
-    const normalizedCruises = annotateOverlappingCruises(dedupeBookedCruises(prepareOwnedRecords<BookedCruise>(lifecycleResult.updatedCruises, ownerScopeId, authenticatedEmail, 'normalized booked cruises'), 'normalized booked cruises'));
+    const normalizedCruises = annotateOverlappingCruises(dedupeBookedCruises(prepareOwnedRecords<BookedCruise>(lifecycleResult.updatedCruises.map(normalizeCruiseCasinoPerformance), ownerScopeId, authenticatedEmail, 'normalized booked cruises'), 'normalized booked cruises'));
     console.log('[CoreData] Normalized booked cruise lifecycle before persist:', {
       total: normalizedCruises.length,
       upcoming: lifecycleResult.report.upcomingCount,
@@ -1247,7 +1252,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   }), []);
 
   const addBookedCruise = useCallback((cruise: BookedCruise) => {
-    const correctedCruise = applyKnownBookingCorrectionsToCruise(cruise);
+    const correctedCruise = normalizeCruiseCasinoPerformance(applyKnownBookingCorrectionsToCruise(cruise));
     setBookedCruisesState(prev => {
       const updated = annotateOverlappingCruises([...prev, correctedCruise]);
       void persistData(skRef.current.BOOKED_CRUISES, updated);
@@ -1265,7 +1270,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
 
   const updateBookedCruise = useCallback((id: string, updates: Partial<BookedCruise>) => {
     setBookedCruisesState(prev => {
-      const updated = annotateOverlappingCruises(prev.map(c => c.id === id ? applyKnownBookingCorrectionsToCruise({ ...c, ...updates }) : c));
+      const updated = annotateOverlappingCruises(prev.map(c => c.id === id ? normalizeCruiseCasinoPerformance(applyKnownBookingCorrectionsToCruise({ ...c, ...updates })) : c));
       void persistData(skRef.current.BOOKED_CRUISES, updated);
       
       if (updates.earnedPoints !== undefined) {

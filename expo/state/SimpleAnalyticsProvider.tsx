@@ -24,7 +24,7 @@ export interface CasinoAnalytics {
   currentPointBalance: number;
   currentStatusTier: string;
   historicalTier: string;
-  pointBalanceSource: 'api' | 'manual' | 'historical';
+  pointBalanceSource: 'api' | 'manual' | 'historical' | 'app';
   seasonStartDate: string;
   nextResetDate: string;
   netResult: number;

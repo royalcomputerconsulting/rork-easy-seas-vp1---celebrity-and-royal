@@ -100,6 +100,11 @@ import { useCrewRecognition } from '@/state/CrewRecognitionProvider';
 import { buildCruiseEconomicsSummary, normalizeCruisesWithCasinoEconomics, type CruiseEconomicsRow } from '@/lib/casinoCruiseEconomics';
 import { CONFIRMED_CLUB_ROYALE_2025_POINTS, getKnownCasinoProfileCruises, isKnownCasinoProfile } from '@/lib/knownProfileFallback';
 import { dedupeBookedCruises } from '@/lib/dataIdentity';
+import {
+  buildCurrentSeasonCasinoMetrics,
+  getBookedCruiseCasinoPoints,
+  normalizeCruiseCasinoPerformance,
+} from '@/lib/casinoPointTruth';
 
 type AnalyticsTab = 'intelligence' | 'charts' | 'session' | 'calcs';
 type ROIFilter = 'all' | 'high' | 'medium' | 'low';
@@ -181,6 +186,7 @@ export default function AnalyticsScreen() {
     clubRoyaleHistoricalPoints,
     clubRoyaleHistoricalTier,
     clubRoyaleNextResetDate,
+    clubRoyaleSyncDiscrepancy,
     crownAnchorPoints: loyaltyCrownAnchorPoints,
     crownAnchorLevel: loyaltyCrownAnchorLevel,
   } = useLoyalty();
@@ -239,7 +245,7 @@ export default function AnalyticsScreen() {
     const knownProfileCruises = getKnownCasinoProfileCruises(authenticatedEmail);
 
     if (knownProfileCruises.length > 0) {
-      const mergedCruises = dedupeBookedCruises([...knownProfileCruises, ...primaryBooked], 'analytics known-profile cruise merge');
+      const mergedCruises = dedupeBookedCruises([...knownProfileCruises, ...primaryBooked].map(normalizeCruiseCasinoPerformance), 'analytics known-profile cruise merge');
       const normalizedMergedCruises = normalizeCruisesWithCasinoEconomics(mergedCruises, {
         includeKnownAnnualFacts: isKnownCasinoProfile(authenticatedEmail),
       });
@@ -251,15 +257,16 @@ export default function AnalyticsScreen() {
       return normalizedMergedCruises;
     }
 
-    if (primaryBooked.length > 0) return normalizeCruisesWithCasinoEconomics(primaryBooked);
+    if (primaryBooked.length > 0) return normalizeCruisesWithCasinoEconomics(primaryBooked.map(normalizeCruiseCasinoPerformance));
     console.log('[Analytics] No booked cruises available, using empty array');
     return [];
   }, [authenticatedEmail, localData.booked, storedBookedCruises]);
 
 
 
-  const currentPoints = loyaltyClubRoyalePoints;
-  const currentYearPoints = clubRoyaleCurrentYearPoints;
+  const currentSeasonMetrics = useMemo(() => buildCurrentSeasonCasinoMetrics(bookedCruises), [bookedCruises]);
+  const currentPoints = Math.max(loyaltyClubRoyalePoints, currentSeasonMetrics.points);
+  const currentYearPoints = Math.max(clubRoyaleCurrentYearPoints, currentSeasonMetrics.points);
   const historicalPoints = Math.max(
     casinoAnalytics.historicalPointsEarned || 0,
     clubRoyaleHistoricalPoints || 0,
@@ -282,7 +289,7 @@ export default function AnalyticsScreen() {
         const isCompleted = returnDate ? returnDate < today : cruise.completionState === 'completed';
         if (!isCompleted) return false;
         
-        const points = cruise.earnedPoints || cruise.casinoPoints || 0;
+        const points = getBookedCruiseCasinoPoints(cruise);
         const breakdown = calculateCruiseValue(cruise);
         return points > 0 || breakdown.taxesFees > 0 || breakdown.totalRetailValue > 0;
       })
@@ -331,7 +338,7 @@ export default function AnalyticsScreen() {
       };
     }
     const avgPointsPerNight = bookedCruises.length > 0
-      ? bookedCruises.reduce((sum, c) => sum + (c.earnedPoints || c.casinoPoints || 0), 0) / 
+      ? bookedCruises.reduce((sum, c) => sum + getBookedCruiseCasinoPoints(c), 0) / 
         Math.max(1, bookedCruises.reduce((sum, c) => sum + (c.nights || 0), 0))
       : 150;
     
@@ -485,7 +492,7 @@ export default function AnalyticsScreen() {
 
   const openCruisePerformanceEditor = useCallback((cruise: BookedCruise) => {
     const existingWinLoss = cruise.winningsBroughtHome ?? cruise.winnings ?? cruise.netResult ?? cruise.totalWinnings ?? cruise.cashResult;
-    const existingPoints = cruise.pointsEarned ?? cruise.earnedPoints ?? cruise.casinoPoints;
+    const existingPoints = getBookedCruiseCasinoPoints(cruise) || undefined;
     const hasInstantCertificate = Boolean(
       cruise.instantCertificateWon ||
       cruise.instantCertificateOfferCode ||
@@ -699,7 +706,7 @@ export default function AnalyticsScreen() {
         return isCompleted;
       })
       .map(cruise => {
-        const casinoPoints = cruise.earnedPoints || cruise.casinoPoints || 0;
+        const casinoPoints = getBookedCruiseCasinoPoints(cruise);
         const nights = cruise.nights || 0;
         const isRCI = isRoyalCaribbeanShip(cruise.shipName);
         const source = cruise.cruiseSource || (isRCI ? 'royal' : 'celebrity');
@@ -770,7 +777,7 @@ export default function AnalyticsScreen() {
     ];
 
     const rows = cruises.map((cruise) => {
-      const pointsEarned = cruise.earnedPoints ?? cruise.casinoPoints ?? 0;
+      const pointsEarned = getBookedCruiseCasinoPoints(cruise);
       const winLoss = cruise.winnings ?? cruise.netResult ?? cruise.totalWinnings ?? 0;
 
       return [
@@ -815,7 +822,7 @@ export default function AnalyticsScreen() {
       });
 
       const cruisesToExport = completedCruises.filter((c) => {
-        const points = c.earnedPoints ?? c.casinoPoints ?? 0;
+        const points = getBookedCruiseCasinoPoints(c);
         const winLoss = c.winnings ?? c.netResult ?? c.totalWinnings ?? 0;
         return points > 0 || winLoss !== 0;
       });
@@ -918,7 +925,7 @@ export default function AnalyticsScreen() {
     const breakdown = calculateCruiseValue(cruise);
     const economicsRow = cruiseEconomicsRowById.get(cruise.id);
     const winnings = economicsRow?.winningsHome ?? cruise.winnings ?? 0;
-    const earnedPoints = economicsRow?.points ?? cruise.earnedPoints ?? cruise.casinoPoints ?? 0;
+    const earnedPoints = economicsRow?.points ?? getBookedCruiseCasinoPoints(cruise);
     
     const roiColor = cruise.roiLevel === 'high' 
       ? COLORS.success 
@@ -1115,6 +1122,26 @@ export default function AnalyticsScreen() {
               <Text style={styles.dataValue}>{formatNumber(currentYearPoints)}</Text>
             </View>
             <View style={styles.dataRow}>
+              <Text style={styles.dataLabel}>Signature Retain Gap</Text>
+              <Text style={[styles.dataValue, { color: currentSeasonMetrics.pointsNeededForSignature === 0 ? COLORS.success : COLORS.warning }]}>{formatNumber(currentSeasonMetrics.pointsNeededForSignature)} pts</Text>
+            </View>
+            <View style={styles.dataRow}>
+              <Text style={styles.dataLabel}>Current Season Coin-In</Text>
+              <Text style={styles.dataValue}>{formatCurrencyDetailed(currentSeasonMetrics.coinIn)}</Text>
+            </View>
+            <View style={styles.dataRow}>
+              <Text style={styles.dataLabel}>Avg Points / Night</Text>
+              <Text style={styles.dataValue}>{currentSeasonMetrics.averagePointsPerNight.toFixed(2)}</Text>
+            </View>
+            <View style={styles.dataRow}>
+              <Text style={styles.dataLabel}>Est. Casino Play</Text>
+              <Text style={styles.dataValue}>{currentSeasonMetrics.estimatedPlayHours.toFixed(1)} hrs</Text>
+            </View>
+            <View style={styles.dataRow}>
+              <Text style={styles.dataLabel}>Est. Daily Play Hours</Text>
+              <Text style={styles.dataValue}>{currentSeasonMetrics.averageDailyPlayHours.toFixed(2)} hrs/day</Text>
+            </View>
+            <View style={styles.dataRow}>
               <Text style={styles.dataLabel}>Historical Points Earned</Text>
               <Text style={[styles.dataValue, { color: COLORS.goldDark }]}>{formatNumber(historicalPoints)}</Text>
             </View>
@@ -1129,7 +1156,14 @@ export default function AnalyticsScreen() {
           </View>
           <View style={styles.avgStatsRow}>
             <Text style={styles.avgStatText}>April 1 resets current-year Club Royale points only. Historical ROI, coin-in, cash result, and annual cruise analytics stay historical.</Text>
+            <Text style={styles.avgStatText}>Current season uses {currentSeasonMetrics.cruises} completed Royal Caribbean cruise(s), {currentSeasonMetrics.nights} nights, and {formatNumber(currentSeasonMetrics.points)} app-entered points.</Text>
           </View>
+          {clubRoyaleSyncDiscrepancy.hasDiscrepancy && clubRoyaleSyncDiscrepancy.message ? (
+            <View style={styles.discrepancyNotice} testID="club-royale-discrepancy-notice">
+              <Text style={styles.discrepancyTitle}>Club Royale sync discrepancy</Text>
+              <Text style={styles.discrepancyText}>{clubRoyaleSyncDiscrepancy.message}</Text>
+            </View>
+          ) : null}
         </View>
       </View>
 
@@ -1639,14 +1673,15 @@ export default function AnalyticsScreen() {
       const completedCruises = bookedCruises.filter(cruise => {
         const returnDate = cruise.returnDate ? createDateFromString(cruise.returnDate) : null;
         const isCompleted = returnDate ? returnDate < today : cruise.completionState === 'completed';
-        const hasPointsData = cruise.pointsEarned || cruise.earnedPoints || cruise.casinoPoints || annualEconomicsIds.has(cruise.id);
+        const cruisePoints = getBookedCruiseCasinoPoints(cruise);
+        const hasPointsData = cruisePoints > 0 || annualEconomicsIds.has(cruise.id);
         
         if (isCompleted && hasPointsData) {
           console.log('[Analytics] Found completed cruise with points:', {
             id: cruise.id,
             shipName: cruise.shipName,
             sailDate: cruise.sailDate,
-            earnedPoints: cruise.pointsEarned || cruise.earnedPoints || cruise.casinoPoints,
+            earnedPoints: cruisePoints,
             winningsBroughtHome: cruise.winningsBroughtHome ?? cruise.winnings,
             cashResult: cruise.cashResult,
           });
@@ -1659,7 +1694,7 @@ export default function AnalyticsScreen() {
       console.log('[Analytics] Total booked cruises:', bookedCruises.length);
       console.log('[Analytics] Completed cruises with points:', completedCruises.length);
       console.log('[Analytics] Current total sessions:', sessions.length);
-      console.log('[Analytics] Cruises list:', completedCruises.map(c => `${c.shipName} (${c.sailDate}) - ${c.earnedPoints || c.casinoPoints} pts`));
+      console.log('[Analytics] Cruises list:', completedCruises.map(c => `${c.shipName} (${c.sailDate}) - ${getBookedCruiseCasinoPoints(c)} pts`));
       
       const sessionsPerCruise = completedCruises.map(cruise => {
         const existingSessions = sessions.filter(s => s.cruiseId === cruise.id);
@@ -2263,7 +2298,7 @@ export default function AnalyticsScreen() {
           {calcsMode === 'historical' && cruiseEconomicsSummary.totals.cruises > 0 && (
             <View style={styles.calcsModeSummary}>
               <Text style={styles.calcsModeSummaryText}>
-                Historical: {formatNumber(cruiseEconomicsSummary.totals.totalPoints)} pts ({formatCurrency(cruiseEconomicsSummary.totals.totalCoinIn)} coin-in) • Current season: {formatNumber(casinoAnalytics.currentPointBalance)} pts • Status: {casinoAnalytics.currentStatusTier} • {realAnalytics.completedCashResult >= 0 ? '+' : ''}{formatCurrency(realAnalytics.completedCashResult)} cash result • {cruiseEconomicsSummary.totals.cruises} cruises
+                Historical: {formatNumber(cruiseEconomicsSummary.totals.totalPoints)} pts ({formatCurrency(cruiseEconomicsSummary.totals.totalCoinIn)} coin-in) • Current season: {formatNumber(currentYearPoints)} pts ({formatNumber(currentSeasonMetrics.pointsNeededForSignature)} to retain Signature) • Status: {clubRoyaleTier} • {realAnalytics.completedCashResult >= 0 ? '+' : ''}{formatCurrency(realAnalytics.completedCashResult)} cash result • {cruiseEconomicsSummary.totals.cruises} cruises
               </Text>
             </View>
           )}
@@ -2766,6 +2801,25 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#64748B',
     textAlign: 'center',
+  },
+  discrepancyNotice: {
+    marginTop: SPACING.sm,
+    padding: SPACING.sm,
+    borderRadius: BORDER_RADIUS.sm,
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+  },
+  discrepancyTitle: {
+    fontSize: 12,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#92400E',
+    marginBottom: 2,
+  },
+  discrepancyText: {
+    fontSize: 11,
+    color: '#92400E',
+    lineHeight: 15,
   },
   header: {
     paddingHorizontal: SPACING.md,

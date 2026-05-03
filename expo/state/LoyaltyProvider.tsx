@@ -23,6 +23,12 @@ import { mergeExtendedLoyaltyData } from "@/lib/royalCaribbean/loyaltyConverter"
 import { dedupeBookedCruises } from "@/lib/dataIdentity";
 import { applyUserConfirmedBookedCruiseManifest } from "@/lib/cruiseOverlapGuards";
 import { CONFIRMED_CLUB_ROYALE_2025_POINTS, isKnownCasinoProfile } from "@/lib/knownProfileFallback";
+import {
+  buildClubRoyaleDiscrepancy,
+  getBookedCruiseCasinoPoints,
+  normalizeCruiseCasinoPerformance,
+  type ClubRoyaleDiscrepancy,
+} from "@/lib/casinoPointTruth";
 
 interface PinnacleFutureCruiseBreakdownItem {
   shipName: string;
@@ -52,7 +58,8 @@ interface LoyaltyState {
   clubRoyaleCurrentYearPoints: number;
   clubRoyaleHistoricalPoints: number;
   clubRoyaleHistoricalTier: ClubRoyaleTier;
-  clubRoyalePointsSource: 'api' | 'manual' | 'historical';
+  clubRoyalePointsSource: 'api' | 'manual' | 'historical' | 'app';
+  clubRoyaleSyncDiscrepancy: ClubRoyaleDiscrepancy;
   clubRoyaleSeasonStartDate: Date;
   clubRoyaleNextResetDate: Date;
   crownAnchorPoints: number;
@@ -500,7 +507,8 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
     
     const completedCruisesData: { nights: number; earnedPoints: number }[] = [];
 
-    bookedCruises.forEach((cruise: BookedCruise) => {
+    bookedCruises.forEach((rawCruise: BookedCruise) => {
+      const cruise = normalizeCruiseCasinoPerformance(rawCruise);
       const nights = cruise.nights || 0;
       const sailDate = cruise.sailDate ? createDateFromString(cruise.sailDate) : (cruise.returnDate ? createDateFromString(cruise.returnDate) : new Date());
       const returnDate = cruise.returnDate ? createDateFromString(cruise.returnDate) : sailDate;
@@ -527,7 +535,7 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
         return; // Skip non-Royal Caribbean ships
       }
       
-      const earnedPoints = cruise.earnedPoints || cruise.casinoPoints || 0;
+      const earnedPoints = getBookedCruiseCasinoPoints(cruise);
       
       if (earnedPoints > 0) {
         calculatedClubRoyalePoints += earnedPoints;
@@ -593,14 +601,22 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
       && ((manualClubRoyalePoints ?? 0) > 0 || (hasLiveClubRoyalePoints && liveClubRoyalePoints > 0));
 
     let effectiveClubRoyalePoints = currentYearClubRoyalePoints;
-    let clubRoyalePointsSource: 'api' | 'manual' | 'historical' = 'historical';
+    let clubRoyalePointsSource: 'api' | 'manual' | 'historical' | 'app' = currentYearClubRoyalePoints > 0 ? 'app' : 'historical';
 
-    if (!shouldForceSeasonResetBalance && hasLiveClubRoyalePoints) {
-      effectiveClubRoyalePoints = liveClubRoyalePoints;
-      clubRoyalePointsSource = 'api';
+    if (currentYearClubRoyalePoints > 0) {
+      effectiveClubRoyalePoints = currentYearClubRoyalePoints;
+      clubRoyalePointsSource = 'app';
     } else if (!shouldForceSeasonResetBalance && manualClubRoyalePoints !== null) {
       effectiveClubRoyalePoints = manualClubRoyalePoints;
       clubRoyalePointsSource = 'manual';
+    } else if (!shouldForceSeasonResetBalance && hasLiveClubRoyalePoints) {
+      effectiveClubRoyalePoints = liveClubRoyalePoints;
+      clubRoyalePointsSource = 'api';
+    }
+
+    const clubRoyaleSyncDiscrepancy = buildClubRoyaleDiscrepancy(currentYearClubRoyalePoints, hasLiveClubRoyalePoints ? liveClubRoyalePoints : null);
+    if (clubRoyaleSyncDiscrepancy.hasDiscrepancy) {
+      console.warn('[LoyaltyProvider] Club Royale sync discrepancy detected; using app-entered cruise points as authoritative:', clubRoyaleSyncDiscrepancy);
     }
 
     const currentClubRoyaleTier = getTierByPoints(effectiveClubRoyalePoints) as ClubRoyaleTier;
@@ -835,6 +851,7 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
       clubRoyaleHistoricalPoints: historicalClubRoyalePoints,
       clubRoyaleHistoricalTier: historicalClubRoyaleTier,
       clubRoyalePointsSource,
+      clubRoyaleSyncDiscrepancy,
       crownAnchorPoints: effectiveCrownAnchorPoints,
       crownAnchorLevel,
       completedNights,
@@ -872,6 +889,7 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
       clubRoyaleHistoricalPoints: historicalClubRoyalePoints,
       clubRoyaleHistoricalTier: historicalClubRoyaleTier,
       clubRoyalePointsSource,
+      clubRoyaleSyncDiscrepancy,
       clubRoyaleSeasonStartDate: lastApril1,
       clubRoyaleNextResetDate: nextApril1,
       crownAnchorPoints: effectiveCrownAnchorPoints,

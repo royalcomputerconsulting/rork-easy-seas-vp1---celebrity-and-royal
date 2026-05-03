@@ -31,6 +31,7 @@ import { generateCruiseCalendarEvents } from '../calendar/cruiseEvents';
 import { applyFoundationFields } from '../dataFoundation';
 import { isKnownCasinoProfile } from '../knownProfileFallback';
 import { normalizeCruisesWithCasinoEconomics } from '../casinoCruiseEconomics';
+import { getBookedCruiseCasinoPoints, normalizeCruiseCasinoPerformance } from '../casinoPointTruth';
 
 const CURRENT_MACHINE_ENCYCLOPEDIA_KEY = 'easyseas_machine_encyclopedia_v2_262_only';
 const CURRENT_MY_SLOT_ATLAS_KEY = 'easyseas_my_slot_atlas_v2_262_only';
@@ -333,6 +334,11 @@ export interface FullAppDataBundle {
     casinoOpenHours: Record<string, CasinoOpenHoursData>;
     compItems: CompItem[];
     w2gRecords: W2GRecord[];
+    casinoPointSummary?: {
+      totalCasinoPoints: number;
+      totalCasinoCoinIn: number;
+      cruisesWithCasinoPoints: number;
+    };
   };
   metadata: {
     totalCruises: number;
@@ -347,6 +353,9 @@ export interface FullAppDataBundle {
     totalCasinoOpenHours?: number;
     totalCompItems?: number;
     totalW2GRecords?: number;
+    totalCasinoPoints?: number;
+    totalCasinoCoinIn?: number;
+    cruisesWithCasinoPoints?: number;
   };
 }
 
@@ -581,7 +590,7 @@ export async function getAllStoredData(email?: string | null, profileGate?: Data
 
     cruises = dedupeCruises(filterRecordsForProfileGate(cruises, 'export cruises', resolvedGate, true), 'export cruises');
     bookedCruises = normalizeCruisesWithCasinoEconomics(
-      dedupeBookedCruises(filterRecordsForProfileGate(bookedCruises, 'export booked cruises', resolvedGate, true), 'export booked cruises'),
+      dedupeBookedCruises(filterRecordsForProfileGate(bookedCruises, 'export booked cruises', resolvedGate, true), 'export booked cruises').map(normalizeCruiseCasinoPerformance),
       { includeKnownAnnualFacts: isKnownCasinoProfile(email) },
     );
     casinoOffers = dedupeCasinoOffers(filterRecordsForProfileGate(casinoOffers, 'export casino offers', resolvedGate, true), 'export casino offers');
@@ -618,6 +627,12 @@ export async function getAllStoredData(email?: string | null, profileGate?: Data
     compItems = filterRecordsForProfileGate(compItems, 'export comp items', resolvedGate, true);
     w2gRecords = filterRecordsForProfileGate(w2gRecords, 'export W-2G records', resolvedGate, true);
     casinoOpenHours = filterRecordMapForProfileGate(casinoOpenHours, 'export casino open hours', resolvedGate);
+    const totalCasinoPoints = bookedCruises.reduce((sum, cruise) => sum + getBookedCruiseCasinoPoints(cruise), 0);
+    const casinoPointSummary = {
+      totalCasinoPoints,
+      totalCasinoCoinIn: totalCasinoPoints * 5,
+      cruisesWithCasinoPoints: bookedCruises.filter((cruise) => getBookedCruiseCasinoPoints(cruise) > 0).length,
+    };
 
     const bundle: FullAppDataBundle = {
       version: '2.2.0',
@@ -661,6 +676,7 @@ export async function getAllStoredData(email?: string | null, profileGate?: Data
         casinoOpenHours,
         compItems,
         w2gRecords,
+        casinoPointSummary,
       },
       metadata: {
         totalCruises: cruises.length,
@@ -675,6 +691,9 @@ export async function getAllStoredData(email?: string | null, profileGate?: Data
         totalCasinoOpenHours: Object.keys(casinoOpenHours).length,
         totalCompItems: compItems.length,
         totalW2GRecords: w2gRecords.length,
+        totalCasinoPoints: casinoPointSummary.totalCasinoPoints,
+        totalCasinoCoinIn: casinoPointSummary.totalCasinoCoinIn,
+        cruisesWithCasinoPoints: casinoPointSummary.cruisesWithCasinoPoints,
       },
     };
 
@@ -768,7 +787,7 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
       });
       const dedupedBooked = dedupeBookedCruises(foundationBooked, 'backup booked cruises');
       const enrichedBooked = normalizeCruisesWithCasinoEconomics(
-        applyKnownRetailValuesToBooked(dedupedBooked),
+        applyKnownRetailValuesToBooked(dedupedBooked).map(normalizeCruiseCasinoPerformance),
         { includeKnownAnnualFacts: isKnownCasinoProfile(email) },
       );
       const mergedBooked = await mergeWithExistingOutsideProfileGate(sk(ALL_STORAGE_KEYS.BOOKED_CRUISES), enrichedBooked, resolvedGate, 'backup booked cruises');

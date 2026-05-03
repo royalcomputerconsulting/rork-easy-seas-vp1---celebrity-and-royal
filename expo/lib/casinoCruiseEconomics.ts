@@ -3,6 +3,7 @@ import { createDateFromString } from '@/lib/date';
 import { calculateCruiseValue, type ValueBreakdown } from '@/lib/valueCalculator';
 import type { BookedCruise } from '@/types/models';
 import { DOLLARS_PER_POINT } from '@/types/models';
+import { normalizeCruiseCasinoPerformance } from '@/lib/casinoPointTruth';
 
 export type CruiseEconomicsStatus = 'actual' | 'estimated' | 'mixed';
 
@@ -147,7 +148,7 @@ interface AnnualCasinoHistoricalFact {
 }
 
 export const ANNUAL_CASINO_REPORT_FACTS: AnnualCasinoHistoricalFact[] = [
-  { ship: 'Harmony of the Seas', sailDate: '2025-04-20', returnDate: '2025-04-27', nights: 7, retailValue: 4650, amountPaid: 175.25, winningsBroughtHome: 8000, pointsEarned: 2030, calculationConfidence: 'actual' },
+  { ship: 'Harmony of the Seas', sailDate: '2025-04-20', returnDate: '2025-04-27', nights: 7, retailValue: 4650, amountPaid: 175.25, winningsBroughtHome: 8000, pointsEarned: 2030, calculationConfidence: 'actual', notes: 'Annual total reconciles to the confirmed 58,680 Club Royale points with an aggregate point adjustment for unallocated point transactions.' },
   { ship: 'Ovation of the Seas', sailDate: '2025-07-29', returnDate: '2025-08-01', nights: 3, retailValue: 1588, amountPaid: 149.10, winningsBroughtHome: 0, pointsEarned: 317, calculationConfidence: 'actual' },
   { ship: 'Navigator of the Seas', sailDate: '2025-08-01', returnDate: '2025-08-04', nights: 3, retailValue: 1326, amountPaid: 133, winningsBroughtHome: 300, pointsEarned: 650, calculationConfidence: 'mixed', notes: 'Winnings use the confirmed 3-night estimated baseline.' },
   { ship: 'Navigator of the Seas', sailDate: '2025-08-22', returnDate: '2025-08-25', nights: 3, retailValue: 1326, amountPaid: 133, winningsBroughtHome: 300, pointsEarned: 650, calculationConfidence: 'mixed', notes: 'Winnings use the confirmed 3-night estimated baseline.' },
@@ -353,7 +354,7 @@ export function normalizeCruisesWithCasinoEconomics(
   cruises: BookedCruise[],
   options?: { includeKnownAnnualFacts?: boolean },
 ): BookedCruise[] {
-  const normalizedCruises = cruises.map(applyAnnualCruiseOverrides);
+  const normalizedCruises = cruises.map((cruise) => applyAnnualCruiseOverrides(normalizeCruiseCasinoPerformance(cruise)));
 
   if (!options?.includeKnownAnnualFacts) {
     return normalizedCruises;
@@ -849,7 +850,7 @@ export function buildCruiseEconomicsSummary(
   const footnotes = totals.hasEstimates
     ? [
         options?.pointsAdjustmentNote,
-        'Annual totals include estimated values where paid amount, winnings, points, coin-in, or hours were missing.',
+        'Annual totals include estimated values where paid amount, winnings, points, coin-in, or hours were missing. Coin-In is gaming volume only and is excluded from Cash Result and Total Economic Value.',
       ].filter((note): note is string => Boolean(note))
     : [];
 

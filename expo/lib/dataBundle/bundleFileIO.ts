@@ -50,6 +50,9 @@ export interface ExportAllDataSummary {
   casinoOpenHourRecords: number;
   compItems: number;
   w2gRecords: number;
+  totalCasinoPoints: number;
+  totalCasinoCoinIn: number;
+  cruisesWithCasinoPoints: number;
 }
 
 function normalizeImportedArray<T>(value: unknown): T[] {
@@ -85,6 +88,8 @@ export function buildExportAllDataSummary(bundle: FullAppDataBundle): ExportAllD
   const casinoData = bundle.casinoData;
   const loyaltyData = bundle.loyaltyData;
 
+  const casinoPointSummary = casinoData?.casinoPointSummary;
+
   return {
     cruiseSailings: bundle.cruises.length,
     bookedCruises: bundle.bookedCruises.length,
@@ -111,6 +116,9 @@ export function buildExportAllDataSummary(bundle: FullAppDataBundle): ExportAllD
     casinoOpenHourRecords: casinoData?.casinoOpenHours ? Object.keys(casinoData.casinoOpenHours).length : 0,
     compItems: casinoData?.compItems.length ?? 0,
     w2gRecords: casinoData?.w2gRecords.length ?? 0,
+    totalCasinoPoints: casinoPointSummary?.totalCasinoPoints ?? bundle.metadata.totalCasinoPoints ?? 0,
+    totalCasinoCoinIn: casinoPointSummary?.totalCasinoCoinIn ?? bundle.metadata.totalCasinoCoinIn ?? 0,
+    cruisesWithCasinoPoints: casinoPointSummary?.cruisesWithCasinoPoints ?? bundle.metadata.cruisesWithCasinoPoints ?? 0,
   };
 }
 
@@ -128,6 +136,9 @@ export function formatExportAllDataSummary(summary: ExportAllDataSummary, fileNa
     '',
     'Casino tracking:',
     `• ${formatCount(summary.casinoSessions, 'casino session')}`,
+    `• ${formatCount(summary.cruisesWithCasinoPoints, 'cruise with stored casino points')}`,
+    `• ${summary.totalCasinoPoints.toLocaleString()} stored Club Royale / casino point${summary.totalCasinoPoints === 1 ? '' : 's'}`,
+    `• ${summary.totalCasinoCoinIn.toLocaleString()} point-derived coin-in`,
     `• ${formatCount(summary.bankrollLimits, 'bankroll limit')}`,
     `• ${formatCount(summary.bankrollAlerts, 'bankroll alert')}`,
     `• ${formatCount(summary.casinoOpenHourRecords, 'casino-open-hours record')}`,

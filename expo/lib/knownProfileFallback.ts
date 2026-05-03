@@ -9,13 +9,14 @@ import {
   enrichCruisesWithMockItineraries,
   enrichCruisesWithReceiptData,
 } from '@/state/coreData/dataEnrichment';
+import { normalizeCruiseCasinoPerformance } from '@/lib/casinoPointTruth';
 
 const KNOWN_CASINO_PROFILE_EMAILS = new Set<string>([
   'scott.merlis1@gmail.com',
   's@a.com',
 ]);
 
-export const CONFIRMED_CLUB_ROYALE_2025_POINTS = 58500;
+export { CONFIRMED_CLUB_ROYALE_2025_POINTS } from '@/lib/casinoPointTruth';
 
 export function isKnownCasinoProfile(email?: string | null): boolean {
   const normalizedEmail = email?.toLowerCase().trim() ?? '';
@@ -37,5 +38,5 @@ export function getKnownCasinoProfileCruises(email?: string | null): BookedCruis
   const withItineraries = enrichCruisesWithMockItineraries(dedupedCruises);
   const withKnownRetail = applyKnownRetailValues(withItineraries);
   const withFreeplayOBC = applyFreeplayOBCData(withKnownRetail);
-  return enrichCruisesWithReceiptData(withFreeplayOBC);
+  return enrichCruisesWithReceiptData(withFreeplayOBC).map(normalizeCruiseCasinoPerformance);
 }
