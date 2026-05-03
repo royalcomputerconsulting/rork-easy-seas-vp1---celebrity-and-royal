@@ -40,6 +40,7 @@ import { useSimpleAnalytics } from '@/state/SimpleAnalyticsProvider';
 import { useAppState } from '@/state/AppStateProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
+import { useAuth } from '@/state/AuthProvider';
 import { formatCurrency, formatCurrencyDetailed, formatNumber, formatPercentage } from '@/lib/format';
 import { calculateCruiseValue } from '@/lib/valueCalculator';
 import { createDateFromString } from '@/lib/date';
@@ -91,6 +92,8 @@ import { ResponsiveContainer } from '@/components/ResponsiveContainer';
 import { useEntitlement } from '@/state/EntitlementProvider';
 import { useCrewRecognition } from '@/state/CrewRecognitionProvider';
 import { buildCruiseEconomicsSummary, type CruiseEconomicsRow } from '@/lib/casinoCruiseEconomics';
+import { CONFIRMED_CLUB_ROYALE_2025_POINTS, getKnownCasinoProfileCruises, isKnownCasinoProfile } from '@/lib/knownProfileFallback';
+import { dedupeBookedCruises } from '@/lib/dataIdentity';
 
 type AnalyticsTab = 'intelligence' | 'charts' | 'session' | 'calcs';
 type ROIFilter = 'all' | 'high' | 'medium' | 'low';
@@ -114,6 +117,7 @@ function getCruiseROILevel(roi: number): 'high' | 'medium' | 'low' {
 export default function AnalyticsScreen() {
   const router = useRouter();
   useEntitlement();
+  const { authenticatedEmail } = useAuth();
   const { analytics, casinoAnalytics } = useSimpleAnalytics();
   const { 
     activeAlerts, 
@@ -183,17 +187,35 @@ export default function AnalyticsScreen() {
 
   const bookedCruises = useMemo(() => {
     const localBooked = localData.booked || [];
-    if (localBooked.length > 0) return localBooked;
-    if (storedBookedCruises && storedBookedCruises.length > 0) return storedBookedCruises;
+    const storedBooked = storedBookedCruises || [];
+    const primaryBooked = localBooked.length > 0 ? localBooked : storedBooked;
+    const knownProfileCruises = getKnownCasinoProfileCruises(authenticatedEmail);
+
+    if (knownProfileCruises.length > 0) {
+      const mergedCruises = dedupeBookedCruises([...knownProfileCruises, ...primaryBooked], 'analytics known-profile cruise merge');
+      console.log('[Analytics] Using known profile cruise history merge:', {
+        primary: primaryBooked.length,
+        knownProfile: knownProfileCruises.length,
+        merged: mergedCruises.length,
+      });
+      return mergedCruises;
+    }
+
+    if (primaryBooked.length > 0) return primaryBooked;
     console.log('[Analytics] No booked cruises available, using empty array');
     return [];
-  }, [localData.booked, storedBookedCruises]);
+  }, [authenticatedEmail, localData.booked, storedBookedCruises]);
 
 
 
   const currentPoints = loyaltyClubRoyalePoints;
   const currentYearPoints = clubRoyaleCurrentYearPoints;
-  const historicalPoints = casinoAnalytics.historicalPointsEarned || clubRoyaleHistoricalPoints || analytics.totalPoints || 0;
+  const historicalPoints = Math.max(
+    casinoAnalytics.historicalPointsEarned || 0,
+    clubRoyaleHistoricalPoints || 0,
+    analytics.totalPoints || 0,
+    isKnownCasinoProfile(authenticatedEmail) ? CONFIRMED_CLUB_ROYALE_2025_POINTS : 0,
+  );
   const totalNights = loyaltyCrownAnchorPoints || clubRoyaleProfile?.lifetimeNights || analytics.totalNights || 0;
   const clubRoyaleTier = loyaltyClubRoyaleTier || clubRoyaleProfile?.tier || 'Choice';
   const historicalClubRoyaleTier = clubRoyaleHistoricalTier || clubRoyaleTier;
@@ -412,8 +434,11 @@ export default function AnalyticsScreen() {
   }, [router]);
 
   const cruiseEconomicsSummary = useMemo(() => {
-    return buildCruiseEconomicsSummary(bookedCruises);
-  }, [bookedCruises]);
+    return buildCruiseEconomicsSummary(bookedCruises, new Date(), {
+      minimumTotalPoints: isKnownCasinoProfile(authenticatedEmail) ? CONFIRMED_CLUB_ROYALE_2025_POINTS : undefined,
+      pointsAdjustmentNote: 'Historical Club Royale points use the confirmed 58,500-point 2025 season floor when imported per-cruise rows do not contain every point transaction.',
+    });
+  }, [authenticatedEmail, bookedCruises]);
 
   const cruiseEconomicsRowById = useMemo(() => {
     return new Map(cruiseEconomicsSummary.rows.map((row) => [row.cruiseId, row]));

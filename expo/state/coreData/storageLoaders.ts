@@ -13,6 +13,7 @@ import { quotaSafeGetItem } from "@/lib/storage/quotaSafeStorage";
 import { containsKnownForeignPersonalData } from "@/lib/storage/dataOwnership";
 import { dedupeBookedCruises, dedupeCalendarEvents } from "@/lib/dataIdentity";
 import { generateCruiseCalendarEvents } from "@/lib/calendar/cruiseEvents";
+import { getKnownCasinoProfileCruises } from "@/lib/knownProfileFallback";
 
 export interface StorageSnapshot {
   cruisesData: string | null;
@@ -163,9 +164,13 @@ export async function processBookedCruises(
   if (bookedData && parsedBookedData.length > 0) {
     console.log('[CoreData] Found existing booked data, processing...');
 
+    const knownProfileCruises = getKnownCasinoProfileCruises(email);
     const nonMockCruises = filterDemoCruises(parsedBookedData);
+    const mergedKnownProfileCruises = knownProfileCruises.length > 0
+      ? dedupeBookedCruises([...knownProfileCruises, ...nonMockCruises], 'known-profile + stored booked cruises')
+      : nonMockCruises;
 
-    if (nonMockCruises.length === 0 && !hasRealData) {
+    if (nonMockCruises.length === 0 && !hasRealData && knownProfileCruises.length === 0) {
       console.log('[CoreData] Existing booked data only contains demo records - loading isolated sample demo data');
       const { sampleCruises, sampleOffers } = getFirstTimeUserSampleData();
       const enrichedSample = enrichCruisePipeline(sampleCruises);
@@ -181,9 +186,11 @@ export async function processBookedCruises(
     console.log('[CoreData] Filtered cruises:', {
       original: parsedBookedData.length,
       afterFilter: nonMockCruises.length,
+      knownProfileFallback: knownProfileCruises.length,
+      merged: mergedKnownProfileCruises.length,
     });
 
-    const dedupedNonMockCruises = dedupeBookedCruises(nonMockCruises, 'processed booked cruises');
+    const dedupedNonMockCruises = dedupeBookedCruises(mergedKnownProfileCruises, 'processed booked cruises');
     const withNormalizedLifecycle = normalizeCruiseLifecycle(dedupedNonMockCruises);
     const enrichedBooked = enrichCruisePipeline(withNormalizedLifecycle);
     const cleanedKnownData = parsedBookedData.length !== nonMockCruises.length || JSON.stringify(parsedBookedData) !== JSON.stringify(nonMockCruises);
@@ -191,7 +198,23 @@ export async function processBookedCruises(
     return {
       bookedCruises: enrichedBooked,
       finalBookedCount: enrichedBooked.length,
-      shouldPersistMergedCruises: cleanedKnownData || dedupedNonMockCruises.length !== nonMockCruises.length,
+      shouldPersistMergedCruises: cleanedKnownData || dedupedNonMockCruises.length !== nonMockCruises.length || knownProfileCruises.length > 0,
+      shouldPersistFirstTimeData: false,
+    };
+  }
+
+  const knownProfileCruises = getKnownCasinoProfileCruises(email);
+  if (knownProfileCruises.length > 0) {
+    console.log('[CoreData] Restoring known casino profile cruise history fallback:', {
+      email,
+      cruiseCount: knownProfileCruises.length,
+    });
+    const withNormalizedLifecycle = normalizeCruiseLifecycle(knownProfileCruises);
+    const enrichedKnownProfileCruises = enrichCruisePipeline(withNormalizedLifecycle);
+    return {
+      bookedCruises: enrichedKnownProfileCruises,
+      finalBookedCount: enrichedKnownProfileCruises.length,
+      shouldPersistMergedCruises: true,
       shouldPersistFirstTimeData: false,
     };
   }

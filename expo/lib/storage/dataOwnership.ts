@@ -95,7 +95,7 @@ export function isRecordForOwner(record: unknown, ownerScopeId: string | null | 
   const recordOwnerEmail = typeof ownedRecord.ownerEmail === 'string' ? normalizeOwnerEmail(ownedRecord.ownerEmail) : null;
 
   if (recordScope) {
-    return normalizedScope.length > 0 && recordScope === normalizedScope;
+    return (normalizedScope.length > 0 && recordScope === normalizedScope) || isOwnerScopeForEmail(recordScope, normalizedEmail);
   }
 
   if (recordEmail) {

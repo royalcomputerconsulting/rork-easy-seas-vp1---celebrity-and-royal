@@ -22,6 +22,7 @@ import type { ExtendedLoyaltyData } from "@/lib/royalCaribbean/types";
 import { mergeExtendedLoyaltyData } from "@/lib/royalCaribbean/loyaltyConverter";
 import { dedupeBookedCruises } from "@/lib/dataIdentity";
 import { applyUserConfirmedBookedCruiseManifest } from "@/lib/cruiseOverlapGuards";
+import { CONFIRMED_CLUB_ROYALE_2025_POINTS, isKnownCasinoProfile } from "@/lib/knownProfileFallback";
 
 interface PinnacleFutureCruiseBreakdownItem {
   shipName: string;
@@ -530,7 +531,7 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
       
       if (earnedPoints > 0) {
         calculatedClubRoyalePoints += earnedPoints;
-        if (returnDate >= lastApril1 && returnDate <= today) {
+        if (sailDate >= lastApril1 && sailDate < nextApril1 && returnDate <= today) {
           currentYearClubRoyalePoints += earnedPoints;
         }
       }
@@ -580,7 +581,9 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
     upcomingBookedCruises.sort((a, b) => a.sailDate.getTime() - b.sailDate.getTime());
     upcomingTopTierStatusCruises.sort((a, b) => a.sailDate.getTime() - b.sailDate.getTime());
 
-    const historicalClubRoyalePoints = calculatedClubRoyalePoints;
+    const historicalClubRoyalePoints = isKnownCasinoProfile(authenticatedEmail)
+      ? Math.max(calculatedClubRoyalePoints, CONFIRMED_CLUB_ROYALE_2025_POINTS)
+      : calculatedClubRoyalePoints;
     const historicalClubRoyaleTier = getTierByPoints(historicalClubRoyalePoints) as ClubRoyaleTier;
     const liveClubRoyalePoints = extendedLoyalty?.clubRoyalePointsFromApi;
     const hasLiveClubRoyalePoints = typeof liveClubRoyalePoints === 'number' && Number.isFinite(liveClubRoyalePoints);
@@ -885,7 +888,7 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
       venetianSociety,
       captainsClub,
     };
-  }, [bookedCruises, manualClubRoyalePoints, manualCrownAnchorPoints, extendedLoyalty]);
+  }, [authenticatedEmail, bookedCruises, manualClubRoyalePoints, manualCrownAnchorPoints, extendedLoyalty]);
 
   return useMemo(() => ({
     ...calculatedData,

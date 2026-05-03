@@ -197,7 +197,23 @@ export const dataRouter = createTRPCRouter({
         { ownerScopeId, email: normalizedEmail }
       );
 
-      const existingData = existingResults?.[0]?.[0];
+      const exactExistingData: StoredUserData | undefined = existingResults?.[0]?.[0];
+      let existingData: StoredUserData | undefined = exactExistingData;
+
+      if (!existingData) {
+        const fallbackResults = await db.query<[StoredUserData[]]>(
+          `SELECT * FROM user_profiles WHERE email = $email ORDER BY updatedAt DESC LIMIT 5`,
+          { email: normalizedEmail }
+        );
+        existingData = fallbackResults?.[0]?.find((record) => isOwnerScopeForEmail(record?.ownerScopeId, normalizedEmail));
+        if (existingData) {
+          console.log('[API] Found same-email profile under prior owner scope; carrying data into current scope:', {
+            email: normalizedEmail,
+            previousOwnerScopeId: existingData.ownerScopeId,
+            currentOwnerScopeId: ownerScopeId,
+          });
+        }
+      }
       
       const userProfiles = prepareOwnedDataArray(input.userProfiles, existingData?.userProfiles, ownerScopeId, normalizedEmail, 'api-save user profiles');
       const userProfileIds = new Set(userProfiles.map((profile) => typeof profile?.id === 'string' ? profile.id : null).filter((id): id is string => id !== null));
@@ -241,7 +257,7 @@ export const dataRouter = createTRPCRouter({
         createdAt: existingData?.createdAt ?? now,
       };
 
-      if (existingData) {
+      if (exactExistingData) {
         await db.query(
           `UPDATE user_profiles SET 
             cruises = $cruises,
@@ -323,10 +339,28 @@ export const dataRouter = createTRPCRouter({
         { ownerScopeId, email: normalizedEmail }
       );
 
-      if (results && results[0] && results[0].length > 0) {
-        const rawData = results[0][0];
+      let rawData: StoredUserData | undefined = results?.[0]?.[0];
+
+      if (!rawData) {
+        const fallbackResults = await db.query<[StoredUserData[]]>(
+          `SELECT * FROM user_profiles WHERE email = $email ORDER BY updatedAt DESC LIMIT 5`,
+          { email: normalizedEmail }
+        );
+        rawData = fallbackResults?.[0]?.find((record) => isOwnerScopeForEmail(record?.ownerScopeId, normalizedEmail));
+        if (rawData) {
+          console.log('[API] Found user data under prior owner scope; restoring into current scope:', {
+            email: normalizedEmail,
+            previousOwnerScopeId: rawData.ownerScopeId,
+            currentOwnerScopeId: ownerScopeId,
+          });
+        }
+      }
+
+      if (rawData) {
         const data: StoredUserData = {
           ...rawData,
+          email: normalizedEmail,
+          ownerScopeId,
           cruises: prepareOwnedCruises(rawData.cruises, undefined, ownerScopeId, normalizedEmail, 'api-restore available cruises'),
           bookedCruises: prepareOwnedBookedCruises(rawData.bookedCruises, undefined, ownerScopeId, normalizedEmail, 'api-restore booked cruises'),
           casinoOffers: prepareOwnedCasinoOffers(rawData.casinoOffers, undefined, ownerScopeId, normalizedEmail, 'api-restore casino offers'),

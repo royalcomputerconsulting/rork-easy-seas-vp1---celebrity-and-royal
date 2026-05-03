@@ -112,6 +112,11 @@ export interface CruiseEconomicsSummary {
   footnotes: string[];
 }
 
+interface CruiseEconomicsSummaryOptions {
+  minimumTotalPoints?: number;
+  pointsAdjustmentNote?: string;
+}
+
 const ANNUAL_SCOPE_START = '2025-04-01' as const;
 const ANNUAL_SCOPE_END = '2026-04-01' as const;
 const DEFAULT_HOUSE_EDGE = 0.08;
@@ -603,6 +608,7 @@ function buildCruiseEconomicsRow(cruise: BookedCruise): CruiseEconomicsRow {
 export function buildCruiseEconomicsSummary(
   cruises: BookedCruise[],
   today: Date = new Date(),
+  options?: CruiseEconomicsSummaryOptions,
 ): CruiseEconomicsSummary {
   const scopedRows = cruises
     .filter((cruise) => inAnnualScope(cruise, today))
@@ -669,6 +675,26 @@ export function buildCruiseEconomicsSummary(
   totals.totalNetTheoretical = round2(totals.totalNetTheoretical);
   totals.hasEstimates = totals.totalRowsWithEstimatedValues > 0;
 
+  const minimumTotalPoints = options?.minimumTotalPoints ?? 0;
+  if (minimumTotalPoints > totals.totalPoints) {
+    const adjustmentPoints = Math.round(minimumTotalPoints - totals.totalPoints);
+    const adjustmentCoinIn = round2(adjustmentPoints * DOLLARS_PER_POINT);
+    const adjustmentPointValue = calcPointValue(adjustmentPoints, DEFAULT_POINT_DOLLAR_VALUE);
+    const adjustmentTheoreticalLoss = calcTheoreticalLoss(adjustmentCoinIn, DEFAULT_HOUSE_EDGE);
+    totals.totalPoints += adjustmentPoints;
+    totals.totalCoinIn = round2(totals.totalCoinIn + adjustmentCoinIn);
+    totals.totalPointValueEarned = round2(totals.totalPointValueEarned + adjustmentPointValue);
+    totals.totalTheoreticalLoss = round2(totals.totalTheoreticalLoss + adjustmentTheoreticalLoss);
+    totals.totalNetTheoretical = round2(totals.totalNetTheoretical + calcNetTheoretical(adjustmentPointValue, adjustmentTheoreticalLoss));
+    totals.totalRowsWithEstimatedValues += 1;
+    totals.hasEstimates = true;
+    console.log('[CasinoCruiseEconomics] Applied confirmed historical points floor', {
+      originalTotalPoints: totals.totalPoints - adjustmentPoints,
+      adjustmentPoints,
+      finalTotalPoints: totals.totalPoints,
+    });
+  }
+
   const cruiseCount = totals.cruises || 1;
   const averages: CruiseEconomicsAverages = {
     nightsPerCruise: totals.cruises > 0 ? round2(totals.totalNights / cruiseCount) : 0,
@@ -705,7 +731,10 @@ export function buildCruiseEconomicsSummary(
   };
 
   const footnotes = totals.hasEstimates
-    ? ['Annual totals include estimated values where paid amount, winnings, points, coin-in, or hours were missing.']
+    ? [
+        options?.pointsAdjustmentNote,
+        'Annual totals include estimated values where paid amount, winnings, points, coin-in, or hours were missing.',
+      ].filter((note): note is string => Boolean(note))
     : [];
 
   console.log('[CasinoCruiseEconomics] Summary built', {
