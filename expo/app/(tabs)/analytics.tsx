@@ -542,14 +542,15 @@ export default function AnalyticsScreen() {
     const cruiseValueCaptured = Math.round((retailValue - netEffectivePaid + Number.EPSILON) * 100) / 100;
     const cashResult = Math.round((winLoss - netEffectivePaid + Number.EPSILON) * 100) / 100;
     const totalEconomicValue = Math.round((retailValue + winLoss - netEffectivePaid + Number.EPSILON) * 100) / 100;
+    const preservedAmountPaid = selectedPerformanceCruise.amountPaid ?? selectedPerformanceCruise.depositPaid ?? netEffectivePaid;
     const updates: Partial<BookedCruise> = {
       earnedPoints: pointsEarned,
       casinoPoints: pointsEarned,
       pointsEarned,
-      coinIn: pointsEarned * 5,
+      coinIn: pointsEarned * DOLLARS_PER_POINT,
       retailValue,
       totalRetailCost: retailValue,
-      amountPaid: netEffectivePaid,
+      amountPaid: preservedAmountPaid,
       netEffectivePaid,
       winnings: winLoss,
       winningsBroughtHome: winLoss,
@@ -771,15 +772,38 @@ export default function AnalyticsScreen() {
       'deckNumber',
       'packageCode',
       'passengerStatus',
+      'retailValue',
+      'amountPaid',
+      'taxesFeesEstimate',
+      'netEffectivePaid',
       'pointsEarned',
-      'winLoss',
-      'actualSpend',
-      'totalRetailCost',
+      'winningsBroughtHome',
+      'coinIn',
+      'houseEdge',
+      'pointDollarValue',
+      'hoursPlayed',
+      'casinoChargesRoomBilled',
+      'cashResult',
+      'cruiseValueCaptured',
+      'totalEconomicValue',
+      'theoreticalLoss',
+      'netTheoretical',
+      'coinInPerHour',
+      'pointsPerHour',
+      'valuePerHour',
+      'instantCertificateWon',
+      'instantCertificateOfferCode',
+      'instantCertificateValue',
+      'instantCertificateNotes',
+      'calculationConfidence',
+      'notes',
     ];
 
     const rows = cruises.map((cruise) => {
-      const pointsEarned = getBookedCruiseCasinoPoints(cruise);
-      const winLoss = cruise.winnings ?? cruise.netResult ?? cruise.totalWinnings ?? 0;
+      const summary = buildCruiseEconomicsSummary([cruise], new Date(), { scope: 'allCruises' });
+      const row = summary.rows[0];
+      const pointsEarned = row?.points ?? getBookedCruiseCasinoPoints(cruise);
+      const winningsBroughtHome = row?.winningsHome ?? cruise.winningsBroughtHome ?? cruise.winnings ?? cruise.totalWinnings ?? cruise.netResult ?? 0;
 
       return [
         cruise.shipName,
@@ -798,10 +822,31 @@ export default function AnalyticsScreen() {
         cruise.deckNumber,
         cruise.packageCode,
         cruise.passengerStatus,
+        row?.retail ?? cruise.retailValue ?? cruise.totalRetailCost,
+        cruise.amountPaid,
+        row?.taxesFeesEstimate ?? cruise.taxesFeesEstimate ?? cruise.taxes,
+        row?.paid ?? cruise.netEffectivePaid,
         pointsEarned,
-        winLoss,
-        cruise.actualSpend,
-        cruise.totalRetailCost,
+        winningsBroughtHome,
+        row?.coinIn ?? cruise.coinIn,
+        row?.houseEdge ?? cruise.houseEdge,
+        row?.pointDollarValue ?? cruise.pointDollarValue,
+        row?.hoursPlayed ?? cruise.hoursPlayed,
+        row?.casinoChargesRoomBilled ?? cruise.casinoChargesRoomBilled ?? cruise.actualSpend,
+        row?.cashResult ?? cruise.cashResult,
+        row?.cruiseValueCaptured ?? cruise.cruiseValueCaptured,
+        row?.totalEconomicValue ?? cruise.totalEconomicValue,
+        row?.theoreticalLoss ?? cruise.theoreticalLoss,
+        row?.netTheoretical ?? cruise.netTheoretical,
+        row?.coinInPerHour ?? cruise.coinInPerHour,
+        row?.pointsPerHour ?? cruise.pointsPerHour,
+        row?.valuePerHour ?? cruise.valuePerHour,
+        cruise.instantCertificateWon ?? false,
+        cruise.instantCertificateOfferCode,
+        cruise.instantCertificateValue,
+        cruise.instantCertificateNotes,
+        row?.calculationConfidence ?? cruise.calculationConfidence,
+        row?.notes ?? cruise.notes,
       ].map(escapeCsv).join(',');
     });
 
@@ -1057,7 +1102,7 @@ export default function AnalyticsScreen() {
               </Text>
             </View>
             <View style={styles.portfolioMetric}>
-              <Text style={styles.portfolioMetricLabel}>Total Econ</Text>
+              <Text style={styles.portfolioMetricLabel}>Total Economic Value</Text>
               <Text style={[styles.portfolioMetricValue, { color: (economicsRow?.totalEconomic ?? breakdown.totalProfit) >= 0 ? COLORS.success : COLORS.error }]}>
                 {formatCurrency(economicsRow?.totalEconomic ?? breakdown.totalProfit)}
               </Text>
@@ -1462,30 +1507,19 @@ export default function AnalyticsScreen() {
           </View>
 
           <View style={styles.annualSummaryGrid}>
-            <View style={styles.annualSummaryMetric}>
-              <Text style={styles.annualSummaryMetricLabel}>Retail Value</Text>
-              <Text style={styles.annualSummaryMetricValue} numberOfLines={1} adjustsFontSizeToFit>
-                {formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalRetailValue)}
-              </Text>
-            </View>
-            <View style={styles.annualSummaryMetric}>
-              <Text style={styles.annualSummaryMetricLabel}>Value Captured</Text>
-              <Text style={styles.annualSummaryMetricValue} numberOfLines={1} adjustsFontSizeToFit>
-                {formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalCruiseValueCaptured)}
-              </Text>
-            </View>
-            <View style={styles.annualSummaryMetric}>
-              <Text style={styles.annualSummaryMetricLabel}>Economic Value</Text>
-              <Text style={[styles.annualSummaryMetricValue, { color: COLORS.success }]} numberOfLines={1} adjustsFontSizeToFit>
-                {formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalEconomicValue)}
-              </Text>
-            </View>
-            <View style={styles.annualSummaryMetric}>
-              <Text style={styles.annualSummaryMetricLabel}>Total Points</Text>
-              <Text style={styles.annualSummaryMetricValue} numberOfLines={1} adjustsFontSizeToFit>
-                {formatNumber(cruiseEconomicsSummary.totals.totalPoints)}
-              </Text>
-            </View>
+            {[
+              { label: 'Retail Value', value: formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalRetailValue), color: COLORS.navyDeep },
+              { label: 'Cruise Value Captured', value: formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalCruiseValueCaptured), color: COLORS.success },
+              { label: 'Total Economic Value', value: formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalEconomicValue), color: COLORS.success },
+              { label: 'Total Points', value: formatNumber(cruiseEconomicsSummary.totals.totalPoints), color: COLORS.navyDeep },
+            ].map((metric) => (
+              <View key={metric.label} style={styles.annualSummaryMetric}>
+                <Text style={styles.annualSummaryMetricLabel}>{metric.label}</Text>
+                <Text style={[styles.annualSummaryMetricValue, { color: metric.color }]} numberOfLines={1} adjustsFontSizeToFit>
+                  {metric.value}
+                </Text>
+              </View>
+            ))}
           </View>
           {cruiseEconomicsSummary.totals.cruises > 0 && (
             <View style={styles.annualSummaryDetails}>
@@ -2012,7 +2046,7 @@ export default function AnalyticsScreen() {
   };
 
   const historicalCruiseData = useMemo(() => {
-    if (activeTab !== 'calcs') return { totalCruises: 0, totalPoints: 0, totalSessions: 0, totalNights: 0, totalCoinIn: 0, totalWinLoss: 0, totalRetailValue: 0, totalTaxesFees: 0, totalProfit: 0, cruises: [] as { id: string; shipName: string; sailDate: string; points: number; sessionCount: number; nights: number }[] };
+    if (activeTab !== 'calcs') return { totalCruises: 0, totalPoints: 0, totalSessions: 0, totalNights: 0, totalCoinIn: 0, totalWinLoss: 0, totalRetailValue: 0, totalTaxesFees: 0, totalEconomicValue: 0, cruises: [] as { id: string; shipName: string; sailDate: string; points: number; sessionCount: number; nights: number }[] };
     const cruiseData = cruiseEconomicsSummary.rows.map((row) => {
       const cruiseSessions = sessions.filter(s => s.cruiseId === row.cruiseId);
       return {
@@ -2036,7 +2070,7 @@ export default function AnalyticsScreen() {
       totalWinLoss: cruiseEconomicsSummary.totals.totalCashResult,
       totalRetailValue: cruiseEconomicsSummary.totals.totalRetailValue,
       totalTaxesFees: cruiseEconomicsSummary.totals.totalPaid,
-      totalProfit: cruiseEconomicsSummary.totals.totalEconomicValue,
+      totalEconomicValue: cruiseEconomicsSummary.totals.totalEconomicValue,
       cruises: cruiseData,
     };
   }, [activeTab, cruiseEconomicsSummary, sessions]);
@@ -2072,7 +2106,7 @@ export default function AnalyticsScreen() {
     const totalHoursForMode = isHistorical
       ? historicalHours
       : (hasSessionData ? actualSessionHours : currentSeasonMetrics.estimatedPlayHours);
-    const totalProfit = isHistorical
+    const totalValueForMode = isHistorical
       ? cruiseEconomicsSummary.totals.totalEconomicValue
       : (hasSessionData ? actualSessionValue : currentSeasonMetrics.winningsBroughtHome);
     const totalWinLoss = isHistorical
@@ -2197,9 +2231,9 @@ export default function AnalyticsScreen() {
     const theoStdDev = Math.sqrt(theoVariance);
     const adtSmoothingFactor = avgTheo > 0 ? (theoStdDev / avgTheo) : 0;
 
-    const totalEconomicRoiPercentage = totalTaxesFees > 0 ? (totalProfit / totalTaxesFees) * 100 : 0;
+    const totalEconomicRoiPercentage = totalTaxesFees > 0 ? (totalValueForMode / totalTaxesFees) * 100 : 0;
     void totalEconomicRoiPercentage;
-    const profitPerUnit = totalSessions > 0 ? totalProfit / totalSessions : (totalProfit !== 0 ? totalProfit : 0);
+    const valuePerUnit = totalSessions > 0 ? totalValueForMode / totalSessions : (totalValueForMode !== 0 ? totalValueForMode : 0);
 
     const stopGap = 200;
     const riskPerHour = avgSessionLength > 0 ? (stopGap / (avgSessionLength / 60)) : 0;
@@ -2220,11 +2254,11 @@ export default function AnalyticsScreen() {
     const offerSafetyIndex = consistencyScore > 0 && spikeRisk > 0 ? consistencyScore / spikeRisk : 0;
 
     const totalHistoricalHours = totalHoursForMode;
-    const valuePerHourPlayed = totalHistoricalHours > 0 ? totalProfit / totalHistoricalHours : 0;
+    const valuePerHourPlayed = totalHistoricalHours > 0 ? totalValueForMode / totalHistoricalHours : 0;
 
-    const recentProfit = sessions.slice(-10).reduce((sum, s) => sum + (s.winLoss || 0), 0);
-    const earlyProfit = sessions.slice(0, 10).reduce((sum, s) => sum + (s.winLoss || 0), 0);
-    const trendScore = earlyProfit !== 0 ? (recentProfit / Math.max(Math.abs(earlyProfit), 1)) : 1;
+    const recentCashResult = sessions.slice(-10).reduce((sum, s) => sum + (s.winLoss || 0), 0);
+    const earlyCashResult = sessions.slice(0, 10).reduce((sum, s) => sum + (s.winLoss || 0), 0);
+    const trendScore = earlyCashResult !== 0 ? (recentCashResult / Math.max(Math.abs(earlyCashResult), 1)) : 1;
     const variabilityScore = 1 - Math.min(adtSmoothingFactor, 1);
     const sustainabilityScore = (trendScore * 0.6 + variabilityScore * 0.4) * 100;
 
@@ -2267,10 +2301,10 @@ export default function AnalyticsScreen() {
       },
       {
         id: 5,
-        label: isHistorical ? 'Total Econ (historical avg)' : 'Total Econ per session',
-        value: formatCurrency(profitPerUnit),
-        description: `${formatCurrency(totalProfit)} ÷ ${totalSessions} ${isHistorical ? 'historical' : ''} sessions`,
-        color: profitPerUnit >= 0 ? COLORS.success : COLORS.error,
+        label: isHistorical ? 'Total economic value / session' : 'Casino value / session',
+        value: formatCurrency(valuePerUnit),
+        description: `${formatCurrency(totalValueForMode)} ÷ ${totalSessions} ${isHistorical ? 'historical/derived' : ''} sessions. Coin-In is excluded from value.`,
+        color: valuePerUnit >= 0 ? COLORS.success : COLORS.error,
         icon: TrendingUp,
       },
       {
@@ -2299,10 +2333,10 @@ export default function AnalyticsScreen() {
       },
       {
         id: 9,
-        label: isHistorical ? 'Total economic value/hr' : 'Casino value/hr',
+        label: isHistorical ? 'Total economic value / hour' : 'Casino value / hour',
         value: totalHistoricalHours > 0 ? formatCurrency(valuePerHourPlayed) : '—',
         description: isHistorical
-          ? `Total economic value ÷ ${totalHistoricalHours.toFixed(2)} play hours from points/session data`
+          ? `Total economic value ÷ ${totalHistoricalHours.toFixed(2)} play hours. Coin-In is not included in value.`
           : (hasSessionData ? 'Session cash result + point value ÷ tracked play hours' : `Known current-season winnings ÷ ${totalHistoricalHours.toFixed(2)} estimated play hours`),
         color: COLORS.goldDark,
         icon: DollarSign,
@@ -2347,8 +2381,8 @@ export default function AnalyticsScreen() {
               <Calculator size={20} color={COLORS.royalPurple} />
             </View>
             <View style={styles.calcsHeaderText}>
-              <Text style={styles.calcsHeaderTitle}>High-Value Calculations</Text>
-              <Text style={styles.calcsHeaderSubtitle}>10 advanced metrics now unlocked</Text>
+              <Text style={styles.calcsHeaderTitle}>Casino Calculation Lab</Text>
+              <Text style={styles.calcsHeaderSubtitle}>Coin-In stays gaming-only; value uses cash + cruise economics</Text>
             </View>
           </View>
 
@@ -2388,7 +2422,7 @@ export default function AnalyticsScreen() {
           {calcsMode === 'historical' && cruiseEconomicsSummary.totals.cruises > 0 && (
             <View style={styles.calcsModeSummary}>
               <Text style={styles.calcsModeSummaryText}>
-                Historical: {formatNumber(cruiseEconomicsSummary.totals.totalPoints)} pts ({formatCurrency(cruiseEconomicsSummary.totals.totalCoinIn)} coin-in) • Current season: {formatNumber(currentYearPoints)} pts ({formatNumber(currentSeasonMetrics.pointsNeededForSignature)} to retain Signature) • Status: {clubRoyaleTier} • {realAnalytics.completedCashResult >= 0 ? '+' : ''}{formatCurrency(realAnalytics.completedCashResult)} cash result • {cruiseEconomicsSummary.totals.cruises} cruises
+                Historical: {formatNumber(cruiseEconomicsSummary.totals.totalPoints)} pts ({formatCurrency(cruiseEconomicsSummary.totals.totalCoinIn)} coin-in volume) • Current season: {formatNumber(currentYearPoints)} pts ({formatNumber(currentSeasonMetrics.pointsNeededForSignature)} to retain Signature) • Status: {clubRoyaleTier} • {realAnalytics.completedCashResult >= 0 ? '+' : ''}{formatCurrency(realAnalytics.completedCashResult)} cash result • {cruiseEconomicsSummary.totals.cruises} cruises
               </Text>
             </View>
           )}
@@ -2833,15 +2867,23 @@ const styles = StyleSheet.create({
   dataRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 6,
+    alignItems: 'flex-start',
+    gap: SPACING.sm,
+    paddingVertical: 8,
   },
   dataLabel: {
+    flex: 1,
+    minWidth: 0,
     fontSize: TYPOGRAPHY.fontSizeSM,
+    lineHeight: 18,
     color: '#64748B',
   },
   dataValue: {
+    flexShrink: 0,
+    maxWidth: '48%',
+    textAlign: 'right',
     fontSize: TYPOGRAPHY.fontSizeSM,
+    lineHeight: 18,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
     color: COLORS.navyDeep,
   },
@@ -2852,12 +2894,19 @@ const styles = StyleSheet.create({
     borderTopColor: '#E2E8F0',
   },
   dataTotalLabel: {
+    flex: 1,
+    minWidth: 0,
     fontSize: TYPOGRAPHY.fontSizeMD,
+    lineHeight: 20,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: COLORS.navyDeep,
   },
   dataTotalValue: {
-    fontSize: TYPOGRAPHY.fontSizeLG,
+    flexShrink: 1,
+    maxWidth: '52%',
+    textAlign: 'right',
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    lineHeight: 20,
     fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   compactMetricsGrid: {
@@ -2910,29 +2959,35 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   annualSummaryGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: SPACING.sm,
     marginTop: SPACING.sm,
   },
   annualSummaryMetric: {
-    flexGrow: 1,
-    flexBasis: '47%',
-    minWidth: 132,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: SPACING.sm,
     backgroundColor: '#FFFFFF',
     borderRadius: BORDER_RADIUS.sm,
-    padding: SPACING.sm,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
   annualSummaryMetricLabel: {
-    fontSize: 10,
+    flex: 1,
+    minWidth: 0,
+    fontSize: 11,
+    lineHeight: 16,
     color: '#64748B',
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    marginBottom: 5,
   },
   annualSummaryMetricValue: {
+    flexShrink: 1,
+    maxWidth: '50%',
+    textAlign: 'right',
     fontSize: 16,
+    lineHeight: 20,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: COLORS.navyDeep,
   },

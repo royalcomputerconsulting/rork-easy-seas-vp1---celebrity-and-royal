@@ -135,6 +135,9 @@ const CONFIRMED_CLUB_ROYALE_2025_RETAIL_VALUE = 47774;
 const CONFIRMED_CLUB_ROYALE_2025_PAID = 4238.41;
 const DEFAULT_PORT_FEE_PER_PERSON_FOR_7_NIGHTS = 162;
 const TWO_PERSON_PORT_FEE_THRESHOLD = 200;
+const KNOWN_STAR_2026_SAIL_DATE = '2026-07-05';
+const KNOWN_STAR_2026_RETAIL_VALUE = 5596;
+const KNOWN_STAR_2026_NET_EFFECTIVE_PAID = 150.92;
 
 interface TaxesFeesEstimateInfo {
   value: number;
@@ -208,8 +211,17 @@ function getFirstNumber(...values: Array<number | null | undefined>): number | n
 }
 
 function getCruiseBrand(cruise: BookedCruise): string {
-  if (cruise.brand && cruise.brand.trim().length > 0) {
-    return cruise.brand;
+  const normalizedBrand = (cruise.brand ?? '').trim().toLowerCase();
+  if (normalizedBrand === 'royal' || normalizedBrand.includes('royal caribbean')) {
+    return 'Royal Caribbean';
+  }
+
+  if (normalizedBrand.includes('celebrity')) {
+    return 'Celebrity';
+  }
+
+  if (normalizedBrand.includes('carnival')) {
+    return 'Carnival';
   }
 
   if (cruise.cruiseSource === 'royal' || isRoyalCaribbeanShip(cruise.shipName || '')) {
@@ -222,6 +234,10 @@ function getCruiseBrand(cruise: BookedCruise): string {
 
   if (cruise.cruiseSource === 'carnival') {
     return 'Carnival';
+  }
+
+  if (cruise.brand && cruise.brand.trim().length > 0) {
+    return cruise.brand;
   }
 
   return 'Other';
@@ -261,9 +277,17 @@ function inAnnualScope(cruise: BookedCruise, today: Date): boolean {
     && sailDate <= ANNUAL_SCOPE_END;
 }
 
+function isKnownStar2026CasinoBooking(cruise: Pick<BookedCruise, 'shipName' | 'sailDate' | 'reservationNumber' | 'bookingId'>): boolean {
+  const shipName = (cruise.shipName ?? '').trim().toLowerCase();
+  const reservationId = String(cruise.reservationNumber ?? cruise.bookingId ?? '').trim();
+  return (shipName === 'star of the seas' && cruise.sailDate === KNOWN_STAR_2026_SAIL_DATE) || reservationId === '2656334';
+}
+
 function applyRetailOverrides(ship: string, sailDate: string, retailValue: number | null): number | null {
   const annualFact = ANNUAL_CASINO_REPORT_FACTS_BY_KEY.get(getAnnualFactKey(ship, sailDate));
-  return annualFact?.retailValue ?? retailValue;
+  if (annualFact) return annualFact.retailValue;
+  if (ship.trim().toLowerCase() === 'star of the seas' && sailDate === KNOWN_STAR_2026_SAIL_DATE) return KNOWN_STAR_2026_RETAIL_VALUE;
+  return retailValue;
 }
 
 function getAnnualCasinoFact(cruise: BookedCruise): AnnualCasinoHistoricalFact | undefined {
@@ -472,6 +496,15 @@ function getTaxesFeesEstimate(
 }
 
 function getNetEffectivePaid(cruise: BookedCruise, taxesFeesEstimate: number): { value: number; isActual: boolean; nextCruiseOffsetApplied: boolean | null; note: string | null } {
+  if (isKnownStar2026CasinoBooking(cruise)) {
+    return {
+      value: KNOWN_STAR_2026_NET_EFFECTIVE_PAID,
+      isActual: true,
+      nextCruiseOffsetApplied: cruise.nextCruiseOffsetApplied ?? false,
+      note: 'Star of the Seas 2026 booking uses the confirmed $150.92 taxes/fees charge as net effective paid; the $200 paid receipt amount is preserved separately.',
+    };
+  }
+
   const explicitNetEffectivePaid = getFirstNumber(cruise.netEffectivePaid);
   if (isNumber(explicitNetEffectivePaid)) {
     const actualAmountPaid = getFirstNumber(cruise.amountPaid, cruise.pricePaid, cruise.totalPrice, cruise.price);
@@ -598,6 +631,7 @@ function buildCruiseEconomicsRow(cruise: BookedCruise): CruiseEconomicsRow {
   const status = cruiseForEconomics.status === 'completed' || cruiseForEconomics.completionState === 'completed' ? 'completed' : cruiseForEconomics.status === 'booked' ? 'booked' : 'other';
 
   const matchedAnnualFact = getAnnualCasinoFact(cruiseForEconomics);
+  const isKnownStar2026Booking = isKnownStar2026CasinoBooking(cruiseForEconomics);
   const rawRetailValue = getFirstNumber(
     cruiseForEconomics.retailValue,
     cruiseForEconomics.totalRetailCost,
@@ -606,7 +640,7 @@ function buildCruiseEconomicsRow(cruise: BookedCruise): CruiseEconomicsRow {
     breakdown.cabinValueForTwo,
   );
   const retailValue = applyRetailOverrides(ship, sailDate, rawRetailValue);
-  const retailIsActual = isNumber(rawRetailValue) || Boolean(matchedAnnualFact);
+  const retailIsActual = isNumber(rawRetailValue) || Boolean(matchedAnnualFact) || isKnownStar2026Booking;
 
   const taxesFeesInfo = getTaxesFeesEstimate(cruiseForEconomics, breakdown);
   const taxesFeesEstimate = taxesFeesInfo.value;
@@ -668,6 +702,7 @@ function buildCruiseEconomicsRow(cruise: BookedCruise): CruiseEconomicsRow {
     hoursWereEstimated ? `Hours played estimated from points at ${DEFAULT_ESTIMATED_POINTS_PER_PLAY_HOUR} points/hour.` : null,
     !isNumber(hoursPlayed) ? 'Hours played not available for this row.' : null,
     matchedAnnualFact?.notes ?? null,
+    isKnownStar2026Booking ? 'Star of the Seas 2026 value is locked to the confirmed $5,596 retail value and $150.92 net effective paid casino booking data.' : null,
   ].filter((note): note is string => Boolean(note));
 
   console.log('[CasinoCruiseEconomics] Row built', {
