@@ -712,7 +712,7 @@ export default function EventsScreen() {
             </View>
           </View>
 
-          <IntelligenceFilterStrip contextLabel="Calendar" variant="bookedCruises" />
+          <IntelligenceFilterStrip contextLabel="Calendar" variant="bookedCruises" compact />
 
           <TouchableOpacity
             style={styles.passengerPermanentButton}
@@ -721,14 +721,12 @@ export default function EventsScreen() {
             testID="open-passenger-calendar-drilldown"
           >
             <View style={styles.passengerPermanentIcon}>
-              <Users size={20} color="#A7F3D0" />
+              <Users size={16} color="#A7F3D0" />
             </View>
             <View style={styles.passengerPermanentCopy}>
-              <Text style={styles.passengerPermanentEyebrow}>Permanent passenger calendar</Text>
-              <Text style={styles.passengerPermanentTitle}>Open full passenger drill-down</Text>
-              <Text style={styles.passengerPermanentSubtitle}>Sea days, port days, gaps, expirations, shared/solo travel</Text>
+              <Text style={styles.passengerPermanentTitle}>Sea View Calendar → Sea Days. Port Days Gaps, Expirations etc.</Text>
             </View>
-            <ChevronRight size={20} color={COLORS.white} />
+            <ChevronRight size={18} color={COLORS.white} />
           </TouchableOpacity>
 
           <View style={styles.viewToggleContainer}>
@@ -1033,62 +1031,66 @@ const styles = StyleSheet.create({
   },
   heroHeader: {
     backgroundColor: COLORS.navyDeep,
-    borderBottomLeftRadius: BORDER_RADIUS.xl,
-    borderBottomRightRadius: BORDER_RADIUS.xl,
+    borderRadius: BORDER_RADIUS.lg,
     marginHorizontal: SPACING.md,
-    marginBottom: SPACING.md,
+    marginBottom: 6,
     marginTop: SPACING.xs,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 200,
-    ...SHADOW.lg,
+    minHeight: 66,
+    ...SHADOW.sm,
   },
 
   heroOverlay: {
+    width: '100%',
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: SPACING.xl,
-    paddingHorizontal: SPACING.lg,
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    paddingHorizontal: SPACING.md,
+    gap: SPACING.sm,
   },
   heroTitle: {
-    fontSize: 32,
+    fontSize: 19,
     fontWeight: '800' as const,
     color: COLORS.white,
-    letterSpacing: 1,
-    textAlign: 'center' as const,
+    letterSpacing: 0.4,
+    textAlign: 'left' as const,
   },
   heroSubtitle: {
-    fontSize: 15,
-    fontWeight: '500' as const,
-    color: 'rgba(255, 255, 255, 0.82)',
-    marginTop: 6,
-    letterSpacing: 0.3,
-    textAlign: 'center' as const,
+    flex: 1,
+    fontSize: 11,
+    fontWeight: '600' as const,
+    color: 'rgba(255, 255, 255, 0.78)',
+    marginTop: 2,
+    letterSpacing: 0.1,
+    textAlign: 'left' as const,
   },
   heroSignature: {
-    width: 240,
-    height: 100,
-    marginTop: 14,
-    opacity: 0.8,
+    width: 86,
+    height: 34,
+    marginTop: 0,
+    opacity: 0.74,
   },
   passengerPermanentButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.sm,
+    gap: 8,
     marginHorizontal: SPACING.md,
-    marginBottom: SPACING.md,
-    padding: SPACING.md,
-    borderRadius: 22,
+    marginBottom: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 16,
     backgroundColor: COLORS.navyDeep,
     borderWidth: 1,
     borderColor: 'rgba(167, 243, 208, 0.24)',
-    ...SHADOW.md,
+    ...SHADOW.sm,
   },
   passengerPermanentIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 16,
+    width: 30,
+    height: 30,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(167, 243, 208, 0.12)',
@@ -1104,8 +1106,8 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase' as const,
   },
   passengerPermanentTitle: {
-    marginTop: 2,
-    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontSize: 13,
+    lineHeight: 17,
     fontWeight: '900' as const,
     color: COLORS.white,
   },

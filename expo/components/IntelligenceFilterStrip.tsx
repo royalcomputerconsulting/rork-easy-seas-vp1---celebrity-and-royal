@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Building2, SlidersHorizontal, Trophy, UserRound } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
@@ -74,6 +74,83 @@ export const IntelligenceFilterStrip = React.memo(function IntelligenceFilterStr
       ...(secondProfile ? [] : [{ id: 'unassigned' as const, label: 'Second User' }]),
     ];
   }, [users]);
+
+  if (isBookedCruisesVariant && compact) {
+    return (
+      <LinearGradient
+        colors={['#FFFFFF', '#F8FAFC']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.container, styles.bookedContainer, styles.bookedUltraCompactContainer]}
+        testID={`${contextLabel.toLowerCase().replace(/\s+/g, '-')}-intelligence-filters`}
+      >
+        <View style={styles.compactRailHeader}>
+          <View style={styles.compactRailTitleRow}>
+            <View style={styles.compactRailIconBadge}>
+              <SlidersHorizontal size={10} color={COLORS.navyDeep} />
+            </View>
+            <Text style={styles.compactRailTitle}>Filters</Text>
+          </View>
+          {activeFilterCount > 0 ? (
+            <TouchableOpacity style={styles.compactRailClearButton} onPress={clearIntelligenceFilters} activeOpacity={0.75} testID="clear-intelligence-filters">
+              <Text style={styles.compactRailClearText}>Clear</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.compactFilterRail}>
+          <Text style={styles.compactRailGroupLabel}>Profile</Text>
+          {profileOptions.map((option) => {
+            const active = selectedProfileId === option.id;
+            return (
+              <TouchableOpacity
+                key={`profile-filter-option-${option.id}`}
+                style={[styles.compactRailChip, active && styles.compactRailChipActive]}
+                onPress={() => setSelectedProfileId(option.id)}
+                activeOpacity={0.75}
+                testID={`profile-filter-${option.id}`}
+              >
+                <Text style={[styles.compactRailChipText, active && styles.compactRailChipTextActive]} numberOfLines={1}>{option.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+          <Text style={styles.compactRailGroupLabel}>Brand</Text>
+          {BRAND_OPTIONS.map((brand) => {
+            const active = selectedBrand === brand;
+            return (
+              <TouchableOpacity
+                key={brand}
+                style={[styles.compactRailChip, active && styles.compactRailChipActive]}
+                onPress={() => setSelectedBrand(brand)}
+                activeOpacity={0.75}
+                testID={`brand-filter-${brand}`}
+              >
+                <Text style={[styles.compactRailChipText, active && styles.compactRailChipTextActive]} numberOfLines={1}>{getBrandChipLabel(brand)}</Text>
+              </TouchableOpacity>
+            );
+          })}
+          {showProgram ? (
+            <>
+              <Text style={styles.compactRailGroupLabel}>Program</Text>
+              {PROGRAM_OPTIONS.map((program) => {
+                const active = selectedProgram === program;
+                return (
+                  <TouchableOpacity
+                    key={program}
+                    style={[styles.compactRailChip, active && styles.compactRailChipActive]}
+                    onPress={() => setSelectedProgram(program)}
+                    activeOpacity={0.75}
+                    testID={`program-filter-${program}`}
+                  >
+                    <Text style={[styles.compactRailChipText, active && styles.compactRailChipTextActive]} numberOfLines={1}>{getProgramChipLabel(program)}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </>
+          ) : null}
+        </ScrollView>
+      </LinearGradient>
+    );
+  }
 
   return (
     <LinearGradient
@@ -419,5 +496,87 @@ const styles = StyleSheet.create({
   bookedChipTextActive: {
     color: COLORS.white,
     fontWeight: '800' as const,
+  },
+  bookedUltraCompactContainer: {
+    marginHorizontal: SPACING.md,
+    marginBottom: 6,
+    padding: 7,
+    borderRadius: 16,
+    ...SHADOW.sm,
+  },
+  compactRailHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 5,
+  },
+  compactRailTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  compactRailIconBadge: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 31, 63, 0.06)',
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+  },
+  compactRailTitle: {
+    fontSize: 10,
+    fontWeight: '900' as const,
+    color: COLORS.navyDeep,
+    letterSpacing: 0.3,
+    textTransform: 'uppercase' as const,
+  },
+  compactRailClearButton: {
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: BORDER_RADIUS.round,
+    backgroundColor: '#EEF2F7',
+  },
+  compactRailClearText: {
+    fontSize: 9,
+    fontWeight: '900' as const,
+    color: COLORS.navyDeep,
+  },
+  compactFilterRail: {
+    alignItems: 'center',
+    gap: 5,
+    paddingRight: SPACING.md,
+  },
+  compactRailGroupLabel: {
+    fontSize: 9,
+    fontWeight: '900' as const,
+    color: COLORS.textDarkGrey,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.4,
+    marginLeft: 2,
+  },
+  compactRailChip: {
+    minWidth: 38,
+    maxWidth: 112,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: BORDER_RADIUS.round,
+    backgroundColor: CLEAN_THEME.tab.unselectedBg,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+  },
+  compactRailChipActive: {
+    backgroundColor: COLORS.navyDeep,
+    borderColor: COLORS.navyDeep,
+  },
+  compactRailChipText: {
+    fontSize: 10,
+    fontWeight: '800' as const,
+    color: COLORS.textDarkGrey,
+    textAlign: 'center' as const,
+  },
+  compactRailChipTextActive: {
+    color: COLORS.white,
   },
 });
