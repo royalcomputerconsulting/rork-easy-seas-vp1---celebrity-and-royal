@@ -1837,58 +1837,42 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
       const newEmail = profileData.email.toLowerCase().trim();
       const profileEmailChanged = Boolean(oldEmail && oldEmail !== newEmail);
       const emailChanged = isPrimaryProfileSelected && profileEmailChanged;
+      const isChangingToReservedAdminEmail = profileEmailChanged && isAdminAccountEmail(newEmail) && !isAdminAccountEmail(oldEmail ?? '');
+      const isChangingAdminAccountEmail = emailChanged && (isAdmin || isAdminAccountEmail(oldEmail ?? ''));
       
       console.log('[Settings] Email change check:', { oldEmail, newEmail, emailChanged });
+
+      if (!newEmail || !newEmail.includes('@')) {
+        Alert.alert('Invalid Email', 'Please enter a valid email address before saving your profile.');
+        setIsSaving(false);
+        return;
+      }
+
+      if (isChangingToReservedAdminEmail || isChangingAdminAccountEmail) {
+        Alert.alert(
+          'Admin Email Protected',
+          'Admin email addresses cannot be claimed or changed from the profile editor. Please sign out and log in with the admin email and password instead.'
+        );
+        setIsSaving(false);
+        return;
+      }
       
-      if (emailChanged) {
-        if (isAdmin) {
-          return new Promise<void>((resolve) => {
-            Alert.prompt(
-              'Admin Email Verification',
-              'You are an admin. Please enter the password to change your email:',
-              [
-                {
-                  text: 'Cancel',
-                  style: 'cancel',
-                  onPress: () => {
-                    setIsSaving(false);
-                    resolve();
-                  },
-                },
-                {
-                  text: 'Verify',
-                  onPress: async (password?: string) => {
-                    if (password !== 'a1') {
-                      Alert.alert('Invalid Password', 'The password you entered is incorrect.');
-                      setIsSaving(false);
-                      resolve();
-                      return;
-                    }
-                    await continueProfileSave(profileData, oldEmail, newEmail, !!emailChanged);
-                    resolve();
-                  },
-                },
-              ],
-              'secure-text'
+      if (profileEmailChanged) {
+        try {
+          const emailCheck = { exists: false };
+          if (emailCheck.exists) {
+            Alert.alert(
+              'Email Already Exists',
+              'This email is already associated with another account. Please use a different email address.'
             );
-          });
-        } else {
-          try {
-            const emailCheck = { exists: false };
-            if (emailCheck.exists) {
-              Alert.alert(
-                'Email Already Exists',
-                'This email is already associated with another account. Please use a different email address.'
-              );
-              setIsSaving(false);
-              return;
-            }
-          } catch (error) {
-            console.error('[Settings] Error checking email uniqueness:', error);
-            Alert.alert('Error', 'Failed to verify email. Please try again.');
             setIsSaving(false);
             return;
           }
+        } catch (error) {
+          console.error('[Settings] Error checking email uniqueness:', error);
+          Alert.alert('Error', 'Failed to verify email. Please try again.');
+          setIsSaving(false);
+          return;
         }
       }
       
