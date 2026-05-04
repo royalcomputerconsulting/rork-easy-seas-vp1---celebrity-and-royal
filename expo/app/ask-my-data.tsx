@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Bot, ChevronRight, DatabaseZap, FileSearch, Search, Ship, SlidersHorizontal, Tag, Ticket, X, Wand2 } from 'lucide-react-native';
+import { Bot, ChevronRight, CloudSun, DatabaseZap, FileSearch, Gamepad2, Search, Ship, SlidersHorizontal, Tag, Ticket, Users, X, Wand2 } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { AgentXChat } from '@/components/AgentXChat';
 import { IntelligenceFilterStrip } from '@/components/IntelligenceFilterStrip';
@@ -29,6 +29,9 @@ const SOURCE_STYLES: Record<AskMyDataSource, { label: string; color: string; ico
   cruises: { label: 'Cruise', color: '#1D4ED8', icon: Ship },
   certificates: { label: 'Certificate', color: '#B45309', icon: Ticket },
   calendar: { label: 'Calendar', color: '#7C3AED', icon: FileSearch },
+  crew: { label: 'Crew', color: '#BE123C', icon: Users },
+  machines: { label: 'Slots', color: '#4338CA', icon: Gamepad2 },
+  weather: { label: 'Weather', color: '#0284C7', icon: CloudSun },
 };
 
 function buildScopeLabel(profileId: string, users: ReturnType<typeof useUser>['users'], brand: string, program: string): string {
@@ -90,7 +93,7 @@ export default function AskMyDataScreen() {
   const scopedOffers = useMemo(() => filterRecordsByIntelligence(casinoOffers, filterSnapshot, users), [casinoOffers, filterSnapshot, users]);
   const scopedCruises = useMemo(() => filterRecordsByIntelligence(cruises, filterSnapshot, users), [cruises, filterSnapshot, users]);
   const scopedBookedCruises = useMemo(() => filterRecordsByIntelligence(bookedCruises, filterSnapshot, users), [bookedCruises, filterSnapshot, users]);
-  const scopedCertificates = useMemo(() => filterRecordsByIntelligence(certificates as Array<Certificate & { ownerProfileId?: string; sourceEmail?: string; brand?: string; casinoProgram?: string }>, filterSnapshot, users), [certificates, filterSnapshot, users]);
+  const scopedCertificates = useMemo(() => filterRecordsByIntelligence(certificates as unknown as Array<Certificate & { ownerProfileId?: string; sourceEmail?: string; brand?: string; casinoProgram?: any }>, filterSnapshot, users), [certificates, filterSnapshot, users]);
   const scopedCalendarEvents = useMemo(() => filterRecordsByIntelligence(calendarEvents, filterSnapshot, users), [calendarEvents, filterSnapshot, users]);
 
   const scopeLabel = useMemo(() => buildScopeLabel(selectedProfileId, users, selectedBrand, selectedProgram), [selectedBrand, selectedProfileId, selectedProgram, users]);

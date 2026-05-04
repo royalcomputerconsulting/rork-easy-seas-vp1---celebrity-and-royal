@@ -595,8 +595,8 @@ const ServiceProviders = composeProviders(
   AlertsProvider,
   CertificatesProvider,
   IntelligenceFiltersProvider,
-  AgentXProvider,
   SailingWeatherProvider,
+  AgentXProvider,
 );
 
 export default function RootLayout() {
