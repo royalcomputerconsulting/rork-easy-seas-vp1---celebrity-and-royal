@@ -891,10 +891,10 @@ export default function CruiseDetailsScreen() {
         </View>
       )}
 
-      {(cruise.taxes ?? 0) > 0 && (
+      {valueBreakdown.taxesFees > 0 && (
         <View style={styles.valueTaxesRow}>
           <Text style={styles.valueCompactLabel}>Port Taxes & Fees</Text>
-          <Text style={styles.valueCompactValue}>{formatCurrency(cruise.taxes ?? 0)}</Text>
+          <Text style={styles.valueCompactValue}>{formatCurrency(valueBreakdown.taxesFees)}</Text>
         </View>
       )}
 

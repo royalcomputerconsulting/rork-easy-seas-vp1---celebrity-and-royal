@@ -342,7 +342,7 @@ export function parseBookedCSV(content: string, existingCruises: BookedCruise[] 
     const pricePaid = getNumericValue(colIndices.pricePaid);
     const totalRetailCost = getNumericValue(colIndices.totalRetailCost);
     const totalCasinoDiscount = getNumericValue(colIndices.totalCasinoDiscount);
-    const portTaxesFees = getNumericValue(colIndices.portTaxesFees) / 2;
+    const portTaxesFees = getNumericValue(colIndices.portTaxesFees);
 
     if (!ship || !departureDateRaw) {
       console.log(`[BookedParser] Skipping booked row ${i}: missing ship or date`);
