@@ -927,7 +927,7 @@ export default function AtlasScreen() {
             listRef.current = r;
           }}
           data={isLoading ? [] : filteredMachines}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item, index) => `${item.id?.trim() || 'atlas-machine'}-${item.globalMachineId || item.machineName || 'machine'}-${item.manufacturer || 'maker'}-${index}`}
           renderItem={({ item, index }) => {
             try {
               return renderMachineItem({ item, index } as any);

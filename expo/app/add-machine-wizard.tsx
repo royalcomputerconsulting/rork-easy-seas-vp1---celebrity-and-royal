@@ -85,7 +85,7 @@ export default function AddMachineWizardScreen() {
     [globalLibrary, searchQuery]
   );
 
-  const keyExtractor = useCallback((item: MachineEncyclopediaEntry) => item.id, []);
+  const keyExtractor = useCallback((item: MachineEncyclopediaEntry, index: number) => `${item.id?.trim() || 'wizard-machine'}-${item.globalMachineId || item.machineName || 'machine'}-${item.manufacturer || 'maker'}-${index}`, []);
 
   const renderWizardMachineRow = useCallback(({ item }: ListRenderItemInfo<MachineEncyclopediaEntry>) => (
     <WizardMachineRow machine={item} onSelect={selectGlobalMachine} />

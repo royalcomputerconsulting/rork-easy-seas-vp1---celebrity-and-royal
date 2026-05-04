@@ -129,11 +129,50 @@ function getScopedUserKeys(email: string | null) {
   } as const;
 }
 
+function createUserProfileId(index?: number): string {
+  const randomToken = Math.random().toString(36).slice(2, 8);
+  return typeof index === 'number' ? `user_${Date.now()}_${index}_${randomToken}` : `user_${Date.now()}_${randomToken}`;
+}
+
+function ensureUniqueUserProfileIds(userProfiles: UserProfile[]): UserProfile[] {
+  const seenIds = new Set<string>();
+  let changed = false;
+
+  const uniqueProfiles = userProfiles.map((profile, index) => {
+    const trimmedId = typeof profile.id === 'string' ? profile.id.trim() : '';
+    let nextId = trimmedId;
+
+    if (!nextId || seenIds.has(nextId)) {
+      nextId = createUserProfileId(index);
+      changed = true;
+      console.warn('[UserProvider] Repaired duplicate or missing user profile id:', {
+        previousId: trimmedId || '(missing)',
+        nextId,
+        index,
+      });
+    }
+
+    seenIds.add(nextId);
+
+    if (nextId === profile.id) {
+      return profile;
+    }
+
+    return {
+      ...profile,
+      id: nextId,
+      updatedAt: new Date().toISOString(),
+    };
+  });
+
+  return changed ? uniqueProfiles : userProfiles;
+}
+
 function createOwnerProfile(email: string | null): UserProfile {
   const now = new Date().toISOString();
 
   return {
-    id: `user_${Date.now()}`,
+    id: createUserProfileId(),
     name: DEFAULT_OWNER.name,
     displayName: DEFAULT_OWNER.name,
     relationshipLabel: 'Self',
@@ -213,7 +252,7 @@ function sanitizeUserProfile(user: unknown, fallbackEmail: string | null, index:
   const normalizedEmail = normalizeEmail(userRecord.email) ?? fallbackEmail ?? DEFAULT_OWNER.email;
 
   return {
-    id: typeof userRecord.id === 'string' && userRecord.id.trim().length > 0 ? userRecord.id : `user_${Date.now()}_${index}`,
+    id: typeof userRecord.id === 'string' && userRecord.id.trim().length > 0 ? userRecord.id.trim() : createUserProfileId(index),
     name: typeof userRecord.name === 'string' && userRecord.name.trim().length > 0 ? userRecord.name : DEFAULT_OWNER.name,
     displayName: typeof userRecord.displayName === 'string' && userRecord.displayName.trim().length > 0 ? userRecord.displayName : (typeof userRecord.name === 'string' && userRecord.name.trim().length > 0 ? userRecord.name : DEFAULT_OWNER.name),
     relationshipLabel: typeof userRecord.relationshipLabel === 'string' ? userRecord.relationshipLabel : (userRecord.isOwner === true ? 'Self' : ''),
@@ -267,9 +306,9 @@ function parseStoredUsers(rawValue: string | null, fallbackEmail: string | null)
       return [];
     }
 
-    return parsedValue
+    return ensureUniqueUserProfileIds(parsedValue
       .map((user, index) => sanitizeUserProfile(user, fallbackEmail, index))
-      .filter((user): user is UserProfile => user !== null);
+      .filter((user): user is UserProfile => user !== null));
   } catch (error) {
     console.error('[UserProvider] Failed to parse stored users payload:', error);
     return [];
@@ -322,12 +361,13 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
 
   const persistUsers = useCallback(async (newUsers: UserProfile[]) => {
     const scopedKeys = getScopedUserKeys(normalizedAuthenticatedEmail);
+    const uniqueUsers = ensureUniqueUserProfileIds(newUsers);
 
     try {
-      await AsyncStorage.setItem(scopedKeys.USERS, JSON.stringify(newUsers));
+      await AsyncStorage.setItem(scopedKeys.USERS, JSON.stringify(uniqueUsers));
       console.log('[UserProvider] Persisted scoped users:', {
         email: normalizedAuthenticatedEmail,
-        count: newUsers.length,
+        count: uniqueUsers.length,
         key: scopedKeys.USERS,
       });
     } catch (error) {
@@ -387,11 +427,11 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
         return null;
       }
 
-      const migratedUsers = matchingUsers.map((user) => ({
+      const migratedUsers = ensureUniqueUserProfileIds(matchingUsers.map((user) => ({
         ...user,
         email: normalizeEmail(user.email) ?? normalizedAuthenticatedEmail,
         isOwner: user.id === selectedCurrentUser.id,
-      }));
+      })));
 
       const scopedKeys = getScopedUserKeys(normalizedAuthenticatedEmail);
       await Promise.all([
@@ -450,10 +490,10 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
 
       if (storedUsersRaw) {
         const parsedUsers = parseStoredUsers(storedUsersRaw, normalizedAuthenticatedEmail);
-        const normalizedUsers = parsedUsers.map((user) => ({
+        const normalizedUsers = ensureUniqueUserProfileIds(parsedUsers.map((user) => ({
           ...user,
           email: normalizeEmail(user.email) ?? normalizedAuthenticatedEmail,
-        }));
+        })));
 
         const owner = normalizedUsers.find((user) => user.isOwner) ?? normalizedUsers[0] ?? null;
         const resolvedCurrentUserId = storedCurrentUserId && normalizedUsers.some((user) => user.id === storedCurrentUserId)
@@ -507,7 +547,7 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
 
     const isFirstUser = users.length === 0;
     const newUser: UserProfile = {
-      id: user.id || `user_${Date.now()}`,
+      id: typeof user.id === 'string' && user.id.trim().length > 0 && !users.some((existingUser) => existingUser.id === user.id?.trim()) ? user.id.trim() : createUserProfileId(),
       name: user.name,
       displayName: user.name,
       relationshipLabel: isFirstUser ? 'Self' : '',
@@ -520,7 +560,7 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
       updatedAt: now,
     };
 
-    const newUsers = [...users, newUser];
+    const newUsers = ensureUniqueUserProfileIds([...users, newUser]);
     setUsers(newUsers);
     await persistUsers(newUsers);
 
@@ -596,11 +636,11 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
       };
 
       const targetUserBeforeUpdate = currentUsers.find((user) => user.id === userId) ?? null;
-      const updatedUsers = currentUsers.map((user) => (
+      const updatedUsers = ensureUniqueUserProfileIds(currentUsers.map((user) => (
         user.id === userId
           ? { ...user, ...normalizedUpdates, updatedAt: new Date().toISOString() }
           : user
-      ));
+      )));
 
       await AsyncStorage.setItem(scopedKeys.USERS, JSON.stringify(updatedUsers));
 
@@ -672,7 +712,7 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
     try {
       const storedUsersRaw = await AsyncStorage.getItem(scopedKeys.USERS);
       if (storedUsersRaw) {
-        const parsedUsers = parseStoredUsers(storedUsersRaw, normalizedAuthenticatedEmail);
+        const parsedUsers = ensureUniqueUserProfileIds(parseStoredUsers(storedUsersRaw, normalizedAuthenticatedEmail));
         const storedOwner = parsedUsers.find((user) => user.isOwner) ?? parsedUsers[0] ?? null;
 
         if (storedOwner) {

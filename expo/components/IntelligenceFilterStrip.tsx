@@ -45,7 +45,20 @@ export const IntelligenceFilterStrip = React.memo(function IntelligenceFilterStr
   } = useIntelligenceFilters();
 
   const profileOptions = useMemo((): { id: ProfileFilterValue; label: string }[] => {
-    const activeProfiles = users.filter((profile) => profile.active !== false);
+    const seenProfileIds = new Set<string>();
+    const activeProfiles = users.filter((profile) => {
+      if (profile.active === false) {
+        return false;
+      }
+
+      const profileId = profile.id.trim();
+      if (!profileId || seenProfileIds.has(profileId)) {
+        return false;
+      }
+
+      seenProfileIds.add(profileId);
+      return true;
+    });
     const primaryProfile = activeProfiles.find((profile) => profile.isOwner) ?? activeProfiles[0];
     const secondProfile = getSecondProfileForUnassignedRecords(activeProfiles);
     return [
@@ -101,7 +114,7 @@ export const IntelligenceFilterStrip = React.memo(function IntelligenceFilterStr
             const active = selectedProfileId === option.id;
             return (
               <TouchableOpacity
-                key={option.id}
+                key={`profile-filter-option-${option.id}`}
                 style={[isBookedCruisesVariant ? styles.bookedChip : styles.chip, active && (isBookedCruisesVariant ? styles.bookedChipActive : styles.chipActive)]}
                 onPress={() => setSelectedProfileId(option.id)}
                 activeOpacity={0.75}

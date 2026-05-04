@@ -849,7 +849,7 @@ export default function SchedulingScreen() {
           <FlatList
             data={sortedB2bSets}
             renderItem={({ item, index }) => renderB2BSetCard(item, index)}
-            keyExtractor={(item) => item.id}
+            keyExtractor={(item, index) => `${item.id?.trim() || 'b2b-set'}-${item.startDate || 'start'}-${item.departurePort || 'port'}-${index}`}
             contentContainerStyle={styles.listContent}
             ListHeaderComponent={renderHeader}
             ListEmptyComponent={renderEmpty}
@@ -868,7 +868,7 @@ export default function SchedulingScreen() {
           <FlatList
             data={filteredCruises}
             renderItem={renderCruiseCard}
-            keyExtractor={(item) => item.id}
+            keyExtractor={(item, index) => `${item.id?.trim() || 'scheduled-cruise'}-${item.shipName || 'ship'}-${item.sailDate || 'date'}-${item.offerCode || 'offer'}-${index}`}
             contentContainerStyle={styles.listContent}
             ListHeaderComponent={renderHeader}
             ListFooterComponent={renderListFooter}

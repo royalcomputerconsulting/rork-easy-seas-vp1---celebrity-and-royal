@@ -1115,7 +1115,7 @@ function OverviewScreenContent() {
     );
   }, [handleOfferPress, handleCruiseItemPress, bookedCruiseIds, cruisesData, offerNameByCode, certificates, currentTravelerProfile, handleDecodeOffer]);
 
-  const keyExtractor = useCallback((item: CasinoOfferCardData | Cruise) => item.id, []);
+  const keyExtractor = useCallback((item: CasinoOfferCardData | Cruise, index: number) => `${item.id?.trim() || 'overview-item'}-${'offerCode' in item ? item.offerCode || 'offer' : item.shipName || 'ship'}-${'sailDate' in item ? item.sailDate || 'date' : item.expiryDate || 'expiry'}-${index}`, []);
 
   return (
     <View style={styles.container}>

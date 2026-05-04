@@ -56,7 +56,22 @@ export default function ImportReviewScreen() {
   const reviewItems = useMemo(() => allReviewItems.filter((item) => recordMatchesIntelligenceFilters(item.record, intelligenceFilterSnapshot, users)), [allReviewItems, intelligenceFilterSnapshot, users]);
 
   const reviewGroups = useMemo(() => groupImportAssignmentReviewItems(reviewItems), [reviewItems]);
-  const activeProfiles = useMemo(() => users.filter((profile) => profile.active !== false), [users]);
+  const activeProfiles = useMemo(() => {
+    const seenProfileIds = new Set<string>();
+    return users.filter((profile) => {
+      if (profile.active === false) {
+        return false;
+      }
+
+      const profileId = profile.id.trim();
+      if (!profileId || seenProfileIds.has(profileId)) {
+        return false;
+      }
+
+      seenProfileIds.add(profileId);
+      return true;
+    });
+  }, [users]);
 
   const applyPatchToItem = useCallback((item: ImportAssignmentReviewItem, patch: Partial<CasinoOffer & Cruise & BookedCruise & CalendarEvent>) => {
     console.log('[ImportReview] Applying assignment patch:', { entity: item.entity, id: item.id, patch });
@@ -156,7 +171,7 @@ export default function ImportReviewScreen() {
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.profileChipRow}>
             {activeProfiles.map((profile) => (
               <TouchableOpacity
-                key={profile.id}
+                key={`assign-profile-${profile.id}`}
                 style={styles.profileChip}
                 onPress={() => { void assignGroupToProfile(group, profile); }}
                 activeOpacity={0.78}

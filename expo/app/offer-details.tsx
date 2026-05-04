@@ -549,7 +549,7 @@ export default function OfferDetailsScreen() {
         <FlatList
           data={offerData.cruises}
           renderItem={renderCruiseCard}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item, index) => `${item.id?.trim() || 'offer-cruise'}-${item.shipName || 'ship'}-${item.sailDate || 'date'}-${index}`}
           extraData={sortBy}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
