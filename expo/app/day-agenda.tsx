@@ -950,6 +950,14 @@ export default function DayAgendaScreen() {
     return Array.from(cruiseMap.values());
   }, [fallbackCruisesForWeather, mergedCruiseBookings, upcomingCruisesForWeather]);
 
+  const weatherAlertCruises = useMemo(() => {
+    return mergedCruiseBookings.length > 0 ? mergedCruiseBookings : allWeatherCruises;
+  }, [allWeatherCruises, mergedCruiseBookings]);
+
+  const weatherAlertDaysAhead = useMemo(() => {
+    return mergedCruiseBookings.length > 0 ? 0 : upcomingCruisesForWeather.length > 0 ? 7 : 0;
+  }, [mergedCruiseBookings.length, upcomingCruisesForWeather.length]);
+
   useEffect(() => {
     if (!isWeatherHydrated || allWeatherCruises.length === 0) {
       return;
@@ -1601,12 +1609,14 @@ export default function DayAgendaScreen() {
             {allWeatherCruises.length > 0 ? (
               <>
                 <MarineAlertsPanel
-                  cruises={allWeatherCruises}
+                  cruises={weatherAlertCruises}
                   startDate={selectedDate}
-                  daysAhead={upcomingCruisesForWeather.length > 0 ? 7 : 0}
+                  daysAhead={weatherAlertDaysAhead}
                   maxItems={3}
                   title="Rough seas / weather alerts"
-                  description="Heads-up for rough conditions in your sailing window."
+                  description={mergedCruiseBookings.length > 0
+                    ? 'Heads-up for rough conditions on this selected cruise day.'
+                    : 'Heads-up for rough conditions in your sailing window.'}
                   testID="agenda-marine-alerts-panel"
                 />
                 <View style={styles.weatherCardsStack}>

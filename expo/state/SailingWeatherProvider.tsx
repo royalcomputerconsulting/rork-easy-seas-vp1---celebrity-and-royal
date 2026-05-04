@@ -1036,8 +1036,24 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
 
     const dateKey = formatDateKey(targetDate);
     const cacheKey = createCacheKey(cruise.id, dateKey, resolvedPoint.latitude, resolvedPoint.longitude);
-    const cached = cacheRef.current[cacheKey];
+    const rawCached = cacheRef.current[cacheKey];
+    const cached = rawCached && rawCached.dateKey === dateKey && rawCached.cacheKey === cacheKey ? rawCached : undefined;
     const shouldForce = options?.force === true;
+
+    if (rawCached && !cached) {
+      logSailingWeather('warn', '[SailingWeather] Ignoring cached forecast with mismatched date/key', {
+        requestedDateKey: dateKey,
+        requestedCacheKey: cacheKey,
+        cachedDateKey: rawCached.dateKey,
+        cachedCacheKey: rawCached.cacheKey,
+      });
+      setCache((previousCache) => {
+        const nextCache = { ...previousCache };
+        delete nextCache[cacheKey];
+        cacheRef.current = nextCache;
+        return nextCache;
+      });
+    }
 
     if (!shouldForce && cached && !isCacheExpired(cached.updatedAt)) {
       console.log('[SailingWeather] Serving fresh cached forecast', { cacheKey, source: 'cache-fresh' });
