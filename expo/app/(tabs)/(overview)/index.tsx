@@ -66,7 +66,7 @@ import { filterRecordsByIntelligence } from '@/lib/intelligenceFilters';
 import { getBookedCruiseCasinoPoints, getBookedCruiseWinningsBroughtHome } from '@/lib/casinoPointTruth';
 
 import type { Cruise, BookedCruise, CasinoOffer } from '@/types/models';
-import { getCabinPriceFromEntity, GUEST_COUNT_DEFAULT } from '@/lib/valueCalculator';
+import { getCabinPriceFromEntity, getDoubleOccupancyRoomRetailValue, GUEST_COUNT_DEFAULT } from '@/lib/valueCalculator';
 
 const OFFERS_TITLE_LOGO_URL = 'https://r2-pub.rork.com/attachments/4hm4mwycibyktcoe3b7eo.png';
 import { formatCurrency } from '@/lib/format';
@@ -532,7 +532,7 @@ function OverviewScreenContent() {
       const roomType = offer.cruises[0]?.cabinType || 'Balcony';
       
       offer.cruises.forEach(cruise => {
-        let cabinPrice = getCabinPriceFromEntity(cruise, roomType) || cruise.price || 0;
+        let cabinPrice = getCabinPriceFromEntity(cruise, roomType) ?? getDoubleOccupancyRoomRetailValue(cruise.price) ?? 0;
         
         // Estimate cabin price if not available
         if (cabinPrice === 0 && cruise.nights > 0) {

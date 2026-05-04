@@ -136,7 +136,7 @@ const DEFAULT_POINT_DOLLAR_VALUE = 0.01;
 const CONFIRMED_CLUB_ROYALE_2025_RETAIL_VALUE_FLOOR = 47774;
 const CONFIRMED_CLUB_ROYALE_2025_PAID = 4238.41;
 const DEFAULT_PORT_FEE_PER_PERSON_FOR_7_NIGHTS = 162;
-const TWO_PERSON_PORT_FEE_THRESHOLD = 200;
+const DEFAULT_DOUBLE_OCCUPANCY_GUESTS = 2;
 const KNOWN_STAR_2026_SAIL_DATE = '2026-07-05';
 const KNOWN_STAR_2026_RETAIL_VALUE = 5500;
 const KNOWN_STAR_2026_NET_EFFECTIVE_PAID = 150.92;
@@ -482,15 +482,15 @@ export function calcValuePerHour(totalEconomicValue: number, hoursPlayed: number
 
 function getEconomicsGuestCount(cruise: BookedCruise): number {
   if (isNumber(cruise.guests) && cruise.guests > 0) {
-    return Math.max(1, Math.round(cruise.guests));
+    return Math.max(DEFAULT_DOUBLE_OCCUPANCY_GUESTS, Math.round(cruise.guests));
   }
 
-  return cruise.singleOccupancy ? 1 : 2;
+  return DEFAULT_DOUBLE_OCCUPANCY_GUESTS;
 }
 
-function estimatePerPersonTaxesFees(nights: number): number {
+function estimateBookingTaxesFees(nights: number): number {
   const normalizedNights = nights > 0 ? nights : 7;
-  return round2((DEFAULT_PORT_FEE_PER_PERSON_FOR_7_NIGHTS / 7) * normalizedNights);
+  return round2((DEFAULT_PORT_FEE_PER_PERSON_FOR_7_NIGHTS / 7) * normalizedNights * DEFAULT_DOUBLE_OCCUPANCY_GUESTS);
 }
 
 function getTaxesFeesEstimate(
@@ -505,18 +505,6 @@ function getTaxesFeesEstimate(
   );
 
   if (isNumber(rawTaxesFeesEstimate) && rawTaxesFeesEstimate > 0) {
-    const guestCount = getEconomicsGuestCount(cruise);
-    if (guestCount > 1 && rawTaxesFeesEstimate > TWO_PERSON_PORT_FEE_THRESHOLD) {
-      const normalizedPerPersonTaxesFees = round2(rawTaxesFeesEstimate / guestCount);
-      return {
-        value: normalizedPerPersonTaxesFees,
-        rawValue: round2(rawTaxesFeesEstimate),
-        isEstimated: false,
-        wasNormalized: true,
-        note: `Taxes/fees looked like a ${guestCount}-guest total, so the economics model normalized ${round2(rawTaxesFeesEstimate).toFixed(2)} to ${normalizedPerPersonTaxesFees.toFixed(2)} per person.`,
-      };
-    }
-
     return {
       value: round2(rawTaxesFeesEstimate),
       rawValue: round2(rawTaxesFeesEstimate),
@@ -526,13 +514,13 @@ function getTaxesFeesEstimate(
     };
   }
 
-  const estimatedTaxesFees = estimatePerPersonTaxesFees(cruise.nights || 0);
+  const estimatedTaxesFees = estimateBookingTaxesFees(cruise.nights || 0);
   return {
     value: estimatedTaxesFees,
     rawValue: null,
     isEstimated: true,
     wasNormalized: false,
-    note: `Taxes/fees estimated at ${estimatedTaxesFees.toFixed(2)} using the ${DEFAULT_PORT_FEE_PER_PERSON_FOR_7_NIGHTS.toFixed(0)} per-person port-fee baseline.`,
+    note: `Taxes/fees estimated at ${estimatedTaxesFees.toFixed(2)} using the ${DEFAULT_PORT_FEE_PER_PERSON_FOR_7_NIGHTS.toFixed(0)} per-person double-occupancy port-fee baseline.`,
   };
 }
 

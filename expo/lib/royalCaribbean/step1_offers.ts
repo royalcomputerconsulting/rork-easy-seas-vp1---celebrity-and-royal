@@ -92,6 +92,40 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
     return String(val);
   }
 
+  function parseMaybeJson(value) {
+    if (!value) return null;
+    if (typeof value === 'object') return value;
+    if (typeof value !== 'string') return null;
+    try { return JSON.parse(value); } catch (e) { return null; }
+  }
+
+  function firstStringValue() {
+    for (let i = 0; i < arguments.length; i += 1) {
+      const value = arguments[i];
+      if (typeof value === 'string' && value.trim()) return value.trim();
+      if (typeof value === 'number' && isFinite(value)) return String(value);
+    }
+    return '';
+  }
+
+  function findAppKey() {
+    try {
+      const captured = window.capturedRequestHeaders || {};
+      if (captured.apiKey) return captured.apiKey;
+      const keys = Object.keys(localStorage || {});
+      for (const key of keys) {
+        if (/appkey|api[-_]?key|apigee/i.test(key)) {
+          const value = localStorage.getItem(key);
+          if (value && value.length > 10) return value;
+        }
+      }
+      const winAny = window;
+      return winAny.RCLL_APPKEY || winAny.RCCL_APPKEY || winAny.APPKEY || '';
+    } catch (e) {
+      return '';
+    }
+  }
+
   function pad2(value) {
     return String(value).padStart(2, '0');
   }
@@ -306,58 +340,96 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
 
   async function getAuthContext() {
     try {
-      log('Parsing session data from localStorage...');
+      log('Parsing live session data from browser storage...');
       const host = location && location.hostname ? location.hostname : '';
       const isCarnivalHost = host.includes('carnival.com');
-      let sessionData = localStorage.getItem('persist:session');
-      if (!sessionData && isCarnivalHost) {
-        const carnivalFallbackKeys = ['persist:auth', 'persist:root', 'carnival-session', 'persist:user'];
-        for (const ck of carnivalFallbackKeys) {
-          const cv = localStorage.getItem(ck);
-          if (cv && cv.length > 30) { sessionData = cv; break; }
-        }
-        if (!sessionData) {
-          const lsKeys = Object.keys(localStorage || {});
-          for (const k of lsKeys) {
-            if (/persist:|session|auth/i.test(k)) {
-              const v = localStorage.getItem(k);
-              if (v && v.length > 30) { sessionData = v; break; }
-            }
+      const storageKeys = ['persist:session'];
+      if (isCarnivalHost) {
+        storageKeys.push('persist:auth', 'persist:root', 'carnival-session', 'persist:user');
+      }
+      try {
+        Object.keys(localStorage || {}).forEach((key) => {
+          if (/persist:|session|auth|token|user/i.test(key) && !storageKeys.includes(key)) {
+            storageKeys.push(key);
           }
+        });
+      } catch (e) {}
+
+      let bestSession = null;
+      for (const key of storageKeys) {
+        const raw = localStorage.getItem(key);
+        if (!raw || raw.length < 10) continue;
+        const parsed = parseMaybeJson(raw);
+        if (!parsed) continue;
+        const token = parseMaybeJson(parsed.token) || parsed.token || parsed.accessToken || parsed.access_token || parsed.idToken || parsed.id_token || parsed.authToken;
+        const user = parseMaybeJson(parsed.user) || parsed.user || parsed.profile || parsed.account || {};
+        const accountId = firstStringValue(
+          user.accountId,
+          user.accountID,
+          user.account_id,
+          parsed.accountId,
+          parsed.accountID,
+          parsed.account_id,
+          user.guestAccountId,
+          parsed.guestAccountId
+        );
+        const loyaltyId = firstStringValue(
+          user.cruiseLoyaltyId,
+          user.cruiseLoyaltyID,
+          user.loyaltyId,
+          user.loyaltyID,
+          user.casinoLoyaltyId,
+          user.casinoLoyaltyID,
+          user.clubRoyaleId,
+          user.blueChipId,
+          user.crownAndAnchorNumber,
+          user.crownAnchorNumber,
+          user.captainsClubId,
+          parsed.cruiseLoyaltyId,
+          parsed.loyaltyId
+        );
+        const tokenString = firstStringValue(token);
+        const expirationRaw = parsed.tokenExpiration || parsed.expiresAt || parsed.expires_at || parsed.expiration;
+        const expirationNumber = expirationRaw ? Number(expirationRaw) : 0;
+        const tokenExpiration = expirationNumber > 0 && expirationNumber < 100000000000 ? expirationNumber * 1000 : expirationNumber;
+        const score = (tokenString ? 4 : 0) + (accountId ? 3 : 0) + (loyaltyId ? 2 : 0) + (key === 'persist:session' ? 1 : 0);
+        if (score > 0 && (!bestSession || score > bestSession.score)) {
+          bestSession = { key, token: tokenString, accountId, loyaltyId, tokenExpiration, user, score };
         }
-        if (sessionData) {
-          log('Found Carnival session data in localStorage', 'success');
-        }
       }
-      if (!sessionData) {
-        throw new Error('No session data found. Please log in again.');
+
+      const capturedHeaders = window.capturedRequestHeaders || {};
+      const capturedAuth = firstStringValue(capturedHeaders.authorization);
+      const capturedAccountId = firstStringValue(capturedHeaders.accountId);
+      const authToken = bestSession?.token || (capturedAuth ? capturedAuth.replace(/^Bearer\s+/i, '') : '');
+      const accountId = bestSession?.accountId || capturedAccountId;
+      const loyaltyId = bestSession?.loyaltyId || '';
+
+      if (!authToken && !accountId) {
+        throw new Error('No usable signed-in session found. Please log in again.');
       }
-      const parsedData = JSON.parse(sessionData);
-      const authToken = parsedData.token ? JSON.parse(parsedData.token) : null;
-      const tokenExpiration = parsedData.tokenExpiration ? parseInt(parsedData.tokenExpiration) * 1000 : null;
-      const user = parsedData.user ? JSON.parse(parsedData.user) : null;
-      const accountId = user && user.accountId ? user.accountId : null;
-      const loyaltyId = user && user.cruiseLoyaltyId ? user.cruiseLoyaltyId : null;
-      if (!authToken || !accountId) {
-        throw new Error('Invalid session data. Please log in again.');
+
+      if (bestSession?.tokenExpiration && bestSession.tokenExpiration < Date.now()) {
+        log('⚠️ Stored token timestamp is stale; continuing with the active browser session/cookies', 'warning');
       }
-      const currentTime = Date.now();
-      if (tokenExpiration && tokenExpiration < currentTime) {
-        throw new Error('Session expired. Please log in again.');
-      }
-      log('Session data parsed successfully', 'success');
-      const rawAuth = authToken && authToken.toString ? authToken.toString() : '';
-      const networkAuth = rawAuth ? (rawAuth.startsWith('Bearer ') ? rawAuth : 'Bearer ' + rawAuth) : '';
+
+      log('Session context prepared' + (bestSession?.key ? ' from ' + bestSession.key : ' from captured headers'), 'success');
+      const networkAuth = authToken ? (authToken.startsWith('Bearer ') ? authToken : 'Bearer ' + authToken) : capturedAuth;
+      const appKey = findAppKey();
       const headers = {
         'accept': 'application/json',
         'accept-language': 'en-US,en;q=0.9',
-        'account-id': accountId,
-        'authorization': networkAuth,
         'content-type': 'application/json',
       };
+      if (accountId) headers['account-id'] = accountId;
+      if (networkAuth) headers['authorization'] = networkAuth;
+      if (appKey) {
+        headers['appkey'] = appKey;
+        headers['x-api-key'] = appKey;
+      }
       const brandCode = host.includes('celebritycruises.com') ? 'C' : (host.includes('carnival.com') ? 'N' : 'R');
       const baseUrl = brandCode === 'C' ? 'https://www.celebritycruises.com' : (brandCode === 'N' ? 'https://www.carnival.com' : 'https://www.royalcaribbean.com');
-      return { headers, accountId, loyaltyId, brandCode, baseUrl, user };
+      return { headers, accountId, loyaltyId, brandCode, baseUrl, user: bestSession?.user || {} };
     } catch (error) {
       log('Failed to get auth context: ' + error.message, 'error');
       throw error;
@@ -480,16 +552,56 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
       log('Endpoint: ' + endpoint);
       const requestBody = { cruiseLoyaltyId: loyaltyId, offerCode: '', brand: apiBrandCode };
       window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'progress', current: 0, total: 100, stepName: 'Fetching offers from API...' }));
-      const response = await fetch(endpoint, { method: 'POST', headers: headers, credentials: 'omit', body: JSON.stringify(requestBody) });
-      log('API response status: ' + response.status);
-      if (response.status === 403) {
-        throw new Error('Session expired (403). Please log in again.');
+      async function requestOffers(endpointUrl, body, includeAuthorization, label) {
+        const requestHeaders = { ...headers };
+        if (!includeAuthorization) {
+          delete requestHeaders.authorization;
+        }
+        const response = await fetch(endpointUrl, {
+          method: 'POST',
+          headers: requestHeaders,
+          credentials: 'include',
+          body: JSON.stringify(body)
+        });
+        log(label + ' response status: ' + response.status);
+        return response;
       }
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error('API error: ' + response.status + ' - ' + errorText);
+
+      const endpointsToTry = [endpoint];
+      const alternateEndpoint = baseUrl + (brandCode === 'C' ? '/api/casino/casino-offers/v1' : '/api/casino/casino-offers/v2');
+      if (!endpointsToTry.includes(alternateEndpoint)) {
+        endpointsToTry.push(alternateEndpoint);
       }
-      const rawData = await response.json();
+
+      let response = null;
+      let lastErrorText = '';
+      for (let endpointIndex = 0; endpointIndex < endpointsToTry.length; endpointIndex += 1) {
+        const endpointToTry = endpointsToTry[endpointIndex];
+        response = await requestOffers(endpointToTry, requestBody, true, 'Casino offers API' + (endpointIndex > 0 ? ' alternate' : ''));
+        if ((response.status === 401 || response.status === 403) && headers.authorization) {
+          log('⚠️ Authorized offer fetch was rejected; retrying with website cookies only', 'warning');
+          response = await requestOffers(endpointToTry, requestBody, false, 'Cookie-only casino offers API');
+        }
+        if (response.ok) {
+          break;
+        }
+        try { lastErrorText = await response.clone().text(); } catch (e) { lastErrorText = ''; }
+      }
+
+      if (!response || !response.ok) {
+        throw new Error('API error: ' + (response ? response.status : 'NO_RESPONSE') + (lastErrorText ? ' - ' + lastErrorText : ''));
+      }
+
+      let rawData = await response.json();
+      const capturedOffers = window.capturedPayloads && window.capturedPayloads.offers;
+      if (capturedOffers && capturedOffers !== rawData) {
+        const capturedData = normalizeOffersApiResponse(capturedOffers);
+        const liveData = normalizeOffersApiResponse(rawData);
+        if ((capturedData.offers?.length || 0) > (liveData.offers?.length || 0)) {
+          log('ℹ️ Using richer casino offers payload captured from the website network call', 'info');
+          rawData = capturedOffers;
+        }
+      }
       const data = normalizeOffersApiResponse(rawData);
       if (!Array.isArray(data.offers)) {
         throw new Error('Invalid API response format');
@@ -816,6 +928,23 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
       }
     } catch (error) {
       log('❌ API extraction failed: ' + error.message, 'error');
+      const capturedOffers = window.capturedPayloads && window.capturedPayloads.offers;
+      if (capturedOffers) {
+        try {
+          log('🔄 Attempting recovery from already-captured casino offers payload...', 'warning');
+          const recoveredData = normalizeOffersApiResponse(capturedOffers);
+          let recovered = processAPIResponse(recoveredData, SCRAPE_PRICING_AND_ITINERARY);
+          let recoveredRows = recovered.offerRows || [];
+          if (SCRAPE_PRICING_AND_ITINERARY && recoveredRows.length > 0) {
+            recoveredRows = await enrichWithPricingData(recoveredRows, location.origin);
+          }
+          sendOfferRowsInChunks(recoveredRows, recovered.offerCount || 0);
+          log('✅ Recovered ' + recoveredRows.length + ' offer row(s) from network capture', 'success');
+          return;
+        } catch (captureError) {
+          log('⚠️ Captured offers recovery failed: ' + captureError.message, 'warning');
+        }
+      }
       log('Attempting fallback to DOM scraping...', 'warning');
       await fallbackDOMExtraction();
     }

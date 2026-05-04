@@ -19,7 +19,7 @@ import { getUniqueImageForCruise, DEFAULT_CRUISE_IMAGE } from '@/constants/cruis
 import type { Cruise, CasinoOffer } from '@/types/models';
 import type { OfferRatingLabel } from '@/lib/offerIntelligence';
 import { useAppState } from '@/state/AppStateProvider';
-import { getCabinPriceFromEntity, GUEST_COUNT_DEFAULT } from '@/lib/valueCalculator';
+import { getCabinPriceFromEntity, getDoubleOccupancyRoomRetailValue, GUEST_COUNT_DEFAULT } from '@/lib/valueCalculator';
 import { getCertificatePdfMatch, openCertificatePdf } from '@/lib/royalCaribbean/certificatePdf';
 
 interface CasinoOfferCardProps {
@@ -401,7 +401,7 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
     };
     
     cruises.forEach(cruise => {
-      let cabinPrice = getCabinPriceFromEntity(cruise, roomType) || cruise.price || 0;
+      let cabinPrice = getCabinPriceFromEntity(cruise, roomType) ?? getDoubleOccupancyRoomRetailValue(cruise.price) ?? 0;
       
       // Estimate cabin price if not available
       if (cabinPrice === 0 && cruise.nights > 0) {
@@ -475,7 +475,7 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
     let total = 0;
     if (firstCruise) {
       const roomType = offerDetails.roomType || firstCruise.cabinType || 'Balcony';
-      let cabinPrice = getCabinPriceFromEntity(firstCruise, roomType) || firstCruise.price || 0;
+      let cabinPrice = getCabinPriceFromEntity(firstCruise, roomType) ?? getDoubleOccupancyRoomRetailValue(firstCruise.price) ?? 0;
       
       // Estimate cabin price if not available
       if (cabinPrice === 0 && firstCruise.nights > 0) {

@@ -22,9 +22,9 @@ const CABIN_BASE_PRICES: Record<string, number> = {
 
 function estimateCabinRetailValue(cabinType: string, nights: number): number {
   const typeKey = getCabinTypeKey(cabinType);
-  const basePrice = CABIN_BASE_PRICES[typeKey] || 1000;
-  const perNightRate = basePrice / 7;
-  return Math.round(perNightRate * nights);
+  const basePerPersonPrice = CABIN_BASE_PRICES[typeKey] || 1000;
+  const perNightRate = basePerPersonPrice / 7;
+  return Math.round(perNightRate * nights * DOUBLE_OCCUPANCY_GUESTS);
 }
 
 export const CABIN_PRICE_MULTIPLIERS: Record<string, number> = {
@@ -46,6 +46,7 @@ export const CABIN_PRICE_MULTIPLIERS: Record<string, number> = {
 
 export const DOLLARS_PER_POINT = 5;
 export const GUEST_COUNT_DEFAULT = 2;
+const DOUBLE_OCCUPANCY_GUESTS = 2;
 const DEFAULT_PORT_TAXES_PER_PERSON_FOR_7_NIGHTS = 162;
 
 function roundMoney(value: number): number {
@@ -64,9 +65,23 @@ function getFirstPositiveNumber(...values: Array<number | null | undefined>): nu
   return values.find((value): value is number => isFiniteNumber(value) && value > 0);
 }
 
+export function getDoubleOccupancyRoomRetailValue(perPersonPrice: number | null | undefined): number | undefined {
+  return isFiniteNumber(perPersonPrice) && perPersonPrice > 0 ? roundMoney(perPersonPrice * DOUBLE_OCCUPANCY_GUESTS) : undefined;
+}
+
 function getGuestCount(entity: Cruise | BookedCruise | CasinoOffer): number {
   const guests = entity.guests;
-  return isFiniteNumber(guests) && guests > 0 ? Math.max(1, Math.round(guests)) : GUEST_COUNT_DEFAULT;
+  return isFiniteNumber(guests) && guests > 0 ? Math.max(DOUBLE_OCCUPANCY_GUESTS, Math.round(guests)) : GUEST_COUNT_DEFAULT;
+}
+
+function getOfferCompedGuestCount(offer: CasinoOffer): number {
+  if (isFiniteNumber(offer.guests) && offer.guests > 0) {
+    return Math.max(1, Math.round(offer.guests));
+  }
+
+  const parsedGuests = offer.guestsInfo?.match(/\d+/)?.[0];
+  const guestCount = parsedGuests ? parseInt(parsedGuests, 10) : NaN;
+  return Number.isFinite(guestCount) && guestCount > 0 ? guestCount : GUEST_COUNT_DEFAULT;
 }
 
 function getMoneyFromPayload(entity: Cruise | BookedCruise, keys: string[]): number | undefined {
@@ -145,13 +160,18 @@ function buildResolvedRetailValue(
   };
 }
 
-/** Resolves the full-booking cabin retail value; imported cabin prices are full retail booking totals, not per-person rates. */
+/** Resolves the full double-occupancy cabin retail value; imported category prices are per-person rates. */
 export function resolveCruiseRetailValue(cruise: Cruise | BookedCruise, cabinType?: string): ResolvedCruiseRetailValue {
   const guestCount = getGuestCount(cruise);
   const targetCabinType = cabinType || cruise.cabinType || (cruise as BookedCruise).cabinCategory || 'Balcony';
-  const importedCabinRetailValue = getDetailedCabinPriceFromEntity(cruise, targetCabinType);
-  if (isFiniteNumber(importedCabinRetailValue) && importedCabinRetailValue > 0) {
-    return buildResolvedRetailValue(importedCabinRetailValue, guestCount, 'pricing');
+  const importedPerPersonCabinRetailValue = getDetailedPerPersonCabinPriceFromEntity(cruise, targetCabinType);
+  const importedRoomRetailValue = getDoubleOccupancyRoomRetailValue(importedPerPersonCabinRetailValue);
+  if (importedRoomRetailValue !== undefined && importedPerPersonCabinRetailValue !== undefined) {
+    return {
+      totalRetailValue: importedRoomRetailValue,
+      perGuestRetailValue: roundMoney(importedPerPersonCabinRetailValue),
+      source: 'pricing',
+    };
   }
 
   const payloadRetailValue = getMoneyFromPayload(cruise, [
@@ -172,6 +192,11 @@ export function resolveCruiseRetailValue(cruise: Cruise | BookedCruise, cabinTyp
     cruise.originalPrice,
     cruise.totalValue,
   );
+  const priceRoomRetailValue = getDoubleOccupancyRoomRetailValue(cruise.price);
+  if (priceRoomRetailValue !== undefined && (explicitRetailValue === undefined || explicitRetailValue <= priceRoomRetailValue)) {
+    return buildResolvedRetailValue(priceRoomRetailValue, guestCount, 'pricing');
+  }
+
   if (explicitRetailValue !== undefined) {
     return buildResolvedRetailValue(explicitRetailValue, guestCount, 'explicit');
   }
@@ -190,7 +215,7 @@ export function resolveCruiseRetailValue(cruise: Cruise | BookedCruise, cabinTyp
   let source: ResolvedCruiseRetailValue['source'] = 'pricing';
 
   if (cruise.price && cruise.price > 0) {
-    estimatedRetailValue = cruise.price;
+    estimatedRetailValue = getDoubleOccupancyRoomRetailValue(cruise.price) ?? cruise.price;
   } else if (cruise.nights > 0) {
     estimatedRetailValue = estimateCabinRetailValue(targetCabinType, cruise.nights);
     source = 'estimate';
@@ -199,7 +224,7 @@ export function resolveCruiseRetailValue(cruise: Cruise | BookedCruise, cabinTyp
   return buildResolvedRetailValue(estimatedRetailValue, guestCount, source);
 }
 
-function getDetailedCabinPriceFromEntity(
+function getDetailedPerPersonCabinPriceFromEntity(
   entity: Cruise | CasinoOffer | BookedCruise,
   cabinType?: string
 ): number | undefined {
@@ -321,31 +346,8 @@ export function getCabinPriceFromEntity(
   entity: Cruise | CasinoOffer | BookedCruise,
   cabinType?: string
 ): number | undefined {
-  const entityWithCabin = entity as Cruise | BookedCruise;
-  const entityWithRoom = entity as CasinoOffer;
-  const targetType = cabinType || entityWithCabin.cabinType || entityWithRoom.roomType || 'Balcony';
-  const typeKey = getCabinTypeKey(targetType);
-  
-  if (typeKey.includes('Interior')) {
-    return entity.interiorPrice;
-  }
-  if (typeKey.includes('Oceanview')) {
-    return entity.oceanviewPrice;
-  }
-  if (typeKey.includes('Balcony')) {
-    return entity.balconyPrice;
-  }
-  if (typeKey.includes('Junior')) {
-    return entity.juniorSuitePrice || entity.suitePrice;
-  }
-  if (typeKey.includes('Grand')) {
-    return entity.grandSuitePrice || entity.suitePrice;
-  }
-  if (typeKey.includes('Suite')) {
-    return entity.suitePrice;
-  }
-  
-  return entity.balconyPrice || entity.oceanviewPrice || entity.interiorPrice || (entity as Cruise).price;
+  const perPersonCabinPrice = getDetailedPerPersonCabinPriceFromEntity(entity, cabinType);
+  return getDoubleOccupancyRoomRetailValue(perPersonCabinPrice);
 }
 
 export function estimateCabinPrice(
@@ -369,10 +371,10 @@ export function calculateCasinoPayTable(
   obc: number = 0,
   guestCount: number = GUEST_COUNT_DEFAULT
 ): CasinoPayTable {
-  const retailCabinPrice = cabinPrice;
+  const retailCabinPrice = getDoubleOccupancyRoomRetailValue(cabinPrice) ?? cabinPrice;
   const cabinValue = guestCount > 0 ? roundMoney(retailCabinPrice / guestCount) : retailCabinPrice;
   const totalValue = retailCabinPrice + taxesFees + freePlay + obc;
-  const discountValue = retailCabinPrice;
+  const discountValue = Math.max(0, retailCabinPrice + taxesFees);
   
   console.log('[ValueCalculator] CasinoPayTable calculated:', {
     cabinPrice,
@@ -413,10 +415,13 @@ export function calculateOfferValue(
   const tradeInValue = offer.tradeInValue || 0;
   const freeInternetValue = (offer.nights || 7) * 30;
   
-  const trueOutOfPocket = taxesFees;
+  const compedGuestCount = getOfferCompedGuestCount(offer);
+  const perPersonCabinPrice = cabinValueForTwo / DOUBLE_OCCUPANCY_GUESTS;
+  const secondPassengerFare = compedGuestCount >= DOUBLE_OCCUPANCY_GUESTS ? 0 : perPersonCabinPrice;
+  const trueOutOfPocket = roundMoney(taxesFees + secondPassengerFare);
   
-  const totalRetailValue = cabinValueForTwo;
-  const totalValueReceived = cabinValueForTwo + freePlayValue + obcValue + tradeInValue + freeInternetValue;
+  const totalRetailValue = roundMoney(cabinValueForTwo + taxesFees);
+  const totalValueReceived = totalRetailValue + freePlayValue + obcValue + tradeInValue + freeInternetValue;
   
   const casinoWinnings = 0;
   const totalProfit = totalValueReceived - trueOutOfPocket;
@@ -426,17 +431,19 @@ export function calculateOfferValue(
     : (totalValueReceived > 0 ? Infinity : 0);
   
   const compValue = totalValueReceived;
-  const discountValue = totalRetailValue;
+  const discountValue = Math.max(0, totalRetailValue - trueOutOfPocket);
   const netValue = totalProfit;
   
-  const isFullyComped = true;
-  const is2Person = offer.classification === '2person' || 
+  const is2Person = compedGuestCount >= DOUBLE_OCCUPANCY_GUESTS ||
+                    offer.classification === '2person' || 
                     offer.offerType === '2person' ||
-                    (offer.guestsInfo?.toLowerCase().includes('2 person') || false);
+                    (offer.guestsInfo?.toLowerCase().includes('2 person') || false) ||
+                    (offer.guestsInfo?.toLowerCase().includes('2 guest') || false);
+  const isFullyComped = is2Person && cabinValueForTwo > 0;
   
-  const coverageFraction = 1;
+  const coverageFraction = totalRetailValue > 0 ? Math.min(1, discountValue / totalRetailValue) : 0;
   
-  const formula = `Value Per $1 = (Retail ${cabinValueForTwo} + FreePlay ${freePlayValue} + OBC ${obcValue}) / Taxes ${trueOutOfPocket}`;
+  const formula = `Value Per $1 = (Room ${cabinValueForTwo} + Taxes/Fees ${taxesFees} + FreePlay ${freePlayValue} + OBC ${obcValue}) / Paid ${trueOutOfPocket}`;
 
   console.log('[ValueCalculator] Offer value calculated:', {
     offerId: offer.id,
@@ -489,12 +496,14 @@ export function calculateCruiseValue(
   const paidInfo = resolveCruisePaidValue(cruise, taxesFeesInfo.value);
   
   const cabinValueForTwo = retailInfo.totalRetailValue;
+  const taxesFees = taxesFeesInfo.value;
+  const totalRetailValue = roundMoney(cabinValueForTwo + taxesFees);
   const trueOutOfPocket = roundMoney(amountPaid ?? paidInfo.value);
   const explicitCasinoDiscount = getFirstPositiveNumber(bookedCruise.totalCasinoDiscount);
-  const casinoDiscount = roundMoney(explicitCasinoDiscount ?? Math.max(0, cabinValueForTwo - trueOutOfPocket));
+  const calculatedCasinoDiscount = Math.max(0, totalRetailValue - trueOutOfPocket);
+  const casinoDiscount = roundMoney(Math.max(explicitCasinoDiscount ?? 0, calculatedCasinoDiscount));
   const hasReceiptData = retailInfo.source !== 'estimate' || paidInfo.isActual;
   const cabinValue = retailInfo.perGuestRetailValue;
-  const taxesFees = taxesFeesInfo.value;
   
   const freePlayValue = cruise.freePlay || 0;
   const obcValue = cruise.freeOBC || 0;
@@ -505,9 +514,7 @@ export function calculateCruiseValue(
   
   const clubRoyalePointsValue = (bookedCruise.earnedPoints || bookedCruise.casinoPoints || 0) * 0.01;
   
-  const totalRetailValue = cabinValueForTwo;
-  
-  const totalValueReceived = cabinValueForTwo + freePlayValue + obcValue + tradeInValue + freeInternetValue + clubRoyalePointsValue;
+  const totalValueReceived = totalRetailValue + freePlayValue + obcValue + tradeInValue + freeInternetValue + clubRoyalePointsValue;
   
   const totalProfit = totalValueReceived + winnings - trueOutOfPocket;
   
@@ -519,12 +526,12 @@ export function calculateCruiseValue(
   const discountValue = casinoDiscount;
   const netValue = totalProfit;
   
-  const isFullyComped = cabinValueForTwo > 0 ? trueOutOfPocket <= cabinValueForTwo * 0.1 || casinoDiscount >= cabinValueForTwo * 0.9 : false;
+  const isFullyComped = totalRetailValue > 0 ? trueOutOfPocket <= totalRetailValue * 0.1 || casinoDiscount >= totalRetailValue * 0.9 : false;
   const is2Person = guestCount >= 2;
   
-  const coverageFraction = cabinValueForTwo > 0 ? Math.min(1, casinoDiscount / cabinValueForTwo) : 0;
+  const coverageFraction = totalRetailValue > 0 ? Math.min(1, casinoDiscount / totalRetailValue) : 0;
   
-  const formula = `Value Per $1 = (Retail ${cabinValueForTwo.toFixed(0)} + FreePlay ${freePlayValue} + OBC ${obcValue} + CR Points ${clubRoyalePointsValue.toFixed(0)} + Winnings ${winnings.toFixed(0)}) / Paid ${trueOutOfPocket.toFixed(2)}`;
+  const formula = `Value Per $1 = (Room ${cabinValueForTwo.toFixed(0)} + Taxes/Fees ${taxesFees.toFixed(0)} + FreePlay ${freePlayValue} + OBC ${obcValue} + CR Points ${clubRoyalePointsValue.toFixed(0)} + Winnings ${winnings.toFixed(0)}) / Paid ${trueOutOfPocket.toFixed(2)}`;
 
   console.log('[ValueCalculator] Cruise value calculated:', {
     cruiseId: cruise.id,
@@ -818,7 +825,7 @@ export function calculateOfferAggregateValue(
   
   if (matchingCruises.length === 0) {
     const singleCruise = offer as Cruise;
-    const cabinPrice = getCabinPriceFromEntity(singleCruise, roomType) || singleCruise.price || 0;
+    const cabinPrice = getCabinPriceFromEntity(singleCruise, roomType) ?? getDoubleOccupancyRoomRetailValue(singleCruise.price) ?? 0;
     const cabinValueForTwo = cabinPrice;
     const taxesFees = singleCruise.taxes || 0;
     const freePlay = singleCruise.freePlay || 0;
@@ -856,7 +863,7 @@ export function calculateOfferAggregateValue(
   const allPerks = new Set<string>();
   
   matchingCruises.forEach(cruise => {
-    const cabinPrice = getCabinPriceFromEntity(cruise, roomType) || cruise.price || 0;
+    const cabinPrice = getCabinPriceFromEntity(cruise, roomType) ?? getDoubleOccupancyRoomRetailValue(cruise.price) ?? 0;
     const cabinValueForTwo = cabinPrice;
     const taxesFees = cruise.taxes || 0;
     
@@ -944,17 +951,18 @@ export function getEstimatedCabinPrices(
                  (actualSuite && actualSuite > 0);
   
   if (hasAny) {
-    const knownPrice = actualBalcony || actualOceanview || actualInterior || actualSuite || 0;
+    const knownPerPersonPrice = actualBalcony || actualOceanview || actualInterior || actualSuite || 0;
     const knownType = actualBalcony ? 'Balcony' 
       : actualOceanview ? 'Oceanview' 
       : actualInterior ? 'Interior' 
       : 'Suite';
+    const estimateRoomPrice = (targetType: string): number => getDoubleOccupancyRoomRetailValue(estimateCabinPrice(knownPerPersonPrice, knownType, targetType)) ?? 0;
     
     return {
-      interior: (actualInterior && actualInterior > 0) ? actualInterior : estimateCabinPrice(knownPrice, knownType, 'Interior'),
-      oceanview: (actualOceanview && actualOceanview > 0) ? actualOceanview : estimateCabinPrice(knownPrice, knownType, 'Oceanview'),
-      balcony: (actualBalcony && actualBalcony > 0) ? actualBalcony : estimateCabinPrice(knownPrice, knownType, 'Balcony'),
-      suite: (actualSuite && actualSuite > 0) ? actualSuite : estimateCabinPrice(knownPrice, knownType, 'Junior Suite'),
+      interior: getDoubleOccupancyRoomRetailValue(actualInterior) ?? estimateRoomPrice('Interior'),
+      oceanview: getDoubleOccupancyRoomRetailValue(actualOceanview) ?? estimateRoomPrice('Oceanview'),
+      balcony: getDoubleOccupancyRoomRetailValue(actualBalcony) ?? estimateRoomPrice('Balcony'),
+      suite: getDoubleOccupancyRoomRetailValue(actualSuite) ?? estimateRoomPrice('Junior Suite'),
       source: 'mixed',
     };
   }

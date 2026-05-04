@@ -1224,13 +1224,16 @@ const styles = StyleSheet.create({
   },
   viewModeRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
     alignItems: 'center',
+    gap: SPACING.sm,
     marginBottom: SPACING.md,
     paddingHorizontal: SPACING.xs,
   },
   viewModeToggle: {
     flexDirection: 'row',
+    width: '100%',
     backgroundColor: 'rgba(0, 31, 63, 0.05)',
     borderRadius: BORDER_RADIUS.round,
     padding: 4,
@@ -1238,11 +1241,13 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(0, 31, 63, 0.1)',
   },
   viewModeButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: SPACING.xs,
     paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.xs,
     borderRadius: BORDER_RADIUS.round,
   },
   viewModeButtonActive: {
@@ -1260,6 +1265,7 @@ const styles = StyleSheet.create({
   addCruiseButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    alignSelf: 'flex-end',
     gap: SPACING.xs,
     backgroundColor: COLORS.navyDeep,
     paddingVertical: SPACING.sm,

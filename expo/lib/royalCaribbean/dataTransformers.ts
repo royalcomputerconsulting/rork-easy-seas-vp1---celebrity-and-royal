@@ -1,5 +1,6 @@
 import { OfferRow, BookedCruiseRow, LoyaltyData } from './types';
 import { CasinoOffer, BookedCruise, Cruise } from '@/types/models';
+import { getDoubleOccupancyRoomRetailValue } from '@/lib/valueCalculator';
 
 export type SyncDataSource = NonNullable<Cruise['cruiseSource']>;
 
@@ -41,6 +42,14 @@ function parseDate(dateStr: string): string {
       const month = isoMatch[2];
       const day = isoMatch[3];
       console.log(`[parseDate] ISO date detected: ${trimmed} -> ${month}-${day}-${year}`);
+      return `${month}-${day}-${year}`;
+    }
+
+    const compactIsoMatch = trimmed.match(/^(\d{4})(\d{2})(\d{2})$/);
+    if (compactIsoMatch) {
+      const year = compactIsoMatch[1];
+      const month = compactIsoMatch[2];
+      const day = compactIsoMatch[3];
       return `${month}-${day}-${year}`;
     }
 
@@ -286,7 +295,8 @@ export function transformOfferRowsToCruisesAndOffers(
     const balconyPrice = parseMoneyValue(offer.balconyPrice);
     const suitePrice = parseMoneyValue(offer.suitePrice);
     const taxes = parseMoneyValue(offer.taxesAndFees);
-    const lowestPrice = getLowestPositivePrice([interiorPrice, oceanviewPrice, balconyPrice, suitePrice]);
+    const lowestPerPersonPrice = getLowestPositivePrice([interiorPrice, oceanviewPrice, balconyPrice, suitePrice]);
+    const lowestRoomPrice = getDoubleOccupancyRoomRetailValue(lowestPerPersonPrice);
     const ports = parsePortList(offer.portList);
 
     console.log(
@@ -302,13 +312,13 @@ export function transformOfferRowsToCruisesAndOffers(
       departurePort: offer.departurePort,
       destination: offer.itinerary,
       nights,
-      price: lowestPrice,
+      price: lowestPerPersonPrice,
       interiorPrice,
       oceanviewPrice,
       balconyPrice,
       suitePrice,
       taxes,
-      totalPrice: typeof lowestPrice === 'number' ? lowestPrice + (taxes ?? 0) : undefined,
+      totalPrice: typeof lowestRoomPrice === 'number' ? lowestRoomPrice + (taxes ?? 0) : undefined,
       cabinType: offer.cabinType || 'Balcony',
       offerCode: offer.offerCode,
       offerName: offer.offerName,
@@ -366,8 +376,8 @@ export function transformOfferRowsToCruisesAndOffers(
         roomType: offer.cabinType || undefined,
         guestsInfo: offer.numberOfGuests || undefined,
         guests,
-        value: lowestPrice,
-        offerValue: lowestPrice,
+        value: lowestRoomPrice,
+        offerValue: lowestRoomPrice,
         interiorPrice,
         oceanviewPrice,
         balconyPrice,
@@ -426,14 +436,15 @@ export function transformOfferRowsToCruisesAndOffers(
         aggregatedOffer.portCharges = getLowestPositivePrice([aggregatedOffer.portCharges, taxes]);
       }
 
-      const aggregatedBestPrice = getLowestPositivePrice([
+      const aggregatedBestPerPersonPrice = getLowestPositivePrice([
         aggregatedOffer.interiorPrice,
         aggregatedOffer.oceanviewPrice,
         aggregatedOffer.balconyPrice,
         aggregatedOffer.suitePrice,
       ]);
-      aggregatedOffer.value = aggregatedBestPrice;
-      aggregatedOffer.offerValue = aggregatedBestPrice;
+      const aggregatedBestRoomPrice = getDoubleOccupancyRoomRetailValue(aggregatedBestPerPersonPrice);
+      aggregatedOffer.value = aggregatedBestRoomPrice;
+      aggregatedOffer.offerValue = aggregatedBestRoomPrice;
       aggregatedOffer.updatedAt = new Date().toISOString();
     }
 
@@ -531,12 +542,13 @@ export function transformBookedCruisesToAppFormat(
     const balconyPrice = parseMoneyValue(cruise.balconyPrice);
     const suitePrice = parseMoneyValue(cruise.suitePrice);
     const taxesAndFees = parseMoneyValue(cruise.taxesAndFees);
-    const importedCabinRetailValue = getBookedCabinRetailPrice(cruise.cabinType, {
+    const importedPerPersonCabinRetailValue = getBookedCabinRetailPrice(cruise.cabinType, {
       interior: interiorPrice,
       oceanview: oceanviewPrice,
       balcony: balconyPrice,
       suite: suitePrice,
     });
+    const importedRoomCabinRetailValue = getDoubleOccupancyRoomRetailValue(importedPerPersonCabinRetailValue);
 
     const bookedCruise: BookedCruise = {
       sourcePayload: (cruise as { rawBooking?: unknown }).rawBooking,
@@ -550,16 +562,16 @@ export function transformBookedCruisesToAppFormat(
       cabinType: cruise.cabinType,
       cabinNumber: cruise.cabinNumberOrGTY && cruise.cabinNumberOrGTY !== 'GTY' ? cruise.cabinNumberOrGTY : undefined,
       cabinCategory: cruise.cabinCategory || cruise.stateroomCategoryCode,
-      price: importedCabinRetailValue,
+      price: importedPerPersonCabinRetailValue,
       interiorPrice,
       oceanviewPrice,
       balconyPrice,
       suitePrice,
       taxes: taxesAndFees,
       taxesFeesEstimate: taxesAndFees,
-      retailValue: importedCabinRetailValue,
-      totalRetailCost: importedCabinRetailValue,
-      originalPrice: importedCabinRetailValue,
+      retailValue: importedRoomCabinRetailValue,
+      totalRetailCost: importedRoomCabinRetailValue,
+      originalPrice: importedRoomCabinRetailValue,
       deckNumber: cruise.deckNumber,
       bookingId: cruise.bookingId,
       reservationNumber: cruise.bookingId,

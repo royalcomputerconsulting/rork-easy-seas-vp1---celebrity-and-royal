@@ -1,4 +1,5 @@
 import type { BookedCruise } from '@/types/models';
+import { getDoubleOccupancyRoomRetailValue } from '@/lib/valueCalculator';
 import {
   parseCSVLine,
   normalizeDateString,
@@ -352,9 +353,13 @@ export function parseBookedCSV(content: string, existingCruises: BookedCruise[] 
     const oceanviewPrice = getNumericValue(colIndices.oceanviewPrice);
     const balconyPrice = getNumericValue(colIndices.balconyPrice);
     const suitePrice = getNumericValue(colIndices.suitePrice);
-    const importedCabinRetailValue = getPriceForRoomType(cabinType, interiorPrice, oceanviewPrice, balconyPrice, suitePrice) || totalRetailCost;
+    const importedPerPersonCabinRetailValue = getPriceForRoomType(cabinType, interiorPrice, oceanviewPrice, balconyPrice, suitePrice) || 0;
+    const importedRoomCabinRetailValue = getDoubleOccupancyRoomRetailValue(importedPerPersonCabinRetailValue) ?? (totalRetailCost > 0 ? totalRetailCost : undefined);
     const totalCasinoDiscount = getNumericValue(colIndices.totalCasinoDiscount);
     const portTaxesFees = getNumericValue(colIndices.portTaxesFees);
+    const calculatedCasinoDiscount = importedRoomCabinRetailValue !== undefined && pricePaid > 0
+      ? Math.max(0, importedRoomCabinRetailValue + portTaxesFees - pricePaid)
+      : undefined;
 
     if (!ship || !departureDateRaw) {
       console.log(`[BookedParser] Skipping booked row ${i}: missing ship or date`);
@@ -405,16 +410,16 @@ export function parseBookedCSV(content: string, existingCruises: BookedCruise[] 
       cabinType: cabinType || undefined,
       cabinCategory: cabinCategory || undefined,
       cabinNumber: cabinNumber || undefined,
-      price: importedCabinRetailValue > 0 ? importedCabinRetailValue : undefined,
+      price: importedPerPersonCabinRetailValue > 0 ? importedPerPersonCabinRetailValue : undefined,
       interiorPrice: interiorPrice > 0 ? interiorPrice : undefined,
       oceanviewPrice: oceanviewPrice > 0 ? oceanviewPrice : undefined,
       balconyPrice: balconyPrice > 0 ? balconyPrice : undefined,
       suitePrice: suitePrice > 0 ? suitePrice : undefined,
       pricePaid: pricePaid > 0 ? pricePaid : undefined,
-      totalRetailCost: importedCabinRetailValue > 0 ? importedCabinRetailValue : undefined,
-      retailValue: importedCabinRetailValue > 0 ? importedCabinRetailValue : undefined,
-      originalPrice: importedCabinRetailValue > 0 ? importedCabinRetailValue : undefined,
-      totalCasinoDiscount: totalCasinoDiscount > 0 ? totalCasinoDiscount : (importedCabinRetailValue > 0 && pricePaid > 0 ? Math.max(0, importedCabinRetailValue - pricePaid) : undefined),
+      totalRetailCost: importedRoomCabinRetailValue,
+      retailValue: importedRoomCabinRetailValue,
+      originalPrice: importedRoomCabinRetailValue,
+      totalCasinoDiscount: totalCasinoDiscount > 0 ? totalCasinoDiscount : calculatedCasinoDiscount,
       taxes: portTaxesFees > 0 ? portTaxesFees : undefined,
       taxesFeesEstimate: portTaxesFees > 0 ? portTaxesFees : undefined,
       amountPaid: pricePaid > 0 ? pricePaid : undefined,

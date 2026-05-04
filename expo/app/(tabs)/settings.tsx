@@ -117,6 +117,7 @@ import { useCrewRecognition } from '@/state/CrewRecognitionProvider';
 import { useUserDataSync } from '@/state/UserDataSyncProvider';
 import { useIntelligenceFilters } from '@/state/IntelligenceFiltersProvider';
 import { getSecondProfileForUnassignedRecords } from '@/lib/intelligenceFilters';
+import { getDoubleOccupancyRoomRetailValue } from '@/lib/valueCalculator';
 
 function normalizeAccountEmail(email: string | null | undefined): string | null {
   if (!email) {
@@ -1292,7 +1293,8 @@ export default function SettingsScreen() {
 
         const portsList = portsVisited ? portsVisited.split(',').map(p => p.trim()).filter(Boolean) : [];
         const itineraryLabel = destination || fullItinerary || `${nights} Night Cruise`;
-        const retailPrice = price ? parseFloat(price.replace(/[^0-9.]/g, '')) || undefined : undefined;
+        const perPersonRetailPrice = price ? parseFloat(price.replace(/[^0-9.]/g, '')) || undefined : undefined;
+        const roomRetailPrice = getDoubleOccupancyRoomRetailValue(perPersonRetailPrice);
         const paidAmount = paid ? parseFloat(paid.replace(/[^0-9.]/g, '')) || undefined : undefined;
         const taxesAmount = taxes ? parseFloat(taxes.replace(/[^0-9.]/g, '')) || undefined : undefined;
 
@@ -1311,17 +1313,17 @@ export default function SettingsScreen() {
           cabinType: cabinType || 'Balcony',
           guests: parseInt(guests) || 2,
           guestNames: [],
-          price: retailPrice,
-          totalPrice: retailPrice,
-          retailValue: retailPrice,
-          totalRetailCost: retailPrice,
-          originalPrice: retailPrice,
+          price: perPersonRetailPrice,
+          totalPrice: roomRetailPrice !== undefined ? roomRetailPrice + (taxesAmount ?? 0) : undefined,
+          retailValue: roomRetailPrice,
+          totalRetailCost: roomRetailPrice,
+          originalPrice: roomRetailPrice,
           pricePaid: paidAmount,
           amountPaid: paidAmount,
           netEffectivePaid: paidAmount,
           taxes: taxesAmount,
           taxesFeesEstimate: taxesAmount,
-          totalCasinoDiscount: retailPrice !== undefined && paidAmount !== undefined ? Math.max(0, retailPrice - paidAmount) : undefined,
+          totalCasinoDiscount: roomRetailPrice !== undefined && paidAmount !== undefined ? Math.max(0, roomRetailPrice + (taxesAmount ?? 0) - paidAmount) : undefined,
           winnings: winnings ? parseFloat(winnings.replace(/[^0-9.]/g, '')) || undefined : undefined,
           notes: notesVal || (program ? `Program: ${program}` : undefined),
           status: 'completed',

@@ -1,4 +1,5 @@
 import type { Cruise, CasinoOffer } from '@/types/models';
+import { getDoubleOccupancyRoomRetailValue } from '@/lib/valueCalculator';
 import {
   parseCSVLine,
   normalizeDateString,
@@ -191,6 +192,9 @@ export function parseOffersCSV(content: string): { cruises: Cruise[]; offers: Ca
     const priceBalcony = getNumericValue(colIndices.priceBalcony);
     const priceSuite = getNumericValue(colIndices.priceSuite);
     const taxesFees = getNumericValue(colIndices.taxesFees);
+    const selectedPerPersonPrice = getPriceForRoomType(roomType, priceInterior, priceOceanView, priceBalcony, priceSuite);
+    const selectedRoomPrice = getDoubleOccupancyRoomRetailValue(selectedPerPersonPrice);
+    const importedOfferRoomValue = getDoubleOccupancyRoomRetailValue(offerValue) ?? offerValue;
     const portsAndTimes = getValue(colIndices.portsAndTimes);
     const offerType = getValue(colIndices.offerType);
     const nights = getNumericValue(colIndices.nights) || 7;
@@ -234,10 +238,10 @@ export function parseOffersCSV(content: string): { cruises: Cruise[]; offers: Ca
       balconyPrice: priceBalcony,
       suitePrice: priceSuite,
       taxes: taxesFees,
-      totalPrice: getPriceForRoomType(roomType, priceInterior, priceOceanView, priceBalcony, priceSuite),
+      totalPrice: selectedRoomPrice !== undefined ? selectedRoomPrice + taxesFees : undefined,
       offerCode,
       offerName: offerName || undefined,
-      offerValue,
+      offerValue: importedOfferRoomValue,
       offerExpiry: offerExpiryDate,
       tradeInValue: tradeInValue || undefined,
       itineraryName: itinerary,
@@ -266,7 +270,8 @@ export function parseOffersCSV(content: string): { cruises: Cruise[]; offers: Ca
         title: finalOfferName,
         offerType: mapOfferType(offerType),
         tradeInValue,
-        offerValue,
+        offerValue: importedOfferRoomValue,
+        value: selectedRoomPrice,
         expiryDate: offerExpiryDate,
         offerExpiryDate,
         expires: offerExpiryDate,

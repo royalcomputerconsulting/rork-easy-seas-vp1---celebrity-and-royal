@@ -2394,12 +2394,28 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
       setState(prev => ({ ...prev, syncPreview: preview }));
 
-      const allowOfferRemoval = normalizedOffers.length > 0;
-      const allowCruiseRemoval = normalizedOffers.length > 0;
+      const authoritativeOfferRows = normalizedOffers.filter((offer) => {
+        const status = (offer.offerStatus || '').toLowerCase().replace(/[\s_-]+/g, ' ');
+        const isIncompleteFallback =
+          offer.isInProgress === true ||
+          status.includes('in progress') ||
+          status.includes('pending') ||
+          status.includes('processing') ||
+          status.includes('earning') ||
+          status.includes('fallback extraction incomplete') ||
+          (!offer.offerCode?.trim() && !offer.offerName?.trim()) ||
+          (offer.offerName?.trim().toLowerCase() === 'unknown offer' && !offer.offerCode?.trim());
+        return !isIncompleteFallback;
+      });
+      const offerRowsWithSailings = authoritativeOfferRows.filter((offer) => Boolean(offer.shipName?.trim() || offer.sailingDate?.trim()));
+      const allowOfferRemoval = authoritativeOfferRows.length > 0;
+      const allowCruiseRemoval = offerRowsWithSailings.length > 0;
       const allowBookedCruiseRemoval = normalizedBookedCruises.length > 0;
 
       if (!allowOfferRemoval) {
-        addLog(`⚠️ No ${config.loyaltyClubName} offer rows were captured, so existing offers and available sailings will be preserved`, 'warning');
+        addLog(`⚠️ No authoritative ${config.loyaltyClubName} offer rows were captured, so existing offers and available sailings will be preserved`, 'warning');
+      } else if (!allowCruiseRemoval) {
+        addLog(`⚠️ ${config.loyaltyClubName} offers were captured without sailing detail, so existing available sailings will be preserved`, 'warning');
       }
       if (!allowBookedCruiseRemoval) {
         addLog(`⚠️ No booked cruise rows were captured for ${config.name}, so existing booked cruises will be preserved`, 'warning');

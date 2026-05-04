@@ -13,6 +13,7 @@ import { X, Ship, Calendar, MapPin, Hash, Home } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
 import type { BookedCruise, CabinCategory } from '@/types/models';
+import { getDoubleOccupancyRoomRetailValue } from '@/lib/valueCalculator';
 
 interface AddBookedCruiseModalProps {
   visible: boolean;
@@ -49,7 +50,8 @@ export function AddBookedCruiseModal({ visible, onClose, onSave }: AddBookedCrui
       return;
     }
 
-    const parsedRetailPrice = price ? parseFloat(price) : undefined;
+    const parsedPerPersonRetailPrice = price ? parseFloat(price) : undefined;
+    const parsedRoomRetailPrice = getDoubleOccupancyRoomRetailValue(parsedPerPersonRetailPrice);
 
     const newCruise: BookedCruise = {
       id: `cruise-${Date.now()}`,
@@ -62,11 +64,11 @@ export function AddBookedCruiseModal({ visible, onClose, onSave }: AddBookedCrui
       reservationNumber: reservationNumber.trim() || undefined,
       cabinNumber: cabinNumber.trim() || undefined,
       cabinType: cabinType,
-      price: parsedRetailPrice,
-      totalPrice: parsedRetailPrice,
-      retailValue: parsedRetailPrice,
-      totalRetailCost: parsedRetailPrice,
-      originalPrice: parsedRetailPrice,
+      price: parsedPerPersonRetailPrice,
+      totalPrice: parsedRoomRetailPrice,
+      retailValue: parsedRoomRetailPrice,
+      totalRetailCost: parsedRoomRetailPrice,
+      originalPrice: parsedRoomRetailPrice,
       freePlay: freePlay ? parseFloat(freePlay) : undefined,
       freeOBC: freeOBC ? parseFloat(freeOBC) : undefined,
       offerCode: offerCode.trim() || undefined,
