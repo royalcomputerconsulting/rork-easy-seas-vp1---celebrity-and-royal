@@ -1,4 +1,5 @@
 import { findRetailValueByShipAndDate, getKnownRetailValue } from '@/constants/knownRetailValues';
+import { findReceiptByShipAndDate } from '@/constants/receiptData';
 import type { Cruise, CasinoOffer, BookedCruise, CasinoPayTable } from '@/types/models';
 
 const CABIN_BASE_PRICES: Record<string, number> = {
@@ -109,10 +110,25 @@ function getKnownRetailValueForEntity(entity: Cruise | BookedCruise): number | u
   return undefined;
 }
 
+function getReceiptForEntity(entity: Cruise | BookedCruise) {
+  if (!entity.shipName || !entity.sailDate) return undefined;
+  return findReceiptByShipAndDate(entity.shipName, entity.sailDate);
+}
+
+function getReceiptRetailValueForEntity(entity: Cruise | BookedCruise): number | undefined {
+  const receipt = getReceiptForEntity(entity);
+  return isFiniteNumber(receipt?.totalRetailCost) && receipt.totalRetailCost > 0 ? receipt.totalRetailCost : undefined;
+}
+
+function getReceiptPaidValueForEntity(entity: Cruise | BookedCruise): number | undefined {
+  const receipt = getReceiptForEntity(entity);
+  return isFiniteNumber(receipt?.pricePaid) && receipt.pricePaid > 0 ? receipt.pricePaid : undefined;
+}
+
 interface ResolvedCruiseRetailValue {
   totalRetailValue: number;
   perGuestRetailValue: number;
-  source: 'known' | 'explicit' | 'payload' | 'pricing' | 'estimate';
+  source: 'known' | 'explicit' | 'payload' | 'receipt' | 'pricing' | 'estimate';
 }
 
 /** Resolves the full-booking cabin retail value; known/imported totals are never multiplied as if per-person. */
@@ -133,19 +149,24 @@ export function resolveCruiseRetailValue(cruise: Cruise | BookedCruise, cabinTyp
     'grossRetailValue',
     'grossTotal',
   ]);
-  const authoritativeRetailValue = getFirstPositiveNumber(knownRetailValue, explicitRetailValue, payloadRetailValue);
+  const receiptRetailValue = getReceiptRetailValueForEntity(cruise);
+  const authoritativeRetailCandidate = [
+    { value: payloadRetailValue, source: 'payload' as const },
+    { value: receiptRetailValue, source: 'receipt' as const },
+    { value: explicitRetailValue, source: 'explicit' as const },
+    { value: knownRetailValue, source: 'known' as const },
+  ]
+    .filter((candidate): candidate is { value: number; source: ResolvedCruiseRetailValue['source'] } => isFiniteNumber(candidate.value) && candidate.value > 0)
+    .reduce<{ value: number; source: ResolvedCruiseRetailValue['source'] } | undefined>((best, candidate) => {
+      if (!best || candidate.value > best.value) return candidate;
+      return best;
+    }, undefined);
 
-  if (authoritativeRetailValue !== undefined) {
-    const source: ResolvedCruiseRetailValue['source'] = knownRetailValue !== undefined
-      ? 'known'
-      : explicitRetailValue !== undefined
-        ? 'explicit'
-        : 'payload';
-
+  if (authoritativeRetailCandidate !== undefined) {
     return {
-      totalRetailValue: roundMoney(authoritativeRetailValue),
-      perGuestRetailValue: roundMoney(authoritativeRetailValue / guestCount),
-      source,
+      totalRetailValue: roundMoney(authoritativeRetailCandidate.value),
+      perGuestRetailValue: roundMoney(authoritativeRetailCandidate.value / guestCount),
+      source: authoritativeRetailCandidate.source,
     };
   }
 
@@ -172,6 +193,7 @@ function estimateTaxesFees(nights: number, guestCount: number): number {
 }
 
 function resolveCruiseTaxesFees(cruise: Cruise | BookedCruise, guestCount: number): { value: number; isEstimated: boolean } {
+  const receiptPaidValue = getReceiptPaidValueForEntity(cruise);
   const payloadTaxesFees = getMoneyFromPayload(cruise, [
     'taxesFeesPortExpenses',
     'portTaxesFees',
@@ -181,6 +203,7 @@ function resolveCruiseTaxesFees(cruise: Cruise | BookedCruise, guestCount: numbe
     'totalCharge',
   ]);
   const explicitTaxesFees = getFirstPositiveNumber(
+    receiptPaidValue,
     payloadTaxesFees,
     (cruise as BookedCruise).taxesFeesEstimate,
     cruise.taxes,
@@ -195,9 +218,11 @@ function resolveCruiseTaxesFees(cruise: Cruise | BookedCruise, guestCount: numbe
 }
 
 function resolveCruisePaidValue(cruise: Cruise | BookedCruise, taxesFees: number): { value: number; isActual: boolean } {
+  const receiptPaidValue = getReceiptPaidValueForEntity(cruise);
   const explicitPaid = getFirstFiniteNumber(
     (cruise as BookedCruise).netEffectivePaid,
     (cruise as BookedCruise).pricePaid,
+    receiptPaidValue,
     (cruise as BookedCruise).amountPaid,
   );
 

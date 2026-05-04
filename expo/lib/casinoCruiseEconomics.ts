@@ -132,7 +132,7 @@ const ANNUAL_SCOPE_START = '2025-04-01' as const;
 const ANNUAL_SCOPE_END = '2026-04-01' as const;
 const DEFAULT_HOUSE_EDGE = 0.08;
 const DEFAULT_POINT_DOLLAR_VALUE = 0.01;
-const CONFIRMED_CLUB_ROYALE_2025_RETAIL_VALUE = 47774;
+const CONFIRMED_CLUB_ROYALE_2025_RETAIL_VALUE_FLOOR = 47774;
 const CONFIRMED_CLUB_ROYALE_2025_PAID = 4238.41;
 const DEFAULT_PORT_FEE_PER_PERSON_FOR_7_NIGHTS = 162;
 const TWO_PERSON_PORT_FEE_THRESHOLD = 200;
@@ -238,6 +238,15 @@ function getFirstNumber(...values: Array<number | null | undefined>): number | n
   return null;
 }
 
+function getHighestPositiveNumber(...values: Array<number | null | undefined>): number | null {
+  const positiveValues = values.filter((value): value is number => isNumber(value) && value > 0);
+  if (positiveValues.length === 0) {
+    return null;
+  }
+
+  return Math.max(...positiveValues);
+}
+
 function getCruiseBrand(cruise: BookedCruise): string {
   const normalizedBrand = (cruise.brand ?? '').trim().toLowerCase();
   if (normalizedBrand === 'royal' || normalizedBrand.includes('royal caribbean')) {
@@ -313,9 +322,11 @@ function isKnownStar2026CasinoBooking(cruise: Pick<BookedCruise, 'shipName' | 's
 
 function applyRetailOverrides(ship: string, sailDate: string, retailValue: number | null): number | null {
   const annualFact = ANNUAL_CASINO_REPORT_FACTS_BY_KEY.get(getAnnualFactKey(ship, sailDate));
-  if (annualFact) return annualFact.retailValue;
-  if (ship.trim().toLowerCase() === 'star of the seas' && sailDate === KNOWN_STAR_2026_SAIL_DATE) return KNOWN_STAR_2026_RETAIL_VALUE;
-  return retailValue;
+  const starOverride = ship.trim().toLowerCase() === 'star of the seas' && sailDate === KNOWN_STAR_2026_SAIL_DATE
+    ? KNOWN_STAR_2026_RETAIL_VALUE
+    : null;
+
+  return getHighestPositiveNumber(retailValue, annualFact?.retailValue, starOverride);
 }
 
 function getAnnualCasinoFact(cruise: BookedCruise): AnnualCasinoHistoricalFact | undefined {
@@ -660,7 +671,7 @@ function buildCruiseEconomicsRow(cruise: BookedCruise): CruiseEconomicsRow {
 
   const matchedAnnualFact = getAnnualCasinoFact(cruiseForEconomics);
   const isKnownStar2026Booking = isKnownStar2026CasinoBooking(cruiseForEconomics);
-  const rawRetailValue = getFirstNumber(
+  const rawRetailValue = getHighestPositiveNumber(
     cruiseForEconomics.retailValue,
     cruiseForEconomics.totalRetailCost,
     cruiseForEconomics.originalPrice,
@@ -668,7 +679,7 @@ function buildCruiseEconomicsRow(cruise: BookedCruise): CruiseEconomicsRow {
     breakdown.cabinValueForTwo,
   );
   const knownRetailValue = getKnownRetailValueForCruise(cruiseForEconomics);
-  const retailValue = applyRetailOverrides(ship, sailDate, knownRetailValue ?? rawRetailValue);
+  const retailValue = applyRetailOverrides(ship, sailDate, getHighestPositiveNumber(knownRetailValue, rawRetailValue));
   const retailIsActual = isNumber(knownRetailValue) || isNumber(rawRetailValue) || Boolean(matchedAnnualFact) || isKnownStar2026Booking;
 
   const taxesFeesInfo = getTaxesFeesEstimate(cruiseForEconomics, breakdown);
@@ -901,8 +912,9 @@ export function buildCruiseEconomicsSummary(
   }
 
   if (options?.useKnownAnnualReportFacts && totals.cruises > 0) {
-    totals.totalRetail = CONFIRMED_CLUB_ROYALE_2025_RETAIL_VALUE;
-    totals.totalRetailValue = CONFIRMED_CLUB_ROYALE_2025_RETAIL_VALUE;
+    const reconciledRetailValue = Math.max(totals.totalRetailValue, CONFIRMED_CLUB_ROYALE_2025_RETAIL_VALUE_FLOOR);
+    totals.totalRetail = reconciledRetailValue;
+    totals.totalRetailValue = reconciledRetailValue;
     totals.totalPaid = CONFIRMED_CLUB_ROYALE_2025_PAID;
     totals.totalWinningsHome = CONFIRMED_CLUB_ROYALE_2025_WINNINGS_HOME;
     totals.totalNetCash = CONFIRMED_CLUB_ROYALE_2025_NET_CASH_RESULT;
@@ -967,7 +979,7 @@ export function buildCruiseEconomicsSummary(
   const footnotes = totals.hasEstimates
     ? [
         options?.pointsAdjustmentNote,
-        options?.useKnownAnnualReportFacts ? 'Known annual casino totals are reconciled to the confirmed 2025 Royal Caribbean season: $47,774 retail, $4,238.41 paid, $19,457 winnings home, 58,680 points, and $293,400 coin-in. Coin-In remains gaming volume only.' : null,
+        options?.useKnownAnnualReportFacts ? 'Known annual casino totals are reconciled to the confirmed 2025 Royal Caribbean season: $47,774 minimum retail floor, $4,238.41 paid, $19,457 winnings home, 58,680 points, and $293,400 coin-in. Imported receipts and higher known retail values can raise retail value; Coin-In remains gaming volume only.' : null,
         'Annual totals include estimated values where paid amount, winnings, points, coin-in, or hours were missing. Coin-In is gaming volume only and is excluded from Cash Result and Total Economic Value.',
       ].filter((note): note is string => Boolean(note))
     : [];

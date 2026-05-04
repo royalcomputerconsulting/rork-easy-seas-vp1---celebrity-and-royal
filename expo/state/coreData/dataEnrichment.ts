@@ -41,13 +41,16 @@ export function enrichCruisesWithReceiptData(cruises: BookedCruise[]): BookedCru
         const normalizedKnownShip = kv.ship.toLowerCase().trim();
         return kv.departureDate === cruise.sailDate && (normalizedShip === normalizedKnownShip || normalizedShip.includes(normalizedKnownShip) || normalizedKnownShip.includes(normalizedShip));
       })?.retailCabinValue;
-      const retailValue = knownRetailValue ?? receipt.totalRetailCost;
+      const retailValue = Math.max(knownRetailValue ?? 0, receipt.totalRetailCost);
+      const casinoDiscount = Math.max(receipt.totalCasinoDiscount, retailValue - receipt.pricePaid);
 
       return {
         ...cruise,
         pricePaid: receipt.pricePaid,
+        taxesFeesEstimate: cruise.taxesFeesEstimate ?? receipt.pricePaid,
+        netEffectivePaid: cruise.netEffectivePaid ?? receipt.pricePaid,
         totalRetailCost: retailValue,
-        totalCasinoDiscount: retailValue,
+        totalCasinoDiscount: casinoDiscount,
         cabinCategory: receipt.cabinCategory,
         cabinNumber: cruise.cabinNumber || receipt.cabinNumber,
         retailValue,
