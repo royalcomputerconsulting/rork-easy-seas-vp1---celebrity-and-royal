@@ -366,14 +366,21 @@ export default function SettingsScreen() {
     );
   };
 
-  const currentProfileValues = useMemo(() => ({
+  const currentProfileValues = useMemo(() => {
+    const hasManualProfileLoyalty = Boolean(profileDisplayUser?.loyaltyManualOverrideAt);
+    const savedClubRoyalePoints = profileDisplayUser?.clubRoyalePoints ?? 0;
+    const savedCrownAnchorPoints = profileDisplayUser?.loyaltyPoints ?? 0;
+    const savedClubRoyaleTier = profileDisplayUser?.clubRoyaleTier || '';
+    const savedCrownAnchorLevel = profileDisplayUser?.crownAnchorLevel || '';
+
+    return {
     name: profileDisplayUser?.name || '',
     email: profileDisplayUser?.email || authenticatedEmail || '',
     crownAnchorNumber: profileDisplayUser?.crownAnchorNumber || '',
-    clubRoyalePoints: isPrimaryProfileSelected ? loyaltyClubRoyalePoints : (profileDisplayUser?.clubRoyalePoints ?? 0),
-    clubRoyaleTier: isPrimaryProfileSelected ? loyaltyClubRoyaleTier : (profileDisplayUser?.clubRoyaleTier || ''),
-    loyaltyPoints: isPrimaryProfileSelected ? loyaltyCrownAnchorPoints : (profileDisplayUser?.loyaltyPoints ?? 0),
-    crownAnchorLevel: isPrimaryProfileSelected ? loyaltyCrownAnchorLevel : (profileDisplayUser?.crownAnchorLevel || ''),
+    clubRoyalePoints: hasManualProfileLoyalty || savedClubRoyalePoints > 0 ? savedClubRoyalePoints : (isPrimaryProfileSelected ? loyaltyClubRoyalePoints : 0),
+    clubRoyaleTier: savedClubRoyaleTier || (isPrimaryProfileSelected ? loyaltyClubRoyaleTier : ''),
+    loyaltyPoints: hasManualProfileLoyalty || savedCrownAnchorPoints > 0 ? savedCrownAnchorPoints : (isPrimaryProfileSelected ? loyaltyCrownAnchorPoints : 0),
+    crownAnchorLevel: savedCrownAnchorLevel || (isPrimaryProfileSelected ? loyaltyCrownAnchorLevel : ''),
     celebrityEmail: profileDisplayUser?.celebrityEmail || '',
     celebrityCaptainsClubNumber: profileDisplayUser?.celebrityCaptainsClubNumber || '',
     celebrityCaptainsClubPoints: profileDisplayUser?.celebrityCaptainsClubPoints || 0,
@@ -390,7 +397,8 @@ export default function SettingsScreen() {
     carnivalPlayersClubTier: profileDisplayUser?.carnivalPlayersClubTier || '',
     carnivalPlayersClubPoints: profileDisplayUser?.carnivalPlayersClubPoints || 0,
     birthdate: profileDisplayUser?.birthdate || '',
-  }), [
+  };
+  }, [
     authenticatedEmail,
     loyaltyClubRoyalePoints,
     loyaltyClubRoyaleTier,
@@ -1940,6 +1948,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
           carnivalPlayersClubTier: profileData.carnivalPlayersClubTier,
           carnivalPlayersClubPoints: profileData.carnivalPlayersClubPoints,
           birthdate: profileData.birthdate || undefined,
+          loyaltyManualOverrideAt: new Date().toISOString(),
         });
       
       if (isPrimaryProfileSelected) {

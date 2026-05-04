@@ -70,6 +70,7 @@ export interface UserProfile {
   carnivalPlayersClubTier?: string;
   carnivalPlayersClubPoints?: number;
   birthdate?: string;
+  loyaltyManualOverrideAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -247,6 +248,7 @@ function sanitizeUserProfile(user: unknown, fallbackEmail: string | null, index:
     carnivalPlayersClubTier: typeof userRecord.carnivalPlayersClubTier === 'string' ? userRecord.carnivalPlayersClubTier : '',
     carnivalPlayersClubPoints: typeof userRecord.carnivalPlayersClubPoints === 'number' ? userRecord.carnivalPlayersClubPoints : 0,
     birthdate: typeof userRecord.birthdate === 'string' ? userRecord.birthdate : undefined,
+    loyaltyManualOverrideAt: typeof userRecord.loyaltyManualOverrideAt === 'string' ? userRecord.loyaltyManualOverrideAt : undefined,
     createdAt: typeof userRecord.createdAt === 'string' ? userRecord.createdAt : now,
     updatedAt: typeof userRecord.updatedAt === 'string' ? userRecord.updatedAt : now,
   };
