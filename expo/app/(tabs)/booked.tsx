@@ -35,7 +35,9 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
 import { withAlpha } from '@/constants/loyaltyColors';
-import { createLoyaltyCardTheme, getClubRoyaleTierColor } from '@/constants/loyaltyTheme';
+import { getPlayerCardTheme, type SupportedBrand } from '@/constants/loyaltyTheme';
+import { getCelebrityCaptainsClubLevelByPoints } from '@/constants/celebrityCaptainsClub';
+import { getSilverseaTierByDays } from '@/constants/silverseaVenetianSociety';
 import { LoyaltyPill } from '@/components/ui/LoyaltyPill';
 import { useAppState } from '@/state/AppStateProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
@@ -126,6 +128,14 @@ function mergeCruiseData(primaryCruises: BookedCruise[], fallbackCruises: Booked
   return applyKnownBookingCorrections(dedupeBookedCruises([...fallbackCruises, ...primaryCruises], 'booked screen merged cruises'));
 }
 
+function resolveCasinoThemeBrand(selectedBrand: string, preferredBrand?: SupportedBrand): SupportedBrand {
+  if (selectedBrand === 'royal' || selectedBrand === 'celebrity' || selectedBrand === 'silversea' || selectedBrand === 'carnival') {
+    return selectedBrand;
+  }
+
+  return preferredBrand ?? 'royal';
+}
+
 function getBookedCruiseRenderKey(cruise: BookedCruise, index: number): string {
   const keyParts = [
     cruise.id,
@@ -147,7 +157,7 @@ export default function BookedScreen() {
   const { localData, clubRoyaleProfile, isLoading: appLoading, refreshData } = useAppState();
   const { addBookedCruise, bookedCruises: storedBooked } = useCoreData();
   const { authenticatedEmail } = useAuth();
-  const { users } = useUser();
+  const { users, currentUser } = useUser();
   const { selectedProfileId, selectedBrand, selectedProgram } = useIntelligenceFilters();
   const { casinoAnalytics } = useSimpleAnalytics();
   const {
@@ -155,6 +165,8 @@ export default function BookedScreen() {
     clubRoyaleCurrentYearPoints,
     clubRoyaleHistoricalPoints,
     crownAnchorPoints,
+    crownAnchorLevel,
+    captainsClub,
   } = useLoyalty();
 
   const [refreshing, setRefreshing] = useState(false);
@@ -251,8 +263,19 @@ export default function BookedScreen() {
   const historicalPoints = casinoAnalytics.historicalPointsEarned || clubRoyaleHistoricalPoints;
   const usesKnownCasinoProfile = isKnownCasinoProfile(authenticatedEmail);
   const clubRoyaleTier = loyaltyClubRoyaleTier || clubRoyaleProfile?.tier || 'Choice';
-  const clubRoyaleTierColor = getClubRoyaleTierColor(clubRoyaleTier);
-  const casinoCardTheme = useMemo(() => createLoyaltyCardTheme(clubRoyaleTierColor), [clubRoyaleTierColor]);
+  const casinoThemeBrand = useMemo(() => resolveCasinoThemeBrand(selectedBrand, currentUser?.preferredBrand), [currentUser?.preferredBrand, selectedBrand]);
+  const hasRoyalPinnacleReciprocity = crownAnchorLevel === 'Pinnacle' || captainsClub.tier === 'Zenith';
+  const celebrityLevel = useMemo(() => (
+    hasRoyalPinnacleReciprocity ? 'Zenith' : getCelebrityCaptainsClubLevelByPoints(currentUser?.celebrityCaptainsClubPoints ?? captainsClub.points ?? 0)
+  ), [captainsClub.points, currentUser?.celebrityCaptainsClubPoints, hasRoyalPinnacleReciprocity]);
+  const silverseaTier = useMemo(() => currentUser?.silverseaVenetianTier || getSilverseaTierByDays(currentUser?.silverseaVenetianPoints ?? 0), [currentUser?.silverseaVenetianPoints, currentUser?.silverseaVenetianTier]);
+  const casinoCardTheme = useMemo(() => getPlayerCardTheme({
+    brand: casinoThemeBrand,
+    crownAnchorLevel: crownAnchorLevel || currentUser?.crownAnchorLevel,
+    celebrityLevel,
+    silverseaTier,
+    carnivalVifpTier: currentUser?.carnivalVifpTier || 'Blue',
+  }), [casinoThemeBrand, celebrityLevel, crownAnchorLevel, currentUser?.carnivalVifpTier, currentUser?.crownAnchorLevel, silverseaTier]);
 
   const stats = useMemo(() => {
     const activeCruises = bookedCruises.filter((cruise) => isCruiseUpcomingBooking(cruise) || isCruiseCompleted(cruise));
@@ -597,28 +620,28 @@ export default function BookedScreen() {
         >
           <View style={styles.casinoHeader}>
             <View style={[styles.casinoIconBadge, {
-              backgroundColor: withAlpha(casinoCardTheme.accentColor, 0.28),
+              backgroundColor: casinoCardTheme.surfaceColor,
               borderWidth: 1,
-              borderColor: withAlpha('#FFFFFF', 0.18),
+              borderColor: casinoCardTheme.borderColor,
             }]}> 
-              <Dice5 size={20} color={COLORS.white} />
+              <Dice5 size={20} color={casinoCardTheme.accentColor} />
             </View>
             <Text style={[styles.casinoTitle, { color: casinoCardTheme.topTextColor }]}>Casino</Text>
-            <LoyaltyPill label={clubRoyaleTier} color={clubRoyaleTierColor} size="small" testID="booked-casino-tier-pill" />
+            <LoyaltyPill label={clubRoyaleTier} color={casinoCardTheme.accentColor} size="small" testID="booked-casino-tier-pill" />
           </View>
           
           <View style={styles.casinoMetricsGrid}>
-            <View style={[styles.casinoMetricCard, { backgroundColor: casinoCardTheme.surfaceColor, borderWidth: 1, borderColor: withAlpha(casinoCardTheme.accentColor, 0.24) }]}>
+            <View style={[styles.casinoMetricCard, { backgroundColor: casinoCardTheme.surfaceColor, borderWidth: 1, borderColor: casinoCardTheme.borderColor }]}>
               <View style={[styles.casinoMetricIcon, { backgroundColor: casinoCardTheme.surfaceColorMuted }]}>
-                <Coins size={16} color={COLORS.goldLight} />
+                <Coins size={16} color={casinoCardTheme.accentColor} />
               </View>
               <Text style={[styles.casinoMetricValue, { color: casinoCardTheme.topTextColor }]}>{formatCurrency(casinoStats.totalCoinIn)}</Text>
               <Text style={[styles.casinoMetricLabel, { color: casinoCardTheme.secondaryTextColor }]}>Total Coin-In</Text>
             </View>
             
-            <View style={[styles.casinoMetricCard, { backgroundColor: casinoCardTheme.surfaceColor, borderWidth: 1, borderColor: withAlpha(casinoCardTheme.accentColor, 0.24) }]}>
+            <View style={[styles.casinoMetricCard, { backgroundColor: casinoCardTheme.surfaceColor, borderWidth: 1, borderColor: casinoCardTheme.borderColor }]}>
               <View style={[styles.casinoMetricIcon, { backgroundColor: casinoCardTheme.surfaceColorMuted }]}>
-                <Target size={16} color={casinoStats.netResult >= 0 ? COLORS.success : COLORS.error} />
+                <Target size={16} color={casinoCardTheme.accentColor} />
               </View>
               <Text style={[styles.casinoMetricValue, { color: casinoCardTheme.topTextColor }]}>
                 {casinoStats.netResult >= 0 ? '+' : ''}{formatCurrency(casinoStats.netResult)}
@@ -626,18 +649,18 @@ export default function BookedScreen() {
               <Text style={[styles.casinoMetricLabel, { color: casinoCardTheme.secondaryTextColor }]}>Cash Result</Text>
             </View>
             
-            <View style={[styles.casinoMetricCard, { backgroundColor: casinoCardTheme.surfaceColor, borderWidth: 1, borderColor: withAlpha(casinoCardTheme.accentColor, 0.24) }]}>
+            <View style={[styles.casinoMetricCard, { backgroundColor: casinoCardTheme.surfaceColor, borderWidth: 1, borderColor: casinoCardTheme.borderColor }]}>
               <View style={[styles.casinoMetricIcon, { backgroundColor: casinoCardTheme.surfaceColorMuted }]}>
-                <Award size={16} color={clubRoyaleTierColor} />
+                <Award size={16} color={casinoCardTheme.accentColor} />
               </View>
               <Text style={[styles.casinoMetricValue, { color: casinoCardTheme.topTextColor }]}>{formatNumber(currentYearPoints)}</Text>
               <Text style={[styles.casinoMetricLabel, { color: casinoCardTheme.secondaryTextColor }]}>Current Season</Text>
             </View>
           </View>
           
-          <View style={[styles.casinoFinancialsRow, { backgroundColor: casinoCardTheme.surfaceColor, borderWidth: 1, borderColor: withAlpha(casinoCardTheme.accentColor, 0.24) }]}>
+          <View style={[styles.casinoFinancialsRow, { backgroundColor: casinoCardTheme.surfaceColor, borderWidth: 1, borderColor: casinoCardTheme.borderColor }]}>
             <View style={styles.casinoFinancialItem}>
-              <Ship size={14} color={casinoCardTheme.topTextColor} />
+              <Ship size={14} color={casinoCardTheme.accentColor} />
               <View style={styles.casinoFinancialText}>
                 <Text style={[styles.casinoFinancialLabel, { color: casinoCardTheme.secondaryTextColor }]}>Retail Value</Text>
                 <Text style={[styles.casinoFinancialValue, { color: casinoCardTheme.topTextColor }]}>
@@ -647,7 +670,7 @@ export default function BookedScreen() {
             </View>
             <View style={[styles.casinoFinancialDivider, { backgroundColor: withAlpha(casinoCardTheme.topTextColor, 0.12) }]} />
             <View style={styles.casinoFinancialItem}>
-              <DollarSign size={14} color={casinoCardTheme.topTextColor} />
+              <DollarSign size={14} color={casinoCardTheme.accentColor} />
               <View style={styles.casinoFinancialText}>
                 <Text style={[styles.casinoFinancialLabel, { color: casinoCardTheme.secondaryTextColor }]}>Amount Paid</Text>
                 <Text style={[styles.casinoFinancialValue, { color: casinoCardTheme.topTextColor }]}>
@@ -657,7 +680,7 @@ export default function BookedScreen() {
             </View>
             <View style={[styles.casinoFinancialDivider, { backgroundColor: withAlpha(casinoCardTheme.topTextColor, 0.12) }]} />
             <View style={styles.casinoFinancialItem}>
-              <TrendingUp size={14} color={casinoCardTheme.topTextColor} />
+              <TrendingUp size={14} color={casinoCardTheme.accentColor} />
               <View style={styles.casinoFinancialText}>
                 <Text style={[styles.casinoFinancialLabel, { color: casinoCardTheme.secondaryTextColor }]}>Total Economic Value</Text>
                 <Text style={[styles.casinoFinancialValue, { color: casinoCardTheme.topTextColor }]}> 
@@ -667,7 +690,7 @@ export default function BookedScreen() {
             </View>
           </View>
           
-          <View style={[styles.casinoAvgRow, { backgroundColor: casinoCardTheme.surfaceColorMuted, borderWidth: 1, borderColor: withAlpha(casinoCardTheme.accentColor, 0.2), marginBottom: SPACING.sm }]}>
+          <View style={[styles.casinoAvgRow, { backgroundColor: casinoCardTheme.surfaceColorMuted, borderWidth: 1, borderColor: casinoCardTheme.borderColor, marginBottom: SPACING.sm }]}>
             <View style={styles.casinoAvgItem}>
               <Text style={[styles.casinoAvgLabel, { color: casinoCardTheme.secondaryTextColor }]}>Historical Points</Text>
               <Text style={[styles.casinoAvgValue, { color: casinoCardTheme.topTextColor }]}>{formatNumber(historicalPoints)}</Text>
@@ -680,7 +703,7 @@ export default function BookedScreen() {
           </View>
 
           {casinoStats.completedCount > 0 && (
-            <View style={[styles.casinoAvgRow, { backgroundColor: casinoCardTheme.surfaceColorMuted, borderWidth: 1, borderColor: withAlpha(casinoCardTheme.accentColor, 0.2) }]}>
+            <View style={[styles.casinoAvgRow, { backgroundColor: casinoCardTheme.surfaceColorMuted, borderWidth: 1, borderColor: casinoCardTheme.borderColor }]}>
               <View style={styles.casinoAvgItem}>
                 <Text style={[styles.casinoAvgLabel, { color: casinoCardTheme.secondaryTextColor }]}>Avg Coin-In/Cruise</Text>
                 <Text style={[styles.casinoAvgValue, { color: casinoCardTheme.topTextColor }]}>{formatCurrency(casinoStats.avgCoinInPerCruise)}</Text>
