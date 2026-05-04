@@ -250,14 +250,14 @@ export const [SimpleAnalyticsProvider, useSimpleAnalytics] = createContextHook((
     bookedCruises.forEach((cruise: BookedCruise) => {
       totalNights += cruise.nights || 0;
       
-      const price = cruise.totalPrice || cruise.price || 0;
+      const valueBreakdown = calculateCruiseValue(cruise);
+      const price = cruise.netEffectivePaid ?? cruise.amountPaid ?? cruise.pricePaid ?? cruise.taxesFeesEstimate ?? cruise.taxes ?? 0;
+      const retailValue = valueBreakdown.totalRetailValue;
       totalSpent += price;
 
-      if (cruise.originalPrice && cruise.price) {
-        const savings = cruise.originalPrice - cruise.price;
-        if (savings > 0) {
-          totalSaved += savings;
-        }
+      const savings = retailValue - price;
+      if (savings > 0) {
+        totalSaved += savings;
       }
 
       if (cruise.shipName) {
@@ -281,9 +281,7 @@ export const [SimpleAnalyticsProvider, useSimpleAnalytics] = createContextHook((
         totalPoints += points;
       }
 
-      if (cruise.retailValue || cruise.originalPrice) {
-        totalRetailValue += cruise.retailValue || cruise.originalPrice || 0;
-      }
+      totalRetailValue += retailValue;
 
       if (cruise.sailDate) {
         const date = new Date(cruise.sailDate);
@@ -293,7 +291,7 @@ export const [SimpleAnalyticsProvider, useSimpleAnalytics] = createContextHook((
         monthlySpending[monthKey] = (monthlySpending[monthKey] || 0) + price;
         yearlySpending[yearKey] = (yearlySpending[yearKey] || 0) + price;
         
-        const cruiseROI = cruise.roi || (totalRetailValue > 0 && price > 0 ? ((totalRetailValue - price) / price) * 100 : 0);
+        const cruiseROI = cruise.roi || (retailValue > 0 && price > 0 ? ((retailValue - price) / price) * 100 : 0);
         if (!roiByMonth[monthKey]) roiByMonth[monthKey] = [];
         roiByMonth[monthKey].push(cruiseROI);
         

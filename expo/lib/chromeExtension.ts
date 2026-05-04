@@ -1134,7 +1134,7 @@ function getContentJS(): string {
       : (capturedData.loyalty && capturedData.loyalty.payload && capturedData.loyalty.payload.loyaltyInformation ? capturedData.loyalty.payload.loyaltyInformation : null);
     var loyaltyLevel = loyaltyInfo ? (loyaltyInfo.crownAndAnchorLevel || loyaltyInfo.clubRoyaleTier || '') : '';
     var loyaltyPoints = loyaltyInfo ? (loyaltyInfo.crownAndAnchorPoints || loyaltyInfo.vifpNumber || '') : '';
-    var header = ['Source','Ship Name','Sail Date','Return Date','Nights','Itinerary','Departure Port','Cabin Type','Cabin #','Booking ID','Status','Loyalty Level','Loyalty Points'].map(esc).join(',');
+    var header = ['Source','Ship Name','Sail Date','Return Date','Nights','Itinerary','Departure Port','Cabin Type','Cabin #','Booking ID','Status','Loyalty Level','Loyalty Points','Interior Price','Oceanview Price','Balcony Price','Suite Price','Port Taxes & Fees'].map(esc).join(',');
 
     if (capturedData.cruiseLine === 'carnival') {
       if (!capturedData.carnivalBookingsRows.length) return null;
@@ -1143,7 +1143,7 @@ function getContentJS(): string {
         carnivalRows.push([
           esc(row.source || row.status || 'Upcoming'), esc(row.shipName || ''), esc(row.sailDate || ''), esc(row.returnDate || ''), esc(row.nights || ''),
           esc(row.itinerary || ''), esc(row.departurePort || ''), esc(row.cabinType || ''), esc(row.cabinNumber || ''), esc(row.bookingId || ''), esc(row.status || row.source || 'Upcoming'),
-          esc(loyaltyLevel), esc(loyaltyPoints)
+          esc(loyaltyLevel), esc(loyaltyPoints), esc(row.interiorPrice || ''), esc(row.oceanviewPrice || ''), esc(row.balconyPrice || ''), esc(row.suitePrice || ''), esc(row.taxesAndFees || row.taxes || '')
         ].join(','));
       });
       return carnivalRows.join('\n');
@@ -1171,7 +1171,12 @@ function getContentJS(): string {
         esc(booking.bookingId || booking.masterBookingId || ''),
         esc(booking.bookingStatus === 'OF' ? 'Courtesy Hold' : entry.source),
         esc(loyaltyLevel),
-        esc(loyaltyPoints)
+        esc(loyaltyPoints),
+        esc(fmtPrice(booking.interiorPrice || '')),
+        esc(fmtPrice(booking.oceanviewPrice || '')),
+        esc(fmtPrice(booking.balconyPrice || '')),
+        esc(fmtPrice(booking.suitePrice || '')),
+        esc(fmtPrice(booking.taxesAndFees || booking.taxes || ''))
       ].join(','));
     });
     return rows.join('\n');

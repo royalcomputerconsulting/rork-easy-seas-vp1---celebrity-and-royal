@@ -184,10 +184,9 @@ export default function OfferDetailsScreen() {
 
   const offerInfo = useMemo(() => {
     const { cruises, offer } = offerData;
-    const guestCount = 2;
     
-    // Calculate aggregate total value from ALL cruises in this offer
-    // This is the sum of (2x room price + taxes) for each cruise
+    // Calculate aggregate total value from ALL cruises in this offer.
+    // Imported cabin prices are already full-booking retail prices.
     let aggregateTotalValue = 0;
     let minRetailValue = Infinity;
     let maxRetailValue = 0;
@@ -201,24 +200,24 @@ export default function OfferDetailsScreen() {
       
       // Calculate retail value using balcony as default (or whatever is available)
       const cabinPrice = balconyPrice || interiorPrice || suitePrice || 0;
-      const retailValueForCruise = (cabinPrice * guestCount) + taxes;
+      const retailValueForCruise = cabinPrice + taxes;
       aggregateTotalValue += retailValueForCruise;
       
       // Track min (interior) and max (suite) values for range display
       if (interiorPrice > 0) {
-        const minVal = (interiorPrice * guestCount) + taxes;
+        const minVal = interiorPrice + taxes;
         if (minVal < minRetailValue) minRetailValue = minVal;
       }
       if (suitePrice > 0) {
-        const maxVal = (suitePrice * guestCount) + taxes;
+        const maxVal = suitePrice + taxes;
         if (maxVal > maxRetailValue) maxRetailValue = maxVal;
       }
       // Fallback to balcony if no interior/suite
       if (minRetailValue === Infinity && balconyPrice > 0) {
-        minRetailValue = (balconyPrice * guestCount) + taxes;
+        minRetailValue = balconyPrice + taxes;
       }
       if (maxRetailValue === 0 && balconyPrice > 0) {
-        maxRetailValue = (balconyPrice * guestCount) + taxes;
+        maxRetailValue = balconyPrice + taxes;
       }
     });
     
@@ -368,15 +367,14 @@ export default function OfferDetailsScreen() {
     const valueBreakdown = calculateCruiseValue(cruise);
     const statusBadge = getCasinoStatusBadge(casinoAvail.casinoOpenDays, casinoAvail.totalDays);
     
-    // Calculate retail value range: 2x room + taxes
-    const guestCount = 2;
+    // Calculate retail value range; imported cabin prices are already full-booking totals.
     const taxes = cruise.taxes || 0;
     const interiorPrice = cruise.interiorPrice || 0;
     const suitePrice = cruise.suitePrice || 0;
     
-    // Min retail = 2x interior + taxes, Max retail = 2x suite + taxes
-    const minRetailValue = interiorPrice > 0 ? (interiorPrice * guestCount) + taxes : 0;
-    const maxRetailValue = suitePrice > 0 ? (suitePrice * guestCount) + taxes : 0;
+    // Min retail = interior + taxes, Max retail = suite + taxes.
+    const minRetailValue = interiorPrice > 0 ? interiorPrice + taxes : 0;
+    const maxRetailValue = suitePrice > 0 ? suitePrice + taxes : 0;
     
     return {
       casinoDays: casinoAvail.casinoOpenDays,

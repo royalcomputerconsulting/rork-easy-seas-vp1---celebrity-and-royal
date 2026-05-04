@@ -1205,7 +1205,9 @@ export default function SettingsScreen() {
       const colReservation = findCol(['reservation', 'booking', 'res']);
       const colCabin = findCol(['cabin', 'stateroom', 'room type']);
       const colGuests = findCol(['guests', 'pax', 'passengers']);
-      const colPrice = findCol(['price', 'cost', 'paid', 'amount']);
+      const colPrice = findCol(['retail price', 'retail value', 'total retail', 'cruise fare', 'fare', 'price', 'cost'], ['paid', 'amount paid', 'net', 'tax']);
+      const colPaid = findCol(['price paid', 'paid', 'amount paid', 'net paid', 'out of pocket'], ['retail']);
+      const colTaxes = findCol(['port taxes', 'taxes and fees', 'taxes & fees', 'taxes', 'fees', 'port charges']);
       const colWinnings = findCol(['winnings', 'casino win']);
       const colProgram = findCol(['program', 'charter']);
       const colSourceEmail = findCol(['source email', 'account email', 'owner email', 'traveler email', 'profile email', 'email']);
@@ -1239,6 +1241,8 @@ export default function SettingsScreen() {
         const cabinType = getCol(colCabin);
         const guests = getCol(colGuests);
         const price = getCol(colPrice);
+        const paid = getCol(colPaid);
+        const taxes = getCol(colTaxes);
         const winnings = getCol(colWinnings);
         const program = getCol(colProgram);
         const sourceEmail = normalizeAccountEmail(getCol(colSourceEmail)) ?? undefined;
@@ -1288,6 +1292,9 @@ export default function SettingsScreen() {
 
         const portsList = portsVisited ? portsVisited.split(',').map(p => p.trim()).filter(Boolean) : [];
         const itineraryLabel = destination || fullItinerary || `${nights} Night Cruise`;
+        const retailPrice = price ? parseFloat(price.replace(/[^0-9.]/g, '')) || undefined : undefined;
+        const paidAmount = paid ? parseFloat(paid.replace(/[^0-9.]/g, '')) || undefined : undefined;
+        const taxesAmount = taxes ? parseFloat(taxes.replace(/[^0-9.]/g, '')) || undefined : undefined;
 
         const cruise: BookedCruise = {
           id: `completed-xlsx-${Date.now()}-${i}`,
@@ -1304,7 +1311,17 @@ export default function SettingsScreen() {
           cabinType: cabinType || 'Balcony',
           guests: parseInt(guests) || 2,
           guestNames: [],
-          price: price ? parseFloat(price.replace(/[^0-9.]/g, '')) || undefined : undefined,
+          price: retailPrice,
+          totalPrice: retailPrice,
+          retailValue: retailPrice,
+          totalRetailCost: retailPrice,
+          originalPrice: retailPrice,
+          pricePaid: paidAmount,
+          amountPaid: paidAmount,
+          netEffectivePaid: paidAmount,
+          taxes: taxesAmount,
+          taxesFeesEstimate: taxesAmount,
+          totalCasinoDiscount: retailPrice !== undefined && paidAmount !== undefined ? Math.max(0, retailPrice - paidAmount) : undefined,
           winnings: winnings ? parseFloat(winnings.replace(/[^0-9.]/g, '')) || undefined : undefined,
           notes: notesVal || (program ? `Program: ${program}` : undefined),
           status: 'completed',

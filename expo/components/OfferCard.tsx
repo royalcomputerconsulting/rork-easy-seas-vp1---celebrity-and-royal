@@ -161,7 +161,7 @@ export const OfferCard = React.memo(function OfferCard({
     }
     
     const guestCount = offer.guests || GUEST_COUNT_DEFAULT;
-    const cabinValueForTwo = cabinPrice * guestCount;
+    const cabinValueForTwo = cabinPrice;
     
     // Estimate taxes if not provided (roughly $30/night per guest)
     let taxes = offer.taxes || 0;

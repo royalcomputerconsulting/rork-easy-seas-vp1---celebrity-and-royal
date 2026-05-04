@@ -713,10 +713,9 @@ export function calculateTotalValue(
   taxesFees: number,
   freePlay: number = 0,
   obc: number = 0,
-  guestCount: number = 2
+  _guestCount: number = 2
 ): number {
-  const cabinValueForTwo = cabinPrice * guestCount;
-  return cabinValueForTwo + taxesFees + freePlay + obc;
+  return cabinPrice + taxesFees + freePlay + obc;
 }
 
 export function calculateROI(

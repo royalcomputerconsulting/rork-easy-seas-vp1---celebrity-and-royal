@@ -388,6 +388,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         stateroomNumber: stringifyValue(row.stateroomNumber) || undefined,
         stateroomCategoryCode: stringifyValue(row.stateroomCategoryCode) || undefined,
         stateroomType: stringifyValue(row.stateroomType) || undefined,
+        interiorPrice: stringifyValue(row.interiorPrice) || undefined,
+        oceanviewPrice: stringifyValue(row.oceanviewPrice) || undefined,
+        balconyPrice: stringifyValue(row.balconyPrice) || undefined,
+        suitePrice: stringifyValue(row.suitePrice) || undefined,
+        taxesAndFees: stringifyValue(row.taxesAndFees) || undefined,
       };
 
       const dedupeKey = normalizedRow.bookingId || `${normalizedRow.shipName}|${normalizedRow.sailingStartDate}`;

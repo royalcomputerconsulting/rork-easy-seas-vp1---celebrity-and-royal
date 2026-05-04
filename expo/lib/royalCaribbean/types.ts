@@ -204,6 +204,7 @@ export interface BookedCruiseRow {
   oceanviewPrice?: string;
   balconyPrice?: string;
   suitePrice?: string;
+  taxesAndFees?: string;
   portList?: string;
   stateroomDescription?: string;
   bookingChannel?: string;

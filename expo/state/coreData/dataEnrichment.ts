@@ -17,7 +17,7 @@ export function applyKnownRetailValues(cruises: BookedCruise[]): BookedCruise[] 
       return shipMatch && dateMatch;
     });
     
-    if (knownValue) {
+    if (knownValue && !cruise.retailValue && !cruise.totalRetailCost && !cruise.originalPrice) {
       return {
         ...cruise,
         retailValue: knownValue.retailCabinValue,
@@ -41,7 +41,8 @@ export function enrichCruisesWithReceiptData(cruises: BookedCruise[]): BookedCru
         const normalizedKnownShip = kv.ship.toLowerCase().trim();
         return kv.departureDate === cruise.sailDate && (normalizedShip === normalizedKnownShip || normalizedShip.includes(normalizedKnownShip) || normalizedKnownShip.includes(normalizedShip));
       })?.retailCabinValue;
-      const retailValue = Math.max(knownRetailValue ?? 0, receipt.totalRetailCost);
+      const importedRetailValue = cruise.retailValue || cruise.totalRetailCost || cruise.originalPrice || 0;
+      const retailValue = Math.max(importedRetailValue, knownRetailValue ?? 0, receipt.totalRetailCost);
       const casinoDiscount = Math.max(receipt.totalCasinoDiscount, retailValue - receipt.pricePaid);
 
       return {

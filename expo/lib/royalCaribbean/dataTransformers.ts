@@ -221,6 +221,18 @@ function getLowestPositivePrice(values: Array<number | undefined>): number | und
   return Math.min(...filtered);
 }
 
+function getBookedCabinRetailPrice(
+  cabinType: string | undefined,
+  prices: { interior?: number; oceanview?: number; balcony?: number; suite?: number }
+): number | undefined {
+  const normalized = (cabinType ?? '').toLowerCase();
+  if (normalized.includes('interior') || normalized.includes('inside')) return prices.interior;
+  if (normalized.includes('ocean') || normalized.includes('outside') || normalized.includes('view')) return prices.oceanview;
+  if (normalized.includes('balcony') || normalized.includes('verand')) return prices.balcony;
+  if (normalized.includes('suite')) return prices.suite;
+  return prices.balcony || prices.oceanview || prices.interior || prices.suite;
+}
+
 function parsePortList(portList: string | undefined): string[] | undefined {
   if (!portList) {
     return undefined;
@@ -514,6 +526,17 @@ export function transformBookedCruisesToAppFormat(
 
     const isCourtesyHold = cruise.status === 'Courtesy Hold' || cruise.status === 'Offer';
     const finalEndDate = endDate || calculateReturnDate(startDate, nights);
+    const interiorPrice = parseMoneyValue(cruise.interiorPrice);
+    const oceanviewPrice = parseMoneyValue(cruise.oceanviewPrice);
+    const balconyPrice = parseMoneyValue(cruise.balconyPrice);
+    const suitePrice = parseMoneyValue(cruise.suitePrice);
+    const taxesAndFees = parseMoneyValue(cruise.taxesAndFees);
+    const importedCabinRetailValue = getBookedCabinRetailPrice(cruise.cabinType, {
+      interior: interiorPrice,
+      oceanview: oceanviewPrice,
+      balcony: balconyPrice,
+      suite: suitePrice,
+    });
 
     const bookedCruise: BookedCruise = {
       sourcePayload: (cruise as { rawBooking?: unknown }).rawBooking,
@@ -527,6 +550,16 @@ export function transformBookedCruisesToAppFormat(
       cabinType: cruise.cabinType,
       cabinNumber: cruise.cabinNumberOrGTY && cruise.cabinNumberOrGTY !== 'GTY' ? cruise.cabinNumberOrGTY : undefined,
       cabinCategory: cruise.cabinCategory || cruise.stateroomCategoryCode,
+      price: importedCabinRetailValue,
+      interiorPrice,
+      oceanviewPrice,
+      balconyPrice,
+      suitePrice,
+      taxes: taxesAndFees,
+      taxesFeesEstimate: taxesAndFees,
+      retailValue: importedCabinRetailValue,
+      totalRetailCost: importedCabinRetailValue,
+      originalPrice: importedCabinRetailValue,
       deckNumber: cruise.deckNumber,
       bookingId: cruise.bookingId,
       reservationNumber: cruise.bookingId,

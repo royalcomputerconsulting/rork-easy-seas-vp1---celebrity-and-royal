@@ -131,16 +131,28 @@ interface ResolvedCruiseRetailValue {
   source: 'known' | 'explicit' | 'payload' | 'receipt' | 'pricing' | 'estimate';
 }
 
-/** Resolves the full-booking cabin retail value; known/imported totals are never multiplied as if per-person. */
+function buildResolvedRetailValue(
+  value: number,
+  guestCount: number,
+  source: ResolvedCruiseRetailValue['source']
+): ResolvedCruiseRetailValue {
+  const totalRetailValue = roundMoney(value);
+  return {
+    totalRetailValue,
+    perGuestRetailValue: guestCount > 0 ? roundMoney(totalRetailValue / guestCount) : totalRetailValue,
+    source,
+  };
+}
+
+/** Resolves the full-booking cabin retail value; imported cabin prices are full retail booking totals, not per-person rates. */
 export function resolveCruiseRetailValue(cruise: Cruise | BookedCruise, cabinType?: string): ResolvedCruiseRetailValue {
   const guestCount = getGuestCount(cruise);
-  const knownRetailValue = getKnownRetailValueForEntity(cruise);
-  const explicitRetailValue = getFirstPositiveNumber(
-    (cruise as BookedCruise).retailValue,
-    (cruise as BookedCruise).totalRetailCost,
-    cruise.originalPrice,
-    cruise.totalValue,
-  );
+  const targetCabinType = cabinType || cruise.cabinType || (cruise as BookedCruise).cabinCategory || 'Balcony';
+  const importedCabinRetailValue = getDetailedCabinPriceFromEntity(cruise, targetCabinType);
+  if (isFiniteNumber(importedCabinRetailValue) && importedCabinRetailValue > 0) {
+    return buildResolvedRetailValue(importedCabinRetailValue, guestCount, 'pricing');
+  }
+
   const payloadRetailValue = getMoneyFromPayload(cruise, [
     'totalCruiseFare',
     'totalRetailCost',
@@ -149,42 +161,58 @@ export function resolveCruiseRetailValue(cruise: Cruise | BookedCruise, cabinTyp
     'grossRetailValue',
     'grossTotal',
   ]);
-  const receiptRetailValue = getReceiptRetailValueForEntity(cruise);
-  const authoritativeRetailCandidate = [
-    { value: payloadRetailValue, source: 'payload' as const },
-    { value: receiptRetailValue, source: 'receipt' as const },
-    { value: explicitRetailValue, source: 'explicit' as const },
-    { value: knownRetailValue, source: 'known' as const },
-  ]
-    .filter((candidate): candidate is { value: number; source: ResolvedCruiseRetailValue['source'] } => isFiniteNumber(candidate.value) && candidate.value > 0)
-    .reduce<{ value: number; source: ResolvedCruiseRetailValue['source'] } | undefined>((best, candidate) => {
-      if (!best || candidate.value > best.value) return candidate;
-      return best;
-    }, undefined);
-
-  if (authoritativeRetailCandidate !== undefined) {
-    return {
-      totalRetailValue: roundMoney(authoritativeRetailCandidate.value),
-      perGuestRetailValue: roundMoney(authoritativeRetailCandidate.value / guestCount),
-      source: authoritativeRetailCandidate.source,
-    };
+  if (payloadRetailValue !== undefined) {
+    return buildResolvedRetailValue(payloadRetailValue, guestCount, 'payload');
   }
 
-  const targetCabinType = cabinType || cruise.cabinType || 'Balcony';
-  let cabinPrice = getCabinPriceFromEntity(cruise, targetCabinType) || cruise.price || 0;
+  const explicitRetailValue = getFirstPositiveNumber(
+    (cruise as BookedCruise).retailValue,
+    (cruise as BookedCruise).totalRetailCost,
+    cruise.originalPrice,
+    cruise.totalValue,
+  );
+  if (explicitRetailValue !== undefined) {
+    return buildResolvedRetailValue(explicitRetailValue, guestCount, 'explicit');
+  }
+
+  const receiptRetailValue = getReceiptRetailValueForEntity(cruise);
+  if (receiptRetailValue !== undefined) {
+    return buildResolvedRetailValue(receiptRetailValue, guestCount, 'receipt');
+  }
+
+  const knownRetailValue = getKnownRetailValueForEntity(cruise);
+  if (knownRetailValue !== undefined) {
+    return buildResolvedRetailValue(knownRetailValue, guestCount, 'known');
+  }
+
+  let estimatedRetailValue = 0;
   let source: ResolvedCruiseRetailValue['source'] = 'pricing';
 
-  if (cabinPrice === 0 && cruise.nights > 0) {
-    cabinPrice = estimateCabinRetailValue(targetCabinType, cruise.nights);
+  if (cruise.price && cruise.price > 0) {
+    estimatedRetailValue = cruise.price;
+  } else if (cruise.nights > 0) {
+    estimatedRetailValue = estimateCabinRetailValue(targetCabinType, cruise.nights);
     source = 'estimate';
   }
 
-  const totalRetailValue = roundMoney(cabinPrice * guestCount);
-  return {
-    totalRetailValue,
-    perGuestRetailValue: guestCount > 0 ? roundMoney(totalRetailValue / guestCount) : totalRetailValue,
-    source,
-  };
+  return buildResolvedRetailValue(estimatedRetailValue, guestCount, source);
+}
+
+function getDetailedCabinPriceFromEntity(
+  entity: Cruise | CasinoOffer | BookedCruise,
+  cabinType?: string
+): number | undefined {
+  const targetType = cabinType || (entity as Cruise | BookedCruise).cabinType || (entity as CasinoOffer).roomType || 'Balcony';
+  const typeKey = getCabinTypeKey(targetType);
+
+  if (typeKey.includes('Interior')) return entity.interiorPrice;
+  if (typeKey.includes('Oceanview')) return entity.oceanviewPrice;
+  if (typeKey.includes('Balcony')) return entity.balconyPrice;
+  if (typeKey.includes('Junior')) return entity.juniorSuitePrice || entity.suitePrice;
+  if (typeKey.includes('Grand')) return entity.grandSuitePrice || entity.suitePrice;
+  if (typeKey.includes('Suite')) return entity.suitePrice;
+
+  return entity.balconyPrice || entity.oceanviewPrice || entity.interiorPrice || entity.suitePrice;
 }
 
 function estimateTaxesFees(nights: number, guestCount: number): number {
@@ -203,10 +231,10 @@ function resolveCruiseTaxesFees(cruise: Cruise | BookedCruise, guestCount: numbe
     'totalCharge',
   ]);
   const explicitTaxesFees = getFirstPositiveNumber(
-    receiptPaidValue,
     payloadTaxesFees,
-    (cruise as BookedCruise).taxesFeesEstimate,
     cruise.taxes,
+    (cruise as BookedCruise).taxesFeesEstimate,
+    receiptPaidValue,
     (cruise as BookedCruise).pricePaid,
   );
 
@@ -340,9 +368,9 @@ export function calculateCasinoPayTable(
   obc: number = 0,
   guestCount: number = GUEST_COUNT_DEFAULT
 ): CasinoPayTable {
-  const retailCabinPrice = cabinPrice * guestCount;
-  const cabinValue = retailCabinPrice;
-  const totalValue = cabinValue + taxesFees + freePlay + obc;
+  const retailCabinPrice = cabinPrice;
+  const cabinValue = guestCount > 0 ? roundMoney(retailCabinPrice / guestCount) : retailCabinPrice;
+  const totalValue = retailCabinPrice + taxesFees + freePlay + obc;
   const discountValue = retailCabinPrice;
   
   console.log('[ValueCalculator] CasinoPayTable calculated:', {
@@ -376,8 +404,8 @@ export function calculateOfferValue(
   const cabinPrice = getCabinPriceFromEntity(offer, cabinType) || 0;
   const guestCount = getGuestCount(offer);
   
-  const cabinValue = cabinPrice;
-  const cabinValueForTwo = cabinPrice * guestCount;
+  const cabinValueForTwo = cabinPrice;
+  const cabinValue = guestCount > 0 ? roundMoney(cabinValueForTwo / guestCount) : cabinValueForTwo;
   const taxesFees = offer.taxesFees || offer.portCharges || 0;
   const freePlayValue = offer.freePlay || offer.freeplayAmount || 0;
   const obcValue = offer.OBC || offer.obcAmount || 0;
@@ -790,7 +818,7 @@ export function calculateOfferAggregateValue(
   if (matchingCruises.length === 0) {
     const singleCruise = offer as Cruise;
     const cabinPrice = getCabinPriceFromEntity(singleCruise, roomType) || singleCruise.price || 0;
-    const cabinValueForTwo = cabinPrice * GUEST_COUNT_DEFAULT;
+    const cabinValueForTwo = cabinPrice;
     const taxesFees = singleCruise.taxes || 0;
     const freePlay = singleCruise.freePlay || 0;
     const obc = singleCruise.freeOBC || 0;
@@ -828,7 +856,7 @@ export function calculateOfferAggregateValue(
   
   matchingCruises.forEach(cruise => {
     const cabinPrice = getCabinPriceFromEntity(cruise, roomType) || cruise.price || 0;
-    const cabinValueForTwo = cabinPrice * GUEST_COUNT_DEFAULT;
+    const cabinValueForTwo = cabinPrice;
     const taxesFees = cruise.taxes || 0;
     
     const hasDetailedPricing = !!(cruise.interiorPrice || cruise.oceanviewPrice || cruise.balconyPrice || cruise.suitePrice || cruise.juniorSuitePrice || cruise.grandSuitePrice);

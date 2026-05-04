@@ -179,7 +179,12 @@ function generateBookedCruisesCSV(bookingsData, loyaltyData) {
     'Booking ID',
     'Status',
     'Loyalty Level',
-    'Loyalty Points'
+    'Loyalty Points',
+    'Interior Price',
+    'Oceanview Price',
+    'Balcony Price',
+    'Suite Price',
+    'Port Taxes & Fees'
   ];
 
   const rows = [headers.join(',')];
@@ -251,7 +256,12 @@ function generateBookedCruisesCSV(bookingsData, loyaltyData) {
       escapeCSVField(bookingId),
       escapeCSVField(status),
       escapeCSVField(loyaltyLevel),
-      escapeCSVField(loyaltyPoints)
+      escapeCSVField(loyaltyPoints),
+      escapeCSVField(booking.interiorPrice || ''),
+      escapeCSVField(booking.oceanviewPrice || ''),
+      escapeCSVField(booking.balconyPrice || ''),
+      escapeCSVField(booking.suitePrice || ''),
+      escapeCSVField(booking.taxesAndFees || booking.taxes || '')
     ];
 
     rows.push(row.join(','));

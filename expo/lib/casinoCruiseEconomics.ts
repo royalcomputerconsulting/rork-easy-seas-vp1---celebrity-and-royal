@@ -204,7 +204,7 @@ function getKnownRetailValueForCruise(cruise: Pick<BookedCruise, 'id' | 'booking
 
 function applyKnownRetailValueToCruise(cruise: BookedCruise): BookedCruise {
   const knownRetailValue = getKnownRetailValueForCruise(cruise);
-  if (!isNumber(knownRetailValue)) {
+  if (!isNumber(knownRetailValue) || isNumber(cruise.retailValue) || isNumber(cruise.totalRetailCost) || isNumber(cruise.originalPrice)) {
     return cruise;
   }
 

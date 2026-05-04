@@ -10,6 +10,7 @@ import { createDateFromString } from '@/lib/date';
 import { getUniqueImageForCruise, getImageForDestination, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
 import type { Cruise, BookedCruise, ItineraryDay } from '@/types/models';
 import { calculateSeaDayDensityScore } from '@/lib/cruisePlanningIntelligence';
+import { calculateCruiseValue } from '@/lib/valueCalculator';
 
 interface CruiseCardProps {
   cruise: Cruise | BookedCruise;
@@ -117,19 +118,7 @@ export const CruiseCard = React.memo(function CruiseCard({
 
   const retailValue = useMemo(() => {
     if (!showRetailValue) return null;
-    
-    const guestCount = cruise.guests || 2;
-    let cabinValueForTwo = 0;
-    
-    const bookedCruise = cruise as BookedCruise;
-    if (bookedCruise.totalRetailCost && bookedCruise.pricePaid !== undefined) {
-      cabinValueForTwo = bookedCruise.totalRetailCost * 2;
-    } else {
-      const cabinPrice = cruise.interiorPrice || cruise.oceanviewPrice || cruise.balconyPrice || cruise.suitePrice || cruise.price || 0;
-      cabinValueForTwo = cabinPrice * guestCount;
-    }
-    
-    return cabinValueForTwo;
+    return calculateCruiseValue(cruise).totalRetailValue;
   }, [cruise, showRetailValue]);
 
   const formatDateRange = (sailDate: string, returnDate?: string, nights?: number) => {

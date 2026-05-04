@@ -13,7 +13,7 @@ export function applyKnownRetailValuesToBooked(cruises: BookedCruise[]): BookedC
       return shipMatch && dateMatch;
     });
     
-    if (knownValue) {
+    if (knownValue && !cruise.retailValue && !cruise.totalRetailCost && !cruise.originalPrice) {
       console.log(`[DataEnrichment] Applied known retail value ${knownValue.retailCabinValue} to cruise ${cruise.id} (${cruise.shipName})`);
       return {
         ...cruise,

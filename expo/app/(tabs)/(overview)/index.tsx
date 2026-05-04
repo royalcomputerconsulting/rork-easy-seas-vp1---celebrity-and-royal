@@ -542,7 +542,7 @@ function OverviewScreenContent() {
         }
         
         const guestCount = cruise.guests || GUEST_COUNT_DEFAULT;
-        const cabinValueForTwo = cabinPrice * guestCount;
+        const cabinValueForTwo = cabinPrice;
         
         // Estimate taxes if not provided (~$30/night per guest)
         let taxesFees = cruise.taxes || 0;

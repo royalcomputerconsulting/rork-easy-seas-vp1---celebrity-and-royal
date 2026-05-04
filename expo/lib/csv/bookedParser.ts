@@ -6,6 +6,7 @@ import {
   detectDelimiter,
   createHeaderMap,
   getColumnIndex,
+  getPriceForRoomType,
 } from './csvParser';
 
 function stripOuterQuotes(value: string): string {
@@ -253,10 +254,15 @@ export function parseBookedCSV(content: string, existingCruises: BookedCruise[] 
     isBooked: getColumnIndex(headerMap, ['isbooked', 'is booked', 'is_booked', 'booked', 'status']),
     winningsBroughtHome: getColumnIndex(headerMap, ['winningsbroughthome', 'winnings brought home', 'winnings_brought_home', 'winnings', 'casino winnings']),
     cruisePointsEarned: getColumnIndex(headerMap, ['cruisepointsearned', 'cruise points earned', 'cruise_points_earned', 'points earned', 'points']),
-    cabinCategory: getColumnIndex(headerMap, ['cabincategory', 'cabin category', 'cabin_category', 'category', 'room type', 'cabintype', 'cabin type', 'roomtype']),
+    cabinCategory: getColumnIndex(headerMap, ['cabincategory', 'cabin category', 'cabin_category', 'category', 'stateroom category', 'stateroomcategory']),
+    cabinType: getColumnIndex(headerMap, ['cabintype', 'cabin type', 'cabin_type', 'room type', 'roomtype', 'stateroom type', 'stateroomtype']),
     cabinNumber: getColumnIndex(headerMap, ['cabinnumber', 'cabin number', 'cabin_number', 'cabin', 'cabin #', 'cabin#']),
-    pricePaid: getColumnIndex(headerMap, ['pricepaid', 'price paid', 'price_paid', 'paid']),
-    totalRetailCost: getColumnIndex(headerMap, ['totalretailcost', 'total retail cost', 'total_retail_cost', 'retail cost', 'retailcost']),
+    pricePaid: getColumnIndex(headerMap, ['pricepaid', 'price paid', 'price_paid', 'paid', 'amount paid', 'amountpaid']),
+    totalRetailCost: getColumnIndex(headerMap, ['totalretailcost', 'total retail cost', 'total_retail_cost', 'retail cost', 'retailcost', 'retail value', 'retailvalue', 'cruise fare', 'cruisefare', 'fare', 'price', 'booked price', 'bookedprice']),
+    interiorPrice: getColumnIndex(headerMap, ['interiorprice', 'interior price', 'interior_price', 'price interior']),
+    oceanviewPrice: getColumnIndex(headerMap, ['oceanviewprice', 'oceanview price', 'oceanview_price', 'ocean view price', 'ocean price', 'price ocean view', 'price ocean']),
+    balconyPrice: getColumnIndex(headerMap, ['balconyprice', 'balcony price', 'balcony_price', 'price balcony']),
+    suitePrice: getColumnIndex(headerMap, ['suiteprice', 'suite price', 'suite_price', 'price suite']),
     totalCasinoDiscount: getColumnIndex(headerMap, ['totalcasinodiscount', 'total casino discount', 'total_casino_discount', 'casino discount', 'casinodiscount', 'discount', 'offer value']),
     portTaxesFees: getColumnIndex(headerMap, ['port taxes & fees', 'port taxes and fees', 'porttaxes', 'port_taxes', 'taxes & fees', 'taxes and fees', 'taxes', 'fees', 'port charges', 'portcharges']),
     source: getColumnIndex(headerMap, ['cruise line', 'cruiseline', 'brand', 'line']),
@@ -337,10 +343,16 @@ export function parseBookedCSV(content: string, existingCruises: BookedCruise[] 
     const parsedState = parseBookedState(isBookedValue);
     const winningsBroughtHome = getNumericValue(colIndices.winningsBroughtHome);
     const cruisePointsEarned = getNumericValue(colIndices.cruisePointsEarned);
+    const cabinType = getValue(colIndices.cabinType) || getValue(colIndices.cabinCategory);
     const cabinCategory = getValue(colIndices.cabinCategory);
     const cabinNumber = getValue(colIndices.cabinNumber);
     const pricePaid = getNumericValue(colIndices.pricePaid);
     const totalRetailCost = getNumericValue(colIndices.totalRetailCost);
+    const interiorPrice = getNumericValue(colIndices.interiorPrice);
+    const oceanviewPrice = getNumericValue(colIndices.oceanviewPrice);
+    const balconyPrice = getNumericValue(colIndices.balconyPrice);
+    const suitePrice = getNumericValue(colIndices.suitePrice);
+    const importedCabinRetailValue = getPriceForRoomType(cabinType, interiorPrice, oceanviewPrice, balconyPrice, suitePrice) || totalRetailCost;
     const totalCasinoDiscount = getNumericValue(colIndices.totalCasinoDiscount);
     const portTaxesFees = getNumericValue(colIndices.portTaxesFees);
 
@@ -390,12 +402,23 @@ export function parseBookedCSV(content: string, existingCruises: BookedCruise[] 
       isCourtesyHold: parsedState.isCourtesyHold,
       winnings: winningsBroughtHome || undefined,
       earnedPoints: cruisePointsEarned || undefined,
+      cabinType: cabinType || undefined,
       cabinCategory: cabinCategory || undefined,
       cabinNumber: cabinNumber || undefined,
+      price: importedCabinRetailValue > 0 ? importedCabinRetailValue : undefined,
+      interiorPrice: interiorPrice > 0 ? interiorPrice : undefined,
+      oceanviewPrice: oceanviewPrice > 0 ? oceanviewPrice : undefined,
+      balconyPrice: balconyPrice > 0 ? balconyPrice : undefined,
+      suitePrice: suitePrice > 0 ? suitePrice : undefined,
       pricePaid: pricePaid > 0 ? pricePaid : undefined,
-      totalRetailCost: totalRetailCost > 0 ? totalRetailCost : undefined,
-      totalCasinoDiscount: totalCasinoDiscount > 0 ? totalCasinoDiscount : undefined,
+      totalRetailCost: importedCabinRetailValue > 0 ? importedCabinRetailValue : undefined,
+      retailValue: importedCabinRetailValue > 0 ? importedCabinRetailValue : undefined,
+      originalPrice: importedCabinRetailValue > 0 ? importedCabinRetailValue : undefined,
+      totalCasinoDiscount: totalCasinoDiscount > 0 ? totalCasinoDiscount : (importedCabinRetailValue > 0 && pricePaid > 0 ? Math.max(0, importedCabinRetailValue - pricePaid) : undefined),
       taxes: portTaxesFees > 0 ? portTaxesFees : undefined,
+      taxesFeesEstimate: portTaxesFees > 0 ? portTaxesFees : undefined,
+      amountPaid: pricePaid > 0 ? pricePaid : undefined,
+      netEffectivePaid: pricePaid > 0 ? pricePaid : undefined,
       cruiseSource: parsedSource,
       sourceEmail,
       importStatus: sourceEmail ? 'unassigned' : undefined,
@@ -457,6 +480,16 @@ export function generateBookedCSV(bookedCruises: BookedCruise[]): string {
     'isBooked',
     'winningsBroughtHome',
     'cruisePointsEarned',
+    'cabinType',
+    'cabinCategory',
+    'cabinNumber',
+    'pricePaid',
+    'totalRetailCost',
+    'interiorPrice',
+    'oceanviewPrice',
+    'balconyPrice',
+    'suitePrice',
+    'portTaxesFees',
   ];
 
   const rows: string[] = [headers.join(',')];
@@ -477,6 +510,16 @@ export function generateBookedCSV(bookedCruises: BookedCruise[]): string {
       (cruise.status === 'booked').toString().toUpperCase(),
       (cruise.winnings ?? '').toString(),
       (cruise.earnedPoints ?? '').toString(),
+      escapeCSVField(cruise.cabinType || ''),
+      escapeCSVField(cruise.cabinCategory || ''),
+      escapeCSVField(cruise.cabinNumber || cruise.stateroomNumber || ''),
+      (cruise.pricePaid ?? cruise.amountPaid ?? '').toString(),
+      (cruise.totalRetailCost ?? cruise.retailValue ?? cruise.originalPrice ?? '').toString(),
+      (cruise.interiorPrice ?? '').toString(),
+      (cruise.oceanviewPrice ?? '').toString(),
+      (cruise.balconyPrice ?? '').toString(),
+      (cruise.suitePrice ?? '').toString(),
+      (cruise.taxes ?? cruise.taxesFeesEstimate ?? '').toString(),
     ];
 
     rows.push(row.join(','));

@@ -49,6 +49,8 @@ export function AddBookedCruiseModal({ visible, onClose, onSave }: AddBookedCrui
       return;
     }
 
+    const parsedRetailPrice = price ? parseFloat(price) : undefined;
+
     const newCruise: BookedCruise = {
       id: `cruise-${Date.now()}`,
       shipName: shipName.trim(),
@@ -60,8 +62,11 @@ export function AddBookedCruiseModal({ visible, onClose, onSave }: AddBookedCrui
       reservationNumber: reservationNumber.trim() || undefined,
       cabinNumber: cabinNumber.trim() || undefined,
       cabinType: cabinType,
-      price: price ? parseFloat(price) : undefined,
-      totalPrice: price ? parseFloat(price) : undefined,
+      price: parsedRetailPrice,
+      totalPrice: parsedRetailPrice,
+      retailValue: parsedRetailPrice,
+      totalRetailCost: parsedRetailPrice,
+      originalPrice: parsedRetailPrice,
       freePlay: freePlay ? parseFloat(freePlay) : undefined,
       freeOBC: freeOBC ? parseFloat(freeOBC) : undefined,
       offerCode: offerCode.trim() || undefined,
@@ -264,14 +269,14 @@ export function AddBookedCruiseModal({ visible, onClose, onSave }: AddBookedCrui
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Price</Text>
+                <Text style={styles.label}>Retail Price</Text>
                 <View style={styles.inputWrapper}>
                   <Text style={styles.currencySymbol}>$</Text>
                   <TextInput
                     style={[styles.input, styles.priceInput]}
                     value={price}
                     onChangeText={setPrice}
-                    placeholder="0.00"
+                    placeholder="Imported cabin retail value"
                     placeholderTextColor={COLORS.textSecondary}
                     keyboardType="decimal-pad"
                   />
