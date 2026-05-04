@@ -38,6 +38,8 @@ import {
 } from 'lucide-react-native';
 
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
+import { withAlpha } from '@/constants/loyaltyColors';
+import { createLoyaltyCardTheme, getClubRoyaleTierColor } from '@/constants/loyaltyTheme';
 import { IMAGES, LOCAL_IMAGES } from '@/constants/images';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { useUser } from '@/state/UserProvider';
@@ -504,6 +506,10 @@ function OverviewScreenContent() {
     return commandCenterBuckets.filter((bucket) => bucket.offers.length > 0).slice(0, 3);
   }, [commandCenterBuckets]);
 
+  const clubRoyaleTier = clubRoyaleProfile?.tier ?? 'Choice';
+  const clubRoyaleAccent = getClubRoyaleTierColor(clubRoyaleTier);
+  const commandCenterTheme = useMemo(() => createLoyaltyCardTheme(clubRoyaleAccent), [clubRoyaleAccent]);
+
   const [sortMode, setSortMode] = useState<'soonest' | 'highestValue'>('soonest');
 
   const offerSummary = useMemo(() => {
@@ -818,46 +824,55 @@ function OverviewScreenContent() {
     return (
       <View style={styles.commandCenterCard} testID="offer-expiration-command-center">
         <LinearGradient
-          colors={['#172554', '#0F766E']}
+          colors={commandCenterTheme.gradientColors}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={styles.commandCenterGradient}
+          style={[styles.commandCenterGradient, { borderColor: commandCenterTheme.borderColor }]}
         >
+          <View style={styles.commandCenterRoyalBand}>
+            <View style={[styles.commandCenterRoyalLine, { backgroundColor: commandCenterTheme.accentColor }]} />
+            <Text style={[styles.commandCenterRoyalText, { color: commandCenterTheme.secondaryTextColor }]}>Club Royale watchlist</Text>
+          </View>
+
           <View style={styles.commandCenterHeader}>
             <View style={styles.commandCenterTitleRow}>
-              <Clock size={18} color="#FDE68A" />
-              <Text style={styles.commandCenterTitle}>Expiration Command Center</Text>
+              <View style={[styles.commandCenterIconBadge, { backgroundColor: commandCenterTheme.surfaceColor, borderColor: commandCenterTheme.borderColor }]}> 
+                <Clock size={18} color={commandCenterTheme.accentColor} />
+              </View>
+              <View style={styles.commandCenterHeadingCopy}>
+                <Text style={[styles.commandCenterTitle, { color: commandCenterTheme.topTextColor }]}>Expiration Command Center</Text>
+                <Text style={[styles.commandCenterSubtitle, { color: commandCenterTheme.secondaryTextColor }]}>Royal Caribbean offers that need a decision window.</Text>
+              </View>
             </View>
-            <View style={styles.commandCenterCountPill}>
+            <View style={[styles.commandCenterCountPill, { backgroundColor: commandCenterTheme.accentColor }]}> 
               <Text style={styles.commandCenterCountText}>{commandCenterBucketCounts.urgentExpiring}</Text>
               <Text style={styles.commandCenterCountLabel}>expiring</Text>
             </View>
           </View>
-          <Text style={styles.commandCenterSubtitle}>
-            Urgent expiring offers are now counted in one place: {commandCenterBucketCounts.urgentExpiring} total, with {commandCenterBucketCounts.expires7} expiring in 0-7 days and {commandCenterBucketCounts.expires14} expiring in 8-14 days. {commandCenterTotalCount} total timing item{commandCenterTotalCount === 1 ? '' : 's'} need attention.
-          </Text>
+
           <View style={styles.commandCenterSummaryRow} testID="command-center-expiring-summary">
-            <View style={styles.commandCenterUrgentChip}>
-              <AlertTriangle size={13} color="#172554" />
-              <Text style={styles.commandCenterUrgentChipText}>Urgent: {commandCenterBucketCounts.urgentExpiring} total</Text>
+            <View style={[styles.commandCenterUrgentChip, { backgroundColor: withAlpha(commandCenterTheme.accentColor, 0.16), borderColor: commandCenterTheme.borderColor }]}> 
+              <AlertTriangle size={13} color={commandCenterTheme.accentColor} />
+              <Text style={[styles.commandCenterUrgentChipText, { color: commandCenterTheme.topTextColor }]}>Urgent: {commandCenterBucketCounts.urgentExpiring}</Text>
             </View>
-            <View style={styles.commandCenterMiniChip}>
-              <Text style={styles.commandCenterMiniChipValue}>{commandCenterBucketCounts.expires7}</Text>
-              <Text style={styles.commandCenterMiniChipLabel}>expire in 0-7 days</Text>
+            <View style={[styles.commandCenterMiniChip, { backgroundColor: commandCenterTheme.surfaceColor, borderColor: commandCenterTheme.borderColor }]}> 
+              <Text style={[styles.commandCenterMiniChipValue, { color: commandCenterTheme.topTextColor }]}>{commandCenterBucketCounts.expires7}</Text>
+              <Text style={[styles.commandCenterMiniChipLabel, { color: commandCenterTheme.secondaryTextColor }]}>0-7 days</Text>
             </View>
-            <View style={styles.commandCenterMiniChip}>
-              <Text style={styles.commandCenterMiniChipValue}>{commandCenterBucketCounts.expires14}</Text>
-              <Text style={styles.commandCenterMiniChipLabel}>expire in 8-14 days</Text>
+            <View style={[styles.commandCenterMiniChip, { backgroundColor: commandCenterTheme.surfaceColor, borderColor: commandCenterTheme.borderColor }]}> 
+              <Text style={[styles.commandCenterMiniChipValue, { color: commandCenterTheme.topTextColor }]}>{commandCenterBucketCounts.expires14}</Text>
+              <Text style={[styles.commandCenterMiniChipLabel, { color: commandCenterTheme.secondaryTextColor }]}>8-14 days</Text>
             </View>
             {commandCenterBucketCounts.expires30 > 0 && (
-              <View style={styles.commandCenterMiniChipMuted}>
-                <Text style={styles.commandCenterMiniChipMutedValue}>{commandCenterBucketCounts.expires30}</Text>
-                <Text style={styles.commandCenterMiniChipMutedLabel}>15-30 days</Text>
+              <View style={[styles.commandCenterMiniChipMuted, { backgroundColor: commandCenterTheme.surfaceColorMuted, borderColor: commandCenterTheme.borderColor }]}> 
+                <Text style={[styles.commandCenterMiniChipMutedValue, { color: commandCenterTheme.topTextColor }]}>{commandCenterBucketCounts.expires30}</Text>
+                <Text style={[styles.commandCenterMiniChipMutedLabel, { color: commandCenterTheme.secondaryTextColor }]}>15-30 days</Text>
               </View>
             )}
           </View>
+
           <TouchableOpacity
-            style={styles.commandCenterOpenButton}
+            style={[styles.commandCenterOpenButton, { backgroundColor: commandCenterTheme.accentColor }]}
             onPress={() => router.push('/command-center' as any)}
             activeOpacity={0.82}
             testID="open-full-command-center"
@@ -866,44 +881,44 @@ function OverviewScreenContent() {
           </TouchableOpacity>
 
           {topCommandCenterBuckets.map((bucket) => (
-            <View key={bucket.id} style={styles.commandCenterBucket}>
+            <View key={bucket.id} style={[styles.commandCenterBucket, { backgroundColor: commandCenterTheme.surfaceColor, borderColor: commandCenterTheme.borderColor }]}> 
               <View style={styles.commandCenterBucketHeader}>
-                <Text style={styles.commandCenterBucketTitle}>{bucket.title}</Text>
-                <Text style={styles.commandCenterBucketSubtitle}>{bucket.offers.length} item{bucket.offers.length === 1 ? '' : 's'}</Text>
+                <Text style={[styles.commandCenterBucketTitle, { color: commandCenterTheme.topTextColor }]}>{bucket.title}</Text>
+                <Text style={[styles.commandCenterBucketSubtitle, { color: commandCenterTheme.secondaryTextColor }]}>{bucket.offers.length} item{bucket.offers.length === 1 ? '' : 's'}</Text>
               </View>
               {bucket.offers.slice(0, 2).map((item) => (
-                <View key={item.offer.id} style={styles.commandCenterOfferRow}>
-                  <View style={styles.commandCenterScoreBubble}>
-                    <Gauge size={14} color="#A7F3D0" />
-                    <Text style={styles.commandCenterScoreText}>{item.intelligence.score}</Text>
+                <View key={item.offer.id} style={[styles.commandCenterOfferRow, { backgroundColor: commandCenterTheme.surfaceColorMuted, borderColor: withAlpha(commandCenterTheme.accentColor, 0.18) }]}> 
+                  <View style={[styles.commandCenterScoreBubble, { backgroundColor: withAlpha(commandCenterTheme.accentColor, 0.14) }]}> 
+                    <Gauge size={14} color={commandCenterTheme.accentColor} />
+                    <Text style={[styles.commandCenterScoreText, { color: commandCenterTheme.topTextColor }]}>{item.intelligence.score}</Text>
                   </View>
                   <View style={styles.commandCenterOfferCopy}>
-                    <Text style={styles.commandCenterOfferTitle} numberOfLines={1}>{item.offer.offerName || item.offer.title || item.offer.offerCode || 'Casino Offer'}</Text>
-                    <Text style={styles.commandCenterOfferMeta} numberOfLines={1}>{item.intelligence.rating} · {item.intelligence.daysUntilExpiration === null ? 'No expiry found' : `${item.intelligence.daysUntilExpiration} days`} · {formatCurrency(item.intelligence.casinoPaysFor.casinoCoveredValue)}</Text>
+                    <Text style={[styles.commandCenterOfferTitle, { color: commandCenterTheme.topTextColor }]} numberOfLines={1}>{item.offer.offerName || item.offer.title || item.offer.offerCode || 'Casino Offer'}</Text>
+                    <Text style={[styles.commandCenterOfferMeta, { color: commandCenterTheme.secondaryTextColor }]} numberOfLines={1}>{item.intelligence.rating} · {item.intelligence.daysUntilExpiration === null ? 'No expiry found' : `${item.intelligence.daysUntilExpiration} days`} · {formatCurrency(item.intelligence.casinoPaysFor.casinoCoveredValue)}</Text>
                   </View>
                   <View style={styles.commandCenterActions}>
-                    <TouchableOpacity style={styles.commandCenterAction} onPress={() => handleCommandCenterAction('view', item)} testID="command-center-view">
+                    <TouchableOpacity style={[styles.commandCenterAction, { backgroundColor: commandCenterTheme.accentColor }]} onPress={() => handleCommandCenterAction('view', item)} testID="command-center-view">
                       <Text style={styles.commandCenterActionText}>View</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.commandCenterAction} onPress={() => handleCommandCenterAction('decode', item)} testID="command-center-decode">
+                    <TouchableOpacity style={[styles.commandCenterAction, { backgroundColor: COLORS.navyDeep }]} onPress={() => handleCommandCenterAction('decode', item)} testID="command-center-decode">
                       <Text style={styles.commandCenterActionText}>Decode</Text>
                     </TouchableOpacity>
                   </View>
                   <View style={styles.commandCenterActionsWide}>
-                    <TouchableOpacity style={styles.commandCenterActionMuted} onPress={() => handleCommandCenterAction('compare', item)} testID="command-center-compare">
-                      <Calculator size={12} color="#CBD5E1" />
-                      <Text style={styles.commandCenterActionMutedText}>Compare</Text>
+                    <TouchableOpacity style={[styles.commandCenterActionMuted, { borderColor: commandCenterTheme.borderColor, backgroundColor: commandCenterTheme.surfaceColor }]} onPress={() => handleCommandCenterAction('compare', item)} testID="command-center-compare">
+                      <Calculator size={12} color={commandCenterTheme.accentColor} />
+                      <Text style={[styles.commandCenterActionMutedText, { color: commandCenterTheme.secondaryTextColor }]}>Compare</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.commandCenterActionMuted} onPress={() => handleCommandCenterAction('archive', item)} testID="command-center-archive">
-                      <Archive size={12} color="#CBD5E1" />
-                      <Text style={styles.commandCenterActionMutedText}>Archive</Text>
+                    <TouchableOpacity style={[styles.commandCenterActionMuted, { borderColor: commandCenterTheme.borderColor, backgroundColor: commandCenterTheme.surfaceColor }]} onPress={() => handleCommandCenterAction('archive', item)} testID="command-center-archive">
+                      <Archive size={12} color={commandCenterTheme.accentColor} />
+                      <Text style={[styles.commandCenterActionMutedText, { color: commandCenterTheme.secondaryTextColor }]}>Archive</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.commandCenterActionMuted} onPress={() => handleCommandCenterAction('skip', item)} testID="command-center-skip">
-                      <CheckCircle size={12} color="#CBD5E1" />
-                      <Text style={styles.commandCenterActionMutedText}>Mark skipped</Text>
+                    <TouchableOpacity style={[styles.commandCenterActionMuted, { borderColor: commandCenterTheme.borderColor, backgroundColor: commandCenterTheme.surfaceColor }]} onPress={() => handleCommandCenterAction('skip', item)} testID="command-center-skip">
+                      <CheckCircle size={12} color={commandCenterTheme.accentColor} />
+                      <Text style={[styles.commandCenterActionMutedText, { color: commandCenterTheme.secondaryTextColor }]}>Mark skipped</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={styles.commandCenterActionMuted}
+                      style={[styles.commandCenterActionMuted, { borderColor: commandCenterTheme.borderColor, backgroundColor: commandCenterTheme.surfaceColor }]}
                       onPress={() => {
                         setAgentMode('casinoHost');
                         router.push('/ask-my-data' as any);
@@ -911,8 +926,8 @@ function OverviewScreenContent() {
                       }}
                       testID="command-center-ask-agentx"
                     >
-                      <Bot size={12} color="#CBD5E1" />
-                      <Text style={styles.commandCenterActionMutedText}>Ask</Text>
+                      <Bot size={12} color={commandCenterTheme.accentColor} />
+                      <Text style={[styles.commandCenterActionMutedText, { color: commandCenterTheme.secondaryTextColor }]}>Ask</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -1603,51 +1618,81 @@ const styles = StyleSheet.create({
   },
   commandCenterGradient: {
     padding: SPACING.md,
+    borderWidth: 1,
+    borderRadius: BORDER_RADIUS.xl,
+  },
+  commandCenterRoyalBand: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    marginBottom: SPACING.sm,
+  },
+  commandCenterRoyalLine: {
+    width: 34,
+    height: 3,
+    borderRadius: 2,
+  },
+  commandCenterRoyalText: {
+    fontSize: 10,
+    fontWeight: '900' as const,
+    letterSpacing: 1,
+    textTransform: 'uppercase' as const,
   },
   commandCenterHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    marginBottom: 6,
+    gap: SPACING.sm,
+    marginBottom: SPACING.sm,
   },
   commandCenterTitleRow: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.sm,
   },
+  commandCenterIconBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  commandCenterHeadingCopy: {
+    flex: 1,
+  },
   commandCenterTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '900' as const,
-    color: '#FFFFFF',
+    letterSpacing: -0.2,
   },
   commandCenterCountPill: {
-    minWidth: 72,
-    minHeight: 32,
-    borderRadius: 16,
-    backgroundColor: '#FDE68A',
+    minWidth: 58,
+    minHeight: 44,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: SPACING.sm,
-    paddingVertical: 4,
+    paddingVertical: 5,
   },
   commandCenterCountText: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '900' as const,
-    color: '#172554',
-    lineHeight: 17,
+    color: '#FFFFFF',
+    lineHeight: 18,
   },
   commandCenterCountLabel: {
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: '900' as const,
-    color: '#172554',
+    color: 'rgba(255,255,255,0.88)',
     letterSpacing: 0.4,
     textTransform: 'uppercase' as const,
   },
   commandCenterSubtitle: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.78)',
-    lineHeight: 17,
-    marginBottom: SPACING.sm,
+    fontSize: 11,
+    lineHeight: 15,
+    marginTop: 2,
   },
   commandCenterSummaryRow: {
     flexDirection: 'row',
@@ -1659,7 +1704,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: '#FDE68A',
+    borderWidth: 1,
     borderRadius: BORDER_RADIUS.round,
     paddingHorizontal: SPACING.sm,
     paddingVertical: 7,
@@ -1667,15 +1712,12 @@ const styles = StyleSheet.create({
   commandCenterUrgentChipText: {
     fontSize: 12,
     fontWeight: '900' as const,
-    color: '#172554',
   },
   commandCenterMiniChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: 'rgba(186, 230, 253, 0.18)',
     borderWidth: 1,
-    borderColor: 'rgba(186, 230, 253, 0.3)',
     borderRadius: BORDER_RADIUS.round,
     paddingHorizontal: SPACING.sm,
     paddingVertical: 7,
@@ -1683,20 +1725,16 @@ const styles = StyleSheet.create({
   commandCenterMiniChipValue: {
     fontSize: 12,
     fontWeight: '900' as const,
-    color: '#FFFFFF',
   },
   commandCenterMiniChipLabel: {
     fontSize: 11,
     fontWeight: '800' as const,
-    color: '#BAE6FD',
   },
   commandCenterMiniChipMuted: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: 'rgba(255,255,255,0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
     borderRadius: BORDER_RADIUS.round,
     paddingHorizontal: SPACING.sm,
     paddingVertical: 7,
@@ -1704,30 +1742,25 @@ const styles = StyleSheet.create({
   commandCenterMiniChipMutedValue: {
     fontSize: 12,
     fontWeight: '900' as const,
-    color: '#FFFFFF',
   },
   commandCenterMiniChipMutedLabel: {
     fontSize: 11,
     fontWeight: '800' as const,
-    color: 'rgba(255,255,255,0.68)',
   },
   commandCenterOpenButton: {
     alignSelf: 'flex-start',
-    backgroundColor: '#FDE68A',
     borderRadius: BORDER_RADIUS.round,
     paddingHorizontal: SPACING.md,
     paddingVertical: 8,
     marginBottom: SPACING.sm,
   },
   commandCenterOpenButtonText: {
-    color: '#172554',
+    color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '900' as const,
   },
   commandCenterBucket: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.sm,
     marginTop: SPACING.sm,
@@ -1740,15 +1773,14 @@ const styles = StyleSheet.create({
   },
   commandCenterBucketTitle: {
     fontSize: 13,
-    fontWeight: '800' as const,
-    color: '#FFFFFF',
+    fontWeight: '900' as const,
   },
   commandCenterBucketSubtitle: {
     fontSize: 11,
-    color: 'rgba(255,255,255,0.68)',
+    fontWeight: '700' as const,
   },
   commandCenterOfferRow: {
-    backgroundColor: 'rgba(15, 23, 42, 0.28)',
+    borderWidth: 1,
     borderRadius: BORDER_RADIUS.sm,
     padding: SPACING.sm,
     marginTop: SPACING.xs,
@@ -1760,14 +1792,12 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   commandCenterScoreText: {
     fontSize: 13,
     fontWeight: '900' as const,
-    color: '#FFFFFF',
   },
   commandCenterOfferCopy: {
     marginLeft: 52,
@@ -1776,12 +1806,10 @@ const styles = StyleSheet.create({
   },
   commandCenterOfferTitle: {
     fontSize: 13,
-    fontWeight: '800' as const,
-    color: '#FFFFFF',
+    fontWeight: '900' as const,
   },
   commandCenterOfferMeta: {
     fontSize: 11,
-    color: '#BAE6FD',
     marginTop: 2,
   },
   commandCenterActions: {
@@ -1797,29 +1825,27 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xs,
   },
   commandCenterAction: {
-    backgroundColor: '#FFFFFF',
     borderRadius: BORDER_RADIUS.sm,
     paddingHorizontal: SPACING.md,
     paddingVertical: 6,
   },
   commandCenterActionText: {
     fontSize: 12,
-    fontWeight: '800' as const,
-    color: COLORS.navyDeep,
+    fontWeight: '900' as const,
+    color: '#FFFFFF',
   },
   commandCenterActionMuted: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
     borderRadius: BORDER_RADIUS.sm,
     paddingHorizontal: SPACING.sm,
     paddingVertical: 5,
   },
   commandCenterActionMutedText: {
     fontSize: 11,
-    fontWeight: '700' as const,
-    color: '#CBD5E1',
+    fontWeight: '800' as const,
   },
   decodeOverlay: {
     flex: 1,
