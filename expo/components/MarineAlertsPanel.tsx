@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, CloudSun, Ship, Waves, Wind } from 'lucide-react-native';
 import { BORDER_RADIUS, COLORS, SPACING, TYPOGRAPHY } from '@/constants/theme';
-import { useSailingWeather, type SailingWeatherCruiseInput } from '@/state/SailingWeatherProvider';
+import { useSailingWeather, type SailingWeatherCruiseInput, type SailingWeatherForecast } from '@/state/SailingWeatherProvider';
 
 interface MarineAlertsPanelProps {
   cruises: SailingWeatherCruiseInput[];
@@ -33,7 +33,34 @@ interface MarineAlertItem {
   waveHeightFt: number | null;
 }
 
-const EMPTY_ALERTS: MarineAlertItem[] = [];
+interface MarineForecastItem {
+  id: string;
+  cruiseId: string;
+  shipName: string;
+  dateKey: string;
+  dayLabel: string;
+  locationName: string;
+  zoneLabel: string;
+  sourceLabel: string;
+  headline: string;
+  summary: string;
+  conditionLabel: string;
+  highTempF: number | null;
+  lowTempF: number | null;
+  windMph: number | null;
+  windGustMph: number | null;
+  waveHeightFt: number | null;
+  precipitationChance: number | null;
+  advisoryCount: number;
+  strongestSeverity: MarineAlertSeverity | null;
+}
+
+interface MarinePanelData {
+  alerts: MarineAlertItem[];
+  forecasts: MarineForecastItem[];
+}
+
+const EMPTY_PANEL_DATA: MarinePanelData = { alerts: [], forecasts: [] };
 
 function startOfDay(date: Date): Date {
   const normalized = new Date(date);
@@ -70,15 +97,14 @@ function buildCruiseDatesInWindow(cruise: SailingWeatherCruiseInput, startDate: 
     return [];
   }
 
-  const effectiveStart = cruiseStart > windowStart ? cruiseStart : windowStart;
-  const effectiveEnd = cruiseEnd < windowEnd ? cruiseEnd : windowEnd;
-  if (effectiveEnd < effectiveStart) {
+  if (cruiseEnd < windowStart || cruiseStart > windowEnd) {
     return [];
   }
 
+  const effectiveEnd = cruiseEnd < windowEnd ? cruiseEnd : windowEnd;
   const dates: Date[] = [];
-  const cursor = new Date(effectiveStart);
-  while (cursor <= effectiveEnd) {
+  const cursor = new Date(windowStart);
+  while (cursor <= effectiveEnd && dates.length <= daysAhead) {
     dates.push(new Date(cursor));
     cursor.setDate(cursor.getDate() + 1);
   }
@@ -150,6 +176,52 @@ function formatAlertDate(dateKey: string, anchorDate: Date, isSingleDayWindow: b
   });
 }
 
+function formatForecastDayLabel(dateKey: string, anchorDate: Date): string {
+  const targetDate = parseDateKey(dateKey);
+  if (!targetDate) return dateKey;
+  const relativeLabel = formatAlertDate(dateKey, anchorDate, false);
+  const weekday = targetDate.toLocaleDateString('en-US', { weekday: 'short' });
+  return `${relativeLabel} · ${weekday}`;
+}
+
+function formatTempRange(low: number | null, high: number | null): string {
+  if (low === null && high === null) return '—';
+  if (low === null) return `${Math.round(high ?? 0)}° high`;
+  if (high === null) return `${Math.round(low)}° low`;
+  return `${Math.round(low)}°–${Math.round(high)}°`;
+}
+
+function getStrongestSeverity(forecast: SailingWeatherForecast): MarineAlertSeverity | null {
+  return forecast.advisories.reduce<MarineAlertSeverity | null>((strongest, advisory) => {
+    if (!strongest) return advisory.severity;
+    return getSeverityRank(advisory.severity) > getSeverityRank(strongest) ? advisory.severity : strongest;
+  }, null);
+}
+
+function buildForecastItem(forecast: SailingWeatherForecast, anchorDate: Date): MarineForecastItem {
+  return {
+    id: forecast.cacheKey,
+    cruiseId: forecast.cruiseId,
+    shipName: forecast.shipName,
+    dateKey: forecast.dateKey,
+    dayLabel: formatForecastDayLabel(forecast.dateKey, anchorDate),
+    locationName: forecast.locationName,
+    zoneLabel: forecast.zoneLabel,
+    sourceLabel: getSourceLabel(forecast.source),
+    headline: forecast.headline,
+    summary: forecast.summary,
+    conditionLabel: forecast.metrics.conditionLabel,
+    highTempF: forecast.metrics.highTempF,
+    lowTempF: forecast.metrics.lowTempF,
+    windMph: forecast.metrics.maxWindMph,
+    windGustMph: forecast.metrics.maxWindGustMph,
+    waveHeightFt: forecast.metrics.maxWaveHeightFt,
+    precipitationChance: forecast.metrics.precipitationChance,
+    advisoryCount: forecast.advisories.length,
+    strongestSeverity: getStrongestSeverity(forecast),
+  };
+}
+
 function formatMetricValue(value: number | null, suffix: string, decimals = 0): string {
   if (value === null || Number.isNaN(value)) return '—';
   return `${value.toFixed(decimals)}${suffix}`;
@@ -179,7 +251,7 @@ export function MarineAlertsPanel({
 
   const alertsQuery = useQuery({
     queryKey: ['marine-alerts-panel', cruisesSignature, formatDateKey(normalizedStartDate), daysAhead],
-    queryFn: async (): Promise<MarineAlertItem[]> => {
+    queryFn: async (): Promise<MarinePanelData> => {
       const requests = cruises.flatMap((cruise) => {
         return buildCruiseDatesInWindow(cruise, normalizedStartDate, daysAhead).map(async (targetDate) => {
           const forecast = await getForecastForCruiseDay(cruise, targetDate);
@@ -192,11 +264,14 @@ export function MarineAlertsPanel({
 
       const forecastResults = await Promise.all(requests);
       const nextAlerts: MarineAlertItem[] = [];
+      const nextForecasts: MarineForecastItem[] = [];
 
       forecastResults.forEach(({ cruise, forecast }) => {
-        if (!forecast || forecast.advisories.length === 0) {
+        if (!forecast) {
           return;
         }
+
+        nextForecasts.push(buildForecastItem(forecast, normalizedStartDate));
 
         forecast.advisories.forEach((advisory) => {
           nextAlerts.push({
@@ -223,7 +298,13 @@ export function MarineAlertsPanel({
         return left.dateKey.localeCompare(right.dateKey);
       });
 
-      return dedupedAlerts;
+      const dedupedForecasts = Array.from(new Map(nextForecasts.map((forecast) => [forecast.id, forecast])).values());
+      dedupedForecasts.sort((left, right) => left.dateKey.localeCompare(right.dateKey));
+
+      return {
+        alerts: dedupedAlerts,
+        forecasts: dedupedForecasts,
+      };
     },
     enabled: isHydrated && cruises.length > 0,
     staleTime: 1000 * 60 * 20,
@@ -233,7 +314,9 @@ export function MarineAlertsPanel({
     refetchInterval: 1000 * 60 * 30,
   });
 
-  const alerts = alertsQuery.data ?? EMPTY_ALERTS;
+  const panelData = alertsQuery.data ?? EMPTY_PANEL_DATA;
+  const alerts = panelData.alerts;
+  const forecasts = panelData.forecasts;
   const visibleAlerts = useMemo(() => alerts.slice(0, maxItems), [alerts, maxItems]);
   const strongestSeverity = alerts[0]?.severity ?? null;
   const panelColors = getPanelGradientColors(alerts.length > 0, strongestSeverity);
@@ -256,7 +339,7 @@ export function MarineAlertsPanel({
           <Text style={styles.headerBadgeText}>{title}</Text>
         </View>
         <View style={styles.countPill}>
-          <Text style={styles.countPillText}>{alerts.length}</Text>
+          <Text style={styles.countPillText}>{forecasts.length > 0 ? `${forecasts.length}D` : alerts.length}</Text>
         </View>
       </View>
 
@@ -270,18 +353,79 @@ export function MarineAlertsPanel({
         </View>
       ) : null}
 
-      {!alertsQuery.isLoading && visibleAlerts.length === 0 ? (
+      {!alertsQuery.isLoading && forecasts.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Ship size={18} color="#CFEFFF" />
+          <Text style={styles.emptyTitle}>Forecast not loaded yet</Text>
+          <Text style={styles.emptySubtitle}>
+            The 10-day sailing window needs a resolvable departure port or itinerary before detailed weather can be shown.
+          </Text>
+        </View>
+      ) : null}
+
+      {!alertsQuery.isLoading && forecasts.length > 0 && visibleAlerts.length === 0 ? (
         <View style={styles.emptyState}>
           <Ship size={18} color="#CFEFFF" />
           <Text style={styles.emptyTitle}>No rough-seas or bad-weather alerts right now</Text>
           <Text style={styles.emptySubtitle}>
-            Forecast looks manageable for the next {Math.max(1, daysAhead + 1)} day{daysAhead === 0 ? '' : 's'} in your sailing window.
+            Forecast looks manageable across the loaded {forecasts.length}-day sailing outlook below.
           </Text>
+        </View>
+      ) : null}
+
+      {!alertsQuery.isLoading && forecasts.length > 0 ? (
+        <View style={styles.forecastSection}>
+          <View style={styles.sectionHeaderRow}>
+            <CloudSun size={14} color="#B4EBFF" />
+            <Text style={styles.sectionTitle}>Detailed {Math.max(1, daysAhead + 1)}-day forecast</Text>
+          </View>
+          {forecasts.map((forecast) => {
+            const severityMeta = forecast.strongestSeverity ? getSeverityMeta(forecast.strongestSeverity) : null;
+            return (
+              <View key={forecast.id} style={styles.forecastCard} testID={`marine-forecast-item-${forecast.cruiseId}-${forecast.dateKey}`}>
+                <View style={styles.forecastTopRow}>
+                  <View style={styles.forecastTitleWrap}>
+                    <Text style={styles.forecastDate}>{forecast.dayLabel}</Text>
+                    <Text style={styles.forecastHeadline}>{forecast.headline}</Text>
+                  </View>
+                  <View style={[styles.forecastSourcePill, severityMeta ? { borderColor: severityMeta.borderColor } : null]}>
+                    <Text style={[styles.forecastSourceText, severityMeta ? { color: severityMeta.accent } : null]}>
+                      {forecast.advisoryCount > 0 ? `${forecast.advisoryCount} alert${forecast.advisoryCount === 1 ? '' : 's'}` : forecast.sourceLabel}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.forecastLocation} numberOfLines={1}>{forecast.shipName} • {forecast.zoneLabel}</Text>
+                <Text style={styles.forecastSummary}>{forecast.summary}</Text>
+                <View style={styles.forecastMetricGrid}>
+                  <View style={styles.forecastMetricChip}>
+                    <Text style={styles.forecastMetricLabel}>Temp</Text>
+                    <Text style={styles.forecastMetricValue}>{formatTempRange(forecast.lowTempF, forecast.highTempF)}</Text>
+                  </View>
+                  <View style={styles.forecastMetricChip}>
+                    <Wind size={12} color="#E8F6FF" />
+                    <Text style={styles.forecastMetricValue}>{formatMetricValue(forecast.windGustMph ?? forecast.windMph, ' mph')}</Text>
+                  </View>
+                  <View style={styles.forecastMetricChip}>
+                    <Waves size={12} color="#E8F6FF" />
+                    <Text style={styles.forecastMetricValue}>{formatMetricValue(forecast.waveHeightFt, ' ft', 1)}</Text>
+                  </View>
+                  <View style={styles.forecastMetricChip}>
+                    <Text style={styles.forecastMetricLabel}>Rain</Text>
+                    <Text style={styles.forecastMetricValue}>{formatMetricValue(forecast.precipitationChance, '%')}</Text>
+                  </View>
+                </View>
+              </View>
+            );
+          })}
         </View>
       ) : null}
 
       {!alertsQuery.isLoading && visibleAlerts.length > 0 ? (
         <View style={styles.alertsList}>
+          <View style={styles.sectionHeaderRow}>
+            <AlertTriangle size={14} color="#FFD59E" />
+            <Text style={styles.sectionTitle}>Rough-seas watchouts</Text>
+          </View>
           {visibleAlerts.map((alert) => {
             const severityMeta = getSeverityMeta(alert.severity);
             return (
@@ -409,6 +553,101 @@ const styles = StyleSheet.create({
     color: 'rgba(231, 248, 255, 0.76)',
     fontSize: TYPOGRAPHY.fontSizeXS,
     lineHeight: 18,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: SPACING.xs,
+  },
+  sectionTitle: {
+    color: COLORS.white,
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  forecastSection: {
+    gap: SPACING.sm,
+  },
+  forecastCard: {
+    backgroundColor: 'rgba(255,255,255,0.09)',
+    borderRadius: BORDER_RADIUS.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(197, 234, 255, 0.14)',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.md,
+    gap: 8,
+  },
+  forecastTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: SPACING.sm,
+  },
+  forecastTitleWrap: {
+    flex: 1,
+    gap: 2,
+  },
+  forecastDate: {
+    color: '#BDEBFF',
+    textTransform: 'uppercase',
+    letterSpacing: 0.7,
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  forecastHeadline: {
+    color: COLORS.white,
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  forecastSourcePill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  forecastSourceText: {
+    color: '#D8F3FF',
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.7,
+  },
+  forecastLocation: {
+    color: 'rgba(218, 242, 255, 0.78)',
+    fontSize: TYPOGRAPHY.fontSizeXS,
+  },
+  forecastSummary: {
+    color: 'rgba(237, 248, 255, 0.88)',
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    lineHeight: 19,
+  },
+  forecastMetricGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+  },
+  forecastMetricChip: {
+    minWidth: 74,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    borderRadius: 999,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 8,
+  },
+  forecastMetricLabel: {
+    color: 'rgba(232, 246, 255, 0.68)',
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+  },
+  forecastMetricValue: {
+    color: '#E8F6FF',
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   alertsList: {
     gap: SPACING.sm,

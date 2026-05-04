@@ -201,7 +201,7 @@ function isCruiseWeatherEligible(cruise: BookedCruise): boolean {
   if (!sailDate || !returnDate) return false;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const forecastLimit = addDays(today, 10);
+  const forecastLimit = addDays(today, 9);
   return returnDate >= today && sailDate <= forecastLimit;
 }
 
@@ -211,10 +211,11 @@ function buildWeatherTargetDates(cruise: BookedCruise): Date[] {
   if (!sailDate || !returnDate) return [];
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const start = sailDate > today ? sailDate : today;
-  const end = returnDate < addDays(today, 9) ? returnDate : addDays(today, 9);
+  const forecastEnd = addDays(today, 9);
+  if (returnDate < today || sailDate > forecastEnd) return [];
+  const end = returnDate < forecastEnd ? returnDate : forecastEnd;
   const dates: Date[] = [];
-  let cursor = new Date(start);
+  let cursor = new Date(today);
   while (cursor <= end && dates.length < 10) {
     dates.push(new Date(cursor));
     cursor = addDays(cursor, 1);
@@ -398,9 +399,13 @@ function isDevAssistantRequest(message: string): boolean {
   return /prompt-based development|voice-enabled assistant|conversational ai|conversational capabilities|app structure|ai dev assistant|api integration|gpt-4o|anthropic|claude|voice api|speech-to-text|text-to-speech|websocket|real-time audio|audio streaming|persona|conversational tone|system prompt|conversation memory|backend integration/i.test(message);
 }
 
+function isWeatherQuestion(message: string): boolean {
+  return /weather|forecast|rough\s+seas?|marine|wind|winds|wave|waves|swell|rain|storm|squall|sea\s+state/i.test(message);
+}
+
 function parseToolCall(message: string): { tool: string; params: unknown } | null {
   const askDataMatch = message.match(/ask my data|search my data|find in my data|search everything|global search|natural language search|show me.*data|what .* do i have|which .* do i have|who .*recogniz|show .*crew|show .*weather|show .*forecast|show .*events?|show .*slot|show .*alert|show .*financial|show .*payment|show .*price|show .*tax|show .*w-?2g|show .*bankroll|show .*achievement|what .*weather|which .*slot|rough seas|weather reports?|price drops?|bankroll|financials?|payments?|tax|w-?2g|achievements?|app data|data sources?|what can you see/i);
-  if (askDataMatch) {
+  if (askDataMatch || isWeatherQuestion(message)) {
     return { tool: 'askMyData', params: { query: message } };
   }
 
@@ -798,8 +803,8 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
     ];
   }, [activeScopeLabel, alertsState.activeAlerts, alertsState.alerts.length, alertsState.anomalies.length, alertsState.criticalAlerts.length, alertsState.insights.length, alertsState.lastDetectionRun, alertsState.rules, allMachines.length, authenticatedEmail, bankrollState, brandProgramLabel, celebrityState.destinations, celebrityState.ships, clubRoyalePoints, clubRoyalePointsSource, clubRoyaleTier, coreDataLoading, coreUserPoints, crewRecognitionEntries.length, deckMappings.length, filteredBookedCruises.length, filteredCalendarEvents.length, filteredCasinoOffers.length, filteredCertificates.length, filteredCruises.length, financials.summary, gamificationState, getSessionAnalytics, globalLibrary.length, hasLocalData, lastSyncDate, machineLogs.length, myAtlasMachines.length, pphAlertsState, priceHistoryState, priceTrackingState, selectedBrand, selectedProfileLabel, selectedProgram, sessions.length, settings, taxState, users, weatherReports.length]);
 
-  const refreshWeatherReports = useCallback(async (): Promise<SailingWeatherForecast[]> => {
-    if (!isWeatherHydrated) return weatherReports;
+  const refreshWeatherReports = useCallback(async (options?: { force?: boolean }): Promise<SailingWeatherForecast[]> => {
+    if (!isWeatherHydrated) return [];
     const targets = filteredBookedCruises
       .filter(isCruiseWeatherEligible)
       .sort((left, right) => (left.sailDate || '').localeCompare(right.sailDate || ''))
@@ -815,7 +820,7 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
       const dates = buildWeatherTargetDates(cruise);
       for (const targetDate of dates) {
         try {
-          const forecast = await getForecastForCruiseDay(cruise, targetDate);
+          const forecast = await getForecastForCruiseDay(cruise, targetDate, { force: options?.force === true });
           if (forecast) forecasts.push(forecast);
         } catch (error) {
           console.warn('[AgentX] Failed to load weather context forecast:', {
@@ -829,7 +834,7 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
     }
     setWeatherReports(forecasts);
     return forecasts;
-  }, [filteredBookedCruises, getForecastForCruiseDay, isWeatherHydrated, weatherReports]);
+  }, [filteredBookedCruises, getForecastForCruiseDay, isWeatherHydrated]);
 
   useEffect(() => {
     if (!isVisible) return;
@@ -969,7 +974,8 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
 
     try {
       const toolCall = devAssistantRequest ? null : parseToolCall(content);
-      const latestWeatherReports = devAssistantRequest ? weatherReports : await refreshWeatherReports();
+      const forceWeatherRefresh = !devAssistantRequest && isWeatherQuestion(content);
+      const latestWeatherReports = devAssistantRequest ? weatherReports : await refreshWeatherReports({ force: forceWeatherRefresh });
 
       let toolResult = '';
       if (toolCall) {
