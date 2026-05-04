@@ -66,12 +66,43 @@ type FilterType = 'all' | 'upcoming' | 'completed' | 'celebrity';
 type SortType = 'next' | 'newest' | 'oldest' | 'ship' | 'nights';
 type ViewMode = 'list' | 'timeline' | 'points';
 
+const BOOKED_MARINE_ALERT_FORECAST_DAYS = 10;
+const BOOKED_MARINE_ALERT_DAYS_AHEAD = BOOKED_MARINE_ALERT_FORECAST_DAYS - 1;
+
 function isCruiseCompleted(cruise: BookedCruise): boolean {
   return isCompletedBookedCruise(cruise);
 }
 
 function isCruiseUpcomingBooking(cruise: BookedCruise): boolean {
   return isActiveBookedCruise(cruise);
+}
+
+function startOfLocalDay(date: Date): Date {
+  const normalized = new Date(date);
+  normalized.setHours(0, 0, 0, 0);
+  return normalized;
+}
+
+function getCruiseForecastEndDate(cruise: BookedCruise, sailStart: Date): Date {
+  if (cruise.returnDate) {
+    const parsedReturnDate = createDateFromString(cruise.returnDate);
+    if (!Number.isNaN(parsedReturnDate.getTime())) {
+      return startOfLocalDay(parsedReturnDate);
+    }
+  }
+
+  const nights = typeof cruise.nights === 'number' && Number.isFinite(cruise.nights) && cruise.nights > 0 ? cruise.nights : 0;
+  const estimatedReturnDate = new Date(sailStart);
+  estimatedReturnDate.setDate(estimatedReturnDate.getDate() + nights);
+  return startOfLocalDay(estimatedReturnDate);
+}
+
+function isCruiseInsideForecastWindow(cruise: BookedCruise, windowStart: Date, windowEnd: Date): boolean {
+  if (!cruise.sailDate) return false;
+  const sailStart = startOfLocalDay(createDateFromString(cruise.sailDate));
+  if (Number.isNaN(sailStart.getTime())) return false;
+  const cruiseEnd = getCruiseForecastEndDate(cruise, sailStart);
+  return cruiseEnd >= windowStart && sailStart <= windowEnd;
 }
 
 const FILTER_OPTIONS: { label: string; value: FilterType }[] = [
@@ -275,8 +306,17 @@ export default function BookedScreen() {
     return new Map(warnings.map((warning) => [warning.cruiseId, warning.message]));
   }, [bookedCruises]);
 
-  const upcomingCruisesForAlerts = useMemo(() => {
-    return bookedCruises.filter((cruise) => isCruiseUpcomingBooking(cruise));
+  const upcomingCruisesForAlerts = useMemo((): BookedCruise[] => {
+    const forecastWindowStart = startOfLocalDay(new Date());
+    const forecastWindowEnd = new Date(forecastWindowStart);
+    forecastWindowEnd.setDate(forecastWindowEnd.getDate() + BOOKED_MARINE_ALERT_DAYS_AHEAD);
+
+    const nextForecastCruise = bookedCruises
+      .filter((cruise) => isCruiseUpcomingBooking(cruise))
+      .filter((cruise) => isCruiseInsideForecastWindow(cruise, forecastWindowStart, forecastWindowEnd))
+      .sort((a, b) => createDateFromString(a.sailDate).getTime() - createDateFromString(b.sailDate).getTime())[0];
+
+    return nextForecastCruise ? [nextForecastCruise] : [];
   }, [bookedCruises]);
 
   const nextCruise = useMemo(() => {
@@ -522,10 +562,10 @@ export default function BookedScreen() {
         <MarineAlertsPanel
           cruises={upcomingCruisesForAlerts}
           startDate={new Date()}
-          daysAhead={7}
+          daysAhead={BOOKED_MARINE_ALERT_DAYS_AHEAD}
           maxItems={3}
           title="Rough seas / weather alerts"
-          description="Checks upcoming sailings for rough-seas, squall, and bad-weather watchouts so you can see issues before embarkation."
+          description="10-day outlook focused on the next sailing you are on, with rough-seas, squall, and bad-weather watchouts before and during the cruise."
           testID="booked-marine-alerts-panel"
         />
       </View>
