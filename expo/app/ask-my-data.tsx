@@ -3,9 +3,9 @@ import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Award, Bot, ChevronRight, DatabaseZap, FileSearch, Search, Ship, SlidersHorizontal, Tag, Ticket, X, Wand2 } from 'lucide-react-native';
+import { Bot, ChevronRight, DatabaseZap, FileSearch, Search, Ship, SlidersHorizontal, Tag, Ticket, X, Wand2 } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
-import { AgentXChat, type AgentXQuickAction } from '@/components/AgentXChat';
+import { AgentXChat } from '@/components/AgentXChat';
 import { IntelligenceFilterStrip } from '@/components/IntelligenceFilterStrip';
 import { ResponsiveContainer } from '@/components/ResponsiveContainer';
 import { useCoreData } from '@/state/CoreDataProvider';
@@ -22,15 +22,6 @@ import { buildAskMyDataOverview } from '@/lib/askMyDataOverview';
 import { isKnownCasinoProfile } from '@/lib/knownProfileFallback';
 import type { BookedCruise, CalendarEvent, CasinoOffer, Cruise } from '@/types/models';
 import type { Certificate } from '@/components/CertificateManagerModal';
-
-const ASK_MY_DATA_AGENT_ACTIONS: AgentXQuickAction[] = [
-  { id: 'search-my-data', label: 'Search My Data', icon: Search, prompt: 'Ask my data: show the most important offers, cruises, certificates, and calendar items that need attention.' },
-  { id: 'decode-best-offer', label: 'Decode Offer', icon: Tag, prompt: 'Decode my strongest active offer and explain what the casino is actually paying for.' },
-  { id: 'replacement-finder', label: 'Replacement Finder', icon: Ship, prompt: 'Find replacement cruises for my strongest active offer, prioritizing better value, lower out-of-pocket cost, and more sea days.' },
-  { id: 'certificate-fit', label: 'Certificate Fit', icon: Ticket, prompt: 'Which certificates fit my active offers? Include stacking notes, owner profile, and recommended action.' },
-  { id: 'tier-progress', label: 'Tier Progress', icon: Award, prompt: 'Show my tier progress and recommend the best next actions using the current profile and brand filters.' },
-  { id: 'import-audit', label: 'Import Audit', icon: FileSearch, prompt: 'Show unassigned imports, review-needed records, missing offers, duplicates, and archive suggestions.' },
-];
 
 const SOURCE_STYLES: Record<AskMyDataSource, { label: string; color: string; icon: typeof Tag }> = {
   overview: { label: 'Overview', color: '#0369A1', icon: DatabaseZap },
@@ -156,11 +147,6 @@ export default function AskMyDataScreen() {
     setSubmittedQuery('');
   }, []);
 
-  const runAgentTool = useCallback((prompt: string) => {
-    console.log('[AskMyDataScreen] Agent tool selected');
-    void sendMessage(prompt);
-  }, [sendMessage]);
-
   const openResult = useCallback((result: AskMyDataResult) => {
     if (!result.actionRoute) return;
     console.log('[AskMyDataScreen] Opening result:', { id: result.id, route: result.actionRoute });
@@ -241,10 +227,7 @@ export default function AskMyDataScreen() {
           <View style={styles.headerIcon}>
             <DatabaseZap size={22} color="#A7F3D0" />
           </View>
-          <View style={styles.headerCopy}>
-            <Text style={styles.headerTitle}>Ask My Data</Text>
-            <Text style={styles.headerSubtitle}>Natural-language search with active account scope</Text>
-          </View>
+          <View style={styles.headerSpacer} />
           <TouchableOpacity style={styles.closeButton} onPress={() => router.back()} activeOpacity={0.75} testID="ask-my-data-close">
             <X size={20} color={COLORS.white} />
           </TouchableOpacity>
@@ -284,20 +267,8 @@ export default function AskMyDataScreen() {
               </View>
               <TouchableOpacity style={styles.searchButton} onPress={() => submitSearch()} activeOpacity={0.82} testID="ask-my-data-submit">
                 <Bot size={16} color={COLORS.white} />
-                <Text style={styles.searchButtonText}>Ask My Data</Text>
+                <Text style={styles.searchButtonText}>Ask Easy Seas</Text>
               </TouchableOpacity>
-
-              <View style={styles.toolStrip}>
-                {ASK_MY_DATA_AGENT_ACTIONS.map((action) => {
-                  const ActionIcon = action.icon;
-                  return (
-                    <TouchableOpacity key={action.id} style={styles.toolChip} onPress={() => runAgentTool(action.prompt)} activeOpacity={0.78} testID={`ask-my-data-tool-${action.id}`}>
-                      <ActionIcon size={13} color="#A7F3D0" />
-                      <Text style={styles.toolChipText}>{action.label}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
             </View>
 
             <View style={styles.scopeCard}>
@@ -319,8 +290,7 @@ export default function AskMyDataScreen() {
                   <Bot size={18} color="#FDE68A" />
                 </View>
                 <View style={styles.agentUnifiedCopy}>
-                  <Text style={styles.agentUnifiedTitle}>Conversation</Text>
-                  <Text style={styles.agentUnifiedSubtitle}>Agent X tools are active here. Ask naturally or use voice.</Text>
+                  <Text style={styles.agentUnifiedTitle}>Chat with Easy Seas</Text>
                 </View>
                 {messages.length > 0 ? (
                   <TouchableOpacity style={styles.clearConversationButton} onPress={clearMessages} activeOpacity={0.75} testID="ask-my-data-clear-agentx">
@@ -406,18 +376,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(167, 243, 208, 0.28)',
   },
-  headerCopy: {
+  headerSpacer: {
     flex: 1,
-  },
-  headerTitle: {
-    color: COLORS.white,
-    fontSize: TYPOGRAPHY.fontSizeLG,
-    fontWeight: '900' as const,
-  },
-  headerSubtitle: {
-    color: 'rgba(255,255,255,0.72)',
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    marginTop: 2,
   },
   closeButton: {
     width: 38,
@@ -587,15 +547,20 @@ const styles = StyleSheet.create({
   },
   clearConversationButton: {
     borderRadius: BORDER_RADIUS.round,
-    backgroundColor: 'rgba(255,255,255,0.10)',
+    backgroundColor: '#DC2626',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.16)',
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 7,
+    borderColor: 'rgba(254, 202, 202, 0.70)',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 10,
+    minWidth: 82,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   clearConversationText: {
-    color: '#A7F3D0',
-    fontSize: 11,
+    color: COLORS.white,
+    fontSize: 12,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase' as const,
     fontWeight: '900' as const,
   },
   agentChatFrame: {
