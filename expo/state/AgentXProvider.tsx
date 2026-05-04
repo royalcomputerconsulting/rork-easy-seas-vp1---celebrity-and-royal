@@ -4,8 +4,8 @@ import { generateText } from '@rork-ai/toolkit-sdk';
 import { useCoreData } from './CoreDataProvider';
 import { useLoyalty } from './LoyaltyProvider';
 import type { ChatMessage } from '@/components/AgentXChat';
-import type { AgentXMode, BookedCruise, CalendarEvent, Cruise, SlotMachine } from '@/types/models';
-import { askMyDataSearch, formatAskMyDataResponse } from '@/lib/askMyData';
+import type { AgentXMode, BookedCruise, CalendarEvent, Cruise, SlotMachine, PriceDropAlert, PriceHistoryRecord, Alert, CompItem, W2GRecord } from '@/types/models';
+import { askMyDataSearch, formatAskMyDataResponse, type AskMyDataContextBlock } from '@/lib/askMyData';
 import { buildAskMyDataOverview } from '@/lib/askMyDataOverview';
 import { isKnownCasinoProfile } from '@/lib/knownProfileFallback';
 import { getBookedCruiseCasinoPoints } from '@/lib/casinoPointTruth';
@@ -46,6 +46,17 @@ import { useIntelligenceFilters } from './IntelligenceFiltersProvider';
 import { useUser } from './UserProvider';
 import { useCrewRecognition } from './CrewRecognitionProvider';
 import { useSailingWeather, type SailingWeatherForecast } from './SailingWeatherProvider';
+import { useFinancials } from './FinancialsProvider';
+import { useSimpleAnalytics } from './SimpleAnalyticsProvider';
+import { useHistoricalPerformance } from './HistoricalPerformanceProvider';
+import { usePriceHistory } from './PriceHistoryProvider';
+import { usePriceTracking } from './PriceTrackingProvider';
+import { useAlerts } from './AlertsProvider';
+import { useBankroll } from './BankrollProvider';
+import { useTax } from './TaxProvider';
+import { usePPHAlerts } from './PPHAlertsProvider';
+import { useGamification } from './GamificationProvider';
+import { useCelebrity } from './CelebrityProvider';
 import type { RecognitionEntryWithCrew } from '@/types/crew-recognition';
 import {
   buildIntelligenceScopeLabel,
@@ -94,6 +105,7 @@ function buildSystemPrompt(context: {
   calendarEvents?: CalendarEvent[];
   crewRecognitionEntries?: RecognitionEntryWithCrew[];
   weatherReports?: SailingWeatherForecast[];
+  appContextBlocks?: AskMyDataContextBlock[];
   mode: AgentXMode;
   brandProgramLabel: string;
 }): string {
@@ -109,6 +121,7 @@ function buildSystemPrompt(context: {
 - Track machine locations and condition logs on specific ships
 - Answer questions about crew recognition records, departments, roles, ships, and sail dates
 - Answer questions about loaded weather/rough-seas reports, wind, waves, rain, and advisories
+- Answer questions about financials, payments, price history, alerts, bankroll, tax/W-2G, comp items, analytics, achievements, and app settings context
 - Provide careful educational guidance about offer math, certificates, loyalty, and responsible use
 - Answer Ask My Data questions from freshly loaded saved app context
 
@@ -122,6 +135,7 @@ You have FULL ACCESS to:
 7. **Events / Calendar**: ${context.calendarEvents?.length || 0} calendar, travel, cruise, flight, hotel, and personal event records
 8. **Crew Recognition**: ${context.crewRecognitionEntries?.length || 0} crew recognition entries
 9. **Weather Reports**: ${context.weatherReports?.length || 0} loaded sailing weather / rough-seas reports
+10. **App-Wide Context**: ${context.appContextBlocks?.length || 0} live context blocks covering financials, analytics, price history, alerts, bankroll, taxes, achievements, profile/settings, and reference data
 
 Mode guidance:
 - Travel Agent: prioritize itinerary, cabin, dates, route, ports, weather, events, and booking practicality.
@@ -130,7 +144,7 @@ Mode guidance:
 - Loyalty Strategist: prioritize tier points, progress, milestones, and realistic earning paths.
 - AP Scout: prioritize slot machines, machine condition logs, persistence, meters, jackpot conditions, and play/pass/watch decisions.
 - Calendar Planner: prioritize agenda dates, sailing days, expirations, weather, travel gaps, and conflicts.
-- Import Auditor: prioritize source, profile ownership, reconciliation, missing rows, duplicates, and review-needed records.
+- Import Auditor: prioritize source, profile ownership, reconciliation, missing rows, duplicates, review-needed records, and data-source counts.
 - EasySeas Guide: prioritize app tutorials, cruise casino basics, offer math, certificates, and responsible-use education.
 
 Key formulas:
@@ -305,6 +319,61 @@ function buildWeatherContext(reports: SailingWeatherForecast[]): string {
     .join('\n');
 }
 
+function formatCount(value: number): string {
+  return value.toLocaleString();
+}
+
+function buildRecentPriceDropLines(priceDrops: PriceDropAlert[]): string {
+  if (priceDrops.length === 0) return 'No price drop alerts loaded.';
+  return priceDrops
+    .slice()
+    .sort((left, right) => right.priceDropPercent - left.priceDropPercent)
+    .slice(0, 8)
+    .map((alert) => `- ${alert.shipName} ${alert.sailDate} ${alert.cabinType}: ${formatMoney(alert.previousPrice)} -> ${formatMoney(alert.currentPrice)} (${alert.priceDropPercent.toFixed(1)}% drop)`)
+    .join('\n');
+}
+
+function buildRecentPriceHistoryLines(priceHistory: PriceHistoryRecord[]): string {
+  if (priceHistory.length === 0) return 'No price history records loaded.';
+  return priceHistory
+    .slice()
+    .sort((left, right) => (right.recordedAt || '').localeCompare(left.recordedAt || ''))
+    .slice(0, 8)
+    .map((record) => `- ${record.shipName} ${record.sailDate} ${record.cabinType}: ${formatMoney(record.totalPrice)} recorded ${record.recordedAt}; source ${record.source}`)
+    .join('\n');
+}
+
+function buildAlertLines(alerts: Alert[]): string {
+  if (alerts.length === 0) return 'No active app alerts loaded.';
+  return alerts
+    .slice(0, 10)
+    .map((alert) => `- [${alert.priority}] ${alert.title}: ${alert.message}; status ${alert.status}; created ${alert.createdAt}`)
+    .join('\n');
+}
+
+function buildCompItemLines(items: CompItem[]): string {
+  if (items.length === 0) return 'No comp items loaded.';
+  return items
+    .slice(0, 10)
+    .map((item) => `- ${item.name} (${item.category}): ${formatMoney(item.value)}${item.cruiseId ? `; cruise ${item.cruiseId}` : ''}`)
+    .join('\n');
+}
+
+function buildW2GLines(records: W2GRecord[]): string {
+  if (records.length === 0) return 'No W-2G records loaded.';
+  return records
+    .slice()
+    .sort((left, right) => (right.date || '').localeCompare(left.date || ''))
+    .slice(0, 10)
+    .map((record) => `- ${record.date}: ${formatMoney(record.amount)} W-2G winnings, ${formatMoney(record.withheld)} withheld${record.cruiseName ? `; ${record.cruiseName}` : ''}`)
+    .join('\n');
+}
+
+function buildAppContextBlockText(blocks: AskMyDataContextBlock[]): string {
+  if (blocks.length === 0) return 'No app-wide context blocks were assembled.';
+  return blocks.map((block) => `### ${block.title}\n${block.subtitle}\n${block.detail}`).join('\n\n');
+}
+
 function buildDevAssistantSystemPrompt(): string {
   return `You are AI Dev Assistant inside Easy Seas. Help the user design and implement voice-enabled assistant features with practical, production-minded guidance.
 
@@ -330,7 +399,7 @@ function isDevAssistantRequest(message: string): boolean {
 }
 
 function parseToolCall(message: string): { tool: string; params: unknown } | null {
-  const askDataMatch = message.match(/ask my data|search my data|find in my data|search everything|global search|natural language search|show me.*data|what .* do i have|which .* do i have|who .*recogniz|show .*crew|show .*weather|show .*forecast|show .*events?|show .*slot|what .*weather|which .*slot|rough seas|weather reports?/i);
+  const askDataMatch = message.match(/ask my data|search my data|find in my data|search everything|global search|natural language search|show me.*data|what .* do i have|which .* do i have|who .*recogniz|show .*crew|show .*weather|show .*forecast|show .*events?|show .*slot|show .*alert|show .*financial|show .*payment|show .*price|show .*tax|show .*w-?2g|show .*bankroll|show .*achievement|what .*weather|which .*slot|rough seas|weather reports?|price drops?|bankroll|financials?|payments?|tax|w-?2g|achievements?|app data|data sources?|what can you see/i);
   if (askDataMatch) {
     return { tool: 'askMyData', params: { query: message } };
   }
@@ -507,6 +576,8 @@ function buildAgentSuggestedActions(tool: string | null, userContent: string): C
       { id: 'ask-events', label: 'Events', prompt: 'Show my upcoming events and travel agenda.' },
       { id: 'ask-crew', label: 'Crew', prompt: 'Summarize my crew recognition records by ship and department.' },
       { id: 'ask-machines', label: 'Slots', prompt: 'Show slot machines and AP notes for my upcoming ships.' },
+      { id: 'ask-financials', label: 'Financials', prompt: 'Show my financial, payment, price drop, alert, bankroll, and tax data sources.' },
+      { id: 'ask-sources', label: 'Data Sources', prompt: 'What app data sources can you see right now?' },
     ];
   }
 
@@ -536,7 +607,7 @@ function buildAgentSuggestedActions(tool: string | null, userContent: string): C
 export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => {
   const { tier } = useEntitlement();
   const { isAdmin, authenticatedEmail } = useAuth();
-  const { cruises, bookedCruises, casinoOffers, calendarEvents, filters } = useCoreData();
+  const { cruises, bookedCruises, casinoOffers, calendarEvents, filters, settings, lastSyncDate, hasLocalData, isLoading: coreDataLoading, userPoints: coreUserPoints } = useCoreData();
   const { users } = useUser();
   const { selectedProfileId, selectedBrand, selectedProgram } = useIntelligenceFilters();
   const {
@@ -553,6 +624,17 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
   const { logs: machineLogs } = useMachineConditionLogs();
   const { entries: crewRecognitionEntries } = useCrewRecognition();
   const { isHydrated: isWeatherHydrated, getForecastForCruiseDay } = useSailingWeather();
+  const financials = useFinancials();
+  const simpleAnalytics = useSimpleAnalytics();
+  const historicalPerformance = useHistoricalPerformance();
+  const priceHistoryState = usePriceHistory();
+  const priceTrackingState = usePriceTracking();
+  const alertsState = useAlerts();
+  const bankrollState = useBankroll();
+  const taxState = useTax();
+  const pphAlertsState = usePPHAlerts();
+  const gamificationState = useGamification();
+  const celebrityState = useCelebrity();
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -598,6 +680,123 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
     clubRoyaleSyncDiscrepancy,
     useKnownAnnualReportFacts: isKnownCasinoProfile(authenticatedEmail),
   }), [authenticatedEmail, clubRoyalePoints, clubRoyalePointsSource, clubRoyaleSyncDiscrepancy, clubRoyaleTier, filteredBookedCruises, sessions]);
+
+  const appWideContextBlocks = useMemo<AskMyDataContextBlock[]>(() => {
+    const sessionAnalytics = getSessionAnalytics();
+    const bankrollStats = bankrollState.getBankrollStats();
+    const taxYear = new Date().getFullYear();
+    const taxSummary = taxState.getTaxSummary(taxYear);
+    const activePriceDrops = priceHistoryState.getActivePriceDrops();
+    const trackedPriceDrops = priceTrackingState.getAllPriceDrops();
+    const unlockedAchievements = gamificationState.getUnlockedAchievements();
+    const lockedAchievements = gamificationState.getLockedAchievements();
+    const enabledAlertRules = alertsState.rules.filter((rule) => rule.enabled).length;
+    const upcomingPayments = financials.summary.upcomingPayments
+      .slice()
+      .sort((left, right) => (left.dueDate || '').localeCompare(right.dueDate || ''))
+      .slice(0, 8)
+      .map((payment) => `- Cruise ${payment.cruiseId}: ${formatMoney(payment.amount)} due ${payment.dueDate}`)
+      .join('\n') || 'No upcoming payment records loaded.';
+
+    return [
+      {
+        id: 'data-source-coverage',
+        title: 'Loaded Easy Seas data sources',
+        subtitle: `${formatCount(filteredCruises.length + filteredBookedCruises.length)} cruises · ${formatCount(filteredCasinoOffers.length)} offers · ${formatCount(filteredCalendarEvents.length)} events · ${formatCount(crewRecognitionEntries.length)} crew · ${formatCount(allMachines.length)} slots`,
+        keywords: ['data source', 'system', 'context', 'loaded', 'overview', 'coverage', 'what can you see'],
+        detail: [
+          `Core data: ${formatCount(filteredCruises.length)} available cruise(s), ${formatCount(filteredBookedCruises.length)} booked/completed cruise(s), ${formatCount(filteredCasinoOffers.length)} casino offer(s), ${formatCount(filteredCertificates.length)} certificate(s), ${formatCount(filteredCalendarEvents.length)} calendar/event record(s).`,
+          `Casino/slot data: ${formatCount(sessions.length)} casino session(s), ${formatCount(allMachines.length)} slot machine record(s), ${formatCount(myAtlasMachines.length)} personal Atlas record(s), ${formatCount(globalLibrary.length)} permanent library record(s), ${formatCount(deckMappings.length)} deck mapping(s), ${formatCount(machineLogs.length)} condition log(s).`,
+          `Crew/weather data: ${formatCount(crewRecognitionEntries.length)} crew recognition record(s), ${formatCount(weatherReports.length)} loaded weather report(s).`,
+          `App-wide data: ${formatCount(priceHistoryState.priceHistory.length)} price history row(s), ${formatCount(activePriceDrops.length + trackedPriceDrops.length)} price drop alert row(s), ${formatCount(alertsState.alerts.length)} app alert(s), ${formatCount(taxState.compItems.length)} comp item(s), ${formatCount(taxState.w2gRecords.length)} W-2G record(s), ${formatCount(gamificationState.achievements.length)} achievement record(s).`,
+          `Freshness: core data loading=${coreDataLoading ? 'yes' : 'no'}, has local data=${hasLocalData ? 'yes' : 'no'}, last sync=${lastSyncDate ?? 'not recorded'}, authenticated profile=${authenticatedEmail ?? 'guest/local'}.`,
+        ].join('\n'),
+        actionLabel: 'Use full app context',
+      },
+      {
+        id: 'financials-payments',
+        title: 'Financials and payments',
+        subtitle: `${formatMoney(financials.summary.totalPaid)} paid · ${formatMoney(financials.summary.totalDue)} due · ${formatMoney(financials.summary.totalSavings)} savings`,
+        keywords: ['financial', 'financials', 'payment', 'payments', 'deposit', 'balance due', 'paid', 'savings', 'freeplay', 'obc'],
+        detail: [
+          `Summary: deposits ${formatMoney(financials.summary.totalDeposits)}, paid ${formatMoney(financials.summary.totalPaid)}, due ${formatMoney(financials.summary.totalDue)}, FreePlay ${formatMoney(financials.summary.totalFreeplay)}, OBC ${formatMoney(financials.summary.totalOBC)}, savings ${formatMoney(financials.summary.totalSavings)}.`,
+          `Casino/non-casino spend: casino ${formatMoney(financials.summary.totalCasinoSpend)}, non-casino ${formatMoney(financials.summary.totalNonCasinoSpend)}.`,
+          `Upcoming payments:\n${upcomingPayments}`,
+        ].join('\n'),
+        actionLabel: 'Review financials',
+      },
+      {
+        id: 'analytics-performance',
+        title: 'Analytics and historical performance',
+        subtitle: `${formatCount(simpleAnalytics.analytics.totalCruises)} cruises · ${formatCount(simpleAnalytics.analytics.totalNights)} nights · ${formatCount(simpleAnalytics.casinoAnalytics.totalPointsEarned)} casino points`,
+        keywords: ['analytics', 'performance', 'portfolio', 'roi', 'historical', 'points', 'coin in', 'coin-in', 'casino metrics'],
+        detail: [
+          `Portfolio analytics: total spent ${formatMoney(simpleAnalytics.analytics.totalSpent)}, total saved ${formatMoney(simpleAnalytics.analytics.totalSaved)}, total port taxes ${formatMoney(simpleAnalytics.analytics.totalPortTaxes)}, average price/night ${formatMoney(simpleAnalytics.analytics.averagePricePerNight)}, portfolio ROI ${simpleAnalytics.analytics.portfolioROI.toFixed(2)}%.`,
+          `Casino analytics: total points ${formatCount(simpleAnalytics.casinoAnalytics.totalPointsEarned)}, historical points ${formatCount(simpleAnalytics.casinoAnalytics.historicalPointsEarned)}, current balance ${formatCount(simpleAnalytics.casinoAnalytics.currentPointBalance)}, point-derived coin-in ${formatMoney(simpleAnalytics.casinoAnalytics.totalCoinIn)}, win/loss ${formatMoney(simpleAnalytics.casinoAnalytics.totalWinLoss)}, tier ${simpleAnalytics.casinoAnalytics.currentStatusTier}.`,
+          `Session analytics: ${formatCount(sessionAnalytics.totalSessions)} sessions, ${Math.round(sessionAnalytics.totalPlayTimeMinutes / 60).toLocaleString()} play hour(s), ${formatCount(sessionAnalytics.totalPointsEarned)} points, ${formatMoney(sessionAnalytics.totalCoinIn)} coin-in, ${formatMoney(sessionAnalytics.netWinLoss)} net win/loss, ${sessionAnalytics.pointsPerHour.toFixed(1)} points/hour.`,
+          `Historical performance: average ${historicalPerformance.metrics.averagePointsPerNight.toFixed(1)} points/night, ${formatMoney(historicalPerformance.metrics.averageCoinInPerNight)} coin-in/night, ${historicalPerformance.metrics.averageROI.toFixed(2)}% average ROI, ${historicalPerformance.metrics.consistencyScore.toFixed(1)} consistency score. Best cruise: ${historicalPerformance.metrics.bestCruise?.cruiseName ?? 'n/a'}.`,
+        ].join('\n'),
+        actionLabel: 'Use analytics',
+      },
+      {
+        id: 'price-history-alerts',
+        title: 'Price history, upgrade prices, and alerts',
+        subtitle: `${formatCount(priceHistoryState.priceHistory.length + priceTrackingState.priceHistory.length)} price rows · ${formatCount(activePriceDrops.length + trackedPriceDrops.length)} price drops · ${formatCount(alertsState.activeAlerts.length)} active alerts`,
+        keywords: ['price', 'price history', 'price drop', 'upgrade price', 'alert', 'alerts', 'anomaly', 'insight', 'watchlist'],
+        detail: [
+          `Price history provider: ${formatCount(priceHistoryState.priceHistory.length)} row(s), ${formatCount(priceHistoryState.priceDropAlerts.length)} stored price drop alert(s), ${formatCount(activePriceDrops.length)} active future price drop(s), ${formatCount(priceHistoryState.upgradePrices.size)} upgrade price record(s).`,
+          `Price tracking provider: ${formatCount(priceTrackingState.priceHistory.length)} row(s), ${formatCount(priceTrackingState.priceDrops.length)} price drop(s).`,
+          `Alerts: ${formatCount(alertsState.alerts.length)} stored, ${formatCount(alertsState.activeAlerts.length)} active, ${formatCount(alertsState.criticalAlerts.length)} critical, ${formatCount(alertsState.insights.length)} insight(s), ${formatCount(alertsState.anomalies.length)} anomaly/anomalies, ${enabledAlertRules} enabled rule(s), last detection ${alertsState.lastDetectionRun ?? 'not run'}.`,
+          `Top price drops:\n${buildRecentPriceDropLines([...activePriceDrops, ...trackedPriceDrops])}`,
+          `Recent price history:\n${buildRecentPriceHistoryLines([...priceHistoryState.priceHistory, ...priceTrackingState.priceHistory])}`,
+          `Active alerts:\n${buildAlertLines(alertsState.activeAlerts)}`,
+        ].join('\n'),
+        actionLabel: 'Review alerts',
+      },
+      {
+        id: 'bankroll-taxes-comps',
+        title: 'Bankroll, tax, W-2G, and comp tracking',
+        subtitle: `${formatMoney(bankrollStats.dailyRemaining)} daily remaining · ${formatCount(taxState.w2gRecords.length)} W-2G · ${formatMoney(taxState.getTotalCompValue())} comps`,
+        keywords: ['bankroll', 'limit', 'limits', 'tax', 'w2g', 'w-2g', 'comp', 'comps', 'withheld', 'daily remaining', 'weekly remaining'],
+        detail: [
+          `Bankroll limits: ${formatCount(bankrollState.limits.length)} limit(s), ${formatCount(bankrollState.alerts.length)} bankroll alert(s), session bankroll ${bankrollState.sessionBankroll ? `${formatMoney(bankrollState.sessionBankroll.currentAmount)} current from ${formatMoney(bankrollState.sessionBankroll.startingAmount)} start` : 'not active'}.`,
+          `Bankroll stats: daily spent ${formatMoney(bankrollStats.dailySpent)}, weekly spent ${formatMoney(bankrollStats.weeklySpent)}, monthly spent ${formatMoney(bankrollStats.monthlySpent)}, daily remaining ${formatMoney(bankrollStats.dailyRemaining)}, weekly remaining ${formatMoney(bankrollStats.weeklyRemaining)}, monthly remaining ${formatMoney(bankrollStats.monthlyRemaining)}.`,
+          `Tax summary ${taxYear}: ${formatCount(taxSummary.w2gCount)} W-2G record(s), ${formatMoney(taxSummary.totalW2GWinnings)} winnings, ${formatMoney(taxSummary.totalW2GWithheld)} withheld.`,
+          `Comp items: ${formatCount(taxState.compItems.length)} loaded, total comp value ${formatMoney(taxState.getTotalCompValue())}.\n${buildCompItemLines(taxState.compItems)}`,
+          `W-2G records:\n${buildW2GLines(taxState.w2gRecords)}`,
+        ].join('\n'),
+        actionLabel: 'Use bankroll and tax context',
+      },
+      {
+        id: 'goals-achievements-pph',
+        title: 'Goals, achievements, and points-per-hour alerts',
+        subtitle: `${formatCount(unlockedAchievements.length)} achievements unlocked · level ${gamificationState.stats.currentLevel} · best ${pphAlertsState.personalBestPPH.toFixed(1)} PPH`,
+        keywords: ['achievement', 'achievements', 'goal', 'weekly goal', 'streak', 'level', 'xp', 'points per hour', 'pph', 'milestone'],
+        detail: [
+          `Gamification: ${formatCount(unlockedAchievements.length)} unlocked achievement(s), ${formatCount(lockedAchievements.length)} locked achievement(s), level ${gamificationState.stats.currentLevel}, XP ${formatCount(gamificationState.stats.experiencePoints)} / ${formatCount(gamificationState.stats.nextLevelXP)}, total sessions ${formatCount(gamificationState.stats.totalSessionsAllTime)}, total points ${formatCount(gamificationState.stats.totalPointsAllTime)}.`,
+          `Streaks: daily ${gamificationState.streak.currentDailyStreak}, weekly ${gamificationState.streak.currentWeeklyStreak}, longest daily ${gamificationState.streak.longestDailyStreak}, total days played ${gamificationState.streak.totalDaysPlayed}.`,
+          `Weekly goals: ${gamificationState.weeklyGoals.map((goal) => `${goal.type} ${goal.current}/${goal.target}${goal.completed ? ' complete' : ''}`).join('; ') || 'none loaded'}.`,
+          `PPH alerts: ${formatCount(pphAlertsState.alerts.length)} active in-session alert(s), target ${pphAlertsState.thresholds.targetPPH}, personal best ${pphAlertsState.personalBestPPH.toFixed(1)}, last alerted PPH ${pphAlertsState.lastAlertedPPH ?? 'n/a'}.`,
+        ].join('\n'),
+        actionLabel: 'Use goals context',
+      },
+      {
+        id: 'settings-reference-data',
+        title: 'Settings, profile, and reference data',
+        subtitle: `${formatCount(users.length)} profile(s) · ${formatCount(celebrityState.ships.length)} Celebrity ship refs · ${formatCount(celebrityState.destinations.length)} destination refs`,
+        keywords: ['settings', 'profile', 'profiles', 'preferences', 'reference', 'celebrity', 'destination', 'ship class', 'app settings'],
+        detail: [
+          `Active intelligence scope: ${activeScopeLabel}; profile label ${selectedProfileLabel}; brand ${getBrandLabel(selectedBrand)}; program ${getProgramLabel(selectedProgram)}; casino system ${brandProgramLabel}.`,
+          `Core points fallback: ${formatCount(coreUserPoints)} point(s). Loyalty points in active scope: ${formatCount(clubRoyalePoints)} point(s), tier ${clubRoyaleTier}, source ${clubRoyalePointsSource}.`,
+          `Profiles loaded: ${users.map((user) => `${getProfileDisplayName(user)} (${user.id})`).join('; ') || 'none'}.`,
+          `Settings snapshot: ${JSON.stringify(settings).slice(0, 1200)}.`,
+          `Celebrity reference ships: ${celebrityState.ships.slice(0, 12).map((ship) => `${ship.name} (${ship.class})`).join(', ')}${celebrityState.ships.length > 12 ? ', ...' : ''}.`,
+          `Destination references: ${celebrityState.destinations.map((destination) => `${destination.name}: ${destination.ports.slice(0, 4).join('/')}`).join('; ')}.`,
+        ].join('\n'),
+        actionLabel: 'Use profile/settings context',
+      },
+    ];
+  }, [activeScopeLabel, alertsState.activeAlerts, alertsState.alerts.length, alertsState.anomalies.length, alertsState.criticalAlerts.length, alertsState.insights.length, alertsState.lastDetectionRun, alertsState.rules, allMachines.length, authenticatedEmail, bankrollState, brandProgramLabel, celebrityState.destinations, celebrityState.ships, clubRoyalePoints, clubRoyalePointsSource, clubRoyaleTier, coreDataLoading, coreUserPoints, crewRecognitionEntries.length, deckMappings.length, filteredBookedCruises.length, filteredCalendarEvents.length, filteredCasinoOffers.length, filteredCertificates.length, filteredCruises.length, financials.summary, gamificationState, getSessionAnalytics, globalLibrary.length, hasLocalData, lastSyncDate, machineLogs.length, myAtlasMachines.length, pphAlertsState, priceHistoryState, priceTrackingState, selectedBrand, selectedProfileLabel, selectedProgram, sessions.length, settings, taxState, users, weatherReports.length]);
 
   const refreshWeatherReports = useCallback(async (): Promise<SailingWeatherForecast[]> => {
     if (!isWeatherHydrated) return weatherReports;
@@ -718,6 +917,7 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
           crewRecognitionEntries,
           slotMachines: allMachines,
           weatherReports: activeWeatherReports,
+          additionalContextBlocks: appWideContextBlocks,
           overview: askMyDataOverview,
         });
         return formatAskMyDataResponse(response);
@@ -725,7 +925,7 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
       default:
         return `Unknown tool: ${tool}`;
     }
-  }, [toolContext, filteredCasinoOffers, filteredCruises, filteredBookedCruises, filteredCertificates, filteredCalendarEvents, crewRecognitionEntries, allMachines, weatherReports, askMyDataOverview]);
+  }, [toolContext, filteredCasinoOffers, filteredCruises, filteredBookedCruises, filteredCertificates, filteredCalendarEvents, crewRecognitionEntries, allMachines, weatherReports, appWideContextBlocks, askMyDataOverview]);
 
   const sendMessage = useCallback(async (content: string) => {
     console.log('[AgentX] User message:', content, 'mode:', mode);
@@ -814,6 +1014,7 @@ User's current status (FRESH DATA - UPDATED ON EVERY REQUEST):
 - Slot Machine Records: ${allMachines.length}
 - Machine Condition Logs: ${machineLogs.length}
 - Loaded Weather Reports: ${latestWeatherReports.length}
+- App-Wide Context Blocks: ${appWideContextBlocks.length}
 - Active Profile Scope: ${selectedProfileLabel}
 - Active Brand Scope: ${getBrandLabel(selectedBrand)}
 - Active Program Scope: ${getProgramLabel(selectedProgram)}
@@ -845,7 +1046,10 @@ ${buildMachineDataContext(allMachines, machineLogs)}
 Weather / rough-seas reports loaded for the current cruise window:
 ${buildWeatherContext(latestWeatherReports)}
 
-CRITICAL: The user has EXACTLY ${toolContext.userPoints.toLocaleString()} casino program points in the active Royal/Celebrity scope and is in ${toolContext.currentTier} tier. They have earned ${totalEarnedPoints.toLocaleString()} points from ${completedCruises.length} completed cruises. These numbers are from the live system. Use ONLY these values, not any cached or outdated information. Coin-In is included only as gaming volume, never as profit/value/cash result. If standalone offers are empty, booked-cruise offer/value records are still actual saved offer data and must be used for Ask My Data offer answers. Events, crew recognition, slot machines, machine logs, and weather reports are also valid app data sources for the chat.
+App-wide Easy Seas context loaded:
+${buildAppContextBlockText(appWideContextBlocks)}
+
+CRITICAL: The user has EXACTLY ${toolContext.userPoints.toLocaleString()} casino program points in the active Royal/Celebrity scope and is in ${toolContext.currentTier} tier. They have earned ${totalEarnedPoints.toLocaleString()} points from ${completedCruises.length} completed cruises. These numbers are from the live system. Use ONLY these values, not any cached or outdated information. Coin-In is included only as gaming volume, never as profit/value/cash result. If standalone offers are empty, booked-cruise offer/value records are still actual saved offer data and must be used for Ask My Data offer answers. Events, crew recognition, slot machines, machine logs, weather reports, financials, price history, alerts, bankroll, tax/W-2G, comp items, achievements, analytics, settings, profiles, and reference data are valid app data sources for the chat.
 `;
 
       const systemPrompt = devAssistantRequest
@@ -861,6 +1065,7 @@ CRITICAL: The user has EXACTLY ${toolContext.userPoints.toLocaleString()} casino
             calendarEvents: filteredCalendarEvents,
             crewRecognitionEntries,
             weatherReports: latestWeatherReports,
+            appContextBlocks: appWideContextBlocks,
             mode,
             brandProgramLabel,
           });
@@ -878,7 +1083,7 @@ CRITICAL: The user has EXACTLY ${toolContext.userPoints.toLocaleString()} casino
               role: 'user' as const,
               content: toolResult
                 ? `Ask My Data mode: ${AGENT_MODE_LABELS[mode]}\nActive context: ${activeScopeLabel}\nArchive/review context: ${archiveContextLabel}\nUser asked: "${content}"\n\nTool result:\n${toolResult}\n\nPlease summarize this information in a helpful, conversational way. Start by confirming the active profile, brand/program, mode, and archive/review context. Highlight the most important points and name the data sources used.`
-                : `Ask My Data mode: ${AGENT_MODE_LABELS[mode]}\nActive context: ${activeScopeLabel}\nArchive/review context: ${archiveContextLabel}\nUser asked: "${content}"\n\nPlease provide a helpful response based on the user's cruise, offer, event, crew, slot machine, weather, active profile/filter context, selected mode, and archive/review context. Start by confirming the active profile, brand/program, mode, and archive/review context.`,
+                : `Ask My Data mode: ${AGENT_MODE_LABELS[mode]}\nActive context: ${activeScopeLabel}\nArchive/review context: ${archiveContextLabel}\nUser asked: "${content}"\n\nPlease provide a helpful response based on the user's cruise, offer, event, crew, slot machine, weather, financial, price history, alert, bankroll, tax/W-2G, comp, achievement, analytics, settings/profile, active filter context, selected mode, and archive/review context. Start by confirming the active profile, brand/program, mode, and archive/review context.`,
             },
           ];
 
@@ -919,7 +1124,7 @@ CRITICAL: The user has EXACTLY ${toolContext.userPoints.toLocaleString()} casino
     } finally {
       setIsLoading(false);
     }
-  }, [messages, tier, isAdmin, toolContext, executeToolCall, refreshWeatherReports, weatherReports, allMachines, globalLibrary, myAtlasMachines, sessions, deckMappings, machineLogs, filteredCertificates, filteredCalendarEvents, crewRecognitionEntries, filteredCasinoOffers, filteredCruises, filteredBookedCruises, mode, selectedProfileLabel, selectedBrand, selectedProgram, activeScopeLabel, brandProgramLabel, archiveContextLabel, askMyDataOverview]);
+  }, [messages, tier, isAdmin, toolContext, executeToolCall, refreshWeatherReports, weatherReports, allMachines, globalLibrary, myAtlasMachines, sessions, deckMappings, machineLogs, filteredCertificates, filteredCalendarEvents, crewRecognitionEntries, filteredCasinoOffers, filteredCruises, filteredBookedCruises, appWideContextBlocks, mode, selectedProfileLabel, selectedBrand, selectedProgram, activeScopeLabel, brandProgramLabel, archiveContextLabel, askMyDataOverview]);
 
   const clearMessages = useCallback(() => {
     console.log('[AgentX] Clearing messages');

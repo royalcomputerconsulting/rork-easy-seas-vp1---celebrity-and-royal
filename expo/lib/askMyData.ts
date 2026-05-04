@@ -5,8 +5,18 @@ import type { AskMyDataOverview } from '@/lib/askMyDataOverview';
 import type { RecognitionEntryWithCrew } from '@/types/crew-recognition';
 import type { SailingWeatherForecast } from '@/state/SailingWeatherProvider';
 
-export type AskMyDataSource = 'overview' | 'offers' | 'cruises' | 'certificates' | 'calendar' | 'crew' | 'machines' | 'weather';
+export type AskMyDataSource = 'overview' | 'offers' | 'cruises' | 'certificates' | 'calendar' | 'crew' | 'machines' | 'weather' | 'system';
 export type AskMyDataConfidence = 'high' | 'medium' | 'low';
+
+export interface AskMyDataContextBlock {
+  id: string;
+  title: string;
+  subtitle: string;
+  keywords: string[];
+  detail: string;
+  actionLabel?: string;
+  actionRoute?: string;
+}
 
 export interface AskMyDataResult {
   id: string;
@@ -73,6 +83,7 @@ interface QueryIntent {
   wantsCrew: boolean;
   wantsMachines: boolean;
   wantsWeather: boolean;
+  wantsSystem: boolean;
   minNights?: number;
   maxNights?: number;
   afterDate?: string;
@@ -91,6 +102,7 @@ const SYNONYMS: Record<string, string[]> = {
   crew: ['crew', 'recognition', 'crew recognition', 'staff', 'employee', 'server', 'host', 'dealer', 'casino host', 'bartender', 'waiter', 'waitress', 'department'],
   machine: ['slot', 'slots', 'machine', 'machines', 'slot machine', 'atlas', 'ap', 'advantage play', 'must hit', 'must-hit', 'persistent', 'volatility', 'denomination'],
   weather: ['weather', 'forecast', 'rough seas', 'marine', 'wind', 'wave', 'swell', 'rain', 'storm', 'squall', 'sea state'],
+  system: ['financial', 'finance', 'money', 'payment', 'balance due', 'deposit', 'price drop', 'price history', 'upgrade price', 'alert', 'anomaly', 'insight', 'bankroll', 'limit', 'tax', 'w2g', 'w-2g', 'comp item', 'comp', 'achievement', 'goal', 'analytics', 'performance', 'portfolio', 'data source', 'system'],
   expiring: ['expiring', 'expires', 'expiration', 'urgent', 'soon', 'deadline', 'lapsing', 'last chance'],
   booked: ['booked', 'booking', 'reservation', 'reserved', 'hold', 'courtesy hold'],
   value: ['value', 'best', 'strongest', 'highest', 'worth', 'roi', 'score', 'retail', 'savings'],
@@ -185,6 +197,7 @@ function parseQueryIntent(query: string): QueryIntent {
     crew: hasAny(normalizedQuery, SYNONYMS.crew),
     machines: hasAny(normalizedQuery, SYNONYMS.machine),
     weather: hasAny(normalizedQuery, SYNONYMS.weather),
+    system: hasAny(normalizedQuery, SYNONYMS.system),
   };
   const wantsAllSources = !Object.values(sourceMentions).some(Boolean);
 
@@ -217,6 +230,7 @@ function parseQueryIntent(query: string): QueryIntent {
     wantsCrew: sourceMentions.crew,
     wantsMachines: sourceMentions.machines,
     wantsWeather: sourceMentions.weather,
+    wantsSystem: sourceMentions.system,
     minNights: nightsMatch?.[1] ? wordToNumber(nightsMatch[1]) : undefined,
     maxNights: maxNightsMatch?.[1] ? wordToNumber(maxNightsMatch[1]) : undefined,
     afterDate: parseDateConstraint(normalizedQuery, 'after'),
@@ -410,6 +424,7 @@ function getInterpretedIntent(intent: QueryIntent): string {
     if (intent.sources.crew) pieces.push('crew recognition');
     if (intent.sources.machines) pieces.push('slot machines');
     if (intent.sources.weather) pieces.push('weather reports');
+    if (intent.sources.system) pieces.push('app-wide system context');
   }
   if (intent.wantsExpiring) pieces.push('expiring soon');
   if (intent.wantsHighValue) pieces.push('high value');
@@ -454,14 +469,16 @@ export function askMyDataSearch(params: {
   crewRecognitionEntries?: RecognitionEntryWithCrew[];
   slotMachines?: SlotMachine[];
   weatherReports?: SailingWeatherForecast[];
+  additionalContextBlocks?: AskMyDataContextBlock[];
   overview?: AskMyDataOverview;
 }): AskMyDataResponse {
   const intent = parseQueryIntent(params.query);
   const crewRecognitionEntries = params.crewRecognitionEntries ?? [];
   const slotMachines = params.slotMachines ?? [];
   const weatherReports = params.weatherReports ?? [];
+  const additionalContextBlocks = params.additionalContextBlocks ?? [];
   const cruiseOfferRecords = params.cruises.filter((cruise) => getCruiseOfferData(cruise).hasOfferData);
-  const dataIndexLabel = `loaded ${params.offers.length.toLocaleString()} standalone offer(s), ${cruiseOfferRecords.length.toLocaleString()} booked cruise offer record(s), ${params.cruises.length.toLocaleString()} cruise(s), ${params.certificates.length.toLocaleString()} certificate(s), ${params.calendarEvents.length.toLocaleString()} event(s), ${crewRecognitionEntries.length.toLocaleString()} crew recognition record(s), ${slotMachines.length.toLocaleString()} slot machine record(s), ${weatherReports.length.toLocaleString()} weather report(s)`;
+  const dataIndexLabel = `loaded ${params.offers.length.toLocaleString()} standalone offer(s), ${cruiseOfferRecords.length.toLocaleString()} booked cruise offer record(s), ${params.cruises.length.toLocaleString()} cruise(s), ${params.certificates.length.toLocaleString()} certificate(s), ${params.calendarEvents.length.toLocaleString()} event(s), ${crewRecognitionEntries.length.toLocaleString()} crew recognition record(s), ${slotMachines.length.toLocaleString()} slot machine record(s), ${weatherReports.length.toLocaleString()} weather report(s), ${additionalContextBlocks.length.toLocaleString()} app-wide context block(s)`;
   const interpretedIntent = getInterpretedIntent(intent) || 'all data sources';
   const filtersApplied: string[] = [interpretedIntent, dataIndexLabel];
   const results: AskMyDataResult[] = [];
@@ -715,6 +732,33 @@ export function askMyDataSearch(params: {
     });
   }
 
+  if (intent.sources.system || intent.wantsAllSources) {
+    additionalContextBlocks.forEach((block) => {
+      const haystack = [block.title, block.subtitle, block.detail, block.keywords.join(' ')].filter(Boolean).join(' ');
+      const textScore = scoreText(intent, haystack);
+      const reasons: string[] = [];
+      let score = textScore.score;
+      score += addReason(reasons, intent.sources.system, 'app-wide system context loaded', 26);
+      score += addReason(reasons, block.detail.length > 0, 'detailed app data snapshot available', 8);
+
+      if (score > 0 || reasons.length > 0 || intent.wantsAllSources) {
+        results.push({
+          id: `system-${block.id}`,
+          source: 'system',
+          title: block.title,
+          subtitle: block.subtitle,
+          score,
+          actionLabel: block.actionLabel ?? 'Use this context',
+          actionRoute: block.actionRoute,
+          confidence: confidenceFromScore(score),
+          matchedTerms: textScore.matchedTerms,
+          matchReasons: reasons.length > 0 ? reasons : textScore.matchedTerms.map((term) => `matched “${term}”`),
+          detail: block.detail,
+        });
+      }
+    });
+  }
+
   if (intent.sources.weather || intent.wantsAllSources) {
     weatherReports.forEach((forecast) => {
       if (!weatherPassesStructuredFilters(forecast, intent)) return;
@@ -770,7 +814,7 @@ export function askMyDataSearch(params: {
     results: rankedResults,
     interpretedIntent,
     suggestedQueries: buildSuggestedQueries(intent),
-    noResultsExplanation: rankedResults.length === 0 ? `Ask My Data did load your active scope (${dataIndexLabel}), but no records matched the query terms and filters. Try a ship name, offer code, port, date, owner email, cabin type, crew name, department, slot machine, or weather term.` : undefined,
+    noResultsExplanation: rankedResults.length === 0 ? `Ask My Data did load your active scope (${dataIndexLabel}), but no records matched the query terms and filters. Try a ship name, offer code, port, date, owner email, cabin type, crew name, department, slot machine, weather, alert, tax, bankroll, price, or financial term.` : undefined,
   };
 }
 
