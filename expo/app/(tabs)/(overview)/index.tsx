@@ -63,6 +63,7 @@ import { CertificateExplorerModal } from '@/components/CertificateExplorerModal'
 import { IntelligenceFilterStrip } from '@/components/IntelligenceFilterStrip';
 import { useIntelligenceFilters } from '@/state/IntelligenceFiltersProvider';
 import { filterRecordsByIntelligence } from '@/lib/intelligenceFilters';
+import { getBookedCruiseCasinoPoints, getBookedCruiseWinningsBroughtHome } from '@/lib/casinoPointTruth';
 
 import type { Cruise, BookedCruise, CasinoOffer } from '@/types/models';
 import { getCabinPriceFromEntity, GUEST_COUNT_DEFAULT } from '@/lib/valueCalculator';
@@ -571,10 +572,9 @@ function OverviewScreenContent() {
   const cruisesWithCasinoData = useMemo(() => {
     const allCruises = [...bookedCruises, ...cruisesData];
     return allCruises.filter((cruise: BookedCruise) => {
-      const hasWinnings = cruise.winnings !== undefined && cruise.winnings !== 0;
-      const hasPoints = (cruise.earnedPoints !== undefined && cruise.earnedPoints > 0) || 
-                       (cruise.casinoPoints !== undefined && cruise.casinoPoints > 0);
-      return hasWinnings || hasPoints;
+      const winnings = getBookedCruiseWinningsBroughtHome(cruise);
+      const points = getBookedCruiseCasinoPoints(cruise);
+      return winnings !== 0 || points > 0;
     }).sort((a, b) => {
       const dateA = new Date(a.sailDate).getTime();
       const dateB = new Date(b.sailDate).getTime();
@@ -994,8 +994,8 @@ function OverviewScreenContent() {
               </Text>
             </View>
             {cruisesWithCasinoData.map((cruise: BookedCruise) => {
-              const winnings = cruise.winnings || 0;
-              const earnedPoints = cruise.earnedPoints || cruise.casinoPoints || 0;
+              const winnings = getBookedCruiseWinningsBroughtHome(cruise);
+              const earnedPoints = getBookedCruiseCasinoPoints(cruise);
               const isWin = winnings >= 0;
               const itineraryText = `${cruise.nights} night${cruise.nights !== 1 ? 's' : ''} to ${cruise.destination || cruise.itineraryName || 'Caribbean'}`;
 

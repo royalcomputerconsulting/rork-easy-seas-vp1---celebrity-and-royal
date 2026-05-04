@@ -25,6 +25,7 @@ import { applyUserConfirmedBookedCruiseManifest } from "@/lib/cruiseOverlapGuard
 import { CONFIRMED_CLUB_ROYALE_2025_POINTS, isKnownCasinoProfile } from "@/lib/knownProfileFallback";
 import {
   buildClubRoyaleDiscrepancy,
+  CONFIRMED_CLUB_ROYALE_2026_POINTS,
   getBookedCruiseCasinoPoints,
   normalizeCruiseCasinoPerformance,
   type ClubRoyaleDiscrepancy,
@@ -589,22 +590,26 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
     upcomingBookedCruises.sort((a, b) => a.sailDate.getTime() - b.sailDate.getTime());
     upcomingTopTierStatusCruises.sort((a, b) => a.sailDate.getTime() - b.sailDate.getTime());
 
-    const historicalClubRoyalePoints = isKnownCasinoProfile(authenticatedEmail)
-      ? Math.max(calculatedClubRoyalePoints, CONFIRMED_CLUB_ROYALE_2025_POINTS)
+    const usesKnownCasinoProfile = isKnownCasinoProfile(authenticatedEmail);
+    const historicalClubRoyalePoints = usesKnownCasinoProfile
+      ? CONFIRMED_CLUB_ROYALE_2025_POINTS
       : calculatedClubRoyalePoints;
+    const authoritativeCurrentYearClubRoyalePoints = usesKnownCasinoProfile
+      ? Math.max(currentYearClubRoyalePoints, CONFIRMED_CLUB_ROYALE_2026_POINTS)
+      : currentYearClubRoyalePoints;
     const historicalClubRoyaleTier = getTierByPoints(historicalClubRoyalePoints) as ClubRoyaleTier;
     const liveClubRoyalePoints = extendedLoyalty?.clubRoyalePointsFromApi;
     const hasLiveClubRoyalePoints = typeof liveClubRoyalePoints === 'number' && Number.isFinite(liveClubRoyalePoints);
     const daysSinceSeasonStart = Math.max(0, Math.floor((today.getTime() - lastApril1.getTime()) / (1000 * 60 * 60 * 24)));
-    const shouldForceSeasonResetBalance = currentYearClubRoyalePoints === 0
+    const shouldForceSeasonResetBalance = authoritativeCurrentYearClubRoyalePoints === 0
       && daysSinceSeasonStart <= 14
       && ((manualClubRoyalePoints ?? 0) > 0 || (hasLiveClubRoyalePoints && liveClubRoyalePoints > 0));
 
-    let effectiveClubRoyalePoints = currentYearClubRoyalePoints;
-    let clubRoyalePointsSource: 'api' | 'manual' | 'historical' | 'app' = currentYearClubRoyalePoints > 0 ? 'app' : 'historical';
+    let effectiveClubRoyalePoints = authoritativeCurrentYearClubRoyalePoints;
+    let clubRoyalePointsSource: 'api' | 'manual' | 'historical' | 'app' = authoritativeCurrentYearClubRoyalePoints > 0 ? 'app' : 'historical';
 
-    if (currentYearClubRoyalePoints > 0) {
-      effectiveClubRoyalePoints = currentYearClubRoyalePoints;
+    if (authoritativeCurrentYearClubRoyalePoints > 0) {
+      effectiveClubRoyalePoints = authoritativeCurrentYearClubRoyalePoints;
       clubRoyalePointsSource = 'app';
     } else if (!shouldForceSeasonResetBalance && manualClubRoyalePoints !== null) {
       effectiveClubRoyalePoints = manualClubRoyalePoints;
@@ -614,7 +619,7 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
       clubRoyalePointsSource = 'api';
     }
 
-    const clubRoyaleSyncDiscrepancy = buildClubRoyaleDiscrepancy(currentYearClubRoyalePoints, hasLiveClubRoyalePoints ? liveClubRoyalePoints : null);
+    const clubRoyaleSyncDiscrepancy = buildClubRoyaleDiscrepancy(authoritativeCurrentYearClubRoyalePoints, hasLiveClubRoyalePoints ? liveClubRoyalePoints : null);
     if (clubRoyaleSyncDiscrepancy.hasDiscrepancy) {
       console.warn('[LoyaltyProvider] Club Royale sync discrepancy detected; using app-entered cruise points as authoritative:', clubRoyaleSyncDiscrepancy);
     }
@@ -629,7 +634,7 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
       console.log('[LoyaltyProvider] Forcing Club Royale current-season balance to reset state', {
         manualClubRoyalePoints,
         liveClubRoyalePoints,
-        currentYearClubRoyalePoints,
+        currentYearClubRoyalePoints: authoritativeCurrentYearClubRoyalePoints,
         daysSinceSeasonStart,
       });
     }

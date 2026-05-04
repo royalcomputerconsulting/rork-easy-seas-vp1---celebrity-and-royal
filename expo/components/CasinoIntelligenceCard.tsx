@@ -17,6 +17,7 @@ import {
   Activity,
 } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
+import { getBookedCruiseCasinoPoints, getBookedCruiseWinningsBroughtHome } from '@/lib/casinoPointTruth';
 import { formatCurrency, formatNumber } from '@/lib/format';
 import type { SessionAnalytics, MachineType } from '@/state/CasinoSessionProvider';
 import type { BookedCruise } from '@/types/models';
@@ -477,25 +478,33 @@ export function CasinoIntelligenceCard({ analytics, onViewDetails, completedCrui
     if (!completedCruises || completedCruises.length === 0) return undefined;
     
     const cruisesWithData = completedCruises.filter(c => {
-      const hasWinnings = c.winningsBroughtHome !== undefined || c.winnings !== undefined || c.cashResult !== undefined;
-      const hasPoints = (c.pointsEarned !== undefined && c.pointsEarned > 0) ||
-                       (c.earnedPoints !== undefined && c.earnedPoints > 0) || 
-                       (c.casinoPoints !== undefined && c.casinoPoints > 0);
-      return hasWinnings || hasPoints;
+      const points = getBookedCruiseCasinoPoints(c);
+      const winnings = getBookedCruiseWinningsBroughtHome(c);
+      return points > 0 || winnings !== 0;
     });
     
     if (cruisesWithData.length === 0) return undefined;
     
-    const totalWinLoss = cruisesWithData.reduce((sum, c) => sum + (c.winningsBroughtHome ?? c.winnings ?? 0), 0);
-    const totalCashResult = cruisesWithData.reduce((sum, c) => sum + (c.cashResult ?? (c.winningsBroughtHome ?? c.winnings ?? 0) - (c.netEffectivePaid ?? c.amountPaid ?? 0)), 0);
-    const totalEconomicValue = cruisesWithData.reduce((sum, c) => sum + (c.totalEconomicValue ?? (c.retailValue ?? c.totalRetailCost ?? 0) + (c.winningsBroughtHome ?? c.winnings ?? 0) - (c.netEffectivePaid ?? c.amountPaid ?? 0)), 0);
-    const totalPointsEarned = cruisesWithData.reduce((sum, c) => sum + (c.pointsEarned ?? c.earnedPoints ?? c.casinoPoints ?? 0), 0);
-    const totalCoinIn = cruisesWithData.reduce((sum, c) => sum + (c.coinIn ?? (c.pointsEarned ?? c.earnedPoints ?? c.casinoPoints ?? 0) * 5), 0);
+    const totalWinLoss = cruisesWithData.reduce((sum, c) => sum + getBookedCruiseWinningsBroughtHome(c), 0);
+    const totalCashResult = cruisesWithData.reduce((sum, c) => {
+      const winnings = getBookedCruiseWinningsBroughtHome(c);
+      return sum + (c.cashResult ?? winnings - (c.netEffectivePaid ?? c.amountPaid ?? 0));
+    }, 0);
+    const totalEconomicValue = cruisesWithData.reduce((sum, c) => {
+      const winnings = getBookedCruiseWinningsBroughtHome(c);
+      return sum + (c.totalEconomicValue ?? (c.retailValue ?? c.totalRetailCost ?? 0) + winnings - (c.netEffectivePaid ?? c.amountPaid ?? 0));
+    }, 0);
+    const totalPointsEarned = cruisesWithData.reduce((sum, c) => sum + getBookedCruiseCasinoPoints(c), 0);
+    const totalCoinIn = cruisesWithData.reduce((sum, c) => {
+      const points = getBookedCruiseCasinoPoints(c);
+      return sum + (points > 0 ? (c.coinIn ?? points * 5) : 0);
+    }, 0);
     const totalHoursPlayed = cruisesWithData.reduce((sum, c) => sum + (c.hoursPlayed || (c.nights || 0) * 4), 0);
     
     const totalTheoreticalLoss = cruisesWithData.reduce((sum, c) => {
       if (c.theoreticalLoss) return sum + c.theoreticalLoss;
-      const coinIn = c.coinIn ?? (c.pointsEarned ?? c.earnedPoints ?? c.casinoPoints ?? 0) * 5;
+      const points = getBookedCruiseCasinoPoints(c);
+      const coinIn = points > 0 ? (c.coinIn ?? points * 5) : 0;
       return sum + (coinIn * (c.houseEdge ?? 0.08));
     }, 0);
     

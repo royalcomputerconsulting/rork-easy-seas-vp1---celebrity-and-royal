@@ -16,6 +16,7 @@ import {
   type CruiseCasinoSummary 
 } from "@/lib/casinoAvailability";
 import { buildCruiseEconomicsSummary } from "@/lib/casinoCruiseEconomics";
+import { getBookedCruiseCasinoPoints, getBookedCruiseWinningsBroughtHome } from "@/lib/casinoPointTruth";
 import { CONFIRMED_CLUB_ROYALE_2025_POINTS, isKnownCasinoProfile } from "@/lib/knownProfileFallback";
 
 export interface CasinoAnalytics {
@@ -163,10 +164,13 @@ export const [SimpleAnalyticsProvider, useSimpleAnalytics] = createContextHook((
     let totalCashResult = 0;
 
     completedCruises.forEach((cruise: BookedCruise) => {
-      const points = cruise.pointsEarned ?? cruise.earnedPoints ?? cruise.casinoPoints ?? 0;
+      const points = getBookedCruiseCasinoPoints(cruise);
+      const winnings = getBookedCruiseWinningsBroughtHome(cruise);
       cruisePointsSum += points;
-      totalWinnings += cruise.winningsBroughtHome ?? cruise.winnings ?? 0;
-      totalCashResult += cruise.cashResult ?? ((cruise.winningsBroughtHome ?? cruise.winnings ?? 0) - (cruise.netEffectivePaid ?? cruise.amountPaid ?? cruise.pricePaid ?? 0));
+      totalWinnings += winnings;
+      totalCashResult += points > 0
+        ? (cruise.cashResult ?? (winnings - (cruise.netEffectivePaid ?? cruise.amountPaid ?? cruise.pricePaid ?? 0)))
+        : 0;
     });
 
     const count = hasEconomicsRows ? economicsSummary.totals.cruises : completedCruises.length;
@@ -276,9 +280,9 @@ export const [SimpleAnalyticsProvider, useSimpleAnalytics] = createContextHook((
         totalPortTaxes += cruise.taxes;
       }
 
-      if (cruise.earnedPoints || cruise.casinoPoints) {
-        const points = cruise.earnedPoints || cruise.casinoPoints || 0;
-        totalPoints += points;
+      const casinoPoints = getBookedCruiseCasinoPoints(cruise);
+      if (casinoPoints > 0) {
+        totalPoints += casinoPoints;
       }
 
       totalRetailValue += retailValue;
@@ -295,7 +299,7 @@ export const [SimpleAnalyticsProvider, useSimpleAnalytics] = createContextHook((
         if (!roiByMonth[monthKey]) roiByMonth[monthKey] = [];
         roiByMonth[monthKey].push(cruiseROI);
         
-        const points = cruise.earnedPoints || cruise.casinoPoints || 0;
+        const points = getBookedCruiseCasinoPoints(cruise);
         pointsByMonth[monthKey] = (pointsByMonth[monthKey] || 0) + points;
       }
     });

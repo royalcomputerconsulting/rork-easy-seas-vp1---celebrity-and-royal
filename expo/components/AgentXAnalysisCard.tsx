@@ -5,6 +5,7 @@ import { Bot, TrendingUp, Award, DollarSign, RefreshCw, MessageSquare } from 'lu
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME } from '@/constants/theme';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
+import { getBookedCruiseCasinoPoints, getBookedCruiseWinningsBroughtHome } from '@/lib/casinoPointTruth';
 
 import type { BookedCruise } from '@/types/models';
 
@@ -70,14 +71,14 @@ export function AgentXAnalysisCard({ onViewDetails, onRefresh }: AgentXAnalysisC
     );
 
     const earnedPointsFromCruises = allCompletedCruises.reduce(
-      (sum: number, c: BookedCruise) => sum + (c.earnedPoints || c.casinoPoints || 0),
+      (sum: number, c: BookedCruise) => sum + getBookedCruiseCasinoPoints(c),
       0
     );
     
     const totalPoints = clubRoyalePoints > 0 ? clubRoyalePoints : earnedPointsFromCruises;
 
     const totalWinnings = allCompletedCruises.reduce(
-      (sum: number, c: BookedCruise) => sum + (c.winnings || 0),
+      (sum: number, c: BookedCruise) => sum + getBookedCruiseWinningsBroughtHome(c),
       0
     );
 

@@ -10,6 +10,7 @@ import {
   CONFIRMED_CLUB_ROYALE_2025_POINTS,
   CONFIRMED_CLUB_ROYALE_2025_WINNINGS_HOME,
   DEFAULT_ESTIMATED_POINTS_PER_PLAY_HOUR,
+  isClubRoyaleCasinoCruise,
   normalizeCruiseCasinoPerformance,
 } from '@/lib/casinoPointTruth';
 
@@ -309,6 +310,7 @@ function inAnnualScope(cruise: BookedCruise, today: Date): boolean {
   const sailDate = cruise.sailDate || '';
 
   return brand === 'Royal Caribbean'
+    && isClubRoyaleCasinoCruise(cruise)
     && status === 'completed'
     && sailDate >= ANNUAL_SCOPE_START
     && sailDate <= ANNUAL_SCOPE_END;
@@ -582,7 +584,15 @@ function getNetEffectivePaid(cruise: BookedCruise, taxesFeesEstimate: number): {
   };
 }
 
-function getEstimatedWinnings(cruise: BookedCruise): { value: number; isActual: boolean; note: string | null } {
+function getEstimatedWinnings(cruise: BookedCruise, isClubRoyaleEligible: boolean): { value: number; isActual: boolean; note: string | null } {
+  if (!isClubRoyaleEligible) {
+    return {
+      value: 0,
+      isActual: true,
+      note: 'Excluded from Club Royale casino win/loss because this sailing is Celebrity, Virgin, VACAYA/charter, or another non-Royal Caribbean casino program.',
+    };
+  }
+
   const actualWinnings = getFirstNumber(cruise.winningsBroughtHome, cruise.winnings, cruise.totalWinnings, cruise.netResult);
   if (isNumber(actualWinnings)) {
     return {
@@ -612,7 +622,15 @@ function getEstimatedWinnings(cruise: BookedCruise): { value: number; isActual: 
   };
 }
 
-function getEstimatedPoints(cruise: BookedCruise): { value: number; isActual: boolean; note: string | null } {
+function getEstimatedPoints(cruise: BookedCruise, isClubRoyaleEligible: boolean): { value: number; isActual: boolean; note: string | null } {
+  if (!isClubRoyaleEligible) {
+    return {
+      value: 0,
+      isActual: true,
+      note: 'Excluded from Club Royale points because imported points for this sailing are loyalty points, not casino points.',
+    };
+  }
+
   const actualPoints = getFirstNumber(cruise.pointsEarned, cruise.earnedPoints, cruise.casinoPoints);
   if (isNumber(actualPoints)) {
     return {
@@ -622,12 +640,21 @@ function getEstimatedPoints(cruise: BookedCruise): { value: number; isActual: bo
     };
   }
 
+  const isFutureBookedCruise = cruise.status === 'booked' || cruise.completionState === 'upcoming' || cruise.bookingStatus === 'booked';
+  if (isFutureBookedCruise) {
+    return {
+      value: 0,
+      isActual: false,
+      note: 'No Club Royale points entered yet for this booked cruise; future casino points are not pre-estimated.',
+    };
+  }
+
   const estimatedPoints = Math.round((cruise.nights || 0) * 300);
 
   return {
     value: estimatedPoints,
     isActual: false,
-    note: 'Points estimated at 300 points per night.',
+    note: 'Completed Royal Caribbean casino points estimated at 300 points per night because no actual Club Royale points were entered.',
   };
 }
 
@@ -670,6 +697,7 @@ function buildCruiseEconomicsRow(cruise: BookedCruise): CruiseEconomicsRow {
   const status = cruiseForEconomics.status === 'completed' || cruiseForEconomics.completionState === 'completed' ? 'completed' : cruiseForEconomics.status === 'booked' ? 'booked' : 'other';
 
   const matchedAnnualFact = getAnnualCasinoFact(cruiseForEconomics);
+  const isClubRoyaleEligible = Boolean(matchedAnnualFact) || isClubRoyaleCasinoCruise(cruiseForEconomics);
   const isKnownStar2026Booking = isKnownStar2026CasinoBooking(cruiseForEconomics);
   const rawRetailValue = getHighestPositiveNumber(
     cruiseForEconomics.retailValue,
@@ -685,24 +713,26 @@ function buildCruiseEconomicsRow(cruise: BookedCruise): CruiseEconomicsRow {
   const taxesFeesInfo = getTaxesFeesEstimate(cruiseForEconomics, breakdown);
   const taxesFeesEstimate = taxesFeesInfo.value;
   const paidInfo = getNetEffectivePaid(cruiseForEconomics, taxesFeesEstimate);
-  const winningsInfo = getEstimatedWinnings(cruiseForEconomics);
-  const pointsInfo = getEstimatedPoints(cruiseForEconomics);
+  const winningsInfo = getEstimatedWinnings(cruiseForEconomics, isClubRoyaleEligible);
+  const pointsInfo = getEstimatedPoints(cruiseForEconomics, isClubRoyaleEligible);
 
   const pointDollarValue = round2(getFirstNumber(cruiseForEconomics.pointDollarValue, DEFAULT_POINT_DOLLAR_VALUE) ?? DEFAULT_POINT_DOLLAR_VALUE);
   const pointValueEarned = calcPointValue(pointsInfo.value, pointDollarValue);
 
-  const explicitCoinIn = getFirstNumber(cruiseForEconomics.coinIn);
-  const coinIn = isNumber(explicitCoinIn)
-    ? round2(explicitCoinIn)
-    : round2(pointsInfo.value * DOLLARS_PER_POINT);
-  const coinInWasEstimated = !isNumber(explicitCoinIn);
+  const explicitCoinIn = isClubRoyaleEligible ? getFirstNumber(cruiseForEconomics.coinIn) : null;
+  const coinIn = isClubRoyaleEligible
+    ? (isNumber(explicitCoinIn) ? round2(explicitCoinIn) : round2(pointsInfo.value * DOLLARS_PER_POINT))
+    : 0;
+  const coinInWasEstimated = isClubRoyaleEligible && !isNumber(explicitCoinIn);
 
   const houseEdge = round2(getFirstNumber(cruiseForEconomics.houseEdge, DEFAULT_HOUSE_EDGE) ?? DEFAULT_HOUSE_EDGE);
-  const explicitHoursPlayed = getFirstNumber(cruiseForEconomics.hoursPlayed);
-  const hoursPlayed = isNumber(explicitHoursPlayed)
-    ? round2(explicitHoursPlayed)
-    : (pointsInfo.value > 0 ? round2(pointsInfo.value / DEFAULT_ESTIMATED_POINTS_PER_PLAY_HOUR) : null);
-  const hoursWereEstimated = !isNumber(explicitHoursPlayed) && isNumber(hoursPlayed);
+  const explicitHoursPlayed = isClubRoyaleEligible ? getFirstNumber(cruiseForEconomics.hoursPlayed) : null;
+  const hoursPlayed = isClubRoyaleEligible
+    ? (isNumber(explicitHoursPlayed)
+      ? round2(explicitHoursPlayed)
+      : (pointsInfo.value > 0 ? round2(pointsInfo.value / DEFAULT_ESTIMATED_POINTS_PER_PLAY_HOUR) : null))
+    : null;
+  const hoursWereEstimated = isClubRoyaleEligible && !isNumber(explicitHoursPlayed) && isNumber(hoursPlayed);
   const theoreticalLoss = calcTheoreticalLoss(coinIn, houseEdge);
   const netTheoretical = calcNetTheoretical(pointValueEarned, theoreticalLoss);
 

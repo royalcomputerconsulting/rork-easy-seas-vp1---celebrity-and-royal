@@ -1,4 +1,5 @@
 import type { Cruise, BookedCruise, CasinoOffer, ClubRoyaleTier } from '@/types/models';
+import { getBookedCruiseCasinoPoints } from '@/lib/casinoPointTruth';
 import { calculateCruiseValue, calculatePortfolioValue, calculateROIFromValue } from '@/lib/valueCalculator';
 import { formatDate, getDaysUntil, createDateFromString, isDateInPast } from '@/lib/date';
 import { CLUB_ROYALE_TIERS } from '@/types/models';
@@ -99,13 +100,7 @@ function normalizeClubRoyaleTier(tier: ClubRoyaleTier | string | undefined, poin
 }
 
 function getBookedCruisePoints(cruise: BookedCruise): number {
-  const explicitPoints = cruise.earnedPoints ?? cruise.casinoPoints ?? cruise.pointsEarned;
-  if (typeof explicitPoints === 'number' && Number.isFinite(explicitPoints) && explicitPoints > 0) return explicitPoints;
-  const estimatedFromCoinIn = typeof cruise.coinIn === 'number' && Number.isFinite(cruise.coinIn) && cruise.coinIn > 0
-    ? Math.round(cruise.coinIn / 5)
-    : 0;
-  if (estimatedFromCoinIn > 0) return estimatedFromCoinIn;
-  return Math.round(Math.max(0, cruise.nights || 0) * 500);
+  return getBookedCruiseCasinoPoints(cruise);
 }
 
 function getCompletedBookedCruises(bookedCruises: BookedCruise[]): BookedCruise[] {
@@ -126,8 +121,8 @@ function getUpcomingBookedCruises(bookedCruises: BookedCruise[]): BookedCruise[]
 
 function calculateAveragePointsPerCruise(bookedCruises: BookedCruise[], fallbackPointsPerNight = 500): number {
   const cruisesWithActualPoints = bookedCruises
-    .map((cruise) => cruise.earnedPoints ?? cruise.casinoPoints ?? cruise.pointsEarned)
-    .filter((points): points is number => typeof points === 'number' && Number.isFinite(points) && points > 0);
+    .map(getBookedCruisePoints)
+    .filter((points): points is number => Number.isFinite(points) && points > 0);
   if (cruisesWithActualPoints.length > 0) {
     return cruisesWithActualPoints.reduce((sum, points) => sum + points, 0) / cruisesWithActualPoints.length;
   }

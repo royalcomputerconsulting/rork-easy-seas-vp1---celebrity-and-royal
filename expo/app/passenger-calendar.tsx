@@ -16,6 +16,7 @@ import { createDateFromString } from '@/lib/date';
 import { deriveCruiseDayPlan } from '@/lib/cruisePlanningIntelligence';
 import { filterRecordsByIntelligence } from '@/lib/intelligenceFilters';
 import { getNormalizedCruiseDateRange } from '@/lib/calendar/cruiseEvents';
+import { getBookedCruiseCasinoPoints } from '@/lib/casinoPointTruth';
 import type { BookedCruise, CalendarEvent, CasinoOffer } from '@/types/models';
 
 const DAY_COLORS = {
@@ -167,7 +168,7 @@ function buildPassengerDayItems(input: {
   });
 
   input.bookedCruises.forEach((cruise) => {
-    const points = cruise.earnedPoints || cruise.casinoPoints || 0;
+    const points = getBookedCruiseCasinoPoints(cruise);
     if (points <= 0) return;
     addItem({
       id: `tier-milestone-${cruise.id}`,

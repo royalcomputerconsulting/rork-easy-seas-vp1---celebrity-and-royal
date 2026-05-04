@@ -7,6 +7,8 @@ export const CONFIRMED_CLUB_ROYALE_2025_POINTS = 58680;
 export const CONFIRMED_CLUB_ROYALE_2025_COIN_IN = CONFIRMED_CLUB_ROYALE_2025_POINTS * DOLLARS_PER_POINT;
 export const CONFIRMED_CLUB_ROYALE_2025_WINNINGS_HOME = 19457;
 export const CONFIRMED_CLUB_ROYALE_2025_NET_CASH_RESULT = 15218.59;
+export const CONFIRMED_CLUB_ROYALE_2026_POINTS = 6660;
+export const CONFIRMED_CLUB_ROYALE_2026_COIN_IN = CONFIRMED_CLUB_ROYALE_2026_POINTS * DOLLARS_PER_POINT;
 export const CLUB_ROYALE_SIGNATURE_RETAIN_POINTS = 25000;
 export const DEFAULT_ESTIMATED_POINTS_PER_PLAY_HOUR = 400;
 
@@ -62,8 +64,8 @@ export const KNOWN_CURRENT_CLUB_ROYALE_CRUISES: KnownCasinoCruiseFact[] = [
   {
     shipName: 'Quantum of the Seas',
     sailDate: '2026-04-21',
-    returnDate: '2026-04-23',
-    nights: 2,
+    returnDate: '2026-04-24',
+    nights: 3,
     pointsEarned: 860,
     winningsBroughtHome: 3500,
     status: 'completed',
@@ -99,9 +101,47 @@ function isCompletedForCasino(cruise: BookedCruise, today: Date): boolean {
   return createDateFromString(cruise.returnDate).getTime() <= today.getTime();
 }
 
-function isRoyalCruise(cruise: BookedCruise): boolean {
-  const brand = (cruise.brand ?? '').toLowerCase();
-  return cruise.cruiseSource === 'royal' || brand.includes('royal') || isRoyalCaribbeanShip(cruise.shipName ?? '');
+export function isClubRoyaleCasinoCruise(cruise: Pick<BookedCruise, 'shipName' | 'sailDate' | 'brand' | 'cruiseSource' | 'casinoProgram' | 'programCharter' | 'nights' | 'pointsEarned' | 'earnedPoints' | 'casinoPoints' | 'coinIn' | 'winningsBroughtHome' | 'winnings' | 'totalWinnings' | 'cashResult' | 'offerCode' | 'offerName' | 'freePlay'>): boolean {
+  const brand = (cruise.brand ?? '').trim().toLowerCase();
+  const shipName = (cruise.shipName ?? '').trim().toLowerCase();
+  const programCharter = (cruise.programCharter ?? '').trim().toLowerCase();
+  const casinoProgram = cruise.casinoProgram;
+
+  if (getKnownCurrentClubRoyaleFact(cruise)) {
+    return true;
+  }
+
+  if (casinoProgram && casinoProgram !== 'clubRoyale') {
+    return false;
+  }
+
+  if (
+    cruise.cruiseSource === 'celebrity'
+    || brand.includes('celebrity')
+    || shipName.startsWith('celebrity ')
+    || brand.includes('virgin')
+    || shipName.includes('scarlet lady')
+    || shipName.includes('valiant lady')
+    || programCharter.includes('vacaya')
+  ) {
+    return false;
+  }
+
+  const isRoyal = cruise.cruiseSource === 'royal' || brand.includes('royal') || isRoyalCaribbeanShip(cruise.shipName ?? '');
+  if (!isRoyal) {
+    return false;
+  }
+
+  if (casinoProgram === 'clubRoyale') {
+    return true;
+  }
+
+  const explicitPoints = firstFiniteNumber(cruise.pointsEarned, cruise.earnedPoints, cruise.casinoPoints) ?? 0;
+  const loyaltyPointCeiling = Math.max(3, (cruise.nights ?? 0) * 3);
+  const hasCasinoVolume = (cruise.coinIn ?? 0) > 0 || (cruise.freePlay ?? 0) > 0 || Boolean(cruise.offerCode || cruise.offerName);
+  const hasCasinoResult = firstFiniteNumber(cruise.winningsBroughtHome, cruise.winnings, cruise.totalWinnings, cruise.cashResult) !== null;
+
+  return hasCasinoVolume || hasCasinoResult || explicitPoints > loyaltyPointCeiling;
 }
 
 export function getKnownCurrentClubRoyaleFact(cruise: Pick<BookedCruise, 'shipName' | 'sailDate'>): KnownCasinoCruiseFact | undefined {
@@ -109,14 +149,18 @@ export function getKnownCurrentClubRoyaleFact(cruise: Pick<BookedCruise, 'shipNa
 }
 
 export function getBookedCruiseCasinoPoints(cruise: BookedCruise): number {
-  const explicitPoints = firstFiniteNumber(cruise.pointsEarned, cruise.earnedPoints, cruise.casinoPoints);
-  if (explicitPoints !== null) {
-    return Math.round(explicitPoints);
-  }
-
   const knownFact = getKnownCurrentClubRoyaleFact(cruise);
   if (knownFact) {
     return knownFact.pointsEarned;
+  }
+
+  if (!isClubRoyaleCasinoCruise(cruise)) {
+    return 0;
+  }
+
+  const explicitPoints = firstFiniteNumber(cruise.pointsEarned, cruise.earnedPoints, cruise.casinoPoints);
+  if (explicitPoints !== null) {
+    return Math.round(explicitPoints);
   }
 
   const coinIn = firstFiniteNumber(cruise.coinIn);
@@ -128,18 +172,30 @@ export function getBookedCruiseCasinoPoints(cruise: BookedCruise): number {
 }
 
 export function getBookedCruiseWinningsBroughtHome(cruise: BookedCruise): number {
+  const knownFact = getKnownCurrentClubRoyaleFact(cruise);
+  if (knownFact) {
+    return knownFact.winningsBroughtHome;
+  }
+
+  if (!isClubRoyaleCasinoCruise(cruise)) {
+    return 0;
+  }
+
   const explicitWinnings = firstFiniteNumber(cruise.winningsBroughtHome, cruise.winnings, cruise.totalWinnings, cruise.netResult);
   if (explicitWinnings !== null) {
     return explicitWinnings;
   }
 
-  const knownFact = getKnownCurrentClubRoyaleFact(cruise);
-  return knownFact?.winningsBroughtHome ?? 0;
+  return 0;
 }
 
 export function normalizeCruiseCasinoPerformance(cruise: BookedCruise): BookedCruise {
   const knownFact = getKnownCurrentClubRoyaleFact(cruise);
   if (!knownFact) {
+    if (!isClubRoyaleCasinoCruise(cruise)) {
+      return cruise;
+    }
+
     const points = getBookedCruiseCasinoPoints(cruise);
     if (points <= 0) {
       return cruise;
@@ -153,8 +209,8 @@ export function normalizeCruiseCasinoPerformance(cruise: BookedCruise): BookedCr
     };
   }
 
-  const points = firstFiniteNumber(cruise.pointsEarned, cruise.earnedPoints, cruise.casinoPoints) ?? knownFact.pointsEarned;
-  const winnings = firstFiniteNumber(cruise.winningsBroughtHome, cruise.winnings, cruise.totalWinnings, cruise.netResult) ?? knownFact.winningsBroughtHome;
+  const points = knownFact.pointsEarned;
+  const winnings = knownFact.winningsBroughtHome;
 
   return {
     ...cruise,
@@ -175,7 +231,7 @@ export function normalizeCruiseCasinoPerformance(cruise: BookedCruise): BookedCr
     totalWinnings: winnings,
     netResult: winnings,
     calculationConfidence: knownFact.calculationConfidence,
-    notes: [cruise.notes, knownFact.notes, 'App-entered/current-season casino points are authoritative over Club Royale sync when there is a discrepancy.']
+    notes: [cruise.notes, knownFact.notes, 'Confirmed Club Royale season facts are authoritative for current-season casino points and win/loss.']
       .filter((note): note is string => Boolean(note))
       .join(' '),
   };
@@ -209,7 +265,7 @@ export function buildCurrentSeasonCasinoMetrics(cruises: BookedCruise[], today: 
     .map(normalizeCruiseCasinoPerformance)
     .filter((cruise) => {
       const sailDate = cruise.sailDate ?? '';
-      return isRoyalCruise(cruise)
+      return isClubRoyaleCasinoCruise(cruise)
         && isCompletedForCasino(cruise, today)
         && sailDate >= CURRENT_CLUB_ROYALE_SEASON_START
         && sailDate < CURRENT_CLUB_ROYALE_SEASON_END;

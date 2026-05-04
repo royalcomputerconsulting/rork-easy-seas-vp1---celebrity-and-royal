@@ -1,5 +1,6 @@
 import type { BookedCruise } from '@/types/models';
 import { DOLLARS_PER_POINT } from '@/types/models';
+import { getBookedCruiseCasinoPoints, getBookedCruiseWinningsBroughtHome } from '@/lib/casinoPointTruth';
 
 export interface HistoricalPerformanceMetrics {
   averagePointsPerNight: number;
@@ -56,9 +57,9 @@ export function calculateHistoricalPerformance(
   }
 
   const totalNights = completedCruises.reduce((sum, c) => sum + (c.nights || 0), 0);
-  const totalPoints = completedCruises.reduce((sum, c) => sum + (c.earnedPoints || c.casinoPoints || 0), 0);
+  const totalPoints = completedCruises.reduce((sum, c) => sum + getBookedCruiseCasinoPoints(c), 0);
   const totalCoinIn = totalPoints * DOLLARS_PER_POINT;
-  const totalWinnings = completedCruises.reduce((sum, c) => sum + (c.winnings || 0), 0);
+  const totalWinnings = completedCruises.reduce((sum, c) => sum + getBookedCruiseWinningsBroughtHome(c), 0);
 
   const averagePointsPerNight = totalNights > 0 ? totalPoints / totalNights : 0;
   const averagePointsPerCruise = totalPoints / completedCruises.length;
@@ -69,8 +70,8 @@ export function calculateHistoricalPerformance(
   const cruisesWithROI = completedCruises.map(cruise => {
     const retailValue = cruise.retailValue || 0;
     const amountPaid = cruise.totalPrice || cruise.price || 0;
-    const winnings = cruise.winnings || 0;
-    const points = cruise.earnedPoints || cruise.casinoPoints || 0;
+    const winnings = getBookedCruiseWinningsBroughtHome(cruise);
+    const points = getBookedCruiseCasinoPoints(cruise);
     const coinIn = points * DOLLARS_PER_POINT;
 
     const roi = amountPaid > 0 
@@ -227,7 +228,7 @@ export function calculateCostPerPoint(completedCruises: BookedCruise[]): {
 
   const costPerPointValues = completedCruises
     .map(cruise => {
-      const points = cruise.earnedPoints || cruise.casinoPoints || 0;
+      const points = getBookedCruiseCasinoPoints(cruise);
       const amountPaid = cruise.totalPrice || cruise.price || 0;
       return points > 0 ? amountPaid / points : 0;
     })

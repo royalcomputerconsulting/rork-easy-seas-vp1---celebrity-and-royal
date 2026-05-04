@@ -15,6 +15,7 @@ import { ADMIN_EMAILS, useAuth } from '@/state/AuthProvider';
 import { useUser, DEFAULT_PLAYING_HOURS } from '@/state/UserProvider';
 
 import { getCasinoStatusBadge, calculatePersonalizedPlayEstimate, PersonalizedPlayEstimate, PlayingHoursConfig, type CasinoAvailability } from '@/lib/casinoAvailability';
+import { getBookedCruiseCasinoPoints } from '@/lib/casinoPointTruth';
 import { getEstimatedCabinPrices } from '@/lib/valueCalculator';
 import { getUniqueImageForCruise, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
 import {
@@ -654,7 +655,7 @@ export default function CruiseDetailsScreen() {
     let cruisesWithPoints = 0;
 
     completedCruises.forEach((c: BookedCruise) => {
-      const points = c.earnedPoints || c.casinoPoints || 0;
+      const points = getBookedCruiseCasinoPoints(c);
       if (points > 0) {
         totalPoints += points;
         totalNights += c.nights || 0;

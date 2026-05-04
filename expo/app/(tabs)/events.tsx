@@ -12,6 +12,7 @@ import { createDateFromString } from '@/lib/date';
 import { CrewRecognitionSection } from '@/components/crew-recognition/CrewRecognitionSection';
 import { TimeZoneConverter } from '@/components/TimeZoneConverter';
 import { getCalendarEventsWithGeneratedCruiseEvents, getNormalizedCruiseDateRange } from '@/lib/calendar/cruiseEvents';
+import { getBookedCruiseCasinoPoints } from '@/lib/casinoPointTruth';
 import { ResponsiveContainer } from '@/components/ResponsiveContainer';
 import { useCertificates } from '@/state/CertificatesProvider';
 import { IntelligenceFilterStrip } from '@/components/IntelligenceFilterStrip';
@@ -574,7 +575,7 @@ export default function EventsScreen() {
     });
 
     normalizedBookedCruises.forEach((cruise) => {
-      const points = cruise.earnedPoints || cruise.casinoPoints || 0;
+      const points = getBookedCruiseCasinoPoints(cruise);
       if (points <= 0) return;
       addItem({
         id: `tier-milestone-${cruise.id}`,

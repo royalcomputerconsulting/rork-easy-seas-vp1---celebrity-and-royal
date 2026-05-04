@@ -59,6 +59,7 @@ import { IntelligenceFilterStrip } from '@/components/IntelligenceFilterStrip';
 import { useIntelligenceFilters } from '@/state/IntelligenceFiltersProvider';
 import { filterRecordsByIntelligence } from '@/lib/intelligenceFilters';
 import { buildCruiseEconomicsSummary } from '@/lib/casinoCruiseEconomics';
+import { getBookedCruiseCasinoPoints } from '@/lib/casinoPointTruth';
 import { CONFIRMED_CLUB_ROYALE_2025_POINTS, isKnownCasinoProfile } from '@/lib/knownProfileFallback';
 import { applyKnownBookingCorrections, findOverlappingBookedCruises } from '@/lib/cruiseOverlapGuards';
 import { isActiveBookedCruise, isCompletedBookedCruise } from '@/lib/bookedCruiseStatus';
@@ -259,7 +260,7 @@ export default function BookedScreen() {
     const completed = activeCruises.filter(c => isCruiseCompleted(c)).length;
     const withData = activeCruises.filter(c => c.price && c.price > 0).length;
     const totalNights = crownAnchorPoints;
-    const totalPoints = activeCruises.reduce((sum, c) => sum + (c.earnedPoints || c.casinoPoints || 0), 0);
+    const totalPoints = activeCruises.reduce((sum, c) => sum + getBookedCruiseCasinoPoints(c), 0);
     const totalSpent = activeCruises.reduce((sum, c) => sum + (c.totalPrice || c.price || 0), 0);
     return { upcoming, completed, withData, total: activeCruises.length, totalNights, totalPoints, totalSpent };
   }, [bookedCruises, crownAnchorPoints]);
@@ -480,7 +481,7 @@ export default function BookedScreen() {
           ) : (
             <View style={styles.timelineVerticalList}>
               {completedCruises.map((cruise, index) => {
-                const points = cruise.earnedPoints || cruise.casinoPoints || 0;
+                const points = getBookedCruiseCasinoPoints(cruise);
                 return (
                   <View key={getBookedCruiseRenderKey(cruise, index)} style={styles.timelineItemWrapper}>
                     {points > 0 && (

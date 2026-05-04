@@ -1,5 +1,6 @@
 import { findRetailValueByShipAndDate, getKnownRetailValue } from '@/constants/knownRetailValues';
 import { findReceiptByShipAndDate } from '@/constants/receiptData';
+import { getBookedCruiseCasinoPoints } from '@/lib/casinoPointTruth';
 import type { Cruise, CasinoOffer, BookedCruise, CasinoPayTable } from '@/types/models';
 
 const CABIN_BASE_PRICES: Record<string, number> = {
@@ -653,7 +654,7 @@ export function calculatePortfolioValue(
     totalValueReceived += breakdown.totalValueReceived;
     totalWinnings += breakdown.casinoWinnings;
     
-    const points = cruise.earnedPoints || cruise.casinoPoints || 0;
+    const points = getBookedCruiseCasinoPoints(cruise);
     totalPoints += points;
   });
   
