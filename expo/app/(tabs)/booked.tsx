@@ -44,7 +44,7 @@ import { useAuth } from '@/state/AuthProvider';
 import { MinimalistFilterBar } from '@/components/ui/MinimalistFilterBar';
 import { createDateFromString } from '@/lib/date';
 import { CruiseCard } from '@/components/CruiseCard';
-import type { BookedCruise } from '@/types/models';
+import { DOLLARS_PER_POINT, type BookedCruise } from '@/types/models';
 import { dedupeBookedCruises } from '@/lib/dataIdentity';
 import { AddBookedCruiseModal } from '@/components/AddBookedCruiseModal';
 import { MarineAlertsPanel } from '@/components/MarineAlertsPanel';
@@ -59,6 +59,7 @@ import { IntelligenceFilterStrip } from '@/components/IntelligenceFilterStrip';
 import { useIntelligenceFilters } from '@/state/IntelligenceFiltersProvider';
 import { filterRecordsByIntelligence } from '@/lib/intelligenceFilters';
 import { buildCruiseEconomicsSummary } from '@/lib/casinoCruiseEconomics';
+import { CONFIRMED_CLUB_ROYALE_2025_POINTS, isKnownCasinoProfile } from '@/lib/knownProfileFallback';
 import { applyKnownBookingCorrections, findOverlappingBookedCruises } from '@/lib/cruiseOverlapGuards';
 import { isActiveBookedCruise, isCompletedBookedCruise } from '@/lib/bookedCruiseStatus';
 
@@ -247,6 +248,7 @@ export default function BookedScreen() {
 
   const currentYearPoints = clubRoyaleCurrentYearPoints;
   const historicalPoints = casinoAnalytics.historicalPointsEarned || clubRoyaleHistoricalPoints;
+  const usesKnownCasinoProfile = isKnownCasinoProfile(authenticatedEmail);
   const clubRoyaleTier = loyaltyClubRoyaleTier || clubRoyaleProfile?.tier || 'Choice';
   const clubRoyaleTierColor = getClubRoyaleTierColor(clubRoyaleTier);
   const casinoCardTheme = useMemo(() => createLoyaltyCardTheme(clubRoyaleTierColor), [clubRoyaleTierColor]);
@@ -267,39 +269,53 @@ export default function BookedScreen() {
     return buildCruiseEconomicsSummary(activeCruises, new Date(), { scope: 'allCruises' });
   }, [bookedCruises]);
 
+  const gamingActivitySummary = useMemo(() => {
+    return buildCruiseEconomicsSummary(bookedCruises, new Date(), {
+      useKnownAnnualReportFacts: usesKnownCasinoProfile,
+      minimumTotalPoints: usesKnownCasinoProfile ? CONFIRMED_CLUB_ROYALE_2025_POINTS : undefined,
+      pointsAdjustmentNote: 'Historical Club Royale points use the confirmed 58,680-point 2025 season floor when imported per-cruise rows do not contain every point transaction.',
+    });
+  }, [bookedCruises, usesKnownCasinoProfile]);
+
   const casinoStats = useMemo(() => {
-    const scopedCruiseCount = cruiseEconomicsSummary.totals.cruises;
-    const totalCoinIn = cruiseEconomicsSummary.totals.totalCoinIn || casinoAnalytics.totalCoinIn || 0;
-    const totalCashResult = cruiseEconomicsSummary.totals.totalCashResult;
+    const gamingCruiseCount = gamingActivitySummary.totals.cruises;
+    const portfolioCruiseCount = cruiseEconomicsSummary.totals.cruises;
+    const historicalCoinInFromPoints = historicalPoints > 0 ? historicalPoints * DOLLARS_PER_POINT : 0;
+    const totalCoinIn = gamingActivitySummary.totals.totalCoinIn || casinoAnalytics.totalCoinIn || historicalCoinInFromPoints;
+    const totalCashResult = gamingActivitySummary.totals.totalCashResult || cruiseEconomicsSummary.totals.totalCashResult;
     const totalRetailValue = cruiseEconomicsSummary.totals.totalRetailValue;
     const totalPaid = cruiseEconomicsSummary.totals.totalPaid;
     const totalCruiseValueCaptured = cruiseEconomicsSummary.totals.totalCruiseValueCaptured;
     const totalEconomicValue = cruiseEconomicsSummary.totals.totalEconomicValue;
 
-    console.log('[Booked] Casino stats calculated from annual economics summary:', {
-      scopedCruiseCount,
+    console.log('[Booked] Casino stats calculated with shared gaming activity summary:', {
+      gamingCruiseCount,
+      portfolioCruiseCount,
+      historicalPoints,
+      historicalCoinInFromPoints,
       totalRetailValue,
       totalPaid,
       totalCruiseValueCaptured,
       totalCashResult,
       totalEconomicValue,
       totalCoinIn,
-      hasEstimates: cruiseEconomicsSummary.totals.hasEstimates,
+      gamingTotalCoinIn: gamingActivitySummary.totals.totalCoinIn,
+      hasEstimates: gamingActivitySummary.totals.hasEstimates || cruiseEconomicsSummary.totals.hasEstimates,
     });
 
     return {
       totalCoinIn,
       netResult: totalCashResult,
-      avgCoinInPerCruise: scopedCruiseCount > 0 ? totalCoinIn / scopedCruiseCount : casinoAnalytics.avgCoinInPerCruise,
-      avgCashResultPerCruise: scopedCruiseCount > 0 ? totalCashResult / scopedCruiseCount : 0,
+      avgCoinInPerCruise: gamingCruiseCount > 0 ? totalCoinIn / gamingCruiseCount : casinoAnalytics.avgCoinInPerCruise,
+      avgCashResultPerCruise: gamingCruiseCount > 0 ? totalCashResult / gamingCruiseCount : 0,
       totalRetailValue,
       totalPaid,
       totalCruiseValueCaptured,
       totalEconomicValue,
-      completedCount: scopedCruiseCount,
-      hasEstimates: cruiseEconomicsSummary.totals.hasEstimates,
+      completedCount: gamingCruiseCount || portfolioCruiseCount,
+      hasEstimates: gamingActivitySummary.totals.hasEstimates || cruiseEconomicsSummary.totals.hasEstimates,
     };
-  }, [casinoAnalytics.avgCoinInPerCruise, casinoAnalytics.totalCoinIn, cruiseEconomicsSummary]);
+  }, [casinoAnalytics.avgCoinInPerCruise, casinoAnalytics.totalCoinIn, cruiseEconomicsSummary, gamingActivitySummary, historicalPoints]);
 
   const overlapWarningsByCruiseId = useMemo(() => {
     const warnings = findOverlappingBookedCruises(bookedCruises);

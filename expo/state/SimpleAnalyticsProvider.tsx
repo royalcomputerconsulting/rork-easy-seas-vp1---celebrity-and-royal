@@ -3,6 +3,7 @@ import createContextHook from "@nkzw/create-context-hook";
 import type { AnalyticsData, BookedCruise, Cruise, CasinoOffer } from "@/types/models";
 import { useCoreData } from "./CoreDataProvider";
 import { useLoyalty } from "./LoyaltyProvider";
+import { useAuth } from "./AuthProvider";
 import { 
   calculateCruiseValue, 
   calculateOfferValue, 
@@ -15,6 +16,7 @@ import {
   type CruiseCasinoSummary 
 } from "@/lib/casinoAvailability";
 import { buildCruiseEconomicsSummary } from "@/lib/casinoCruiseEconomics";
+import { CONFIRMED_CLUB_ROYALE_2025_POINTS, isKnownCasinoProfile } from "@/lib/knownProfileFallback";
 
 export interface CasinoAnalytics {
   totalCoinIn: number;
@@ -112,6 +114,8 @@ const DOLLARS_PER_POINT = 5;
 
 export const [SimpleAnalyticsProvider, useSimpleAnalytics] = createContextHook((): SimpleAnalyticsState => {
   const { bookedCruises: storedBookedCruises, cruises, casinoOffers, isLoading } = useCoreData();
+  const { authenticatedEmail } = useAuth();
+  const usesKnownCasinoProfile = isKnownCasinoProfile(authenticatedEmail);
   const {
     clubRoyalePoints: loyaltyClubRoyalePoints,
     clubRoyaleTier: loyaltyClubRoyaleTier,
@@ -148,7 +152,11 @@ export const [SimpleAnalyticsProvider, useSimpleAnalytics] = createContextHook((
 
   const casinoAnalytics = useMemo((): CasinoAnalytics => {
     const currentPointBalance = loyaltyClubRoyalePoints || 0;
-    const economicsSummary = buildCruiseEconomicsSummary(bookedCruises);
+    const economicsSummary = buildCruiseEconomicsSummary(bookedCruises, new Date(), {
+      useKnownAnnualReportFacts: usesKnownCasinoProfile,
+      minimumTotalPoints: usesKnownCasinoProfile ? CONFIRMED_CLUB_ROYALE_2025_POINTS : undefined,
+      pointsAdjustmentNote: 'Historical Club Royale points use the confirmed 58,680-point 2025 season floor when imported per-cruise rows do not contain every point transaction.',
+    });
     const hasEconomicsRows = economicsSummary.rows.length > 0;
     let cruisePointsSum = 0;
     let totalWinnings = 0;
@@ -215,6 +223,7 @@ export const [SimpleAnalyticsProvider, useSimpleAnalytics] = createContextHook((
     clubRoyalePointsSource,
     clubRoyaleSeasonStartDate,
     completedCruises,
+    usesKnownCasinoProfile,
     loyaltyClubRoyalePoints,
     loyaltyClubRoyaleTier,
   ]);
