@@ -20,11 +20,15 @@ import {
   X,
 } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
+import { getPlayerCardTheme, type SupportedBrand } from '@/constants/loyaltyTheme';
+import { getCelebrityCaptainsClubLevelByPoints } from '@/constants/celebrityCaptainsClub';
+import { getSilverseaTierByDays } from '@/constants/silverseaVenetianSociety';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { useUser } from '@/state/UserProvider';
 import { useCertificates } from '@/state/CertificatesProvider';
 import { useAgentX } from '@/state/AgentXProvider';
 import { useIntelligenceFilters } from '@/state/IntelligenceFiltersProvider';
+import { useLoyalty } from '@/state/LoyaltyProvider';
 import { IntelligenceFilterStrip } from '@/components/IntelligenceFilterStrip';
 import { filterRecordsByIntelligence, getRecordOwnerLabel } from '@/lib/intelligenceFilters';
 import {
@@ -199,12 +203,18 @@ function offerIsInactive(offer: CasinoOffer): boolean {
   return status === 'archived' || status === 'skipped' || status === 'replaced' || archiveStatus === 'archived' || archiveStatus === 'replaced';
 }
 
+function resolveThemeBrand(selectedBrand: string, preferredBrand?: SupportedBrand): SupportedBrand {
+  if (selectedBrand === 'royal' || selectedBrand === 'celebrity' || selectedBrand === 'silversea' || selectedBrand === 'carnival') return selectedBrand;
+  return preferredBrand ?? 'royal';
+}
+
 export default function CommandCenterScreen() {
   const router = useRouter();
   const { cruises, casinoOffers, updateCasinoOffer } = useCoreData();
   const { users, currentUser } = useUser();
   const { certificates, updateCertificate } = useCertificates();
   const { selectedProfileId, selectedBrand, selectedProgram } = useIntelligenceFilters();
+  const { crownAnchorLevel, captainsClub } = useLoyalty();
   const {
     sendMessage,
     setMode: setAgentMode,
@@ -217,6 +227,31 @@ export default function CommandCenterScreen() {
     selectedBrand,
     selectedProgram,
   }), [selectedBrand, selectedProfileId, selectedProgram]);
+
+  const themeBrand = useMemo(() => resolveThemeBrand(selectedBrand, currentUser?.preferredBrand), [currentUser?.preferredBrand, selectedBrand]);
+  const hasRoyalPinnacleReciprocity = crownAnchorLevel === 'Pinnacle' || captainsClub.tier === 'Zenith';
+  const celebrityLevel = useMemo(() => (
+    hasRoyalPinnacleReciprocity ? 'Zenith' : getCelebrityCaptainsClubLevelByPoints(currentUser?.celebrityCaptainsClubPoints ?? captainsClub.points ?? 0)
+  ), [captainsClub.points, currentUser?.celebrityCaptainsClubPoints, hasRoyalPinnacleReciprocity]);
+  const silverseaTier = useMemo(() => currentUser?.silverseaVenetianTier || getSilverseaTierByDays(currentUser?.silverseaVenetianPoints ?? 0), [currentUser?.silverseaVenetianPoints, currentUser?.silverseaVenetianTier]);
+  const playerCardTheme = useMemo(() => getPlayerCardTheme({
+    brand: themeBrand,
+    crownAnchorLevel: crownAnchorLevel || currentUser?.crownAnchorLevel,
+    celebrityLevel,
+    silverseaTier,
+    carnivalVifpTier: currentUser?.carnivalVifpTier || 'Blue',
+  }), [celebrityLevel, crownAnchorLevel, currentUser?.carnivalVifpTier, currentUser?.crownAnchorLevel, silverseaTier, themeBrand]);
+  const themed = useMemo(() => ({
+    headerIcon: { backgroundColor: playerCardTheme.surfaceColor, borderColor: playerCardTheme.borderColor },
+    closeButton: { backgroundColor: playerCardTheme.surfaceColor, borderColor: playerCardTheme.borderColor },
+    topText: { color: playerCardTheme.topTextColor },
+    secondaryText: { color: playerCardTheme.secondaryTextColor },
+    accentText: { color: playerCardTheme.accentColor },
+    card: { backgroundColor: playerCardTheme.surfaceColor, borderColor: playerCardTheme.borderColor },
+    mutedCard: { backgroundColor: playerCardTheme.surfaceColorMuted, borderColor: playerCardTheme.borderColor },
+    activeChip: { backgroundColor: playerCardTheme.accentColor, borderColor: playerCardTheme.accentColor },
+    primaryAction: { backgroundColor: playerCardTheme.accentColor },
+  }), [playerCardTheme]);
 
   const filteredOffers = useMemo(() => filterRecordsByIntelligence(casinoOffers, filterSnapshot, users), [casinoOffers, filterSnapshot, users]);
   const filteredCruises = useMemo(() => filterRecordsByIntelligence(cruises, filterSnapshot, users), [cruises, filterSnapshot, users]);
@@ -316,45 +351,44 @@ export default function CommandCenterScreen() {
   const renderOfferItem = useCallback((item: CommandCenterOffer) => {
     const offer = item.offer;
     const ownerLabel = getRecordOwnerLabel(offer, users);
-    const isArchived = offer.status === 'archived' || offer.archiveStatus === 'archived';
     const isInactive = offerIsInactive(offer);
     const reviewFlags = getOfferReviewFlags(item);
     return (
-      <View key={offer.id} style={styles.itemCard} testID={`command-center-offer-${offer.id}`}>
+      <View key={offer.id} style={[styles.itemCard, themed.mutedCard]} testID={`command-center-offer-${offer.id}`}>
         <View style={styles.itemTopRow}>
-          <View style={styles.scorePill}>
-            <Gauge size={15} color="#A7F3D0" />
-            <Text style={styles.scoreText}>{item.intelligence.score}</Text>
+          <View style={[styles.scorePill, themed.card]}>
+            <Gauge size={15} color={playerCardTheme.accentColor} />
+            <Text style={[styles.scoreText, themed.topText]}>{item.intelligence.score}</Text>
           </View>
           <View style={styles.itemCopy}>
-            <Text style={styles.itemTitle}>{getOfferDisplayName(offer)}</Text>
-            <Text style={styles.itemMeta}>{getOfferDisplayCode(offer)} • {ownerLabel} • {item.intelligence.rating}</Text>
+            <Text style={[styles.itemTitle, themed.topText]}>{getOfferDisplayName(offer)}</Text>
+            <Text style={[styles.itemMeta, themed.secondaryText]}>{getOfferDisplayCode(offer)} • {ownerLabel} • {item.intelligence.rating}</Text>
           </View>
         </View>
-        <Text style={styles.itemExplanation}>{item.intelligence.explanation}</Text>
+        <Text style={[styles.itemExplanation, themed.secondaryText]}>{item.intelligence.explanation}</Text>
         <View style={styles.detailGrid}>
-          <View style={styles.detailPill}>
-            <UserRound size={12} color="#BAE6FD" />
-            <Text style={styles.detailText}>{ownerLabel}</Text>
+          <View style={[styles.detailPill, themed.card]}>
+            <UserRound size={12} color={playerCardTheme.accentColor} />
+            <Text style={[styles.detailText, themed.topText]}>{ownerLabel}</Text>
           </View>
-          <View style={styles.detailPill}>
-            <CalendarDays size={12} color="#BAE6FD" />
-            <Text style={styles.detailText}>{getOfferExpirationLabel(item)}</Text>
+          <View style={[styles.detailPill, themed.card]}>
+            <CalendarDays size={12} color={playerCardTheme.accentColor} />
+            <Text style={[styles.detailText, themed.topText]}>{getOfferExpirationLabel(item)}</Text>
           </View>
-          <View style={styles.detailPill}>
-            <Ship size={12} color="#BAE6FD" />
-            <Text style={styles.detailText}>{getOfferBrandProgramLabel(offer)}</Text>
+          <View style={[styles.detailPill, themed.card]}>
+            <Ship size={12} color={playerCardTheme.accentColor} />
+            <Text style={[styles.detailText, themed.topText]}>{getOfferBrandProgramLabel(offer)}</Text>
           </View>
-          <View style={styles.detailPill}>
-            <Ticket size={12} color="#BAE6FD" />
-            <Text style={styles.detailText}>{getOfferCabinLabel(offer)}</Text>
+          <View style={[styles.detailPill, themed.card]}>
+            <Ticket size={12} color={playerCardTheme.accentColor} />
+            <Text style={[styles.detailText, themed.topText]}>{getOfferCabinLabel(offer)}</Text>
           </View>
         </View>
-        <View style={styles.strategyBox}>
-          <Text style={styles.strategyLabel}>Best remaining use</Text>
-          <Text style={styles.strategyText}>{getBestRemainingUse(item)}</Text>
-          <Text style={styles.strategyLabel}>Suggested action</Text>
-          <Text style={styles.strategyText}>{getSuggestedOfferAction(item)}</Text>
+        <View style={[styles.strategyBox, themed.card]}>
+          <Text style={[styles.strategyLabel, themed.accentText]}>Best remaining use</Text>
+          <Text style={[styles.strategyText, themed.secondaryText]}>{getBestRemainingUse(item)}</Text>
+          <Text style={[styles.strategyLabel, themed.accentText]}>Suggested action</Text>
+          <Text style={[styles.strategyText, themed.secondaryText]}>{getSuggestedOfferAction(item)}</Text>
         </View>
         {reviewFlags.length > 0 ? (
           <View style={styles.flagWrap}>
@@ -366,164 +400,164 @@ export default function CommandCenterScreen() {
           </View>
         ) : null}
         <View style={styles.valueRow}>
-          <View style={styles.valuePill}>
-            <Text style={styles.valueLabel}>Casino covers</Text>
-            <Text style={styles.valueText}>{formatCurrency(item.intelligence.casinoPaysFor.casinoCoveredValue)}</Text>
+          <View style={[styles.valuePill, themed.card]}>
+            <Text style={[styles.valueLabel, themed.secondaryText]}>Casino covers</Text>
+            <Text style={[styles.valueText, themed.topText]}>{formatCurrency(item.intelligence.casinoPaysFor.casinoCoveredValue)}</Text>
           </View>
-          <View style={styles.valuePill}>
-            <Text style={styles.valueLabel}>Out of pocket</Text>
-            <Text style={styles.valueText}>{formatCurrency(item.intelligence.casinoPaysFor.userOutOfPocket)}</Text>
+          <View style={[styles.valuePill, themed.card]}>
+            <Text style={[styles.valueLabel, themed.secondaryText]}>Out of pocket</Text>
+            <Text style={[styles.valueText, themed.topText]}>{formatCurrency(item.intelligence.casinoPaysFor.userOutOfPocket)}</Text>
           </View>
         </View>
         <View style={styles.actionGrid}>
-          <TouchableOpacity style={styles.primaryAction} onPress={() => handleViewOffer(offer)} testID={`command-center-view-${offer.id}`}>
+          <TouchableOpacity style={[styles.primaryAction, themed.primaryAction]} onPress={() => handleViewOffer(offer)} testID={`command-center-view-${offer.id}`}>
             <Text style={styles.primaryActionText}>View</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.primaryAction} onPress={() => handleDecodeOffer(offer)} testID={`command-center-decode-${offer.id}`}>
+          <TouchableOpacity style={[styles.primaryAction, themed.primaryAction]} onPress={() => handleDecodeOffer(offer)} testID={`command-center-decode-${offer.id}`}>
             <Text style={styles.primaryActionText}>Decode</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.secondaryAction} onPress={() => handleCompareOffer(offer)} testID={`command-center-compare-${offer.id}`}>
-            <Calculator size={13} color="#CBD5E1" />
-            <Text style={styles.secondaryActionText}>Compare</Text>
+          <TouchableOpacity style={[styles.secondaryAction, themed.card]} onPress={() => handleCompareOffer(offer)} testID={`command-center-compare-${offer.id}`}>
+            <Calculator size={13} color={playerCardTheme.accentColor} />
+            <Text style={[styles.secondaryActionText, themed.topText]}>Compare</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.secondaryAction} onPress={() => handleAskAgentX(offer)} testID={`command-center-ask-${offer.id}`}>
-            <Bot size={13} color="#CBD5E1" />
-            <Text style={styles.secondaryActionText}>Ask My Data</Text>
+          <TouchableOpacity style={[styles.secondaryAction, themed.card]} onPress={() => handleAskAgentX(offer)} testID={`command-center-ask-${offer.id}`}>
+            <Bot size={13} color={playerCardTheme.accentColor} />
+            <Text style={[styles.secondaryActionText, themed.topText]}>Ask My Data</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.secondaryAction} onPress={() => handleKeepActiveOffer(offer)} testID={`command-center-keep-${offer.id}`}>
-            <ShieldCheck size={13} color="#CBD5E1" />
-            <Text style={styles.secondaryActionText}>Keep Active</Text>
+          <TouchableOpacity style={[styles.secondaryAction, themed.card]} onPress={() => handleKeepActiveOffer(offer)} testID={`command-center-keep-${offer.id}`}>
+            <ShieldCheck size={13} color={playerCardTheme.accentColor} />
+            <Text style={[styles.secondaryActionText, themed.topText]}>Keep Active</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.secondaryAction} onPress={() => (isInactive ? handleRestoreOffer(offer) : handleArchiveOffer(offer))} testID={`command-center-archive-restore-${offer.id}`}>
-            {isInactive ? <RotateCcw size={13} color="#CBD5E1" /> : <Archive size={13} color="#CBD5E1" />}
-            <Text style={styles.secondaryActionText}>{isInactive ? 'Restore' : 'Archive'}</Text>
+          <TouchableOpacity style={[styles.secondaryAction, themed.card]} onPress={() => (isInactive ? handleRestoreOffer(offer) : handleArchiveOffer(offer))} testID={`command-center-archive-restore-${offer.id}`}>
+            {isInactive ? <RotateCcw size={13} color={playerCardTheme.accentColor} /> : <Archive size={13} color={playerCardTheme.accentColor} />}
+            <Text style={[styles.secondaryActionText, themed.topText]}>{isInactive ? 'Restore' : 'Archive'}</Text>
           </TouchableOpacity>
           {!isInactive ? (
-            <TouchableOpacity style={styles.secondaryAction} onPress={() => handleSkipOffer(offer)} testID={`command-center-skip-${offer.id}`}>
-              <CheckCircle2 size={13} color="#CBD5E1" />
-              <Text style={styles.secondaryActionText}>Mark Skipped</Text>
+            <TouchableOpacity style={[styles.secondaryAction, themed.card]} onPress={() => handleSkipOffer(offer)} testID={`command-center-skip-${offer.id}`}>
+              <CheckCircle2 size={13} color={playerCardTheme.accentColor} />
+              <Text style={[styles.secondaryActionText, themed.topText]}>Mark Skipped</Text>
             </TouchableOpacity>
           ) : null}
         </View>
       </View>
     );
-  }, [handleArchiveOffer, handleAskAgentX, handleCompareOffer, handleDecodeOffer, handleKeepActiveOffer, handleRestoreOffer, handleSkipOffer, handleViewOffer, users]);
+  }, [handleArchiveOffer, handleAskAgentX, handleCompareOffer, handleDecodeOffer, handleKeepActiveOffer, handleRestoreOffer, handleSkipOffer, handleViewOffer, playerCardTheme.accentColor, themed, users]);
 
   const renderOfferBucket = useCallback((bucket: OfferManagementBucket) => (
-    <View key={bucket.id} style={styles.bucketCard} testID={`command-center-bucket-${bucket.id}`}>
+    <View key={bucket.id} style={[styles.bucketCard, themed.card]} testID={`command-center-bucket-${bucket.id}`}>
       <View style={styles.bucketHeader}>
-        <View>
-          <Text style={styles.bucketTitle}>{bucket.title}</Text>
-          <Text style={styles.bucketSubtitle}>{bucket.subtitle}</Text>
+        <View style={styles.bucketCopy}>
+          <Text style={[styles.bucketTitle, themed.topText]}>{bucket.title}</Text>
+          <Text style={[styles.bucketSubtitle, themed.secondaryText]}>{bucket.subtitle}</Text>
         </View>
-        <Text style={styles.bucketCount}>{bucket.offers.length}</Text>
+        <Text style={[styles.bucketCount, themed.mutedCard, themed.accentText]}>{bucket.offers.length}</Text>
       </View>
       {bucket.offers.map(renderOfferItem)}
     </View>
-  ), [renderOfferItem]);
+  ), [renderOfferItem, themed]);
 
   const renderCertificateItem = useCallback((certificate: CertificateReviewItem) => (
-    <View key={certificate.id} style={styles.certificateCard} testID={`command-center-certificate-${certificate.id}`}>
+    <View key={certificate.id} style={[styles.certificateCard, themed.mutedCard]} testID={`command-center-certificate-${certificate.id}`}>
       <View style={styles.itemTopRow}>
-        <View style={styles.certificateIconWrap}>
-          <Ticket size={17} color="#FDE68A" />
+        <View style={[styles.certificateIconWrap, themed.card]}>
+          <Ticket size={17} color={playerCardTheme.accentColor} />
         </View>
         <View style={styles.itemCopy}>
-          <Text style={styles.itemTitle}>{certificate.label || 'Certificate'}</Text>
-          <Text style={styles.itemMeta}>{certificate.type} • {getCertificateExpiryLabel(certificate)} • {formatCurrency(certificate.value)}</Text>
+          <Text style={[styles.itemTitle, themed.topText]}>{certificate.label || 'Certificate'}</Text>
+          <Text style={[styles.itemMeta, themed.secondaryText]}>{certificate.type} • {getCertificateExpiryLabel(certificate)} • {formatCurrency(certificate.value)}</Text>
         </View>
       </View>
-      <Text style={styles.itemExplanation}>{certificate.description || 'Review certificate owner, expiration, cabin entitlement, and stackability before applying it to a sailing.'}</Text>
+      <Text style={[styles.itemExplanation, themed.secondaryText]}>{certificate.description || 'Review certificate owner, expiration, cabin entitlement, and stackability before applying it to a sailing.'}</Text>
       <View style={styles.detailGrid}>
-        <View style={styles.detailPill}>
-          <UserRound size={12} color="#BAE6FD" />
-          <Text style={styles.detailText}>{getRecordOwnerLabel(certificate, users)}</Text>
+        <View style={[styles.detailPill, themed.card]}>
+          <UserRound size={12} color={playerCardTheme.accentColor} />
+          <Text style={[styles.detailText, themed.topText]}>{getRecordOwnerLabel(certificate, users)}</Text>
         </View>
-        <View style={styles.detailPill}>
-          <CalendarDays size={12} color="#BAE6FD" />
-          <Text style={styles.detailText}>{getCertificateExpiryLabel(certificate)}</Text>
+        <View style={[styles.detailPill, themed.card]}>
+          <CalendarDays size={12} color={playerCardTheme.accentColor} />
+          <Text style={[styles.detailText, themed.topText]}>{getCertificateExpiryLabel(certificate)}</Text>
         </View>
-        <View style={styles.detailPill}>
-          <Ship size={12} color="#BAE6FD" />
-          <Text style={styles.detailText}>{certificate.casinoProgram || 'Program not set'}</Text>
+        <View style={[styles.detailPill, themed.card]}>
+          <Ship size={12} color={playerCardTheme.accentColor} />
+          <Text style={[styles.detailText, themed.topText]}>{certificate.casinoProgram || 'Program not set'}</Text>
         </View>
-        <View style={styles.detailPill}>
-          <Ticket size={12} color="#BAE6FD" />
-          <Text style={styles.detailText}>{certificate.cabinEntitlement || certificate.offerCode || 'No cabin/offer link'}</Text>
+        <View style={[styles.detailPill, themed.card]}>
+          <Ticket size={12} color={playerCardTheme.accentColor} />
+          <Text style={[styles.detailText, themed.topText]}>{certificate.cabinEntitlement || certificate.offerCode || 'No cabin/offer link'}</Text>
         </View>
       </View>
-      <View style={styles.strategyBox}>
-        <Text style={styles.strategyLabel}>Best remaining use</Text>
-        <Text style={styles.strategyText}>Use only when the certificate improves cabin entitlement, upgrade cost, OBC, FreePlay, or out-of-pocket math.</Text>
-        <Text style={styles.strategyLabel}>Suggested action</Text>
-        <Text style={styles.strategyText}>{certificate.expiryDate && getDaysUntil(certificate.expiryDate) < 0 ? 'Keep for history or mark expired.' : 'Ask My Data or verify stackability before applying it to a sailing.'}</Text>
+      <View style={[styles.strategyBox, themed.card]}>
+        <Text style={[styles.strategyLabel, themed.accentText]}>Best remaining use</Text>
+        <Text style={[styles.strategyText, themed.secondaryText]}>Use only when the certificate improves cabin entitlement, upgrade cost, OBC, FreePlay, or out-of-pocket math.</Text>
+        <Text style={[styles.strategyLabel, themed.accentText]}>Suggested action</Text>
+        <Text style={[styles.strategyText, themed.secondaryText]}>{certificate.expiryDate && getDaysUntil(certificate.expiryDate) < 0 ? 'Keep for history or mark expired.' : 'Ask My Data or verify stackability before applying it to a sailing.'}</Text>
       </View>
       <View style={styles.actionGrid}>
-        <TouchableOpacity style={styles.secondaryAction} onPress={() => handleCertificateAsk(certificate)} testID={`command-center-cert-ask-${certificate.id}`}>
-          <Bot size={13} color="#CBD5E1" />
-          <Text style={styles.secondaryActionText}>Ask My Data</Text>
+        <TouchableOpacity style={[styles.secondaryAction, themed.card]} onPress={() => handleCertificateAsk(certificate)} testID={`command-center-cert-ask-${certificate.id}`}>
+          <Bot size={13} color={playerCardTheme.accentColor} />
+          <Text style={[styles.secondaryActionText, themed.topText]}>Ask My Data</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.secondaryAction} onPress={() => handleRestoreCertificate(certificate)} testID={`command-center-cert-restore-${certificate.id}`}>
-          <RotateCcw size={13} color="#CBD5E1" />
-          <Text style={styles.secondaryActionText}>Restore</Text>
+        <TouchableOpacity style={[styles.secondaryAction, themed.card]} onPress={() => handleRestoreCertificate(certificate)} testID={`command-center-cert-restore-${certificate.id}`}>
+          <RotateCcw size={13} color={playerCardTheme.accentColor} />
+          <Text style={[styles.secondaryActionText, themed.topText]}>Restore</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.secondaryAction} onPress={() => handleMarkCertificateExpired(certificate)} testID={`command-center-cert-expire-${certificate.id}`}>
-          <Archive size={13} color="#CBD5E1" />
-          <Text style={styles.secondaryActionText}>Mark Expired</Text>
+        <TouchableOpacity style={[styles.secondaryAction, themed.card]} onPress={() => handleMarkCertificateExpired(certificate)} testID={`command-center-cert-expire-${certificate.id}`}>
+          <Archive size={13} color={playerCardTheme.accentColor} />
+          <Text style={[styles.secondaryActionText, themed.topText]}>Mark Expired</Text>
         </TouchableOpacity>
       </View>
     </View>
-  ), [handleCertificateAsk, handleMarkCertificateExpired, handleRestoreCertificate, users]);
+  ), [handleCertificateAsk, handleMarkCertificateExpired, handleRestoreCertificate, playerCardTheme.accentColor, themed, users]);
 
   const renderCertificateBucket = useCallback((bucket: CertificateReviewBucket) => (
-    <View key={bucket.id} style={styles.bucketCard} testID={`command-center-certificate-bucket-${bucket.id}`}>
+    <View key={bucket.id} style={[styles.bucketCard, themed.card]} testID={`command-center-certificate-bucket-${bucket.id}`}>
       <View style={styles.bucketHeader}>
-        <View>
-          <Text style={styles.bucketTitle}>{bucket.title}</Text>
-          <Text style={styles.bucketSubtitle}>{bucket.subtitle}</Text>
+        <View style={styles.bucketCopy}>
+          <Text style={[styles.bucketTitle, themed.topText]}>{bucket.title}</Text>
+          <Text style={[styles.bucketSubtitle, themed.secondaryText]}>{bucket.subtitle}</Text>
         </View>
-        <Text style={styles.bucketCount}>{bucket.certificates.length}</Text>
+        <Text style={[styles.bucketCount, themed.mutedCard, themed.accentText]}>{bucket.certificates.length}</Text>
       </View>
       {bucket.certificates.map(renderCertificateItem)}
     </View>
-  ), [renderCertificateItem]);
+  ), [renderCertificateItem, themed]);
 
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
-      <LinearGradient colors={['#020617', '#0F2439', '#134E4A']} style={StyleSheet.absoluteFill} />
+      <LinearGradient colors={playerCardTheme.gradientColors} style={StyleSheet.absoluteFill} />
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <View style={styles.header}>
-          <View style={styles.headerIcon}>
-            <Clock size={22} color="#FDE68A" />
+          <View style={[styles.headerIcon, themed.headerIcon]}>
+            <Clock size={22} color={playerCardTheme.accentColor} />
           </View>
           <View style={styles.headerCopy}>
-            <Text style={styles.headerTitle}>Expiration Command Center</Text>
-            <Text style={styles.headerSubtitle}>Dedicated offer, certificate, and archive management</Text>
+            <Text style={[styles.headerTitle, themed.topText]}>Expiration Command Center</Text>
+            <Text style={[styles.headerSubtitle, themed.secondaryText]}>Dedicated offer, certificate, and archive management</Text>
           </View>
-          <TouchableOpacity style={styles.closeButton} onPress={() => router.back()} testID="close-command-center">
-            <X size={20} color={COLORS.white} />
+          <TouchableOpacity style={[styles.closeButton, themed.closeButton]} onPress={() => router.back()} testID="close-command-center">
+            <X size={20} color={playerCardTheme.topTextColor} />
           </TouchableOpacity>
         </View>
 
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          <View style={styles.heroCard}>
-            <LinearGradient colors={['rgba(253, 230, 138, 0.18)', 'rgba(45, 212, 191, 0.12)']} style={StyleSheet.absoluteFill} />
-            <Text style={styles.heroKicker}>Decision cockpit</Text>
-            <Text style={styles.heroTitle}>{totalManagementCount} records are ready for timing decisions.</Text>
-            <Text style={styles.heroBody}>Grouped urgency queues show owner profile, brand/program, expiration, best use, suggested action, archive history, and Ask My Data controls without deleting uncertain data.</Text>
+          <View style={[styles.heroCard, { borderColor: playerCardTheme.borderColor }]}>
+            <LinearGradient colors={playerCardTheme.gradientColors} style={StyleSheet.absoluteFill} />
+            <Text style={[styles.heroKicker, themed.accentText]}>Decision cockpit</Text>
+            <Text style={[styles.heroTitle, themed.topText]}>{totalManagementCount} records are ready for timing decisions.</Text>
+            <Text style={[styles.heroBody, themed.secondaryText]}>Grouped urgency queues show owner profile, brand/program, expiration, best use, suggested action, archive history, and Ask My Data controls without deleting uncertain data.</Text>
             <View style={styles.heroStatsRow}>
-              <View style={styles.heroStat}>
-                <Text style={styles.heroStatValue}>{visibleOfferBuckets.length}</Text>
-                <Text style={styles.heroStatLabel}>Offer groups</Text>
+              <View style={[styles.heroStat, themed.card]}>
+                <Text style={[styles.heroStatValue, themed.topText]}>{visibleOfferBuckets.length}</Text>
+                <Text style={[styles.heroStatLabel, themed.secondaryText]}>Offer groups</Text>
               </View>
-              <View style={styles.heroStat}>
-                <Text style={styles.heroStatValue}>{visibleCertificateBuckets.length}</Text>
-                <Text style={styles.heroStatLabel}>Cert groups</Text>
+              <View style={[styles.heroStat, themed.card]}>
+                <Text style={[styles.heroStatValue, themed.topText]}>{visibleCertificateBuckets.length}</Text>
+                <Text style={[styles.heroStatLabel, themed.secondaryText]}>Cert groups</Text>
               </View>
-              <View style={styles.heroStat}>
-                <Text style={styles.heroStatValue}>{inactiveOfferCount}</Text>
-                <Text style={styles.heroStatLabel}>Archived/skipped</Text>
+              <View style={[styles.heroStat, themed.card]}>
+                <Text style={[styles.heroStatValue, themed.topText]}>{inactiveOfferCount}</Text>
+                <Text style={[styles.heroStatLabel, themed.secondaryText]}>Archived/skipped</Text>
               </View>
             </View>
           </View>
@@ -536,42 +570,42 @@ export default function CommandCenterScreen() {
               return (
                 <TouchableOpacity
                   key={view.id}
-                  style={[styles.queueChip, active && styles.queueChipActive]}
+                  style={[styles.queueChip, themed.card, active && themed.activeChip]}
                   onPress={() => setQueueView(view.id)}
                   activeOpacity={0.75}
                   testID={`command-center-view-${view.id}`}
                 >
-                  <Text style={[styles.queueChipText, active && styles.queueChipTextActive]}>{view.label}</Text>
+                  <Text style={[styles.queueChipText, active ? styles.queueChipTextActive : themed.topText]}>{view.label}</Text>
                 </TouchableOpacity>
               );
             })}
           </View>
 
           {totalManagementCount === 0 ? (
-            <View style={styles.emptyCard} testID="command-center-empty">
-              <CheckCircle2 size={36} color="#A7F3D0" />
-              <Text style={styles.emptyTitle}>Nothing urgent right now</Text>
-              <Text style={styles.emptyBody}>No expiring offers, recently expired items, or review-needed certificate records match the current filters.</Text>
+            <View style={[styles.emptyCard, themed.card]} testID="command-center-empty">
+              <CheckCircle2 size={36} color={playerCardTheme.accentColor} />
+              <Text style={[styles.emptyTitle, themed.topText]}>Nothing urgent right now</Text>
+              <Text style={[styles.emptyBody, themed.secondaryText]}>No expiring offers, recently expired items, or review-needed certificate records match the current filters.</Text>
             </View>
           ) : null}
 
           {showOffers && visibleOfferBuckets.length > 0 ? (
             <View style={styles.sectionBlock}>
-              <Text style={styles.sectionLabel}>Offer queue</Text>
+              <Text style={[styles.sectionLabel, themed.accentText]}>Offer queue</Text>
               {visibleOfferBuckets.map(renderOfferBucket)}
             </View>
           ) : null}
 
           {showCertificates && visibleCertificateBuckets.length > 0 ? (
             <View style={styles.sectionBlock}>
-              <Text style={styles.sectionLabel}>Certificate queue</Text>
+              <Text style={[styles.sectionLabel, themed.accentText]}>Certificate queue</Text>
               {visibleCertificateBuckets.map(renderCertificateBucket)}
             </View>
           ) : null}
 
           {showHistory && visibleInactiveOfferBuckets.length > 0 ? (
             <View style={styles.sectionBlock}>
-              <Text style={styles.sectionLabel}>Archive / skipped history</Text>
+              <Text style={[styles.sectionLabel, themed.accentText]}>Archive / skipped history</Text>
               {visibleInactiveOfferBuckets.map(renderOfferBucket)}
             </View>
           ) : null}
@@ -610,7 +644,7 @@ export default function CommandCenterScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#020617',
+    backgroundColor: COLORS.white,
   },
   safeArea: {
     flex: 1,
@@ -652,6 +686,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.1)',
+    borderWidth: 1,
   },
   content: {
     padding: SPACING.lg,
@@ -733,7 +768,7 @@ const styles = StyleSheet.create({
     fontWeight: '900' as const,
   },
   queueChipTextActive: {
-    color: '#422006',
+    color: COLORS.white,
   },
   sectionBlock: {
     gap: SPACING.md,
@@ -759,6 +794,9 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: SPACING.md,
+  },
+  bucketCopy: {
+    flex: 1,
   },
   bucketTitle: {
     color: COLORS.white,
