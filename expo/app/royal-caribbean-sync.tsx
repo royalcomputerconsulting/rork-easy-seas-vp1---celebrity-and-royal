@@ -867,6 +867,19 @@ function RoyalCaribbeanSyncScreen() {
                   </View>
                 </View>
 
+                {(state.syncCounts?.completedCruises ?? 0) > 0 && (
+                  <View style={styles.countCard}>
+                    <View style={styles.countIconContainer}>
+                      <CheckCircle size={24} color="#14b8a6" />
+                    </View>
+                    <View style={styles.countInfo}>
+                      <Text style={styles.countNumber}>{state.syncCounts?.completedCruises || 0}</Text>
+                      <Text style={styles.countLabel}>Completed Cruises</Text>
+                      <Text style={styles.countDetail}>Imported from Royal Caribbean Past Trips</Text>
+                    </View>
+                  </View>
+                )}
+
                 <View style={styles.loyaltyCard} testID="loyalty-preview-card">
                   <Text style={styles.loyaltyTitle}>Loyalty Status Updates</Text>
 
@@ -1109,7 +1122,7 @@ function RoyalCaribbeanSyncScreen() {
               <Text style={styles.successTitle}>Sync Complete!</Text>
               <Text style={styles.successMessage}>
                 {state.syncCounts ? (
-                  `${state.syncCounts.offerCount} offer${state.syncCounts.offerCount !== 1 ? 's' : ''} (${state.syncCounts.offerRows} sailing${state.syncCounts.offerRows !== 1 ? 's' : ''}), ${state.syncCounts.upcomingCruises} upcoming cruise${state.syncCounts.upcomingCruises !== 1 ? 's' : ''}, ${state.syncCounts.courtesyHolds} courtesy hold${state.syncCounts.courtesyHolds !== 1 ? 's' : ''}`
+                  `${state.syncCounts.offerCount} offer${state.syncCounts.offerCount !== 1 ? 's' : ''} (${state.syncCounts.offerRows} sailing${state.syncCounts.offerRows !== 1 ? 's' : ''}), ${state.syncCounts.upcomingCruises} upcoming cruise${state.syncCounts.upcomingCruises !== 1 ? 's' : ''}, ${state.syncCounts.completedCruises ?? 0} completed cruise${(state.syncCounts.completedCruises ?? 0) !== 1 ? 's' : ''}, ${state.syncCounts.courtesyHolds} courtesy hold${state.syncCounts.courtesyHolds !== 1 ? 's' : ''}`
                 ) : null}
               </Text>
 

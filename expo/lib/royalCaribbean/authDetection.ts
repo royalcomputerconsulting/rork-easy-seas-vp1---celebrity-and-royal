@@ -10,8 +10,82 @@ export const AUTH_DETECTION_SCRIPT = `
       courtesyHolds: null,
       loyalty: null,
       voyageEnrichment: null,
+      pastTrips: null,
       carnivalVifpOffers: null
     };
+  }
+
+  function looksLikeTripRecord(item) {
+    if (!item || typeof item !== 'object') return false;
+    return !!(item.bookingId || item.confirmationNumber || item.reservationId || item.reservationNumber || item.shipName || item.shipCode || item.sailDate || item.departureDate || item.startDate || item.sailingStartDate);
+  }
+
+  function firstTripArray(data, preferredKeys) {
+    if (!data || typeof data !== 'object') return null;
+    if (Array.isArray(data)) return data.length > 0 && looksLikeTripRecord(data[0]) ? data : null;
+    for (var pk = 0; pk < preferredKeys.length; pk++) {
+      var key = preferredKeys[pk];
+      if (Array.isArray(data[key]) && (data[key].length === 0 || looksLikeTripRecord(data[key][0]))) return data[key];
+    }
+    var containers = [data.payload, data.data, data.result, data.response];
+    for (var ci = 0; ci < containers.length; ci++) {
+      var container = containers[ci];
+      if (!container || typeof container !== 'object') continue;
+      if (Array.isArray(container)) return container.length > 0 && looksLikeTripRecord(container[0]) ? container : null;
+      for (var pk2 = 0; pk2 < preferredKeys.length; pk2++) {
+        var nestedKey = preferredKeys[pk2];
+        if (Array.isArray(container[nestedKey]) && (container[nestedKey].length === 0 || looksLikeTripRecord(container[nestedKey][0]))) return container[nestedKey];
+      }
+    }
+    return null;
+  }
+
+  function captureRoyalTripPayload(data, url, sourceLabel) {
+    try {
+      if (!data || typeof data !== 'object' || typeof url !== 'string') return false;
+      var lowerUrl = url.toLowerCase();
+      var isRoyalFamily = lowerUrl.includes('royalcaribbean.com') || lowerUrl.includes('celebritycruises.com') || lowerUrl.includes('aws-prd.api.rccl.com');
+      if (!isRoyalFamily) return false;
+
+      var forcePastTrips = !!window.__easySeasReadingPastTrips;
+      var pastTrips = firstTripArray(data, ['pastCruises', 'pastTrips', 'past', 'completedCruises', 'completedTrips', 'previousTrips']);
+      var isPastEndpoint = lowerUrl.includes('past') || lowerUrl.includes('previous') || lowerUrl.includes('completed');
+      var isMyTripsEndpoint = lowerUrl.includes('my-trips') || lowerUrl.includes('mytrips') || lowerUrl.includes('/trips') || lowerUrl.includes('/trip');
+      if (pastTrips && (forcePastTrips || isPastEndpoint || isMyTripsEndpoint || pastTrips.length > 0)) {
+        window.capturedPayloads.pastTrips = data;
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'network_payload',
+          endpoint: 'pastTrips',
+          data: data,
+          url: url
+        }));
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: '📦 ' + sourceLabel + ' captured Royal Caribbean Past Trips payload with ' + pastTrips.length + ' cruise(s)',
+          logType: 'success'
+        }));
+        return true;
+      }
+
+      var tripRows = firstTripArray(data, ['trips', 'reservations', 'bookings', 'profileBookings', 'sailingInfo', 'upcomingTrips', 'upcomingCruises']);
+      if (tripRows && isMyTripsEndpoint && (forcePastTrips || !window.capturedPayloads.upcomingCruises)) {
+        var endpoint = (forcePastTrips || isPastEndpoint) ? 'pastTrips' : 'upcomingCruises';
+        window.capturedPayloads[endpoint] = data;
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'network_payload',
+          endpoint: endpoint,
+          data: data,
+          url: url
+        }));
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: '📦 ' + sourceLabel + ' captured My Trips payload with ' + tripRows.length + ' trip(s)',
+          logType: 'success'
+        }));
+        return true;
+      }
+    } catch(e) {}
+    return false;
   }
 
   function interceptNetworkCalls() {
@@ -25,6 +99,11 @@ export const AUTH_DETECTION_SCRIPT = `
         const url = (typeof args[0] === 'string') ? args[0] : (args[0] && args[0].url ? args[0].url : '');
         
         if (typeof url === 'string' && url) {
+          var royalTripClone = response.clone();
+          royalTripClone.json().then(function(data) {
+            captureRoyalTripPayload(data, url, '[Fetch]');
+          }).catch(function() {});
+
           if (url.includes('/api/casino/casino-offers') || url.includes('/casino-offers')) {
             if (response.ok && response.status === 200) {
               clonedResponse.json().then(data => {
@@ -262,6 +341,7 @@ export const AUTH_DETECTION_SCRIPT = `
         if (this._url) {
           try {
             const data = JSON.parse(this.responseText);
+            captureRoyalTripPayload(data, String(this._url || ''), '[XHR]');
             
             if (this._url.includes('/api/casino/casino-offers') || this._url.includes('/casino-offers')) {
               window.capturedPayloads.offers = data;

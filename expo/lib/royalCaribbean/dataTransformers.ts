@@ -535,7 +535,9 @@ export function transformBookedCruisesToAppFormat(
 
     console.log(`[DataTransformer] Final nights for ${cruise.shipName} (${startDate} to ${endDate}): ${nights} (method: ${calculationMethod})`);
 
-    const isCourtesyHold = cruise.status === 'Courtesy Hold' || cruise.status === 'Offer';
+    const normalizedStatus = (cruise.status || '').trim().toLowerCase();
+    const isCourtesyHold = normalizedStatus === 'courtesy hold' || normalizedStatus === 'hold' || normalizedStatus === 'offer';
+    const isCompleted = normalizedStatus === 'completed' || normalizedStatus === 'past' || cruise.sourcePage?.toLowerCase().includes('past') === true;
     const finalEndDate = endDate || calculateReturnDate(startDate, nights);
     const interiorPrice = parseMoneyValue(cruise.interiorPrice);
     const oceanviewPrice = parseMoneyValue(cruise.oceanviewPrice);
@@ -575,11 +577,15 @@ export function transformBookedCruisesToAppFormat(
       deckNumber: cruise.deckNumber,
       bookingId: cruise.bookingId,
       reservationNumber: cruise.bookingId,
-      status: 'booked',
-      completionState: 'upcoming',
+      status: isCompleted ? 'completed' : isCourtesyHold ? 'courtesy hold' : 'booked',
+      completionState: isCompleted ? 'completed' : 'upcoming',
       isCourtesyHold,
       holdExpiration: cruise.holdExpiration || undefined,
-      notes: isCourtesyHold ? `Courtesy Hold${cruise.holdExpiration ? ` (expires ${cruise.holdExpiration})` : ''}` : undefined,
+      notes: isCompleted
+        ? 'Imported from Royal Caribbean Past Trips'
+        : isCourtesyHold
+          ? `Courtesy Hold${cruise.holdExpiration ? ` (expires ${cruise.holdExpiration})` : ''}`
+          : undefined,
       itineraryName: cruise.itinerary,
       itineraryRaw: cruise.itinerary ? [cruise.itinerary] : [],
       bookingStatus: cruise.bookingStatus,

@@ -267,7 +267,7 @@ export type WebViewMessage =
   | { type: 'progress'; current: number; total: number; stepName?: string }
   | { type: 'offers_batch'; step: number; data: any[]; isFinal?: boolean }
   | { type: 'cruise_batch'; data: any[] }
-  | { type: 'step_complete'; step: number; data: any[]; totalCount?: number; offerCount?: number }
+  | { type: 'step_complete'; step: number; data?: any[]; totalCount?: number; offerCount?: number }
   | { type: 'offer_progress'; offerIndex: number; totalOffers: number; offerName: string; sailingsCount: number; status: string }
   | { type: 'all_bookings_data'; bookings: any[]; vdsId?: string }
   | { type: 'loyalty_data'; data?: LoyaltyData; loyalty?: LoyaltyApiInformation }
@@ -283,6 +283,7 @@ export interface SyncDataCounts {
   offerRows: number;
   upcomingCruises: number;
   courtesyHolds: number;
+  completedCruises?: number;
 }
 
 export interface RoyalCaribbeanSyncState {
