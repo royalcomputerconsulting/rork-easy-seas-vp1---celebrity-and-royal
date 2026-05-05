@@ -12,6 +12,7 @@ import {
   Image,
   Modal,
   ScrollView,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -199,6 +200,7 @@ function isOfferLinkedCruiseInProgress(cruise: BookedCruise, today: Date): boole
 
 function OverviewScreenContent() {
   const router = useRouter();
+  const { width: viewportWidth, height: viewportHeight } = useWindowDimensions();
   const { cruises, bookedCruises: allBookedCruises, casinoOffers, clubRoyaleProfile, updateCasinoOffer } = useCoreData();
   const { currentUser, users } = useUser();
   const { selectedProfileId, selectedBrand, selectedProgram } = useIntelligenceFilters();
@@ -482,6 +484,13 @@ function OverviewScreenContent() {
     return commandCenterBuckets.reduce((sum, bucket) => sum + bucket.offers.length, 0);
   }, [commandCenterBuckets]);
 
+  const offersHeaderImageHeight = useMemo<number>(() => {
+    const contentWidth = Math.max(0, Math.min(viewportWidth - SPACING.md * 2, 430));
+    const naturalImageHeight = contentWidth / 1.5;
+    const compactMaxHeight = Math.min(190, viewportHeight * 0.24);
+    return Math.max(96, Math.min(naturalImageHeight, compactMaxHeight));
+  }, [viewportHeight, viewportWidth]);
+
   const commandCenterBucketCounts = useMemo(() => {
     const getBucketCount = (id: CommandCenterBucket['id']): number => commandCenterBuckets.find((bucket) => bucket.id === id)?.offers.length ?? 0;
     const expires7 = getBucketCount('expires7');
@@ -705,11 +714,11 @@ function OverviewScreenContent() {
   const renderHeader = () => (
     <ResponsiveContainer>
       <View style={styles.headerContent}>
-        <View style={styles.offersHeaderImageCard}>
+        <View style={[styles.offersHeaderImageCard, { height: offersHeaderImageHeight }]}>
           <Image
             source={require('@/assets/images/offers-header-card.png')}
             style={styles.offersHeaderImage}
-            resizeMode="cover"
+            resizeMode="contain"
             accessibilityLabel="Easy Seas nautical lifestyle artwork"
             testID="offers-fixed-header-image"
           />
@@ -1223,18 +1232,20 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
   },
   offersHeaderImageCard: {
-    marginTop: SPACING.sm,
+    marginTop: SPACING.xs,
     marginBottom: SPACING.md,
-    borderRadius: BORDER_RADIUS.xl,
+    borderRadius: BORDER_RADIUS.lg,
     backgroundColor: '#041827',
     overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: '#D4AF37',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.65)',
+    alignItems: 'center',
+    justifyContent: 'center',
     ...SHADOW.card,
   },
   offersHeaderImage: {
     width: '100%',
-    aspectRatio: 1.5,
+    height: '100%',
   },
   footerContent: {
     marginTop: SPACING.md,
