@@ -81,6 +81,10 @@ import {
   type CommandCenterOffer,
 } from '@/lib/offerIntelligence';
 
+const OFFERS_HEADER_IMAGE_ASPECT_RATIO = 1170 / 600;
+const OFFERS_HEADER_WORDMARK_ZOOM = 1.92;
+const OFFERS_HEADER_WORDMARK_FOCUS_Y = 0.63;
+
 function AnimatedEmptyState({ onImportPress }: { onImportPress: () => void }) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
@@ -485,9 +489,20 @@ function OverviewScreenContent() {
   }, [commandCenterBuckets]);
 
   const offersHeaderImageHeight = useMemo<number>(() => {
-    const offersHeaderImageAspectRatio = 1170 / 600;
-    return Math.max(120, viewportWidth / offersHeaderImageAspectRatio);
+    return Math.min(132, Math.max(108, viewportWidth * 0.3));
   }, [viewportWidth]);
+
+  const offersHeaderWordmarkImageStyle = useMemo(() => {
+    const imageWidth = viewportWidth * OFFERS_HEADER_WORDMARK_ZOOM;
+    const imageHeight = imageWidth / OFFERS_HEADER_IMAGE_ASPECT_RATIO;
+
+    return {
+      width: imageWidth,
+      height: imageHeight,
+      left: (viewportWidth - imageWidth) / 2,
+      top: (offersHeaderImageHeight / 2) - (imageHeight * OFFERS_HEADER_WORDMARK_FOCUS_Y),
+    };
+  }, [offersHeaderImageHeight, viewportWidth]);
 
   const commandCenterBucketCounts = useMemo(() => {
     const getBucketCount = (id: CommandCenterBucket['id']): number => commandCenterBuckets.find((bucket) => bucket.id === id)?.offers.length ?? 0;
@@ -715,9 +730,9 @@ function OverviewScreenContent() {
         <View style={[styles.offersHeaderImageCard, { width: viewportWidth, height: offersHeaderImageHeight }]}>
           <Image
             source={require('@/assets/images/offers-header-card-new.png')}
-            style={styles.offersHeaderImage}
-            resizeMode="contain"
-            accessibilityLabel="Easy Seas nautical lifestyle artwork"
+            style={[styles.offersHeaderImage, offersHeaderWordmarkImageStyle]}
+            resizeMode="cover"
+            accessibilityLabel="Easy Seas wordmark banner"
             testID="offers-fixed-header-image"
           />
         </View>
@@ -1235,12 +1250,9 @@ const styles = StyleSheet.create({
     marginLeft: -SPACING.md,
     backgroundColor: '#041827',
     overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   offersHeaderImage: {
-    width: '100%',
-    height: '100%',
+    position: 'absolute',
   },
   footerContent: {
     marginTop: SPACING.md,
