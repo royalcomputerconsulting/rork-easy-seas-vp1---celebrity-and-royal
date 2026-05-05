@@ -1,10 +1,9 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CalendarDays, ChevronLeft, ChevronRight, Ship, Plane, User, Users, Plus, AlertTriangle, Ban, Gift, Award, MapPin, Clock } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
-import { IMAGES } from '@/constants/images';
 import { useAppState } from '@/state/AppStateProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
 import type { CalendarEvent, BookedCruise, CasinoOffer } from '@/types/models';
@@ -699,20 +698,7 @@ export default function EventsScreen() {
           contentContainerStyle={styles.scrollContent}
         >
           <ResponsiveContainer>
-            <View style={styles.heroHeader}>
-
-            <View style={styles.heroOverlay}>
-              <Text style={styles.heroTitle}>Easy Seas™</Text>
-              <Text style={styles.heroSubtitle}>Manage your Nautical Lifestyle™</Text>
-              <Image
-                source={{ uri: IMAGES.signature }}
-                style={styles.heroSignature}
-                resizeMode="contain"
-              />
-            </View>
-          </View>
-
-          <IntelligenceFilterStrip contextLabel="Calendar" variant="bookedCruises" compact />
+            <IntelligenceFilterStrip contextLabel="Calendar" variant="bookedCruises" compact />
 
           <TouchableOpacity
             style={styles.passengerPermanentButton}
@@ -1028,50 +1014,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: 120,
-  },
-  heroHeader: {
-    backgroundColor: COLORS.navyDeep,
-    borderRadius: BORDER_RADIUS.lg,
-    marginHorizontal: SPACING.md,
-    marginBottom: 6,
-    marginTop: SPACING.xs,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 66,
-    ...SHADOW.sm,
-  },
-
-  heroOverlay: {
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-    paddingHorizontal: SPACING.md,
-    gap: SPACING.sm,
-  },
-  heroTitle: {
-    fontSize: 19,
-    fontWeight: '800' as const,
-    color: COLORS.white,
-    letterSpacing: 0.4,
-    textAlign: 'left' as const,
-  },
-  heroSubtitle: {
-    flex: 1,
-    fontSize: 11,
-    fontWeight: '600' as const,
-    color: 'rgba(255, 255, 255, 0.78)',
-    marginTop: 2,
-    letterSpacing: 0.1,
-    textAlign: 'left' as const,
-  },
-  heroSignature: {
-    width: 86,
-    height: 34,
-    marginTop: 0,
-    opacity: 0.74,
   },
   passengerPermanentButton: {
     flexDirection: 'row',

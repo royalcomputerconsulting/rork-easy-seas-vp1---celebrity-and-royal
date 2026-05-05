@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Building2, SlidersHorizontal, Trophy, UserRound } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
@@ -97,57 +97,69 @@ export const IntelligenceFilterStrip = React.memo(function IntelligenceFilterStr
             </TouchableOpacity>
           ) : null}
         </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.compactFilterRail}>
-          <Text style={styles.compactRailGroupLabel}>Profile</Text>
-          {profileOptions.map((option) => {
-            const active = selectedProfileId === option.id;
-            return (
-              <TouchableOpacity
-                key={`profile-filter-option-${option.id}`}
-                style={[styles.compactRailChip, active && styles.compactRailChipActive]}
-                onPress={() => setSelectedProfileId(option.id)}
-                activeOpacity={0.75}
-                testID={`profile-filter-${option.id}`}
-              >
-                <Text style={[styles.compactRailChipText, active && styles.compactRailChipTextActive]} numberOfLines={1}>{option.label}</Text>
-              </TouchableOpacity>
-            );
-          })}
-          <Text style={styles.compactRailGroupLabel}>Brand</Text>
-          {BRAND_OPTIONS.map((brand) => {
-            const active = selectedBrand === brand;
-            return (
-              <TouchableOpacity
-                key={brand}
-                style={[styles.compactRailChip, active && styles.compactRailChipActive]}
-                onPress={() => setSelectedBrand(brand)}
-                activeOpacity={0.75}
-                testID={`brand-filter-${brand}`}
-              >
-                <Text style={[styles.compactRailChipText, active && styles.compactRailChipTextActive]} numberOfLines={1}>{getBrandChipLabel(brand)}</Text>
-              </TouchableOpacity>
-            );
-          })}
-          {showProgram ? (
-            <>
-              <Text style={styles.compactRailGroupLabel}>Program</Text>
-              {PROGRAM_OPTIONS.map((program) => {
-                const active = selectedProgram === program;
+        <View style={styles.compactFilterGrid}>
+          <View style={styles.compactFilterSection}>
+            <Text style={styles.compactRailGroupLabel}>Profile</Text>
+            <View style={styles.compactFilterWrappedRow}>
+              {profileOptions.map((option) => {
+                const active = selectedProfileId === option.id;
                 return (
                   <TouchableOpacity
-                    key={program}
+                    key={`profile-filter-option-${option.id}`}
                     style={[styles.compactRailChip, active && styles.compactRailChipActive]}
-                    onPress={() => setSelectedProgram(program)}
+                    onPress={() => setSelectedProfileId(option.id)}
                     activeOpacity={0.75}
-                    testID={`program-filter-${program}`}
+                    testID={`profile-filter-${option.id}`}
                   >
-                    <Text style={[styles.compactRailChipText, active && styles.compactRailChipTextActive]} numberOfLines={1}>{getProgramChipLabel(program)}</Text>
+                    <Text style={[styles.compactRailChipText, active && styles.compactRailChipTextActive]} numberOfLines={1}>{option.label}</Text>
                   </TouchableOpacity>
                 );
               })}
-            </>
+            </View>
+          </View>
+
+          <View style={styles.compactFilterSection}>
+            <Text style={styles.compactRailGroupLabel}>Brand</Text>
+            <View style={styles.compactFilterWrappedRow}>
+              {BRAND_OPTIONS.map((brand) => {
+                const active = selectedBrand === brand;
+                return (
+                  <TouchableOpacity
+                    key={brand}
+                    style={[styles.compactRailChip, active && styles.compactRailChipActive]}
+                    onPress={() => setSelectedBrand(brand)}
+                    activeOpacity={0.75}
+                    testID={`brand-filter-${brand}`}
+                  >
+                    <Text style={[styles.compactRailChipText, active && styles.compactRailChipTextActive]} numberOfLines={1}>{getBrandChipLabel(brand)}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          {showProgram ? (
+            <View style={styles.compactFilterSection}>
+              <Text style={styles.compactRailGroupLabel}>Program</Text>
+              <View style={styles.compactFilterWrappedRow}>
+                {PROGRAM_OPTIONS.map((program) => {
+                  const active = selectedProgram === program;
+                  return (
+                    <TouchableOpacity
+                      key={program}
+                      style={[styles.compactRailChip, active && styles.compactRailChipActive]}
+                      onPress={() => setSelectedProgram(program)}
+                      activeOpacity={0.75}
+                      testID={`program-filter-${program}`}
+                    >
+                      <Text style={[styles.compactRailChipText, active && styles.compactRailChipTextActive]} numberOfLines={1}>{getProgramChipLabel(program)}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
           ) : null}
-        </ScrollView>
+        </View>
       </LinearGradient>
     );
   }
@@ -543,10 +555,17 @@ const styles = StyleSheet.create({
     fontWeight: '900' as const,
     color: COLORS.navyDeep,
   },
-  compactFilterRail: {
+  compactFilterGrid: {
+    gap: 7,
+  },
+  compactFilterSection: {
+    gap: 4,
+  },
+  compactFilterWrappedRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: 5,
-    paddingRight: SPACING.md,
   },
   compactRailGroupLabel: {
     fontSize: 9,
@@ -557,8 +576,8 @@ const styles = StyleSheet.create({
     marginLeft: 2,
   },
   compactRailChip: {
-    minWidth: 38,
-    maxWidth: 112,
+    minWidth: 48,
+    maxWidth: 130,
     paddingHorizontal: 8,
     paddingVertical: 5,
     borderRadius: BORDER_RADIUS.round,
