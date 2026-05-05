@@ -1298,19 +1298,52 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
                 stateroomType
               };
             });
-            
+
+            // Filter out placeholder rows (no ship + no sail date) so empty past-trips skeletons don't pollute completed cruises
+            const isPlaceholderRow = (c: any): boolean => {
+              const ship = String(c.shipName || '').trim();
+              const code = String(c.shipCode || '').trim();
+              const sailDate = String(c.sailingStartDate || '').trim();
+              const nights = Number.parseInt(String(c.numberOfNights || '0'), 10) || 0;
+              const hasShip = ship !== '' && ship !== 'Unknown Ship';
+              const hasIdentity = (hasShip && sailDate !== '') || (code !== '' && sailDate !== '');
+              if (!hasIdentity) return true;
+              if (!hasShip && !code && nights === 0) return true;
+              return false;
+            };
+            const placeholderCount = formattedCruises.filter(isPlaceholderRow).length;
+            const meaningfulCruises = formattedCruises.filter((c: any) => !isPlaceholderRow(c));
+            if (placeholderCount > 0) {
+              addLog(
+                isPastTripsPayload
+                  ? `⚠️ Ignored ${placeholderCount} placeholder past-trip row(s) without ship/sail data`
+                  : `⚠️ Ignored ${placeholderCount} placeholder booking row(s) without ship/sail data`,
+                'warning'
+              );
+            }
+
+            if (meaningfulCruises.length === 0) {
+              addLog(
+                isPastTripsPayload
+                  ? `⚠️ Past Trips payload contained only placeholder rows; waiting for the real Past Trips API response`
+                  : `⚠️ Booking payload contained only placeholder rows; ignored`,
+                'warning'
+              );
+              break;
+            }
+
             setState(prev => {
               const existingIds = new Set(prev.extractedBookedCruises.map(c => c.bookingId).filter(Boolean));
               const existingShipDates = new Set(prev.extractedBookedCruises.map(c => `${c.shipName}|${c.sailingStartDate}`));
-              const deduped = formattedCruises.filter((c: any) => {
+              const deduped = meaningfulCruises.filter((c: any) => {
                 if (c.bookingId && existingIds.has(c.bookingId)) return false;
                 const shipDateKey = `${c.shipName}|${c.sailingStartDate}`;
                 if (existingShipDates.has(shipDateKey)) return false;
                 return true;
               });
-              if (deduped.length < formattedCruises.length) {
-                console.log(`[RoyalCaribbeanSync] Deduped network_payload bookings: ${formattedCruises.length} -> ${deduped.length}`);
-                addLog(`ℹ️ Skipped ${formattedCruises.length - deduped.length} duplicate booking(s)`, 'info');
+              if (deduped.length < meaningfulCruises.length) {
+                console.log(`[RoyalCaribbeanSync] Deduped network_payload bookings: ${meaningfulCruises.length} -> ${deduped.length}`);
+                addLog(`ℹ️ Skipped ${meaningfulCruises.length - deduped.length} duplicate booking(s)`, 'info');
               }
               return {
                 ...prev,
@@ -1324,8 +1357,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
               capturedSections.current.bookings = true;
             }
             const cruiseLineName = isCarnivalBooking ? 'Carnival' : config.name;
-            addLog(`✅ Captured ${bookings.length} ${isPastTripsPayload ? 'past cruise(s)' : 'booking(s)'} from ${cruiseLineName} API`, 'success');
-            formattedCruises.forEach((c: any) => {
+            addLog(`✅ Captured ${meaningfulCruises.length} ${isPastTripsPayload ? 'past cruise(s)' : 'booking(s)'} from ${cruiseLineName} API`, 'success');
+            meaningfulCruises.forEach((c: any) => {
               addLog(`✅ Captured booking: ${c.shipName} - ${c.sailingStartDate} - ${c.cabinType} ${c.cabinNumberOrGTY} (${c.numberOfNights} nights) [${c.status}]`, 'success');
             });
             

@@ -3787,7 +3787,7 @@ const styles = StyleSheet.create({
   },
   subscriptionPromoImage: {
     width: '100%',
-    aspectRatio: 1,
+    aspectRatio: 2,
   },
   subscriptionStatusBanner: {
     flexDirection: 'row',
