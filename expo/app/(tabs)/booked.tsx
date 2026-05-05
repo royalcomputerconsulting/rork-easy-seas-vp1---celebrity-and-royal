@@ -904,7 +904,7 @@ export default function BookedScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#E0F2F1',
+    backgroundColor: '#0A1628',
   },
   safeArea: {
     flex: 1,
@@ -913,12 +913,12 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#E0F2F1',
+    backgroundColor: '#0A1628',
   },
   loadingText: {
     marginTop: SPACING.md,
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: CLEAN_THEME.text.secondary,
+    color: '#E2E8F0',
   },
   listContent: {
     padding: SPACING.md,
@@ -1216,12 +1216,12 @@ const styles = StyleSheet.create({
   },
   statsHighlightCard: {
     flex: 1,
-    backgroundColor: 'rgba(224, 242, 254, 0.5)',
+    backgroundColor: 'rgba(255,255,255,0.95)',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.sm,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.1)',
+    borderColor: 'rgba(255,255,255,0.2)',
     minWidth: 70,
   },
   statsHighlightIcon: {
@@ -1257,11 +1257,11 @@ const styles = StyleSheet.create({
   viewModeToggle: {
     flexDirection: 'row',
     width: '100%',
-    backgroundColor: 'rgba(0, 31, 63, 0.05)',
+    backgroundColor: 'rgba(255,255,255,0.95)',
     borderRadius: BORDER_RADIUS.round,
     padding: 4,
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.1)',
+    borderColor: 'rgba(255,255,255,0.2)',
   },
   viewModeButton: {
     flex: 1,
@@ -1324,7 +1324,7 @@ const styles = StyleSheet.create({
   timelineSectionTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: COLORS.white,
   },
   timelineVerticalList: {
     gap: SPACING.sm,
@@ -1373,17 +1373,17 @@ const styles = StyleSheet.create({
   timelineEmptyCard: {
     paddingVertical: SPACING.xl,
     borderRadius: BORDER_RADIUS.lg,
-    backgroundColor: 'rgba(224, 242, 254, 0.5)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
     borderStyle: 'dashed',
-    borderColor: 'rgba(0, 31, 63, 0.2)',
+    borderColor: 'rgba(255,255,255,0.2)',
   },
   timelineEmptyText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.navyDeep,
-    opacity: 0.6,
+    color: COLORS.white,
+    opacity: 0.7,
     marginTop: SPACING.xs,
     textAlign: 'center' as const,
   },
@@ -1450,8 +1450,8 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.md,
     marginBottom: SPACING.xs,
-    backgroundColor: 'rgba(224, 242, 254, 0.3)',
-    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: BORDER_RADIUS.lg,
   },
   cruiseListTitle: {
     fontSize: TYPOGRAPHY.fontSizeLG,
@@ -1698,15 +1698,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: SPACING.huge,
     paddingHorizontal: SPACING.xl,
-    backgroundColor: 'rgba(224, 242, 254, 0.3)',
-    borderRadius: BORDER_RADIUS.lg,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: BORDER_RADIUS.xl,
     marginHorizontal: SPACING.md,
+    marginTop: SPACING.lg,
   },
   emptyIconContainer: {
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: 'rgba(224, 242, 254, 0.8)',
+    backgroundColor: 'rgba(30, 58, 95, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: SPACING.lg,
