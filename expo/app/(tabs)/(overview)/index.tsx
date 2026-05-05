@@ -40,7 +40,6 @@ import {
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
 import { withAlpha } from '@/constants/loyaltyColors';
 import { createLoyaltyCardTheme, getClubRoyaleTierColor } from '@/constants/loyaltyTheme';
-import { IMAGES, LOCAL_IMAGES } from '@/constants/images';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { useUser } from '@/state/UserProvider';
 import { useAuth } from '@/state/AuthProvider';
@@ -70,7 +69,6 @@ import { getBookedCruiseCasinoPoints, getBookedCruiseWinningsBroughtHome } from 
 import type { Cruise, BookedCruise, CasinoOffer } from '@/types/models';
 import { getCabinPriceFromEntity, getDoubleOccupancyRoomRetailValue, GUEST_COUNT_DEFAULT } from '@/lib/valueCalculator';
 
-const OFFERS_TITLE_LOGO_URL = 'https://r2-pub.rork.com/attachments/4hm4mwycibyktcoe3b7eo.png';
 import { formatCurrency } from '@/lib/format';
 import {
   buildCommandCenterBuckets,
@@ -215,7 +213,6 @@ function OverviewScreenContent() {
   const [showCertificateExplorerModal, setShowCertificateExplorerModal] = useState(false);
   const [showAlertsModal, setShowAlertsModal] = useState(false);
   const [decodedOffer, setDecodedOffer] = useState<DecodedOffer | null>(null);
-  const [heroSignatureFailed, setHeroSignatureFailed] = useState<boolean>(false);
   const { 
     certificates, 
     addCertificate, 
@@ -708,53 +705,14 @@ function OverviewScreenContent() {
   const renderHeader = () => (
     <ResponsiveContainer>
       <View style={styles.headerContent}>
-        <View style={styles.titleLogoCard}>
+        <View style={styles.offersHeaderImageCard}>
           <Image
-            source={{ uri: OFFERS_TITLE_LOGO_URL }}
-            style={styles.titleLogoImage}
-            resizeMode="contain"
-            accessibilityLabel="Any Day Aboard Ship is a Great Day Aboard Ship logo"
-            testID="offers-title-logo-card-image"
+            source={require('@/assets/images/offers-header-card.png')}
+            style={styles.offersHeaderImage}
+            resizeMode="cover"
+            accessibilityLabel="Easy Seas nautical lifestyle artwork"
+            testID="offers-fixed-header-image"
           />
-        </View>
-
-        <View style={styles.heroCard}>
-          <LinearGradient
-            colors={['#3AAFA9', '#2B7A78', '#17A398', '#1E8C82', '#3AAFA9']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={StyleSheet.absoluteFill}
-          />
-          <LinearGradient
-            colors={['rgba(255,255,255,0.18)', 'transparent', 'rgba(255,255,255,0.12)', 'transparent', 'rgba(255,255,255,0.08)']}
-            start={{ x: 0.2, y: 0 }}
-            end={{ x: 0.8, y: 1 }}
-            style={StyleSheet.absoluteFill}
-          />
-
-          <View style={styles.heroOverlay}>
-            <Text style={styles.heroTitle}>Easy Seas™</Text>
-            <Text style={styles.heroSubtitle}>Manage your Nautical Lifestyle™</Text>
-            {!heroSignatureFailed ? (
-              <Image
-                source={{ uri: IMAGES.signature }}
-                style={styles.heroSignature}
-                resizeMode="contain"
-                onError={() => {
-                  console.warn('[Overview] Signature image failed to load, using bundled fallback');
-                  setHeroSignatureFailed(true);
-                }}
-                testID="offers-hero-signature-image"
-              />
-            ) : (
-              <Image
-                source={LOCAL_IMAGES.signature}
-                style={styles.heroSignature}
-                resizeMode="contain"
-                testID="offers-hero-signature-fallback-image"
-              />
-            )}
-          </View>
         </View>
 
         <CompactDashboardHeader
@@ -1264,66 +1222,24 @@ const styles = StyleSheet.create({
   headerContent: {
     marginBottom: SPACING.md,
   },
-  titleLogoCard: {
+  offersHeaderImageCard: {
     marginTop: SPACING.sm,
     marginBottom: SPACING.md,
     borderRadius: BORDER_RADIUS.xl,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#041827',
     overflow: 'hidden',
     borderWidth: 2,
     borderColor: '#D4AF37',
-    minHeight: 245,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.sm,
     ...SHADOW.card,
   },
-  titleLogoImage: {
+  offersHeaderImage: {
     width: '100%',
-    height: 230,
+    aspectRatio: 1.5,
   },
   footerContent: {
     marginTop: SPACING.md,
   },
 
-  heroCard: {
-    marginBottom: SPACING.sm,
-    marginTop: SPACING.sm,
-    borderRadius: BORDER_RADIUS.xl,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 200,
-  },
-
-  heroOverlay: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: SPACING.xl,
-    paddingHorizontal: SPACING.lg,
-  },
-  heroTitle: {
-    fontSize: 32,
-    fontWeight: '800' as const,
-    color: '#1A1A1A',
-    letterSpacing: 1,
-    textAlign: 'center',
-  },
-  heroSubtitle: {
-    fontSize: 15,
-    fontWeight: '500' as const,
-    color: 'rgba(0,0,0,0.65)',
-    marginTop: 6,
-    letterSpacing: 0.3,
-    textAlign: 'center',
-  },
-  heroSignature: {
-    width: 240,
-    height: 100,
-    marginTop: 14,
-    opacity: 0.8,
-  },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
