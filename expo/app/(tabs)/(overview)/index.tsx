@@ -200,7 +200,7 @@ function isOfferLinkedCruiseInProgress(cruise: BookedCruise, today: Date): boole
 
 function OverviewScreenContent() {
   const router = useRouter();
-  const { width: viewportWidth, height: viewportHeight } = useWindowDimensions();
+  const { width: viewportWidth } = useWindowDimensions();
   const { cruises, bookedCruises: allBookedCruises, casinoOffers, clubRoyaleProfile, updateCasinoOffer } = useCoreData();
   const { currentUser, users } = useUser();
   const { selectedProfileId, selectedBrand, selectedProgram } = useIntelligenceFilters();
@@ -485,11 +485,9 @@ function OverviewScreenContent() {
   }, [commandCenterBuckets]);
 
   const offersHeaderImageHeight = useMemo<number>(() => {
-    const contentWidth = Math.max(0, Math.min(viewportWidth - SPACING.md * 2, 430));
-    const naturalImageHeight = contentWidth / 1.5;
-    const compactMaxHeight = Math.min(190, viewportHeight * 0.24);
-    return Math.max(96, Math.min(naturalImageHeight, compactMaxHeight));
-  }, [viewportHeight, viewportWidth]);
+    const offersHeaderImageAspectRatio = 1170 / 600;
+    return Math.max(120, viewportWidth / offersHeaderImageAspectRatio);
+  }, [viewportWidth]);
 
   const commandCenterBucketCounts = useMemo(() => {
     const getBucketCount = (id: CommandCenterBucket['id']): number => commandCenterBuckets.find((bucket) => bucket.id === id)?.offers.length ?? 0;
@@ -714,9 +712,9 @@ function OverviewScreenContent() {
   const renderHeader = () => (
     <ResponsiveContainer>
       <View style={styles.headerContent}>
-        <View style={[styles.offersHeaderImageCard, { height: offersHeaderImageHeight }]}>
+        <View style={[styles.offersHeaderImageCard, { width: viewportWidth, height: offersHeaderImageHeight }]}>
           <Image
-            source={require('@/assets/images/offers-header-card.png')}
+            source={require('@/assets/images/offers-header-card-new.png')}
             style={styles.offersHeaderImage}
             resizeMode="contain"
             accessibilityLabel="Easy Seas nautical lifestyle artwork"
@@ -1234,14 +1232,11 @@ const styles = StyleSheet.create({
   offersHeaderImageCard: {
     marginTop: SPACING.xs,
     marginBottom: SPACING.md,
-    borderRadius: BORDER_RADIUS.lg,
+    marginLeft: -SPACING.md,
     backgroundColor: '#041827',
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(212, 175, 55, 0.65)',
     alignItems: 'center',
     justifyContent: 'center',
-    ...SHADOW.card,
   },
   offersHeaderImage: {
     width: '100%',
