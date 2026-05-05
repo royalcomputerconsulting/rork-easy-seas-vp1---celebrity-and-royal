@@ -84,6 +84,8 @@ import {
 const OFFERS_HEADER_IMAGE_ASPECT_RATIO = 1170 / 600;
 const OFFERS_HEADER_WORDMARK_ZOOM = 1.92;
 const OFFERS_HEADER_WORDMARK_FOCUS_Y = 0.63;
+// Static image source - resolved once at module load and reused across renders.
+const OFFERS_HEADER_IMAGE_SOURCE = require('@/assets/images/offers-header-card-new.png');
 
 function AnimatedEmptyState({ onImportPress }: { onImportPress: () => void }) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -729,7 +731,7 @@ function OverviewScreenContent() {
       <View style={styles.headerContent}>
         <View style={[styles.offersHeaderImageCard, { width: viewportWidth, height: offersHeaderImageHeight }]}>
           <Image
-            source={require('@/assets/images/offers-header-card-new.png')}
+            source={OFFERS_HEADER_IMAGE_SOURCE}
             style={[styles.offersHeaderImage, offersHeaderWordmarkImageStyle]}
             resizeMode="cover"
             accessibilityLabel="Easy Seas wordmark banner"
