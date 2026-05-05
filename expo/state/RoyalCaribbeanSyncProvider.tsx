@@ -24,6 +24,7 @@ import { injectOffersExtraction } from '@/lib/royalCaribbean/step1_offers';
 import { injectCarnivalOffersExtraction, injectCarnivalBookingsScrape, injectCarnivalCruiseSearchScrape, injectCarnivalTgoExtract } from '@/lib/carnival/carnivalOffersExtraction';
 import { createSyncPreview, calculateSyncCounts, applySyncPreview } from '@/lib/royalCaribbean/syncLogic';
 import { parseCasinoOffersPayload } from '@/lib/royalCaribbean/offerPayloadParser';
+import { getBookedCruiseRowIdentityKey, isMeaningfulBookedCruiseRow, parseTripPayload } from '@/lib/royalCaribbean/tripPayloadParser';
 import { healImportedData } from '@/lib/dataHealing';
 import { isActiveBookedCruise, isCourtesyHoldCruise } from '@/lib/bookedCruiseStatus';
 
@@ -148,6 +149,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   const progressCallbacks = useRef<{ onProgress?: () => void }>({});
   const processedPayloads = useRef<Set<string>>(new Set());
   const capturedSections = useRef({ offers: false, bookings: false, loyalty: false, pastTrips: false });
+  const expectedPastTripsCountRef = useRef<number | null>(null);
   const pageLoadResolver = useRef<((loadedUrl?: string) => void) | null>(null);
   const offerSailingsResolver = useRef<((sailings: OfferRow[]) => void) | null>(null);
   const carnivalPageCheckResolver = useRef<((onOffers: boolean) => void) | null>(null);
@@ -352,7 +354,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       }
 
       const row = item as Partial<BookedCruiseRow>;
-      const bookingId = stringifyValue(row.bookingId) || `booking_${index}`;
+      const bookingId = stringifyValue(row.bookingId);
       const normalizedRow: BookedCruiseRow = {
         rawBooking: row.rawBooking,
         sourcePage: stringifyValue(row.sourcePage) || 'Upcoming',
@@ -398,7 +400,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         taxesAndFees: stringifyValue(row.taxesAndFees) || undefined,
       };
 
-      const dedupeKey = normalizedRow.bookingId || `${normalizedRow.shipName}|${normalizedRow.sailingStartDate}`;
+      if (!isMeaningfulBookedCruiseRow(normalizedRow)) {
+        return;
+      }
+
+      const dedupeKey = getBookedCruiseRowIdentityKey(normalizedRow);
       if (seenKeys.has(dedupeKey)) {
         return;
       }
@@ -480,6 +486,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     lastAuthenticatedEmailRef.current = authenticatedEmail;
     processedPayloads.current.clear();
     capturedSections.current = { offers: false, bookings: false, loyalty: false, pastTrips: false };
+    expectedPastTripsCountRef.current = null;
     hasReceivedApiLoyaltyDataRef.current = false;
     carnivalUserDataRef.current = null;
     rcLogger.clear();
@@ -753,6 +760,15 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         break;
       }
 
+      case 'past_trips_expected_count': {
+        const expectedCount = Number.parseInt(String(msg.count ?? '').replace(/,/g, ''), 10);
+        if (Number.isFinite(expectedCount) && expectedCount > 0) {
+          expectedPastTripsCountRef.current = expectedCount;
+          addLog(`📊 My Trips page reports ${expectedCount} past cruise(s) available`, 'info');
+        }
+        break;
+      }
+
       case 'all_bookings_data':
         if (msg.bookings && Array.isArray(msg.bookings)) {
           const isCarnivalBookings = cruiseLine === 'carnival';
@@ -1001,6 +1017,89 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           // Check for error responses first
           if (data.message && !data.payload && !data.status && data.status !== 200) {
             addLog(`⚠️ Captured error response: ${data.message}`, 'warning');
+            break;
+          }
+
+          const parsedTripPayload = parseTripPayload(data, {
+            endpoint: String(endpoint || ''),
+            url: typeof url === 'string' ? url : undefined,
+            forceCompleted: endpoint === 'pastTrips',
+            isCarnival: cruiseLine === 'carnival' || (typeof url === 'string' && url.includes('carnival.com')),
+          });
+
+          if (parsedTripPayload.rawRows.length > 0 || endpoint === 'pastTrips') {
+            const isPastPayload = parsedTripPayload.isPastTripsPayload;
+            const expectedPastTrips = isPastPayload
+              ? (parsedTripPayload.expectedTotal ?? expectedPastTripsCountRef.current ?? undefined)
+              : undefined;
+
+            if (parsedTripPayload.rows.length === 0) {
+              const skipped = parsedTripPayload.skippedPlaceholderRows || parsedTripPayload.rawRows.length;
+              addLog(
+                isPastPayload
+                  ? `⚠️ Ignored incomplete Past Trips payload (${skipped} placeholder row(s)); continuing to wait for real completed cruises`
+                  : `⚠️ Ignored ${skipped} incomplete booking row(s) from captured payload`,
+                'warning'
+              );
+              break;
+            }
+
+            const incomingRows = normalizeBookedCruiseRows(parsedTripPayload.rows);
+            setState(prev => {
+              const existingKeys = new Set(prev.extractedBookedCruises.map(getBookedCruiseRowIdentityKey));
+              const deduped = incomingRows.filter((cruise) => {
+                const key = getBookedCruiseRowIdentityKey(cruise);
+                if (existingKeys.has(key)) return false;
+                existingKeys.add(key);
+                return true;
+              });
+
+              if (deduped.length < incomingRows.length) {
+                console.log(`[RoyalCaribbeanSync] Deduped parsed ${String(endpoint)} bookings: ${incomingRows.length} -> ${deduped.length}`);
+                addLog(`ℹ️ Skipped ${incomingRows.length - deduped.length} duplicate booking(s)`, 'info');
+              }
+
+              const nextExtractedBookedCruises = [...prev.extractedBookedCruises, ...deduped];
+              if (isPastPayload) {
+                const completedCruises = nextExtractedBookedCruises.filter(c => {
+                  const status = (c.status || '').toLowerCase();
+                  return status === 'completed' || status === 'past';
+                }).length;
+                const canAcceptCurrentStepPartial = prev.status === 'running_step_4' && !expectedPastTrips;
+                if ((expectedPastTrips && completedCruises >= expectedPastTrips) || canAcceptCurrentStepPartial) {
+                  capturedSections.current.pastTrips = true;
+                }
+              }
+
+              return {
+                ...prev,
+                extractedBookedCruises: nextExtractedBookedCruises,
+              };
+            });
+
+            if (!isPastPayload) {
+              capturedSections.current.bookings = true;
+            }
+
+            const cruiseLineName = cruiseLine === 'carnival' ? 'Carnival' : config.name;
+            addLog(`✅ Captured ${incomingRows.length} ${isPastPayload ? 'completed/past cruise(s)' : 'booking(s)'} from ${cruiseLineName} API`, 'success');
+            if (expectedPastTrips && isPastPayload) {
+              addLog(`📊 Past Trips progress: captured ${incomingRows.length} row(s), expecting ${expectedPastTrips}`, 'info');
+            }
+            incomingRows.forEach((cruise) => {
+              addLog(`✅ Captured booking: ${cruise.shipName} - ${cruise.sailingStartDate} - ${cruise.cabinType || 'Cabin'} ${cruise.cabinNumberOrGTY || 'GTY'} (${cruise.numberOfNights ?? 0} nights) [${cruise.status}]`, 'success');
+            });
+
+            setState(prev => {
+              if (!isPastPayload && prev.status === 'running_step_2') {
+                addLog(`✅ Step 2 auto-completing with ${incomingRows.length} bookings from network monitor`, 'success');
+                if (stepCompleteResolvers.current[2]) {
+                  stepCompleteResolvers.current[2]();
+                  delete stepCompleteResolvers.current[2];
+                }
+              }
+              return prev;
+            });
             break;
           }
           
@@ -1314,6 +1413,13 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           const loyaltyPayload = data.payload || data;
           const loyaltyInfo = loyaltyPayload.loyaltyInformation || loyaltyPayload;
           const accountId = loyaltyPayload.accountId || '';
+          const totalTripsValue = typeof loyaltyPayload.totalTrips === 'number'
+            ? loyaltyPayload.totalTrips
+            : Number.parseInt(String(loyaltyPayload.totalTrips ?? '').replace(/,/g, ''), 10);
+          if (Number.isFinite(totalTripsValue) && totalTripsValue > 0) {
+            expectedPastTripsCountRef.current = totalTripsValue;
+            addLog(`📊 Royal Caribbean history says ${totalTripsValue} total past trip(s) should be available`, 'info');
+          }
 
           if (typeof url === 'string' && url.includes('/guestAccounts/loyalty/info')) {
             addLog('Captured loyalty from /guestAccounts/loyalty/info (correct endpoint)', 'success');
@@ -1479,6 +1585,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     processedPayloads.current.clear();
     hasReceivedApiLoyaltyDataRef.current = false;
     capturedSections.current = { offers: false, bookings: false, loyalty: false, pastTrips: false };
+    expectedPastTripsCountRef.current = null;
     carnivalUserDataRef.current = null;
     extractedOffersRef.current = [];
 
@@ -2133,6 +2240,14 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
                 post('log', { message: message, logType: logType || 'info' });
               }
               try { window.__easySeasReadingPastTrips = true; } catch (e) {}
+              try { if (window.capturedPayloads) window.capturedPayloads.pastTrips = null; } catch (e) {}
+              function getPastCountFromText(text) {
+                try {
+                  var match = String(text || '').match(/past\\s*\\(?\\s*([0-9,]+)\\s*\\)?/i);
+                  if (!match) return 0;
+                  return parseInt(match[1].replace(/,/g, ''), 10) || 0;
+                } catch (e) { return 0; }
+              }
               function clickPastTab() {
                 var candidates = Array.prototype.slice.call(document.querySelectorAll('button, [role="tab"], a, div, span'));
                 var past = candidates.find(function(el) {
@@ -2143,8 +2258,13 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
                   return /^past/i.test(text);
                 });
                 if (past && typeof past.click === 'function') {
+                  var pastText = (past.innerText || past.textContent || '').replace(/\\s+/g, ' ').trim();
+                  var count = getPastCountFromText(pastText);
+                  if (count > 0) {
+                    post('past_trips_expected_count', { count: count });
+                  }
                   past.click();
-                  log('✅ Clicked Past Trips tab on My Trips', 'success');
+                  log('✅ Clicked Past Trips tab on My Trips' + (count > 0 ? ' (' + count + ' expected)' : ''), 'success');
                   return true;
                 }
                 log('⚠️ Past Trips tab not visible yet', 'warning');
@@ -2159,7 +2279,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
                   var scrollTimer = setInterval(function() {
                     scrolls++;
                     try { window.scrollBy(0, Math.max(700, window.innerHeight || 700)); } catch (e) {}
-                    if (scrolls >= 8) {
+                    if (scrolls >= 16) {
                       clearInterval(scrollTimer);
                       try { window.scrollTo(0, 0); } catch (e) {}
                       var existing = window.capturedPayloads && window.capturedPayloads.pastTrips ? window.capturedPayloads.pastTrips : null;
@@ -2178,7 +2298,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         };
 
         try {
-          const pastCaptureCycles = 2;
+          const pastCaptureCycles = 4;
           for (let cycle = 0; cycle < pastCaptureCycles && !capturedSections.current.pastTrips; cycle++) {
             if (cycle > 0) {
               addLog('🔄 Past Trips not captured yet — refreshing loyalty then returning to My Trips...', 'info');
@@ -2186,9 +2306,9 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
               await delay(2500);
             }
             await navigateToPage(config.myTripsUrl, 22000);
-            await delay(4500);
+            await delay(6500);
             injectPastTripsTabClick();
-            await waitForStepComplete(4, 26000);
+            await waitForStepComplete(4, 42000);
             if (!capturedSections.current.pastTrips) {
               await delay(2000);
             }
@@ -2202,8 +2322,9 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             const status = (c.status || '').toLowerCase();
             return status === 'completed' || status === 'past';
           }).length;
+          const expectedPastTrips = expectedPastTripsCountRef.current;
           if (completedCruises > 0) {
-            addLog(`✅ STEP 4 COMPLETE: Captured ${completedCruises} completed/past cruise(s)`, 'success');
+            addLog(`✅ STEP 4 COMPLETE: Captured ${completedCruises} completed/past cruise(s)${expectedPastTrips ? ` of ${expectedPastTrips} expected` : ''}`, completedCruises < (expectedPastTrips ?? 0) ? 'warning' : 'success');
           } else {
             addLog('⚠️ STEP 4 COMPLETE: No Past Trips payload captured; existing completed cruises will be preserved', 'warning');
           }
