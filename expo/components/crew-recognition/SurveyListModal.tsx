@@ -22,14 +22,14 @@ interface SurveyListModalProps {
 }
 
 export function SurveyListModal({ visible, onClose, sailings }: SurveyListModalProps) {
-  const { userId, ownerScopeId, isOfflineMode, entries: allEntries } = useCrewRecognition();
+  const { userId, isOfflineMode, entries: allEntries } = useCrewRecognition();
   const [selectedSailingId, setSelectedSailingId] = useState('');
   const [showSailingPicker, setShowSailingPicker] = useState(false);
 
   const surveyListQuery = trpc.crewRecognition.getSurveyList.useQuery(
-    { sailingId: selectedSailingId, userId, ownerScopeId: ownerScopeId || '' },
+    { sailingId: selectedSailingId, userId },
     {
-      enabled: !!selectedSailingId && !!userId && !!ownerScopeId && !isOfflineMode,
+      enabled: !!selectedSailingId && !!userId && !isOfflineMode,
       refetchOnMount: true,
       refetchOnWindowFocus: false,
     }

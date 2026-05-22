@@ -7,6 +7,8 @@ const AUTH_PRESERVE_KEYS = new Set<string>([
   ALL_STORAGE_KEYS.EMAIL_WHITELIST,
   ALL_STORAGE_KEYS.EMAIL_WHITELIST_GLOBAL,
   ALL_STORAGE_KEYS.EMAIL_WHITELIST_PENDING,
+  ALL_STORAGE_KEYS.USERS,
+  ALL_STORAGE_KEYS.CURRENT_USER,
   'easyseas_auth_email',
   'easyseas_authenticated',
   'easyseas_fresh_start',
@@ -23,7 +25,7 @@ export async function clearUserSpecificData(): Promise<void> {
       if (key === ALL_STORAGE_KEYS.USERS || key === ALL_STORAGE_KEYS.CURRENT_USER) return true;
       if (GLOBAL_KEYS.has(key)) return false;
       if (key.includes('::')) return false;
-      if (key.startsWith('easyseas') || key.startsWith('@easyseas') || key.startsWith('@easy_seas') || key.startsWith('crew_recognition')) {
+      if (key.startsWith('easyseas') || key.startsWith('@easyseas') || key.startsWith('crew_recognition')) {
         return true;
       }
       return false;
@@ -96,7 +98,7 @@ export async function clearAllAppData(): Promise<{
   try {
     const additionalKeys = await AsyncStorage.getAllKeys();
     const easySeaKeys = additionalKeys.filter(
-      key => key.startsWith('easyseas') || key.startsWith('@easyseas') || key.startsWith('@easy_seas') || key.startsWith('crew_recognition')
+      key => key.startsWith('easyseas') || key.startsWith('@easyseas') || key.startsWith('crew_recognition')
     );
     
     const preserveAdditionalKeys = new Set<string>([

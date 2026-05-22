@@ -37,12 +37,12 @@ export function calculateHistoricalSessions(
 ): HistoricalSessionEstimate | null {
   console.log('[HistoricalSessionCalculator] Calculating sessions for cruise:', cruise.id);
 
-  if (!cruise.pointsEarned && !cruise.earnedPoints && !cruise.casinoPoints) {
+  if (!cruise.earnedPoints && !cruise.casinoPoints) {
     console.log('[HistoricalSessionCalculator] No points data available for cruise:', cruise.id);
     return null;
   }
 
-  const pointsEarned = cruise.pointsEarned || cruise.earnedPoints || cruise.casinoPoints || 0;
+  const pointsEarned = cruise.earnedPoints || cruise.casinoPoints || 0;
   const totalHoursPlayed = estimatePlayingHoursFromPoints(pointsEarned, avgPPH);
   const coinIn = pointsEarned * DOLLARS_PER_POINT;
   
@@ -58,9 +58,9 @@ export function calculateHistoricalSessions(
   ];
 
   let confidence: 'low' | 'medium' | 'high' = 'medium';
-  if (cruise.winningsBroughtHome !== undefined || cruise.winnings !== undefined) {
+  if (cruise.actualSpend && cruise.winnings !== undefined) {
     confidence = 'high';
-    assumptions.push('Winnings brought home available; Coin-In remains volume-only.');
+    assumptions.push('Win/loss data available for accurate calculations');
   } else if (casinoOpenDays >= 3) {
     confidence = 'medium';
   } else {
@@ -75,7 +75,7 @@ export function calculateHistoricalSessions(
     casinoOpenDays,
     avgHoursPerDay,
     cruise.actualSpend,
-    cruise.winningsBroughtHome ?? cruise.winnings
+    cruise.winnings
   );
 
   console.log('[HistoricalSessionCalculator] Generated', sessions.length, 'sessions for cruise:', cruise.id);
@@ -125,8 +125,8 @@ function generateSessionEstimates(
   }
 
   const pointsPerDay = totalPoints / casinoDays.length;
-  const totalWinLoss = winnings !== undefined 
-    ? winnings 
+  const totalWinLoss = winnings !== undefined && actualSpend !== undefined 
+    ? winnings - actualSpend 
     : 0;
   
   const winLossPerDay = totalWinLoss / casinoDays.length;
@@ -213,8 +213,8 @@ function generateSimpleSessionEstimates(
   const totalSessions = casinoOpenDays * sessionsPerDay;
   const pointsPerSession = totalPoints / totalSessions;
   
-  const totalWinLoss = winnings !== undefined 
-    ? winnings 
+  const totalWinLoss = winnings !== undefined && actualSpend !== undefined 
+    ? winnings - actualSpend 
     : 0;
   const winLossPerSession = totalWinLoss / totalSessions;
 
@@ -286,9 +286,9 @@ export function generateSessionsFromCruise(
     id: cruise.id,
     ship: cruise.shipName,
     sailDate: cruise.sailDate,
-    earnedPoints: cruise.pointsEarned || cruise.earnedPoints || cruise.casinoPoints,
-    winningsBroughtHome: cruise.winningsBroughtHome ?? cruise.winnings,
-    cashResult: cruise.cashResult,
+    earnedPoints: cruise.earnedPoints || cruise.casinoPoints,
+    winnings: cruise.winnings,
+    actualSpend: cruise.actualSpend,
   });
   
   const estimate = calculateHistoricalSessions(cruise, 3, avgPPH);

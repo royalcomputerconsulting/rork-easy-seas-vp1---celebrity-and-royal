@@ -2,7 +2,6 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, publicProcedure } from "../create-context";
 import { getDb } from "../../db";
-import { isOwnerScopeForEmail } from "@/lib/storage/dataOwnership";
 
 const departmentEnum = z.enum([
   'Casino',
@@ -28,19 +27,6 @@ function generateSailingMonth(date: string): string {
 
 function generateSailingYear(date: string): number {
   return parseInt(date.substring(0, 4), 10);
-}
-
-function enforceScopedUser(input: { userId: string; ownerScopeId: string }): void {
-  const normalizedUserId = input.userId.toLowerCase().trim();
-  const ownerScopeId = input.ownerScopeId.trim();
-  if (!isOwnerScopeForEmail(ownerScopeId, normalizedUserId)) {
-    throw new TRPCError({
-      code: 'FORBIDDEN',
-      message: 'User data scope is invalid for this account',
-    });
-  }
-  input.userId = normalizedUserId;
-  input.ownerScopeId = ownerScopeId;
 }
 
 export const crewRecognitionRouter = createTRPCRouter({
@@ -75,13 +61,11 @@ export const crewRecognitionRouter = createTRPCRouter({
     .input(
       z.object({
         csvText: z.string(),
-        userId: z.string().email(),
-        ownerScopeId: z.string().min(3),
+        userId: z.string(),
       })
     )
     .mutation(async ({ input }) => {
       const db = await getDb();
-      enforceScopedUser(input);
       
       const lines = input.csvText.split('\n').filter(line => line.trim());
       if (lines.length < 2) {
@@ -197,13 +181,11 @@ export const crewRecognitionRouter = createTRPCRouter({
       z.object({
         search: z.string().optional(),
         department: z.string().optional(),
-        userId: z.string().email(),
-        ownerScopeId: z.string().min(3),
+        userId: z.string(),
       })
     )
     .query(async ({ input }) => {
       const db = await getDb();
-      enforceScopedUser(input);
       
       let query = `SELECT * FROM crew_members WHERE userId = "${input.userId}" AND isDeleted != true`;
       const conditions: string[] = [];
@@ -234,13 +216,11 @@ export const crewRecognitionRouter = createTRPCRouter({
         roleTitle: z.string().optional(),
         notes: z.string().optional(),
         sailingId: z.string().optional(),
-        userId: z.string().email(),
-        ownerScopeId: z.string().min(3),
+        userId: z.string(),
       })
     )
     .mutation(async ({ input }) => {
       const db = await getDb();
-      enforceScopedUser(input);
       
       const normalizedName = normalizeString(input.fullName);
       const existingResult = await db.query(
@@ -302,8 +282,7 @@ export const crewRecognitionRouter = createTRPCRouter({
     .input(
       z.object({
         id: z.string(),
-        userId: z.string().email(),
-        ownerScopeId: z.string().min(3),
+        userId: z.string(),
         fullName: z.string().min(1),
         department: departmentEnum,
         roleTitle: z.string().optional(),
@@ -312,7 +291,6 @@ export const crewRecognitionRouter = createTRPCRouter({
     )
     .mutation(async ({ input }) => {
       const db = await getDb();
-      enforceScopedUser(input);
       const existingResult = await db.query(
         `SELECT * FROM crew_members WHERE id = "${input.id}" AND userId = "${input.userId}" AND isDeleted != true LIMIT 1`
       );
@@ -338,10 +316,9 @@ export const crewRecognitionRouter = createTRPCRouter({
     }),
 
   deleteCrewMember: publicProcedure
-    .input(z.object({ id: z.string(), userId: z.string().email(), ownerScopeId: z.string().min(3) }))
+    .input(z.object({ id: z.string(), userId: z.string() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      enforceScopedUser(input);
       const existingResult = await db.query(
         `SELECT * FROM crew_members WHERE id = "${input.id}" AND userId = "${input.userId}" AND isDeleted != true LIMIT 1`
       );
@@ -382,13 +359,11 @@ export const crewRecognitionRouter = createTRPCRouter({
         endDate: z.string().optional(),
         page: z.number().default(1),
         pageSize: z.number().default(50),
-        userId: z.string().email(),
-        ownerScopeId: z.string().min(3),
+        userId: z.string(),
       })
     )
     .query(async ({ input }) => {
       const db = await getDb();
-      enforceScopedUser(input);
       
       const conditions: string[] = [`userId = "${input.userId}"`];
       
@@ -469,13 +444,11 @@ export const crewRecognitionRouter = createTRPCRouter({
         department: departmentEnum,
         roleTitle: z.string().optional(),
         sourceText: z.string().optional(),
-        userId: z.string().email(),
-        ownerScopeId: z.string().min(3),
+        userId: z.string(),
       })
     )
     .mutation(async ({ input }) => {
       const db = await getDb();
-      enforceScopedUser(input);
       
       const sailingResult = await db.query(`SELECT * FROM sailings WHERE id = "${input.sailingId}" AND userId = "${input.userId}" LIMIT 1`);
       const sailing = (sailingResult[0] as any[])?.[0];
@@ -521,8 +494,7 @@ export const crewRecognitionRouter = createTRPCRouter({
     .input(
       z.object({
         id: z.string(),
-        userId: z.string().email(),
-        ownerScopeId: z.string().min(3),
+        userId: z.string(),
         sailingId: z.string().optional(),
         department: departmentEnum.optional(),
         roleTitle: z.string().optional(),
@@ -531,7 +503,6 @@ export const crewRecognitionRouter = createTRPCRouter({
     )
     .mutation(async ({ input }) => {
       const db = await getDb();
-      enforceScopedUser(input);
 
       const existingResult = await db.query(
         `SELECT * FROM recognition_entries WHERE id = "${input.id}" AND userId = "${input.userId}" LIMIT 1`
@@ -579,10 +550,9 @@ export const crewRecognitionRouter = createTRPCRouter({
     }),
 
   deleteRecognitionEntry: publicProcedure
-    .input(z.object({ id: z.string(), userId: z.string().email(), ownerScopeId: z.string().min(3) }))
+    .input(z.object({ id: z.string(), userId: z.string() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      enforceScopedUser(input);
       const existingResult = await db.query(
         `SELECT * FROM recognition_entries WHERE id = "${input.id}" AND userId = "${input.userId}" LIMIT 1`
       );
@@ -609,13 +579,11 @@ export const crewRecognitionRouter = createTRPCRouter({
           startDate: z.string(),
           endDate: z.string(),
         })),
-        userId: z.string().email(),
-        ownerScopeId: z.string().min(3),
+        userId: z.string(),
       })
     )
     .mutation(async ({ input }) => {
       const db = await getDb();
-      enforceScopedUser(input);
       const now = new Date().toISOString();
       let importedCount = 0;
 
@@ -699,10 +667,9 @@ export const crewRecognitionRouter = createTRPCRouter({
     }),
 
   getSailings: publicProcedure
-    .input(z.object({ userId: z.string().email(), ownerScopeId: z.string().min(3) }))
+    .input(z.object({ userId: z.string() }))
     .query(async ({ input }) => {
       const db = await getDb();
-      enforceScopedUser(input);
       const result = await db.query(`SELECT * FROM sailings WHERE userId = "${input.userId}" ORDER BY sailStartDate DESC`);
       return (result[0] || []) as any[];
     }),
@@ -714,13 +681,11 @@ export const crewRecognitionRouter = createTRPCRouter({
         sailStartDate: z.string(),
         sailEndDate: z.string(),
         nights: z.number().optional(),
-        userId: z.string().email(),
-        ownerScopeId: z.string().min(3),
+        userId: z.string(),
       })
     )
     .mutation(async ({ input }) => {
       const db = await getDb();
-      enforceScopedUser(input);
       
       const now = new Date().toISOString();
       const sailingData = {
@@ -738,10 +703,9 @@ export const crewRecognitionRouter = createTRPCRouter({
     }),
 
   getSurveyList: publicProcedure
-    .input(z.object({ sailingId: z.string(), userId: z.string().email(), ownerScopeId: z.string().min(3) }))
+    .input(z.object({ sailingId: z.string(), userId: z.string() }))
     .query(async ({ input }) => {
       const db = await getDb();
-      enforceScopedUser(input);
       
       const query = `
         SELECT 
@@ -778,10 +742,9 @@ export const crewRecognitionRouter = createTRPCRouter({
     }),
 
   getStats: publicProcedure
-    .input(z.object({ userId: z.string().email(), ownerScopeId: z.string().min(3) }))
+    .input(z.object({ userId: z.string() }))
     .query(async ({ input }) => {
       const db = await getDb();
-      enforceScopedUser(input);
       
       const crewCountQuery = `SELECT count() FROM crew_members WHERE userId = "${input.userId}" AND isDeleted != true GROUP ALL`;
       const crewCountResult = await db.query(crewCountQuery);

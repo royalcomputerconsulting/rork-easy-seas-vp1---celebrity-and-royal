@@ -1,8 +1,6 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
-import { useAuth } from './AuthProvider';
-import { getUserScopedKey } from '@/lib/storage/storageKeys';
 import type { 
   PriceHistoryRecord, 
   PriceDropAlert,
@@ -13,17 +11,9 @@ import type {
 import { generateCruiseKey } from '@/types/models';
 import { getCabinTier, getHigherCabinTypes } from '@/lib/upgradeMonitor';
 
-const BASE_PRICE_HISTORY_STORAGE_KEY = '@easy_seas_price_history';
-const BASE_PRICE_DROP_ALERTS_STORAGE_KEY = '@easy_seas_price_drop_alerts';
-const BASE_UPGRADE_PRICES_STORAGE_KEY = '@easy_seas_upgrade_prices';
-
-function getScopedPriceHistoryKeys(email: string | null) {
-  return {
-    PRICE_HISTORY: getUserScopedKey(BASE_PRICE_HISTORY_STORAGE_KEY, email),
-    PRICE_DROP_ALERTS: getUserScopedKey(BASE_PRICE_DROP_ALERTS_STORAGE_KEY, email),
-    UPGRADE_PRICES: getUserScopedKey(BASE_UPGRADE_PRICES_STORAGE_KEY, email),
-  } as const;
-}
+const PRICE_HISTORY_STORAGE_KEY = '@easy_seas_price_history';
+const PRICE_DROP_ALERTS_STORAGE_KEY = '@easy_seas_price_drop_alerts';
+const UPGRADE_PRICES_STORAGE_KEY = '@easy_seas_upgrade_prices';
 
 interface PriceHistoryState {
   priceHistory: PriceHistoryRecord[];
@@ -77,90 +67,52 @@ function extractUpgradeCabinPrice(offer: CasinoOffer, tierLabel: string): number
 }
 
 export const [PriceHistoryProvider, usePriceHistory] = createContextHook((): PriceHistoryState => {
-  const { authenticatedEmail } = useAuth();
-  const storageKeysRef = useRef(getScopedPriceHistoryKeys(authenticatedEmail));
   const [priceHistory, setPriceHistory] = useState<PriceHistoryRecord[]>([]);
   const [priceDropAlerts, setPriceDropAlerts] = useState<PriceDropAlert[]>([]);
   const [upgradePrices, setUpgradePrices] = useState<Map<string, number>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    storageKeysRef.current = getScopedPriceHistoryKeys(authenticatedEmail);
-    console.log('[PriceHistoryProvider] Scoped storage keys updated for:', authenticatedEmail);
-  }, [authenticatedEmail]);
+    const loadStoredData = async () => {
+      try {
+        const [storedHistory, storedAlerts, storedUpgradePrices] = await Promise.all([
+          AsyncStorage.getItem(PRICE_HISTORY_STORAGE_KEY),
+          AsyncStorage.getItem(PRICE_DROP_ALERTS_STORAGE_KEY),
+          AsyncStorage.getItem(UPGRADE_PRICES_STORAGE_KEY),
+        ]);
 
-  const loadStoredData = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      const scopedKeys = getScopedPriceHistoryKeys(authenticatedEmail);
-      storageKeysRef.current = scopedKeys;
-      const [storedHistory, storedAlerts, storedUpgradePrices] = await Promise.all([
-        AsyncStorage.getItem(scopedKeys.PRICE_HISTORY),
-        AsyncStorage.getItem(scopedKeys.PRICE_DROP_ALERTS),
-        AsyncStorage.getItem(scopedKeys.UPGRADE_PRICES),
-      ]);
+        if (storedHistory) {
+          const parsed = JSON.parse(storedHistory);
+          setPriceHistory(parsed);
+          console.log('[PriceHistoryProvider] Loaded price history:', parsed.length, 'records');
+        }
 
-      const parsedHistory = storedHistory ? JSON.parse(storedHistory) as PriceHistoryRecord[] : [];
-      setPriceHistory(parsedHistory);
-      console.log('[PriceHistoryProvider] Loaded scoped price history:', { email: authenticatedEmail, count: parsedHistory.length });
+        if (storedAlerts) {
+          const parsed = JSON.parse(storedAlerts);
+          setPriceDropAlerts(parsed);
+          console.log('[PriceHistoryProvider] Loaded price drop alerts:', parsed.length);
+        }
 
-      const parsedAlerts = storedAlerts ? JSON.parse(storedAlerts) as PriceDropAlert[] : [];
-      setPriceDropAlerts(parsedAlerts);
-      console.log('[PriceHistoryProvider] Loaded scoped price drop alerts:', { email: authenticatedEmail, count: parsedAlerts.length });
-
-      const parsedUpgradePrices = storedUpgradePrices ? JSON.parse(storedUpgradePrices) as Record<string, number> : {};
-      const map = new Map<string, number>(Object.entries(parsedUpgradePrices));
-      setUpgradePrices(map);
-      console.log('[PriceHistoryProvider] Loaded scoped upgrade prices:', { email: authenticatedEmail, count: map.size });
-    } catch (error) {
-      console.error('[PriceHistoryProvider] Error loading scoped stored data:', error);
-      setPriceHistory([]);
-      setPriceDropAlerts([]);
-      setUpgradePrices(new Map());
-    } finally {
-      setIsLoading(false);
-    }
-  }, [authenticatedEmail]);
-
-  useEffect(() => {
-    setPriceHistory([]);
-    setPriceDropAlerts([]);
-    setUpgradePrices(new Map());
-    void loadStoredData();
-  }, [authenticatedEmail, loadStoredData]);
-
-  useEffect(() => {
-    const handleDataCleared = () => {
-      console.log('[PriceHistoryProvider] Data cleared event detected, resetting scoped price history');
-      setPriceHistory([]);
-      setPriceDropAlerts([]);
-      setUpgradePrices(new Map());
-      setIsLoading(false);
-    };
-
-    const handleCloudRestore = () => {
-      console.log('[PriceHistoryProvider] Cloud data restored, reloading scoped price history');
-      void loadStoredData();
-    };
-
-    try {
-      if (typeof window !== 'undefined' && typeof window.addEventListener !== 'undefined') {
-        window.addEventListener('appDataCleared', handleDataCleared);
-        window.addEventListener('cloudDataRestored', handleCloudRestore);
-        return () => {
-          window.removeEventListener('appDataCleared', handleDataCleared);
-          window.removeEventListener('cloudDataRestored', handleCloudRestore);
-        };
+        if (storedUpgradePrices) {
+          const parsed = JSON.parse(storedUpgradePrices);
+          const map = new Map<string, number>(Object.entries(parsed));
+          setUpgradePrices(map);
+          console.log('[PriceHistoryProvider] Loaded upgrade prices:', map.size, 'tracked');
+        }
+      } catch (error) {
+        console.error('[PriceHistoryProvider] Error loading stored data:', error);
+      } finally {
+        setIsLoading(false);
       }
-    } catch (error) {
-      console.log('[PriceHistoryProvider] Could not set up scoped storage event listeners:', error);
-    }
-  }, [loadStoredData]);
+    };
+
+    void loadStoredData();
+  }, []);
 
   useEffect(() => {
     const saveHistory = async () => {
       try {
-        await AsyncStorage.setItem(storageKeysRef.current.PRICE_HISTORY, JSON.stringify(priceHistory));
+        await AsyncStorage.setItem(PRICE_HISTORY_STORAGE_KEY, JSON.stringify(priceHistory));
       } catch (error) {
         console.error('[PriceHistoryProvider] Error saving price history:', error);
       }
@@ -174,7 +126,7 @@ export const [PriceHistoryProvider, usePriceHistory] = createContextHook((): Pri
   useEffect(() => {
     const saveAlerts = async () => {
       try {
-        await AsyncStorage.setItem(storageKeysRef.current.PRICE_DROP_ALERTS, JSON.stringify(priceDropAlerts));
+        await AsyncStorage.setItem(PRICE_DROP_ALERTS_STORAGE_KEY, JSON.stringify(priceDropAlerts));
       } catch (error) {
         console.error('[PriceHistoryProvider] Error saving price drop alerts:', error);
       }
@@ -444,7 +396,7 @@ export const [PriceHistoryProvider, usePriceHistory] = createContextHook((): Pri
     if (updatedCount > 0) {
       setUpgradePrices(newPrices);
       const obj = Object.fromEntries(newPrices);
-      AsyncStorage.setItem(storageKeysRef.current.UPGRADE_PRICES, JSON.stringify(obj)).catch(err => {
+      AsyncStorage.setItem(UPGRADE_PRICES_STORAGE_KEY, JSON.stringify(obj)).catch(err => {
         console.error('[PriceHistoryProvider] Error saving upgrade prices:', err);
       });
       console.log('[PriceHistoryProvider] Updated', updatedCount, 'upgrade price entries, total tracked:', newPrices.size);
@@ -454,9 +406,9 @@ export const [PriceHistoryProvider, usePriceHistory] = createContextHook((): Pri
   const clearPriceHistory = useCallback(async () => {
     try {
       await Promise.all([
-        AsyncStorage.removeItem(storageKeysRef.current.PRICE_HISTORY),
-        AsyncStorage.removeItem(storageKeysRef.current.PRICE_DROP_ALERTS),
-        AsyncStorage.removeItem(storageKeysRef.current.UPGRADE_PRICES),
+        AsyncStorage.removeItem(PRICE_HISTORY_STORAGE_KEY),
+        AsyncStorage.removeItem(PRICE_DROP_ALERTS_STORAGE_KEY),
+        AsyncStorage.removeItem(UPGRADE_PRICES_STORAGE_KEY),
       ]);
       setPriceHistory([]);
       setPriceDropAlerts([]);

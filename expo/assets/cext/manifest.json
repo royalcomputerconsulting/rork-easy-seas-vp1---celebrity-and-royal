@@ -10,11 +10,11 @@
     {
       "matches": [
         "https://www.celebritycruises.com/blue-chip-club/offers/*",
-        "https://www.celebritycruises.com/account/upcoming-cruises*",
+        "https://www.celebritycruises.com/myaccount*",
         "https://www.celebritycruises.com/account/courtesy-holds*",
         "https://www.celebritycruises.com/account/loyalty-programs*",
         "https://www.royalcaribbean.com/club-royale/*",
-        "https://www.royalcaribbean.com/account/upcoming-cruises*",
+        "https://www.royalcaribbean.com/myaccount*",
         "https://www.carnival.com/cruise-deals*",
         "https://www.carnival.com/profilemanagement/*"
       ],

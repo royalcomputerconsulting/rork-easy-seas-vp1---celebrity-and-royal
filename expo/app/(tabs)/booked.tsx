@@ -30,24 +30,19 @@ import {
   Target,
   DollarSign,
   Crown,
-  Globe2,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
 import { withAlpha } from '@/constants/loyaltyColors';
-import { getPlayerCardTheme, type SupportedBrand } from '@/constants/loyaltyTheme';
-import { getCelebrityCaptainsClubLevelByPoints } from '@/constants/celebrityCaptainsClub';
-import { getSilverseaTierByDays } from '@/constants/silverseaVenetianSociety';
+import { createLoyaltyCardTheme, getClubRoyaleTierColor } from '@/constants/loyaltyTheme';
 import { LoyaltyPill } from '@/components/ui/LoyaltyPill';
 import { useAppState } from '@/state/AppStateProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { useUser } from '@/state/UserProvider';
-import { useAuth } from '@/state/AuthProvider';
 import { MinimalistFilterBar } from '@/components/ui/MinimalistFilterBar';
-import { createDateFromString } from '@/lib/date';
+import { isDateInPast, createDateFromString } from '@/lib/date';
 import { CruiseCard } from '@/components/CruiseCard';
-import { DOLLARS_PER_POINT, type BookedCruise } from '@/types/models';
-import { dedupeBookedCruises } from '@/lib/dataIdentity';
+import type { BookedCruise } from '@/types/models';
 import { AddBookedCruiseModal } from '@/components/AddBookedCruiseModal';
 import { MarineAlertsPanel } from '@/components/MarineAlertsPanel';
 import { ResponsiveContainer } from '@/components/ResponsiveContainer';
@@ -57,56 +52,31 @@ import { useSimpleAnalytics } from '@/state/SimpleAnalyticsProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import { formatCurrency, formatNumber as formatNum } from '@/lib/format';
 import { CrownAnchorTimeline } from '@/components/CrownAnchorTimeline';
-import { IntelligenceFilterStrip } from '@/components/IntelligenceFilterStrip';
-import { useIntelligenceFilters } from '@/state/IntelligenceFiltersProvider';
-import { filterRecordsByIntelligence } from '@/lib/intelligenceFilters';
 import { buildCruiseEconomicsSummary } from '@/lib/casinoCruiseEconomics';
-import { getBookedCruiseCasinoPoints } from '@/lib/casinoPointTruth';
-import { CONFIRMED_CLUB_ROYALE_2025_POINTS, isKnownCasinoProfile } from '@/lib/knownProfileFallback';
-import { applyKnownBookingCorrections, findOverlappingBookedCruises } from '@/lib/cruiseOverlapGuards';
-import { isActiveBookedCruise, isCompletedBookedCruise } from '@/lib/bookedCruiseStatus';
 
 type FilterType = 'all' | 'upcoming' | 'completed' | 'celebrity';
 type SortType = 'next' | 'newest' | 'oldest' | 'ship' | 'nights';
 type ViewMode = 'list' | 'timeline' | 'points';
 
-const BOOKED_MARINE_ALERT_FORECAST_DAYS = 10;
-const BOOKED_MARINE_ALERT_DAYS_AHEAD = BOOKED_MARINE_ALERT_FORECAST_DAYS - 1;
-
 function isCruiseCompleted(cruise: BookedCruise): boolean {
-  return isCompletedBookedCruise(cruise);
-}
-
-function isCruiseUpcomingBooking(cruise: BookedCruise): boolean {
-  return isActiveBookedCruise(cruise);
-}
-
-function startOfLocalDay(date: Date): Date {
-  const normalized = new Date(date);
-  normalized.setHours(0, 0, 0, 0);
-  return normalized;
-}
-
-function getCruiseForecastEndDate(cruise: BookedCruise, sailStart: Date): Date {
-  if (cruise.returnDate) {
-    const parsedReturnDate = createDateFromString(cruise.returnDate);
-    if (!Number.isNaN(parsedReturnDate.getTime())) {
-      return startOfLocalDay(parsedReturnDate);
-    }
+  if (cruise.completionState === 'completed' || cruise.status === 'completed') {
+    return true;
   }
-
-  const nights = typeof cruise.nights === 'number' && Number.isFinite(cruise.nights) && cruise.nights > 0 ? cruise.nights : 0;
-  const estimatedReturnDate = new Date(sailStart);
-  estimatedReturnDate.setDate(estimatedReturnDate.getDate() + nights);
-  return startOfLocalDay(estimatedReturnDate);
-}
-
-function isCruiseInsideForecastWindow(cruise: BookedCruise, windowStart: Date, windowEnd: Date): boolean {
-  if (!cruise.sailDate) return false;
-  const sailStart = startOfLocalDay(createDateFromString(cruise.sailDate));
-  if (Number.isNaN(sailStart.getTime())) return false;
-  const cruiseEnd = getCruiseForecastEndDate(cruise, sailStart);
-  return cruiseEnd >= windowStart && sailStart <= windowEnd;
+  if (cruise.returnDate) {
+    return isDateInPast(cruise.returnDate);
+  }
+  if (cruise.sailDate && cruise.nights) {
+    const sailDate = createDateFromString(cruise.sailDate);
+    const estimatedReturn = new Date(sailDate);
+    estimatedReturn.setDate(estimatedReturn.getDate() + cruise.nights);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return estimatedReturn < today;
+  }
+  if (cruise.sailDate) {
+    return isDateInPast(cruise.sailDate);
+  }
+  return false;
 }
 
 const FILTER_OPTIONS: { label: string; value: FilterType }[] = [
@@ -124,49 +94,17 @@ const SORT_OPTIONS: { label: string; value: SortType }[] = [
   { label: 'By Nights', value: 'nights' },
 ];
 
-function mergeCruiseData(primaryCruises: BookedCruise[], fallbackCruises: BookedCruise[]): BookedCruise[] {
-  return applyKnownBookingCorrections(dedupeBookedCruises([...fallbackCruises, ...primaryCruises], 'booked screen merged cruises'));
-}
-
-function resolveCasinoThemeBrand(selectedBrand: string, preferredBrand?: SupportedBrand): SupportedBrand {
-  if (selectedBrand === 'royal' || selectedBrand === 'celebrity' || selectedBrand === 'silversea' || selectedBrand === 'carnival') {
-    return selectedBrand;
-  }
-
-  return preferredBrand ?? 'royal';
-}
-
-function getBookedCruiseRenderKey(cruise: BookedCruise, index: number): string {
-  const keyParts = [
-    cruise.id,
-    cruise.ownerProfileId,
-    cruise.sourceEmail,
-    cruise.reservationNumber,
-    cruise.bookingId,
-    cruise.sailDate,
-    cruise.returnDate,
-  ]
-    .filter((part): part is string => typeof part === 'string' && part.trim().length > 0)
-    .map((part) => part.trim());
-
-  return `${keyParts.join('|') || 'booked-cruise'}|${index}`;
-}
-
 export default function BookedScreen() {
   const router = useRouter();
   const { localData, clubRoyaleProfile, isLoading: appLoading, refreshData } = useAppState();
   const { addBookedCruise, bookedCruises: storedBooked } = useCoreData();
-  const { authenticatedEmail } = useAuth();
-  const { users, currentUser } = useUser();
-  const { selectedProfileId, selectedBrand, selectedProgram } = useIntelligenceFilters();
+  useUser();
   const { casinoAnalytics } = useSimpleAnalytics();
   const {
     clubRoyaleTier: loyaltyClubRoyaleTier,
     clubRoyaleCurrentYearPoints,
     clubRoyaleHistoricalPoints,
     crownAnchorPoints,
-    crownAnchorLevel,
-    captainsClub,
   } = useLoyalty();
 
   const [refreshing, setRefreshing] = useState(false);
@@ -178,32 +116,18 @@ export default function BookedScreen() {
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [showAddModal, setShowAddModal] = useState(false);
 
-  const intelligenceFilterSnapshot = useMemo(() => ({
-    selectedProfileId,
-    selectedBrand,
-    selectedProgram,
-  }), [selectedBrand, selectedProfileId, selectedProgram]);
-
   const bookedCruises = useMemo(() => {
-    const localBooked = filterRecordsByIntelligence((localData.booked || []) as BookedCruise[], intelligenceFilterSnapshot, users);
-    const storedScoped = filterRecordsByIntelligence(storedBooked, intelligenceFilterSnapshot, users);
-    const baseCruises = dedupeBookedCruises([...storedScoped, ...localBooked], 'booked screen scoped source merge');
-    const normalizedEmail = authenticatedEmail?.toLowerCase().trim() ?? null;
-    const mergedCruises = filterRecordsByIntelligence(mergeCruiseData(baseCruises, []), intelligenceFilterSnapshot, users);
-    console.log('[Booked] Resolved booked cruise source:', {
-      authenticatedEmail: normalizedEmail,
-      localBooked: localBooked.length,
-      storedBooked: storedScoped.length,
-      mergedCruises: mergedCruises.length,
-    });
-    return mergedCruises;
-  }, [authenticatedEmail, intelligenceFilterSnapshot, localData.booked, storedBooked, users]);
+    const localBooked = localData.booked || [];
+    if (localBooked.length > 0) return localBooked;
+    if (storedBooked.length > 0) return storedBooked;
+    return [];
+  }, [localData.booked, storedBooked]);
 
   const filteredCruises = useMemo(() => {
-    let result = bookedCruises.filter((cruise) => isCruiseUpcomingBooking(cruise) || isCruiseCompleted(cruise));
+    let result = [...bookedCruises];
 
     if (filter === 'upcoming') {
-      result = result.filter(cruise => isCruiseUpcomingBooking(cruise));
+      result = result.filter(cruise => !isCruiseCompleted(cruise));
     } else if (filter === 'completed') {
       result = result.filter(cruise => isCruiseCompleted(cruise));
     } else if (filter === 'celebrity') {
@@ -261,107 +185,65 @@ export default function BookedScreen() {
 
   const currentYearPoints = clubRoyaleCurrentYearPoints;
   const historicalPoints = casinoAnalytics.historicalPointsEarned || clubRoyaleHistoricalPoints;
-  const usesKnownCasinoProfile = isKnownCasinoProfile(authenticatedEmail);
   const clubRoyaleTier = loyaltyClubRoyaleTier || clubRoyaleProfile?.tier || 'Choice';
-  const casinoThemeBrand = useMemo(() => resolveCasinoThemeBrand(selectedBrand, currentUser?.preferredBrand), [currentUser?.preferredBrand, selectedBrand]);
-  const hasRoyalPinnacleReciprocity = crownAnchorLevel === 'Pinnacle' || captainsClub.tier === 'Zenith';
-  const celebrityLevel = useMemo(() => (
-    hasRoyalPinnacleReciprocity ? 'Zenith' : getCelebrityCaptainsClubLevelByPoints(currentUser?.celebrityCaptainsClubPoints ?? captainsClub.points ?? 0)
-  ), [captainsClub.points, currentUser?.celebrityCaptainsClubPoints, hasRoyalPinnacleReciprocity]);
-  const silverseaTier = useMemo(() => currentUser?.silverseaVenetianTier || getSilverseaTierByDays(currentUser?.silverseaVenetianPoints ?? 0), [currentUser?.silverseaVenetianPoints, currentUser?.silverseaVenetianTier]);
-  const casinoCardTheme = useMemo(() => getPlayerCardTheme({
-    brand: casinoThemeBrand,
-    crownAnchorLevel: crownAnchorLevel || currentUser?.crownAnchorLevel,
-    celebrityLevel,
-    silverseaTier,
-    carnivalVifpTier: currentUser?.carnivalVifpTier || 'Blue',
-  }), [casinoThemeBrand, celebrityLevel, crownAnchorLevel, currentUser?.carnivalVifpTier, currentUser?.crownAnchorLevel, silverseaTier]);
+  const clubRoyaleTierColor = getClubRoyaleTierColor(clubRoyaleTier);
+  const casinoCardTheme = useMemo(() => createLoyaltyCardTheme(clubRoyaleTierColor), [clubRoyaleTierColor]);
 
   const stats = useMemo(() => {
-    const activeCruises = bookedCruises.filter((cruise) => isCruiseUpcomingBooking(cruise) || isCruiseCompleted(cruise));
-    const upcoming = activeCruises.filter(c => isCruiseUpcomingBooking(c)).length;
-    const completed = activeCruises.filter(c => isCruiseCompleted(c)).length;
-    const withData = activeCruises.filter(c => c.price && c.price > 0).length;
+    const upcoming = bookedCruises.filter(c => !isCruiseCompleted(c)).length;
+    const completed = bookedCruises.filter(c => isCruiseCompleted(c)).length;
+    const withData = bookedCruises.filter(c => c.price && c.price > 0).length;
     const totalNights = crownAnchorPoints;
-    const totalPoints = activeCruises.reduce((sum, c) => sum + getBookedCruiseCasinoPoints(c), 0);
-    const totalSpent = activeCruises.reduce((sum, c) => sum + (c.totalPrice || c.price || 0), 0);
-    return { upcoming, completed, withData, total: activeCruises.length, totalNights, totalPoints, totalSpent };
+    const totalPoints = bookedCruises.reduce((sum, c) => sum + (c.earnedPoints || c.casinoPoints || 0), 0);
+    const totalSpent = bookedCruises.reduce((sum, c) => sum + (c.totalPrice || c.price || 0), 0);
+    return { upcoming, completed, withData, total: bookedCruises.length, totalNights, totalPoints, totalSpent };
   }, [bookedCruises, crownAnchorPoints]);
 
   const cruiseEconomicsSummary = useMemo(() => {
-    const activeCruises = bookedCruises.filter((cruise) => isCruiseUpcomingBooking(cruise) || isCruiseCompleted(cruise));
-    return buildCruiseEconomicsSummary(activeCruises, new Date(), { scope: 'allCruises' });
+    return buildCruiseEconomicsSummary(bookedCruises);
   }, [bookedCruises]);
 
-  const gamingActivitySummary = useMemo(() => {
-    return buildCruiseEconomicsSummary(bookedCruises, new Date(), {
-      useKnownAnnualReportFacts: usesKnownCasinoProfile,
-      minimumTotalPoints: usesKnownCasinoProfile ? CONFIRMED_CLUB_ROYALE_2025_POINTS : undefined,
-      pointsAdjustmentNote: 'Historical Club Royale points use the confirmed 58,680-point 2025 season floor when imported per-cruise rows do not contain every point transaction.',
-    });
-  }, [bookedCruises, usesKnownCasinoProfile]);
-
   const casinoStats = useMemo(() => {
-    const gamingCruiseCount = gamingActivitySummary.totals.cruises;
-    const portfolioCruiseCount = cruiseEconomicsSummary.totals.cruises;
-    const historicalCoinInFromPoints = historicalPoints > 0 ? historicalPoints * DOLLARS_PER_POINT : 0;
-    const totalCoinIn = gamingActivitySummary.totals.totalCoinIn || casinoAnalytics.totalCoinIn || historicalCoinInFromPoints;
-    const totalCashResult = gamingActivitySummary.totals.totalCashResult || cruiseEconomicsSummary.totals.totalCashResult;
+    const scopedCruiseCount = cruiseEconomicsSummary.totals.cruises;
+    const totalCoinIn = cruiseEconomicsSummary.totals.totalCoinIn || casinoAnalytics.totalCoinIn || 0;
+    const totalCashResult = cruiseEconomicsSummary.totals.totalCashResult;
     const totalRetailValue = cruiseEconomicsSummary.totals.totalRetailValue;
     const totalPaid = cruiseEconomicsSummary.totals.totalPaid;
     const totalCruiseValueCaptured = cruiseEconomicsSummary.totals.totalCruiseValueCaptured;
     const totalEconomicValue = cruiseEconomicsSummary.totals.totalEconomicValue;
 
-    console.log('[Booked] Casino stats calculated with shared gaming activity summary:', {
-      gamingCruiseCount,
-      portfolioCruiseCount,
-      historicalPoints,
-      historicalCoinInFromPoints,
+    console.log('[Booked] Casino stats calculated from annual economics summary:', {
+      scopedCruiseCount,
       totalRetailValue,
       totalPaid,
       totalCruiseValueCaptured,
       totalCashResult,
       totalEconomicValue,
       totalCoinIn,
-      gamingTotalCoinIn: gamingActivitySummary.totals.totalCoinIn,
-      hasEstimates: gamingActivitySummary.totals.hasEstimates || cruiseEconomicsSummary.totals.hasEstimates,
+      hasEstimates: cruiseEconomicsSummary.totals.hasEstimates,
     });
 
     return {
       totalCoinIn,
       netResult: totalCashResult,
-      avgCoinInPerCruise: gamingCruiseCount > 0 ? totalCoinIn / gamingCruiseCount : casinoAnalytics.avgCoinInPerCruise,
-      avgCashResultPerCruise: gamingCruiseCount > 0 ? totalCashResult / gamingCruiseCount : 0,
+      avgCoinInPerCruise: scopedCruiseCount > 0 ? totalCoinIn / scopedCruiseCount : casinoAnalytics.avgCoinInPerCruise,
+      avgCashResultPerCruise: scopedCruiseCount > 0 ? totalCashResult / scopedCruiseCount : 0,
       totalRetailValue,
       totalPaid,
       totalCruiseValueCaptured,
       totalEconomicValue,
-      completedCount: gamingCruiseCount || portfolioCruiseCount,
-      hasEstimates: gamingActivitySummary.totals.hasEstimates || cruiseEconomicsSummary.totals.hasEstimates,
+      completedCount: scopedCruiseCount,
+      hasEstimates: cruiseEconomicsSummary.totals.hasEstimates,
     };
-  }, [casinoAnalytics.avgCoinInPerCruise, casinoAnalytics.totalCoinIn, cruiseEconomicsSummary, gamingActivitySummary, historicalPoints]);
+  }, [casinoAnalytics.avgCoinInPerCruise, casinoAnalytics.totalCoinIn, cruiseEconomicsSummary]);
 
-  const overlapWarningsByCruiseId = useMemo(() => {
-    const warnings = findOverlappingBookedCruises(bookedCruises);
-    return new Map(warnings.map((warning) => [warning.cruiseId, warning.message]));
-  }, [bookedCruises]);
-
-  const upcomingCruisesForAlerts = useMemo((): BookedCruise[] => {
-    const forecastWindowStart = startOfLocalDay(new Date());
-    const forecastWindowEnd = new Date(forecastWindowStart);
-    forecastWindowEnd.setDate(forecastWindowEnd.getDate() + BOOKED_MARINE_ALERT_DAYS_AHEAD);
-
-    const nextForecastCruise = bookedCruises
-      .filter((cruise) => isCruiseUpcomingBooking(cruise))
-      .filter((cruise) => isCruiseInsideForecastWindow(cruise, forecastWindowStart, forecastWindowEnd))
-      .sort((a, b) => createDateFromString(a.sailDate).getTime() - createDateFromString(b.sailDate).getTime())[0];
-
-    return nextForecastCruise ? [nextForecastCruise] : [];
+  const upcomingCruisesForAlerts = useMemo(() => {
+    return bookedCruises.filter((cruise) => !isCruiseCompleted(cruise));
   }, [bookedCruises]);
 
   const nextCruise = useMemo(() => {
     const upcomingCruises = bookedCruises
-      .filter(c => isCruiseUpcomingBooking(c))
+      .filter(c => !isCruiseCompleted(c))
       .sort((a, b) => createDateFromString(a.sailDate).getTime() - createDateFromString(b.sailDate).getTime());
     return upcomingCruises[0] || null;
   }, [bookedCruises]);
@@ -383,19 +265,13 @@ export default function BookedScreen() {
 
   const handleCruisePress = useCallback((cruise: BookedCruise) => {
     console.log('[Booked] Cruise pressed:', cruise.id);
-    router.push(`/cruise-details?id=${cruise.id}&source=booked` as any);
+    router.push(`/cruise-details?id=${cruise.id}` as any);
   }, [router]);
 
   const handleAddCruise = useCallback(() => {
     console.log('[Booked] Opening add cruise modal');
     setShowAddModal(true);
   }, []);
-
-  const handleCountriesPress = useCallback(() => {
-    const countryFilter = filter === 'upcoming' || filter === 'completed' ? filter : 'all';
-    console.log('[Booked] Opening Countries view:', countryFilter);
-    router.push({ pathname: '/countries' as any, params: { filter: countryFilter } });
-  }, [filter, router]);
 
   const handleSaveNewCruise = useCallback(async (cruise: BookedCruise) => {
     console.log('[Booked] Saving new cruise:', cruise);
@@ -429,16 +305,15 @@ export default function BookedScreen() {
           cruise={item}
           onPress={() => handleCruisePress(item)}
           variant={isPast ? 'completed' : 'booked'}
-          conflictWarning={overlapWarningsByCruiseId.get(item.id)}
           mini={true}
         />
       </ResponsiveContainer>
     );
-  }, [handleCruisePress, overlapWarningsByCruiseId]);
+  }, [handleCruisePress]);
 
   const renderTimelineView = () => {
     const upcomingCruises = filteredCruises
-      .filter(c => isCruiseUpcomingBooking(c))
+      .filter(c => !isCruiseCompleted(c))
       .sort((a, b) => createDateFromString(a.sailDate).getTime() - createDateFromString(b.sailDate).getTime());
     const completedCruises = filteredCruises
       .filter(c => isCruiseCompleted(c))
@@ -462,10 +337,10 @@ export default function BookedScreen() {
             </View>
           ) : (
             <View style={styles.timelineVerticalList}>
-              {upcomingCruises.map((cruise, index) => {
+              {upcomingCruises.map((cruise) => {
                 const daysUntil = getDaysUntilCruise(cruise.sailDate);
                 return (
-                  <View key={getBookedCruiseRenderKey(cruise, index)} style={styles.timelineItemWrapper}>
+                  <View key={cruise.id} style={styles.timelineItemWrapper}>
                     {daysUntil !== null && (
                       <View style={styles.timelineDaysIndicator}>
                         <Text style={styles.timelineDaysNumber}>{daysUntil}</Text>
@@ -503,10 +378,10 @@ export default function BookedScreen() {
             </View>
           ) : (
             <View style={styles.timelineVerticalList}>
-              {completedCruises.map((cruise, index) => {
-                const points = getBookedCruiseCasinoPoints(cruise);
+              {completedCruises.map((cruise) => {
+                const points = cruise.earnedPoints || cruise.casinoPoints || 0;
                 return (
-                  <View key={getBookedCruiseRenderKey(cruise, index)} style={styles.timelineItemWrapper}>
+                  <View key={cruise.id} style={styles.timelineItemWrapper}>
                     {points > 0 && (
                       <View style={[styles.timelineDaysIndicator, styles.timelinePointsIndicator]}>
                         <Award size={14} color={COLORS.success} />
@@ -602,10 +477,10 @@ export default function BookedScreen() {
         <MarineAlertsPanel
           cruises={upcomingCruisesForAlerts}
           startDate={new Date()}
-          daysAhead={BOOKED_MARINE_ALERT_DAYS_AHEAD}
+          daysAhead={7}
           maxItems={3}
           title="Rough seas / weather alerts"
-          description="10-day outlook focused on the next sailing you are on, with rough-seas, squall, and bad-weather watchouts before and during the cruise."
+          description="Checks upcoming sailings for rough-seas, squall, and bad-weather watchouts so you can see issues before embarkation."
           testID="booked-marine-alerts-panel"
         />
       </View>
@@ -620,28 +495,28 @@ export default function BookedScreen() {
         >
           <View style={styles.casinoHeader}>
             <View style={[styles.casinoIconBadge, {
-              backgroundColor: casinoCardTheme.surfaceColor,
+              backgroundColor: withAlpha(casinoCardTheme.accentColor, 0.28),
               borderWidth: 1,
-              borderColor: casinoCardTheme.borderColor,
+              borderColor: withAlpha('#FFFFFF', 0.18),
             }]}> 
-              <Dice5 size={20} color={casinoCardTheme.accentColor} />
+              <Dice5 size={20} color={COLORS.white} />
             </View>
             <Text style={[styles.casinoTitle, { color: casinoCardTheme.topTextColor }]}>Casino</Text>
-            <LoyaltyPill label={clubRoyaleTier} color={casinoCardTheme.accentColor} size="small" testID="booked-casino-tier-pill" />
+            <LoyaltyPill label={clubRoyaleTier} color={clubRoyaleTierColor} size="small" testID="booked-casino-tier-pill" />
           </View>
           
           <View style={styles.casinoMetricsGrid}>
-            <View style={[styles.casinoMetricCard, { backgroundColor: casinoCardTheme.surfaceColor, borderWidth: 1, borderColor: casinoCardTheme.borderColor }]}>
+            <View style={[styles.casinoMetricCard, { backgroundColor: casinoCardTheme.surfaceColor, borderWidth: 1, borderColor: withAlpha(casinoCardTheme.accentColor, 0.24) }]}>
               <View style={[styles.casinoMetricIcon, { backgroundColor: casinoCardTheme.surfaceColorMuted }]}>
-                <Coins size={16} color={casinoCardTheme.accentColor} />
+                <Coins size={16} color={COLORS.goldLight} />
               </View>
               <Text style={[styles.casinoMetricValue, { color: casinoCardTheme.topTextColor }]}>{formatCurrency(casinoStats.totalCoinIn)}</Text>
               <Text style={[styles.casinoMetricLabel, { color: casinoCardTheme.secondaryTextColor }]}>Total Coin-In</Text>
             </View>
             
-            <View style={[styles.casinoMetricCard, { backgroundColor: casinoCardTheme.surfaceColor, borderWidth: 1, borderColor: casinoCardTheme.borderColor }]}>
+            <View style={[styles.casinoMetricCard, { backgroundColor: casinoCardTheme.surfaceColor, borderWidth: 1, borderColor: withAlpha(casinoCardTheme.accentColor, 0.24) }]}>
               <View style={[styles.casinoMetricIcon, { backgroundColor: casinoCardTheme.surfaceColorMuted }]}>
-                <Target size={16} color={casinoCardTheme.accentColor} />
+                <Target size={16} color={casinoStats.netResult >= 0 ? COLORS.success : COLORS.error} />
               </View>
               <Text style={[styles.casinoMetricValue, { color: casinoCardTheme.topTextColor }]}>
                 {casinoStats.netResult >= 0 ? '+' : ''}{formatCurrency(casinoStats.netResult)}
@@ -649,18 +524,18 @@ export default function BookedScreen() {
               <Text style={[styles.casinoMetricLabel, { color: casinoCardTheme.secondaryTextColor }]}>Cash Result</Text>
             </View>
             
-            <View style={[styles.casinoMetricCard, { backgroundColor: casinoCardTheme.surfaceColor, borderWidth: 1, borderColor: casinoCardTheme.borderColor }]}>
+            <View style={[styles.casinoMetricCard, { backgroundColor: casinoCardTheme.surfaceColor, borderWidth: 1, borderColor: withAlpha(casinoCardTheme.accentColor, 0.24) }]}>
               <View style={[styles.casinoMetricIcon, { backgroundColor: casinoCardTheme.surfaceColorMuted }]}>
-                <Award size={16} color={casinoCardTheme.accentColor} />
+                <Award size={16} color={clubRoyaleTierColor} />
               </View>
               <Text style={[styles.casinoMetricValue, { color: casinoCardTheme.topTextColor }]}>{formatNumber(currentYearPoints)}</Text>
               <Text style={[styles.casinoMetricLabel, { color: casinoCardTheme.secondaryTextColor }]}>Current Season</Text>
             </View>
           </View>
           
-          <View style={[styles.casinoFinancialsRow, { backgroundColor: casinoCardTheme.surfaceColor, borderWidth: 1, borderColor: casinoCardTheme.borderColor }]}>
+          <View style={[styles.casinoFinancialsRow, { backgroundColor: casinoCardTheme.surfaceColor, borderWidth: 1, borderColor: withAlpha(casinoCardTheme.accentColor, 0.24) }]}>
             <View style={styles.casinoFinancialItem}>
-              <Ship size={14} color={casinoCardTheme.accentColor} />
+              <Ship size={14} color={casinoCardTheme.topTextColor} />
               <View style={styles.casinoFinancialText}>
                 <Text style={[styles.casinoFinancialLabel, { color: casinoCardTheme.secondaryTextColor }]}>Retail Value</Text>
                 <Text style={[styles.casinoFinancialValue, { color: casinoCardTheme.topTextColor }]}>
@@ -670,7 +545,7 @@ export default function BookedScreen() {
             </View>
             <View style={[styles.casinoFinancialDivider, { backgroundColor: withAlpha(casinoCardTheme.topTextColor, 0.12) }]} />
             <View style={styles.casinoFinancialItem}>
-              <DollarSign size={14} color={casinoCardTheme.accentColor} />
+              <DollarSign size={14} color={casinoCardTheme.topTextColor} />
               <View style={styles.casinoFinancialText}>
                 <Text style={[styles.casinoFinancialLabel, { color: casinoCardTheme.secondaryTextColor }]}>Amount Paid</Text>
                 <Text style={[styles.casinoFinancialValue, { color: casinoCardTheme.topTextColor }]}>
@@ -680,7 +555,7 @@ export default function BookedScreen() {
             </View>
             <View style={[styles.casinoFinancialDivider, { backgroundColor: withAlpha(casinoCardTheme.topTextColor, 0.12) }]} />
             <View style={styles.casinoFinancialItem}>
-              <TrendingUp size={14} color={casinoCardTheme.accentColor} />
+              <TrendingUp size={14} color={casinoCardTheme.topTextColor} />
               <View style={styles.casinoFinancialText}>
                 <Text style={[styles.casinoFinancialLabel, { color: casinoCardTheme.secondaryTextColor }]}>Total Economic Value</Text>
                 <Text style={[styles.casinoFinancialValue, { color: casinoCardTheme.topTextColor }]}> 
@@ -690,7 +565,7 @@ export default function BookedScreen() {
             </View>
           </View>
           
-          <View style={[styles.casinoAvgRow, { backgroundColor: casinoCardTheme.surfaceColorMuted, borderWidth: 1, borderColor: casinoCardTheme.borderColor, marginBottom: SPACING.sm }]}>
+          <View style={[styles.casinoAvgRow, { backgroundColor: casinoCardTheme.surfaceColorMuted, borderWidth: 1, borderColor: withAlpha(casinoCardTheme.accentColor, 0.2), marginBottom: SPACING.sm }]}>
             <View style={styles.casinoAvgItem}>
               <Text style={[styles.casinoAvgLabel, { color: casinoCardTheme.secondaryTextColor }]}>Historical Points</Text>
               <Text style={[styles.casinoAvgValue, { color: casinoCardTheme.topTextColor }]}>{formatNumber(historicalPoints)}</Text>
@@ -703,7 +578,7 @@ export default function BookedScreen() {
           </View>
 
           {casinoStats.completedCount > 0 && (
-            <View style={[styles.casinoAvgRow, { backgroundColor: casinoCardTheme.surfaceColorMuted, borderWidth: 1, borderColor: casinoCardTheme.borderColor }]}>
+            <View style={[styles.casinoAvgRow, { backgroundColor: casinoCardTheme.surfaceColorMuted, borderWidth: 1, borderColor: withAlpha(casinoCardTheme.accentColor, 0.2) }]}>
               <View style={styles.casinoAvgItem}>
                 <Text style={[styles.casinoAvgLabel, { color: casinoCardTheme.secondaryTextColor }]}>Avg Coin-In/Cruise</Text>
                 <Text style={[styles.casinoAvgValue, { color: casinoCardTheme.topTextColor }]}>{formatCurrency(casinoStats.avgCoinInPerCruise)}</Text>
@@ -719,8 +594,6 @@ export default function BookedScreen() {
           )}
         </LinearGradient>
       </View>
-
-      <IntelligenceFilterStrip contextLabel="Booked" variant="bookedCruises" />
 
       <View style={styles.viewModeRow}>
         <View style={styles.viewModeToggle}>
@@ -775,7 +648,6 @@ export default function BookedScreen() {
             activeTab={filter}
             onTabPress={(key) => setFilter(key as FilterType)}
             actions={[
-              { key: 'countries', label: 'Countries', icon: Globe2, onPress: handleCountriesPress },
               { key: 'refresh', label: 'Refresh', icon: RotateCcw, onPress: onRefresh },
               { key: 'hide', label: hideCompleted ? 'Show All' : 'Hide Done', icon: EyeOff, active: hideCompleted, onPress: () => setHideCompleted(!hideCompleted) },
               { key: 'clear', label: 'Clear Filters', icon: X, onPress: clearFilters },
@@ -871,7 +743,7 @@ export default function BookedScreen() {
         <FlatList
           data={viewMode === 'list' ? filteredCruises : ([] as BookedCruise[])}
           renderItem={renderCruiseCard}
-          keyExtractor={(item, index) => getBookedCruiseRenderKey(item, index)}
+          keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
           ListHeaderComponent={renderHeader}
           ListEmptyComponent={viewMode === 'list' ? renderEmpty : undefined}
@@ -904,7 +776,7 @@ export default function BookedScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A1628',
+    backgroundColor: '#E0F2F1',
   },
   safeArea: {
     flex: 1,
@@ -913,12 +785,12 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0A1628',
+    backgroundColor: '#E0F2F1',
   },
   loadingText: {
     marginTop: SPACING.md,
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: '#E2E8F0',
+    color: CLEAN_THEME.text.secondary,
   },
   listContent: {
     padding: SPACING.md,
@@ -1216,12 +1088,12 @@ const styles = StyleSheet.create({
   },
   statsHighlightCard: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.95)',
+    backgroundColor: 'rgba(224, 242, 254, 0.5)',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.sm,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: 'rgba(0, 31, 63, 0.1)',
     minWidth: 70,
   },
   statsHighlightIcon: {
@@ -1247,30 +1119,25 @@ const styles = StyleSheet.create({
   },
   viewModeRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: SPACING.sm,
     marginBottom: SPACING.md,
     paddingHorizontal: SPACING.xs,
   },
   viewModeToggle: {
     flexDirection: 'row',
-    width: '100%',
-    backgroundColor: 'rgba(255,255,255,0.95)',
+    backgroundColor: 'rgba(0, 31, 63, 0.05)',
     borderRadius: BORDER_RADIUS.round,
     padding: 4,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: 'rgba(0, 31, 63, 0.1)',
   },
   viewModeButton: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: SPACING.xs,
     paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.xs,
+    paddingHorizontal: SPACING.lg,
     borderRadius: BORDER_RADIUS.round,
   },
   viewModeButtonActive: {
@@ -1288,7 +1155,6 @@ const styles = StyleSheet.create({
   addCruiseButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-end',
     gap: SPACING.xs,
     backgroundColor: COLORS.navyDeep,
     paddingVertical: SPACING.sm,
@@ -1324,7 +1190,7 @@ const styles = StyleSheet.create({
   timelineSectionTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.white,
+    color: COLORS.navyDeep,
   },
   timelineVerticalList: {
     gap: SPACING.sm,
@@ -1373,17 +1239,17 @@ const styles = StyleSheet.create({
   timelineEmptyCard: {
     paddingVertical: SPACING.xl,
     borderRadius: BORDER_RADIUS.lg,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(224, 242, 254, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
     borderStyle: 'dashed',
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: 'rgba(0, 31, 63, 0.2)',
   },
   timelineEmptyText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.white,
-    opacity: 0.7,
+    color: COLORS.navyDeep,
+    opacity: 0.6,
     marginTop: SPACING.xs,
     textAlign: 'center' as const,
   },
@@ -1450,8 +1316,8 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.md,
     marginBottom: SPACING.xs,
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    borderRadius: BORDER_RADIUS.lg,
+    backgroundColor: 'rgba(224, 242, 254, 0.3)',
+    borderRadius: BORDER_RADIUS.md,
   },
   cruiseListTitle: {
     fontSize: TYPOGRAPHY.fontSizeLG,
@@ -1698,16 +1564,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: SPACING.huge,
     paddingHorizontal: SPACING.xl,
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    borderRadius: BORDER_RADIUS.xl,
+    backgroundColor: 'rgba(224, 242, 254, 0.3)',
+    borderRadius: BORDER_RADIUS.lg,
     marginHorizontal: SPACING.md,
-    marginTop: SPACING.lg,
   },
   emptyIconContainer: {
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: 'rgba(30, 58, 95, 0.1)',
+    backgroundColor: 'rgba(224, 242, 254, 0.8)',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: SPACING.lg,

@@ -1,5 +1,5 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { type GlobalSlotMachine, GLOBAL_SLOT_MACHINES_2020_2025 } from '@/constants/globalSlotMachinesDatabase';
-import { quotaSafeGetItem, quotaSafeSetItem, quotaSafeSetJsonItem, quotaSafeRemoveItem } from '@/lib/storage/quotaSafeStorage';
 
 const PERMANENT_DB_KEY = '@easyseas/PERMANENT_GLOBAL_MACHINE_DATABASE';
 const DB_VERSION_KEY = '@easyseas/PERMANENT_DB_VERSION';
@@ -78,8 +78,8 @@ export class PermanentMachineDatabase {
       console.log('[PermanentDB] Initializing permanent machine database...');
 
       const [storedData, storedVersion] = await Promise.all([
-        quotaSafeGetItem(PERMANENT_DB_KEY),
-        quotaSafeGetItem(DB_VERSION_KEY),
+        AsyncStorage.getItem(PERMANENT_DB_KEY),
+        AsyncStorage.getItem(DB_VERSION_KEY),
       ]);
 
       const version = storedVersion ? parseInt(storedVersion, 10) : 0;
@@ -237,8 +237,8 @@ export class PermanentMachineDatabase {
     try {
       const records = Array.from(this.database.values());
       await Promise.all([
-        quotaSafeSetJsonItem(PERMANENT_DB_KEY, records),
-        quotaSafeSetItem(DB_VERSION_KEY, CURRENT_DB_VERSION.toString()),
+        AsyncStorage.setItem(PERMANENT_DB_KEY, JSON.stringify(records)),
+        AsyncStorage.setItem(DB_VERSION_KEY, CURRENT_DB_VERSION.toString()),
       ]);
       console.log(`[PermanentDB] ✓ Persisted ${records.length} records`);
     } catch (error) {
@@ -249,10 +249,7 @@ export class PermanentMachineDatabase {
 
   async clear(): Promise<void> {
     this.database.clear();
-    await Promise.all([
-      quotaSafeRemoveItem(PERMANENT_DB_KEY),
-      quotaSafeRemoveItem(DB_VERSION_KEY),
-    ]);
+    await AsyncStorage.multiRemove([PERMANENT_DB_KEY, DB_VERSION_KEY]);
     console.log('[PermanentDB] Cleared database');
   }
 

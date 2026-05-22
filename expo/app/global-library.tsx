@@ -112,7 +112,7 @@ export default function GlobalLibraryScreen() {
     router.push(`/machine-detail/${machineId}` as any);
   }, [router]);
 
-  const keyExtractor = useCallback((item: MachineEncyclopediaEntry, index: number) => `${item.id?.trim() || 'global-machine'}-${item.globalMachineId || item.machineName || 'machine'}-${item.manufacturer || 'maker'}-${index}`, []);
+  const keyExtractor = useCallback((item: MachineEncyclopediaEntry) => item.id, []);
 
   const renderMachineCard = useCallback(({ item }: ListRenderItemInfo<MachineEncyclopediaEntry>) => (
     <MachineCard machine={item} onPress={handleMachinePress} onAdd={handleAddMachine} />

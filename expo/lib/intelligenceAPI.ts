@@ -11,7 +11,6 @@ import { CLUB_ROYALE_TIERS, CROWN_ANCHOR_LEVELS, DOLLARS_PER_POINT } from '@/typ
 import { getCruisesByStatus } from './lifecycleManager';
 import { calculateCabinRetailValue, getCabinValueByType } from '@/mocks/bookedCruises';
 import { ROYAL_CARIBBEAN_SHIPS, type ShipInfo } from '@/constants/shipInfo';
-import { getBookedCruiseCasinoPoints, getBookedCruiseWinningsBroughtHome } from '@/lib/casinoPointTruth';
 import { createDateFromString, getDaysUntil, formatDate } from '@/lib/date';
 
 export interface PlayerContext {
@@ -186,9 +185,9 @@ export function getPlayerContext(
   const portfolioROI = totalSpent > 0 ? ((totalSaved / totalSpent) * 100) : 0;
 
   const completedCruises = cruisesByStatus.completed;
-  const totalPointsEarned = completedCruises.reduce((sum, c) => sum + getBookedCruiseCasinoPoints(c), 0);
+  const totalPointsEarned = completedCruises.reduce((sum, c) => sum + (c.earnedPoints || c.casinoPoints || 0), 0);
   const totalCoinIn = totalPointsEarned * DOLLARS_PER_POINT;
-  const netWinLoss = completedCruises.reduce((sum, c) => sum + getBookedCruiseWinningsBroughtHome(c), 0);
+  const netWinLoss = completedCruises.reduce((sum, c) => sum + (c.winnings || 0), 0);
   const avgPointsPerCruise = completedCruises.length > 0 ? totalPointsEarned / completedCruises.length : 0;
   const avgCoinInPerCruise = completedCruises.length > 0 ? totalCoinIn / completedCruises.length : 0;
 

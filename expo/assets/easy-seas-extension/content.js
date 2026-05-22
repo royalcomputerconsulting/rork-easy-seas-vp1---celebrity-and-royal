@@ -1370,7 +1370,7 @@ void function() {
     var loyaltyPoints = loyaltyInfo ? (loyaltyInfo.crownAndAnchorPoints || '') : '';
 
     var rows = [];
-    rows.push(['Source', 'Ship Name', 'Sail Date', 'Return Date', 'Nights', 'Itinerary', 'Departure Port', 'Cabin Type', 'Cabin #', 'Booking ID', 'Status', 'Loyalty Level', 'Loyalty Points', 'Interior Price', 'Oceanview Price', 'Balcony Price', 'Suite Price', 'Port Taxes & Fees'].map(esc).join(','));
+    rows.push(['Source', 'Ship Name', 'Sail Date', 'Return Date', 'Nights', 'Itinerary', 'Departure Port', 'Cabin Type', 'Cabin #', 'Booking ID', 'Status', 'Loyalty Level', 'Loyalty Points'].map(esc).join(','));
 
     allBookings.forEach(function(entry) {
       var b = entry.data;
@@ -1394,15 +1394,12 @@ void function() {
       var deptPort = b.departurePort && typeof b.departurePort === 'object'
         ? (b.departurePort.name || '')
         : (b.departurePort || '');
-      var pricingKey = shipCode + '_' + (b.sailDate || '').toString().trim().slice(0, 10);
-      var pc = pricingCache[pricingKey] || {};
       rows.push([
         esc(status), esc(shipName), esc(fmtDate(b.sailDate)), esc(fmtDate(returnDate)),
         esc(nights), esc(b.cruiseTitle || b.itineraryDescription || (nights ? nights + ' Night Cruise' : '')),
         esc(deptPort), esc(cabinType), esc(cabin),
         esc(b.bookingId || b.masterBookingId || ''), esc(status),
-        esc(loyaltyLevel), esc(loyaltyPoints),
-        esc(fmtPrice(pc.interior)), esc(fmtPrice(pc.oceanview)), esc(fmtPrice(pc.balcony)), esc(fmtPrice(pc.suite)), esc(fmtPrice(pc.taxes))
+        esc(loyaltyLevel), esc(loyaltyPoints)
       ].join(','));
     });
 

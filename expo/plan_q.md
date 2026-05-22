@@ -120,7 +120,7 @@ async function scrollUntilComplete(containerSelector) {
 #### 3B: Upcoming Cruises Script
 **File**: `lib/royalCaribbean/step2_upcoming.ts`
 
-**URL**: `https://www.royalcaribbean.com/account/upcoming-cruises`
+**URL**: `https://www.royalcaribbean.com/myaccount`
 
 **Logic**:
 1. Scroll until all cruise cards loaded

@@ -34,7 +34,7 @@ export async function pickAndReadFile(fileType: 'csv' | 'ics' | 'json'): Promise
     const asset = result.assets[0];
     console.log(`[FileIO] File selected: ${asset.name}, Size: ${asset.size}, URI: ${asset.uri}`);
 
-    if (asset.size && fileType !== 'json') {
+    if (asset.size) {
       const sizeValidation = validateFileSize(asset.size);
       if (!sizeValidation.success) {
         console.error('[FileIO] File size validation failed:', sizeValidation.errors);
@@ -42,8 +42,6 @@ export async function pickAndReadFile(fileType: 'csv' | 'ics' | 'json'): Promise
         error.validationErrors = sizeValidation.errors;
         throw error;
       }
-    } else if (asset.size && fileType === 'json') {
-      console.log('[FileIO] Skipping CSV/ICS size gate for JSON import:', asset.size);
     }
 
     let content: string;
@@ -76,28 +74,21 @@ export async function pickAndReadFile(fileType: 'csv' | 'ics' | 'json'): Promise
       throw error;
     }
 
-    let dataRowCount = 0;
-    let rowWarnings: ImportValidationError[] = [];
-    if (fileType !== 'json') {
-      const lines = content.split(/\r?\n/).filter(line => line.trim());
-      dataRowCount = Math.max(0, lines.length - 1);
-      const rowValidation = validateRowCount(dataRowCount);
-      if (!rowValidation.success) {
-        console.error('[FileIO] Row count validation failed:', rowValidation.errors);
-        const error: any = new Error(rowValidation.errors[0]?.message || 'Too many rows');
-        error.validationErrors = rowValidation.errors;
-        throw error;
-      }
-      rowWarnings = rowValidation.warnings;
-      console.log(`[FileIO] File validated successfully, ${dataRowCount} data rows`);
-    } else {
-      console.log('[FileIO] JSON file validated successfully; row-count limits are not applied to JSON backups');
+    const lines = content.split(/\r?\n/).filter(line => line.trim());
+    const dataRowCount = Math.max(0, lines.length - 1);
+    const rowValidation = validateRowCount(dataRowCount);
+    if (!rowValidation.success) {
+      console.error('[FileIO] Row count validation failed:', rowValidation.errors);
+      const error: any = new Error(rowValidation.errors[0]?.message || 'Too many rows');
+      error.validationErrors = rowValidation.errors;
+      throw error;
     }
 
+    console.log(`[FileIO] File validated successfully, ${dataRowCount} data rows`);
     return { 
       content, 
       fileName: asset.name, 
-      warnings: [...contentValidation.warnings, ...rowWarnings]
+      warnings: [...contentValidation.warnings, ...rowValidation.warnings]
     };
   } catch (error) {
     console.error('[FileIO] Error picking/reading file:', error);

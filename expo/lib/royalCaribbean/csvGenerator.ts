@@ -90,12 +90,7 @@ export function generateBookedCruisesCSV(cruises: BookedCruiseRow[], loyaltyData
     'Booking ID',
     'Status',
     'Loyalty Level',
-    'Loyalty Points',
-    'Interior Price',
-    'Oceanview Price',
-    'Balcony Price',
-    'Suite Price',
-    'Port Taxes & Fees'
+    'Loyalty Points'
   ];
 
   const rows = cruises.map(cruise => [
@@ -111,12 +106,7 @@ export function generateBookedCruisesCSV(cruises: BookedCruiseRow[], loyaltyData
     escapeCSVField(cruise.bookingId),
     escapeCSVField(cruise.status),
     escapeCSVField(cruise.loyaltyLevel || loyaltyData?.crownAndAnchorLevel || ''),
-    escapeCSVField(cruise.loyaltyPoints || loyaltyData?.crownAndAnchorPoints || ''),
-    escapeCSVField(cruise.interiorPrice || ''),
-    escapeCSVField(cruise.oceanviewPrice || ''),
-    escapeCSVField(cruise.balconyPrice || ''),
-    escapeCSVField(cruise.suitePrice || ''),
-    escapeCSVField(cruise.taxesAndFees || '')
+    escapeCSVField(cruise.loyaltyPoints || loyaltyData?.crownAndAnchorPoints || '')
   ]);
 
   const csvContent = [

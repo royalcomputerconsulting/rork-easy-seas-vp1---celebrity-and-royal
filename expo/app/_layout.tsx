@@ -34,7 +34,6 @@ import { TaxProvider } from "@/state/TaxProvider";
 import { MachineStrategyProvider } from "@/state/MachineStrategyProvider";
 import { SlotMachineProvider } from "@/state/SlotMachineProvider";
 import { SlotMachineLibraryProvider, useSlotMachineLibrary } from "@/state/SlotMachineLibraryProvider";
-import { MachineConditionLogProvider } from "@/state/MachineConditionLogProvider";
 import { DeckPlanProvider } from "@/state/DeckPlanProvider";
 import { UserDataSyncProvider, useUserDataSync } from "@/state/UserDataSyncProvider";
 import { EntitlementProvider } from "@/state/EntitlementProvider";
@@ -43,7 +42,6 @@ import { COLORS, SPACING, TYPOGRAPHY } from "@/constants/theme";
 import { composeProviders } from "@/lib/composeProviders";
 import { ensureStorageHealthy } from "@/lib/storage/storageRecovery";
 import { SailingWeatherProvider } from "@/state/SailingWeatherProvider";
-import { IntelligenceFiltersProvider } from "@/state/IntelligenceFiltersProvider";
 
 try {
   void SplashScreen.preventAutoHideAsync();
@@ -292,22 +290,6 @@ function RootLayoutNav() {
         }} 
       />
       <Stack.Screen 
-        name="learn-system" 
-        options={{ 
-          presentation: "modal",
-          headerShown: false,
-          animation: 'slide_from_bottom' as const,
-        }} 
-      />
-      <Stack.Screen 
-        name="ask-my-data" 
-        options={{ 
-          presentation: "modal",
-          headerShown: false,
-          animation: 'slide_from_bottom' as const,
-        }} 
-      />
-      <Stack.Screen 
         name="add-machine-wizard" 
         options={{ 
           presentation: "modal",
@@ -353,30 +335,6 @@ function RootLayoutNav() {
       />
       <Stack.Screen 
         name="pricing-summary" 
-        options={{ 
-          presentation: "modal",
-          headerShown: false,
-          animation: 'slide_from_bottom' as const,
-        }} 
-      />
-      <Stack.Screen 
-        name="import-review" 
-        options={{ 
-          presentation: "modal",
-          headerShown: false,
-          animation: 'slide_from_bottom' as const,
-        }} 
-      />
-      <Stack.Screen 
-        name="command-center" 
-        options={{ 
-          presentation: "modal",
-          headerShown: false,
-          animation: 'slide_from_bottom' as const,
-        }} 
-      />
-      <Stack.Screen 
-        name="war-room" 
         options={{ 
           presentation: "modal",
           headerShown: false,
@@ -583,7 +541,6 @@ const CasinoProviders = composeProviders(
   CasinoSessionProvider,
   SlotMachineProvider,
   SlotMachineLibraryProvider,
-  MachineConditionLogProvider,
   MachineStrategyProvider,
   BankrollProvider,
   GamificationProvider,
@@ -593,10 +550,9 @@ const CasinoProviders = composeProviders(
 const ServiceProviders = composeProviders(
   TaxProvider,
   AlertsProvider,
-  CertificatesProvider,
-  IntelligenceFiltersProvider,
-  SailingWeatherProvider,
   AgentXProvider,
+  CertificatesProvider,
+  SailingWeatherProvider,
 );
 
 export default function RootLayout() {

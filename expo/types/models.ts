@@ -1,67 +1,3 @@
-export type TravelBrand = 'royal' | 'celebrity' | 'carnival' | 'silversea' | 'unknown';
-export type AgentXMode = 'travelAgent' | 'casinoHost' | 'certificateAdvisor' | 'loyaltyStrategist' | 'apScout' | 'calendarPlanner' | 'importAuditor' | 'easySeasGuide';
-export type MachineLogDecision = 'played' | 'passed' | 'watched';
-export type CasinoProgram = 'clubRoyale' | 'blueChip' | 'playersClub' | 'venetianSociety' | 'none' | 'unknown';
-export type ImportReviewStatus = 'assigned' | 'unassigned' | 'reviewNeeded' | 'matched' | 'overlap' | 'error';
-export type OfferArchiveStatus = 'active' | 'expiringSoon' | 'expired' | 'archived' | 'reviewNeeded' | 'replaced';
-export type DataRecordStatus = 'active' | 'available' | 'booked' | 'completed' | 'cancelled' | 'Courtesy Hold' | 'expired' | 'used' | 'archived' | 'reviewNeeded' | 'replaced' | 'skipped';
-
-export interface TravelerProfile {
-  id: string;
-  displayName: string;
-  relationshipLabel?: string;
-  email?: string;
-  royalCaribbeanNumber?: string;
-  clubRoyaleId?: string;
-  celebrityCaptainsClubNumber?: string;
-  blueChipId?: string;
-  defaultProfile?: boolean;
-  active?: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface MachineConditionLog extends SharedOwnershipFields {
-  id: string;
-  shipName: string;
-  casinoLocation: string;
-  machineId?: string;
-  machineName: string;
-  seatBankPosition: string;
-  denomination: string;
-  betLevel: string;
-  majorAmount?: number;
-  grandAmount?: number;
-  visibleMachineState: string;
-  bonusMeterCondition: string;
-  timeObserved: string;
-  decision: MachineLogDecision;
-  notes?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface SharedOwnershipFields {
-  ownerProfileId?: string;
-  sourceEmail?: string;
-  brand?: TravelBrand | string;
-  casinoProgram?: CasinoProgram;
-  importStatus?: ImportReviewStatus;
-  archiveStatus?: OfferArchiveStatus;
-  reconciliationStatus?: ImportReviewStatus;
-}
-
-export interface ImportReconciliationSummary {
-  addedRows: number;
-  updatedRows: number;
-  removedMissingRows: number;
-  suggestedArchiveRows: number;
-  changedOffers: number;
-  duplicateOverlappingSailings: number;
-  reviewNeededItems: number;
-  errors: string[];
-}
-
 export type CabinCategory = 
   | 'Interior GTY'
   | 'Interior'
@@ -95,7 +31,7 @@ export const CABIN_HIERARCHY: CabinCategory[] = [
   'Penthouse Suite',
 ];
 
-export interface Cruise extends SharedOwnershipFields {
+export interface Cruise {
   id: string;
   shipName: string;
   sailDate: string;
@@ -104,7 +40,7 @@ export interface Cruise extends SharedOwnershipFields {
   destination: string;
   nights: number;
   category?: string;
-  brand?: TravelBrand | string;
+  brand?: string;
   price?: number;
   pricePerNight?: number;
   cabinType?: CabinCategory | 'Interior' | 'Oceanview' | 'Balcony' | 'Suite' | string;
@@ -133,7 +69,7 @@ export interface Cruise extends SharedOwnershipFields {
   offerValue?: number;
   perks?: string[];
   percentOff?: number;
-  status?: 'available' | 'booked' | 'completed' | 'cancelled' | 'Courtesy Hold' | 'archived' | 'reviewNeeded';
+  status?: 'available' | 'booked' | 'completed' | 'cancelled' | 'Courtesy Hold';
   notes?: string;
   imageUrl?: string;
   itinerary?: ItineraryDay[];
@@ -154,7 +90,6 @@ export interface Cruise extends SharedOwnershipFields {
   seaDays?: number;
   portDays?: number;
   received?: string;
-  programCharter?: string;
   cruiseSource?: 'royal' | 'celebrity' | 'carnival';
   createdAt?: string;
   updatedAt?: string;
@@ -249,10 +184,6 @@ export interface BookedCruise extends Cruise {
   netEffectivePaid?: number;
   winningsBroughtHome?: number;
   casinoChargesRoomBilled?: number;
-  instantCertificateWon?: boolean;
-  instantCertificateOfferCode?: string;
-  instantCertificateValue?: number;
-  instantCertificateNotes?: string;
   coinIn?: number;
   houseEdge?: number;
   pointsEarned?: number;
@@ -278,7 +209,7 @@ export type OfferClassification =
   | 'comped'
   | 'partial';
 
-export interface CasinoOffer extends SharedOwnershipFields {
+export interface CasinoOffer {
   id: string;
   cruiseId?: string;
   cruiseIds?: string[];
@@ -336,7 +267,7 @@ export interface CasinoOffer extends SharedOwnershipFields {
   validFrom?: string;
   validUntil?: string;
   
-  status?: 'active' | 'expired' | 'used' | 'booked' | 'archived' | 'reviewNeeded' | 'replaced' | 'skipped';
+  status?: 'active' | 'expired' | 'used' | 'booked';
   has2025Badge?: boolean;
   
   termsConditions?: string;
@@ -354,7 +285,7 @@ export interface CasinoOffer extends SharedOwnershipFields {
   updatedAt?: string;
 }
 
-export interface CalendarEvent extends SharedOwnershipFields {
+export interface CalendarEvent {
   id: string;
   title: string;
   startDate: string;
@@ -373,7 +304,7 @@ export interface CalendarEvent extends SharedOwnershipFields {
   source?: 'manual' | 'tripit' | 'import';
 }
 
-export interface FinancialsRecord extends SharedOwnershipFields {
+export interface FinancialsRecord {
   id: string;
   sourceType: 'receipt' | 'statement';
   date: string;
@@ -565,7 +496,7 @@ export interface PortfolioMetrics {
   lowROICruises: number;
 }
 
-export interface Certificate extends SharedOwnershipFields {
+export interface Certificate {
   id: string;
   type: 'NextCruise' | 'FPP' | 'OBC' | 'Upgrade';
   value: number;
@@ -713,9 +644,10 @@ export function calculateTotalValue(
   taxesFees: number,
   freePlay: number = 0,
   obc: number = 0,
-  _guestCount: number = 2
+  guestCount: number = 2
 ): number {
-  return cabinPrice + taxesFees + freePlay + obc;
+  const cabinValueForTwo = cabinPrice * guestCount;
+  return cabinValueForTwo + taxesFees + freePlay + obc;
 }
 
 export function calculateROI(

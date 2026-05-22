@@ -9,14 +9,11 @@ import {
   Image,
   Platform,
   ActivityIndicator,
-  Modal,
-  TextInput,
-  KeyboardAvoidingView,
 } from 'react-native';
 import { File as ExpoFile, Paths as ExpoPaths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { 
   BarChart3, 
@@ -37,16 +34,12 @@ import {
   Dices,
   Calculator,
   Download,
-  Save,
-  X,
-  Ticket,
 } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME, SHADOW } from '@/constants/theme';
 import { useSimpleAnalytics } from '@/state/SimpleAnalyticsProvider';
 import { useAppState } from '@/state/AppStateProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
-import { useAuth } from '@/state/AuthProvider';
 import { formatCurrency, formatCurrencyDetailed, formatNumber, formatPercentage } from '@/lib/format';
 import { calculateCruiseValue } from '@/lib/valueCalculator';
 import { createDateFromString } from '@/lib/date';
@@ -58,7 +51,7 @@ import {
 import { 
   getLevelProgress
 } from '@/constants/crownAnchor';
-import { DOLLARS_PER_POINT, type BookedCruise } from '@/types/models';
+import type { BookedCruise } from '@/types/models';
 import { isRoyalCaribbeanShip } from '@/constants/shipInfo';
 import { getImageForDestination, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
 import { TierProgressionChart } from '@/components/charts/TierProgressionChart';
@@ -97,55 +90,12 @@ import { CompactDashboardHeader } from '@/components/CompactDashboardHeader';
 import { ResponsiveContainer } from '@/components/ResponsiveContainer';
 import { useEntitlement } from '@/state/EntitlementProvider';
 import { useCrewRecognition } from '@/state/CrewRecognitionProvider';
-import { buildCruiseEconomicsSummary, normalizeCruisesWithCasinoEconomics, type CruiseEconomicsRow } from '@/lib/casinoCruiseEconomics';
-import { CONFIRMED_CLUB_ROYALE_2025_POINTS, getKnownCasinoProfileCruises, isKnownCasinoProfile } from '@/lib/knownProfileFallback';
-import { dedupeBookedCruises } from '@/lib/dataIdentity';
-import {
-  DEFAULT_ESTIMATED_POINTS_PER_PLAY_HOUR,
-  buildCurrentSeasonCasinoMetrics,
-  getBookedCruiseCasinoPoints,
-  normalizeCruiseCasinoPerformance,
-} from '@/lib/casinoPointTruth';
+import { buildCruiseEconomicsSummary, type CruiseEconomicsRow } from '@/lib/casinoCruiseEconomics';
 
 type AnalyticsTab = 'intelligence' | 'charts' | 'session' | 'calcs';
 type ROIFilter = 'all' | 'high' | 'medium' | 'low';
 
-type CruisePerformanceForm = {
-  winLoss: string;
-  pointsEarned: string;
-  instantCertificateWon: boolean;
-  instantCertificateOfferCode: string;
-  instantCertificateValue: string;
-  instantCertificateNotes: string;
-};
-
-const EMPTY_PERFORMANCE_FORM: CruisePerformanceForm = {
-  winLoss: '',
-  pointsEarned: '',
-  instantCertificateWon: false,
-  instantCertificateOfferCode: '',
-  instantCertificateValue: '',
-  instantCertificateNotes: '',
-};
-
-function parseNumberInput(value: string): number {
-  const cleaned = value.replace(/[$,\s]/g, '');
-  if (!cleaned || cleaned === '-' || cleaned === '.') return 0;
-  const parsed = Number(cleaned);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
 function calculateCruiseROI(cruise: BookedCruise): { roi: number; valuePerDollar: number } {
-  const summary = buildCruiseEconomicsSummary([cruise], new Date(), { scope: 'allCruises' });
-  const row = summary.rows[0];
-
-  if (row) {
-    return {
-      roi: row.paid > 0 ? (row.netCash / row.paid) * 100 : (row.netCash > 0 ? 1000 : 0),
-      valuePerDollar: row.paid > 0 ? row.totalEconomic / row.paid : (row.totalEconomic > 0 ? 9999 : 0),
-    };
-  }
-
   const breakdown = calculateCruiseValue(cruise);
   return {
     roi: breakdown.trueOutOfPocket > 0 
@@ -162,8 +112,8 @@ function getCruiseROILevel(roi: number): 'high' | 'medium' | 'low' {
 }
 
 export default function AnalyticsScreen() {
+  const router = useRouter();
   useEntitlement();
-  const { authenticatedEmail } = useAuth();
   const { analytics, casinoAnalytics } = useSimpleAnalytics();
   const { 
     activeAlerts, 
@@ -174,12 +124,7 @@ export default function AnalyticsScreen() {
     runDetection,
   } = useAlerts();
   const { clubRoyaleProfile, localData } = useAppState();
-  const {
-    bookedCruises: storedBookedCruises,
-    isLoading: storeLoading,
-    updateBookedCruise,
-    addBookedCruise,
-  } = useCoreData();
+  const { bookedCruises: storedBookedCruises, isLoading: storeLoading } = useCoreData();
   const {
     clubRoyalePoints: loyaltyClubRoyalePoints,
     clubRoyaleTier: loyaltyClubRoyaleTier,
@@ -187,7 +132,6 @@ export default function AnalyticsScreen() {
     clubRoyaleHistoricalPoints,
     clubRoyaleHistoricalTier,
     clubRoyaleNextResetDate,
-    clubRoyaleSyncDiscrepancy,
     crownAnchorPoints: loyaltyCrownAnchorPoints,
     crownAnchorLevel: loyaltyCrownAnchorLevel,
   } = useLoyalty();
@@ -207,8 +151,6 @@ export default function AnalyticsScreen() {
   const [targetPPH, setTargetPPH] = useState(100);
   const [calcsMode, setCalcsMode] = useState<'per-session' | 'historical'>('per-session');
   const [isGeneratingSessions, setIsGeneratingSessions] = useState(false);
-  const [selectedPerformanceCruise, setSelectedPerformanceCruise] = useState<BookedCruise | null>(null);
-  const [performanceForm, setPerformanceForm] = useState<CruisePerformanceForm>(EMPTY_PERFORMANCE_FORM);
   
   const {
     sessions,
@@ -241,39 +183,17 @@ export default function AnalyticsScreen() {
 
   const bookedCruises = useMemo(() => {
     const localBooked = localData.booked || [];
-    const storedBooked = storedBookedCruises || [];
-    const primaryBooked = localBooked.length > 0 ? localBooked : storedBooked;
-    const knownProfileCruises = getKnownCasinoProfileCruises(authenticatedEmail);
-
-    if (knownProfileCruises.length > 0) {
-      const mergedCruises = dedupeBookedCruises([...knownProfileCruises, ...primaryBooked].map(normalizeCruiseCasinoPerformance), 'analytics known-profile cruise merge');
-      const normalizedMergedCruises = normalizeCruisesWithCasinoEconomics(mergedCruises, {
-        includeKnownAnnualFacts: isKnownCasinoProfile(authenticatedEmail),
-      });
-      console.log('[Analytics] Using known profile cruise history merge:', {
-        primary: primaryBooked.length,
-        knownProfile: knownProfileCruises.length,
-        merged: normalizedMergedCruises.length,
-      });
-      return normalizedMergedCruises;
-    }
-
-    if (primaryBooked.length > 0) return normalizeCruisesWithCasinoEconomics(primaryBooked.map(normalizeCruiseCasinoPerformance));
+    if (localBooked.length > 0) return localBooked;
+    if (storedBookedCruises && storedBookedCruises.length > 0) return storedBookedCruises;
     console.log('[Analytics] No booked cruises available, using empty array');
     return [];
-  }, [authenticatedEmail, localData.booked, storedBookedCruises]);
+  }, [localData.booked, storedBookedCruises]);
 
 
 
-  const currentSeasonMetrics = useMemo(() => buildCurrentSeasonCasinoMetrics(bookedCruises), [bookedCruises]);
-  const currentPoints = Math.max(loyaltyClubRoyalePoints, currentSeasonMetrics.points);
-  const currentYearPoints = Math.max(clubRoyaleCurrentYearPoints, currentSeasonMetrics.points);
-  const historicalPoints = Math.max(
-    casinoAnalytics.historicalPointsEarned || 0,
-    clubRoyaleHistoricalPoints || 0,
-    analytics.totalPoints || 0,
-    isKnownCasinoProfile(authenticatedEmail) ? CONFIRMED_CLUB_ROYALE_2025_POINTS : 0,
-  );
+  const currentPoints = loyaltyClubRoyalePoints;
+  const currentYearPoints = clubRoyaleCurrentYearPoints;
+  const historicalPoints = casinoAnalytics.historicalPointsEarned || clubRoyaleHistoricalPoints || analytics.totalPoints || 0;
   const totalNights = loyaltyCrownAnchorPoints || clubRoyaleProfile?.lifetimeNights || analytics.totalNights || 0;
   const clubRoyaleTier = loyaltyClubRoyaleTier || clubRoyaleProfile?.tier || 'Choice';
   const historicalClubRoyaleTier = clubRoyaleHistoricalTier || clubRoyaleTier;
@@ -290,7 +210,7 @@ export default function AnalyticsScreen() {
         const isCompleted = returnDate ? returnDate < today : cruise.completionState === 'completed';
         if (!isCompleted) return false;
         
-        const points = getBookedCruiseCasinoPoints(cruise);
+        const points = cruise.earnedPoints || cruise.casinoPoints || 0;
         const breakdown = calculateCruiseValue(cruise);
         return points > 0 || breakdown.taxesFees > 0 || breakdown.totalRetailValue > 0;
       })
@@ -339,7 +259,7 @@ export default function AnalyticsScreen() {
       };
     }
     const avgPointsPerNight = bookedCruises.length > 0
-      ? bookedCruises.reduce((sum, c) => sum + getBookedCruiseCasinoPoints(c), 0) / 
+      ? bookedCruises.reduce((sum, c) => sum + (c.earnedPoints || c.casinoPoints || 0), 0) / 
         Math.max(1, bookedCruises.reduce((sum, c) => sum + (c.nights || 0), 0))
       : 150;
     
@@ -487,118 +407,13 @@ export default function AnalyticsScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookedCruises.length, sessions.length]);
 
-  const findCruiseForPerformanceEdit = useCallback((cruiseId: string): BookedCruise | null => {
-    return bookedCruises.find((cruise) => cruise.id === cruiseId) ?? null;
-  }, [bookedCruises]);
-
-  const openCruisePerformanceEditor = useCallback((cruise: BookedCruise) => {
-    const existingWinLoss = cruise.winningsBroughtHome ?? cruise.winnings ?? cruise.netResult ?? cruise.totalWinnings ?? cruise.cashResult;
-    const existingPoints = getBookedCruiseCasinoPoints(cruise) || undefined;
-    const hasInstantCertificate = Boolean(
-      cruise.instantCertificateWon ||
-      cruise.instantCertificateOfferCode ||
-      cruise.instantCertificateValue ||
-      cruise.instantCertificateNotes,
-    );
-
-    setSelectedPerformanceCruise(cruise);
-    setPerformanceForm({
-      winLoss: typeof existingWinLoss === 'number' && Number.isFinite(existingWinLoss) ? String(existingWinLoss) : '',
-      pointsEarned: typeof existingPoints === 'number' && Number.isFinite(existingPoints) ? String(existingPoints) : '',
-      instantCertificateWon: hasInstantCertificate,
-      instantCertificateOfferCode: cruise.instantCertificateOfferCode ?? '',
-      instantCertificateValue: typeof cruise.instantCertificateValue === 'number' && Number.isFinite(cruise.instantCertificateValue) ? String(cruise.instantCertificateValue) : '',
-      instantCertificateNotes: cruise.instantCertificateNotes ?? '',
-    });
-    void haptics.selection();
-  }, [haptics]);
-
-  const openCruisePerformanceEditorById = useCallback((cruiseId: string) => {
-    const cruise = findCruiseForPerformanceEdit(cruiseId);
-    if (!cruise) {
-      console.log('[Analytics] Cruise performance edit skipped; cruise not found:', cruiseId);
-      return;
-    }
-    openCruisePerformanceEditor(cruise);
-  }, [findCruiseForPerformanceEdit, openCruisePerformanceEditor]);
-
-  const closeCruisePerformanceEditor = useCallback(() => {
-    setSelectedPerformanceCruise(null);
-    setPerformanceForm(EMPTY_PERFORMANCE_FORM);
-  }, []);
-
-  const handleSaveCruisePerformance = useCallback(() => {
-    if (!selectedPerformanceCruise) return;
-
-    const pointsEarned = Math.round(parseNumberInput(performanceForm.pointsEarned));
-    const winLoss = parseNumberInput(performanceForm.winLoss);
-    const certificateValue = parseNumberInput(performanceForm.instantCertificateValue);
-    const instantCertificateWon = performanceForm.instantCertificateWon;
-    const now = new Date().toISOString();
-    const selectedSummary = buildCruiseEconomicsSummary([selectedPerformanceCruise], new Date(), { scope: 'allCruises' });
-    const selectedEconomicsRow = selectedSummary.rows[0];
-    const retailValue = selectedEconomicsRow?.retail ?? selectedPerformanceCruise.retailValue ?? selectedPerformanceCruise.totalRetailCost ?? selectedPerformanceCruise.originalPrice ?? 0;
-    const netEffectivePaid = selectedEconomicsRow?.paid ?? selectedPerformanceCruise.netEffectivePaid ?? selectedPerformanceCruise.amountPaid ?? selectedPerformanceCruise.pricePaid ?? selectedPerformanceCruise.totalPrice ?? selectedPerformanceCruise.price ?? 0;
-    const cruiseValueCaptured = Math.round((retailValue - netEffectivePaid + Number.EPSILON) * 100) / 100;
-    const cashResult = Math.round((winLoss - netEffectivePaid + Number.EPSILON) * 100) / 100;
-    const totalEconomicValue = Math.round((retailValue + winLoss - netEffectivePaid + Number.EPSILON) * 100) / 100;
-    const preservedAmountPaid = selectedPerformanceCruise.amountPaid ?? selectedPerformanceCruise.depositPaid ?? netEffectivePaid;
-    const updates: Partial<BookedCruise> = {
-      earnedPoints: pointsEarned,
-      casinoPoints: pointsEarned,
-      pointsEarned,
-      coinIn: pointsEarned * DOLLARS_PER_POINT,
-      retailValue,
-      totalRetailCost: retailValue,
-      amountPaid: preservedAmountPaid,
-      netEffectivePaid,
-      winnings: winLoss,
-      winningsBroughtHome: winLoss,
-      totalWinnings: winLoss,
-      netResult: winLoss,
-      cashResult,
-      cruiseValueCaptured,
-      totalEconomicValue,
-      instantCertificateWon,
-      instantCertificateOfferCode: instantCertificateWon ? performanceForm.instantCertificateOfferCode.trim() : '',
-      instantCertificateValue: instantCertificateWon ? certificateValue : 0,
-      instantCertificateNotes: instantCertificateWon ? performanceForm.instantCertificateNotes.trim() : '',
-      completionState: 'completed',
-      status: 'completed',
-      calculationConfidence: 'actual',
-      updatedAt: now,
-    };
-
-    const existsInStoredCruises = (storedBookedCruises ?? []).some((cruise) => cruise.id === selectedPerformanceCruise.id);
-    if (existsInStoredCruises) {
-      updateBookedCruise(selectedPerformanceCruise.id, updates);
-    } else {
-      addBookedCruise({
-        ...selectedPerformanceCruise,
-        ...updates,
-        id: selectedPerformanceCruise.id || `performance-${Date.now()}`,
-        createdAt: selectedPerformanceCruise.createdAt ?? now,
-      });
-    }
-
-    console.log('[Analytics] Saved cruise performance:', {
-      cruiseId: selectedPerformanceCruise.id,
-      pointsEarned,
-      winLoss,
-      instantCertificateWon,
-      hasCertificateCode: Boolean(updates.instantCertificateOfferCode),
-    });
-    void haptics.success();
-    closeCruisePerformanceEditor();
-  }, [addBookedCruise, closeCruisePerformanceEditor, haptics, performanceForm, selectedPerformanceCruise, storedBookedCruises, updateBookedCruise]);
+  const handleCruisePress = useCallback((cruiseId: string) => {
+    router.push({ pathname: '/(tabs)/(overview)/cruise-details' as any, params: { id: cruiseId } });
+  }, [router]);
 
   const cruiseEconomicsSummary = useMemo(() => {
-    return buildCruiseEconomicsSummary(bookedCruises, new Date(), {
-      useKnownAnnualReportFacts: isKnownCasinoProfile(authenticatedEmail),
-      minimumTotalPoints: isKnownCasinoProfile(authenticatedEmail) ? CONFIRMED_CLUB_ROYALE_2025_POINTS : undefined,
-      pointsAdjustmentNote: 'Historical Club Royale points use the confirmed 58,680-point 2025 season floor when imported per-cruise rows do not contain every point transaction.',
-    });
-  }, [authenticatedEmail, bookedCruises]);
+    return buildCruiseEconomicsSummary(bookedCruises);
+  }, [bookedCruises]);
 
   const cruiseEconomicsRowById = useMemo(() => {
     return new Map(cruiseEconomicsSummary.rows.map((row) => [row.cruiseId, row]));
@@ -708,7 +523,7 @@ export default function AnalyticsScreen() {
         return isCompleted;
       })
       .map(cruise => {
-        const casinoPoints = getBookedCruiseCasinoPoints(cruise);
+        const casinoPoints = cruise.earnedPoints || cruise.casinoPoints || 0;
         const nights = cruise.nights || 0;
         const isRCI = isRoyalCaribbeanShip(cruise.shipName);
         const source = cruise.cruiseSource || (isRCI ? 'royal' : 'celebrity');
@@ -772,38 +587,15 @@ export default function AnalyticsScreen() {
       'deckNumber',
       'packageCode',
       'passengerStatus',
-      'retailValue',
-      'amountPaid',
-      'taxesFeesEstimate',
-      'netEffectivePaid',
       'pointsEarned',
-      'winningsBroughtHome',
-      'coinIn',
-      'houseEdge',
-      'pointDollarValue',
-      'hoursPlayed',
-      'casinoChargesRoomBilled',
-      'cashResult',
-      'cruiseValueCaptured',
-      'totalEconomicValue',
-      'theoreticalLoss',
-      'netTheoretical',
-      'coinInPerHour',
-      'pointsPerHour',
-      'valuePerHour',
-      'instantCertificateWon',
-      'instantCertificateOfferCode',
-      'instantCertificateValue',
-      'instantCertificateNotes',
-      'calculationConfidence',
-      'notes',
+      'winLoss',
+      'actualSpend',
+      'totalRetailCost',
     ];
 
     const rows = cruises.map((cruise) => {
-      const summary = buildCruiseEconomicsSummary([cruise], new Date(), { scope: 'allCruises' });
-      const row = summary.rows[0];
-      const pointsEarned = row?.points ?? getBookedCruiseCasinoPoints(cruise);
-      const winningsBroughtHome = row?.winningsHome ?? cruise.winningsBroughtHome ?? cruise.winnings ?? cruise.totalWinnings ?? cruise.netResult ?? 0;
+      const pointsEarned = cruise.earnedPoints ?? cruise.casinoPoints ?? 0;
+      const winLoss = cruise.winnings ?? cruise.netResult ?? cruise.totalWinnings ?? 0;
 
       return [
         cruise.shipName,
@@ -822,31 +614,10 @@ export default function AnalyticsScreen() {
         cruise.deckNumber,
         cruise.packageCode,
         cruise.passengerStatus,
-        row?.retail ?? cruise.retailValue ?? cruise.totalRetailCost,
-        cruise.amountPaid,
-        row?.taxesFeesEstimate ?? cruise.taxesFeesEstimate ?? cruise.taxes,
-        row?.paid ?? cruise.netEffectivePaid,
         pointsEarned,
-        winningsBroughtHome,
-        row?.coinIn ?? cruise.coinIn,
-        row?.houseEdge ?? cruise.houseEdge,
-        row?.pointDollarValue ?? cruise.pointDollarValue,
-        row?.hoursPlayed ?? cruise.hoursPlayed,
-        row?.casinoChargesRoomBilled ?? cruise.casinoChargesRoomBilled ?? cruise.actualSpend,
-        row?.cashResult ?? cruise.cashResult,
-        row?.cruiseValueCaptured ?? cruise.cruiseValueCaptured,
-        row?.totalEconomicValue ?? cruise.totalEconomicValue,
-        row?.theoreticalLoss ?? cruise.theoreticalLoss,
-        row?.netTheoretical ?? cruise.netTheoretical,
-        row?.coinInPerHour ?? cruise.coinInPerHour,
-        row?.pointsPerHour ?? cruise.pointsPerHour,
-        row?.valuePerHour ?? cruise.valuePerHour,
-        cruise.instantCertificateWon ?? false,
-        cruise.instantCertificateOfferCode,
-        cruise.instantCertificateValue,
-        cruise.instantCertificateNotes,
-        row?.calculationConfidence ?? cruise.calculationConfidence,
-        row?.notes ?? cruise.notes,
+        winLoss,
+        cruise.actualSpend,
+        cruise.totalRetailCost,
       ].map(escapeCsv).join(',');
     });
 
@@ -868,7 +639,7 @@ export default function AnalyticsScreen() {
       });
 
       const cruisesToExport = completedCruises.filter((c) => {
-        const points = getBookedCruiseCasinoPoints(c);
+        const points = c.earnedPoints ?? c.casinoPoints ?? 0;
         const winLoss = c.winnings ?? c.netResult ?? c.totalWinnings ?? 0;
         return points > 0 || winLoss !== 0;
       });
@@ -971,7 +742,7 @@ export default function AnalyticsScreen() {
     const breakdown = calculateCruiseValue(cruise);
     const economicsRow = cruiseEconomicsRowById.get(cruise.id);
     const winnings = economicsRow?.winningsHome ?? cruise.winnings ?? 0;
-    const earnedPoints = economicsRow?.points ?? getBookedCruiseCasinoPoints(cruise);
+    const earnedPoints = economicsRow?.points ?? cruise.earnedPoints ?? cruise.casinoPoints ?? 0;
     
     const roiColor = cruise.roiLevel === 'high' 
       ? COLORS.success 
@@ -1036,7 +807,7 @@ export default function AnalyticsScreen() {
       <TouchableOpacity
         key={cruise.id}
         style={styles.portfolioCard}
-        onPress={() => openCruisePerformanceEditorById(cruise.id)}
+        onPress={() => handleCruisePress(cruise.id)}
         activeOpacity={0.85}
       >
         <View style={styles.portfolioImageContainer}>
@@ -1102,7 +873,7 @@ export default function AnalyticsScreen() {
               </Text>
             </View>
             <View style={styles.portfolioMetric}>
-              <Text style={styles.portfolioMetricLabel}>Total Economic Value</Text>
+              <Text style={styles.portfolioMetricLabel}>Total Econ</Text>
               <Text style={[styles.portfolioMetricValue, { color: (economicsRow?.totalEconomic ?? breakdown.totalProfit) >= 0 ? COLORS.success : COLORS.error }]}>
                 {formatCurrency(economicsRow?.totalEconomic ?? breakdown.totalProfit)}
               </Text>
@@ -1116,12 +887,6 @@ export default function AnalyticsScreen() {
                 <View style={styles.portfolioOfferBadge}>
                   <Zap size={10} color={COLORS.goldDark} />
                   <Text style={styles.portfolioOfferCode}>{cruise.offerCode}</Text>
-                </View>
-              ) : null}
-              {cruise.instantCertificateWon ? (
-                <View style={styles.portfolioCertificateBadge}>
-                  <Ticket size={10} color="#047857" />
-                  <Text style={styles.portfolioCertificateText}>Cert won</Text>
                 </View>
               ) : null}
             </View>
@@ -1168,26 +933,6 @@ export default function AnalyticsScreen() {
               <Text style={styles.dataValue}>{formatNumber(currentYearPoints)}</Text>
             </View>
             <View style={styles.dataRow}>
-              <Text style={styles.dataLabel}>Signature Retain Gap</Text>
-              <Text style={[styles.dataValue, { color: currentSeasonMetrics.pointsNeededForSignature === 0 ? COLORS.success : COLORS.warning }]}>{formatNumber(currentSeasonMetrics.pointsNeededForSignature)} pts</Text>
-            </View>
-            <View style={styles.dataRow}>
-              <Text style={styles.dataLabel}>Current Season Coin-In</Text>
-              <Text style={styles.dataValue}>{formatCurrencyDetailed(currentSeasonMetrics.coinIn)}</Text>
-            </View>
-            <View style={styles.dataRow}>
-              <Text style={styles.dataLabel}>Avg Points / Night</Text>
-              <Text style={styles.dataValue}>{currentSeasonMetrics.averagePointsPerNight.toFixed(2)}</Text>
-            </View>
-            <View style={styles.dataRow}>
-              <Text style={styles.dataLabel}>Est. Casino Play</Text>
-              <Text style={styles.dataValue}>{currentSeasonMetrics.estimatedPlayHours.toFixed(1)} hrs</Text>
-            </View>
-            <View style={styles.dataRow}>
-              <Text style={styles.dataLabel}>Est. Daily Play Hours</Text>
-              <Text style={styles.dataValue}>{currentSeasonMetrics.averageDailyPlayHours.toFixed(2)} hrs/day</Text>
-            </View>
-            <View style={styles.dataRow}>
               <Text style={styles.dataLabel}>Historical Points Earned</Text>
               <Text style={[styles.dataValue, { color: COLORS.goldDark }]}>{formatNumber(historicalPoints)}</Text>
             </View>
@@ -1202,14 +947,7 @@ export default function AnalyticsScreen() {
           </View>
           <View style={styles.avgStatsRow}>
             <Text style={styles.avgStatText}>April 1 resets current-year Club Royale points only. Historical ROI, coin-in, cash result, and annual cruise analytics stay historical.</Text>
-            <Text style={styles.avgStatText}>Current season uses {currentSeasonMetrics.cruises} completed Royal Caribbean cruise(s), {currentSeasonMetrics.nights} nights, and {formatNumber(currentSeasonMetrics.points)} app-entered points.</Text>
           </View>
-          {clubRoyaleSyncDiscrepancy.hasDiscrepancy && clubRoyaleSyncDiscrepancy.message ? (
-            <View style={styles.discrepancyNotice} testID="club-royale-discrepancy-notice">
-              <Text style={styles.discrepancyTitle}>Club Royale sync discrepancy</Text>
-              <Text style={styles.discrepancyText}>{clubRoyaleSyncDiscrepancy.message}</Text>
-            </View>
-          ) : null}
         </View>
       </View>
 
@@ -1329,11 +1067,9 @@ export default function AnalyticsScreen() {
                       : 'Estimated';
 
                   return (
-                    <TouchableOpacity
+                    <View
                       key={row.cruiseId}
                       style={[styles.economicsTableRow, isLastVisibleRow && styles.economicsTableRowLast]}
-                      activeOpacity={0.75}
-                      onPress={() => openCruisePerformanceEditorById(row.cruiseId)}
                       testID={`casino-economics-row-${row.cruiseId}`}
                     >
                       <Text style={[styles.economicsCell, styles.economicsDateCell]}>{row.sailDate}</Text>
@@ -1349,7 +1085,7 @@ export default function AnalyticsScreen() {
                       <View style={[styles.economicsStatusPill, statusStyle]}>
                         <Text style={styles.economicsStatusText}>{confidenceLabel}</Text>
                       </View>
-                    </TouchableOpacity>
+                    </View>
                   );
                 })}
 
@@ -1489,49 +1225,32 @@ export default function AnalyticsScreen() {
             <PieChart size={16} color={COLORS.goldDark} />
             <Text style={styles.cleanCardTitle}>Historical Annual Casino Summary</Text>
           </View>
-          <View style={styles.annualSummaryHero}>
-            <Text style={styles.annualSummaryHeroLabel}>Cash Result</Text>
-            <Text
-              style={[
-                styles.annualSummaryHeroValue,
-                { color: cruiseEconomicsSummary.totals.totalCashResult >= 0 ? COLORS.success : COLORS.error },
-              ]}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-            >
-              {formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalCashResult)}
-            </Text>
-            <Text style={styles.annualSummaryHeroSubtext}>
-              {formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalWinningsHome)} winnings home minus {formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalPaid)} paid
-            </Text>
-          </View>
-
-          <View style={styles.annualSummaryGrid}>
-            {[
-              { label: 'Retail Value', value: formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalRetailValue), color: COLORS.navyDeep },
-              { label: 'Cruise Value Captured', value: formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalCruiseValueCaptured), color: COLORS.success },
-              { label: 'Total Economic Value', value: formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalEconomicValue), color: COLORS.success },
-              { label: 'Total Points', value: formatNumber(cruiseEconomicsSummary.totals.totalPoints), color: COLORS.navyDeep },
-            ].map((metric) => (
-              <View key={metric.label} style={styles.annualSummaryMetric}>
-                <Text style={styles.annualSummaryMetricLabel}>{metric.label}</Text>
-                <Text style={[styles.annualSummaryMetricValue, { color: metric.color }]} numberOfLines={1} adjustsFontSizeToFit>
-                  {metric.value}
-                </Text>
-              </View>
-            ))}
+          <View style={styles.compactMetricsGrid}>
+            <View style={styles.compactMetric}>
+              <Text style={styles.compactMetricValue}>{formatCurrency(cruiseEconomicsSummary.totals.totalWinningsHome)}</Text>
+              <Text style={styles.compactMetricLabel}>Winnings Home</Text>
+            </View>
+            <View style={styles.compactMetric}>
+              <Text style={[styles.compactMetricValue, { color: cruiseEconomicsSummary.totals.totalCashResult >= 0 ? COLORS.success : COLORS.error }]}>
+                {formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalCashResult)}
+              </Text>
+              <Text style={styles.compactMetricLabel}>Cash Result</Text>
+            </View>
+            <View style={styles.compactMetric}>
+              <Text style={[styles.compactMetricValue, { color: cruiseEconomicsSummary.totals.totalEconomicValue >= 0 ? COLORS.success : COLORS.error }]}>
+                {formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalEconomicValue)}
+              </Text>
+              <Text style={styles.compactMetricLabel}>Total Econ</Text>
+            </View>
+            <View style={styles.compactMetric}>
+              <Text style={styles.compactMetricValue}>{formatNumber(cruiseEconomicsSummary.totals.totalPoints)}</Text>
+              <Text style={styles.compactMetricLabel}>Total Pts</Text>
+            </View>
           </View>
           {cruiseEconomicsSummary.totals.cruises > 0 && (
-            <View style={styles.annualSummaryDetails}>
-              <View style={styles.annualSummaryDetailRow}>
-                <Text style={styles.annualSummaryDetailLabel}>Per cruise average</Text>
-                <Text style={styles.annualSummaryDetailValue}>
-                  {formatCurrencyDetailed(cruiseEconomicsSummary.averages.paidPerCruise)} paid • {formatCurrencyDetailed(cruiseEconomicsSummary.averages.winningsPerCruise)} won • {formatSignedCurrencyDetailed(cruiseEconomicsSummary.averages.netCashPerCruise)} cash
-                </Text>
-              </View>
-              <Text style={styles.annualSummaryFootnote}>
-                Historical totals stay fixed after the April 1 reset. Only the current-season point balance resets.
-              </Text>
+            <View style={styles.avgStatsRow}>
+              <Text style={styles.avgStatText}>Avg/Cruise: {formatCurrencyDetailed(cruiseEconomicsSummary.averages.paidPerCruise)} paid • {formatCurrencyDetailed(cruiseEconomicsSummary.averages.winningsPerCruise)} winnings • {formatSignedCurrencyDetailed(cruiseEconomicsSummary.averages.netCashPerCruise)} cash result</Text>
+              <Text style={styles.avgStatText}>Historical totals stay fixed after the April 1 point reset. Only the current-season point balance resets.</Text>
             </View>
           )}
         </View>
@@ -1546,7 +1265,6 @@ export default function AnalyticsScreen() {
 
       <View style={styles.section}>
         <Text style={styles.portfolioTitle}>Cruise Portfolio</Text>
-        <Text style={styles.portfolioHintText}>Tap any cruise row to add/edit win-loss, points earned, and instant certificate results.</Text>
         {renderROIFilterTabs()}
         
         {filteredCruises.length > 0 ? (
@@ -1635,16 +1353,10 @@ export default function AnalyticsScreen() {
               const dateStr = sailDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
               const _sourceColor = entry.cruiseSource === 'royal' ? COLORS.navyDeep : entry.cruiseSource === 'celebrity' ? '#1E3A5F' : '#0D47A1';
               return (
-                <TouchableOpacity
-                  key={entry.id}
-                  style={styles.pointsBreakdownRow}
-                  activeOpacity={0.75}
-                  onPress={() => openCruisePerformanceEditorById(entry.id)}
-                  testID={`points-breakdown-row-${entry.id}`}
-                >
+                <View key={entry.id} style={styles.pointsBreakdownRow}>
                   <View style={styles.pointsBreakdownShipCol}>
                     <Text style={styles.pointsBreakdownShipName} numberOfLines={1}>{entry.shipName}</Text>
-                    <Text style={styles.pointsBreakdownDate}>{dateStr} · {entry.nights}N · Tap to edit casino results</Text>
+                    <Text style={styles.pointsBreakdownDate}>{dateStr} · {entry.nights}N</Text>
                   </View>
                   <View style={styles.pointsBreakdownValuesCol}>
                     <View style={styles.pointsBreakdownValueRow}>
@@ -1658,7 +1370,7 @@ export default function AnalyticsScreen() {
                       <Text style={[styles.pointsBreakdownValue, { color: '#1D4ED8' }]}>{formatNumber(entry.loyaltyPoints)}</Text>
                     </View>
                   </View>
-                </TouchableOpacity>
+                </View>
               );
             })}
             {perCruisePointsBreakdown.length > 10 && (
@@ -1731,22 +1443,19 @@ export default function AnalyticsScreen() {
     setIsGeneratingSessions(true);
     try {
       const today = new Date();
-      const annualEconomicsRows = cruiseEconomicsSummary.rows;
-      const annualEconomicsIds = new Set(annualEconomicsRows.map((row) => row.cruiseId));
       const completedCruises = bookedCruises.filter(cruise => {
         const returnDate = cruise.returnDate ? createDateFromString(cruise.returnDate) : null;
         const isCompleted = returnDate ? returnDate < today : cruise.completionState === 'completed';
-        const cruisePoints = getBookedCruiseCasinoPoints(cruise);
-        const hasPointsData = cruisePoints > 0 || annualEconomicsIds.has(cruise.id);
+        const hasPointsData = cruise.earnedPoints || cruise.casinoPoints;
         
         if (isCompleted && hasPointsData) {
           console.log('[Analytics] Found completed cruise with points:', {
             id: cruise.id,
             shipName: cruise.shipName,
             sailDate: cruise.sailDate,
-            earnedPoints: cruisePoints,
-            winningsBroughtHome: cruise.winningsBroughtHome ?? cruise.winnings,
-            cashResult: cruise.cashResult,
+            earnedPoints: cruise.earnedPoints || cruise.casinoPoints,
+            winnings: cruise.winnings,
+            actualSpend: cruise.actualSpend,
           });
         }
         
@@ -1757,7 +1466,7 @@ export default function AnalyticsScreen() {
       console.log('[Analytics] Total booked cruises:', bookedCruises.length);
       console.log('[Analytics] Completed cruises with points:', completedCruises.length);
       console.log('[Analytics] Current total sessions:', sessions.length);
-      console.log('[Analytics] Cruises list:', completedCruises.map(c => `${c.shipName} (${c.sailDate}) - ${getBookedCruiseCasinoPoints(c)} pts`));
+      console.log('[Analytics] Cruises list:', completedCruises.map(c => `${c.shipName} (${c.sailDate}) - ${c.earnedPoints || c.casinoPoints} pts`));
       
       const sessionsPerCruise = completedCruises.map(cruise => {
         const existingSessions = sessions.filter(s => s.cruiseId === cruise.id);
@@ -1792,7 +1501,7 @@ export default function AnalyticsScreen() {
     } finally {
       setIsGeneratingSessions(false);
     }
-  }, [bookedCruises, cruiseEconomicsSummary.rows, generateHistoricalSessions, haptics, sessions]);
+  }, [bookedCruises, generateHistoricalSessions, haptics, sessions]);
 
   const renderSessionTab = () => (
     <View style={styles.tabContent}>
@@ -1904,7 +1613,6 @@ export default function AnalyticsScreen() {
             }
             return false;
           })}
-          cruiseEconomicsSummary={cruiseEconomicsSummary}
         />
       </View>
 
@@ -2046,203 +1754,148 @@ export default function AnalyticsScreen() {
   };
 
   const historicalCruiseData = useMemo(() => {
-    if (activeTab !== 'calcs') return { totalCruises: 0, totalPoints: 0, totalSessions: 0, totalNights: 0, totalCoinIn: 0, totalWinLoss: 0, totalRetailValue: 0, totalTaxesFees: 0, totalEconomicValue: 0, cruises: [] as { id: string; shipName: string; sailDate: string; points: number; sessionCount: number; nights: number }[] };
-    const cruiseData = cruiseEconomicsSummary.rows.map((row) => {
-      const cruiseSessions = sessions.filter(s => s.cruiseId === row.cruiseId);
-      return {
-        id: row.cruiseId,
-        shipName: row.ship,
-        sailDate: row.sailDate,
-        points: row.points,
-        sessionCount: cruiseSessions.length > 0 ? cruiseSessions.length : Math.max(1, row.nights * 2),
-        nights: row.nights || 1,
-      };
-    });
+    if (activeTab !== 'calcs') return { totalCruises: 0, totalPoints: 0, totalSessions: 0, totalNights: 0, totalCoinIn: 0, totalWinLoss: 0, totalRetailValue: 0, totalTaxesFees: 0, totalProfit: 0, cruises: [] as { id: string; shipName: string; sailDate: string; points: number; sessionCount: number; nights: number }[] };
+    const today = new Date();
+    const cruiseData = bookedCruises
+      .filter(cruise => {
+        const returnDate = cruise.returnDate ? createDateFromString(cruise.returnDate) : null;
+        const isCompleted = returnDate ? returnDate < today : cruise.completionState === 'completed';
+        const hasPoints = (cruise.earnedPoints || cruise.casinoPoints || 0) > 0;
+        return isCompleted && hasPoints;
+      })
+      .map(cruise => {
+        const cruiseSessions = sessions.filter(s => s.cruiseId === cruise.id);
+        const points = cruise.earnedPoints || cruise.casinoPoints || 0;
+        return {
+          id: cruise.id,
+          shipName: cruise.shipName || 'Unknown',
+          sailDate: cruise.sailDate || '',
+          points,
+          sessionCount: cruiseSessions.length > 0 ? cruiseSessions.length : Math.max(1, (cruise.nights || 1) * 2),
+          nights: cruise.nights || 1,
+        };
+      });
 
+    const totalPoints = cruiseData.reduce((sum, c) => sum + c.points, 0);
     const totalSessions = cruiseData.reduce((sum, c) => sum + c.sessionCount, 0);
+    const totalNights = cruiseData.reduce((sum, c) => sum + c.nights, 0);
 
     return {
-      totalCruises: cruiseEconomicsSummary.totals.cruises,
-      totalPoints: cruiseEconomicsSummary.totals.totalPoints,
+      totalCruises: cruiseData.length,
+      totalPoints,
       totalSessions,
-      totalNights: cruiseEconomicsSummary.totals.totalNights,
-      totalCoinIn: cruiseEconomicsSummary.totals.totalCoinIn,
-      totalWinLoss: cruiseEconomicsSummary.totals.totalCashResult,
-      totalRetailValue: cruiseEconomicsSummary.totals.totalRetailValue,
-      totalTaxesFees: cruiseEconomicsSummary.totals.totalPaid,
-      totalEconomicValue: cruiseEconomicsSummary.totals.totalEconomicValue,
+      totalNights,
+      totalCoinIn: casinoAnalytics.totalCoinIn,
+      totalWinLoss: realAnalytics.completedCashResult,
+      totalRetailValue: realAnalytics.completedRetailValue,
+      totalTaxesFees: realAnalytics.completedTaxesFees,
+      totalProfit: realAnalytics.completedEconomicValue,
       cruises: cruiseData,
     };
-  }, [activeTab, cruiseEconomicsSummary, sessions]);
+  }, [activeTab, bookedCruises, sessions, casinoAnalytics, realAnalytics]);
 
   const highValueCalculations = useMemo(() => {
     if (activeTab !== 'calcs') return [] as { id: number; label: string; value: string; description: string; color: string; icon: any }[];
 
     const isHistorical = calcsMode === 'historical';
-    const assumedHold = 0.08;
-    const pointDollarValue = 0.01;
-    const roundMetric = (value: number): number => Math.round((value + Number.EPSILON) * 100) / 100;
+    const DOLLARS_PER_POINT = 5;
+
+    const sessionCoinIn = sessions.reduce((sum, s) => sum + ((s.pointsEarned || 0) * DOLLARS_PER_POINT), 0);
+    const hasSessionData = sessions.length > 0 && sessionCoinIn > 0;
+
+    const sessionBuyInTotal = sessions.reduce((sum, s) => sum + (s.buyIn || 0), 0);
+    const estimatedCoinInFromBuyIns = sessionBuyInTotal > 0 ? sessionBuyInTotal * 4 : 0;
+    const estimatedCoinInFromNights = historicalCruiseData.totalNights > 0 ? historicalCruiseData.totalNights * 1500 : 0;
+
+    const rawTotalCoinIn = isHistorical
+      ? casinoAnalytics.totalCoinIn
+      : (hasSessionData ? sessionCoinIn : casinoAnalytics.totalCoinIn);
+
+    const totalCoinIn = rawTotalCoinIn > 0
+      ? rawTotalCoinIn
+      : (estimatedCoinInFromBuyIns > 0 ? estimatedCoinInFromBuyIns : estimatedCoinInFromNights);
+    const coinInIsEstimated = rawTotalCoinIn <= 0 && totalCoinIn > 0;
+
+    const totalSessions = isHistorical
+      ? historicalCruiseData.totalSessions
+      : (hasSessionData ? sessions.length : historicalCruiseData.totalSessions || Math.max(1, casinoAnalytics.completedCruisesCount * 2));
+
+    const totalProfit = realAnalytics.completedEconomicValue;
+    const totalHours = sessionAnalytics.totalPlayTimeMinutes / 60;
+    const _totalRetailValue = realAnalytics.completedRetailValue;
+    const totalTaxesFees = realAnalytics.completedTaxesFees;
+
+    const sessionNetWinLoss = hasSessionData ? sessionAnalytics.netWinLoss : realAnalytics.completedCashResult;
+    const totalWinLoss = isHistorical ? realAnalytics.completedCashResult : sessionNetWinLoss;
 
     const defaultAvgSessionMinutes = 90;
     const avgSessionLength = sessionAnalytics.avgSessionLength > 0 ? sessionAnalytics.avgSessionLength : defaultAvgSessionMinutes;
-    const avgSessionHours = avgSessionLength > 0 ? avgSessionLength / 60 : 1.5;
-
-    const actualSessionMinutes = sessions.reduce((sum, s) => sum + Math.max(0, s.durationMinutes || 0), 0);
-    const actualSessionHours = roundMetric(actualSessionMinutes / 60);
-    const actualSessionPoints = sessions.reduce((sum, s) => sum + (s.pointsEarned || 0), 0);
-    const actualSessionCoinIn = roundMetric(actualSessionPoints * DOLLARS_PER_POINT);
-    const actualSessionPointValue = roundMetric(actualSessionPoints * pointDollarValue);
-    const actualSessionValue = roundMetric(sessionAnalytics.netWinLoss + actualSessionPointValue);
-    const hasSessionData = sessions.length > 0 && (actualSessionMinutes > 0 || actualSessionPoints > 0 || sessionAnalytics.netWinLoss !== 0);
-    const useCurrentSeasonFallback = !isHistorical && !hasSessionData && currentSeasonMetrics.points > 0;
-
-    const historicalHours = cruiseEconomicsSummary.totals.totalHours;
-    const totalCoinIn = isHistorical
-      ? cruiseEconomicsSummary.totals.totalCoinIn
-      : (hasSessionData ? actualSessionCoinIn : currentSeasonMetrics.coinIn);
-    const totalPointsForMode = isHistorical
-      ? cruiseEconomicsSummary.totals.totalPoints
-      : (hasSessionData ? actualSessionPoints : currentSeasonMetrics.points);
-    const totalHoursForMode = isHistorical
-      ? historicalHours
-      : (hasSessionData ? actualSessionHours : currentSeasonMetrics.estimatedPlayHours);
-    const totalValueForMode = isHistorical
-      ? cruiseEconomicsSummary.totals.totalEconomicValue
-      : (hasSessionData ? actualSessionValue : currentSeasonMetrics.winningsBroughtHome);
-    const totalWinLoss = isHistorical
-      ? cruiseEconomicsSummary.totals.totalCashResult
-      : (hasSessionData ? sessionAnalytics.netWinLoss : currentSeasonMetrics.winningsBroughtHome);
-    const totalTaxesFees = isHistorical ? cruiseEconomicsSummary.totals.totalPaid : sessionAnalytics.totalBuyIn;
-
-    const completedCruiseCount = cruiseEconomicsSummary.totals.cruises;
-    const estimatedHistoricalSessions = historicalHours > 0 ? Math.max(1, Math.round(historicalHours / avgSessionHours)) : historicalCruiseData.totalSessions;
-    const totalSessions = isHistorical
-      ? (historicalCruiseData.totalSessions > 0 ? historicalCruiseData.totalSessions : estimatedHistoricalSessions)
-      : (hasSessionData ? sessions.length : Math.max(1, currentSeasonMetrics.cruises));
-    const coinInIsEstimated = isHistorical ? cruiseEconomicsSummary.totals.hasEstimates : useCurrentSeasonFallback;
-    const modeLabel = isHistorical ? 'historical annual' : (hasSessionData ? 'tracked session' : 'current season known-cruise');
-    const historicalTotalPoints = totalPointsForMode;
-    const avgCashResultPerCruise = completedCruiseCount > 0 ? cruiseEconomicsSummary.totals.totalCashResult / completedCruiseCount : 0;
+    const modeLabel = isHistorical ? 'historical' : (hasSessionData ? 'per session' : 'per session (est.)');
+    const historicalTotalPoints = casinoAnalytics.totalPointsEarned;
+    const completedCruiseCount = casinoAnalytics.completedCruisesCount;
+    const avgCashResultPerCruise = completedCruiseCount > 0 ? realAnalytics.completedCashResult / completedCruiseCount : 0;
     const divisorLabel = isHistorical
-      ? `${totalSessions} ${historicalCruiseData.totalSessions > 0 ? 'tracked/derived' : 'estimated'} sessions across ${completedCruiseCount} cruises`
-      : (hasSessionData ? `${sessions.length} tracked sessions` : `${currentSeasonMetrics.cruises} current-season cruises`);
+      ? `${historicalCruiseData.totalSessions} sessions across ${completedCruiseCount} cruises`
+      : (hasSessionData ? `${sessions.length} tracked sessions` : `${totalSessions} est. sessions from ${completedCruiseCount} cruises`);
 
-    console.log('[Calcs] Mode:', calcsMode, 'hasSessionData:', hasSessionData, 'totalCoinIn:', totalCoinIn, 'coinInIsEstimated:', coinInIsEstimated, 'totalHoursForMode:', totalHoursForMode, 'totalSessions:', totalSessions, 'economics.totalCoinIn:', cruiseEconomicsSummary.totals.totalCoinIn);
+    console.log('[Calcs] Mode:', calcsMode, 'hasSessionData:', hasSessionData, 'totalCoinIn:', totalCoinIn, 'rawTotalCoinIn:', rawTotalCoinIn, 'coinInIsEstimated:', coinInIsEstimated, 'totalSessions:', totalSessions, 'casinoAnalytics.totalCoinIn:', casinoAnalytics.totalCoinIn);
 
     const coinInPerUnit = totalSessions > 0 ? totalCoinIn / totalSessions : 0;
+    
+    const assumedHold = 0.08;
     const theoPerUnit = coinInPerUnit * assumedHold;
-
-    const parseSessionStartMinutes = (value: string): number | null => {
-      const timeMatch = value.match(/^(\d{1,2}):(\d{2})/);
-      if (timeMatch) {
-        const hours = Number(timeMatch[1]);
-        const minutes = Number(timeMatch[2]);
-        return Number.isFinite(hours) && Number.isFinite(minutes) ? (hours * 60) + minutes : null;
-      }
-
-      const parsedDate = new Date(value);
-      if (!Number.isNaN(parsedDate.getTime())) {
-        return (parsedDate.getHours() * 60) + parsedDate.getMinutes();
-      }
-
-      return null;
-    };
-
-    const blockDefinitions = [
-      { label: 'Late Night', start: 0, end: 300 },
-      { label: 'Morning', start: 300, end: 720 },
-      { label: 'Afternoon', start: 720, end: 1020 },
-      { label: 'Evening', start: 1020, end: 1380 },
-      { label: 'Late Night', start: 1380, end: 1440 },
-      { label: 'Late Night', start: 1440, end: 1740 },
-      { label: 'Morning', start: 1740, end: 2160 },
-      { label: 'Afternoon', start: 2160, end: 2460 },
-      { label: 'Evening', start: 2460, end: 2820 },
-      { label: 'Late Night', start: 2820, end: 2880 },
-    ];
-
-    const timeBlockMetrics = new Map<string, { label: string; minutes: number; points: number; coinIn: number; theoretical: number; theoreticalPerHour: number }>([
-      ['Late Night', { label: 'Late Night', minutes: 0, points: 0, coinIn: 0, theoretical: 0, theoreticalPerHour: 0 }],
-      ['Morning', { label: 'Morning', minutes: 0, points: 0, coinIn: 0, theoretical: 0, theoreticalPerHour: 0 }],
-      ['Afternoon', { label: 'Afternoon', minutes: 0, points: 0, coinIn: 0, theoretical: 0, theoreticalPerHour: 0 }],
-      ['Evening', { label: 'Evening', minutes: 0, points: 0, coinIn: 0, theoretical: 0, theoreticalPerHour: 0 }],
-    ]);
-
-    const historicalCruiseIds = new Set(cruiseEconomicsSummary.rows.map((row) => row.cruiseId));
-    const sessionsForBlocks = isHistorical ? sessions.filter((session) => session.cruiseId && historicalCruiseIds.has(session.cruiseId)) : sessions;
-    sessionsForBlocks.forEach((session) => {
-      const startMinutes = parseSessionStartMinutes(session.startTime);
-      const durationMinutes = Math.max(0, session.durationMinutes || 0);
-      if (startMinutes === null || durationMinutes <= 0) {
-        return;
-      }
-
-      const sessionEndMinutes = startMinutes + durationMinutes;
-      const sessionPoints = session.pointsEarned || 0;
-      blockDefinitions.forEach((block) => {
-        const overlapMinutes = Math.max(0, Math.min(sessionEndMinutes, block.end) - Math.max(startMinutes, block.start));
-        if (overlapMinutes <= 0) {
-          return;
-        }
-
-        const metric = timeBlockMetrics.get(block.label);
-        if (!metric) {
-          return;
-        }
-
-        const allocatedPoints = sessionPoints * (overlapMinutes / durationMinutes);
-        metric.minutes += overlapMinutes;
-        metric.points += allocatedPoints;
-        metric.coinIn += allocatedPoints * DOLLARS_PER_POINT;
-      });
+    
+    const morningSessionsData = sessions.filter(s => {
+      const hour = parseInt(s.startTime.split(':')[0]);
+      return hour >= 5 && hour < 12;
     });
-
-    const blockMetrics = Array.from(timeBlockMetrics.values()).map((metric) => {
-      const theoretical = roundMetric(metric.coinIn * assumedHold);
-      const hours = metric.minutes / 60;
-      return {
-        ...metric,
-        points: roundMetric(metric.points),
-        coinIn: roundMetric(metric.coinIn),
-        theoretical,
-        theoreticalPerHour: hours > 0 ? roundMetric(theoretical / hours) : 0,
-      };
+    const eveningSessionsData = sessions.filter(s => {
+      const hour = parseInt(s.startTime.split(':')[0]);
+      return hour >= 17 || hour < 2;
     });
-    const bestTheoBlock = blockMetrics
-      .filter((metric) => metric.minutes > 0 && metric.theoretical > 0)
-      .sort((a, b) => b.theoreticalPerHour - a.theoreticalPerHour)[0];
-    const theoPerTimeBlock = bestTheoBlock?.label ?? 'No block data';
-    const theoTimeBlockValue = bestTheoBlock?.theoreticalPerHour ?? 0;
-    const theoTimeBlockDescription = bestTheoBlock
-      ? `${formatCurrency(bestTheoBlock.theoretical)} theo over ${(bestTheoBlock.minutes / 60).toFixed(1)} hrs; based only on sessions with points + duration`
-      : 'Add session start time, duration, and points to calculate exact block-level theo.';
+    
+    const morningCoinIn = morningSessionsData.reduce((sum, s) => sum + ((s.pointsEarned || 0) * DOLLARS_PER_POINT), 0);
+    const eveningCoinIn = eveningSessionsData.reduce((sum, s) => sum + ((s.pointsEarned || 0) * DOLLARS_PER_POINT), 0);
 
-    const theoValues = isHistorical && sessionsForBlocks.length === 0
-      ? cruiseEconomicsSummary.rows.map((row) => row.theoreticalLoss ?? 0).filter((value) => value > 0)
-      : Array.from(new Set(sessionsForBlocks.map((session) => session.date))).map((date) => {
-          const daySessions = sessionsForBlocks.filter((session) => session.date === date);
-          const dayCoinIn = daySessions.reduce((sum, session) => sum + ((session.pointsEarned || 0) * DOLLARS_PER_POINT), 0);
-          return dayCoinIn * assumedHold;
-        }).filter((value) => value > 0);
+    let morningTheo: number;
+    let eveningTheo: number;
+    if (isHistorical || !hasSessionData) {
+      const morningRatio = sessions.length > 0 ? morningSessionsData.length / Math.max(sessions.length, 1) : 0.4;
+      const eveningRatio = sessions.length > 0 ? eveningSessionsData.length / Math.max(sessions.length, 1) : 0.6;
+      morningTheo = (totalCoinIn * morningRatio) * assumedHold;
+      eveningTheo = (totalCoinIn * eveningRatio) * assumedHold;
+    } else {
+      morningTheo = morningCoinIn * assumedHold;
+      eveningTheo = eveningCoinIn * assumedHold;
+    }
+    const theoPerTimeBlock = morningTheo > eveningTheo ? 'Morning' : 'Evening';
+    const theoTimeBlockValue = Math.max(morningTheo, eveningTheo);
+    
+    const cruiseDates = new Set(sessions.map(s => s.date));
+    const theoValues = Array.from(cruiseDates).map(date => {
+      const daySessions = sessions.filter(s => s.date === date);
+      const dayCoinIn = daySessions.reduce((sum, s) => sum + ((s.pointsEarned || 0) * DOLLARS_PER_POINT), 0);
+      return dayCoinIn * assumedHold;
+    });
     const avgTheo = theoValues.length > 0 ? theoValues.reduce((a, b) => a + b, 0) / theoValues.length : 0;
-    const theoVariance = theoValues.length > 0
-      ? theoValues.reduce((sum, v) => sum + Math.pow(v - avgTheo, 2), 0) / theoValues.length
+    const theoVariance = theoValues.length > 0 
+      ? theoValues.reduce((sum, v) => sum + Math.pow(v - avgTheo, 2), 0) / theoValues.length 
       : 0;
     const theoStdDev = Math.sqrt(theoVariance);
     const adtSmoothingFactor = avgTheo > 0 ? (theoStdDev / avgTheo) : 0;
-
-    const totalEconomicRoiPercentage = totalTaxesFees > 0 ? (totalValueForMode / totalTaxesFees) * 100 : 0;
+    
+    const totalEconomicRoiPercentage = totalTaxesFees > 0 ? (totalProfit / totalTaxesFees) * 100 : 0;
     void totalEconomicRoiPercentage;
-    const valuePerUnit = totalSessions > 0 ? totalValueForMode / totalSessions : (totalValueForMode !== 0 ? totalValueForMode : 0);
-
+    const profitPerUnit = totalSessions > 0 ? totalProfit / totalSessions : (totalProfit !== 0 ? totalProfit : 0);
+    
     const stopGap = 200;
     const riskPerHour = avgSessionLength > 0 ? (stopGap / (avgSessionLength / 60)) : 0;
-
+    
     const winSessions = sessions.filter(s => (s.winLoss || 0) > 0);
     const totalWinnings = winSessions.reduce((sum, s) => sum + (s.winLoss || 0), 0);
     const pressExposure = winSessions.reduce((sum, s) => sum + ((s.buyIn || 0) * 0.3), 0);
     const pressEfficiencyRatio = pressExposure > 0 ? totalWinnings / pressExposure : 0;
-
+    
     const sessionWinLoss = sessions.map(s => s.winLoss || 0);
     const avgWinLoss = sessionWinLoss.length > 0 ? sessionWinLoss.reduce((a, b) => a + b, 0) / sessionWinLoss.length : 0;
     const winLossVariance = sessionWinLoss.length > 0
@@ -2250,19 +1903,26 @@ export default function AnalyticsScreen() {
       : 0;
     const winLossStdDev = Math.sqrt(winLossVariance);
     const consistencyScore = avgWinLoss !== 0 ? (avgWinLoss / Math.max(winLossStdDev, 1)) : 0;
-    const spikeRisk = sessionWinLoss.length > 0 ? (Math.max(...sessionWinLoss.map(Math.abs)) / Math.max(Math.abs(avgWinLoss), 1)) : 0;
+    const spikeRisk = sessionWinLoss.length > 0 ? (Math.max(...sessionWinLoss.map(Math.abs)) / Math.max(avgWinLoss, 1)) : 0;
     const offerSafetyIndex = consistencyScore > 0 && spikeRisk > 0 ? consistencyScore / spikeRisk : 0;
-
-    const totalHistoricalHours = totalHoursForMode;
-    const valuePerHourPlayed = totalHistoricalHours > 0 ? totalValueForMode / totalHistoricalHours : 0;
-
-    const recentCashResult = sessions.slice(-10).reduce((sum, s) => sum + (s.winLoss || 0), 0);
-    const earlyCashResult = sessions.slice(0, 10).reduce((sum, s) => sum + (s.winLoss || 0), 0);
-    const trendScore = earlyCashResult !== 0 ? (recentCashResult / Math.max(Math.abs(earlyCashResult), 1)) : 1;
+    
+    const totalHistoricalHours = isHistorical
+      ? (historicalCruiseData.totalSessions * avgSessionLength) / 60
+      : (totalHours > 0 ? totalHours : (totalSessions * avgSessionLength) / 60);
+    const valuePerHourPlayed = totalHistoricalHours > 0 ? totalProfit / totalHistoricalHours : 0;
+    
+    const recentProfit = sessions.slice(-10).reduce((sum, s) => sum + (s.winLoss || 0), 0);
+    const earlyProfit = sessions.slice(0, 10).reduce((sum, s) => sum + (s.winLoss || 0), 0);
+    const trendScore = earlyProfit !== 0 ? (recentProfit / Math.max(Math.abs(earlyProfit), 1)) : 1;
     const variabilityScore = 1 - Math.min(adtSmoothingFactor, 1);
     const sustainabilityScore = (trendScore * 0.6 + variabilityScore * 0.4) * 100;
 
-    const pointsPerSession = totalSessions > 0 ? totalPointsForMode / totalSessions : 0;
+    const sessionPointsTotal = sessions.reduce((sum, s) => sum + (s.pointsEarned || 0), 0);
+    const pointsPerSession = isHistorical && historicalCruiseData.totalSessions > 0
+      ? historicalTotalPoints / historicalCruiseData.totalSessions
+      : (hasSessionData && sessionPointsTotal > 0)
+        ? sessionPointsTotal / sessions.length
+        : (historicalTotalPoints > 0 && totalSessions > 0 ? historicalTotalPoints / totalSessions : 0);
 
     return [
       {
@@ -2270,7 +1930,7 @@ export default function AnalyticsScreen() {
         label: isHistorical ? 'Coin-in (historical avg)' : 'Coin-in per session',
         value: formatCurrency(coinInPerUnit) + (coinInIsEstimated ? ' (est.)' : ''),
         description: coinInIsEstimated
-          ? `Coin-in derived from points at ${formatCurrency(DOLLARS_PER_POINT)}/point; missing hours use ${DEFAULT_ESTIMATED_POINTS_PER_PLAY_HOUR} PPH`
+          ? (estimatedCoinInFromBuyIns > 0 ? 'Estimated from session buy-ins × 4' : 'Estimated from cruise nights × $1,500')
           : (isHistorical ? `Total coin-in ÷ ${divisorLabel}` : 'Total coin-in ÷ total sessions'),
         color: COLORS.navyDeep,
         icon: Coins,
@@ -2285,9 +1945,9 @@ export default function AnalyticsScreen() {
       },
       {
         id: 3,
-        label: isHistorical ? 'Best theo/hour block (hist.)' : 'Best theo/hour block',
-        value: theoTimeBlockValue > 0 ? `${formatCurrency(theoTimeBlockValue)}/hr • ${theoPerTimeBlock}` : '—',
-        description: theoTimeBlockDescription,
+        label: isHistorical ? 'Theo per time block (hist.)' : 'Theo per time block',
+        value: `${theoPerTimeBlock}: ${formatCurrency(theoTimeBlockValue)}`,
+        description: isHistorical ? 'Scaled morning vs evening from cruise history' : 'Morning vs evening efficiency',
         color: '#F59E0B',
         icon: Dices,
       },
@@ -2301,10 +1961,10 @@ export default function AnalyticsScreen() {
       },
       {
         id: 5,
-        label: isHistorical ? 'Total economic value / session' : 'Casino value / session',
-        value: formatCurrency(valuePerUnit),
-        description: `${formatCurrency(totalValueForMode)} ÷ ${totalSessions} ${isHistorical ? 'historical/derived' : ''} sessions. Coin-In is excluded from value.`,
-        color: valuePerUnit >= 0 ? COLORS.success : COLORS.error,
+        label: isHistorical ? 'Total Econ (historical avg)' : 'Total Econ per session',
+        value: formatCurrency(profitPerUnit),
+        description: `${formatCurrency(totalProfit)} ÷ ${totalSessions} ${isHistorical ? 'historical' : ''} sessions`,
+        color: profitPerUnit >= 0 ? COLORS.success : COLORS.error,
         icon: TrendingUp,
       },
       {
@@ -2333,11 +1993,9 @@ export default function AnalyticsScreen() {
       },
       {
         id: 9,
-        label: isHistorical ? 'Total economic value / hour' : 'Casino value / hour',
-        value: totalHistoricalHours > 0 ? formatCurrency(valuePerHourPlayed) : '—',
-        description: isHistorical
-          ? `Total economic value ÷ ${totalHistoricalHours.toFixed(2)} play hours. Coin-In is not included in value.`
-          : (hasSessionData ? 'Session cash result + point value ÷ tracked play hours' : `Known current-season winnings ÷ ${totalHistoricalHours.toFixed(2)} estimated play hours`),
+        label: isHistorical ? 'Value/hr (historical)' : 'Value per hour played',
+        value: formatCurrency(valuePerHourPlayed),
+        description: isHistorical ? `Total economic value ÷ est. ${totalHistoricalHours.toFixed(0)} total hours` : 'Total economic value ÷ total hours',
         color: COLORS.goldDark,
         icon: DollarSign,
       },
@@ -2346,7 +2004,7 @@ export default function AnalyticsScreen() {
         label: isHistorical ? 'Points per session (hist.)' : 'Sustainability score',
         value: isHistorical ? formatNumber(Math.round(pointsPerSession)) + ' pts' : `${sustainabilityScore.toFixed(1)}%`,
         description: isHistorical
-          ? `${formatNumber(historicalTotalPoints)} pts ÷ ${totalSessions} sessions`
+          ? `${formatNumber(historicalTotalPoints)} pts ÷ ${historicalCruiseData.totalSessions} sessions`
           : 'Likelihood offers persist unchanged',
         color: isHistorical ? '#8B5CF6' : (sustainabilityScore >= 70 ? COLORS.success : sustainabilityScore >= 40 ? '#F59E0B' : COLORS.error),
         icon: isHistorical ? Award : BarChart3,
@@ -2355,7 +2013,7 @@ export default function AnalyticsScreen() {
         {
           id: 11,
           label: 'Avg Coin-In / Cruise',
-          value: formatCurrency(completedCruiseCount > 0 ? cruiseEconomicsSummary.totals.totalCoinIn / completedCruiseCount : 0),
+          value: formatCurrency(casinoAnalytics.avgCoinInPerCruise),
           description: `${formatCurrency(totalCoinIn)} ÷ ${completedCruiseCount} completed cruises`,
           color: COLORS.navyDeep,
           icon: Ship,
@@ -2370,7 +2028,7 @@ export default function AnalyticsScreen() {
         },
       ] : []),
     ];
-  }, [activeTab, calcsMode, cruiseEconomicsSummary, sessions, sessionAnalytics, historicalCruiseData, currentSeasonMetrics]);
+  }, [activeTab, calcsMode, casinoAnalytics, sessions, realAnalytics, sessionAnalytics, historicalCruiseData]);
 
   const renderCalcsTab = () => (
     <View style={styles.tabContent}>
@@ -2381,8 +2039,8 @@ export default function AnalyticsScreen() {
               <Calculator size={20} color={COLORS.royalPurple} />
             </View>
             <View style={styles.calcsHeaderText}>
-              <Text style={styles.calcsHeaderTitle}>Casino Calculation Lab</Text>
-              <Text style={styles.calcsHeaderSubtitle}>Coin-In stays gaming-only; value uses cash + cruise economics</Text>
+              <Text style={styles.calcsHeaderTitle}>High-Value Calculations</Text>
+              <Text style={styles.calcsHeaderSubtitle}>10 advanced metrics now unlocked</Text>
             </View>
           </View>
 
@@ -2419,10 +2077,10 @@ export default function AnalyticsScreen() {
             </TouchableOpacity>
           </View>
 
-          {calcsMode === 'historical' && cruiseEconomicsSummary.totals.cruises > 0 && (
+          {calcsMode === 'historical' && casinoAnalytics.completedCruisesCount > 0 && (
             <View style={styles.calcsModeSummary}>
               <Text style={styles.calcsModeSummaryText}>
-                Historical: {formatNumber(cruiseEconomicsSummary.totals.totalPoints)} pts ({formatCurrency(cruiseEconomicsSummary.totals.totalCoinIn)} coin-in volume) • Current season: {formatNumber(currentYearPoints)} pts ({formatNumber(currentSeasonMetrics.pointsNeededForSignature)} to retain Signature) • Status: {clubRoyaleTier} • {realAnalytics.completedCashResult >= 0 ? '+' : ''}{formatCurrency(realAnalytics.completedCashResult)} cash result • {cruiseEconomicsSummary.totals.cruises} cruises
+                Historical: {formatNumber(casinoAnalytics.historicalPointsEarned)} pts ({formatCurrency(casinoAnalytics.totalCoinIn)} coin-in) • Current season: {formatNumber(casinoAnalytics.currentPointBalance)} pts • Status: {casinoAnalytics.currentStatusTier} • {realAnalytics.completedCashResult >= 0 ? '+' : ''}{formatCurrency(realAnalytics.completedCashResult)} cash result • {casinoAnalytics.completedCruisesCount} cruises
               </Text>
             </View>
           )}
@@ -2614,164 +2272,6 @@ export default function AnalyticsScreen() {
         </ScrollView>
       </SafeAreaView>
 
-      <Modal
-        visible={Boolean(selectedPerformanceCruise)}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={closeCruisePerformanceEditor}
-      >
-        <KeyboardAvoidingView
-          style={styles.performanceModalOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
-          <TouchableOpacity
-            style={styles.performanceModalBackdrop}
-            activeOpacity={1}
-            onPress={closeCruisePerformanceEditor}
-          />
-          <View style={styles.performanceModalCard}>
-            <View style={styles.performanceModalHandle} />
-            <View style={styles.performanceModalHeader}>
-              <View style={styles.performanceModalTitleBlock}>
-                <Text style={styles.performanceModalEyebrow}>Cruise casino results</Text>
-                <Text style={styles.performanceModalTitle} numberOfLines={1}>
-                  {selectedPerformanceCruise?.shipName || 'Selected Cruise'}
-                </Text>
-                <Text style={styles.performanceModalSubtitle} numberOfLines={1}>
-                  {selectedPerformanceCruise?.sailDate || 'No sail date'} · {selectedPerformanceCruise?.nights || 0} nights
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={styles.performanceCloseButton}
-                onPress={closeCruisePerformanceEditor}
-                activeOpacity={0.7}
-                testID="close-cruise-performance-editor"
-              >
-                <X size={18} color={COLORS.navyDeep} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView
-              style={styles.performanceModalScroll}
-              contentContainerStyle={styles.performanceModalContent}
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-            >
-              <View style={styles.performanceInputGrid}>
-                <View style={styles.performanceInputGroup}>
-                  <Text style={styles.performanceInputLabel}>Win / Loss total</Text>
-                  <TextInput
-                    style={styles.performanceTextInput}
-                    value={performanceForm.winLoss}
-                    onChangeText={(value) => setPerformanceForm((prev) => ({ ...prev, winLoss: value }))}
-                    placeholder="-1200 or 4500"
-                    placeholderTextColor="#94A3B8"
-                    keyboardType="numbers-and-punctuation"
-                    testID="cruise-performance-win-loss-input"
-                  />
-                  <Text style={styles.performanceInputHint}>Use a negative number for a loss.</Text>
-                </View>
-
-                <View style={styles.performanceInputGroup}>
-                  <Text style={styles.performanceInputLabel}>Points earned</Text>
-                  <TextInput
-                    style={styles.performanceTextInput}
-                    value={performanceForm.pointsEarned}
-                    onChangeText={(value) => setPerformanceForm((prev) => ({ ...prev, pointsEarned: value }))}
-                    placeholder="2500"
-                    placeholderTextColor="#94A3B8"
-                    keyboardType="number-pad"
-                    testID="cruise-performance-points-input"
-                  />
-                  <Text style={styles.performanceInputHint}>Feeds historical points, coin-in, and tier analytics.</Text>
-                </View>
-              </View>
-
-              <TouchableOpacity
-                style={[styles.certificateToggle, performanceForm.instantCertificateWon && styles.certificateToggleActive]}
-                activeOpacity={0.8}
-                onPress={() => setPerformanceForm((prev) => ({ ...prev, instantCertificateWon: !prev.instantCertificateWon }))}
-                testID="cruise-performance-certificate-toggle"
-              >
-                <View style={[styles.certificateToggleIcon, performanceForm.instantCertificateWon && styles.certificateToggleIconActive]}>
-                  <Ticket size={18} color={performanceForm.instantCertificateWon ? COLORS.white : '#047857'} />
-                </View>
-                <View style={styles.certificateToggleTextBlock}>
-                  <Text style={styles.certificateToggleTitle}>Instant certificate / offer won</Text>
-                  <Text style={styles.certificateToggleSubtitle}>Track whether this sailing generated a new casino offer.</Text>
-                </View>
-                <View style={[styles.certificateTogglePill, performanceForm.instantCertificateWon && styles.certificateTogglePillActive]}>
-                  <Text style={[styles.certificateTogglePillText, performanceForm.instantCertificateWon && styles.certificateTogglePillTextActive]}>
-                    {performanceForm.instantCertificateWon ? 'Yes' : 'No'}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-
-              {performanceForm.instantCertificateWon && (
-                <View style={styles.certificateDetailsCard}>
-                  <View style={styles.performanceInputGroup}>
-                    <Text style={styles.performanceInputLabel}>Certificate / offer code</Text>
-                    <TextInput
-                      style={styles.performanceTextInput}
-                      value={performanceForm.instantCertificateOfferCode}
-                      onChangeText={(value) => setPerformanceForm((prev) => ({ ...prev, instantCertificateOfferCode: value }))}
-                      placeholder="Example: 25RCLV123"
-                      placeholderTextColor="#94A3B8"
-                      autoCapitalize="characters"
-                      testID="cruise-performance-certificate-code-input"
-                    />
-                  </View>
-                  <View style={styles.performanceInputGroup}>
-                    <Text style={styles.performanceInputLabel}>Estimated certificate value</Text>
-                    <TextInput
-                      style={styles.performanceTextInput}
-                      value={performanceForm.instantCertificateValue}
-                      onChangeText={(value) => setPerformanceForm((prev) => ({ ...prev, instantCertificateValue: value }))}
-                      placeholder="750"
-                      placeholderTextColor="#94A3B8"
-                      keyboardType="number-pad"
-                      testID="cruise-performance-certificate-value-input"
-                    />
-                  </View>
-                  <View style={styles.performanceInputGroup}>
-                    <Text style={styles.performanceInputLabel}>Certificate notes</Text>
-                    <TextInput
-                      style={[styles.performanceTextInput, styles.performanceNotesInput]}
-                      value={performanceForm.instantCertificateNotes}
-                      onChangeText={(value) => setPerformanceForm((prev) => ({ ...prev, instantCertificateNotes: value }))}
-                      placeholder="Free balcony, freeplay, expiry, restrictions..."
-                      placeholderTextColor="#94A3B8"
-                      multiline={true}
-                      textAlignVertical="top"
-                      testID="cruise-performance-certificate-notes-input"
-                    />
-                  </View>
-                </View>
-              )}
-            </ScrollView>
-
-            <View style={styles.performanceModalActions}>
-              <TouchableOpacity
-                style={styles.performanceCancelButton}
-                activeOpacity={0.8}
-                onPress={closeCruisePerformanceEditor}
-              >
-                <Text style={styles.performanceCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.performanceSaveButton}
-                activeOpacity={0.85}
-                onPress={handleSaveCruisePerformance}
-                testID="save-cruise-performance"
-              >
-                <Save size={16} color={COLORS.white} />
-                <Text style={styles.performanceSaveText}>Save results</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-
       <AddSessionModal
         visible={showAddSessionModal}
         onClose={() => setShowAddSessionModal(false)}
@@ -2867,23 +2367,15 @@ const styles = StyleSheet.create({
   dataRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: SPACING.sm,
-    paddingVertical: 8,
+    alignItems: 'center',
+    paddingVertical: 6,
   },
   dataLabel: {
-    flex: 1,
-    minWidth: 0,
     fontSize: TYPOGRAPHY.fontSizeSM,
-    lineHeight: 18,
     color: '#64748B',
   },
   dataValue: {
-    flexShrink: 0,
-    maxWidth: '48%',
-    textAlign: 'right',
     fontSize: TYPOGRAPHY.fontSizeSM,
-    lineHeight: 18,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
     color: COLORS.navyDeep,
   },
@@ -2894,19 +2386,12 @@ const styles = StyleSheet.create({
     borderTopColor: '#E2E8F0',
   },
   dataTotalLabel: {
-    flex: 1,
-    minWidth: 0,
     fontSize: TYPOGRAPHY.fontSizeMD,
-    lineHeight: 20,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: COLORS.navyDeep,
   },
   dataTotalValue: {
-    flexShrink: 1,
-    maxWidth: '52%',
-    textAlign: 'right',
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    lineHeight: 20,
+    fontSize: TYPOGRAPHY.fontSizeLG,
     fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   compactMetricsGrid: {
@@ -2930,99 +2415,6 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginTop: 2,
   },
-  annualSummaryHero: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: BORDER_RADIUS.md,
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.md,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    alignItems: 'center',
-  },
-  annualSummaryHeroLabel: {
-    fontSize: 11,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#64748B',
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
-    marginBottom: 4,
-  },
-  annualSummaryHeroValue: {
-    fontSize: 28,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-  },
-  annualSummaryHeroSubtext: {
-    marginTop: 6,
-    fontSize: 11,
-    lineHeight: 16,
-    color: '#64748B',
-    textAlign: 'center',
-  },
-  annualSummaryGrid: {
-    gap: SPACING.sm,
-    marginTop: SPACING.sm,
-  },
-  annualSummaryMetric: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: SPACING.sm,
-    backgroundColor: '#FFFFFF',
-    borderRadius: BORDER_RADIUS.sm,
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  annualSummaryMetricLabel: {
-    flex: 1,
-    minWidth: 0,
-    fontSize: 11,
-    lineHeight: 16,
-    color: '#64748B',
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-  },
-  annualSummaryMetricValue: {
-    flexShrink: 1,
-    maxWidth: '50%',
-    textAlign: 'right',
-    fontSize: 16,
-    lineHeight: 20,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
-  },
-  annualSummaryDetails: {
-    marginTop: SPACING.sm,
-    paddingTop: SPACING.sm,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    gap: SPACING.xs,
-  },
-  annualSummaryDetailRow: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: BORDER_RADIUS.sm,
-    padding: SPACING.sm,
-  },
-  annualSummaryDetailLabel: {
-    fontSize: 10,
-    color: '#64748B',
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    marginBottom: 3,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-  annualSummaryDetailValue: {
-    fontSize: 11,
-    lineHeight: 16,
-    color: COLORS.navyDeep,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-  },
-  annualSummaryFootnote: {
-    fontSize: 11,
-    lineHeight: 16,
-    color: '#64748B',
-    textAlign: 'center',
-  },
   avgStatsRow: {
     marginTop: SPACING.sm,
     paddingTop: SPACING.sm,
@@ -3033,25 +2425,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#64748B',
     textAlign: 'center',
-  },
-  discrepancyNotice: {
-    marginTop: SPACING.sm,
-    padding: SPACING.sm,
-    borderRadius: BORDER_RADIUS.sm,
-    backgroundColor: '#FFFBEB',
-    borderWidth: 1,
-    borderColor: '#F59E0B',
-  },
-  discrepancyTitle: {
-    fontSize: 12,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#92400E',
-    marginBottom: 2,
-  },
-  discrepancyText: {
-    fontSize: 11,
-    color: '#92400E',
-    lineHeight: 15,
   },
   header: {
     paddingHorizontal: SPACING.md,
@@ -3431,13 +2804,6 @@ const styles = StyleSheet.create({
     color: '#64748B',
     fontStyle: 'italic' as const,
   },
-  portfolioHintText: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#475569',
-    marginTop: -4,
-    marginBottom: SPACING.sm,
-    lineHeight: 16,
-  },
   portfolioCard: {
     backgroundColor: COLORS.white,
     borderRadius: BORDER_RADIUS.md,
@@ -3600,22 +2966,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: '#92400E',
-  },
-  portfolioCertificateBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 3,
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-  },
-  portfolioCertificateText: {
-    fontSize: 10,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#047857',
   },
   viewMoreButton: {
     flexDirection: 'row',
@@ -4375,211 +3725,6 @@ const styles = StyleSheet.create({
   economicsNegativeValue: {
     color: COLORS.error,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-  },
-  performanceModalOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  performanceModalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(15, 23, 42, 0.45)',
-  },
-  performanceModalCard: {
-    maxHeight: '88%',
-    backgroundColor: COLORS.white,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingTop: 10,
-    overflow: 'hidden',
-    ...SHADOW.md,
-  },
-  performanceModalHandle: {
-    width: 44,
-    height: 5,
-    borderRadius: 999,
-    backgroundColor: '#CBD5E1',
-    alignSelf: 'center',
-    marginBottom: SPACING.sm,
-  },
-  performanceModalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.lg,
-    paddingBottom: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  performanceModalTitleBlock: {
-    flex: 1,
-    marginRight: SPACING.md,
-  },
-  performanceModalEyebrow: {
-    fontSize: 11,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#047857',
-    textTransform: 'uppercase',
-    letterSpacing: 0.7,
-    marginBottom: 3,
-  },
-  performanceModalTitle: {
-    fontSize: TYPOGRAPHY.fontSizeLG,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
-  },
-  performanceModalSubtitle: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#64748B',
-    marginTop: 3,
-  },
-  performanceCloseButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F1F5F9',
-  },
-  performanceModalScroll: {
-    maxHeight: 470,
-  },
-  performanceModalContent: {
-    padding: SPACING.lg,
-    gap: SPACING.md,
-  },
-  performanceInputGrid: {
-    gap: SPACING.md,
-  },
-  performanceInputGroup: {
-    gap: 6,
-  },
-  performanceInputLabel: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
-  },
-  performanceTextInput: {
-    minHeight: 48,
-    borderRadius: BORDER_RADIUS.md,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#F8FAFC',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 10,
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#0F172A',
-  },
-  performanceNotesInput: {
-    minHeight: 92,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-    lineHeight: 20,
-  },
-  performanceInputHint: {
-    fontSize: 11,
-    color: '#64748B',
-  },
-  certificateToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: BORDER_RADIUS.lg,
-    borderWidth: 1,
-    borderColor: '#D1FAE5',
-    backgroundColor: '#F8FAFC',
-    padding: SPACING.md,
-    gap: SPACING.sm,
-  },
-  certificateToggleActive: {
-    backgroundColor: '#ECFDF5',
-    borderColor: '#10B981',
-  },
-  certificateToggleIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#D1FAE5',
-  },
-  certificateToggleIconActive: {
-    backgroundColor: '#059669',
-  },
-  certificateToggleTextBlock: {
-    flex: 1,
-  },
-  certificateToggleTitle: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
-  },
-  certificateToggleSubtitle: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 2,
-    lineHeight: 15,
-  },
-  certificateTogglePill: {
-    minWidth: 42,
-    alignItems: 'center',
-    borderRadius: BORDER_RADIUS.round,
-    backgroundColor: '#E2E8F0',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  certificateTogglePillActive: {
-    backgroundColor: '#047857',
-  },
-  certificateTogglePillText: {
-    fontSize: 11,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#475569',
-  },
-  certificateTogglePillTextActive: {
-    color: COLORS.white,
-  },
-  certificateDetailsCard: {
-    borderRadius: BORDER_RADIUS.lg,
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-    padding: SPACING.md,
-    gap: SPACING.md,
-  },
-  performanceModalActions: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-    padding: SPACING.lg,
-    paddingTop: SPACING.md,
-    borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-    backgroundColor: COLORS.white,
-  },
-  performanceCancelButton: {
-    flex: 1,
-    minHeight: 48,
-    borderRadius: BORDER_RADIUS.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F1F5F9',
-  },
-  performanceCancelText: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
-  },
-  performanceSaveButton: {
-    flex: 1.4,
-    minHeight: 48,
-    borderRadius: BORDER_RADIUS.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: SPACING.xs,
-    backgroundColor: COLORS.navyDeep,
-  },
-  performanceSaveText: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.white,
   },
   economicsSummarySection: {
     marginTop: SPACING.md,

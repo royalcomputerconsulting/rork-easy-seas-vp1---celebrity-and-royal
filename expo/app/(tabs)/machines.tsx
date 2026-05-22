@@ -33,7 +33,6 @@ import { PlayingHoursCard } from '@/components/ui/PlayingHoursCard';
 import { CasinoOpenHoursCard, type CasinoOpenHoursData } from '@/components/ui/CasinoOpenHoursCard';
 import { CasinoSessionTracker } from '@/components/CasinoSessionTracker';
 import { AddSessionModal } from '@/components/AddSessionModal';
-import { MachineConditionLogsPanel } from '@/components/MachineConditionLogsPanel';
 import { useUser, DEFAULT_PLAYING_HOURS } from '@/state/UserProvider';
 import type { PlayingHours } from '@/state/UserProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
@@ -729,8 +728,6 @@ export default function AtlasScreen() {
           </View>
         )}
 
-        <MachineConditionLogsPanel defaultShipName={nextUpcomingCruise?.shipName} />
-
         <View style={styles.hoursCardsSection}>
           <PlayingHoursCard
             currentValues={currentPlayingHours}
@@ -927,7 +924,7 @@ export default function AtlasScreen() {
             listRef.current = r;
           }}
           data={isLoading ? [] : filteredMachines}
-          keyExtractor={(item, index) => `${item.id?.trim() || 'atlas-machine'}-${item.globalMachineId || item.machineName || 'machine'}-${item.manufacturer || 'maker'}-${index}`}
+          keyExtractor={(item) => item.id}
           renderItem={({ item, index }) => {
             try {
               return renderMachineItem({ item, index } as any);

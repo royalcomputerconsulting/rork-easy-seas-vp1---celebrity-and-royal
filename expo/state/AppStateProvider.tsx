@@ -24,7 +24,7 @@ export const useAppState = () => {
       if (data.booked) await coreData.setBookedCruises(data.booked);
       if (data.cruises) await coreData.setCruises(data.cruises);
       if (data.offers) await coreData.setCasinoOffers(data.offers);
-      if (data.calendar) await coreData.setCalendarEvents(data.calendar);
+      if (data.calendar) coreData.setCalendarEvents(data.calendar);
     },
     clearLocalData: coreData.clearAllData,
     setUserPoints: coreData.setUserPoints,

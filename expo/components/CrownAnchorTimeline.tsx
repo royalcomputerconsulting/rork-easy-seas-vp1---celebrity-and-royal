@@ -10,7 +10,6 @@ import { Anchor, Star, TrendingUp, CheckCircle, Clock, Crown } from 'lucide-reac
 import { COLORS, SPACING, BORDER_RADIUS } from '@/constants/theme';
 import { createDateFromString, isDateInPast } from '@/lib/date';
 import { isRoyalCaribbeanShip } from '@/constants/shipInfo';
-import { applyUserConfirmedBookedCruiseManifest } from '@/lib/cruiseOverlapGuards';
 import type { BookedCruise } from '@/types/models';
 
 const LEVEL_THRESHOLDS: { name: string; points: number; color: string; bgColor: string }[] = [
@@ -73,9 +72,7 @@ export function CrownAnchorTimeline({ currentPoints, bookedCruises }: CrownAncho
   const timeline = useMemo((): TimelineEntry[] => {
     const today = new Date();
 
-    const canonicalBookedCruises = applyUserConfirmedBookedCruiseManifest(bookedCruises);
-
-    const rciCruises = canonicalBookedCruises
+    const rciCruises = bookedCruises
       .filter(c => {
         if (!isRoyalCaribbeanShip(c.shipName)) return false;
         const returnDate = c.returnDate ? createDateFromString(c.returnDate) : null;

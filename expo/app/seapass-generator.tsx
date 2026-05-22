@@ -19,7 +19,7 @@ import { Download, FileDown, RefreshCcw, Shield, Ship } from 'lucide-react-nativ
 import { SeaPassWebPass } from '@/components/seapass/SeaPassWebPass';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { BORDER_RADIUS, COLORS, SPACING, TYPOGRAPHY } from '@/constants/theme';
-import { SEA_PASS_APPROVED_SCREENSHOT_URL, SEA_PASS_DEFAULTS, SEA_PASS_TERMINAL_PORT, SEA_PASS_TERMINAL_VALUE, SEA_PASS_VIEWBOX, shouldShowSeaPassTerminal, type SeaPassWebPassData } from '@/lib/seaPassWebPass';
+import { SEA_PASS_APPROVED_SCREENSHOT_URL, SEA_PASS_DEFAULTS, SEA_PASS_VIEWBOX, type SeaPassWebPassData } from '@/lib/seaPassWebPass';
 import { exportSeaPassPdf, exportSeaPassPng } from '@/lib/seapassExport';
 import { useAuth } from '@/state/AuthProvider';
 
@@ -83,38 +83,26 @@ const FIELD_CONFIGS: SeaPassFieldConfig[] = [
   },
   {
     key: 'port',
-    label: 'Port',
-    placeholder: 'MIAMI, FLORIDA',
-    keyboardType: 'default',
-    autoCapitalize: 'characters',
-  },
-  {
-    key: 'terminal',
-    label: 'Terminal',
-    placeholder: 'A',
+    label: 'Port Name',
+    placeholder: SEA_PASS_DEFAULTS.port,
     keyboardType: 'default',
     autoCapitalize: 'characters',
   },
 ];
 
 function normalizeSeaPassFieldValue(key: keyof SeaPassWebPassData, value: string): string {
-  if (key === 'ship' || key === 'muster' || key === 'port' || key === 'terminal') {
+  if (key === 'ship' || key === 'muster' || key === 'port') {
     return value.toUpperCase();
   }
 
   return value;
 }
 
-const INITIAL_SEA_PASS_FORM_DATA: SeaPassWebPassData = {
-  ...SEA_PASS_DEFAULTS,
-  terminal: SEA_PASS_TERMINAL_VALUE,
-};
-
 function SeaPassGeneratorScreen() {
   const { width } = useWindowDimensions();
   const previewCaptureRef = useRef<View | null>(null);
   const exportCaptureRef = useRef<View | null>(null);
-  const [formData, setFormData] = useState<SeaPassWebPassData>({ ...INITIAL_SEA_PASS_FORM_DATA });
+  const [formData, setFormData] = useState<SeaPassWebPassData>({ ...SEA_PASS_DEFAULTS });
   const [isExportingPng, setIsExportingPng] = useState<boolean>(false);
   const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
 
@@ -126,9 +114,6 @@ function SeaPassGeneratorScreen() {
 
     return Math.min(Math.max(width - 48, 280), 520);
   }, [isWideLayout, width]);
-
-  const canShowTerminal = useMemo(() => shouldShowSeaPassTerminal(formData), [formData]);
-  const visibleFieldConfigs = useMemo(() => FIELD_CONFIGS.filter((field) => field.key !== 'terminal' || canShowTerminal), [canShowTerminal]);
 
   useEffect(() => {
     console.log('[SeaPassGenerator] Screen mounted');
@@ -150,31 +135,15 @@ function SeaPassGeneratorScreen() {
   const handleFieldChange = useCallback((key: keyof SeaPassWebPassData, value: string) => {
     const normalizedValue = normalizeSeaPassFieldValue(key, value);
     console.log('[SeaPassGenerator] Field changed', { key, value: normalizedValue });
-    setFormData((current) => {
-      const next: SeaPassWebPassData = {
-        ...current,
-        [key]: normalizedValue,
-      };
-
-      const nextCanShowTerminal = shouldShowSeaPassTerminal(next);
-
-      if ((key === 'ship' || key === 'port') && nextCanShowTerminal && next.terminal.trim().length === 0) {
-        console.log('[SeaPassGenerator] Auto-defaulting terminal to A for Icon sailing from Miami, Florida', { ship: next.ship, port: next.port });
-        next.terminal = SEA_PASS_TERMINAL_VALUE;
-      }
-
-      if ((key === 'ship' || key === 'port') && !nextCanShowTerminal && next.terminal.trim().length > 0) {
-        console.log('[SeaPassGenerator] Hiding terminal because sailing is not Icon from Miami, Florida', { ship: next.ship, port: next.port });
-        next.terminal = '';
-      }
-
-      return next;
-    });
+    setFormData((current) => ({
+      ...current,
+      [key]: normalizedValue,
+    }));
   }, []);
 
   const handleReset = useCallback(() => {
     console.log('[SeaPassGenerator] Resetting form to defaults');
-    setFormData({ ...INITIAL_SEA_PASS_FORM_DATA });
+    setFormData({ ...SEA_PASS_DEFAULTS });
   }, []);
 
   const handleExportPng = useCallback(async () => {
@@ -232,7 +201,6 @@ function SeaPassGeneratorScreen() {
               reservation={formData.reservation}
               ship={formData.ship}
               port={formData.port}
-              terminal={formData.terminal}
               width={SEA_PASS_VIEWBOX.width}
               style={styles.hiddenExportPass}
               testID="seapass-generator.export-pass"
@@ -269,8 +237,7 @@ function SeaPassGeneratorScreen() {
                     reservation={formData.reservation}
                     ship={formData.ship}
                     port={formData.port}
-                    terminal={formData.terminal}
-                    width={previewWidth}
+              width={previewWidth}
                     style={styles.previewPass}
                     testID="seapass-generator.preview"
                   />
@@ -290,11 +257,11 @@ function SeaPassGeneratorScreen() {
                     <Shield size={14} color="#5A319F" />
                     <Text style={styles.lockedBadgeText}>Locked Elements</Text>
                   </View>
-                  <Text style={styles.lockedInfoText}>Scott Merlis • DIAMOND PLUS • SIGNATURE • Port is editable • Terminal appears only for Icon sailings from {SEA_PASS_TERMINAL_PORT}.</Text>
+                  <Text style={styles.lockedInfoText}>Scott Merlis • DIAMOND PLUS • SIGNATURE • Editable Port Name</Text>
                 </View>
 
                 <View style={styles.fieldsGrid}>
-                  {visibleFieldConfigs.map((field) => (
+                  {FIELD_CONFIGS.map((field) => (
                     <View key={field.key} style={styles.fieldGroup}>
                       <Text style={styles.fieldLabel}>{field.label}</Text>
                       <TextInput
