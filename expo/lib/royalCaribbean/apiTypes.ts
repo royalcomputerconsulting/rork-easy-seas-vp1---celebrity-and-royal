@@ -284,8 +284,6 @@ export const SHIP_CODE_TO_NAME: Record<string, string> = {
   'WN': 'Wonder of the Seas',
   'IC': 'Icon of the Seas',
   'SG': 'Star of the Seas',
-  'ST': 'Star of the Seas',
-  'SN': 'Star of the Seas',
 };
 
 export const STATEROOM_TYPE_MAP: Record<string, string> = {
@@ -298,8 +296,7 @@ export const STATEROOM_TYPE_MAP: Record<string, string> = {
 };
 
 export function getShipNameFromCode(shipCode: string): string {
-  const normalizedCode = shipCode.trim().toUpperCase();
-  return SHIP_CODE_TO_NAME[normalizedCode] || shipCode;
+  return SHIP_CODE_TO_NAME[shipCode] || shipCode;
 }
 
 export function getStateroomTypeName(typeCode: string): string {

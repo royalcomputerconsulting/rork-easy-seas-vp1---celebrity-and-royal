@@ -30,14 +30,10 @@ export function isCourtesyHoldCruise(cruise: BookedCruise): boolean {
   return cruise.isCourtesyHold === true || normalizedStatus === 'courtesy hold' || normalizedStatus === 'hold' || normalizedStatus === 'offer';
 }
 
-function isInactiveNonCompletedStatus(status: string): boolean {
-  return ['archived', 'replaced', 'skipped', 'review needed', 'reviewneeded'].includes(status);
-}
-
 export function isCompletedBookedCruise(cruise: BookedCruise, today: Date = startOfToday()): boolean {
   const normalizedStatus = String(cruise.status ?? '').trim().toLowerCase();
 
-  if (cruise.completionState === 'completed' || normalizedStatus === 'completed' || normalizedStatus === 'past' || normalizedStatus === 'cancelled' || normalizedStatus === 'canceled') {
+  if (cruise.completionState === 'completed' || normalizedStatus === 'completed' || normalizedStatus === 'past' || normalizedStatus === 'cancelled') {
     return true;
   }
 
@@ -58,11 +54,6 @@ export function isCompletedBookedCruise(cruise: BookedCruise, today: Date = star
 }
 
 export function isInProgressBookedCruise(cruise: BookedCruise, today: Date = startOfToday()): boolean {
-  const normalizedStatus = String(cruise.status ?? '').trim().toLowerCase();
-  if (isInactiveNonCompletedStatus(normalizedStatus) || isCourtesyHoldCruise(cruise) || isCompletedBookedCruise(cruise, today)) {
-    return false;
-  }
-
   if (cruise.completionState === 'in-progress') {
     return true;
   }
@@ -78,6 +69,5 @@ export function isInProgressBookedCruise(cruise: BookedCruise, today: Date = sta
 }
 
 export function isActiveBookedCruise(cruise: BookedCruise, today: Date = startOfToday()): boolean {
-  const normalizedStatus = String(cruise.status ?? '').trim().toLowerCase();
-  return !isInactiveNonCompletedStatus(normalizedStatus) && !isCourtesyHoldCruise(cruise) && !isCompletedBookedCruise(cruise, today);
+  return !isCourtesyHoldCruise(cruise) && !isCompletedBookedCruise(cruise, today);
 }

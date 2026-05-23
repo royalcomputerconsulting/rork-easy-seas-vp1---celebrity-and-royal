@@ -1,11 +1,5 @@
 import type { CalendarEvent } from '@/types/models';
 
-function normalizeSourceEmail(value: string): string | undefined {
-  const cleaned = value.replace(/^mailto:/i, '').replace(/[<>]/g, '').toLowerCase().trim();
-  const match = cleaned.match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i);
-  return match ? match[0].toLowerCase() : undefined;
-}
-
 function parseICSDate(dateStr: string): string {
   if (!dateStr) return '';
   const cleaned = dateStr.replace(/[^\dT]/g, '');
@@ -41,9 +35,6 @@ export function parseICSFile(content: string): CalendarEvent[] {
     const dtend = getValue('DTEND');
     const location = getValue('LOCATION');
     const description = getValue('DESCRIPTION');
-    const organizer = getValue('ORGANIZER');
-    const attendee = getValue('ATTENDEE');
-    const sourceEmail = normalizeSourceEmail(organizer) ?? normalizeSourceEmail(attendee) ?? normalizeSourceEmail(description);
 
     if (!summary && !dtstart) continue;
 
@@ -74,9 +65,6 @@ export function parseICSFile(content: string): CalendarEvent[] {
       location: location || undefined,
       description: description || undefined,
       source: 'import',
-      sourceEmail,
-      importStatus: sourceEmail ? 'unassigned' : undefined,
-      reconciliationStatus: sourceEmail ? 'reviewNeeded' : undefined,
     };
 
     events.push(event);

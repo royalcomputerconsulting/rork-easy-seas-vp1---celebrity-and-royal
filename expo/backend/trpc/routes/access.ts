@@ -3,17 +3,6 @@ import { getDb } from "@/backend/db";
 import { createTRPCRouter, publicProcedure } from "../create-context";
 
 const ADMIN_EMAILS = ["scott.merlis1@gmail.com", "s@a.com"] as const;
-const DEFAULT_WHITELIST_SEED = [
-  "scott.merlis1@gmail.com",
-  "scott.merlis4@gmail.com",
-  "scott.a.merlis1@gmail.com",
-  "hemispheredancer480@gmail.com",
-  "hemispheredancer480@icloud.com",
-  "jsp22008@yahoo.com",
-  "jpence90@gmail.com",
-  "dextretehkh@hotmail.sg",
-  "s@a.com",
-] as const;
 
 function normalizeEmail(email: string): string {
   return email.toLowerCase().trim();
@@ -32,7 +21,7 @@ async function loadWhitelistFromDb(): Promise<string[]> {
   const dbEmails = (results?.[0] ?? [])
     .map((entry) => typeof entry.email === "string" ? normalizeEmail(entry.email) : "")
     .filter((email) => email.includes("@"));
-  return Array.from(new Set([...ADMIN_EMAILS, ...DEFAULT_WHITELIST_SEED, ...dbEmails])).sort();
+  return Array.from(new Set([...ADMIN_EMAILS, ...dbEmails])).sort();
 }
 
 export const accessRouter = createTRPCRouter({
@@ -43,7 +32,7 @@ export const accessRouter = createTRPCRouter({
       return { whitelist };
     } catch (error) {
       console.error("[AccessAPI] Failed to load whitelist:", error);
-      return { whitelist: Array.from(new Set([...ADMIN_EMAILS, ...DEFAULT_WHITELIST_SEED])).sort() };
+      return { whitelist: [...ADMIN_EMAILS] };
     }
   }),
 

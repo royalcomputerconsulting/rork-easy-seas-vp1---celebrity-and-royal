@@ -62,43 +62,38 @@ export function ROIProjectionChart({
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <View style={styles.headerMainRow}>
-          <View style={styles.headerContent}>
-            <View style={styles.headerIcon}>
-              <TrendingUp size={18} color={COLORS.aquaAccent} />
-            </View>
-            <Text style={styles.title} numberOfLines={1}>{title}</Text>
+        <View style={styles.headerContent}>
+          <View style={styles.headerIcon}>
+            <TrendingUp size={18} color={COLORS.aquaAccent} />
           </View>
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{totalSpent > 0 ? `${valueMultiple.toFixed(2)}x` : '—'}</Text>
-            <Text style={styles.badgeSubtext}>value / paid</Text>
+          <View>
+            <Text style={styles.title}>{title}</Text>
+            <Text style={styles.subtitle}>Cash result and cruise value are separated from gaming activity</Text>
           </View>
         </View>
-        <Text style={styles.subtitle}>Cash result and cruise value are separated from gaming activity</Text>
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>{totalSpent > 0 ? `${valueMultiple.toFixed(2)}x` : '—'}</Text>
+          <Text style={styles.badgeSubtext}>value / paid</Text>
+        </View>
       </View>
 
       <View style={styles.content}>
         <View style={styles.chartSection}>
           <View style={styles.barRow}>
-            <View style={styles.barHeaderRow}>
-              <View style={styles.barLabelContainer}>
-                <CreditCard size={12} color={COLORS.error} />
-                <Text style={styles.barLabel}>Amount Paid</Text>
-              </View>
-              <Text style={[styles.barValue, { color: COLORS.error }]}>{formatCurrency(totalSpent)}</Text>
+            <View style={styles.barLabelContainer}>
+              <CreditCard size={12} color={COLORS.error} />
+              <Text style={styles.barLabel}>Amount Paid</Text>
             </View>
             <View style={styles.barWrapper}>
               <View style={[styles.bar, styles.paidBar, { width: `${chartBars.paidWidth}%` }]} />
             </View>
+            <Text style={[styles.barValue, { color: COLORS.error }]}>{formatCurrency(totalSpent)}</Text>
           </View>
 
           <View style={styles.barRow}>
-            <View style={styles.barHeaderRow}>
-              <View style={styles.barLabelContainer}>
-                <Gem size={12} color={COLORS.success} />
-                <Text style={styles.barLabel}>Cruise Value Captured</Text>
-              </View>
-              <Text style={[styles.barValue, { color: COLORS.success }]}>{formatCurrency(totalCruiseValueCaptured)}</Text>
+            <View style={styles.barLabelContainer}>
+              <Gem size={12} color={COLORS.success} />
+              <Text style={styles.barLabel}>Cruise Value Captured</Text>
             </View>
             <View style={styles.barWrapper}>
               <LinearGradient
@@ -108,15 +103,13 @@ export function ROIProjectionChart({
                 style={[styles.bar, { width: `${chartBars.cruiseValueWidth}%` }]}
               />
             </View>
+            <Text style={[styles.barValue, { color: COLORS.success }]}>{formatCurrency(totalCruiseValueCaptured)}</Text>
           </View>
 
           <View style={styles.barRow}>
-            <View style={styles.barHeaderRow}>
-              <View style={styles.barLabelContainer}>
-                <Wallet size={12} color={COLORS.goldAccent} />
-                <Text style={styles.barLabel}>Total Economic Value</Text>
-              </View>
-              <Text style={[styles.barValue, { color: COLORS.goldAccent }]}>{formatCurrency(totalEconomicValue)}</Text>
+            <View style={styles.barLabelContainer}>
+              <Wallet size={12} color={COLORS.goldAccent} />
+              <Text style={styles.barLabel}>Total Economic Value</Text>
             </View>
             <View style={styles.barWrapper}>
               <LinearGradient
@@ -126,6 +119,7 @@ export function ROIProjectionChart({
                 style={[styles.bar, { width: `${chartBars.economicWidth}%` }]}
               />
             </View>
+            <Text style={[styles.barValue, { color: COLORS.goldAccent }]}>{formatCurrency(totalEconomicValue)}</Text>
           </View>
         </View>
 
@@ -195,21 +189,17 @@ const styles = StyleSheet.create({
     ...SHADOW.sm,
   },
   header: {
-    marginBottom: SPACING.lg,
-    gap: SPACING.sm,
-  },
-  headerMainRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: SPACING.sm,
+    marginBottom: SPACING.lg,
+    gap: SPACING.md,
   },
   headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.sm,
+    gap: SPACING.md,
     flex: 1,
-    minWidth: 0,
   },
   headerIcon: {
     width: 40,
@@ -223,21 +213,18 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeLG,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: COLORS.navyDeep,
-    flex: 1,
-    minWidth: 0,
   },
   subtitle: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontSize: TYPOGRAPHY.fontSizeSM,
     color: CLEAN_THEME.text.secondary,
-    lineHeight: 16,
+    marginTop: 2,
   },
   badge: {
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 6,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
     borderRadius: BORDER_RADIUS.md,
     backgroundColor: 'rgba(77, 208, 225, 0.12)',
     alignItems: 'center',
-    minWidth: 62,
   },
   badgeText: {
     fontSize: TYPOGRAPHY.fontSizeMD,
@@ -256,29 +243,23 @@ const styles = StyleSheet.create({
     gap: SPACING.md,
   },
   barRow: {
-    gap: SPACING.xs,
-  },
-  barHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     gap: SPACING.sm,
   },
   barLabelContainer: {
+    width: 124,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    flex: 1,
-    minWidth: 0,
   },
   barLabel: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     color: COLORS.navyDeep,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    flexShrink: 1,
   },
   barWrapper: {
-    width: '100%',
+    flex: 1,
     height: 10,
     borderRadius: 999,
     backgroundColor: '#E5EEF8',
@@ -292,10 +273,10 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.error,
   },
   barValue: {
+    width: 88,
     textAlign: 'right',
     fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    flexShrink: 0,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   stackSection: {
     gap: SPACING.sm,

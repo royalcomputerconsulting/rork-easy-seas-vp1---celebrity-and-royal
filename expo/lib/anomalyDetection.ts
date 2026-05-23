@@ -10,8 +10,6 @@ import type {
 } from '@/types/models';
 import { DEFAULT_ANOMALY_CONFIG } from '@/types/models';
 import { findUpgradeOpportunities, convertUpgradeOpportunitiesToAnomalies } from '@/lib/upgradeMonitor';
-import { dedupeBookedCruises } from '@/lib/dataIdentity';
-import { applyKnownBookingCorrectionsToCruise } from '@/lib/cruiseOverlapGuards';
 
 function generateId(): string {
   return `anomaly_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -32,41 +30,6 @@ function calculateStdDev(values: number[], mean?: number): number {
 function calculateZScore(value: number, mean: number, stdDev: number): number {
   if (stdDev === 0) return 0;
   return (value - mean) / stdDev;
-}
-
-function normalizeAnomalyDate(value?: string | null): string {
-  if (!value) return '';
-  const dateOnly = value.trim().includes('T') ? value.trim().split('T')[0] : value.trim();
-  const compactMatch = dateOnly.match(/^(\d{4})(\d{2})(\d{2})$/);
-  if (compactMatch) {
-    const [, year, month, day] = compactMatch;
-    return `${year}-${month}-${day}`;
-  }
-  return dateOnly;
-}
-
-function getAnomalyReservationKey(cruise: BookedCruise): string {
-  return String(cruise.reservationNumber ?? cruise.bookingId ?? cruise.bwoNumber ?? '').trim().toUpperCase();
-}
-
-function isSameAnomalyBookingRecord(left: BookedCruise, right: BookedCruise): boolean {
-  if (left === right) return true;
-  if (left.id && right.id && left.id === right.id) return true;
-
-  const leftReservation = getAnomalyReservationKey(left);
-  const rightReservation = getAnomalyReservationKey(right);
-  if (leftReservation && rightReservation && leftReservation === rightReservation) return true;
-
-  const leftShip = (left.shipName ?? '').trim().toLowerCase();
-  const rightShip = (right.shipName ?? '').trim().toLowerCase();
-  const sameSailing = Boolean(leftShip && rightShip)
-    && leftShip === rightShip
-    && normalizeAnomalyDate(left.sailDate) === normalizeAnomalyDate(right.sailDate);
-  if (!sameSailing) return false;
-
-  const leftReturnDate = normalizeAnomalyDate(left.returnDate);
-  const rightReturnDate = normalizeAnomalyDate(right.returnDate);
-  return !leftReturnDate || !rightReturnDate || leftReturnDate === rightReturnDate;
 }
 
 export function detectROIAnomalies(
@@ -300,10 +263,7 @@ export function detectBookingConflicts(
   cruises: BookedCruise[]
 ): Anomaly[] {
   const anomalies: Anomaly[] = [];
-  const bookedCruises = dedupeBookedCruises(
-    cruises.map(applyKnownBookingCorrectionsToCruise),
-    'anomaly booking conflict detection'
-  ).filter(c => 
+  const bookedCruises = cruises.filter(c => 
     c.status === 'booked' || c.completionState === 'upcoming'
   );
 
@@ -311,7 +271,6 @@ export function detectBookingConflicts(
     for (let j = i + 1; j < bookedCruises.length; j++) {
       const cruiseA = bookedCruises[i];
       const cruiseB = bookedCruises[j];
-      if (isSameAnomalyBookingRecord(cruiseA, cruiseB)) continue;
 
       const startA = new Date(cruiseA.sailDate);
       const endA = new Date(cruiseA.returnDate || cruiseA.sailDate);

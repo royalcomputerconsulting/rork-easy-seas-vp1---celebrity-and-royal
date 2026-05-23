@@ -8,12 +8,12 @@ import {
   TextInput,
   ScrollView,
   Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { X, Ship, Calendar, MapPin, Hash, Home } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
 import type { BookedCruise, CabinCategory } from '@/types/models';
-import { getDoubleOccupancyRoomRetailValue } from '@/lib/valueCalculator';
 
 interface AddBookedCruiseModalProps {
   visible: boolean;
@@ -50,9 +50,6 @@ export function AddBookedCruiseModal({ visible, onClose, onSave }: AddBookedCrui
       return;
     }
 
-    const parsedPerPersonRetailPrice = price ? parseFloat(price) : undefined;
-    const parsedRoomRetailPrice = getDoubleOccupancyRoomRetailValue(parsedPerPersonRetailPrice);
-
     const newCruise: BookedCruise = {
       id: `cruise-${Date.now()}`,
       shipName: shipName.trim(),
@@ -64,11 +61,8 @@ export function AddBookedCruiseModal({ visible, onClose, onSave }: AddBookedCrui
       reservationNumber: reservationNumber.trim() || undefined,
       cabinNumber: cabinNumber.trim() || undefined,
       cabinType: cabinType,
-      price: parsedPerPersonRetailPrice,
-      totalPrice: parsedRoomRetailPrice,
-      retailValue: parsedRoomRetailPrice,
-      totalRetailCost: parsedRoomRetailPrice,
-      originalPrice: parsedRoomRetailPrice,
+      price: price ? parseFloat(price) : undefined,
+      totalPrice: price ? parseFloat(price) : undefined,
       freePlay: freePlay ? parseFloat(freePlay) : undefined,
       freeOBC: freeOBC ? parseFloat(freeOBC) : undefined,
       offerCode: offerCode.trim() || undefined,
@@ -107,7 +101,11 @@ export function AddBookedCruiseModal({ visible, onClose, onSave }: AddBookedCrui
       transparent={true}
       onRequestClose={handleClose}
     >
-      <View style={styles.modalOverlay}>
+      <KeyboardAvoidingView
+        style={styles.modalOverlay}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 12 : 0}
+      >
         <View style={styles.modalContainer}>
           <LinearGradient
             colors={['#001F3F', '#003D5C']}
@@ -124,7 +122,12 @@ export function AddBookedCruiseModal({ visible, onClose, onSave }: AddBookedCrui
             </View>
           </LinearGradient>
 
-          <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            style={styles.modalContent}
+            contentContainerStyle={styles.modalContentInner}
+            showsVerticalScrollIndicator={true}
+            keyboardShouldPersistTaps="handled"
+          >
             <View style={styles.formSection}>
               <Text style={styles.sectionTitle}>Cruise Details</Text>
               
@@ -271,14 +274,14 @@ export function AddBookedCruiseModal({ visible, onClose, onSave }: AddBookedCrui
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Retail Price</Text>
+                <Text style={styles.label}>Price</Text>
                 <View style={styles.inputWrapper}>
                   <Text style={styles.currencySymbol}>$</Text>
                   <TextInput
                     style={[styles.input, styles.priceInput]}
                     value={price}
                     onChangeText={setPrice}
-                    placeholder="Imported cabin retail value"
+                    placeholder="0.00"
                     placeholderTextColor={COLORS.textSecondary}
                     keyboardType="decimal-pad"
                   />
@@ -356,7 +359,7 @@ export function AddBookedCruiseModal({ visible, onClose, onSave }: AddBookedCrui
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -365,17 +368,18 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
   },
   modalContainer: {
     backgroundColor: COLORS.white,
-    borderTopLeftRadius: BORDER_RADIUS.xl,
-    borderTopRightRadius: BORDER_RADIUS.xl,
-    maxHeight: '90%',
+    borderRadius: BORDER_RADIUS.xl,
+    marginHorizontal: SPACING.md,
+    maxHeight: '96%',
+    width: 'auto',
     overflow: 'hidden',
   },
   modalHeader: {
-    paddingVertical: SPACING.lg,
+    paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.lg,
   },
   headerRow: {
@@ -401,8 +405,12 @@ const styles = StyleSheet.create({
     padding: SPACING.xs,
   },
   modalContent: {
-    flex: 1,
-    padding: SPACING.lg,
+    flexGrow: 0,
+    paddingHorizontal: SPACING.lg,
+  },
+  modalContentInner: {
+    paddingTop: SPACING.lg,
+    paddingBottom: SPACING.xl,
   },
   formSection: {
     marginBottom: SPACING.xl,
@@ -476,7 +484,7 @@ const styles = StyleSheet.create({
   },
   modalFooter: {
     flexDirection: 'row',
-    padding: SPACING.lg,
+    padding: SPACING.md,
     gap: SPACING.md,
     borderTopWidth: 1,
     borderTopColor: 'rgba(0, 31, 63, 0.1)',

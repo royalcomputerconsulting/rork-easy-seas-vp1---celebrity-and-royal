@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
 import type { ItineraryDay } from '@/types/models';
 import { getUserScopedKey } from '@/lib/storage/storageKeys';
-import { quotaSafeGetItem, quotaSafeSetJsonItem, quotaSafeRemoveItem } from '@/lib/storage/quotaSafeStorage';
 import { useAuth } from './AuthProvider';
 
 const BASE_STORAGE_KEY = '@easy_seas_sailing_weather_cache_v1';
@@ -722,7 +722,7 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
 
     const loadCache = async () => {
       try {
-        const stored = await quotaSafeGetItem(storageKeyRef.current);
+        const stored = await AsyncStorage.getItem(storageKeyRef.current);
         if (!stored) {
           setCache({});
           setIsHydrated(true);
@@ -760,7 +760,7 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
           cacheRef.current = pruned;
           return;
         }
-        await quotaSafeSetJsonItem(storageKeyRef.current, pruned);
+        await AsyncStorage.setItem(storageKeyRef.current, JSON.stringify(pruned));
         console.log('[SailingWeather] Persisted cached forecasts:', Object.keys(pruned).length);
       } catch (error) {
         logSailingWeather('error', '[SailingWeather] Failed to persist weather cache', {
@@ -1036,24 +1036,8 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
 
     const dateKey = formatDateKey(targetDate);
     const cacheKey = createCacheKey(cruise.id, dateKey, resolvedPoint.latitude, resolvedPoint.longitude);
-    const rawCached = cacheRef.current[cacheKey];
-    const cached = rawCached && rawCached.dateKey === dateKey && rawCached.cacheKey === cacheKey ? rawCached : undefined;
+    const cached = cacheRef.current[cacheKey];
     const shouldForce = options?.force === true;
-
-    if (rawCached && !cached) {
-      logSailingWeather('warn', '[SailingWeather] Ignoring cached forecast with mismatched date/key', {
-        requestedDateKey: dateKey,
-        requestedCacheKey: cacheKey,
-        cachedDateKey: rawCached.dateKey,
-        cachedCacheKey: rawCached.cacheKey,
-      });
-      setCache((previousCache) => {
-        const nextCache = { ...previousCache };
-        delete nextCache[cacheKey];
-        cacheRef.current = nextCache;
-        return nextCache;
-      });
-    }
 
     if (!shouldForce && cached && !isCacheExpired(cached.updatedAt)) {
       console.log('[SailingWeather] Serving fresh cached forecast', { cacheKey, source: 'cache-fresh' });
@@ -1148,7 +1132,7 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
     setCache({});
     cacheRef.current = {};
     try {
-      await quotaSafeRemoveItem(storageKeyRef.current);
+      await AsyncStorage.removeItem(storageKeyRef.current);
       console.log('[SailingWeather] Cleared all cached forecasts');
     } catch (error) {
       logSailingWeather('error', '[SailingWeather] Failed to clear weather cache', {

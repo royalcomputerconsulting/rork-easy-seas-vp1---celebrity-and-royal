@@ -4,7 +4,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/state/AuthProvider';
 import { getUserScopedKey } from '@/lib/storage/storageKeys';
-import { buildOwnerScopeId, getInstallationId } from '@/lib/storage/installationId';
 
 import type { RecognitionEntryWithCrew, Sailing, Department } from '@/types/crew-recognition';
 import { CREW_RECOGNITION_CSV } from '@/constants/crew-recognition-csv';
@@ -122,43 +121,14 @@ function parseCSVToEntries(csvText: string): { entries: RecognitionEntryWithCrew
 
 export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook(() => {
   const auth = useAuth();
-  const userId = auth.authenticatedEmail?.toLowerCase().trim() || 'guest';
-  const [ownerScopeId, setOwnerScopeId] = useState<string | null>(null);
-  const ownerScopeIdRef = useRef<string | null>(null);
+  const userId = auth.authenticatedEmail || 'guest';
 
   const skEntriesRef = useRef(getUserScopedKey(BASE_STORAGE_KEY_ENTRIES, auth.authenticatedEmail));
   const skSailingsRef = useRef(getUserScopedKey(BASE_STORAGE_KEY_SAILINGS, auth.authenticatedEmail));
   useEffect(() => {
-    let isMounted = true;
     skEntriesRef.current = getUserScopedKey(BASE_STORAGE_KEY_ENTRIES, auth.authenticatedEmail);
     skSailingsRef.current = getUserScopedKey(BASE_STORAGE_KEY_SAILINGS, auth.authenticatedEmail);
     console.log('[CrewRecognition] Scoped storage keys updated for:', auth.authenticatedEmail);
-
-    if (!auth.authenticatedEmail) {
-      ownerScopeIdRef.current = null;
-      setOwnerScopeId(null);
-      return;
-    }
-
-    void getInstallationId()
-      .then((installationId) => {
-        if (!isMounted || !auth.authenticatedEmail) {
-          return;
-        }
-        const nextOwnerScopeId = buildOwnerScopeId(auth.authenticatedEmail, installationId);
-        ownerScopeIdRef.current = nextOwnerScopeId;
-        setOwnerScopeId(nextOwnerScopeId);
-        console.log('[CrewRecognition] Owner data scope resolved:', { email: auth.authenticatedEmail, ownerScopeId: nextOwnerScopeId });
-      })
-      .catch((error) => {
-        console.error('[CrewRecognition] Failed to resolve owner data scope:', error);
-        ownerScopeIdRef.current = null;
-        setOwnerScopeId(null);
-      });
-
-    return () => {
-      isMounted = false;
-    };
   }, [auth.authenticatedEmail]);
 
   const [filters, setFilters] = useState<CrewRecognitionFilters>(DEFAULT_FILTERS);
@@ -239,11 +209,11 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
   }, []);
 
   const statsQuery = trpc.crewRecognition.getStats.useQuery(
-    { userId, ownerScopeId: ownerScopeId || '' },
+    { userId },
     {
       refetchOnMount: true,
       refetchOnWindowFocus: false,
-      enabled: !!auth.authenticatedEmail && !!ownerScopeId,
+      enabled: !!userId,
       retry: 1,
       retryDelay: 2000,
     }
@@ -262,23 +232,22 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
       page,
       pageSize,
       userId,
-      ownerScopeId: ownerScopeId || '',
     },
     {
       refetchOnMount: true,
       refetchOnWindowFocus: false,
-      enabled: !!auth.authenticatedEmail && !!ownerScopeId,
+      enabled: !!userId,
       retry: 1,
       retryDelay: 2000,
     }
   );
 
   const sailingsQuery = trpc.crewRecognition.getSailings.useQuery(
-    { userId, ownerScopeId: ownerScopeId || '' },
+    { userId },
     {
       refetchOnMount: true,
       refetchOnWindowFocus: false,
-      enabled: !!auth.authenticatedEmail && !!ownerScopeId,
+      enabled: !!userId,
       retry: 1,
       retryDelay: 2000,
     }
@@ -384,11 +353,7 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
 
     if (!isOfflineMode) {
       try {
-        const currentOwnerScopeId = ownerScopeIdRef.current;
-        if (!currentOwnerScopeId) {
-          throw new Error('User data scope is not ready yet.');
-        }
-        const result = await createCrewMemberMutation.mutateAsync({ ...data, userId, ownerScopeId: currentOwnerScopeId } as any);
+        const result = await createCrewMemberMutation.mutateAsync(data as any);
         console.log('[CrewRecognition] Also saved crew member to backend:', data.fullName);
         return result;
       } catch (err) {
@@ -441,11 +406,7 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
 
     if (!isOfflineMode) {
       try {
-        const currentOwnerScopeId = ownerScopeIdRef.current;
-        if (!currentOwnerScopeId) {
-          throw new Error('User data scope is not ready yet.');
-        }
-        const result = await deleteRecognitionEntryMutation.mutateAsync({ ...data, userId, ownerScopeId: currentOwnerScopeId });
+        const result = await deleteRecognitionEntryMutation.mutateAsync({ ...data, userId });
         return result;
       } catch (err) {
         console.log('[CrewRecognition] Backend delete failed, local already removed:', err);
@@ -481,11 +442,7 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
 
     if (!isOfflineMode) {
       try {
-        const currentOwnerScopeId = ownerScopeIdRef.current;
-        if (!currentOwnerScopeId) {
-          throw new Error('User data scope is not ready yet.');
-        }
-        const result = await updateRecognitionEntryMutation.mutateAsync({ ...data, userId, ownerScopeId: currentOwnerScopeId });
+        const result = await updateRecognitionEntryMutation.mutateAsync({ ...data, userId });
         return result;
       } catch (err) {
         console.log('[CrewRecognition] Backend update failed, local already updated:', err);
@@ -503,11 +460,7 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
 
     if (!isOfflineMode) {
       try {
-        const currentOwnerScopeId = ownerScopeIdRef.current;
-        if (!currentOwnerScopeId) {
-          throw new Error('User data scope is not ready yet.');
-        }
-        const result = await deleteCrewMemberMutation.mutateAsync({ ...data, userId, ownerScopeId: currentOwnerScopeId });
+        const result = await deleteCrewMemberMutation.mutateAsync({ ...data, userId });
         return result;
       } catch (err) {
         console.log('[CrewRecognition] Backend delete crew member failed, local already removed:', err);
@@ -529,13 +482,7 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     department: Department;
     roleTitle?: string;
     notes?: string;
-  }) => {
-    const currentOwnerScopeId = ownerScopeIdRef.current;
-    if (!currentOwnerScopeId) {
-      return Promise.reject(new Error('User data scope is not ready yet.'));
-    }
-    return updateCrewMemberMutation.mutateAsync({ ...data, userId, ownerScopeId: currentOwnerScopeId });
-  }, [updateCrewMemberMutation, userId]);
+  }) => updateCrewMemberMutation.mutateAsync({ ...data, userId }), [updateCrewMemberMutation, userId]);
 
   const createRecognitionEntryScoped = useCallback((data: {
     crewMemberId: string;
@@ -543,26 +490,14 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     department: Department;
     roleTitle?: string;
     sourceText?: string;
-  }) => {
-    const currentOwnerScopeId = ownerScopeIdRef.current;
-    if (!currentOwnerScopeId) {
-      return Promise.reject(new Error('User data scope is not ready yet.'));
-    }
-    return createRecognitionEntryMutation.mutateAsync({ ...data, userId, ownerScopeId: currentOwnerScopeId });
-  }, [createRecognitionEntryMutation, userId]);
+  }) => createRecognitionEntryMutation.mutateAsync({ ...data, userId }), [createRecognitionEntryMutation, userId]);
 
   const createSailingScoped = useCallback((data: {
     shipName: string;
     sailStartDate: string;
     sailEndDate: string;
     nights?: number;
-  }) => {
-    const currentOwnerScopeId = ownerScopeIdRef.current;
-    if (!currentOwnerScopeId) {
-      return Promise.reject(new Error('User data scope is not ready yet.'));
-    }
-    return createSailingMutation.mutateAsync({ ...data, userId, ownerScopeId: currentOwnerScopeId });
-  }, [createSailingMutation, userId]);
+  }) => createSailingMutation.mutateAsync({ ...data, userId }), [createSailingMutation, userId]);
 
   const clearCrewData = useCallback(async () => {
     console.log('[CrewRecognition] Clearing all crew data...');
@@ -776,7 +711,6 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
 
   return useMemo(() => ({
     userId,
-    ownerScopeId,
     filters,
     updateFilters,
     resetFilters,
@@ -805,7 +739,7 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     clearCrewData,
     refetch,
   }), [
-    userId, ownerScopeId, filters, updateFilters, resetFilters, page, pageSize, nextPage, previousPage, goToPage,
+    userId, filters, updateFilters, resetFilters, page, pageSize, nextPage, previousPage, goToPage,
     useLocal, localStats, statsQuery.data, statsQuery.isLoading, filteredLocalEntries, backendEntries, backendTotal,
     entriesQuery.isLoading, localSailings, sailingsQuery.data, sailingsQuery.isLoading,
     syncFromCSVLocally, importFromTextLocally, addCrewMemberWithFallback, updateCrewMemberScoped,

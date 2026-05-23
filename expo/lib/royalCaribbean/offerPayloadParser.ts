@@ -45,6 +45,16 @@ function getString(value: unknown): string {
   return '';
 }
 
+
+function normalizeCasinoOfferCode(value: unknown): string {
+  const code = getString(value).trim().toUpperCase();
+  if (!code) return '';
+  if (/^26BCP105[A-Z]?$/.test(code)) return '26BCP105';
+  if (/^26JUL104[A-Z]?$/.test(code)) return '26JUL104';
+  if (/^26VTY104[A-Z]?$/.test(code)) return '26VTY104';
+  return code;
+}
+
 function getNumber(value: unknown): number | undefined {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return value;
@@ -111,48 +121,72 @@ function isOfferInProgress(offer: UnknownRecord, entry: UnknownRecord): boolean 
   return status.includes('in progress') || status.includes('pending') || status.includes('processing') || status.includes('earning');
 }
 
+const MONTH_INDEX: Record<string, number> = {
+  jan: 1, january: 1,
+  feb: 2, february: 2,
+  mar: 3, march: 3,
+  apr: 4, april: 4,
+  may: 5,
+  jun: 6, june: 6,
+  jul: 7, july: 7,
+  aug: 8, august: 8,
+  sep: 9, sept: 9, september: 9,
+  oct: 10, october: 10,
+  nov: 11, november: 11,
+  dec: 12, december: 12,
+};
+
+function normalizeYear(value: string): number | null {
+  const year = String(value || '').trim();
+  if (!year) {
+    return null;
+  }
+  return year.length === 2 ? 2000 + Number.parseInt(year, 10) : Number.parseInt(year, 10);
+}
+
+function validateDateParts(year: number | null, month: number | undefined, day: number): { year: number; month: number; day: number } | null {
+  if (!year || !month || !day || year < 2020 || year > 2035 || month < 1 || month > 12 || day < 1 || day > 31) {
+    return null;
+  }
+
+  const check = new Date(year, month - 1, day);
+  if (check.getFullYear() !== year || check.getMonth() + 1 !== month || check.getDate() !== day) {
+    return null;
+  }
+
+  return { year, month, day };
+}
+
 function getDateParts(value: string): { year: number; month: number; day: number } | null {
-  const normalized = value.trim();
+  const normalized = value.trim().replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').replace(/\.$/, '');
   if (!normalized) {
     return null;
   }
 
-  let match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s].*)?$/);
+  let match = normalized.match(/^(\d{4})[-\/]?(\d{2})[-\/]?(\d{2})(?:[T\s].*)?$/);
   if (match) {
-    return {
-      year: Number.parseInt(match[1], 10),
-      month: Number.parseInt(match[2], 10),
-      day: Number.parseInt(match[3], 10),
-    };
+    return validateDateParts(Number.parseInt(match[1], 10), Number.parseInt(match[2], 10), Number.parseInt(match[3], 10));
   }
 
-  match = normalized.match(/^(\d{4})(\d{2})(\d{2})$/);
+  match = normalized.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
   if (match) {
-    return {
-      year: Number.parseInt(match[1], 10),
-      month: Number.parseInt(match[2], 10),
-      day: Number.parseInt(match[3], 10),
-    };
+    return validateDateParts(normalizeYear(match[3]), Number.parseInt(match[1], 10), Number.parseInt(match[2], 10));
   }
 
-  match = normalized.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  match = normalized.match(/^([A-Za-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?[,]?\s+(\d{2,4})$/i);
   if (match) {
-    const yearValue = match[3].length === 2 ? `20${match[3]}` : match[3];
-    return {
-      year: Number.parseInt(yearValue, 10),
-      month: Number.parseInt(match[1], 10),
-      day: Number.parseInt(match[2], 10),
-    };
+    return validateDateParts(normalizeYear(match[3]), MONTH_INDEX[match[1].toLowerCase().replace('.', '')], Number.parseInt(match[2], 10));
+  }
+
+  match = normalized.match(/^(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]{3,9})\.?[,]?\s+(\d{2,4})$/i);
+  if (match) {
+    return validateDateParts(normalizeYear(match[3]), MONTH_INDEX[match[2].toLowerCase().replace('.', '')], Number.parseInt(match[1], 10));
   }
 
   try {
     const parsed = new Date(normalized.includes('T') ? normalized : `${normalized}T12:00:00`);
     if (!Number.isNaN(parsed.getTime())) {
-      return {
-        year: parsed.getFullYear(),
-        month: parsed.getMonth() + 1,
-        day: parsed.getDate(),
-      };
+      return validateDateParts(parsed.getFullYear(), parsed.getMonth() + 1, parsed.getDate());
     }
   } catch {
     return null;
@@ -177,6 +211,45 @@ function formatDate(value: unknown): string {
   return `${month}/${day}/${parts.year}`;
 }
 
+
+function extractExpandedSailingDates(...values: unknown[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const add = (raw: string) => {
+    const formatted = formatDate(raw);
+    if (!formatted || formatted === raw) return;
+    if (!seen.has(formatted)) {
+      seen.add(formatted);
+      out.push(formatted);
+    }
+  };
+
+  values.forEach((value) => {
+    const text = getString(value).replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!text) return;
+    add(text);
+
+    const fullDateRe = /\b(?:20\d{2}[-\/]?\d{1,2}[-\/]?\d{1,2}|\d{1,2}[\/-]\d{1,2}[\/-]20\d{2}|(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t)?(?:ember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+\d{1,2}(?:st|nd|rd|th)?[,]?\s+20\d{2}|\d{1,2}(?:st|nd|rd|th)?\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t)?(?:ember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?[,]?\s+20\d{2})\b/gi;
+    let match: RegExpExecArray | null;
+    while ((match = fullDateRe.exec(text)) !== null) {
+      add(match[0]);
+    }
+
+    const yearMatch = text.match(/\b(20\d{2})\b/);
+    if (yearMatch) {
+      const sharedYear = yearMatch[1];
+      const afterYear = text.slice((yearMatch.index ?? 0) + yearMatch[0].length);
+      const monthDayRe = /\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t)?(?:ember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+(\d{1,2})(?:st|nd|rd|th)?\b/gi;
+      let md: RegExpExecArray | null;
+      while ((md = monthDayRe.exec(afterYear)) !== null) {
+        add(`${md[1]} ${md[2]}, ${sharedYear}`);
+      }
+    }
+  });
+
+  return out;
+}
+
 function formatMoney(value: unknown): string | undefined {
   const amount = getNumber(value);
   if (amount === undefined || amount <= 0) {
@@ -199,7 +272,7 @@ function isOfferLikeRecord(record: UnknownRecord): boolean {
 }
 
 function collectOfferRecords(value: unknown, depth: number = 0): UnknownRecord[] {
-  if (depth > 4) {
+  if (depth > 8) {
     return [];
   }
 
@@ -220,7 +293,16 @@ function collectOfferRecords(value: unknown, depth: number = 0): UnknownRecord[]
   const collected: UnknownRecord[] = [];
   Object.entries(record).forEach(([key, childValue]) => {
     const normalizedKey = key.toLowerCase();
-    if (normalizedKey.includes('offer') || normalizedKey === 'payload' || normalizedKey === 'data') {
+    if (
+      normalizedKey.includes('offer') ||
+      normalizedKey.includes('campaign') ||
+      normalizedKey.includes('sailing') ||
+      normalizedKey.includes('cruise') ||
+      normalizedKey === 'payload' ||
+      normalizedKey === 'data' ||
+      normalizedKey === 'items' ||
+      normalizedKey === 'results'
+    ) {
       collected.push(...collectOfferRecords(childValue, depth + 1));
     }
   });
@@ -444,6 +526,13 @@ function extractPortList(sailing: UnknownRecord): string {
 }
 
 function extractSailings(entry: UnknownRecord, offer: UnknownRecord): UnknownRecord[] {
+  const entryData = asRecord(entry.data);
+  const entryPayload = asRecord(entry.payload);
+  const entryCruiseSearch = asRecord(entry.cruiseSearch) ?? asRecord(entryData?.cruiseSearch) ?? asRecord(entryPayload?.cruiseSearch);
+  const entryCruiseResults = asRecord(entryCruiseSearch?.results);
+  const offerCruiseSearch = asRecord(offer.cruiseSearch);
+  const offerCruiseResults = asRecord(offerCruiseSearch?.results);
+
   const candidateArrays: unknown[] = [
     offer.sailings,
     offer.availableSailings,
@@ -452,6 +541,13 @@ function extractSailings(entry: UnknownRecord, offer: UnknownRecord): UnknownRec
     offer.offerSailings,
     offer.sailingList,
     offer.cruises,
+    offer.voyages,
+    offer.availableCruises,
+    offer.cruiseOptions,
+    offer.sailingOptions,
+    offer.itineraries,
+    offerCruiseResults?.cruises,
+    offerCruiseResults?.sailings,
     entry.sailings,
     entry.availableSailings,
     entry.eligibleSailings,
@@ -459,6 +555,13 @@ function extractSailings(entry: UnknownRecord, offer: UnknownRecord): UnknownRec
     entry.offerSailings,
     entry.sailingList,
     entry.cruises,
+    entry.voyages,
+    entry.availableCruises,
+    entry.cruiseOptions,
+    entry.sailingOptions,
+    entry.itineraries,
+    entryCruiseResults?.cruises,
+    entryCruiseResults?.sailings,
   ];
 
   for (const candidate of candidateArrays) {
@@ -638,7 +741,7 @@ export function parseCasinoOffersPayload(
   rawOffers.forEach((entry) => {
     const offer = getOfferRecord(entry);
     const offerName = getString(offer.name ?? offer.title ?? offer.offerName ?? offer.marketingTitle ?? offer.description);
-    const offerCode = getString(offer.offerCode ?? offer.marketingCouponCode ?? offer.couponCode ?? offer.code);
+    const offerCode = normalizeCasinoOfferCode(offer.offerCode ?? offer.marketingCouponCode ?? offer.couponCode ?? offer.code);
     const offerExpirationDate = formatDate(offer.reserveByDate ?? offer.expirationDate ?? offer.marketingEndDate);
     const offerType = getString(offer.type ?? offer.offerType) || defaultOfferType;
     const offerStatus = getOfferStatus(offer, entry);
@@ -684,48 +787,81 @@ export function parseCasinoOffersPayload(
     }
 
     sailings.forEach((sailing) => {
-      const shipRecord = asRecord(sailing.ship);
-      const shipCode = getString(sailing.shipCode ?? shipRecord?.code);
-      const shipName = getString(sailing.shipName ?? shipRecord?.name) || (shipCode ? getShipNameFromCode(shipCode) : '');
-      const sailingDate = formatDate(sailing.sailDate ?? sailing.startDate ?? sailing.departureDate ?? sailing.date);
-      const departurePort = extractDeparturePortName(sailing);
-      const itinerary = extractItineraryText(sailing);
-      const cabinType = getString(sailing.roomType ?? sailing.stateroomType ?? sailing.cabinType);
-      const prices = extractCabinPrices(sailing);
-      const isGOBOSailing = getBoolean(sailing.isGOBO);
-      const totalNights = extractNights(sailing, offer);
-      const portList = extractPortList(sailing);
+      const nestedSailings = asRecordArray(sailing.sailings);
+      const rowSailings = nestedSailings.length > 0 ? nestedSailings : [sailing];
+      const parentCruise = nestedSailings.length > 0 ? sailing : undefined;
 
-      offerRows.push({
-        sourcePage,
-        offerName: offerName || offerCode || defaultOfferType,
-        offerCode,
-        offerExpirationDate,
-        offerType,
-        shipName,
-        shipCode: shipCode || undefined,
-        sailingDate,
-        itinerary,
-        departurePort,
-        cabinType,
-        numberOfGuests: isGOBOSailing || isGOBOOffer ? '1' : '2',
-        perks,
-        loyaltyLevel: '',
-        loyaltyPoints: '',
-        interiorPrice: prices.interiorPrice,
-        oceanviewPrice: prices.oceanviewPrice,
-        balconyPrice: prices.balconyPrice,
-        suitePrice: prices.suitePrice,
-        taxesAndFees: prices.taxesAndFees,
-        portList: portList || undefined,
-        dayByDayItinerary: [],
-        destinationName: undefined,
-        totalNights,
-        bookingLink: getString(sailing.bookingLink ?? asRecord(sailing.marketingUiAttributes)?.ctaLink) || bookingLink || undefined,
-        offerStatus: offerStatus || undefined,
-        isInProgress,
+      rowSailings.forEach((rowSailing) => {
+        const parentRecord = asRecord(parentCruise);
+        const masterSailing = asRecord(rowSailing.masterSailing ?? sailing.masterSailing ?? parentRecord?.masterSailing);
+        const masterItinerary = asRecord(masterSailing?.itinerary);
+        const masterShip = asRecord(masterSailing?.ship ?? masterItinerary?.ship);
+        const shipRecord = asRecord(rowSailing.ship ?? sailing.ship ?? parentRecord?.ship);
+        const shipCode = getString(rowSailing.shipCode ?? sailing.shipCode ?? parentRecord?.shipCode ?? shipRecord?.code ?? masterShip?.code);
+        const shipName = getString(rowSailing.shipName ?? sailing.shipName ?? parentRecord?.shipName ?? shipRecord?.name ?? masterShip?.name) || (shipCode ? getShipNameFromCode(shipCode) : '');
+        const sailingDates = extractExpandedSailingDates(
+          rowSailing.sailDate,
+          rowSailing.startDate,
+          rowSailing.departureDate,
+          rowSailing.date,
+          rowSailing.sailingDate,
+          rowSailing.sailingDates,
+          rowSailing.dates,
+          sailing.sailDate,
+          sailing.startDate,
+          sailing.departureDate,
+          sailing.date,
+          sailing.sailingDate,
+          sailing.sailingDates,
+          sailing.dates,
+          parentRecord?.sailDate,
+          parentRecord?.startDate,
+          parentRecord?.sailingDates,
+          parentRecord?.dates
+        );
+        const datesForRows = sailingDates.length > 0 ? sailingDates : [''];
+        const departurePort = extractDeparturePortName(rowSailing) || extractDeparturePortName(sailing) || extractDeparturePortName(parentRecord ?? {});
+        const itinerary = extractItineraryText(rowSailing) || extractItineraryText(sailing) || extractItineraryText(parentRecord ?? {});
+        const cabinType = getString(rowSailing.roomType ?? rowSailing.stateroomType ?? rowSailing.cabinType ?? sailing.roomType ?? sailing.stateroomType ?? sailing.cabinType);
+        const prices = extractCabinPrices(rowSailing);
+        const parentPrices = extractCabinPrices(sailing);
+        const isGOBOSailing = getBoolean(rowSailing.isGOBO ?? sailing.isGOBO);
+        const totalNights = extractNights(rowSailing, offer) ?? extractNights(sailing, offer);
+        const portList = extractPortList(rowSailing) || extractPortList(sailing) || extractPortList(parentRecord ?? {});
+
+        datesForRows.forEach((sailingDate) => {
+          offerRows.push({
+          sourcePage,
+          offerName: offerName || offerCode || defaultOfferType,
+          offerCode,
+          offerExpirationDate,
+          offerType,
+          shipName,
+          shipCode: shipCode || undefined,
+          sailingDate,
+          itinerary,
+          departurePort,
+          cabinType,
+          numberOfGuests: isGOBOSailing || isGOBOOffer ? '1' : '2',
+          perks,
+          loyaltyLevel: '',
+          loyaltyPoints: '',
+          interiorPrice: prices.interiorPrice || parentPrices.interiorPrice,
+          oceanviewPrice: prices.oceanviewPrice || parentPrices.oceanviewPrice,
+          balconyPrice: prices.balconyPrice || parentPrices.balconyPrice,
+          suitePrice: prices.suitePrice || parentPrices.suitePrice,
+          taxesAndFees: prices.taxesAndFees || parentPrices.taxesAndFees,
+          portList: portList || undefined,
+          dayByDayItinerary: [],
+          destinationName: undefined,
+          totalNights,
+          bookingLink: getString(rowSailing.bookingLink ?? sailing.bookingLink ?? asRecord(rowSailing.marketingUiAttributes)?.ctaLink ?? asRecord(sailing.marketingUiAttributes)?.ctaLink) || bookingLink || undefined,
+          offerStatus: offerStatus || undefined,
+          isInProgress,
+          });
+          totalSailings += 1;
+        });
       });
-      totalSailings += 1;
     });
   });
 

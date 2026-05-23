@@ -9,8 +9,6 @@ export const BASE_STORAGE_KEYS = {
   SETTINGS: 'easyseas_settings',
   USER_POINTS: 'easyseas_user_points',
   CLUB_PROFILE: 'easyseas_club_profile',
-  USERS: 'easyseas_users',
-  CURRENT_USER: 'easyseas_current_user',
   REMOVED_MOCK_CRUISES: 'easyseas_removed_mock_cruises',
   HAS_IMPORTED_DATA: 'easyseas_has_imported_data',
   CRUISE_DATA_VERSION: 'easyseas_cruise_data_version',

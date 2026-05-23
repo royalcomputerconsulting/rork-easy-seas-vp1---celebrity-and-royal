@@ -9,20 +9,9 @@ interface BrandToggleProps {
   onToggle: (brand: BrandType) => void;
   showSilversea?: boolean;
   showCarnival?: boolean;
-  customFourthLabel?: string;
-  customFourthActive?: boolean;
-  onCustomFourthPress?: () => void;
 }
 
-export function BrandToggle({
-  activeBrand,
-  onToggle,
-  showSilversea = true,
-  showCarnival = true,
-  customFourthLabel,
-  customFourthActive = false,
-  onCustomFourthPress,
-}: BrandToggleProps) {
+export function BrandToggle({ activeBrand, onToggle, showSilversea = true, showCarnival = true }: BrandToggleProps) {
   return (
     <View style={styles.container}>
       <View style={styles.toggleContainer}>
@@ -30,7 +19,7 @@ export function BrandToggle({
           style={[
             styles.toggleButton,
             styles.leftButton,
-            !customFourthActive && activeBrand === 'royal' && styles.activeButton,
+            activeBrand === 'royal' && styles.activeButton,
           ]}
           onPress={() => onToggle('royal')}
           activeOpacity={0.7}
@@ -38,7 +27,7 @@ export function BrandToggle({
           <Text
             style={[
               styles.toggleText,
-              !customFourthActive && activeBrand === 'royal' && styles.activeText,
+              activeBrand === 'royal' && styles.activeText,
             ]}
             numberOfLines={1}
           >
@@ -50,7 +39,7 @@ export function BrandToggle({
           style={[
             styles.toggleButton,
             styles.middleButton,
-            !customFourthActive && activeBrand === 'celebrity' && styles.activeButton,
+            activeBrand === 'celebrity' && styles.activeButton,
           ]}
           onPress={() => onToggle('celebrity')}
           activeOpacity={0.7}
@@ -58,7 +47,7 @@ export function BrandToggle({
           <Text
             style={[
               styles.toggleText,
-              !customFourthActive && activeBrand === 'celebrity' && styles.activeText,
+              activeBrand === 'celebrity' && styles.activeText,
             ]}
             numberOfLines={1}
           >
@@ -71,7 +60,7 @@ export function BrandToggle({
             style={[
               styles.toggleButton,
               styles.middleButton,
-              !customFourthActive && activeBrand === 'silversea' && styles.activeButton,
+              activeBrand === 'silversea' && styles.activeButton,
             ]}
             onPress={() => onToggle('silversea')}
             activeOpacity={0.7}
@@ -79,7 +68,7 @@ export function BrandToggle({
             <Text
               style={[
                 styles.toggleText,
-                !customFourthActive && activeBrand === 'silversea' && styles.activeText,
+                activeBrand === 'silversea' && styles.activeText,
               ]}
               numberOfLines={1}
             >
@@ -88,27 +77,7 @@ export function BrandToggle({
           </TouchableOpacity>
         )}
 
-        {customFourthLabel ? (
-          <TouchableOpacity
-            style={[
-              styles.toggleButton,
-              styles.rightButton,
-              customFourthActive && styles.profileActiveButton,
-            ]}
-            onPress={onCustomFourthPress}
-            activeOpacity={0.7}
-          >
-            <Text
-              style={[
-                styles.toggleText,
-                customFourthActive && styles.activeText,
-              ]}
-              numberOfLines={1}
-            >
-              {customFourthLabel}
-            </Text>
-          </TouchableOpacity>
-        ) : showCarnival && (
+        {showCarnival && (
           <TouchableOpacity
             style={[
               styles.toggleButton,
@@ -169,9 +138,6 @@ const styles = StyleSheet.create({
   },
   carnivalActiveButton: {
     backgroundColor: '#CC2232',
-  },
-  profileActiveButton: {
-    backgroundColor: '#0F766E',
   },
   toggleText: {
     fontSize: 9,

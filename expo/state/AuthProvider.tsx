@@ -11,23 +11,6 @@ const FRESH_START_KEY = "easyseas_fresh_start";
 const PENDING_ACCOUNT_SWITCH_KEY = "easyseas_pending_account_switch";
 export const ADMIN_EMAILS = ["scott.merlis1@gmail.com", "s@a.com"] as const;
 const PRIMARY_ADMIN_EMAIL = ADMIN_EMAILS[0];
-/**
- * Default whitelist seed. These emails are restored into the global whitelist
- * on every read so they always appear in the admin-managed Free Use list,
- * regardless of who is currently logged in. Admins can still remove non-admin
- * entries from the cloud; removals propagate via the pending-mutations queue.
- */
-const DEFAULT_WHITELIST_SEED = [
-  'scott.merlis1@gmail.com',
-  'scott.merlis4@gmail.com',
-  'scott.a.merlis1@gmail.com',
-  'hemispheredancer480@gmail.com',
-  'hemispheredancer480@icloud.com',
-  'jsp22008@yahoo.com',
-  'jpence90@gmail.com',
-  'dextretehkh@hotmail.sg',
-  's@a.com',
-] as const;
 const FREE_USE_SUBSCRIPTION_LEVEL = "Free Use of App" as const;
 const GLOBAL_WHITELIST_KEY = STORAGE_KEYS.EMAIL_WHITELIST_GLOBAL;
 const LEGACY_WHITELIST_KEY = STORAGE_KEYS.EMAIL_WHITELIST;
@@ -76,7 +59,6 @@ function isAdminEmail(email: string | null | undefined): boolean {
 
 function mergeWhitelistEmails(...lists: string[][]): string[] {
   const merged = new Set<string>(ADMIN_EMAILS);
-  DEFAULT_WHITELIST_SEED.forEach((email) => merged.add(email));
   lists.flat().forEach((email) => {
     const normalizedEmail = normalizeEmail(email);
     if (normalizedEmail?.includes('@')) {
@@ -264,7 +246,7 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
       return mergedWhitelist;
     } catch (error) {
       console.error('[AuthProvider] Failed loading global whitelist:', error);
-      return mergeWhitelistEmails();
+      return [...ADMIN_EMAILS];
     }
   };
 

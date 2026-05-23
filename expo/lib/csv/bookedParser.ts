@@ -1,5 +1,4 @@
 import type { BookedCruise } from '@/types/models';
-import { getDoubleOccupancyRoomRetailValue } from '@/lib/valueCalculator';
 import {
   parseCSVLine,
   normalizeDateString,
@@ -7,7 +6,6 @@ import {
   detectDelimiter,
   createHeaderMap,
   getColumnIndex,
-  getPriceForRoomType,
 } from './csvParser';
 
 function stripOuterQuotes(value: string): string {
@@ -104,11 +102,6 @@ function inferCruiseSourceFromText(...values: string[]): BookedCruise['cruiseSou
   if (joined.includes('celebrity') || joined.includes('blue chip') || joined.includes("captain's club")) return 'celebrity';
   if (joined.includes('royal caribbean') || joined.includes('club royale') || joined.includes('crown & anchor') || joined.includes(' of the seas')) return 'royal';
   return undefined;
-}
-
-function normalizeSourceEmail(value: string): string | undefined {
-  const normalized = value.toLowerCase().trim();
-  return normalized.includes('@') ? normalized : undefined;
 }
 
 function inferCruiseSourceFromShipName(shipName: string): BookedCruise['cruiseSource'] | undefined {
@@ -255,19 +248,13 @@ export function parseBookedCSV(content: string, existingCruises: BookedCruise[] 
     isBooked: getColumnIndex(headerMap, ['isbooked', 'is booked', 'is_booked', 'booked', 'status']),
     winningsBroughtHome: getColumnIndex(headerMap, ['winningsbroughthome', 'winnings brought home', 'winnings_brought_home', 'winnings', 'casino winnings']),
     cruisePointsEarned: getColumnIndex(headerMap, ['cruisepointsearned', 'cruise points earned', 'cruise_points_earned', 'points earned', 'points']),
-    cabinCategory: getColumnIndex(headerMap, ['cabincategory', 'cabin category', 'cabin_category', 'category', 'stateroom category', 'stateroomcategory']),
-    cabinType: getColumnIndex(headerMap, ['cabintype', 'cabin type', 'cabin_type', 'room type', 'roomtype', 'stateroom type', 'stateroomtype']),
+    cabinCategory: getColumnIndex(headerMap, ['cabincategory', 'cabin category', 'cabin_category', 'category', 'room type', 'cabintype', 'cabin type', 'roomtype']),
     cabinNumber: getColumnIndex(headerMap, ['cabinnumber', 'cabin number', 'cabin_number', 'cabin', 'cabin #', 'cabin#']),
-    pricePaid: getColumnIndex(headerMap, ['pricepaid', 'price paid', 'price_paid', 'paid', 'amount paid', 'amountpaid']),
-    totalRetailCost: getColumnIndex(headerMap, ['totalretailcost', 'total retail cost', 'total_retail_cost', 'retail cost', 'retailcost', 'retail value', 'retailvalue', 'cruise fare', 'cruisefare', 'fare', 'price', 'booked price', 'bookedprice']),
-    interiorPrice: getColumnIndex(headerMap, ['interiorprice', 'interior price', 'interior_price', 'price interior']),
-    oceanviewPrice: getColumnIndex(headerMap, ['oceanviewprice', 'oceanview price', 'oceanview_price', 'ocean view price', 'ocean price', 'price ocean view', 'price ocean']),
-    balconyPrice: getColumnIndex(headerMap, ['balconyprice', 'balcony price', 'balcony_price', 'price balcony']),
-    suitePrice: getColumnIndex(headerMap, ['suiteprice', 'suite price', 'suite_price', 'price suite']),
+    pricePaid: getColumnIndex(headerMap, ['pricepaid', 'price paid', 'price_paid', 'paid']),
+    totalRetailCost: getColumnIndex(headerMap, ['totalretailcost', 'total retail cost', 'total_retail_cost', 'retail cost', 'retailcost']),
     totalCasinoDiscount: getColumnIndex(headerMap, ['totalcasinodiscount', 'total casino discount', 'total_casino_discount', 'casino discount', 'casinodiscount', 'discount', 'offer value']),
     portTaxesFees: getColumnIndex(headerMap, ['port taxes & fees', 'port taxes and fees', 'porttaxes', 'port_taxes', 'taxes & fees', 'taxes and fees', 'taxes', 'fees', 'port charges', 'portcharges']),
     source: getColumnIndex(headerMap, ['cruise line', 'cruiseline', 'brand', 'line']),
-    sourceEmail: getColumnIndex(headerMap, ['source email', 'sourceemail', 'account email', 'accountemail', 'owner email', 'owneremail', 'traveler email', 'traveleremail', 'profile email', 'profileemail', 'email']),
   };
 
   console.log('[BookedParser] Booked column indices:', colIndices);
@@ -340,26 +327,15 @@ export function parseBookedCSV(content: string, existingCruises: BookedCruise[] 
     const bookingId = getValue(colIndices.bookingId) || reservationNumber;
     const isBookedValue = getValue(colIndices.isBooked);
     const sourceValue = getValue(colIndices.source);
-    const sourceEmail = normalizeSourceEmail(getValue(colIndices.sourceEmail));
     const parsedState = parseBookedState(isBookedValue);
     const winningsBroughtHome = getNumericValue(colIndices.winningsBroughtHome);
     const cruisePointsEarned = getNumericValue(colIndices.cruisePointsEarned);
-    const cabinType = getValue(colIndices.cabinType) || getValue(colIndices.cabinCategory);
     const cabinCategory = getValue(colIndices.cabinCategory);
     const cabinNumber = getValue(colIndices.cabinNumber);
     const pricePaid = getNumericValue(colIndices.pricePaid);
     const totalRetailCost = getNumericValue(colIndices.totalRetailCost);
-    const interiorPrice = getNumericValue(colIndices.interiorPrice);
-    const oceanviewPrice = getNumericValue(colIndices.oceanviewPrice);
-    const balconyPrice = getNumericValue(colIndices.balconyPrice);
-    const suitePrice = getNumericValue(colIndices.suitePrice);
-    const importedPerPersonCabinRetailValue = getPriceForRoomType(cabinType, interiorPrice, oceanviewPrice, balconyPrice, suitePrice) || 0;
-    const importedRoomCabinRetailValue = getDoubleOccupancyRoomRetailValue(importedPerPersonCabinRetailValue) ?? (totalRetailCost > 0 ? totalRetailCost : undefined);
     const totalCasinoDiscount = getNumericValue(colIndices.totalCasinoDiscount);
-    const portTaxesFees = getNumericValue(colIndices.portTaxesFees);
-    const calculatedCasinoDiscount = importedRoomCabinRetailValue !== undefined && pricePaid > 0
-      ? Math.max(0, importedRoomCabinRetailValue + portTaxesFees - pricePaid)
-      : undefined;
+    const portTaxesFees = getNumericValue(colIndices.portTaxesFees) / 2;
 
     if (!ship || !departureDateRaw) {
       console.log(`[BookedParser] Skipping booked row ${i}: missing ship or date`);
@@ -407,27 +383,13 @@ export function parseBookedCSV(content: string, existingCruises: BookedCruise[] 
       isCourtesyHold: parsedState.isCourtesyHold,
       winnings: winningsBroughtHome || undefined,
       earnedPoints: cruisePointsEarned || undefined,
-      cabinType: cabinType || undefined,
       cabinCategory: cabinCategory || undefined,
       cabinNumber: cabinNumber || undefined,
-      price: importedPerPersonCabinRetailValue > 0 ? importedPerPersonCabinRetailValue : undefined,
-      interiorPrice: interiorPrice > 0 ? interiorPrice : undefined,
-      oceanviewPrice: oceanviewPrice > 0 ? oceanviewPrice : undefined,
-      balconyPrice: balconyPrice > 0 ? balconyPrice : undefined,
-      suitePrice: suitePrice > 0 ? suitePrice : undefined,
       pricePaid: pricePaid > 0 ? pricePaid : undefined,
-      totalRetailCost: importedRoomCabinRetailValue,
-      retailValue: importedRoomCabinRetailValue,
-      originalPrice: importedRoomCabinRetailValue,
-      totalCasinoDiscount: totalCasinoDiscount > 0 ? totalCasinoDiscount : calculatedCasinoDiscount,
+      totalRetailCost: totalRetailCost > 0 ? totalRetailCost : undefined,
+      totalCasinoDiscount: totalCasinoDiscount > 0 ? totalCasinoDiscount : undefined,
       taxes: portTaxesFees > 0 ? portTaxesFees : undefined,
-      taxesFeesEstimate: portTaxesFees > 0 ? portTaxesFees : undefined,
-      amountPaid: pricePaid > 0 ? pricePaid : undefined,
-      netEffectivePaid: pricePaid > 0 ? pricePaid : undefined,
       cruiseSource: parsedSource,
-      sourceEmail,
-      importStatus: sourceEmail ? 'unassigned' : undefined,
-      reconciliationStatus: sourceEmail ? 'reviewNeeded' : undefined,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -485,16 +447,6 @@ export function generateBookedCSV(bookedCruises: BookedCruise[]): string {
     'isBooked',
     'winningsBroughtHome',
     'cruisePointsEarned',
-    'cabinType',
-    'cabinCategory',
-    'cabinNumber',
-    'pricePaid',
-    'totalRetailCost',
-    'interiorPrice',
-    'oceanviewPrice',
-    'balconyPrice',
-    'suitePrice',
-    'portTaxesFees',
   ];
 
   const rows: string[] = [headers.join(',')];
@@ -515,16 +467,6 @@ export function generateBookedCSV(bookedCruises: BookedCruise[]): string {
       (cruise.status === 'booked').toString().toUpperCase(),
       (cruise.winnings ?? '').toString(),
       (cruise.earnedPoints ?? '').toString(),
-      escapeCSVField(cruise.cabinType || ''),
-      escapeCSVField(cruise.cabinCategory || ''),
-      escapeCSVField(cruise.cabinNumber || cruise.stateroomNumber || ''),
-      (cruise.pricePaid ?? cruise.amountPaid ?? '').toString(),
-      (cruise.totalRetailCost ?? cruise.retailValue ?? cruise.originalPrice ?? '').toString(),
-      (cruise.interiorPrice ?? '').toString(),
-      (cruise.oceanviewPrice ?? '').toString(),
-      (cruise.balconyPrice ?? '').toString(),
-      (cruise.suitePrice ?? '').toString(),
-      (cruise.taxes ?? cruise.taxesFeesEstimate ?? '').toString(),
     ];
 
     rows.push(row.join(','));

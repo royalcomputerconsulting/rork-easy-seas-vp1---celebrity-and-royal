@@ -277,7 +277,7 @@ export function MachineSessionsList({ sessions, onEditSession }: MachineSessions
 
       <FlatList
         data={filteredAndSortedSessions}
-        keyExtractor={(item, index) => `${item.id?.trim() || 'machine-session'}-${item.machineId || item.machineName || 'machine'}-${item.date || 'date'}-${index}`}
+        keyExtractor={(item) => item.id}
         renderItem={renderSession}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}

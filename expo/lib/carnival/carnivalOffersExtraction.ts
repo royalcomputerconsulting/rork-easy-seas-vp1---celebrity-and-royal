@@ -845,58 +845,6 @@ export const CARNIVAL_OFFERS_SCRIPT = `
     return enrichedRows;
   }
 
-  function normalizeOfferMergeText(value) {
-    return String(value || '').toLowerCase().replace(/<[^>]*>/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim();
-  }
-
-  function getOfferMergeKey(row, index) {
-    var code = String(row && row.offerCode ? row.offerCode : '').trim().toUpperCase();
-    if (code) return 'code:' + code;
-    var id = String(row && row.carnivalOfferId ? row.carnivalOfferId : '').trim().toUpperCase();
-    if (id) return 'id:' + id;
-    var link = String(row && row.bookingLink ? row.bookingLink : '').trim().toLowerCase();
-    var name = normalizeOfferMergeText(row && row.offerName);
-    var expiry = normalizeOfferMergeText(row && row.offerExpirationDate);
-    if (name || link) return 'text:' + name + '|' + expiry + '|' + link;
-    return 'row:' + index;
-  }
-
-  function mergeOfferRows(existingRows, incomingRows, sourceName) {
-    var map = {};
-    var order = [];
-    var addRows = function(rows, source) {
-      if (!rows || !rows.length) return;
-      for (var i = 0; i < rows.length; i++) {
-        var row = rows[i];
-        if (!row) continue;
-        var key = getOfferMergeKey(row, source + '-' + i);
-        if (!map[key]) {
-          map[key] = row;
-          order.push(key);
-          continue;
-        }
-        var existing = map[key];
-        var merged = Object.assign({}, existing);
-        Object.keys(row).forEach(function(field) {
-          var nextValue = row[field];
-          var currentValue = merged[field];
-          var currentEmpty = currentValue === undefined || currentValue === null || currentValue === '' || (Array.isArray(currentValue) && currentValue.length === 0);
-          if (currentEmpty && nextValue !== undefined && nextValue !== null && nextValue !== '') {
-            merged[field] = nextValue;
-          }
-        });
-        if (normalizeOfferMergeText(existing.offerName).indexOf('rate code') === 0 && row.offerName) merged.offerName = row.offerName;
-        if (!existing.perks && row.perks) merged.perks = row.perks;
-        if (!existing.bookingLink && row.bookingLink) merged.bookingLink = row.bookingLink;
-        map[key] = merged;
-      }
-      log('Merged ' + rows.length + ' offer row(s) from ' + source + '; total unique offers now ' + order.length, 'info');
-    };
-    addRows(existingRows || [], 'existing');
-    addRows(incomingRows || [], sourceName || 'source');
-    return order.map(function(key) { return map[key]; });
-  }
-
   async function extractCarnivalOffers() {
     try {
       log('Starting Carnival offer extraction...', 'info');
@@ -917,48 +865,44 @@ export const CARNIVAL_OFFERS_SCRIPT = `
       var vifpSource = window.__carnivalVifpOffers || (window.capturedPayloads && window.capturedPayloads.carnivalVifpOffers);
       if (vifpSource) {
         var immediateRows = convertVifpOffers(vifpSource);
-        if (immediateRows.length > 0) { log('Found pre-captured VIFP offers: ' + immediateRows.length, 'success'); collectedOffers = mergeOfferRows(collectedOffers, immediateRows, 'pre-captured VIFP API'); }
+        if (immediateRows.length > 0) { log('Found pre-captured VIFP offers: ' + immediateRows.length, 'success'); collectedOffers = immediateRows; }
       }
-      progress(5, 100, 'Trying Carnival offers APIs...');
-      var apiResult = await tryFetchCarnivalOffersAPI();
-      if (apiResult) {
-        if (apiResult.type === 'vifp') { collectedOffers = mergeOfferRows(collectedOffers, convertVifpOffers(apiResult.data), 'VIFP API'); }
-        else if (apiResult.type === 'casino') { var result = processRCStyleOffers(apiResult.data); if (result.rows.length > 0) collectedOffers = mergeOfferRows(collectedOffers, result.rows, 'casino API'); }
-      }
-      log('Waiting for Carnival page to load offers data...', 'info');
-      for (var wi = 0; wi < 8; wi++) {
-        await wait(1500);
-        progress(15 + (wi * 4), 100, 'Checking Carnival offer payloads (' + ((wi + 1) * 1.5) + 's)...');
-        var captured = window.__carnivalVifpOffers || (window.capturedPayloads && window.capturedPayloads.carnivalVifpOffers);
-        if (captured) { var rows = convertVifpOffers(captured); if (rows.length > 0) { collectedOffers = mergeOfferRows(collectedOffers, rows, 'captured VIFP payload'); } }
-        if (window.capturedPayloads && window.capturedPayloads.offers) {
-          var capturedOffers = window.capturedPayloads.offers;
-          if (capturedOffers.offers && capturedOffers.offers.length > 0) { var casinoResult = processRCStyleOffers(capturedOffers); if (casinoResult.rows.length > 0) { collectedOffers = mergeOfferRows(collectedOffers, casinoResult.rows, 'captured casino payload'); } }
+      if (collectedOffers.length === 0) {
+        progress(5, 100, 'Trying Carnival offers APIs...');
+        var apiResult = await tryFetchCarnivalOffersAPI();
+        if (apiResult) {
+          if (apiResult.type === 'vifp') { collectedOffers = convertVifpOffers(apiResult.data); }
+          else if (apiResult.type === 'casino') { var result = processRCStyleOffers(apiResult.data); if (result.rows.length > 0) collectedOffers = result.rows; }
         }
       }
-      progress(75, 100, 'Checking page data...');
-      var nextDataRows = tryExtractFromNextData();
-      if (nextDataRows.length > 0) collectedOffers = mergeOfferRows(collectedOffers, nextDataRows, '__NEXT_DATA__');
-      progress(80, 100, 'Scraping VIFP offers from page...');
-      var vifpDeals = scrapeVifpOffersFromDOM();
-      if (vifpDeals.length > 0) collectedOffers = mergeOfferRows(collectedOffers, vifpDeals, 'page offer cards');
-      progress(90, 100, 'Scraping cruise deals from page...');
-      var domDeals = scrapeCruiseDealsFromDOM();
-      if (domDeals.length > 0) collectedOffers = mergeOfferRows(collectedOffers, domDeals, 'cruise deal cards');
-      if (tgoCookie && tgoCookie.offers.length > 0) {
-        var cookieRows = [];
+      if (collectedOffers.length === 0) {
+        log('Waiting for Carnival page to load offers data...', 'info');
+        for (var wi = 0; wi < 15; wi++) {
+          await wait(2000);
+          progress(15 + (wi * 4), 100, 'Waiting for Carnival offers (' + ((wi + 1) * 2) + 's)...');
+          var captured = window.__carnivalVifpOffers || (window.capturedPayloads && window.capturedPayloads.carnivalVifpOffers);
+          if (captured) { var rows = convertVifpOffers(captured); if (rows.length > 0) { collectedOffers = rows; log('VIFP offers captured: ' + rows.length + ' offers', 'success'); break; } }
+          if (window.capturedPayloads && window.capturedPayloads.offers) {
+            var capturedOffers = window.capturedPayloads.offers;
+            if (capturedOffers.offers && capturedOffers.offers.length > 0) { var casinoResult = processRCStyleOffers(capturedOffers); if (casinoResult.rows.length > 0) { collectedOffers = casinoResult.rows; log('Casino offers captured: ' + casinoResult.rows.length + ' sailings', 'success'); break; } }
+          }
+        }
+      }
+      if (collectedOffers.length === 0) { progress(75, 100, 'Checking page data...'); var nextDataRows = tryExtractFromNextData(); if (nextDataRows.length > 0) collectedOffers = nextDataRows; }
+      if (collectedOffers.length === 0) { progress(80, 100, 'Scraping VIFP offers from page...'); var vifpDeals = scrapeVifpOffersFromDOM(); if (vifpDeals.length > 0) collectedOffers = vifpDeals; }
+      if (collectedOffers.length === 0) { progress(90, 100, 'Scraping cruise deals from page...'); var domDeals = scrapeCruiseDealsFromDOM(); if (domDeals.length > 0) collectedOffers = domDeals; }
+      if (collectedOffers.length === 0 && tgoCookie && tgoCookie.offers.length > 0) {
+        log('Creating offers from TGO cookie rate codes...', 'info');
         for (var ci = 0; ci < tgoCookie.offers.length; ci++) {
           var co = tgoCookie.offers[ci];
-          cookieRows.push({ sourcePage: 'Offers', offerName: 'Carnival Rate Code ' + co.code, offerCode: co.code, offerExpirationDate: co.endDate || '', offerType: 'VIFP Club', shipName: '', shipCode: '', sailingDate: '', itinerary: '', departurePort: '', cabinType: '', numberOfGuests: '2', perks: '', loyaltyLevel: '', loyaltyPoints: '', interiorPrice: '', oceanviewPrice: '', balconyPrice: '', suitePrice: '', taxesAndFees: '', portList: '', dayByDayItinerary: [], destinationName: '', totalNights: null, bookingLink: '/cruise-search?rateCodes=' + co.code });
+          collectedOffers.push({ sourcePage: 'Offers', offerName: 'Carnival Rate Code ' + co.code, offerCode: co.code, offerExpirationDate: co.endDate || '', offerType: 'VIFP Club', shipName: '', shipCode: '', sailingDate: '', itinerary: '', departurePort: '', cabinType: '', numberOfGuests: '2', perks: '', loyaltyLevel: '', loyaltyPoints: '', interiorPrice: '', oceanviewPrice: '', balconyPrice: '', suitePrice: '', taxesAndFees: '', portList: '', dayByDayItinerary: [], destinationName: '', totalNights: null, bookingLink: '/cruise-search?rateCodes=' + co.code });
         }
-        collectedOffers = mergeOfferRows(collectedOffers, cookieRows, 'TGO cookie');
+        log('Created ' + collectedOffers.length + ' offers from TGO cookie', 'success');
       }
       if (collectedOffers.length > 0) {
-        log('Phase 1 complete: ' + collectedOffers.length + ' unique offer row(s) collected from all sources', 'success');
-        var offerNames = collectedOffers.map(function(o) { return (o.offerName || o.offerCode || 'Unknown Offer'); }).join(', ');
-        log('Offers captured: ' + offerNames, 'success');
+        log('Phase 1 complete: ' + collectedOffers.length + ' offer row(s) collected', 'success');
         log('Skipping per-offer cruise fetch - cruises will open on Carnival.com instead', 'info');
-        progress(95, 100, 'Sending all offer data...');
+        progress(90, 100, 'Sending offer data...');
         for (var k = 0; k < collectedOffers.length; k += BATCH_SIZE) { sendBatch(collectedOffers.slice(k, k + BATCH_SIZE), false); }
         var uniqueOfferCodes = {};
         for (var ui = 0; ui < collectedOffers.length; ui++) { var key = collectedOffers[ui].offerCode || collectedOffers[ui].offerName || ('offer-' + ui); uniqueOfferCodes[key] = true; }

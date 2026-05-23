@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { X, Ship, ChevronDown, Check } from 'lucide-react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, ScrollView } from 'react-native';
+import { X, Bell, Ship, ChevronDown, Check } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
-import { SPACING, BORDER_RADIUS, TYPOGRAPHY, COLORS, SHADOW } from '@/constants/theme';
+import { SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME, COLORS, SHADOW } from '@/constants/theme';
 
 interface Tab {
   key: string;
@@ -55,8 +54,7 @@ export const MinimalistFilterBar = React.memo(function MinimalistFilterBar({
   onClearShips,
 }: MinimalistFilterBarProps) {
   const [showShipFilter, setShowShipFilter] = useState(false);
-  const visibleActions = actions.filter(action => action.key === 'alerts' || action.key === 'countries');
-  const hasVisibleActions = visibleActions.length > 0;
+  const alertAction = actions.find(a => a.key === 'alerts');
 
   const handleShipPress = (ship: string) => {
     if (onShipToggle) {
@@ -65,12 +63,7 @@ export const MinimalistFilterBar = React.memo(function MinimalistFilterBar({
   };
 
   return (
-    <LinearGradient
-      colors={['rgba(255,255,255,0.96)', 'rgba(224,242,241,0.92)', 'rgba(0,172,193,0.10)']}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.container}
-    >
+    <View style={styles.container}>
       <TouchableOpacity 
         style={styles.shipFilterButton} 
         onPress={() => setShowShipFilter(!showShipFilter)}
@@ -138,7 +131,7 @@ export const MinimalistFilterBar = React.memo(function MinimalistFilterBar({
       )}
 
       <View style={styles.mainRow}>
-        <View style={[styles.tabsContainer, !hasVisibleActions && styles.tabsContainerFull]}>
+        <View style={styles.tabsContainer}>
           {tabs.map((tab) => {
             const isActive = activeTab === tab.key;
             return (
@@ -157,28 +150,23 @@ export const MinimalistFilterBar = React.memo(function MinimalistFilterBar({
         </View>
 
         <View style={styles.actionsContainer}>
-          {visibleActions.map((action) => {
-            const ActionIcon = action.icon;
-            return (
-              <TouchableOpacity
-                key={action.key}
-                style={[styles.actionPill, action.active && styles.actionPillActive]}
-                onPress={action.onPress}
-                activeOpacity={0.7}
-                testID={`filter-action-${action.key}`}
-              >
-                <ActionIcon size={14} color={action.active ? COLORS.white : COLORS.textNavy} />
-                <Text style={[styles.actionPillText, action.active && styles.actionPillTextActive]}>{action.label}</Text>
-                {action.badge !== undefined && action.badge > 0 && (
-                  <View style={styles.alertBadge}>
-                    <Text style={styles.alertBadgeText}>
-                      {action.badge > 9 ? '9+' : action.badge}
-                    </Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            );
-          })}
+          {alertAction && (
+            <TouchableOpacity
+              style={styles.actionPill}
+              onPress={alertAction.onPress}
+              activeOpacity={0.7}
+            >
+              <Bell size={14} color={COLORS.textNavy} />
+              <Text style={styles.actionPillText}>Alerts</Text>
+              {alertAction.badge !== undefined && alertAction.badge > 0 && (
+                <View style={styles.alertBadge}>
+                  <Text style={styles.alertBadgeText}>
+                    {alertAction.badge > 9 ? '9+' : alertAction.badge}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -197,39 +185,32 @@ export const MinimalistFilterBar = React.memo(function MinimalistFilterBar({
           </View>
         </View>
       )}
-    </LinearGradient>
+    </View>
   );
 });
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: BORDER_RADIUS.lg,
-    padding: SPACING.xs,
     marginBottom: SPACING.sm,
-    borderWidth: 1,
-    borderColor: 'rgba(30, 58, 95, 0.12)',
-    gap: 6,
-    overflow: 'hidden',
-    ...SHADOW.sm,
+    gap: SPACING.sm,
   },
   shipFilterButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.96)',
+    backgroundColor: COLORS.white,
     borderRadius: BORDER_RADIUS.md,
-    paddingVertical: 9,
+    paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(30, 58, 95, 0.08)',
+    borderColor: COLORS.borderLight,
     gap: SPACING.xs,
-    minHeight: 42,
-    ...SHADOW.sm,
+    minHeight: 44,
   },
   shipFilterLabel: {
     flex: 1,
     fontSize: TYPOGRAPHY.fontSizeSM,
     color: COLORS.textNavy,
-    fontWeight: '700' as const,
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
   shipCountBadge: {
     backgroundColor: COLORS.navyDeep,
@@ -249,12 +230,11 @@ const styles = StyleSheet.create({
     transform: [{ rotate: '180deg' }],
   },
   shipFilterPanel: {
-    backgroundColor: 'rgba(255,255,255,0.98)',
+    backgroundColor: COLORS.white,
     borderRadius: BORDER_RADIUS.md,
     borderWidth: 1,
-    borderColor: 'rgba(30, 58, 95, 0.10)',
+    borderColor: COLORS.borderLight,
     overflow: 'hidden',
-    ...SHADOW.sm,
   },
   shipScrollView: {
     maxHeight: 250,
@@ -274,15 +254,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.md,
-    borderRadius: BORDER_RADIUS.round,
-    backgroundColor: '#D8F1FF',
-    borderWidth: 1,
-    borderColor: '#A9DDF8',
+    borderRadius: BORDER_RADIUS.sm,
+    backgroundColor: COLORS.bgSecondary,
     gap: SPACING.sm,
   },
   shipOptionActive: {
-    backgroundColor: COLORS.goldAccent,
-    borderColor: COLORS.goldAccent,
+    backgroundColor: 'rgba(30, 58, 95, 0.1)',
   },
   shipCheckbox: {
     width: 20,
@@ -302,11 +279,9 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: TYPOGRAPHY.fontSizeSM,
     color: COLORS.textNavy,
-    fontWeight: '700' as const,
   },
   shipOptionTextActive: {
-    color: COLORS.white,
-    fontWeight: '800' as const,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   clearShipsButton: {
     flexDirection: 'row',
@@ -326,45 +301,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 4,
   },
   tabsContainer: {
-    flex: 1,
     flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.50)',
+    backgroundColor: COLORS.white,
     borderRadius: BORDER_RADIUS.md,
     padding: 3,
-    gap: 3,
-    borderWidth: 1,
-    borderColor: 'rgba(30, 58, 95, 0.08)',
-  },
-  tabsContainerFull: {
-    flexGrow: 0,
+    gap: 2,
   },
   tab: {
-    flexGrow: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 7,
-    paddingHorizontal: 6,
+    paddingVertical: 6,
+    paddingHorizontal: SPACING.sm,
     borderRadius: BORDER_RADIUS.sm,
-    backgroundColor: '#D8F1FF',
-    borderWidth: 1,
-    borderColor: '#A9DDF8',
+    backgroundColor: CLEAN_THEME.tab.unselectedBg,
   },
   activeTab: {
-    backgroundColor: COLORS.goldAccent,
-    borderColor: COLORS.goldAccent,
+    backgroundColor: COLORS.white,
     ...SHADOW.tab,
   },
   tabText: {
-    fontSize: 11,
-    fontWeight: '800' as const,
-    color: COLORS.textNavy,
+    fontSize: 13,
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+    color: COLORS.textDarkGrey,
   },
   activeTabText: {
-    color: COLORS.white,
-    fontWeight: '800' as const,
+    color: COLORS.textNavy,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   actionsContainer: {
     flexDirection: 'row',
@@ -374,26 +336,18 @@ const styles = StyleSheet.create({
   actionPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.96)',
+    backgroundColor: COLORS.white,
     borderRadius: BORDER_RADIUS.round,
-    paddingVertical: 7,
-    paddingHorizontal: 7,
-    gap: 3,
+    paddingVertical: 6,
+    paddingHorizontal: SPACING.sm,
+    gap: 4,
     borderWidth: 1,
-    borderColor: 'rgba(30, 58, 95, 0.10)',
-    ...SHADOW.sm,
-  },
-  actionPillActive: {
-    backgroundColor: COLORS.goldAccent,
-    borderColor: COLORS.goldAccent,
+    borderColor: COLORS.borderLight,
   },
   actionPillText: {
-    fontSize: 11,
-    fontWeight: '800' as const,
+    fontSize: 12,
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
     color: COLORS.textNavy,
-  },
-  actionPillTextActive: {
-    color: COLORS.white,
   },
   alertBadge: {
     backgroundColor: COLORS.error,
@@ -403,7 +357,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 3,
-    marginLeft: -1,
   },
   alertBadgeText: {
     fontSize: 9,

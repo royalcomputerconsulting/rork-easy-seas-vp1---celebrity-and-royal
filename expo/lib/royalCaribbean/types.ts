@@ -204,7 +204,6 @@ export interface BookedCruiseRow {
   oceanviewPrice?: string;
   balconyPrice?: string;
   suitePrice?: string;
-  taxesAndFees?: string;
   portList?: string;
   stateroomDescription?: string;
   bookingChannel?: string;
@@ -267,7 +266,7 @@ export type WebViewMessage =
   | { type: 'progress'; current: number; total: number; stepName?: string }
   | { type: 'offers_batch'; step: number; data: any[]; isFinal?: boolean }
   | { type: 'cruise_batch'; data: any[] }
-  | { type: 'step_complete'; step: number; data?: any[]; totalCount?: number; offerCount?: number }
+  | { type: 'step_complete'; step: number; data: any[]; totalCount?: number; offerCount?: number }
   | { type: 'offer_progress'; offerIndex: number; totalOffers: number; offerName: string; sailingsCount: number; status: string }
   | { type: 'all_bookings_data'; bookings: any[]; vdsId?: string }
   | { type: 'loyalty_data'; data?: LoyaltyData; loyalty?: LoyaltyApiInformation }
@@ -283,7 +282,10 @@ export interface SyncDataCounts {
   offerRows: number;
   upcomingCruises: number;
   courtesyHolds: number;
+  /** Past/completed cruise rows captured by the dedicated Sync Completed Cruises flow. */
   completedCruises?: number;
+  /** Per-offer sailing/cruise counts shown in preview and completion cards. */
+  offerBreakdown?: { offerName: string; offerCode?: string; cruiseCount: number }[];
 }
 
 export interface RoyalCaribbeanSyncState {

@@ -4,22 +4,19 @@ import { KNOWN_RETAIL_VALUES } from '@/constants/knownRetailValues';
 export function applyKnownRetailValuesToBooked(cruises: BookedCruise[]): BookedCruise[] {
   return cruises.map(cruise => {
     const knownValue = KNOWN_RETAIL_VALUES.find(kv => {
-      if (kv.cruiseId === cruise.id || kv.cruiseId === cruise.bookingId || kv.cruiseId === cruise.reservationNumber) return true;
-
-      const normalizedShip = cruise.shipName?.toLowerCase().trim() ?? '';
-      const normalizedKnownShip = kv.ship.toLowerCase().trim();
-      const shipMatch = normalizedShip === normalizedKnownShip || normalizedShip.includes(normalizedKnownShip) || normalizedKnownShip.includes(normalizedShip);
+      if (kv.cruiseId === cruise.id) return true;
+      if (kv.cruiseId === cruise.bookingId) return true;
+      
+      const shipMatch = cruise.shipName?.toLowerCase().includes(kv.ship.toLowerCase().split(' ')[0]);
       const dateMatch = cruise.sailDate === kv.departureDate;
       return shipMatch && dateMatch;
     });
     
-    if (knownValue && !cruise.retailValue && !cruise.totalRetailCost && !cruise.originalPrice) {
+    if (knownValue && (!cruise.retailValue || cruise.retailValue === 0)) {
       console.log(`[DataEnrichment] Applied known retail value ${knownValue.retailCabinValue} to cruise ${cruise.id} (${cruise.shipName})`);
       return {
         ...cruise,
         retailValue: knownValue.retailCabinValue,
-        totalRetailCost: knownValue.retailCabinValue,
-        originalPrice: knownValue.retailCabinValue,
       };
     }
     

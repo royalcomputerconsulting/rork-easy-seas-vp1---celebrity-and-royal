@@ -98,17 +98,6 @@ function buildCruiseDescription(cruise: BookedCruise, itineraryDay?: ItineraryDa
   return lines.length > 0 ? lines.join(' • ') : undefined;
 }
 
-function getCruiseFoundationFields(cruise: BookedCruise): Partial<CalendarEvent> {
-  return {
-    ownerProfileId: cruise.ownerProfileId,
-    sourceEmail: cruise.sourceEmail,
-    brand: cruise.brand ?? cruise.cruiseSource,
-    casinoProgram: cruise.casinoProgram,
-    importStatus: cruise.importStatus,
-    reconciliationStatus: cruise.reconciliationStatus,
-  };
-}
-
 function createCruiseEvent(event: CalendarEvent): CalendarEvent {
   return event;
 }
@@ -150,7 +139,6 @@ function createCruiseSpanEvent(cruise: BookedCruise): CalendarEvent | null {
     cruiseId: cruise.id,
     allDay: true,
     source: 'import',
-    ...getCruiseFoundationFields(cruise),
   });
 }
 
@@ -180,7 +168,6 @@ function createTimedCruiseEvent(params: {
     cruiseId: params.cruise.id,
     allDay: false,
     source: 'import',
-    ...getCruiseFoundationFields(params.cruise),
   });
 }
 
@@ -207,7 +194,6 @@ function createAllDayCruiseEvent(params: {
     cruiseId: params.cruise.id,
     allDay: true,
     source: 'import',
-    ...getCruiseFoundationFields(params.cruise),
   });
 }
 
@@ -274,27 +260,7 @@ export function generateCruiseCalendarEvents(bookedCruises: BookedCruise[]): Cal
     }
 
     const sailDate = normalizeDateOnly(cruise.sailDate);
-    if (!sailDate) {
-      return;
-    }
-
-    if (!Array.isArray(cruise.itinerary) || cruise.itinerary.length === 0) {
-      const totalDays = Math.max(1, (typeof cruise.nights === 'number' && cruise.nights > 0 ? cruise.nights : 1) + 1);
-      for (let day = 1; day <= totalDays; day += 1) {
-        const eventDate = addDaysToDateOnly(sailDate, day - 1);
-        const isFirstDay = day === 1;
-        const isLastDay = day === totalDays;
-        generatedEvents.push(
-          createAllDayCruiseEvent({
-            id: `generated-cruise-day-${cruise.id}-${day}`,
-            title: isFirstDay ? 'Embarkation Day' : isLastDay ? 'Disembarkation Day' : `Cruise Day • Day ${day}`,
-            dateOnly: eventDate,
-            cruise,
-            location: isFirstDay || isLastDay ? cruise.departurePort : cruise.shipName,
-            description: buildCruiseDescription(cruise),
-          })
-        );
-      }
+    if (!sailDate || !Array.isArray(cruise.itinerary) || cruise.itinerary.length === 0) {
       return;
     }
 
@@ -436,21 +402,4 @@ export function getCalendarEventsWithGeneratedCruiseEvents(bookedCruises: Booked
   );
   const generatedCruiseEvents = generateCruiseCalendarEvents(bookedCruises);
   return sortCalendarEvents([...visibleCalendarEvents, ...generatedCruiseEvents]);
-}
-
-export function getDayAgendaEventCountForYear(bookedCruises: BookedCruise[], calendarEvents: CalendarEvent[], year: number): number {
-  const yearStart = `${year}-01-01`;
-  const yearEnd = `${year}-12-31`;
-  const visibleCalendarEvents = getDisplayCalendarEvents(bookedCruises, calendarEvents).filter(
-    (event) => !isGeneratedCruiseEventId(event.id)
-  );
-  const generatedCruiseEvents = generateCruiseCalendarEvents(bookedCruises).filter(
-    (event) => !event.id.startsWith('generated-cruise-span-')
-  );
-  return [...visibleCalendarEvents, ...generatedCruiseEvents].filter((event) => {
-    const start = normalizeDateOnly(getEventStartValue(event));
-    const end = normalizeDateOnly(getEventEndValue(event)) || start;
-    if (!start) return false;
-    return start <= yearEnd && end >= yearStart;
-  }).length;
 }
