@@ -293,16 +293,7 @@ function collectOfferRecords(value: unknown, depth: number = 0): UnknownRecord[]
   const collected: UnknownRecord[] = [];
   Object.entries(record).forEach(([key, childValue]) => {
     const normalizedKey = key.toLowerCase();
-    if (
-      normalizedKey.includes('offer') ||
-      normalizedKey.includes('campaign') ||
-      normalizedKey.includes('sailing') ||
-      normalizedKey.includes('cruise') ||
-      normalizedKey === 'payload' ||
-      normalizedKey === 'data' ||
-      normalizedKey === 'items' ||
-      normalizedKey === 'results'
-    ) {
+    if (normalizedKey.includes('offer') || normalizedKey.includes('campaign') || normalizedKey.includes('sailing') || normalizedKey.includes('cruise') || normalizedKey === 'payload' || normalizedKey === 'data' || normalizedKey === 'items' || normalizedKey === 'results') {
       collected.push(...collectOfferRecords(childValue, depth + 1));
     }
   });

@@ -111,24 +111,16 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
     dec: 12, december: 12
   };
 
-
-  // Do not embed or enforce a fixed offer-count baseline in the live sync script.
-  // The user may have 3 offers today and 1200+ rows tomorrow. Live Royal data must always win.
-  // Any uploaded CSV is only a QA acceptance sample for that run, never a global cap/fallback.
-
+  // Normalize Royal's occasional one-letter DOM suffixes for the three known May offer families.
+  // This prevents 26BCP105E / 26JUL104O / 26VTY104B from becoming duplicate pseudo-offers.
+  // It is NOT a row-count cap; live Royal data still determines the number of rows.
   function normalizeCasinoOfferCode(code) {
     let c = safeStr(code).trim().toUpperCase();
     if (!c) return '';
-    // Strip Royal's occasional one-letter DOM suffix only for known malformed card codes.
     if (/^26BCP105[A-Z]?$/.test(c)) return '26BCP105';
     if (/^26JUL104[A-Z]?$/.test(c)) return '26JUL104';
     if (/^26VTY104[A-Z]?$/.test(c)) return '26VTY104';
     return c;
-  }
-
-  function applyVerifiedClubRoyaleBaselineIfNeeded(rows, context) {
-    // Intentionally disabled: never limit or replace live extraction with a fixed 201-row CSV sample.
-    return rows || [];
   }
 
   function normalizeYear(value) {
@@ -431,19 +423,20 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
         // Deliberately do not click random screen coordinates; earlier builds clicked the entire page container.
       }
 
+      // Bounded lazy-load pass: enough to reveal larger offer sets without hanging Step 1.
       let lastButtonCount = 0;
-      let stableOfferPasses = 0;
-      for (let pass = 0; pass < 12; pass += 1) {
-        for (let i = 0; i < 8; i += 1) {
-          window.scrollBy(0, 700);
+      let stablePasses = 0;
+      for (let pass = 0; pass < 4; pass += 1) {
+        for (let i = 0; i < 6; i += 1) {
+          window.scrollBy(0, 650);
           await wait(300);
         }
         const currentButtonCount = getViewSailingsButtons().length;
-        if (currentButtonCount === lastButtonCount) stableOfferPasses += 1;
-        else stableOfferPasses = 0;
+        if (currentButtonCount === lastButtonCount) stablePasses += 1;
+        else stablePasses = 0;
         lastButtonCount = currentButtonCount;
         if (expectedBefore && currentButtonCount >= expectedBefore) break;
-        if (!expectedBefore && stableOfferPasses >= 3 && currentButtonCount > 0) break;
+        if (!expectedBefore && currentButtonCount > 0 && stablePasses >= 1) break;
       }
       window.scrollTo(0, 0);
       await wait(900);
@@ -1150,7 +1143,7 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
   async function extractOffers() {
     try {
       log('Extracting Club Royale data...');
-      log('🛠️ Offer sync engine v8.6.9 active: no fixed row cap + all-offer sync + hardened date parsing + completed-history guard', 'info');
+      log('🛠️ Offer sync engine v8.6.5 active: all-offer payload sweep + strict expanded-sailing extraction + completed-history guard', 'info');
       await extractClubRoyaleStatus();
       log('Loading Club Royale Offers page...');
       await wait(2000);
@@ -1194,16 +1187,14 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
           if (!hasRowsForOffer) mergedRows.push(blankRowForOffer(offer, 'Offer captured from DOM; full View Sailings rows were not exposed'));
         });
 
-        mergedRows = applyVerifiedClubRoyaleBaselineIfNeeded(mergedRows, 'Sync Now Step 1');
-        const baselineOfferCount = new Set(mergedRows.map(function(r) { return normalizeCasinoOfferCode(r.offerCode); }).filter(Boolean)).size || visibleOffers.length;
         const mergedRowsWithSailings = mergedRows.filter(r => r && r.shipName && r.sailingDate).length;
-        sendOfferRowsInChunks(mergedRows, baselineOfferCount);
-        log('✅ STEP 1 ALL-OFFER MERGE COMPLETE: captured ' + baselineOfferCount + ' offer(s) with ' + mergedRows.length + ' row(s), ' + mergedRowsWithSailings + ' real ship/date sailing row(s)', 'success');
+        sendOfferRowsInChunks(mergedRows, visibleOffers.length);
+        log('✅ STEP 1 ALL-OFFER MERGE COMPLETE: captured ' + visibleOffers.length + ' visible offer card(s) with ' + mergedRows.length + ' row(s), ' + mergedRowsWithSailings + ' real ship/date sailing row(s)', 'success');
         return;
       }
 
       // API fallback only if the visible page truly did not expose any structured offer cards.
-      log('No visible offer cards parsed; trying API/network fallback only as secondary path. No fixed CSV row baseline will be applied.', 'warning');
+      log('No visible offer cards parsed; trying API/network fallback only as secondary path.', 'warning');
       const authContext = await getAuthContext();
       const offersData = await fetchOffersFromAPI(authContext);
       let { offerRows, offerCount } = processAPIResponse(offersData, SCRAPE_PRICING_AND_ITINERARY);
@@ -1211,10 +1202,8 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
         log('🔄 Starting pricing and itinerary enrichment...', 'info');
         offerRows = await enrichWithPricingData(offerRows, authContext.baseUrl);
       }
-      offerRows = applyVerifiedClubRoyaleBaselineIfNeeded(offerRows, 'API fallback Step 1');
-      const fallbackOfferCount = new Set(offerRows.map(function(r) { return normalizeCasinoOfferCode(r.offerCode); }).filter(Boolean)).size || offerCount;
-      sendOfferRowsInChunks(offerRows, fallbackOfferCount);
-      log('✓ Extracted ' + offerRows.length + ' offer rows from ' + fallbackOfferCount + ' offer(s)', 'success');
+      sendOfferRowsInChunks(offerRows, offerCount);
+      log('✓ Extracted ' + offerRows.length + ' offer rows from ' + offerCount + ' offer(s)', 'success');
     } catch (error) {
       log('❌ Offer extraction primary path failed: ' + (error && error.message ? error.message : String(error)), 'error');
       log('Attempting final DOM fallback...', 'warning');
@@ -1668,12 +1657,10 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
       sendOfferBatch([], true, 0, 0);
       return;
     }
-    let rows = await scrapeSailingsForVisibleOffers(visibleOffers);
-    rows = applyVerifiedClubRoyaleBaselineIfNeeded(rows, 'DOM fallback Step 1');
-    const domOfferCount = new Set(rows.map(function(r) { return normalizeCasinoOfferCode(r.offerCode); }).filter(Boolean)).size || visibleOffers.length;
+    const rows = await scrapeSailingsForVisibleOffers(visibleOffers);
     // Critical: never report zero when real offer cards were parsed. This lets the app sync actual offer tiles even if Royal hides sailing rows.
-    sendOfferRowsInChunks(rows, domOfferCount);
-    log('✅ DOM fallback captured ' + domOfferCount + ' offer(s) and ' + rows.length + ' row(s).', 'success');
+    sendOfferRowsInChunks(rows, visibleOffers.length);
+    log('✅ DOM fallback captured ' + visibleOffers.length + ' offer(s) and ' + rows.length + ' row(s).', 'success');
   }
 
   if (document.readyState === 'loading') {
