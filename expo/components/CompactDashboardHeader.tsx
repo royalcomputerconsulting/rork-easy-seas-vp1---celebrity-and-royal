@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Modal, ScrollView, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Settings, Bell, Ship, Anchor, Tag, CheckCircle2, LogOut, Target, Users } from 'lucide-react-native';
+import { Settings, Bell, Ship, Anchor, Tag, CheckCircle2, LogOut, Target, Users, X, ChevronRight } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
 import {
   getCarnivalPlayersClubTierColor,
@@ -67,13 +67,18 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
     crownAnchorLevel,
     pinnacleProgress,
     mastersProgress,
+    captainsClub,
     projectedBookedPoints,
+    totalBookedNights,
   } = useLoyalty();
   const { currentUser } = useUser();
   const [activeBrand, setActiveBrand] = useState<BrandType>(currentUser?.preferredBrand || 'royal');
   const [showNumber, setShowNumber] = useState(false);
+  const [showPinnacleBreakdown, setShowPinnacleBreakdown] = useState(false);
 
   const toggleShowNumber = useCallback(() => setShowNumber(v => !v), []);
+  const openPinnacleBreakdown = useCallback(() => setShowPinnacleBreakdown(true), []);
+  const closePinnacleBreakdown = useCallback(() => setShowPinnacleBreakdown(false), []);
 
   useEffect(() => {
     setActiveBrand(currentUser?.preferredBrand || 'royal');
@@ -81,7 +86,8 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
 
   const celebrityCaptainsClubPoints = currentUser?.celebrityCaptainsClubPoints || 0;
   const celebrityBlueChipPoints = currentUser?.celebrityBlueChipPoints || 0;
-  const celebrityLevel = getCelebrityCaptainsClubLevelByPoints(celebrityCaptainsClubPoints);
+  const hasRoyalPinnacleReciprocity = crownAnchorLevel === 'Pinnacle' || captainsClub.tier === 'Zenith';
+  const celebrityLevel = hasRoyalPinnacleReciprocity ? 'Zenith' : getCelebrityCaptainsClubLevelByPoints(celebrityCaptainsClubPoints);
   const celebrityTier = getCelebrityBlueChipTierByLevel(1);
   const silverseaTier = currentUser?.silverseaVenetianTier || getSilverseaTierByDays(currentUser?.silverseaVenetianPoints || 0);
   const silverseaPoints = currentUser?.silverseaVenetianPoints || 0;
@@ -157,8 +163,12 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
     : activeBrand === 'celebrity' ? 'Captain\'s Club #'
     : activeBrand === 'silversea' ? 'Venetian Society #'
     : 'VIFP Club #';
+  const pinnacleBreakdown = pinnacleProgress.futureCruiseBreakdown;
+  const pinnacleBreakdownTotalPoints = pinnacleBreakdown.reduce((sum, cruise) => sum + cruise.pointsEarned, 0);
+  const pinnacleThreshold = CROWN_ANCHOR_LEVELS.Pinnacle.cruiseNights;
 
   return (
+    <>
     <LinearGradient
       colors={playerCardTheme.gradientColors}
       start={{ x: 0, y: 0 }}
@@ -274,37 +284,53 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
                 {isPinnacle 
                   ? 'Pinnacle achieved! Maximum loyalty level reached'
                   : (() => {
-                      const bookedPoints = projectedBookedPoints || 0;
-                      const remainingAfterBooked = Math.max(0, nightsToNext - bookedPoints);
-                      return `Booked: ${bookedPoints} pts • Still need: ${remainingAfterBooked} pts`;
+                      const bookedPointsToPinnacle = pinnacleProgress.pointsFromBookedToPinnacle || projectedBookedPoints || 0;
+                      const bookedNightsToPinnacle = pinnacleProgress.bookedNightsToPinnacle || totalBookedNights;
+                      const remainingAfterBooked = pinnacleProgress.projectedPointsNeededAfterBooked ?? Math.max(0, nightsToNext - bookedPointsToPinnacle);
+                      const soloNightsStillNeeded = Math.ceil(remainingAfterBooked / 2);
+                      const milestoneTotal = pinnacleProgress.thresholdCrossedShip ? ` • Milestone total: ${pinnacleProgress.projectedPointsAtPinnacle} pts` : '';
+                      return `Need: ${pinnacleProgress.currentPointsNeeded ?? nightsToNext} pts (${pinnacleProgress.soloNightsToNext ?? Math.ceil(nightsToNext / 2)} solo nights) • Booked path: +${bookedPointsToPinnacle} pts from ${bookedNightsToPinnacle} nights${milestoneTotal} • Still need: ${remainingAfterBooked} pts (${soloNightsStillNeeded} solo nights)`;
                     })()
                 }
               </Text>
 
               {!isPinnacle && pinnacleProgress.thresholdCrossedShip && pinnacleProgress.thresholdCrossedSailDate && (
                 <View style={styles.pinnacleDetailsContainer}>
-                  <View style={[styles.pinnacleDetailRow, progressDetailRowStyle]}>
+                  <TouchableOpacity
+                    style={[styles.pinnacleDetailRow, styles.pinnacleDetailTouchable, progressDetailRowStyle]}
+                    onPress={openPinnacleBreakdown}
+                    activeOpacity={0.76}
+                    accessibilityRole="button"
+                    accessibilityLabel="Show complete Pinnacle points breakdown"
+                  >
                     <View style={styles.pinnacleIconBadge}>
                       <Target size={10} color="#DC2626" />
                     </View>
                     <View style={styles.pinnacleDetailContent}>
-                      <Text style={[styles.pinnacleDetailLabel, progressMetaStyle]}>Threshold Crossed On:</Text>
+                      <Text style={[styles.pinnacleDetailLabel, progressMetaStyle]}>Pinnacle Reached On:</Text>
                       <Text style={[styles.pinnacleDetailValue, progressLabelStyle]} numberOfLines={1}>
                         {`${pinnacleProgress.thresholdCrossedShip} • ${formatCruiseDate(pinnacleProgress.thresholdCrossedSailDate)}`}
                       </Text>
+                      <Text style={[styles.pinnacleTapHint, progressMetaStyle]}>Tap to see future cruises + point math</Text>
                     </View>
-                  </View>
+                    <ChevronRight size={16} color={playerCardTheme.secondaryTextColor} />
+                  </TouchableOpacity>
                   <View style={[styles.pinnacleDetailRow, styles.pinnacleDetailRowWhite, progressDetailRowStyle]}>
                     <View style={styles.pinnacleStarBadgeWhite}>
                       <Text style={styles.pinnaclePText}>P</Text>
                     </View>
                     <View style={styles.pinnacleDetailContent}>
-                      <Text style={[styles.pinnacleDetailLabel, progressMetaStyle]}>First Cruise AS Pinnacle:</Text>
+                      <Text style={[styles.pinnacleDetailLabel, progressMetaStyle]}>First Cruise With Top-Tier Status:</Text>
                       <Text style={[styles.pinnacleDetailValue, styles.pinnacleHighlightWhite]} numberOfLines={1}>
                         {pinnacleProgress.pinnacleShip && pinnacleProgress.pinnacleSailDate
                           ? `${pinnacleProgress.pinnacleShip} • ${formatCruiseDate(pinnacleProgress.pinnacleSailDate)}`
-                          : 'Not booked yet'}
+                          : 'Reached at end of this sailing'}
                       </Text>
+                      {pinnacleProgress.pinnacleStatusLabel ? (
+                        <Text style={[styles.pinnacleTapHint, progressMetaStyle]} numberOfLines={2}>
+                          {pinnacleProgress.pinnacleStatusLabel}
+                        </Text>
+                      ) : null}
                     </View>
                   </View>
                 </View>
@@ -481,7 +507,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
               <View style={styles.progressHeader}>
                 <Text style={[styles.progressLabel, progressLabelStyle]}>
                   {isZenith 
-                    ? `Zenith (${celebrityCaptainsClubPoints}/3,000)`
+                    ? (hasRoyalPinnacleReciprocity ? 'Zenith via Royal Caribbean Pinnacle reciprocity' : `Zenith (${celebrityCaptainsClubPoints}/3,000)`)
                     : `${celebrityLevel} → ${nextLevel} (${celebrityCaptainsClubPoints}/${nextThreshold})`
                   }
                 </Text>
@@ -503,7 +529,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
               </View>
               <Text style={[styles.progressEta, progressMetaStyle]}>
                 {isZenith 
-                  ? 'Zenith achieved! Maximum Captain\'s Club level'
+                  ? (hasRoyalPinnacleReciprocity ? 'Royal Caribbean Pinnacle automatically maps to Celebrity Zenith.' : 'Zenith achieved! Maximum Captain\'s Club level')
                   : `${pointsToNext} pts to ${nextLevel}`
                 }
               </Text>
@@ -566,8 +592,8 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         </View>
         <View style={[styles.statDivider, progressDividerStyle]} />
         <View style={styles.statItem}>
-          <Text style={[styles.statValue, progressLabelStyle]}>{Math.max(0, 3000 - celebrityCaptainsClubPoints)}</Text>
-          <Text style={[styles.statLabel, progressMetaStyle]}>To Zenith</Text>
+          <Text style={[styles.statValue, progressLabelStyle]}>{hasRoyalPinnacleReciprocity ? 0 : Math.max(0, 3000 - celebrityCaptainsClubPoints)}</Text>
+          <Text style={[styles.statLabel, progressMetaStyle]}>{hasRoyalPinnacleReciprocity ? 'Via Pinnacle' : 'To Zenith'}</Text>
         </View>
       </View>
 
@@ -847,6 +873,88 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         </>
       )}
     </LinearGradient>
+
+    <Modal
+      visible={showPinnacleBreakdown}
+      transparent
+      animationType="fade"
+      onRequestClose={closePinnacleBreakdown}
+    >
+      <View style={styles.modalBackdrop}>
+        <View style={styles.pinnacleModalCard}>
+          <View style={styles.pinnacleModalHeader}>
+            <View style={styles.pinnacleModalTitleBlock}>
+              <Text style={styles.pinnacleModalEyebrow}>Crown & Anchor Path</Text>
+              <Text style={styles.pinnacleModalTitle}>Pinnacle Breakdown</Text>
+              <Text style={styles.pinnacleModalSubtitle}>
+                {pinnacleProgress.startingPoints} starting points → {pinnacleThreshold} Pinnacle threshold
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.pinnacleModalClose}
+              onPress={closePinnacleBreakdown}
+              activeOpacity={0.72}
+              accessibilityRole="button"
+              accessibilityLabel="Close Pinnacle breakdown"
+            >
+              <X size={18} color={COLORS.navyDeep} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.pinnacleSummaryStrip}>
+            <View style={styles.pinnacleSummaryItem}>
+              <Text style={styles.pinnacleSummaryValue}>{pinnacleProgress.currentPointsNeeded}</Text>
+              <Text style={styles.pinnacleSummaryLabel}>points needed</Text>
+            </View>
+            <View style={styles.pinnacleSummaryDivider} />
+            <View style={styles.pinnacleSummaryItem}>
+              <Text style={styles.pinnacleSummaryValue}>+{pinnacleBreakdownTotalPoints}</Text>
+              <Text style={styles.pinnacleSummaryLabel}>booked path</Text>
+            </View>
+            <View style={styles.pinnacleSummaryDivider} />
+            <View style={styles.pinnacleSummaryItem}>
+              <Text style={styles.pinnacleSummaryValue}>{pinnacleProgress.projectedPointsAtPinnacle}</Text>
+              <Text style={styles.pinnacleSummaryLabel}>milestone total</Text>
+            </View>
+          </View>
+
+          <ScrollView style={styles.pinnacleBreakdownScroll} contentContainerStyle={styles.pinnacleBreakdownContent}>
+            {pinnacleBreakdown.length > 0 ? pinnacleBreakdown.map((cruise, index) => (
+              <View key={`${cruise.shipName}-${cruise.sailDate}-${index}`} style={[styles.pinnacleCruiseRow, cruise.reachesPinnacle && styles.pinnacleCruiseRowMilestone]}>
+                <View style={[styles.pinnacleCruiseNumber, cruise.reachesPinnacle && styles.pinnacleCruiseNumberMilestone]}>
+                  <Text style={[styles.pinnacleCruiseNumberText, cruise.reachesPinnacle && styles.pinnacleCruiseNumberTextMilestone]}>{index + 1}</Text>
+                </View>
+                <View style={styles.pinnacleCruiseMain}>
+                  <View style={styles.pinnacleCruiseTopLine}>
+                    <Text style={styles.pinnacleCruiseShip} numberOfLines={1}>{cruise.shipName}</Text>
+                    <Text style={styles.pinnacleCruisePoints}>+{cruise.pointsEarned}</Text>
+                  </View>
+                  <Text style={styles.pinnacleCruiseMeta}>
+                    {formatCruiseDate(cruise.sailDate)} → {formatCruiseDate(cruise.returnDate)} • {cruise.nights} nights • {cruise.pointsMultiplier.toFixed(0)} pts/night
+                  </Text>
+                  <View style={styles.pinnacleCruiseMathLine}>
+                    <Text style={styles.pinnacleCruiseMathText}>Running total: {cruise.runningTotal}</Text>
+                    <Text style={[styles.pinnacleCruiseMathText, cruise.pointsRemainingAfterCruise === 0 && styles.pinnacleCruiseCompleteText]}>
+                      {cruise.pointsRemainingAfterCruise === 0 ? 'Pinnacle reached' : `${cruise.pointsRemainingAfterCruise} still needed`}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            )) : (
+              <View style={styles.pinnacleEmptyState}>
+                <Text style={styles.pinnacleEmptyTitle}>No future cruises needed</Text>
+                <Text style={styles.pinnacleEmptyText}>Your current Crown & Anchor points already meet or exceed Pinnacle.</Text>
+              </View>
+            )}
+          </ScrollView>
+
+          <TouchableOpacity style={styles.pinnacleModalDoneButton} onPress={closePinnacleBreakdown} activeOpacity={0.8}>
+            <Text style={styles.pinnacleModalDoneText}>Done</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+    </>
   );
 });
 
@@ -997,6 +1105,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(0, 31, 63, 0.1)',
   },
+  pinnacleDetailTouchable: {
+    alignItems: 'center',
+  },
   pinnacleIconBadge: {
     width: 20,
     height: 20,
@@ -1049,6 +1160,12 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeSM,
     color: CLEAN_THEME.text.primary,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+  },
+  pinnacleTapHint: {
+    fontSize: 9,
+    color: CLEAN_THEME.text.secondary,
+    marginTop: 2,
+    fontWeight: '600' as const,
   },
   pinnacleHighlight: {
     color: COLORS.goldDark,
@@ -1105,6 +1222,200 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: CLEAN_THEME.data.label,
     marginTop: 1,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 16, 34, 0.66)',
+    justifyContent: 'center',
+    paddingHorizontal: SPACING.md,
+  },
+  pinnacleModalCard: {
+    maxHeight: '86%',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 24,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: 'rgba(184, 134, 11, 0.32)',
+    ...SHADOW.lg,
+  },
+  pinnacleModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: SPACING.sm,
+    marginBottom: SPACING.sm,
+  },
+  pinnacleModalTitleBlock: {
+    flex: 1,
+  },
+  pinnacleModalEyebrow: {
+    fontSize: 11,
+    fontWeight: '800' as const,
+    color: COLORS.goldDark,
+    letterSpacing: 0.9,
+    textTransform: 'uppercase',
+    marginBottom: 3,
+  },
+  pinnacleModalTitle: {
+    fontSize: 24,
+    fontWeight: '900' as const,
+    color: COLORS.navyDeep,
+    letterSpacing: -0.4,
+  },
+  pinnacleModalSubtitle: {
+    fontSize: 12,
+    color: CLEAN_THEME.text.secondary,
+    fontWeight: '600' as const,
+    marginTop: 4,
+  },
+  pinnacleModalClose: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 31, 63, 0.1)',
+  },
+  pinnacleSummaryStrip: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.navyDeep,
+    borderRadius: 18,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.xs,
+    marginBottom: SPACING.sm,
+  },
+  pinnacleSummaryItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  pinnacleSummaryValue: {
+    fontSize: 18,
+    fontWeight: '900' as const,
+    color: COLORS.goldLight,
+  },
+  pinnacleSummaryLabel: {
+    fontSize: 9,
+    color: 'rgba(255, 255, 255, 0.78)',
+    fontWeight: '700' as const,
+    marginTop: 2,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  pinnacleSummaryDivider: {
+    width: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
+    marginVertical: 2,
+  },
+  pinnacleBreakdownScroll: {
+    maxHeight: 420,
+  },
+  pinnacleBreakdownContent: {
+    paddingBottom: SPACING.xs,
+    gap: SPACING.xs,
+  },
+  pinnacleCruiseRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: SPACING.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 31, 63, 0.08)',
+  },
+  pinnacleCruiseRowMilestone: {
+    borderColor: COLORS.goldDark,
+    backgroundColor: '#FFF8E1',
+  },
+  pinnacleCruiseNumber: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#EAF2FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pinnacleCruiseNumberMilestone: {
+    backgroundColor: COLORS.goldDark,
+  },
+  pinnacleCruiseNumberText: {
+    fontSize: 12,
+    fontWeight: '900' as const,
+    color: COLORS.navyDeep,
+  },
+  pinnacleCruiseNumberTextMilestone: {
+    color: '#FFFFFF',
+  },
+  pinnacleCruiseMain: {
+    flex: 1,
+  },
+  pinnacleCruiseTopLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: SPACING.xs,
+  },
+  pinnacleCruiseShip: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '800' as const,
+    color: COLORS.navyDeep,
+  },
+  pinnacleCruisePoints: {
+    fontSize: 15,
+    fontWeight: '900' as const,
+    color: COLORS.goldDark,
+  },
+  pinnacleCruiseMeta: {
+    fontSize: 11,
+    color: CLEAN_THEME.text.secondary,
+    fontWeight: '600' as const,
+    marginTop: 3,
+  },
+  pinnacleCruiseMathLine: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: SPACING.xs,
+    marginTop: SPACING.xs,
+  },
+  pinnacleCruiseMathText: {
+    fontSize: 10,
+    color: CLEAN_THEME.text.primary,
+    fontWeight: '700' as const,
+  },
+  pinnacleCruiseCompleteText: {
+    color: '#047857',
+  },
+  pinnacleEmptyState: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: SPACING.md,
+    alignItems: 'center',
+  },
+  pinnacleEmptyTitle: {
+    fontSize: 16,
+    fontWeight: '900' as const,
+    color: COLORS.navyDeep,
+  },
+  pinnacleEmptyText: {
+    fontSize: 12,
+    color: CLEAN_THEME.text.secondary,
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  pinnacleModalDoneButton: {
+    marginTop: SPACING.sm,
+    backgroundColor: COLORS.navyDeep,
+    borderRadius: 16,
+    paddingVertical: SPACING.sm,
+    alignItems: 'center',
+  },
+  pinnacleModalDoneText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '900' as const,
+    letterSpacing: 0.2,
   },
   quickStatsPillRow: {
     flexDirection: 'row',

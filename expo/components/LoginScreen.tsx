@@ -13,8 +13,7 @@ export function LoginScreen() {
   const [password, setPassword] = useState<string>('');
   const [error, setError] = useState<string>('');
   const [showAboutModal, setShowAboutModal] = useState<boolean>(false);
-  const [logoError, setLogoError] = useState<boolean>(false);
-  const [signatureError, setSignatureError] = useState<boolean>(false);
+  const [heroImageError, setHeroImageError] = useState<boolean>(false);
   const { login } = useAuth();
 
   
@@ -65,42 +64,27 @@ export function LoginScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.content}>
-          <View style={styles.logoContainer}>
-            {!logoError ? (
+          <View style={styles.heroImageContainer}>
+            {!heroImageError ? (
               <Image
-                source={{ uri: IMAGES.logo }}
-                style={styles.logoImage}
-                resizeMode="contain"
+                source={{ uri: IMAGES.loginHero }}
+                style={styles.heroImage}
+                resizeMode="cover"
                 onError={() => {
-                  console.warn('[LoginScreen] Logo image failed to load, using local fallback');
-                  setLogoError(true);
+                  console.warn('[LoginScreen] Login hero image failed to load, using local fallback');
+                  setHeroImageError(true);
                 }}
-                testID="login-logo-image"
+                testID="login-hero-image"
               />
             ) : (
               <Image
                 source={require('@/assets/images/icon.png')}
-                style={styles.logoImage}
+                style={styles.heroFallbackImage}
                 resizeMode="contain"
-                testID="login-logo-fallback-image"
+                testID="login-hero-fallback-image"
               />
             )}
           </View>
-          {!signatureError ? (
-            <Image
-              source={{ uri: IMAGES.signature }}
-              style={styles.signatureImage}
-              resizeMode="contain"
-              onError={() => {
-                console.warn('[LoginScreen] Signature image failed to load, hiding signature');
-                setSignatureError(true);
-              }}
-              testID="login-signature-image"
-            />
-          ) : null}
-
-          <Text style={styles.brandTitle}>EASY SEAS™</Text>
-          <Text style={styles.brandTagline}>Manage your Nautical Lifestyle</Text>
 
           <View style={styles.disclaimerSection}>
             <Text style={styles.trademarkText}>
@@ -232,9 +216,9 @@ export function LoginScreen() {
               
               <Text style={styles.modalHeading}>⚡ AUTOMATIC DATA INGESTION (THE CORE POWER){"\n\n"}</Text>
               
-              <Text style={styles.modalBold}>🎰 Club Royale Offers — Fully Parsed{"\n\n"}</Text>
+              <Text style={styles.modalBold}>🎰 Royal/Celebrity Casino Offers — Fully Parsed{"\n\n"}</Text>
               
-              With one click, EasySeas automatically imports everything from the Club Royale offers page:{"\n\n"}
+              With one click, EasySeas imports supported Royal Caribbean Club Royale and Celebrity Blue Chip offer data:{"\n\n"}
               
               ✔ All current casino offers{"\n"}
               ✔ Every eligible sailing per offer{"\n"}
@@ -292,7 +276,7 @@ export function LoginScreen() {
               
               <Text style={styles.modalBold}>🧠 Ask EasySeas:{"\n\n"}</Text>
               
-              &quot;Which Club Royale cruises fit my schedule next quarter?&quot;{"\n"}
+              &quot;Which Royal or Celebrity casino cruises fit my schedule next quarter?&quot;{"\n"}
               &quot;Which offers give me the best value for my tier?&quot;{"\n"}
               &quot;What sailings maximize sea days without overlapping work?&quot;{"\n"}
               &quot;Which ships historically give me the best ROI?&quot;{"\n\n"}
@@ -519,34 +503,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.xxl,
   },
-  logoContainer: {
-    width: width * 0.7,
-    height: height * 0.35,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: SPACING.md,
+  heroImageContainer: {
+    width: Math.min(width * 0.86, 520),
+    aspectRatio: 1138 / 756,
+    borderRadius: 22,
+    overflow: 'hidden',
+    backgroundColor: '#001F54',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 216, 107, 0.55)',
+    marginBottom: SPACING.lg,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.28,
+    shadowRadius: 20,
+    elevation: 10,
   },
-  logoImage: {
+  heroImage: {
     width: '100%',
     height: '100%',
   },
-  logoFallback: {
+  heroFallbackImage: {
     width: '100%',
     height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  logoFallbackText: {
-    fontSize: 48,
-    fontWeight: '800' as const,
-    color: COLORS.white,
-    textAlign: 'center',
-  },
-  signatureImage: {
-    width: 130,
-    height: 130,
-    marginBottom: SPACING.sm,
-    opacity: 0.8,
+    backgroundColor: COLORS.white,
   },
   card: {
     backgroundColor: COLORS.white,

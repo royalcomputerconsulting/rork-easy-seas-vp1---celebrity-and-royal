@@ -11,6 +11,16 @@ export interface CruiseReceipt {
 
 export const CRUISE_RECEIPTS: CruiseReceipt[] = [
   {
+    ship: 'STAR OF THE SEAS',
+    sailingDate: '2026-07-05',
+    cabinCategory: 'V4',
+    cabinNumber: '10518',
+    roomType: 'Interior Stateroom Obstructed View',
+    pricePaid: 150.92,
+    totalRetailCost: 5500,
+    totalCasinoDiscount: 5500,
+  },
+  {
     ship: 'NAVIGATOR OF THE SEAS',
     sailingDate: '2025-08-22',
     cabinCategory: 'ZI',

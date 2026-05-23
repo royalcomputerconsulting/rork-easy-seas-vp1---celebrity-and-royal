@@ -17,24 +17,31 @@ import {
   Activity,
 } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
+import { getBookedCruiseCasinoPoints, getBookedCruiseWinningsBroughtHome } from '@/lib/casinoPointTruth';
 import { formatCurrency, formatNumber } from '@/lib/format';
 import type { SessionAnalytics, MachineType } from '@/state/CasinoSessionProvider';
 import type { BookedCruise } from '@/types/models';
+import type { CruiseEconomicsSummary } from '@/lib/casinoCruiseEconomics';
 
 
 interface CasinoIntelligenceCardProps {
   analytics: SessionAnalytics;
   onViewDetails?: () => void;
   completedCruises?: BookedCruise[];
+  cruiseEconomicsSummary?: CruiseEconomicsSummary;
 }
 
 interface CruiseBasedMetrics {
   totalWinLoss: number;
+  totalCashResult: number;
+  totalEconomicValue: number;
   totalPointsEarned: number;
+  totalCoinIn: number;
   totalHoursPlayed: number;
   totalTheoreticalLoss: number;
   cruiseCount: number;
   avgWinLossPerCruise: number;
+  avgCashResultPerCruise: number;
   avgPointsPerCruise: number;
   valueVsTimeRatio: number;
   predictiveScore: number;
@@ -72,7 +79,7 @@ const MACHINE_HOUSE_EDGES: Record<MachineType, number> = {
 
 function HouseEdgeSection({ analytics, cruiseMetrics }: { analytics: SessionAnalytics; cruiseMetrics?: CruiseBasedMetrics }) {
   const theoreticalLoss = cruiseMetrics?.totalTheoreticalLoss || analytics.theoreticalVsActual.theoreticalLoss;
-  const actualResult = cruiseMetrics?.totalWinLoss ?? analytics.netWinLoss;
+  const actualResult = cruiseMetrics?.totalCashResult ?? cruiseMetrics?.totalWinLoss ?? analytics.netWinLoss;
   const variance = actualResult - (-theoreticalLoss);
   const isRunningHot = variance > theoreticalLoss * 0.2;
   const isRunningCold = variance < -theoreticalLoss * 0.2;
@@ -123,7 +130,7 @@ function HouseEdgeSection({ analytics, cruiseMetrics }: { analytics: SessionAnal
           ]}>
             {actualResult >= 0 ? '+' : ''}{formatCurrency(actualResult)}
           </Text>
-          <Text style={styles.edgeSubtext}>Your real outcome</Text>
+          <Text style={styles.edgeSubtext}>{cruiseMetrics ? 'Cash Result, not Coin-In' : 'Session win/loss'}</Text>
         </View>
       </View>
 
@@ -435,51 +442,99 @@ function PointsEfficiencySection({ analytics, cruiseMetrics }: { analytics: Sess
   );
 }
 
-export function CasinoIntelligenceCard({ analytics, onViewDetails, completedCruises }: CasinoIntelligenceCardProps) {
+export function CasinoIntelligenceCard({ analytics, onViewDetails, completedCruises, cruiseEconomicsSummary }: CasinoIntelligenceCardProps) {
+  void onViewDetails;
   const cruiseMetrics = useMemo((): CruiseBasedMetrics | undefined => {
+    if (cruiseEconomicsSummary && cruiseEconomicsSummary.rows.length > 0) {
+      const totals = cruiseEconomicsSummary.totals;
+      const hoursFromRows = totals.totalHours;
+      const estimatedHours = hoursFromRows > 0
+        ? hoursFromRows
+        : cruiseEconomicsSummary.rows.reduce((sum, row) => sum + Math.max(1, row.nights * 4), 0);
+      const cruiseCount = totals.cruises;
+      const winningCruises = cruiseEconomicsSummary.rows.filter((row) => (row.cashResult ?? 0) > 0).length;
+      const winRate = cruiseCount > 0 ? (winningCruises / cruiseCount) * 100 : 0;
+      const pointsPerHour = estimatedHours > 0 ? totals.totalPoints / estimatedHours : 0;
+      const consistencyFactor = Math.min(cruiseCount / 5, 1);
+      const predictiveScore = Math.min(100, (winRate * 0.4) + (pointsPerHour * 0.3) + (consistencyFactor * 30));
+
+      return {
+        totalWinLoss: totals.totalWinningsHome,
+        totalCashResult: totals.totalCashResult,
+        totalEconomicValue: totals.totalEconomicValue,
+        totalPointsEarned: totals.totalPoints,
+        totalCoinIn: totals.totalCoinIn,
+        totalHoursPlayed: estimatedHours,
+        totalTheoreticalLoss: totals.totalTheoreticalLoss,
+        cruiseCount,
+        avgWinLossPerCruise: cruiseCount > 0 ? totals.totalWinningsHome / cruiseCount : 0,
+        avgCashResultPerCruise: cruiseCount > 0 ? totals.totalCashResult / cruiseCount : 0,
+        avgPointsPerCruise: cruiseCount > 0 ? totals.totalPoints / cruiseCount : 0,
+        valueVsTimeRatio: pointsPerHour,
+        predictiveScore,
+      };
+    }
+
     if (!completedCruises || completedCruises.length === 0) return undefined;
     
     const cruisesWithData = completedCruises.filter(c => {
-      const hasWinnings = c.winnings !== undefined;
-      const hasPoints = (c.earnedPoints !== undefined && c.earnedPoints > 0) || 
-                       (c.casinoPoints !== undefined && c.casinoPoints > 0);
-      return hasWinnings || hasPoints;
+      const points = getBookedCruiseCasinoPoints(c);
+      const winnings = getBookedCruiseWinningsBroughtHome(c);
+      return points > 0 || winnings !== 0;
     });
     
     if (cruisesWithData.length === 0) return undefined;
     
-    const totalWinLoss = cruisesWithData.reduce((sum, c) => sum + (c.winnings || 0), 0);
-    const totalPointsEarned = cruisesWithData.reduce((sum, c) => sum + (c.earnedPoints || c.casinoPoints || 0), 0);
+    const totalWinLoss = cruisesWithData.reduce((sum, c) => sum + getBookedCruiseWinningsBroughtHome(c), 0);
+    const totalCashResult = cruisesWithData.reduce((sum, c) => {
+      const winnings = getBookedCruiseWinningsBroughtHome(c);
+      return sum + (c.cashResult ?? winnings - (c.netEffectivePaid ?? c.amountPaid ?? 0));
+    }, 0);
+    const totalEconomicValue = cruisesWithData.reduce((sum, c) => {
+      const winnings = getBookedCruiseWinningsBroughtHome(c);
+      return sum + (c.totalEconomicValue ?? (c.retailValue ?? c.totalRetailCost ?? 0) + winnings - (c.netEffectivePaid ?? c.amountPaid ?? 0));
+    }, 0);
+    const totalPointsEarned = cruisesWithData.reduce((sum, c) => sum + getBookedCruiseCasinoPoints(c), 0);
+    const totalCoinIn = cruisesWithData.reduce((sum, c) => {
+      const points = getBookedCruiseCasinoPoints(c);
+      return sum + (points > 0 ? (c.coinIn ?? points * 5) : 0);
+    }, 0);
     const totalHoursPlayed = cruisesWithData.reduce((sum, c) => sum + (c.hoursPlayed || (c.nights || 0) * 4), 0);
     
     const totalTheoreticalLoss = cruisesWithData.reduce((sum, c) => {
       if (c.theoreticalLoss) return sum + c.theoreticalLoss;
-      const estimatedCoinIn = (c.actualSpend || 0) * 5;
-      return sum + (estimatedCoinIn * 0.08);
+      const points = getBookedCruiseCasinoPoints(c);
+      const coinIn = points > 0 ? (c.coinIn ?? points * 5) : 0;
+      return sum + (coinIn * (c.houseEdge ?? 0.08));
     }, 0);
     
     const cruiseCount = cruisesWithData.length;
     const avgWinLossPerCruise = cruiseCount > 0 ? totalWinLoss / cruiseCount : 0;
+    const avgCashResultPerCruise = cruiseCount > 0 ? totalCashResult / cruiseCount : 0;
     const avgPointsPerCruise = cruiseCount > 0 ? totalPointsEarned / cruiseCount : 0;
     const valueVsTimeRatio = totalHoursPlayed > 0 ? totalPointsEarned / totalHoursPlayed : 0;
     
-    const winningCruises = cruisesWithData.filter(c => (c.winnings || 0) > 0).length;
+    const winningCruises = cruisesWithData.filter(c => (c.cashResult ?? c.winningsBroughtHome ?? c.winnings ?? 0) > 0).length;
     const winRate = cruiseCount > 0 ? (winningCruises / cruiseCount) * 100 : 0;
     const consistencyFactor = Math.min(cruiseCount / 5, 1);
-    const predictiveScore = (winRate * 0.4) + (valueVsTimeRatio * 0.3) + (consistencyFactor * 30);
+    const predictiveScore = Math.min(100, (winRate * 0.4) + (valueVsTimeRatio * 0.3) + (consistencyFactor * 30));
     
     return {
       totalWinLoss,
+      totalCashResult,
+      totalEconomicValue,
       totalPointsEarned,
+      totalCoinIn,
       totalHoursPlayed,
       totalTheoreticalLoss,
       cruiseCount,
       avgWinLossPerCruise,
+      avgCashResultPerCruise,
       avgPointsPerCruise,
       valueVsTimeRatio,
       predictiveScore,
     };
-  }, [completedCruises]);
+  }, [completedCruises, cruiseEconomicsSummary]);
 
   if (analytics.totalSessions === 0 && !cruiseMetrics) {
     return (
@@ -543,14 +598,14 @@ export function CasinoIntelligenceCard({ analytics, onViewDetails, completedCrui
               </View>
               
               <View style={styles.predictiveCard}>
-                <Text style={styles.predictiveLabel}>Avg Win/Loss</Text>
+                <Text style={styles.predictiveLabel}>Avg Cash Result</Text>
                 <Text style={[
                   styles.predictiveValue,
-                  { color: cruiseMetrics.avgWinLossPerCruise >= 0 ? COLORS.success : COLORS.error }
+                  { color: cruiseMetrics.avgCashResultPerCruise >= 0 ? COLORS.success : COLORS.error }
                 ]}>
-                  {cruiseMetrics.avgWinLossPerCruise >= 0 ? '+' : ''}{formatCurrency(cruiseMetrics.avgWinLossPerCruise)}
+                  {cruiseMetrics.avgCashResultPerCruise >= 0 ? '+' : ''}{formatCurrency(cruiseMetrics.avgCashResultPerCruise)}
                 </Text>
-                <Text style={styles.predictiveSubtext}>per cruise</Text>
+                <Text style={styles.predictiveSubtext}>winnings minus paid</Text>
               </View>
               
               <View style={styles.predictiveCard}>

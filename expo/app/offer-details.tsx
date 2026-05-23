@@ -22,6 +22,10 @@ import {
   Archive,
   BedDouble,
   Users,
+  Gauge,
+  FileText,
+  Layers,
+  Calculator,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
@@ -32,6 +36,13 @@ import { useCoreData } from '@/state/CoreDataProvider';
 import { calculateCasinoAvailabilityForCruise, calculatePersonalizedPlayEstimate, getCasinoStatusBadge } from '@/lib/casinoAvailability';
 import { useUser, DEFAULT_PLAYING_HOURS } from '@/state/UserProvider';
 import { createDateFromString, getDaysUntil, formatDate } from '@/lib/date';
+import { useCertificates } from '@/state/CertificatesProvider';
+import { formatCurrency } from '@/lib/format';
+import {
+  buildCertificateStackingNotes,
+  calculateOfferIntelligenceScore,
+  decodeOffer,
+} from '@/lib/offerIntelligence';
 import type { Cruise, BookedCruise, CasinoOffer } from '@/types/models';
 
 type SortOption = 'soonest' | 'highest-value' | 'lowest-price' | 'longest' | 'shortest';
@@ -42,7 +53,9 @@ export default function OfferDetailsScreen() {
   const { localData } = useAppState();
   const { cruises: storeCruises, bookedCruises: storeBookedCruises, casinoOffers: storeOffers, updateCasinoOffer, removeCasinoOffer } = useCoreData();
   const { currentUser } = useUser();
+  const { certificates } = useCertificates();
   const [sortBy, setSortBy] = useState<SortOption>('soonest');
+  const [showDecodedOffer, setShowDecodedOffer] = useState<boolean>(false);
 
   const playingHoursConfig = useMemo(() => {
     const userPlayingHours = currentUser?.playingHours || DEFAULT_PLAYING_HOURS;
@@ -171,10 +184,9 @@ export default function OfferDetailsScreen() {
 
   const offerInfo = useMemo(() => {
     const { cruises, offer } = offerData;
-    const guestCount = 2;
     
-    // Calculate aggregate total value from ALL cruises in this offer
-    // This is the sum of (2x room price + taxes) for each cruise
+    // Calculate aggregate total value from ALL cruises in this offer.
+    // Imported cabin prices are already full-booking retail prices.
     let aggregateTotalValue = 0;
     let minRetailValue = Infinity;
     let maxRetailValue = 0;
@@ -188,24 +200,24 @@ export default function OfferDetailsScreen() {
       
       // Calculate retail value using balcony as default (or whatever is available)
       const cabinPrice = balconyPrice || interiorPrice || suitePrice || 0;
-      const retailValueForCruise = (cabinPrice * guestCount) + taxes;
+      const retailValueForCruise = cabinPrice + taxes;
       aggregateTotalValue += retailValueForCruise;
       
       // Track min (interior) and max (suite) values for range display
       if (interiorPrice > 0) {
-        const minVal = (interiorPrice * guestCount) + taxes;
+        const minVal = interiorPrice + taxes;
         if (minVal < minRetailValue) minRetailValue = minVal;
       }
       if (suitePrice > 0) {
-        const maxVal = (suitePrice * guestCount) + taxes;
+        const maxVal = suitePrice + taxes;
         if (maxVal > maxRetailValue) maxRetailValue = maxVal;
       }
       // Fallback to balcony if no interior/suite
       if (minRetailValue === Infinity && balconyPrice > 0) {
-        minRetailValue = (balconyPrice * guestCount) + taxes;
+        minRetailValue = balconyPrice + taxes;
       }
       if (maxRetailValue === 0 && balconyPrice > 0) {
-        maxRetailValue = (balconyPrice * guestCount) + taxes;
+        maxRetailValue = balconyPrice + taxes;
       }
     });
     
@@ -285,6 +297,38 @@ export default function OfferDetailsScreen() {
     };
   }, [offerData, offerCode]);
 
+  const currentTravelerProfile = useMemo(() => {
+    if (!currentUser) return null;
+    return {
+      id: currentUser.id,
+      displayName: currentUser.displayName || currentUser.name,
+      email: currentUser.email,
+      royalCaribbeanNumber: currentUser.royalCaribbeanNumber || currentUser.crownAnchorNumber,
+      clubRoyaleId: currentUser.clubRoyaleId,
+      celebrityCaptainsClubNumber: currentUser.celebrityCaptainsClubNumber,
+      blueChipId: currentUser.blueChipId,
+      active: currentUser.active,
+      defaultProfile: currentUser.defaultProfile,
+      createdAt: currentUser.createdAt,
+      updatedAt: currentUser.updatedAt,
+    };
+  }, [currentUser]);
+
+  const offerIntelligence = useMemo(() => {
+    if (!offerData.offer) return null;
+    return calculateOfferIntelligenceScore(offerData.offer, offerData.cruises, certificates, currentTravelerProfile);
+  }, [offerData.offer, offerData.cruises, certificates, currentTravelerProfile]);
+
+  const decodedOffer = useMemo(() => {
+    if (!offerData.offer) return null;
+    return decodeOffer(offerData.offer, offerData.cruises, currentTravelerProfile);
+  }, [offerData.offer, offerData.cruises, currentTravelerProfile]);
+
+  const certificateStackingNotes = useMemo(() => {
+    if (!offerData.offer) return [];
+    return buildCertificateStackingNotes(offerData.offer, certificates, offerData.cruises).slice(0, 3);
+  }, [offerData.offer, certificates, offerData.cruises]);
+
   const daysUntilExpiry = offerInfo.expiryDate ? getDaysUntil(offerInfo.expiryDate) : null;
   const isExpiringSoon = daysUntilExpiry !== null && daysUntilExpiry > 0 && daysUntilExpiry <= 7;
 
@@ -323,15 +367,14 @@ export default function OfferDetailsScreen() {
     const valueBreakdown = calculateCruiseValue(cruise);
     const statusBadge = getCasinoStatusBadge(casinoAvail.casinoOpenDays, casinoAvail.totalDays);
     
-    // Calculate retail value range: 2x room + taxes
-    const guestCount = 2;
+    // Calculate retail value range; imported cabin prices are already full-booking totals.
     const taxes = cruise.taxes || 0;
     const interiorPrice = cruise.interiorPrice || 0;
     const suitePrice = cruise.suitePrice || 0;
     
-    // Min retail = 2x interior + taxes, Max retail = 2x suite + taxes
-    const minRetailValue = interiorPrice > 0 ? (interiorPrice * guestCount) + taxes : 0;
-    const maxRetailValue = suitePrice > 0 ? (suitePrice * guestCount) + taxes : 0;
+    // Min retail = interior + taxes, Max retail = suite + taxes.
+    const minRetailValue = interiorPrice > 0 ? interiorPrice + taxes : 0;
+    const maxRetailValue = suitePrice > 0 ? suitePrice + taxes : 0;
     
     return {
       casinoDays: casinoAvail.casinoOpenDays,
@@ -503,159 +546,210 @@ export default function OfferDetailsScreen() {
       />
 
       <SafeAreaView style={styles.safeArea} edges={['top']}>
-        {/* Merged Header - Offer Name, Code, Expiry, Value, Cruises */}
-        <LinearGradient
-          colors={['#E0F2FE', '#DBEAFE', '#E0F7FA']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.mergedHeader}
-        >
-          {/* Close Button */}
-          <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
-            <X size={24} color={COLORS.navyDeep} />
-          </TouchableOpacity>
-
-          {/* Featured Offer Name & Code */}
-          <View style={styles.featuredOfferSection}>
-            <View style={styles.offerLogoGroup}>
-              <Image 
-                source={{ uri: IMAGES.logo }}
-                style={styles.offerLogo}
-                resizeMode="contain"
-              />
-
-            </View>
-            <View style={styles.offerNameRow}>
-              <Text style={styles.featuredOfferName} numberOfLines={2}>{offerInfo.offerName}</Text>
-              {offerInfo.totalValue > 0 && (
-                <View style={styles.totalValueBadge}>
-                  <DollarSign size={18} color="#166534" />
-                  <View>
-                    <Text style={styles.totalValueLabel}>Total Value</Text>
-                    <Text style={styles.totalValueAmount}>${Math.round(offerInfo.totalValue).toLocaleString()}</Text>
-                  </View>
-                </View>
-              )}
-            </View>
-            <View style={styles.offerCodeBadge}>
-              <Text style={styles.offerCodeText}>{offerInfo.offerCode}</Text>
-            </View>
-          </View>
-
-          {/* FP/OBC Highlight Row */}
-          {((offerInfo.freePlay ?? 0) > 0 || (offerInfo.obc ?? 0) > 0) && (
-            <View style={styles.fpObcRow}>
-              {(offerInfo.freePlay ?? 0) > 0 && (
-                <View style={styles.fpBadgeOffer}>
-                  <Text style={styles.fpLabelOffer}>FreePlay</Text>
-                  <Text style={styles.fpValueOffer}>${(offerInfo.freePlay ?? 0).toLocaleString()}</Text>
-                </View>
-              )}
-              {(offerInfo.obc ?? 0) > 0 && (
-                <View style={styles.obcBadgeOffer}>
-                  <Text style={styles.obcLabelOffer}>Onboard Credit</Text>
-                  <Text style={styles.obcValueOffer}>${(offerInfo.obc ?? 0).toLocaleString()}</Text>
-                </View>
-              )}
-            </View>
-          )}
-
-          {/* Stats Row - Expiry, Cruises */}
-          <View style={styles.statsRow}>
-            {offerInfo.expiryDate ? (
-              <View style={styles.statItem}>
-                <Clock size={16} color={isExpiringSoon ? COLORS.warning : COLORS.navyDeep} />
-                <View style={styles.statTextGroup}>
-                  <Text style={styles.statLabel}>Expires</Text>
-                  <Text style={[styles.statValue, isExpiringSoon && styles.statValueWarning]}>
-                    {formatDate(offerInfo.expiryDate, 'short')}
-                    {isExpiringSoon && ` (${daysUntilExpiry}d)`}
-                  </Text>
-                </View>
-              </View>
-            ) : null}
-            <View style={styles.statItem}>
-              <Ship size={16} color={COLORS.navyDeep} />
-              <View style={styles.statTextGroup}>
-                <Text style={styles.statLabel}>Cruises</Text>
-                <Text style={styles.statValue}>{offerData.cruises.length}</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Status Actions */}
-          {offerInfo.offerCode && offerData.offer && offerData.offer.status !== 'used' && offerData.offer.status !== 'booked' && (
-            <View style={styles.statusActionsRow}>
-              <TouchableOpacity
-                style={styles.statusActionButton}
-                onPress={handleMarkAsInProgress}
-                activeOpacity={0.7}
-              >
-                <Archive size={16} color={COLORS.white} />
-                <Text style={styles.statusActionText}>Mark In Progress</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.statusActionButton, styles.statusActionButtonUsed]}
-                onPress={handleMarkAsUsed}
-                activeOpacity={0.7}
-              >
-                <Ban size={16} color={COLORS.white} />
-                <Text style={styles.statusActionText}>Mark as Used</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* Status Badge if already marked */}
-          {offerData.offer && (offerData.offer.status === 'used' || offerData.offer.status === 'booked') && (
-            <View style={styles.statusBadgeContainer}>
-              <View style={[styles.statusBadge, offerData.offer.status === 'used' && styles.statusBadgeUsed]}>
-                {offerData.offer.status === 'used' ? (
-                  <Ban size={16} color={COLORS.white} />
-                ) : (
-                  <Archive size={16} color={COLORS.white} />
-                )}
-                <Text style={styles.statusBadgeText}>
-                  {offerData.offer.status === 'used' ? 'Used' : 'In Progress'}
-                </Text>
-              </View>
-            </View>
-          )}
-        </LinearGradient>
-
-        {/* Sort Controls */}
-        <View style={styles.sortSection}>
-          <Text style={styles.sortLabel} testID="offer-sort-label">Sort by:</Text>
-          <View style={styles.sortRowCentered}>
-            <TouchableOpacity
-              style={[styles.sortPillMain, sortBy === 'soonest' && styles.sortPillMainActive]}
-              onPress={() => setSortBy('soonest')}
-              activeOpacity={0.7}
-              testID="sort-soonest"
-            >
-              <Text style={[styles.sortPillMainText, sortBy === 'soonest' && styles.sortPillMainTextActive]}>Soonest Expiring</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.sortPillMain, sortBy === 'highest-value' && styles.sortPillMainActive]}
-              onPress={() => setSortBy('highest-value')}
-              activeOpacity={0.7}
-              testID="sort-highest-value"
-            >
-              <Text style={[styles.sortPillMainText, sortBy === 'highest-value' && styles.sortPillMainTextActive]}>Highest Value</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
         <FlatList
           data={offerData.cruises}
           renderItem={renderCruiseCard}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item, index) => `${item.id?.trim() || 'offer-cruise'}-${item.shipName || 'ship'}-${item.sailDate || 'date'}-${index}`}
           extraData={sortBy}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
+          ListHeaderComponent={
+            <>
+              <LinearGradient
+                colors={['#E0F2FE', '#DBEAFE', '#E0F7FA']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.mergedHeader}
+              >
+                <View style={styles.compactHeaderTopRow}>
+                  <Image
+                    source={{ uri: IMAGES.logo }}
+                    style={styles.compactOfferLogo}
+                    resizeMode="contain"
+                  />
+                  <View style={styles.compactOfferTextGroup}>
+                    <Text style={styles.featuredOfferName} numberOfLines={1}>{offerInfo.offerName}</Text>
+                    <View style={styles.compactCodeRow}>
+                      <View style={styles.offerCodeBadge}>
+                        <Text style={styles.offerCodeText}>{offerInfo.offerCode}</Text>
+                      </View>
+                      {offerData.offer && (offerData.offer.status === 'used' || offerData.offer.status === 'booked') ? (
+                        <View style={[styles.statusMiniBadge, offerData.offer.status === 'used' && styles.statusBadgeUsed]}>
+                          {offerData.offer.status === 'used' ? (
+                            <Ban size={12} color={COLORS.white} />
+                          ) : (
+                            <Archive size={12} color={COLORS.white} />
+                          )}
+                          <Text style={styles.statusMiniBadgeText}>{offerData.offer.status === 'used' ? 'Used' : 'In Progress'}</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                  </View>
+                  <TouchableOpacity style={styles.closeButton} onPress={handleClose} activeOpacity={0.75}>
+                    <X size={22} color={COLORS.navyDeep} />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.compactMetricRow}>
+                  {offerInfo.totalValue > 0 ? (
+                    <View style={[styles.compactMetricPill, styles.compactMetricPillMoney]}>
+                      <DollarSign size={14} color="#166534" />
+                      <Text style={styles.compactMetricLabel}>Value</Text>
+                      <Text style={[styles.compactMetricValue, styles.compactMetricValueMoney]}>${Math.round(offerInfo.totalValue).toLocaleString()}</Text>
+                    </View>
+                  ) : null}
+                  {offerInfo.expiryDate ? (
+                    <View style={styles.compactMetricPill}>
+                      <Clock size={14} color={isExpiringSoon ? COLORS.warning : COLORS.navyDeep} />
+                      <Text style={styles.compactMetricLabel}>Expires</Text>
+                      <Text style={[styles.compactMetricValue, isExpiringSoon && styles.statValueWarning]}>
+                        {formatDate(offerInfo.expiryDate, 'short')}{isExpiringSoon && ` · ${daysUntilExpiry}d`}
+                      </Text>
+                    </View>
+                  ) : null}
+                  <View style={styles.compactMetricPill}>
+                    <Ship size={14} color={COLORS.navyDeep} />
+                    <Text style={styles.compactMetricLabel}>Cruises</Text>
+                    <Text style={styles.compactMetricValue}>{offerData.cruises.length}</Text>
+                  </View>
+                </View>
+
+                {((offerInfo.freePlay ?? 0) > 0 || (offerInfo.obc ?? 0) > 0) && (
+                  <View style={styles.fpObcRow}>
+                    {(offerInfo.freePlay ?? 0) > 0 && (
+                      <View style={styles.fpBadgeOffer}>
+                        <Text style={styles.fpLabelOffer}>FreePlay</Text>
+                        <Text style={styles.fpValueOffer}>${(offerInfo.freePlay ?? 0).toLocaleString()}</Text>
+                      </View>
+                    )}
+                    {(offerInfo.obc ?? 0) > 0 && (
+                      <View style={styles.obcBadgeOffer}>
+                        <Text style={styles.obcLabelOffer}>OBC</Text>
+                        <Text style={styles.obcValueOffer}>${(offerInfo.obc ?? 0).toLocaleString()}</Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+
+                {offerIntelligence ? (
+                  <View style={styles.intelligencePanel} testID="offer-details-intelligence-panel">
+                    <View style={styles.intelligenceHeaderRow}>
+                      <View style={styles.intelligenceScoreBadge}>
+                        <Gauge size={15} color="#0F766E" />
+                        <Text style={styles.intelligenceScoreText}>{offerIntelligence.score}</Text>
+                      </View>
+                      <View style={styles.intelligenceCopy}>
+                        <Text style={styles.intelligenceTitle}>Offer Intelligence</Text>
+                        <Text style={styles.intelligenceSubtitle}>{offerIntelligence.rating} · {offerIntelligence.brandLabel}</Text>
+                        <Text style={styles.intelligenceExplanation} numberOfLines={2}>{offerIntelligence.explanation}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.intelligenceBottomRow}>
+                      <View style={styles.calculatorGrid} testID="casino-pays-for-calculator">
+                        <View style={styles.calculatorCell}>
+                          <Text style={styles.calculatorLabel}>Casino</Text>
+                          <Text style={styles.calculatorValue}>{formatCurrency(offerIntelligence.casinoPaysFor.casinoCoveredValue)}</Text>
+                        </View>
+                        <View style={styles.calculatorCell}>
+                          <Text style={styles.calculatorLabel}>You Pay</Text>
+                          <Text style={styles.calculatorValue}>{formatCurrency(offerIntelligence.casinoPaysFor.userOutOfPocket)}</Text>
+                        </View>
+                        <View style={styles.calculatorCell}>
+                          <Text style={styles.calculatorLabel}>Save</Text>
+                          <Text style={styles.calculatorValue}>{offerIntelligence.casinoPaysFor.effectiveSavingsPercentage}%</Text>
+                        </View>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.decodeButton}
+                        onPress={() => setShowDecodedOffer((current) => !current)}
+                        activeOpacity={0.8}
+                        testID="offer-details-decode-offer"
+                      >
+                        <FileText size={14} color={COLORS.white} />
+                        <Text style={styles.decodeButtonText}>{showDecodedOffer ? 'Hide' : 'Decode'}</Text>
+                      </TouchableOpacity>
+                    </View>
+                    {showDecodedOffer && decodedOffer ? (
+                      <View style={styles.decodedPanel}>
+                        {decodedOffer.bullets.map((bullet, index) => (
+                          <View key={`${bullet}-${index}`} style={styles.decodedBulletRow}>
+                            <Calculator size={14} color="#0F766E" />
+                            <Text style={styles.decodedBulletText}>{bullet}</Text>
+                          </View>
+                        ))}
+                        <Text style={styles.decodedDisclaimer}>{decodedOffer.disclaimer}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null}
+
+                {certificateStackingNotes.length > 0 ? (
+                  <View style={styles.stackingPanel} testID="certificate-stacking-notes">
+                    <View style={styles.stackingHeaderRow}>
+                      <Layers size={15} color={COLORS.navyDeep} />
+                      <Text style={styles.stackingTitle}>Certificate Notes</Text>
+                    </View>
+                    {certificateStackingNotes.map((note) => (
+                      <View key={note.certificateId} style={styles.stackingItem}>
+                        <Text style={styles.stackingLabel}>{note.label}</Text>
+                        <Text style={styles.stackingAction} numberOfLines={2}>{note.recommendedAction}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+              </LinearGradient>
+
+              <View style={styles.sortSection}>
+                <Text style={styles.sortLabel} testID="offer-sort-label">Sort by:</Text>
+                <View style={styles.sortRowCentered}>
+                  <TouchableOpacity
+                    style={[styles.sortPillMain, sortBy === 'soonest' && styles.sortPillMainActive]}
+                    onPress={() => setSortBy('soonest')}
+                    activeOpacity={0.7}
+                    testID="sort-soonest"
+                  >
+                    <Text style={[styles.sortPillMainText, sortBy === 'soonest' && styles.sortPillMainTextActive]}>Soonest Expiring</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.sortPillMain, sortBy === 'highest-value' && styles.sortPillMainActive]}
+                    onPress={() => setSortBy('highest-value')}
+                    activeOpacity={0.7}
+                    testID="sort-highest-value"
+                  >
+                    <Text style={[styles.sortPillMainText, sortBy === 'highest-value' && styles.sortPillMainTextActive]}>Highest Value</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </>
+          }
           ListEmptyComponent={
             <View style={styles.emptyState}>
               <Ship size={48} color={COLORS.textSecondary} />
               <Text style={styles.emptyText}>No cruises found for this offer</Text>
+            </View>
+          }
+          ListFooterComponent={
+            <View style={styles.footerActionsContainer}>
+              {offerInfo.offerCode && offerData.offer && offerData.offer.status !== 'used' && offerData.offer.status !== 'booked' ? (
+                <View style={styles.statusActionsRow}>
+                  <TouchableOpacity
+                    style={styles.statusActionButton}
+                    onPress={handleMarkAsInProgress}
+                    activeOpacity={0.7}
+                  >
+                    <Archive size={16} color={COLORS.white} />
+                    <Text style={styles.statusActionText}>Mark In Progress</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.statusActionButton, styles.statusActionButtonUsed]}
+                    onPress={handleMarkAsUsed}
+                    activeOpacity={0.7}
+                  >
+                    <Ban size={16} color={COLORS.white} />
+                    <Text style={styles.statusActionText}>Mark as Used</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
             </View>
           }
         />
@@ -686,22 +780,40 @@ const styles = StyleSheet.create({
   },
   mergedHeader: {
     paddingHorizontal: SPACING.md,
-    paddingTop: SPACING.sm,
-    paddingBottom: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 31, 63, 0.1)',
+    paddingTop: SPACING.md,
+    paddingBottom: SPACING.sm,
+    borderRadius: BORDER_RADIUS.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 31, 63, 0.08)',
+  },
+  compactHeaderTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  compactOfferLogo: {
+    width: 34,
+    height: 34,
+    borderRadius: 9,
+  },
+  compactOfferTextGroup: {
+    flex: 1,
+    minWidth: 0,
+  },
+  compactCodeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    marginTop: 5,
+    flexWrap: 'wrap',
   },
   closeButton: {
-    position: 'absolute' as const,
-    top: SPACING.sm,
-    right: SPACING.md,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: 'rgba(0, 31, 63, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 10,
   },
   featuredOfferSection: {
     alignItems: 'center',
@@ -728,11 +840,10 @@ const styles = StyleSheet.create({
   },
 
   featuredOfferName: {
-    fontSize: 22,
-    fontWeight: '700' as const,
+    fontSize: 17,
+    fontWeight: '800' as const,
     color: COLORS.navyDeep,
     textAlign: 'left' as const,
-    flex: 1,
   },
   totalValueBadge: {
     flexDirection: 'row',
@@ -757,15 +868,65 @@ const styles = StyleSheet.create({
   },
   offerCodeBadge: {
     backgroundColor: COLORS.navyDeep,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
     borderRadius: BORDER_RADIUS.round,
   },
   offerCodeText: {
-    fontSize: 16,
-    fontWeight: '700' as const,
+    fontSize: 11,
+    fontWeight: '800' as const,
     color: COLORS.white,
-    letterSpacing: 1,
+    letterSpacing: 0.8,
+  },
+  statusMiniBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#0EA5E9',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+    borderRadius: BORDER_RADIUS.round,
+  },
+  statusMiniBadgeText: {
+    fontSize: 11,
+    fontWeight: '800' as const,
+    color: COLORS.white,
+  },
+  compactMetricRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: SPACING.xs,
+    marginTop: SPACING.sm,
+  },
+  compactMetricPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.76)',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 6,
+    borderRadius: BORDER_RADIUS.round,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 31, 63, 0.08)',
+  },
+  compactMetricPillMoney: {
+    backgroundColor: 'rgba(220, 252, 231, 0.9)',
+    borderColor: 'rgba(22, 101, 52, 0.16)',
+  },
+  compactMetricLabel: {
+    fontSize: 10,
+    fontWeight: '700' as const,
+    color: COLORS.navyDeep,
+    opacity: 0.65,
+  },
+  compactMetricValue: {
+    fontSize: 12,
+    fontWeight: '900' as const,
+    color: COLORS.navyDeep,
+  },
+  compactMetricValueMoney: {
+    color: '#166534',
   },
   statsRow: {
     flexDirection: 'row',
@@ -811,7 +972,6 @@ const styles = StyleSheet.create({
     color: '#166534',
   },
   sortSection: {
-    marginHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     gap: SPACING.xs,
   },
@@ -851,7 +1011,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: SPACING.md,
-    paddingBottom: 100,
+    paddingBottom: 28,
   },
   cruiseCard: {
     backgroundColor: COLORS.white,
@@ -1135,60 +1295,227 @@ const styles = StyleSheet.create({
   },
   fpObcRow: {
     flexDirection: 'row',
-    gap: SPACING.md,
-    marginTop: SPACING.md,
+    gap: SPACING.sm,
+    marginTop: SPACING.sm,
     marginBottom: SPACING.xs,
   },
   fpBadgeOffer: {
     flex: 1,
     backgroundColor: '#DCFCE7',
-    paddingVertical: SPACING.md,
+    paddingVertical: 7,
     paddingHorizontal: SPACING.sm,
     borderRadius: BORDER_RADIUS.md,
-    borderWidth: 2,
+    borderWidth: 1,
     borderColor: '#86EFAC',
     alignItems: 'center',
-    ...SHADOW.sm,
   },
   fpLabelOffer: {
-    fontSize: 11,
-    fontWeight: '600' as const,
+    fontSize: 10,
+    fontWeight: '700' as const,
     color: '#15803D',
-    letterSpacing: 0.5,
-    marginBottom: 4,
+    letterSpacing: 0.4,
+    marginBottom: 2,
   },
   fpValueOffer: {
-    fontSize: 20,
-    fontWeight: '700' as const,
+    fontSize: 15,
+    fontWeight: '900' as const,
     color: '#15803D',
   },
   obcBadgeOffer: {
     flex: 1,
     backgroundColor: '#DBEAFE',
-    paddingVertical: SPACING.md,
+    paddingVertical: 7,
     paddingHorizontal: SPACING.sm,
     borderRadius: BORDER_RADIUS.md,
-    borderWidth: 2,
+    borderWidth: 1,
     borderColor: '#93C5FD',
     alignItems: 'center',
-    ...SHADOW.sm,
   },
   obcLabelOffer: {
-    fontSize: 11,
-    fontWeight: '600' as const,
-    color: '#1E40AF',
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
-  obcValueOffer: {
-    fontSize: 20,
+    fontSize: 10,
     fontWeight: '700' as const,
     color: '#1E40AF',
+    letterSpacing: 0.4,
+    marginBottom: 2,
+  },
+  obcValueOffer: {
+    fontSize: 15,
+    fontWeight: '900' as const,
+    color: '#1E40AF',
+  },
+  intelligencePanel: {
+    marginTop: SPACING.sm,
+    backgroundColor: 'rgba(255,255,255,0.82)',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(15, 118, 110, 0.16)',
+  },
+  intelligenceHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  intelligenceScoreBadge: {
+    width: 46,
+    minHeight: 46,
+    borderRadius: 14,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  intelligenceScoreText: {
+    fontSize: 17,
+    fontWeight: '900' as const,
+    color: '#0F766E',
+    marginTop: 1,
+  },
+  intelligenceCopy: {
+    flex: 1,
+  },
+  intelligenceTitle: {
+    fontSize: 11,
+    fontWeight: '900' as const,
+    color: COLORS.navyDeep,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase' as const,
+  },
+  intelligenceSubtitle: {
+    fontSize: 12,
+    fontWeight: '800' as const,
+    color: '#0F766E',
+    marginTop: 1,
+  },
+  intelligenceExplanation: {
+    fontSize: 11,
+    color: '#334155',
+    lineHeight: 15,
+    marginTop: 2,
+  },
+  intelligenceBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: SPACING.sm,
+    marginTop: SPACING.sm,
+  },
+  calculatorGrid: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: SPACING.xs,
+  },
+  calculatorCell: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: BORDER_RADIUS.sm,
+    paddingHorizontal: SPACING.xs,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  calculatorLabel: {
+    fontSize: 9,
+    fontWeight: '800' as const,
+    color: '#64748B',
+    marginBottom: 2,
+  },
+  calculatorValue: {
+    fontSize: 11,
+    fontWeight: '900' as const,
+    color: COLORS.navyDeep,
+  },
+  decodeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: COLORS.navyDeep,
+    borderRadius: BORDER_RADIUS.md,
+    paddingVertical: 6,
+    paddingHorizontal: SPACING.sm,
+  },
+  decodeButtonText: {
+    fontSize: 11,
+    fontWeight: '900' as const,
+    color: COLORS.white,
+  },
+  decodedPanel: {
+    marginTop: SPACING.sm,
+    gap: SPACING.xs,
+  },
+  decodedBulletRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING.xs,
+    backgroundColor: '#F8FAFC',
+    borderRadius: BORDER_RADIUS.sm,
+    padding: SPACING.sm,
+  },
+  decodedBulletText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#1E293B',
+    lineHeight: 18,
+  },
+  decodedDisclaimer: {
+    fontSize: 11,
+    color: '#64748B',
+    lineHeight: 16,
+    marginTop: SPACING.xs,
+  },
+  stackingPanel: {
+    marginTop: SPACING.sm,
+    backgroundColor: 'rgba(255,255,255,0.72)',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(30, 64, 175, 0.14)',
+  },
+  stackingHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    marginBottom: SPACING.xs,
+  },
+  stackingTitle: {
+    fontSize: 13,
+    fontWeight: '900' as const,
+    color: COLORS.navyDeep,
+  },
+  stackingItem: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: BORDER_RADIUS.sm,
+    padding: SPACING.xs,
+    marginTop: SPACING.xs,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  stackingLabel: {
+    fontSize: 13,
+    fontWeight: '900' as const,
+    color: COLORS.navyDeep,
+  },
+  stackingAction: {
+    fontSize: 12,
+    color: '#0F766E',
+    lineHeight: 17,
+    marginTop: 3,
+  },
+  stackingWarning: {
+    fontSize: 11,
+    color: '#B45309',
+    lineHeight: 16,
+    marginTop: 3,
+  },
+  footerActionsContainer: {
+    paddingTop: SPACING.sm,
+    paddingBottom: SPACING.lg,
   },
   statusActionsRow: {
     flexDirection: 'row',
     gap: SPACING.md,
-    marginTop: SPACING.md,
+    marginTop: SPACING.sm,
   },
   statusActionButton: {
     flex: 1,

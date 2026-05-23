@@ -101,7 +101,7 @@ export default function AddMachinesToShipScreen() {
     });
   }, []);
 
-  const keyExtractor = useCallback((item: MachineEncyclopediaEntry) => item.id, []);
+  const keyExtractor = useCallback((item: MachineEncyclopediaEntry, index: number) => `${item.id?.trim() || 'ship-machine'}-${item.globalMachineId || item.machineName || 'machine'}-${item.manufacturer || 'maker'}-${index}`, []);
 
   const renderMachineRow = useCallback(({ item }: ListRenderItemInfo<MachineEncyclopediaEntry>) => (
     <MachineRow machine={item} isSelected={selectedMachines.has(item.id)} onToggle={toggleMachine} />

@@ -1,13 +1,14 @@
 import { View, Text, StyleSheet, Pressable, Modal, Switch, Platform, Linking, ScrollView, ActivityIndicator, Animated } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync } from '@/state/RoyalCaribbeanSyncProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import { ChevronDown, ChevronUp, LoaderCircle, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, DollarSign, Anchor, Crown, Star, Award, Download, FileDown, Cookie } from 'lucide-react-native';
 import { WebViewMessage } from '@/lib/royalCaribbean/types';
 import { AUTH_DETECTION_SCRIPT } from '@/lib/royalCaribbean/authDetection';
 import { useCoreData } from '@/state/CoreDataProvider';
+import { useUser, type UserProfile } from '@/state/UserProvider';
 import { WebSyncCredentialsModal } from '@/components/WebSyncCredentialsModal';
 import { WebCookieSyncModal } from '@/components/WebCookieSyncModal';
 import { LoyaltyPill } from '@/components/ui/LoyaltyPill';
@@ -20,10 +21,48 @@ import {
 } from '@/constants/loyaltyTheme';
 import { trpc, isWebSyncAvailable, RENDER_BACKEND_URL } from '@/lib/trpc';
 import { syncCruisePricing } from '@/lib/cruisePricingSync';
+function normalizeProfileLabel(value: string | undefined): string {
+  return value?.trim().toLowerCase() ?? '';
+}
+
+function hasLoyaltyProfileData(profile: UserProfile | null | undefined): boolean {
+  if (!profile) return false;
+  return Boolean(
+    profile.crownAnchorNumber?.trim() ||
+    profile.royalCaribbeanNumber?.trim() ||
+    profile.clubRoyaleId?.trim() ||
+    profile.clubRoyaleTier?.trim() ||
+    (profile.clubRoyalePoints ?? 0) > 0 ||
+    profile.crownAnchorLevel?.trim() ||
+    (profile.loyaltyPoints ?? 0) > 0 ||
+    profile.celebrityCaptainsClubNumber?.trim() ||
+    profile.blueChipId?.trim() ||
+    profile.celebrityBlueChipTier?.trim() ||
+    (profile.celebrityCaptainsClubPoints ?? 0) > 0 ||
+    (profile.celebrityBlueChipPoints ?? 0) > 0 ||
+    profile.silverseaVenetianNumber?.trim() ||
+    profile.silverseaVenetianTier?.trim() ||
+    (profile.silverseaVenetianPoints ?? 0) > 0
+  );
+}
+
+function isSecondaryUnassigned(profile: UserProfile | null | undefined): boolean {
+  if (!profile) return true;
+  if (hasLoyaltyProfileData(profile)) return false;
+  const label = normalizeProfileLabel(profile.displayName || profile.name);
+  return !label || label === 'unassigned' || label === 'second user' || label === 'secondary user';
+}
+
+function getProfileName(profile: UserProfile | null | undefined, fallback: string): string {
+  const label = profile?.displayName || profile?.name;
+  return label && label.trim().length > 0 ? label.trim() : fallback;
+}
+
 function RoyalCaribbeanSyncScreen() {
   const router = useRouter();
   const coreData = useCoreData();
   const loyalty = useLoyalty();
+  const { users, currentUser } = useUser();
   
   const {
     state,
@@ -33,7 +72,6 @@ function RoyalCaribbeanSyncScreen() {
     config,
     openLogin,
     runIngestion,
-    runCompletedCruisesSync,
     syncToApp,
     cancelSync,
     handleWebViewMessage,
@@ -53,8 +91,8 @@ function RoyalCaribbeanSyncScreen() {
   const [cookieSyncError, setCookieSyncError] = useState<string | null>(null);
   const [syncingPricing, setSyncingPricing] = useState(false);
   const [isExportingLog, setIsExportingLog] = useState(false);
-  const [syncingCompletedCruises, setSyncingCompletedCruises] = useState(false);
   const [syncStarted, setSyncStarted] = useState(false);
+  const [selectedSyncTargetSlot, setSelectedSyncTargetSlot] = useState<'primary' | 'secondary'>('primary');
   const syncPulse = useState(() => new Animated.Value(1))[0];
   const [_pricingSyncResults, setPricingSyncResults] = useState<{ updated: number; total: number } | null>(null);
   
@@ -63,6 +101,24 @@ function RoyalCaribbeanSyncScreen() {
   
   const isCelebrity = cruiseLine === 'celebrity';
   const isRunningOrSyncing = state.status.startsWith('running_') || state.status === 'syncing';
+  const syncProfiles = useMemo(() => {
+    const activeProfiles = users.filter((profile) => profile.active !== false);
+    const primaryProfile = activeProfiles.find((profile) => profile.isOwner) ?? currentUser ?? activeProfiles[0] ?? null;
+    const secondaryProfile = activeProfiles.find((profile) => profile.id !== primaryProfile?.id) ?? null;
+    const secondaryAvailable = !isSecondaryUnassigned(secondaryProfile);
+    const effectiveSlot: 'primary' | 'secondary' = selectedSyncTargetSlot === 'secondary' && secondaryAvailable ? 'secondary' : 'primary';
+    const effectiveProfile = effectiveSlot === 'secondary' ? secondaryProfile : primaryProfile;
+
+    return {
+      primaryProfile,
+      secondaryProfile,
+      secondaryAvailable,
+      effectiveSlot,
+      effectiveProfile,
+      primaryLabel: getProfileName(primaryProfile, 'Primary User'),
+      secondaryLabel: secondaryAvailable ? getProfileName(secondaryProfile, 'Second User') : 'Second User (Unassigned)',
+    };
+  }, [currentUser, selectedSyncTargetSlot, users]);
 
   useEffect(() => {
     if (isRunningOrSyncing) {
@@ -314,22 +370,15 @@ function RoyalCaribbeanSyncScreen() {
     }
   };
 
-  const handleCompletedCruisesSync = async () => {
-    if (syncingCompletedCruises) {
-      return;
-    }
-
-    try {
-      setSyncingCompletedCruises(true);
-      await runCompletedCruisesSync(coreData);
-    } finally {
-      setSyncingCompletedCruises(false);
-    }
-  };
-
   const canRunIngestion = state.status === 'logged_in' || state.status === 'complete';
   const isRunning = state.status.startsWith('running_') || state.status === 'syncing';
   const showConfirmation = state.status === 'awaiting_confirmation';
+
+  useEffect(() => {
+    if (!syncProfiles.secondaryAvailable && selectedSyncTargetSlot === 'secondary') {
+      setSelectedSyncTargetSlot('primary');
+    }
+  }, [selectedSyncTargetSlot, syncProfiles.secondaryAvailable]);
 
   return (
     <>
@@ -746,24 +795,6 @@ function RoyalCaribbeanSyncScreen() {
                   </Text>
                 </Pressable>
               </View>
-
-              <Pressable
-                style={[styles.quickActionButton, styles.completedCruisesButton, syncingCompletedCruises && styles.buttonDisabled]}
-                onPress={() => {
-                  void handleCompletedCruisesSync();
-                }}
-                disabled={syncingCompletedCruises || isRunning}
-                testID="royal-sync-completed-cruises-button"
-              >
-                {syncingCompletedCruises ? (
-                  <LoaderCircle size={20} color="#a78bfa" />
-                ) : (
-                  <CheckCircle size={20} color="#a78bfa" />
-                )}
-                <Text style={styles.quickActionLabel}>
-                  {syncingCompletedCruises ? 'SYNCING COMPLETED...' : 'SYNC COMPLETED CRUISES'}
-                </Text>
-              </Pressable>
             </View>
           )}
         </View>
@@ -806,16 +837,11 @@ function RoyalCaribbeanSyncScreen() {
                       {state.syncCounts?.offerRows || 0} sailings
                     </Text>
                     <Text style={styles.countLabel}>{config.loyaltyClubName} Offers</Text>
-                    {state.syncCounts && (
+                    {state.syncCounts && state.syncCounts.offerRows > 0 && (
                       <Text style={styles.countDetail}>
                         {state.syncCounts.offerCount} unique offer{state.syncCounts.offerCount !== 1 ? 's' : ''}
                       </Text>
                     )}
-                    {state.syncCounts?.offerBreakdown?.map((offer, idx) => (
-                      <Text key={`offer-breakdown-${idx}`} style={styles.countDetail}>
-                        • {offer.offerName}{offer.offerCode ? ` (${offer.offerCode})` : ''}: {offer.cruiseCount} cruise{offer.cruiseCount !== 1 ? 's' : ''}
-                      </Text>
-                    ))}
                   </View>
                 </View>
 
@@ -841,15 +867,15 @@ function RoyalCaribbeanSyncScreen() {
                   </View>
                 </View>
 
-                {(state.syncCounts?.completedCruises || 0) > 0 && (
+                {(state.syncCounts?.completedCruises ?? 0) > 0 && (
                   <View style={styles.countCard}>
                     <View style={styles.countIconContainer}>
-                      <CheckCircle size={24} color="#a78bfa" />
+                      <CheckCircle size={24} color="#14b8a6" />
                     </View>
                     <View style={styles.countInfo}>
                       <Text style={styles.countNumber}>{state.syncCounts?.completedCruises || 0}</Text>
-                      <Text style={styles.countLabel}>Completed / Past Cruises</Text>
-                      <Text style={styles.countDetail}>Will be added to Booked/Completed</Text>
+                      <Text style={styles.countLabel}>Completed Cruises</Text>
+                      <Text style={styles.countDetail}>Imported from Royal Caribbean Past Trips</Text>
                     </View>
                   </View>
                 )}
@@ -1019,10 +1045,44 @@ function RoyalCaribbeanSyncScreen() {
                   )}
                 </View>
 
+                <View style={styles.syncTargetCard} testID="sync-target-card">
+                  <Text style={styles.syncTargetTitle}>Who are you syncing?</Text>
+                  <Text style={styles.syncTargetSubtitle}>
+                    Pick the profile this {isCelebrity ? 'Blue Chip' : 'Club Royale'} account belongs to before importing offers, bookings, and loyalty.
+                  </Text>
+                  <View style={styles.syncTargetOptions}>
+                    <Pressable
+                      style={[styles.syncTargetOption, syncProfiles.effectiveSlot === 'primary' && styles.syncTargetOptionActive]}
+                      onPress={() => setSelectedSyncTargetSlot('primary')}
+                      testID="sync-target-primary"
+                    >
+                      <Text style={[styles.syncTargetOptionLabel, syncProfiles.effectiveSlot === 'primary' && styles.syncTargetOptionLabelActive]}>Primary</Text>
+                      <Text style={styles.syncTargetOptionName} numberOfLines={1}>{syncProfiles.primaryLabel}</Text>
+                    </Pressable>
+                    <Pressable
+                      style={[styles.syncTargetOption, syncProfiles.effectiveSlot === 'secondary' && styles.syncTargetOptionActive, !syncProfiles.secondaryAvailable && styles.syncTargetOptionDisabled]}
+                      onPress={() => {
+                        if (syncProfiles.secondaryAvailable) {
+                          setSelectedSyncTargetSlot('secondary');
+                        } else {
+                          setSelectedSyncTargetSlot('primary');
+                        }
+                      }}
+                      testID="sync-target-secondary"
+                    >
+                      <Text style={[styles.syncTargetOptionLabel, syncProfiles.effectiveSlot === 'secondary' && styles.syncTargetOptionLabelActive]}>Secondary</Text>
+                      <Text style={styles.syncTargetOptionName} numberOfLines={1}>{syncProfiles.secondaryLabel}</Text>
+                    </Pressable>
+                  </View>
+                  {!syncProfiles.secondaryAvailable ? (
+                    <Text style={styles.syncTargetHelper}>Secondary is unassigned, so this sync will default to Primary.</Text>
+                  ) : null}
+                </View>
+
                 <View style={styles.warningBox}>
                   <AlertCircle size={16} color="#f59e0b" />
                   <Text style={styles.warningText}>
-                    Sync will update existing data. If conflicts exist, synced data wins.
+                    Sync will update existing data for the selected profile. If conflicts exist, synced data wins.
                   </Text>
                 </View>
               </ScrollView>
@@ -1040,7 +1100,10 @@ function RoyalCaribbeanSyncScreen() {
                 <Pressable 
                   style={[styles.button, styles.confirmButton]}
                   onPress={() => {
-                    void syncToApp(coreData, loyalty);
+                    void syncToApp(coreData, loyalty, undefined, {
+                      targetProfileId: syncProfiles.effectiveProfile?.id,
+                      targetProfileSlot: syncProfiles.effectiveSlot,
+                    });
                   }}
                 >
                   <Text style={styles.buttonText}>Yes, Sync Now</Text>
@@ -1059,22 +1122,9 @@ function RoyalCaribbeanSyncScreen() {
               <Text style={styles.successTitle}>Sync Complete!</Text>
               <Text style={styles.successMessage}>
                 {state.syncCounts ? (
-                  `${state.syncCounts.offerCount} offer${state.syncCounts.offerCount !== 1 ? 's' : ''}, ${state.syncCounts.offerRows} available cruise${state.syncCounts.offerRows !== 1 ? 's' : ''}, ${state.syncCounts.upcomingCruises} upcoming cruise${state.syncCounts.upcomingCruises !== 1 ? 's' : ''}, ${state.syncCounts.courtesyHolds} courtesy hold${state.syncCounts.courtesyHolds !== 1 ? 's' : ''}${(state.syncCounts.completedCruises || 0) > 0 ? `, ${state.syncCounts.completedCruises} completed cruise${state.syncCounts.completedCruises !== 1 ? 's' : ''}` : ''}`
+                  `${state.syncCounts.offerCount} offer${state.syncCounts.offerCount !== 1 ? 's' : ''} (${state.syncCounts.offerRows} sailing${state.syncCounts.offerRows !== 1 ? 's' : ''}), ${state.syncCounts.upcomingCruises} upcoming cruise${state.syncCounts.upcomingCruises !== 1 ? 's' : ''}, ${state.syncCounts.completedCruises ?? 0} completed cruise${(state.syncCounts.completedCruises ?? 0) !== 1 ? 's' : ''}, ${state.syncCounts.courtesyHolds} courtesy hold${state.syncCounts.courtesyHolds !== 1 ? 's' : ''}`
                 ) : null}
               </Text>
-              {state.syncCounts?.offerBreakdown?.length ? (
-                <View style={styles.successLoyaltyContainer}>
-                  <View style={styles.successLoyaltyHeader}>
-                    <Ship size={14} color="#60a5fa" />
-                    <Text style={styles.successLoyaltyTitle}>Offers & Available Cruises Synced</Text>
-                  </View>
-                  {state.syncCounts.offerBreakdown.map((offer, idx) => (
-                    <View key={`success-offer-breakdown-${idx}`} style={styles.successLoyaltyRow}>
-                      <Text style={styles.successLoyaltyText}>• {offer.offerName}{offer.offerCode ? ` (${offer.offerCode})` : ''}: {offer.cruiseCount} cruise{offer.cruiseCount !== 1 ? 's' : ''}</Text>
-                    </View>
-                  ))}
-                </View>
-              ) : null}
 
               {(extendedLoyaltyData || state.loyaltyData) && (
                 <View style={styles.successLoyaltyContainer}>
@@ -1427,11 +1477,6 @@ const styles = StyleSheet.create({
   secondaryActionButton: {
     flex: 1,
   },
-  completedCruisesButton: {
-    marginTop: 16,
-    borderColor: '#7c3aed',
-    backgroundColor: '#1e1b4b',
-  },
   logExportButton: {
     flex: 1,
     minHeight: 80,
@@ -1766,6 +1811,67 @@ const styles = StyleSheet.create({
   loyaltyValueMuted: {
     color: '#94a3b8',
     fontSize: 13
+  },
+  syncTargetCard: {
+    backgroundColor: '#0b1220',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#334155',
+    gap: 10,
+  },
+  syncTargetTitle: {
+    color: '#f8fafc',
+    fontSize: 15,
+    fontWeight: '800' as const,
+  },
+  syncTargetSubtitle: {
+    color: '#94a3b8',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  syncTargetOptions: {
+    flexDirection: 'row' as const,
+    gap: 10,
+  },
+  syncTargetOption: {
+    flex: 1,
+    minHeight: 74,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: '#111827',
+    borderWidth: 1,
+    borderColor: '#334155',
+    justifyContent: 'center' as const,
+  },
+  syncTargetOptionActive: {
+    backgroundColor: '#064e3b',
+    borderColor: '#10b981',
+  },
+  syncTargetOptionDisabled: {
+    opacity: 0.55,
+  },
+  syncTargetOptionLabel: {
+    color: '#94a3b8',
+    fontSize: 11,
+    fontWeight: '800' as const,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase' as const,
+    marginBottom: 5,
+  },
+  syncTargetOptionLabelActive: {
+    color: '#a7f3d0',
+  },
+  syncTargetOptionName: {
+    color: '#f8fafc',
+    fontSize: 13,
+    fontWeight: '700' as const,
+  },
+  syncTargetHelper: {
+    color: '#fbbf24',
+    fontSize: 12,
+    lineHeight: 16,
   },
   warningBox: {
     backgroundColor: '#78350f',

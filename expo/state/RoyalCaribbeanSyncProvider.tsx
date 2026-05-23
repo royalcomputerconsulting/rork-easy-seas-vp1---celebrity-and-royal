@@ -7,7 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { getUserScopedKey, ALL_STORAGE_KEYS } from '@/lib/storage/storageKeys';
 import { useAuth } from './AuthProvider';
-import { useUser } from './UserProvider';
+import { useUser, type UserProfile } from './UserProvider';
 import { 
   RoyalCaribbeanSyncState, 
   SyncStatus,
@@ -24,6 +24,7 @@ import { injectOffersExtraction } from '@/lib/royalCaribbean/step1_offers';
 import { injectCarnivalOffersExtraction, injectCarnivalBookingsScrape, injectCarnivalCruiseSearchScrape, injectCarnivalTgoExtract } from '@/lib/carnival/carnivalOffersExtraction';
 import { createSyncPreview, calculateSyncCounts, applySyncPreview } from '@/lib/royalCaribbean/syncLogic';
 import { parseCasinoOffersPayload } from '@/lib/royalCaribbean/offerPayloadParser';
+import { getBookedCruiseRowIdentityKey, isMeaningfulBookedCruiseRow, parseTripPayload } from '@/lib/royalCaribbean/tripPayloadParser';
 import { healImportedData } from '@/lib/dataHealing';
 import { isActiveBookedCruise, isCourtesyHoldCruise } from '@/lib/bookedCruiseStatus';
 
@@ -34,8 +35,9 @@ export const CRUISE_LINE_CONFIG = {
     name: 'Royal Caribbean',
     loginUrl: 'https://www.royalcaribbean.com/club-royale',
     offersUrl: 'https://www.royalcaribbean.com/club-royale/offers',
-    upcomingUrl: 'https://www.royalcaribbean.com/myaccount',
+    upcomingUrl: 'https://www.royalcaribbean.com/account/upcoming-cruises',
     holdsUrl: 'https://www.royalcaribbean.com/account/courtesy-holds',
+    myTripsUrl: 'https://www.royalcaribbean.com/myaccount/my-trips',
     loyaltyClubName: 'Club Royale',
     loyaltyPageUrl: 'https://www.royalcaribbean.com/account/loyalty-programs',
   },
@@ -45,6 +47,7 @@ export const CRUISE_LINE_CONFIG = {
     offersUrl: 'https://www.celebritycruises.com/blue-chip-club/offers',
     upcomingUrl: 'https://www.celebritycruises.com/account/upcoming-cruises',
     holdsUrl: 'https://www.celebritycruises.com/account/courtesy-holds',
+    myTripsUrl: 'https://www.celebritycruises.com/account/upcoming-cruises',
     loyaltyClubName: 'Blue Chip Club',
     loyaltyPageUrl: 'https://www.celebritycruises.com/account/loyalty',
   },
@@ -54,6 +57,7 @@ export const CRUISE_LINE_CONFIG = {
     offersUrl: 'https://www.carnival.com/cruise-deals-2025',
     upcomingUrl: 'https://www.carnival.com/profilemanagement/profiles/cruises',
     holdsUrl: 'https://www.carnival.com/profilemanagement/profiles/cruises',
+    myTripsUrl: 'https://www.carnival.com/profilemanagement/profiles/cruises',
     loyaltyClubName: 'VIFP Club',
     loyaltyPageUrl: 'https://www.carnival.com/profilemanagement/profiles',
   },
@@ -76,85 +80,52 @@ const INITIAL_STATE: RoyalCaribbeanSyncState = {
 
 const INITIAL_EXTENDED_LOYALTY: ExtendedLoyaltyData | null = null;
 
+type SyncTargetSlot = 'primary' | 'secondary';
 
-function normalizeRoyalCompactDate(value: any): string {
-  const raw = String(value || '').trim();
-  if (!raw) return '';
-  const compact = raw.match(/^(\d{4})(\d{2})(\d{2})$/);
-  if (compact) return `${compact[1]}${compact[2]}${compact[3]}`;
-  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (iso) return `${iso[1]}${iso[2]}${iso[3]}`;
-  const d = new Date(raw);
-  if (!Number.isNaN(d.getTime())) return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
-  return raw;
+interface SyncTargetOptions {
+  targetProfileId?: string;
+  targetProfileSlot?: SyncTargetSlot;
 }
 
-function getRoyalLoyaltyHistorySailings(data: any): any[] {
-  const payload = data?.payload || data?.data || data;
-  const candidates = [payload?.sailings, data?.sailings, data?.payload?.sailings, data?.data?.sailings];
-  for (const candidate of candidates) {
-    if (Array.isArray(candidate)) return candidate;
+function normalizeProfileText(value: string | undefined): string {
+  return value?.trim().toLowerCase() ?? '';
+}
+
+function hasProfileLoyaltyData(profile: UserProfile | null | undefined): boolean {
+  if (!profile) return false;
+  return Boolean(
+    profile.crownAnchorNumber?.trim() ||
+    profile.royalCaribbeanNumber?.trim() ||
+    profile.clubRoyaleId?.trim() ||
+    profile.clubRoyaleTier?.trim() ||
+    (profile.clubRoyalePoints ?? 0) > 0 ||
+    profile.crownAnchorLevel?.trim() ||
+    (profile.loyaltyPoints ?? 0) > 0 ||
+    profile.celebrityCaptainsClubNumber?.trim() ||
+    profile.blueChipId?.trim() ||
+    profile.celebrityBlueChipTier?.trim() ||
+    (profile.celebrityCaptainsClubPoints ?? 0) > 0 ||
+    (profile.celebrityBlueChipPoints ?? 0) > 0 ||
+    profile.silverseaVenetianNumber?.trim() ||
+    profile.silverseaVenetianTier?.trim() ||
+    (profile.silverseaVenetianPoints ?? 0) > 0 ||
+    profile.carnivalVifpNumber?.trim() ||
+    profile.carnivalVifpTier?.trim() ||
+    profile.carnivalPlayersClubTier?.trim() ||
+    (profile.carnivalPlayersClubPoints ?? 0) > 0
+  );
+}
+
+function isUnassignedProfile(profile: UserProfile | null | undefined, slot: SyncTargetSlot): boolean {
+  if (!profile) return true;
+  if (hasProfileLoyaltyData(profile)) return false;
+
+  const label = normalizeProfileText(profile.displayName || profile.name);
+  if (slot === 'secondary') {
+    return !label || label === 'unassigned' || label === 'second user' || label === 'secondary user';
   }
-  return [];
-}
 
-function convertRoyalLoyaltyHistorySailingsToCompletedRows(sailings: any[]): BookedCruiseRow[] {
-  const RC_SHIP_CODE_MAP: Record<string, string> = {
-    'AL': 'Allure of the Seas', 'AN': 'Anthem of the Seas', 'AD': 'Adventure of the Seas',
-    'BR': 'Brilliance of the Seas', 'EN': 'Enchantment of the Seas', 'EX': 'Explorer of the Seas',
-    'FR': 'Freedom of the Seas', 'GR': 'Grandeur of the Seas', 'HM': 'Harmony of the Seas',
-    'IC': 'Icon of the Seas', 'ID': 'Independence of the Seas', 'JW': 'Jewel of the Seas',
-    'LB': 'Liberty of the Seas', 'LE': 'Legend of the Seas', 'MJ': 'Majesty of the Seas',
-    'MR': 'Mariner of the Seas', 'NV': 'Navigator of the Seas', 'OA': 'Oasis of the Seas',
-    'OV': 'Ovation of the Seas', 'OY': 'Odyssey of the Seas', 'QN': 'Quantum of the Seas',
-    'RD': 'Radiance of the Seas', 'RH': 'Rhapsody of the Seas', 'SE': 'Serenade of the Seas',
-    'SP': 'Spectrum of the Seas', 'SY': 'Symphony of the Seas', 'UT': 'Utopia of the Seas',
-    'VI': 'Vision of the Seas', 'VY': 'Voyager of the Seas', 'WN': 'Wonder of the Seas',
-    'MN': 'Monarch of the Seas', 'MA': 'Majesty of the Seas', 'ST': 'Star of the Seas'
-  };
-  const prettyShip = (ship: string): string => ship ? ship.replace(/\b\w/g, c => c.toUpperCase()).replace(/\bOf\b/g, 'of') : '';
-  return sailings.map((sailing: any, index: number) => {
-    const shipCode = String(sailing.shipCode || sailing.ship || sailing.shipCd || '').trim().toUpperCase();
-    const shipName = prettyShip(String(sailing.shipName || sailing.shipDescription || sailing.shipDisplayName || sailing.shipLongName || RC_SHIP_CODE_MAP[shipCode] || (shipCode ? `${shipCode} of the Seas` : 'Unknown Ship')));
-    const sailDate = normalizeRoyalCompactDate(sailing.sailDate || sailing.departureDate || sailing.startDate || sailing.sailingDate || sailing.date || sailing.voyageStartDate);
-    const cabinCategory = String(sailing.stateroomCategoryCode || sailing.categoryCode || sailing.cabinCategory || sailing.stateroomType || sailing.roomType || '').trim();
-    const cabinNumber = String(sailing.stateroomNumber || sailing.cabinNumber || sailing.roomNumber || sailing.cabin || '').trim();
-    const bookingId = String(sailing.bookingId || sailing.reservationId || sailing.reservationNumber || sailing.confirmationNumber || `completed_${shipCode || shipName}_${sailDate}_${index}`).trim();
-    return {
-      rawBooking: sailing,
-      sourcePage: 'Completed',
-      shipName,
-      shipCode: shipCode || undefined,
-      cruiseTitle: sailing.cruiseTitle || sailing.itineraryName || sailing.packageDescription || 'Completed Cruise',
-      sailingStartDate: sailDate,
-      sailingEndDate: normalizeRoyalCompactDate(sailing.endDate || sailing.returnDate || sailing.sailingEndDate || sailing.voyageEndDate),
-      sailingDates: sailDate,
-      itinerary: String(sailing.itinerary || sailing.itineraryName || sailing.destination || sailing.packageDescription || '').trim(),
-      departurePort: String(sailing.departurePort || sailing.homePort || sailing.embarkPort || sailing.embarkationPort || '').trim(),
-      arrivalPort: String(sailing.arrivalPort || sailing.debarkPort || '').trim(),
-      cabinType: cabinCategory,
-      cabinCategory,
-      cabinNumberOrGTY: cabinNumber || 'GTY',
-      deckNumber: String(sailing.deckNumber || '').trim(),
-      bookingId,
-      numberOfGuests: String(sailing.numberOfGuests || sailing.guestCount || '1'),
-      numberOfNights: Number(sailing.numberOfNights || sailing.nights || sailing.duration || sailing.nightCount || 0) || 0,
-      daysToGo: '',
-      status: 'Completed',
-      loyaltyLevel: '',
-      loyaltyPoints: String(sailing.points || sailing.cruisePoints || sailing.pointValue || sailing.tierCredits || ''),
-      paidInFull: undefined,
-      balanceDue: undefined,
-      musterStation: undefined,
-      holdExpiration: undefined,
-      bookingStatus: 'Completed',
-      packageCode: String(sailing.packageCode || '').trim(),
-      passengerStatus: String(sailing.passengerStatus || '').trim(),
-      stateroomNumber: cabinNumber,
-      stateroomCategoryCode: cabinCategory,
-      stateroomType: cabinCategory,
-    } as BookedCruiseRow;
-  });
+  return !label || label === 'unassigned' || label === 'player' || label === 'user';
 }
 
 const InitialCruiseLineContext = createContext<CruiseLine>('royal_caribbean');
@@ -168,17 +139,17 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   const [cruiseLine, setCruiseLine] = useState<CruiseLine>(initialCruiseLine);
   const [extendedLoyaltyData, setExtendedLoyaltyData] = useState<ExtendedLoyaltyData | null>(INITIAL_EXTENDED_LOYALTY);
   const [staySignedIn, setStaySignedIn] = useState(true);
-  const { currentUser, updateUser: updateUserProfile } = useUser();
+  const { currentUser, users, updateUser: updateUserProfile } = useUser();
   const carnivalUserDataRef = useRef<{ vifpNumber: string; vifpTier: string; firstName: string; lastName: string } | null>(null);
   const extractedOffersRef = useRef<OfferRow[]>([]);
-  const extractedBookedCruisesRef = useRef<BookedCruiseRow[]>([]);
   const webViewRef = useRef<WebView | null>(null);
   const hasReceivedApiLoyaltyDataRef = useRef(false);
   const lastAuthenticatedEmailRef = useRef<string | null>(authenticatedEmail);
   const stepCompleteResolvers = useRef<{ [key: number]: () => void }>({});
   const progressCallbacks = useRef<{ onProgress?: () => void }>({});
   const processedPayloads = useRef<Set<string>>(new Set());
-  const capturedSections = useRef({ offers: false, bookings: false, loyalty: false });
+  const capturedSections = useRef({ offers: false, bookings: false, loyalty: false, pastTrips: false });
+  const expectedPastTripsCountRef = useRef<number | null>(null);
   const pageLoadResolver = useRef<((loadedUrl?: string) => void) | null>(null);
   const offerSailingsResolver = useRef<((sailings: OfferRow[]) => void) | null>(null);
   const carnivalPageCheckResolver = useRef<((onOffers: boolean) => void) | null>(null);
@@ -187,8 +158,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   const pendingNavigationTargetRef = useRef<string | null>(null);
   const syncToAppInFlightRef = useRef<boolean>(false);
   const ingestionInFlightRef = useRef<boolean>(false);
-  const completedCruisesSyncInProgressRef = useRef<boolean>(false);
-  const cachedRoyalLoyaltyHistoryPayloadRef = useRef<any | null>(null);
   const logFlushScheduledRef = useRef<boolean>(false);
   const providerMountedRef = useRef<boolean>(true);
   
@@ -385,7 +354,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       }
 
       const row = item as Partial<BookedCruiseRow>;
-      const bookingId = stringifyValue(row.bookingId) || `booking_${index}`;
+      const bookingId = stringifyValue(row.bookingId);
       const normalizedRow: BookedCruiseRow = {
         rawBooking: row.rawBooking,
         sourcePage: stringifyValue(row.sourcePage) || 'Upcoming',
@@ -424,9 +393,18 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         stateroomNumber: stringifyValue(row.stateroomNumber) || undefined,
         stateroomCategoryCode: stringifyValue(row.stateroomCategoryCode) || undefined,
         stateroomType: stringifyValue(row.stateroomType) || undefined,
+        interiorPrice: stringifyValue(row.interiorPrice) || undefined,
+        oceanviewPrice: stringifyValue(row.oceanviewPrice) || undefined,
+        balconyPrice: stringifyValue(row.balconyPrice) || undefined,
+        suitePrice: stringifyValue(row.suitePrice) || undefined,
+        taxesAndFees: stringifyValue(row.taxesAndFees) || undefined,
       };
 
-      const dedupeKey = normalizedRow.bookingId || `${normalizedRow.shipName}|${normalizedRow.sailingStartDate}`;
+      if (!isMeaningfulBookedCruiseRow(normalizedRow)) {
+        return;
+      }
+
+      const dedupeKey = getBookedCruiseRowIdentityKey(normalizedRow);
       if (seenKeys.has(dedupeKey)) {
         return;
       }
@@ -507,7 +485,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
     lastAuthenticatedEmailRef.current = authenticatedEmail;
     processedPayloads.current.clear();
-    capturedSections.current = { offers: false, bookings: false, loyalty: false };
+    capturedSections.current = { offers: false, bookings: false, loyalty: false, pastTrips: false };
+    expectedPastTripsCountRef.current = null;
     hasReceivedApiLoyaltyDataRef.current = false;
     carnivalUserDataRef.current = null;
     rcLogger.clear();
@@ -727,7 +706,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
               console.log(`[RoyalCaribbeanSync] Deduped cruise_batch: ${incoming.length} -> ${deduped.length} (removed ${incoming.length - deduped.length} duplicates)`);
             }
             const newCruises = [...prev.extractedBookedCruises, ...deduped];
-            extractedBookedCruisesRef.current = newCruises;
             console.log(`[RoyalCaribbeanSync] Cruise batch received: ${deduped.length} items, total now: ${newCruises.length}`);
             
             const batch = incoming;
@@ -782,6 +760,15 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         break;
       }
 
+      case 'past_trips_expected_count': {
+        const expectedCount = Number.parseInt(String(msg.count ?? '').replace(/,/g, ''), 10);
+        if (Number.isFinite(expectedCount) && expectedCount > 0) {
+          expectedPastTripsCountRef.current = expectedCount;
+          addLog(`📊 My Trips page reports ${expectedCount} past cruise(s) available`, 'info');
+        }
+        break;
+      }
+
       case 'all_bookings_data':
         if (msg.bookings && Array.isArray(msg.bookings)) {
           const isCarnivalBookings = cruiseLine === 'carnival';
@@ -796,20 +783,26 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             return 'Upcoming';
           }
           
+          const rcShipCodeMap: Record<string, string> = {
+            ST: 'Star of the Seas',
+            SG: 'Star of the Seas',
+          };
+
           const formattedCruises = msg.bookings.map((booking: any) => {
             const sailDate = booking.sailDate || booking.departureDate || '';
             const bStatus = booking.bookingStatus || 'BK';
             const status = getBookingStatus(sailDate, bStatus);
+            const shipCode = String(booking.shipCode || '').trim().toUpperCase();
             let shipName = booking.shipName || '';
-            if (!shipName && booking.shipCode) {
-              shipName = isCarnivalBookings ? `Carnival ${booking.shipCode}` : `${booking.shipCode} of the Seas`;
+            if (!shipName && shipCode) {
+              shipName = isCarnivalBookings ? `Carnival ${shipCode}` : (rcShipCodeMap[shipCode] || `${shipCode} of the Seas`);
             }
             const nights = booking.numberOfNights || booking.duration || 0;
             return {
               rawBooking: booking,
               sourcePage: status === 'Completed' ? 'Completed' : 'Upcoming',
               shipName,
-              shipCode: booking.shipCode || '',
+              shipCode,
               cruiseTitle: booking.cruiseTitle || (nights ? `${nights} Night Cruise` : 'Cruise'),
               sailingStartDate: sailDate,
               sailingEndDate: booking.sailingEndDate || booking.endDate || '',
@@ -855,11 +848,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             }
             return {
               ...prev,
-              extractedBookedCruises: (() => {
-                const newCruises = [...prev.extractedBookedCruises, ...deduped];
-                extractedBookedCruisesRef.current = newCruises;
-                return newCruises;
-              })()
+              extractedBookedCruises: [...prev.extractedBookedCruises, ...deduped]
             };
           });
           
@@ -1019,37 +1008,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           }
         }
 
-        if (endpoint === 'royalLoyaltyHistory' && data) {
-          cachedRoyalLoyaltyHistoryPayloadRef.current = data;
-          if (!completedCruisesSyncInProgressRef.current) {
-            const cachedSailings = getRoyalLoyaltyHistorySailings(data);
-            addLog(`📦 Cached Royal loyalty-history payload with ${cachedSailings.length} completed sailing(s) for the Sync Completed Cruises button`, cachedSailings.length > 0 ? 'success' : 'info');
-            addLog('ℹ️ Not importing completed sailings during regular Sync Now; use Sync Completed Cruises to review/apply them', 'info');
-            return;
-          }
-          addLog('📦 Processing captured Royal Caribbean loyalty history sailings...', 'info');
-          const sailings = getRoyalLoyaltyHistorySailings(data);
-          if (sailings.length > 0) {
-            const completedRows = convertRoyalLoyaltyHistorySailingsToCompletedRows(sailings).filter(isCompletedBookedCruiseRow);
-            setState(prev => {
-              const existingKeys = new Set(prev.extractedBookedCruises.map(c => `${c.bookingId}|${c.shipName}|${c.sailingStartDate}`));
-              const deduped = completedRows.filter(c => !existingKeys.has(`${c.bookingId}|${c.shipName}|${c.sailingStartDate}`));
-              const newCruises = [...prev.extractedBookedCruises, ...deduped];
-              extractedBookedCruisesRef.current = newCruises;
-              return { ...prev, extractedBookedCruises: newCruises };
-            });
-            capturedSections.current.bookings = true;
-            addLog(`✅ Captured ${completedRows.length} completed/past cruise(s) from loyalty history sailings`, 'success');
-            completedRows.forEach((c) => {
-              addLog(`✅ Captured booking: ${c.shipName} - ${c.sailingStartDate} - ${c.cabinType} ${c.cabinNumberOrGTY} (${c.numberOfNights || 0} nights) [Completed]`, 'success');
-            });
-            if (progressCallbacks.current.onProgress) progressCallbacks.current.onProgress();
-          } else {
-            addLog('⚠️ Loyalty history payload had no sailings array', 'warning');
-          }
-        }
-
-        if ((endpoint === 'bookings' || endpoint === 'upcomingCruises' || endpoint === 'courtesyHolds') && data) {
+        if ((endpoint === 'bookings' || endpoint === 'upcomingCruises' || endpoint === 'courtesyHolds' || endpoint === 'pastTrips') && data) {
           addLog(`📦 Processing captured ${endpoint} API payload...`, 'info');
           if (dataKeys.length > 0) {
             addLog(`📦 Data keys: ${dataKeys.join(', ')}`, 'info');
@@ -1060,35 +1019,112 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             addLog(`⚠️ Captured error response: ${data.message}`, 'warning');
             break;
           }
+
+          const parsedTripPayload = parseTripPayload(data, {
+            endpoint: String(endpoint || ''),
+            url: typeof url === 'string' ? url : undefined,
+            forceCompleted: endpoint === 'pastTrips',
+            isCarnival: cruiseLine === 'carnival' || (typeof url === 'string' && url.includes('carnival.com')),
+          });
+
+          if (parsedTripPayload.rawRows.length > 0 || endpoint === 'pastTrips') {
+            const isPastPayload = parsedTripPayload.isPastTripsPayload;
+            const expectedPastTrips = isPastPayload
+              ? (parsedTripPayload.expectedTotal ?? expectedPastTripsCountRef.current ?? undefined)
+              : undefined;
+
+            if (parsedTripPayload.rows.length === 0) {
+              const skipped = parsedTripPayload.skippedPlaceholderRows || parsedTripPayload.rawRows.length;
+              addLog(
+                isPastPayload
+                  ? `⚠️ Ignored incomplete Past Trips payload (${skipped} placeholder row(s)); continuing to wait for real completed cruises`
+                  : `⚠️ Ignored ${skipped} incomplete booking row(s) from captured payload`,
+                'warning'
+              );
+              break;
+            }
+
+            const incomingRows = normalizeBookedCruiseRows(parsedTripPayload.rows);
+            setState(prev => {
+              const existingKeys = new Set(prev.extractedBookedCruises.map(getBookedCruiseRowIdentityKey));
+              const deduped = incomingRows.filter((cruise) => {
+                const key = getBookedCruiseRowIdentityKey(cruise);
+                if (existingKeys.has(key)) return false;
+                existingKeys.add(key);
+                return true;
+              });
+
+              if (deduped.length < incomingRows.length) {
+                console.log(`[RoyalCaribbeanSync] Deduped parsed ${String(endpoint)} bookings: ${incomingRows.length} -> ${deduped.length}`);
+                addLog(`ℹ️ Skipped ${incomingRows.length - deduped.length} duplicate booking(s)`, 'info');
+              }
+
+              const nextExtractedBookedCruises = [...prev.extractedBookedCruises, ...deduped];
+              if (isPastPayload) {
+                const completedCruises = nextExtractedBookedCruises.filter(c => {
+                  const status = (c.status || '').toLowerCase();
+                  return status === 'completed' || status === 'past';
+                }).length;
+                const canAcceptCurrentStepPartial = prev.status === 'running_step_4' && !expectedPastTrips;
+                if ((expectedPastTrips && completedCruises >= expectedPastTrips) || canAcceptCurrentStepPartial) {
+                  capturedSections.current.pastTrips = true;
+                }
+              }
+
+              return {
+                ...prev,
+                extractedBookedCruises: nextExtractedBookedCruises,
+              };
+            });
+
+            if (!isPastPayload) {
+              capturedSections.current.bookings = true;
+            }
+
+            const cruiseLineName = cruiseLine === 'carnival' ? 'Carnival' : config.name;
+            addLog(`✅ Captured ${incomingRows.length} ${isPastPayload ? 'completed/past cruise(s)' : 'booking(s)'} from ${cruiseLineName} API`, 'success');
+            if (expectedPastTrips && isPastPayload) {
+              addLog(`📊 Past Trips progress: captured ${incomingRows.length} row(s), expecting ${expectedPastTrips}`, 'info');
+            }
+            incomingRows.forEach((cruise) => {
+              addLog(`✅ Captured booking: ${cruise.shipName} - ${cruise.sailingStartDate} - ${cruise.cabinType || 'Cabin'} ${cruise.cabinNumberOrGTY || 'GTY'} (${cruise.numberOfNights ?? 0} nights) [${cruise.status}]`, 'success');
+            });
+
+            setState(prev => {
+              if (!isPastPayload && prev.status === 'running_step_2') {
+                addLog(`✅ Step 2 auto-completing with ${incomingRows.length} bookings from network monitor`, 'success');
+                if (stepCompleteResolvers.current[2]) {
+                  stepCompleteResolvers.current[2]();
+                  delete stepCompleteResolvers.current[2];
+                }
+              }
+              return prev;
+            });
+            break;
+          }
           
-          function findBookingArrayDeep(value: any, depth: number = 0): any[] | null {
-            if (!value || depth > 6) return null;
-            if (Array.isArray(value)) {
-              if (value.some((x: any) => x && typeof x === 'object' && (x.shipCode || x.shipName || x.sailDate || x.departureDate || x.bookingId || x.reservationId))) return value;
-              for (const item of value) {
-                const found = findBookingArrayDeep(item, depth + 1);
-                if (found) return found;
-              }
-              return null;
-            }
+          const isPastTripsPayload = endpoint === 'pastTrips' || (typeof url === 'string' && (url.includes('/myaccount/my-trips') || (url.toLowerCase().includes('past') && url.toLowerCase().includes('trip'))));
+          const findNestedArray = (value: any, keys: string[], depth: number = 0): any[] | null => {
+            if (!value || depth > 3) return null;
+            if (Array.isArray(value)) return value;
             if (typeof value !== 'object') return null;
-            const preferredKeys = ['profileBookings', 'sailingInfo', 'pastCruises', 'completedCruises', 'cruises', 'bookings', 'reservations', 'items', 'data', 'payload'];
-            for (const key of preferredKeys) {
-              if (Object.prototype.hasOwnProperty.call(value, key)) {
-                const found = findBookingArrayDeep(value[key], depth + 1);
-                if (found) return found;
-              }
+            for (const key of keys) {
+              if (Array.isArray(value[key])) return value[key];
             }
-            for (const key of Object.keys(value)) {
-              const found = findBookingArrayDeep(value[key], depth + 1);
+            for (const childKey of ['payload', 'data', 'result', 'response', 'myTrips', 'trips']) {
+              const found = findNestedArray(value[childKey], keys, depth + 1);
               if (found) return found;
             }
             return null;
-          }
+          };
+          const pastTripRows = findNestedArray(data, ['pastCruises', 'pastTrips', 'completedCruises', 'completedTrips', 'previousTrips', 'past']);
 
-          // Royal Caribbean API structure: data.payload.sailingInfo / profileBookings, plus newer past/completed shapes
+          // Royal Caribbean API structure: data.payload.sailingInfo (enriched bookings)
           let bookings = null;
-          if (data.payload && Array.isArray(data.payload.sailingInfo)) {
+          if (isPastTripsPayload && pastTripRows) {
+            bookings = pastTripRows;
+            addLog(`📦 Processing ${bookings.length} past cruise(s) from My Trips API response...`, 'info');
+          } else if (data.payload && Array.isArray(data.payload.sailingInfo)) {
             bookings = data.payload.sailingInfo;
             addLog(`📦 Processing ${bookings.length} booking(s) from API response...`, 'info');
           } else if (data.payload && Array.isArray(data.payload.profileBookings)) {
@@ -1103,31 +1139,40 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           } else if (Array.isArray(data)) {
             bookings = data;
             addLog(`📦 Processing ${bookings.length} booking(s) from API response...`, 'info');
+          } else if (data.payload && Array.isArray(data.payload.pastCruises)) {
+            bookings = data.payload.pastCruises;
+            addLog(`📦 Processing ${bookings.length} past cruise(s) from API response...`, 'info');
+          } else if (data.payload && Array.isArray(data.payload.trips)) {
+            bookings = data.payload.trips;
+            addLog(`📦 Processing ${bookings.length} trip(s) from API response...`, 'info');
+          } else if (data.payload && Array.isArray(data.payload.reservations)) {
+            bookings = data.payload.reservations;
+            addLog(`📦 Processing ${bookings.length} reservation(s) from API response...`, 'info');
+          } else if (Array.isArray(data.pastCruises)) {
+            bookings = data.pastCruises;
+            addLog(`📦 Processing ${bookings.length} past cruise(s) from API response...`, 'info');
+          } else if (Array.isArray(data.trips)) {
+            bookings = data.trips;
+            addLog(`📦 Processing ${bookings.length} trip(s) from API response...`, 'info');
+          } else if (Array.isArray(data.reservations)) {
+            bookings = data.reservations;
+            addLog(`📦 Processing ${bookings.length} reservation(s) from API response...`, 'info');
           } else if (data.bookings && Array.isArray(data.bookings)) {
             bookings = data.bookings;
             addLog(`📦 Processing ${bookings.length} booking(s) from API response...`, 'info');
           } else if (data.data && Array.isArray(data.data.bookings)) {
             bookings = data.data.bookings;
             addLog(`📦 Processing ${bookings.length} booking(s) from API response...`, 'info');
-          } else if (data.payload && Array.isArray((data.payload as any).pastCruises)) {
-            bookings = (data.payload as any).pastCruises;
-            addLog(`📦 Processing ${bookings.length} past cruise booking(s) from API response...`, 'info');
-          } else if (data.payload && Array.isArray((data.payload as any).completedCruises)) {
-            bookings = (data.payload as any).completedCruises;
-            addLog(`📦 Processing ${bookings.length} completed cruise booking(s) from API response...`, 'info');
+          } else if (data.data && Array.isArray(data.data.pastCruises)) {
+            bookings = data.data.pastCruises;
+            addLog(`📦 Processing ${bookings.length} past cruise(s) from API response...`, 'info');
           } else {
-            const deepBookings = findBookingArrayDeep(data);
-            if (deepBookings) {
-              bookings = deepBookings;
-              addLog(`📦 Processing ${bookings.length} booking(s) from nested API response...`, 'info');
-            } else {
             addLog(`⚠️ Bookings data structure not recognized. Type: ${typeof data}, Keys: ${dataKeys.join(', ')}`, 'warning');
             if (payloadKeys.length > 0) {
               addLog(`📦 Payload keys: ${payloadKeys.join(', ')}`, 'info');
             }
             addLog(`📦 Captured ${endpoint} API payload (UNKNOWN STRUCTURE)`, 'warning');
             break;
-            }
           }
           
           if (bookings && bookings.length > 0) {
@@ -1164,7 +1209,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
               'MR': 'Mariner of the Seas', 'NV': 'Navigator of the Seas', 'OA': 'Oasis of the Seas',
               'OV': 'Ovation of the Seas', 'OY': 'Odyssey of the Seas', 'QN': 'Quantum of the Seas',
               'RD': 'Radiance of the Seas', 'RH': 'Rhapsody of the Seas', 'SE': 'Serenade of the Seas',
-              'SP': 'Spectrum of the Seas', 'SY': 'Symphony of the Seas', 'UT': 'Utopia of the Seas',
+              'SP': 'Spectrum of the Seas', 'ST': 'Star of the Seas', 'SG': 'Star of the Seas', 'SY': 'Symphony of the Seas', 'UT': 'Utopia of the Seas',
               'VI': 'Vision of the Seas', 'VY': 'Voyager of the Seas', 'WN': 'Wonder of the Seas'
             };
             
@@ -1172,38 +1217,41 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
               'I': 'Interior', 'O': 'Ocean View', 'B': 'Balcony', 'S': 'Suite'
             };
             
-            function determineCruiseStatus(sailDateStr: string, bookingStatus: string): string {
-              const rawStatus = String(bookingStatus || '').toLowerCase();
-              if (rawStatus.includes('past') || rawStatus.includes('completed') || rawStatus === 'pc') return 'Completed';
+            function parseApiDate(value: string): Date | null {
+              const trimmed = String(value || '').trim();
+              if (!trimmed) return null;
+              const compact = trimmed.match(/^(\d{4})(\d{2})(\d{2})$/);
+              if (compact) {
+                const parsedCompact = new Date(Number(compact[1]), Number(compact[2]) - 1, Number(compact[3]));
+                return Number.isNaN(parsedCompact.getTime()) ? null : parsedCompact;
+              }
+              const parsed = new Date(trimmed.includes('T') ? trimmed : `${trimmed}T12:00:00`);
+              return Number.isNaN(parsed.getTime()) ? null : parsed;
+            }
+
+            function determineCruiseStatus(sailDateStr: string, bookingStatus: string, forceCompleted: boolean): string {
+              if (forceCompleted) return 'Completed';
               if (bookingStatus === 'OF') return 'Courtesy Hold';
               if (bookingStatus === 'CX' || bookingStatus === 'XX') return 'Cancelled';
-              try {
-                const raw = String(sailDateStr || '').trim();
-                let sailDate = new Date(raw);
-                if (isNaN(sailDate.getTime())) {
-                  const ymd = raw.match(/^(20\d{2})(\d{2})(\d{2})$/);
-                  if (ymd) sailDate = new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]));
-                }
-                if (isNaN(sailDate.getTime())) {
-                  const mdy = raw.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](20\d{2})$/);
-                  if (mdy) sailDate = new Date(Number(mdy[3]), Number(mdy[1]) - 1, Number(mdy[2]));
-                }
-                if (!isNaN(sailDate.getTime())) {
-                  const now = new Date();
-                  if (sailDate < now) return 'Completed';
-                }
-              } catch { /* ignore */ }
+              const sailDate = parseApiDate(sailDateStr);
+              if (sailDate) {
+                const now = new Date();
+                now.setHours(0, 0, 0, 0);
+                sailDate.setHours(0, 0, 0, 0);
+                if (sailDate < now) return 'Completed';
+              }
               return 'Upcoming';
             }
             
             const formattedCruises = bookings.map((booking: any) => {
-              const nights = booking.numberOfNights || booking.duration || booking.numNights || 0;
-              const shipCode = booking.shipCode || '';
+              const nights = booking.numberOfNights || booking.duration || booking.numNights || booking.nights || booking.cruiseNights || 0;
+              const shipCode = booking.shipCode || booking.ship?.code || booking.vesselCode || '';
+              const nestedShipName = typeof booking.ship === 'object' ? booking.ship?.name : '';
               let shipName = '';
               if (isCarnivalBooking) {
-                shipName = booking.shipName || booking.ship || CARNIVAL_SHIP_CODE_MAP[shipCode] || (shipCode ? `Carnival ${shipCode}` : 'Unknown Ship');
+                shipName = booking.shipName || nestedShipName || booking.ship || CARNIVAL_SHIP_CODE_MAP[shipCode] || (shipCode ? `Carnival ${shipCode}` : 'Unknown Ship');
               } else {
-                shipName = booking.shipName || RC_SHIP_CODE_MAP[shipCode] || (shipCode ? `${shipCode} of the Seas` : 'Unknown Ship');
+                shipName = booking.shipName || nestedShipName || RC_SHIP_CODE_MAP[shipCode] || (shipCode ? `${shipCode} of the Seas` : 'Unknown Ship');
               }
               const stateroomType = booking.stateroomType || booking.cabinType || booking.categoryType || '';
               const cabinType = STATEROOM_TYPE_MAP[stateroomType] || stateroomType || '';
@@ -1211,9 +1259,9 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
               const stateroomNumber = booking.stateroomNumber || booking.cabinNumber || '';
               const cabinNumber = stateroomNumber === 'GTY' ? '' : stateroomNumber;
               const isGTY = stateroomNumber === 'GTY' || !stateroomNumber;
-              const sailDate = booking.sailDate || booking.departureDate || booking.startDate || '';
-              const bookingStatus = booking.bookingStatus || booking.status || booking.tripStatus || booking.sailingStatus || booking.reservationStatus || 'BK';
-              const status = determineCruiseStatus(sailDate, bookingStatus);
+              const sailDate = booking.sailDate || booking.departureDate || booking.startDate || booking.sailingStartDate || booking.start || '';
+              const bookingStatus = booking.bookingStatus || booking.statusCode || booking.status || 'BK';
+              const status = determineCruiseStatus(sailDate, bookingStatus, isPastTripsPayload || String(booking.status || '').toLowerCase() === 'past' || String(booking.tripStatus || '').toLowerCase() === 'past');
               
               return {
                 rawBooking: booking,
@@ -1222,16 +1270,16 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
                 shipCode,
                 cruiseTitle: booking.cruiseTitle || booking.title || (nights ? `${nights} Night Cruise` : 'Cruise'),
                 sailingStartDate: sailDate,
-                sailingEndDate: booking.endDate || booking.returnDate || '',
-                sailingDates: sailDate,
-                itinerary: booking.itinerary || booking.destination || '',
-                departurePort: booking.departurePort || booking.homePort || '',
-                arrivalPort: booking.arrivalPort || '',
+                sailingEndDate: booking.endDate || booking.returnDate || booking.sailingEndDate || booking.end || '',
+                sailingDates: booking.sailingDates || sailDate,
+                itinerary: booking.itinerary || booking.destination || booking.cruiseName || booking.name || booking.title || '',
+                departurePort: booking.departurePort || booking.homePort || booking.embarkPort || booking.embarkationPort || booking.departurePortName || '',
+                arrivalPort: booking.arrivalPort || booking.arrivalPortName || '',
                 cabinType,
                 cabinCategory: booking.stateroomCategoryCode || booking.categoryCode || '',
                 cabinNumberOrGTY: isGTY ? 'GTY' : cabinNumber,
                 deckNumber: booking.deckNumber || '',
-                bookingId: (booking.bookingId || booking.confirmationNumber || booking.reservationId || '').toString(),
+                bookingId: (booking.bookingId || booking.confirmationNumber || booking.reservationId || booking.reservationNumber || booking.id || '').toString(),
                 numberOfGuests: (booking.passengers?.length || booking.guestCount || booking.numberOfGuests || 1).toString(),
                 numberOfNights: nights.toString(),
                 daysToGo: '',
@@ -1250,32 +1298,67 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
                 stateroomType
               };
             });
-            
+
+            // Filter out placeholder rows (no ship + no sail date) so empty past-trips skeletons don't pollute completed cruises
+            const isPlaceholderRow = (c: any): boolean => {
+              const ship = String(c.shipName || '').trim();
+              const code = String(c.shipCode || '').trim();
+              const sailDate = String(c.sailingStartDate || '').trim();
+              const nights = Number.parseInt(String(c.numberOfNights || '0'), 10) || 0;
+              const hasShip = ship !== '' && ship !== 'Unknown Ship';
+              const hasIdentity = (hasShip && sailDate !== '') || (code !== '' && sailDate !== '');
+              if (!hasIdentity) return true;
+              if (!hasShip && !code && nights === 0) return true;
+              return false;
+            };
+            const placeholderCount = formattedCruises.filter(isPlaceholderRow).length;
+            const meaningfulCruises = formattedCruises.filter((c: any) => !isPlaceholderRow(c));
+            if (placeholderCount > 0) {
+              addLog(
+                isPastTripsPayload
+                  ? `⚠️ Ignored ${placeholderCount} placeholder past-trip row(s) without ship/sail data`
+                  : `⚠️ Ignored ${placeholderCount} placeholder booking row(s) without ship/sail data`,
+                'warning'
+              );
+            }
+
+            if (meaningfulCruises.length === 0) {
+              addLog(
+                isPastTripsPayload
+                  ? `⚠️ Past Trips payload contained only placeholder rows; waiting for the real Past Trips API response`
+                  : `⚠️ Booking payload contained only placeholder rows; ignored`,
+                'warning'
+              );
+              break;
+            }
+
             setState(prev => {
               const existingIds = new Set(prev.extractedBookedCruises.map(c => c.bookingId).filter(Boolean));
               const existingShipDates = new Set(prev.extractedBookedCruises.map(c => `${c.shipName}|${c.sailingStartDate}`));
-              const deduped = formattedCruises.filter((c: any) => {
+              const deduped = meaningfulCruises.filter((c: any) => {
                 if (c.bookingId && existingIds.has(c.bookingId)) return false;
                 const shipDateKey = `${c.shipName}|${c.sailingStartDate}`;
                 if (existingShipDates.has(shipDateKey)) return false;
                 return true;
               });
-              if (deduped.length < formattedCruises.length) {
-                console.log(`[RoyalCaribbeanSync] Deduped network_payload bookings: ${formattedCruises.length} -> ${deduped.length}`);
-                addLog(`ℹ️ Skipped ${formattedCruises.length - deduped.length} duplicate booking(s)`, 'info');
+              if (deduped.length < meaningfulCruises.length) {
+                console.log(`[RoyalCaribbeanSync] Deduped network_payload bookings: ${meaningfulCruises.length} -> ${deduped.length}`);
+                addLog(`ℹ️ Skipped ${meaningfulCruises.length - deduped.length} duplicate booking(s)`, 'info');
               }
-              const newCruises = [...prev.extractedBookedCruises, ...deduped];
-              extractedBookedCruisesRef.current = newCruises;
               return {
                 ...prev,
-                extractedBookedCruises: newCruises
+                extractedBookedCruises: [...prev.extractedBookedCruises, ...deduped]
               };
             });
             
-            capturedSections.current.bookings = true;
+            if (isPastTripsPayload) {
+              capturedSections.current.pastTrips = true;
+            } else {
+              capturedSections.current.bookings = true;
+            }
             const cruiseLineName = isCarnivalBooking ? 'Carnival' : config.name;
-            addLog(`✅ Captured ${bookings.length} booking(s) from ${cruiseLineName} API`, 'success');
-            formattedCruises.forEach((c: any) => {
+            addLog(`✅ Captured ${meaningfulCruises.length} ${isPastTripsPayload ? 'past cruise(s)' : 'booking(s)'} from ${cruiseLineName} API`, 'success');
+            meaningfulCruises.forEach((c: any) => {
               addLog(`✅ Captured booking: ${c.shipName} - ${c.sailingStartDate} - ${c.cabinType} ${c.cabinNumberOrGTY} (${c.numberOfNights} nights) [${c.status}]`, 'success');
             });
             
@@ -1343,57 +1426,33 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
               } as unknown as OfferRow;
             });
             setState(prev => {
-              const newOffers = [...prev.extractedOffers, ...offerRows];
+              const newOffers = mergeOfferRows(prev.extractedOffers, offerRows);
               extractedOffersRef.current = newOffers;
               return { ...prev, extractedOffers: newOffers };
             });
             capturedSections.current.offers = true;
-            addLog('Captured ' + String(offerRows.length) + ' Carnival VIFP offer(s)', 'success');
+            addLog('Captured ' + String(offerRows.length) + ' Carnival VIFP offer(s); continuing page scan for featured offers', 'success');
             offerRows.forEach((o: OfferRow) => {
               addLog('  ' + o.offerName + ' (' + o.offerCode + ')' + (o.interiorPrice ? ' - from ' + o.interiorPrice : ''), 'success');
             });
-            if (stepCompleteResolvers.current[1]) {
-              stepCompleteResolvers.current[1]();
-              delete stepCompleteResolvers.current[1];
-            }
+            console.log('[CarnivalSync] VIFP network payload merged; waiting for injected page extraction to finish before completing step 1');
           }
         }
         
         if (endpoint === 'loyalty' && data) {
           addLog('Processing captured Loyalty API payload...', 'info');
-          if (typeof url === 'string' && url.includes('/guestAccounts/loyalty/history/')) {
-            cachedRoyalLoyaltyHistoryPayloadRef.current = data;
-            if (!completedCruisesSyncInProgressRef.current) {
-              const cachedSailings = getRoyalLoyaltyHistorySailings(data);
-              addLog(`📦 Cached loyalty-history URL payload with ${cachedSailings.length} completed sailing(s) for later completed-cruise sync`, cachedSailings.length > 0 ? 'success' : 'info');
-              addLog('ℹ️ Not importing completed sailings during regular Sync Now; use Sync Completed Cruises to review/apply them', 'info');
-              return;
-            }
-            const historySailings = getRoyalLoyaltyHistorySailings(data);
-            if (historySailings.length > 0) {
-              addLog(`📦 Loyalty-history URL contains ${historySailings.length} completed sailing(s); routing to Completed Cruises sync parser`, 'info');
-              const completedRows = convertRoyalLoyaltyHistorySailingsToCompletedRows(historySailings).filter(isCompletedBookedCruiseRow);
-              setState(prev => {
-                const existingKeys = new Set(prev.extractedBookedCruises.map(c => `${c.bookingId}|${c.shipName}|${c.sailingStartDate}`));
-                const deduped = completedRows.filter(c => !existingKeys.has(`${c.bookingId}|${c.shipName}|${c.sailingStartDate}`));
-                const newCruises = [...prev.extractedBookedCruises, ...deduped];
-                extractedBookedCruisesRef.current = newCruises;
-                return { ...prev, extractedBookedCruises: newCruises };
-              });
-              capturedSections.current.bookings = true;
-              addLog(`✅ Captured ${completedRows.length} completed/past cruise(s) from loyalty history sailings`, 'success');
-              completedRows.forEach((c) => {
-                addLog(`✅ Captured booking: ${c.shipName} - ${c.sailingStartDate} - ${c.cabinType} ${c.cabinNumberOrGTY} (${c.numberOfNights || 0} nights) [Completed]`, 'success');
-              });
-              if (progressCallbacks.current.onProgress) progressCallbacks.current.onProgress();
-              return;
-            }
-          }
           console.log('[RoyalCaribbeanSync] Loyalty data structure:', JSON.stringify(data).substring(0, 500));
           
           const loyaltyPayload = data.payload || data;
           const loyaltyInfo = loyaltyPayload.loyaltyInformation || loyaltyPayload;
           const accountId = loyaltyPayload.accountId || '';
+          const totalTripsValue = typeof loyaltyPayload.totalTrips === 'number'
+            ? loyaltyPayload.totalTrips
+            : Number.parseInt(String(loyaltyPayload.totalTrips ?? '').replace(/,/g, ''), 10);
+          if (Number.isFinite(totalTripsValue) && totalTripsValue > 0) {
+            expectedPastTripsCountRef.current = totalTripsValue;
+            addLog(`📊 Royal Caribbean history says ${totalTripsValue} total past trip(s) should be available`, 'info');
+          }
 
           if (typeof url === 'string' && url.includes('/guestAccounts/loyalty/info')) {
             addLog('Captured loyalty from /guestAccounts/loyalty/info (correct endpoint)', 'success');
@@ -1558,10 +1617,10 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
     processedPayloads.current.clear();
     hasReceivedApiLoyaltyDataRef.current = false;
-    capturedSections.current = { offers: false, bookings: false, loyalty: false };
+    capturedSections.current = { offers: false, bookings: false, loyalty: false, pastTrips: false };
+    expectedPastTripsCountRef.current = null;
     carnivalUserDataRef.current = null;
     extractedOffersRef.current = [];
-    extractedBookedCruisesRef.current = [];
 
     setState(prev => ({
       ...prev,
@@ -1876,7 +1935,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           ? 'https://www.celebritycruises.com/account'
           : isCarnivalMode
           ? 'https://www.carnival.com/profilemanagement/profiles'
-          : 'https://www.royalcaribbean.com/myaccount';
+          : 'https://www.royalcaribbean.com/account';
         const CAPTURE_PAGES: { url: string; section: 'bookings' | 'loyalty'; name: string }[] = isCarnivalMode
           ? [
               { url: 'https://www.carnival.com/profilemanagement/profiles/cruises', section: 'bookings', name: 'My Cruises' },
@@ -2011,7 +2070,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
                   'https://www.royalcaribbean.com/account/loyalty-programs/loyalty-match',
                   'https://www.royalcaribbean.com/account/loyalty',
                   'https://www.royalcaribbean.com/account',
-                  'https://www.royalcaribbean.com/myaccount',
                   'https://www.royalcaribbean.com/account/loyalty-program',
                 ])
               ];
@@ -2199,6 +2257,113 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         }
         return prev;
       });
+
+      if (cruiseLine === 'royal_caribbean') {
+        setState(prev => ({ ...prev, status: 'running_step_4' }));
+        addLog('🚀 ====== STEP 4: PAST TRIPS ======', 'info');
+        addLog('📡 Opening My Trips and switching to Past cruises before app sync...', 'info');
+
+        const injectPastTripsTabClick = () => {
+          webViewRef.current?.injectJavaScript(`
+            (function() {
+              function post(type, payload) {
+                try { window.ReactNativeWebView.postMessage(JSON.stringify(Object.assign({ type: type }, payload || {}))); } catch (e) {}
+              }
+              function log(message, logType) {
+                post('log', { message: message, logType: logType || 'info' });
+              }
+              try { window.__easySeasReadingPastTrips = true; } catch (e) {}
+              try { if (window.capturedPayloads) window.capturedPayloads.pastTrips = null; } catch (e) {}
+              function getPastCountFromText(text) {
+                try {
+                  var match = String(text || '').match(/past\\s*\\(?\\s*([0-9,]+)\\s*\\)?/i);
+                  if (!match) return 0;
+                  return parseInt(match[1].replace(/,/g, ''), 10) || 0;
+                } catch (e) { return 0; }
+              }
+              function clickPastTab() {
+                var candidates = Array.prototype.slice.call(document.querySelectorAll('button, [role="tab"], a, div, span'));
+                var past = candidates.find(function(el) {
+                  var text = (el.innerText || el.textContent || '').replace(/\\s+/g, ' ').trim();
+                  return /\\bPAST\\b|\\bPast\\b/i.test(text) && /\\(?(\\d+)\\)?/.test(text);
+                }) || candidates.find(function(el) {
+                  var text = (el.innerText || el.textContent || '').replace(/\\s+/g, ' ').trim();
+                  return /^past/i.test(text);
+                });
+                if (past && typeof past.click === 'function') {
+                  var pastText = (past.innerText || past.textContent || '').replace(/\\s+/g, ' ').trim();
+                  var count = getPastCountFromText(pastText);
+                  if (count > 0) {
+                    post('past_trips_expected_count', { count: count });
+                  }
+                  past.click();
+                  log('✅ Clicked Past Trips tab on My Trips' + (count > 0 ? ' (' + count + ' expected)' : ''), 'success');
+                  return true;
+                }
+                log('⚠️ Past Trips tab not visible yet', 'warning');
+                return false;
+              }
+              var attempts = 0;
+              var timer = setInterval(function() {
+                attempts++;
+                if (clickPastTab() || attempts >= 12) {
+                  clearInterval(timer);
+                  var scrolls = 0;
+                  var scrollTimer = setInterval(function() {
+                    scrolls++;
+                    try { window.scrollBy(0, Math.max(700, window.innerHeight || 700)); } catch (e) {}
+                    if (scrolls >= 16) {
+                      clearInterval(scrollTimer);
+                      try { window.scrollTo(0, 0); } catch (e) {}
+                      var existing = window.capturedPayloads && window.capturedPayloads.pastTrips ? window.capturedPayloads.pastTrips : null;
+                      if (existing) {
+                        post('network_payload', { endpoint: 'pastTrips', data: existing, url: window.location.href });
+                      }
+                      try { window.__easySeasReadingPastTrips = false; } catch (e) {}
+                      post('step_complete', { step: 4, totalCount: 0 });
+                    }
+                  }, 900);
+                }
+              }, 1000);
+              true;
+            })();
+          `);
+        };
+
+        try {
+          const pastCaptureCycles = 4;
+          for (let cycle = 0; cycle < pastCaptureCycles && !capturedSections.current.pastTrips; cycle++) {
+            if (cycle > 0) {
+              addLog('🔄 Past Trips not captured yet — refreshing loyalty then returning to My Trips...', 'info');
+              await navigateToPage(config.loyaltyPageUrl, 16000);
+              await delay(2500);
+            }
+            await navigateToPage(config.myTripsUrl, 22000);
+            await delay(6500);
+            injectPastTripsTabClick();
+            await waitForStepComplete(4, 42000);
+            if (!capturedSections.current.pastTrips) {
+              await delay(2000);
+            }
+          }
+        } catch (step4Error) {
+          addLog(`Step 4 error: ${String(step4Error)} - continuing with collected data`, 'warning');
+        }
+
+        setState(prev => {
+          const completedCruises = prev.extractedBookedCruises.filter(c => {
+            const status = (c.status || '').toLowerCase();
+            return status === 'completed' || status === 'past';
+          }).length;
+          const expectedPastTrips = expectedPastTripsCountRef.current;
+          if (completedCruises > 0) {
+            addLog(`✅ STEP 4 COMPLETE: Captured ${completedCruises} completed/past cruise(s)${expectedPastTrips ? ` of ${expectedPastTrips} expected` : ''}`, completedCruises < (expectedPastTrips ?? 0) ? 'warning' : 'success');
+          } else {
+            addLog('⚠️ STEP 4 COMPLETE: No Past Trips payload captured; existing completed cruises will be preserved', 'warning');
+          }
+          return prev;
+        });
+      }
       
       addLog('🎉 ====== ALL STEPS COMPLETE ======', 'success');
       addLog('✅ All data extracted successfully - ready to sync to your app!', 'success');
@@ -2231,22 +2396,13 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         
         console.log('[RoyalCaribbeanSync] Status counts - Upcoming:', upcomingCruises, ', Completed:', completedCruises, ', Courtesy Holds:', courtesyHolds);
         
-        // Group by offer name/code to get unique offer count and per-offer sailing/cruise counts
-        const offersByName = new Map<string, { offerName: string; offerCode?: string; cruiseCount: number }>();
+        // Group by offer name to get unique offer count
+        const offersByName = new Map<string, number>();
         prev.extractedOffers.forEach(offer => {
           const key = offer.offerCode || offer.offerName || 'Unknown';
-          const existing = offersByName.get(key) || {
-            offerName: offer.offerName || offer.offerCode || 'Unknown Offer',
-            offerCode: offer.offerCode || undefined,
-            cruiseCount: 0,
-          };
-          if (offer.shipName || offer.sailingDate) {
-            existing.cruiseCount += 1;
-          }
-          offersByName.set(key, existing);
+          offersByName.set(key, (offersByName.get(key) || 0) + 1);
         });
-        const offerBreakdown = Array.from(offersByName.values());
-        const uniqueOffers = offerBreakdown.length;
+        const uniqueOffers = offersByName.size;
         
         // Log detailed breakdown of all extracted cruises
         console.log('[RoyalCaribbeanSync] Extracted cruises breakdown:', {
@@ -2265,7 +2421,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         console.log('[RoyalCaribbeanSync] Offer grouping:', {
           totalRows: prev.extractedOffers.length,
           uniqueOffers,
-          offerBreakdown
+          offerBreakdown: Array.from(offersByName.entries()).map(([name, count]) => ({ name, count }))
         });
         
         const newState = {
@@ -2276,8 +2432,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             offerRows: prev.extractedOffers.length,
             upcomingCruises,
             courtesyHolds,
-            completedCruises,
-            offerBreakdown
+            completedCruises
           },
           syncPreview: null
         };
@@ -2292,10 +2447,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           status: 'awaiting_confirmation'
         });
         
-        addLog(`📊 SUMMARY: ${uniqueOffers} casino offer(s) with ${prev.extractedOffers.length} total row(s)`, 'success');
-        offerBreakdown.forEach((offer) => {
-          addLog(`   • ${offer.offerName}${offer.offerCode ? ` (${offer.offerCode})` : ''}: ${offer.cruiseCount} cruise(s)`, offer.cruiseCount > 0 ? 'success' : 'warning');
-        });
+        addLog(`📊 SUMMARY: ${uniqueOffers} casino offer(s) with ${prev.extractedOffers.length} total sailing(s)`, 'success');
         const statusParts: string[] = [];
         if (upcomingCruises > 0) statusParts.push(`${upcomingCruises} upcoming`);
         if (completedCruises > 0) statusParts.push(`${completedCruises} completed`);
@@ -2438,13 +2590,29 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     }
   }, []);
 
-  const syncToApp = useCallback(async (coreDataContext: any, loyaltyContext: any, providedExtendedLoyalty?: ExtendedLoyaltyData | null) => {
+  const syncToApp = useCallback(async (coreDataContext: any, loyaltyContext: any, providedExtendedLoyalty?: ExtendedLoyaltyData | null, targetOptions?: SyncTargetOptions) => {
     const loyaltyToSync = providedExtendedLoyalty ?? extendedLoyaltyData;
     const fallbackExtendedLoyaltyFromState = state.loyaltyData
       ? convertLoyaltyInfoToExtended(state.loyaltyData as unknown as LoyaltyApiInformation)
       : null;
     const effectiveExtendedLoyalty = loyaltyToSync ?? fallbackExtendedLoyaltyFromState;
     const syncSource = cruiseLine === 'carnival' ? 'carnival' : cruiseLine === 'celebrity' ? 'celebrity' : 'royal';
+    const activeProfiles = users.filter((profile) => profile.active !== false);
+    const primaryProfile = activeProfiles.find((profile) => profile.isOwner) ?? currentUser ?? activeProfiles[0] ?? null;
+    const secondaryProfile = activeProfiles.find((profile) => profile.id !== primaryProfile?.id) ?? null;
+    const requestedSlot = targetOptions?.targetProfileSlot ?? 'primary';
+    const requestedById = targetOptions?.targetProfileId
+      ? activeProfiles.find((profile) => profile.id === targetOptions.targetProfileId) ?? null
+      : null;
+    const requestedProfile = requestedById ?? (requestedSlot === 'secondary' ? secondaryProfile : primaryProfile);
+    const targetProfile = requestedSlot === 'secondary' && isUnassignedProfile(secondaryProfile, 'secondary')
+      ? primaryProfile
+      : requestedProfile ?? primaryProfile ?? currentUser;
+    const isPrimarySyncTarget = !primaryProfile || targetProfile?.id === primaryProfile.id;
+    const targetSlotLabel = isPrimarySyncTarget ? 'Primary User' : 'Second User';
+    const ownershipOptions = targetProfile
+      ? { ownerProfileId: targetProfile.id, sourceEmail: targetProfile.email || authenticatedEmail || undefined, includeUnownedRecords: isPrimarySyncTarget }
+      : undefined;
 
     console.log('[RoyalCaribbeanSync] ========================================');
     console.log('[RoyalCaribbeanSync] Loyalty sync input diagnostics:', {
@@ -2454,6 +2622,9 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       hasEffectiveExtendedLoyalty: !!effectiveExtendedLoyalty,
       clubRoyalePointsFromEffective: effectiveExtendedLoyalty?.clubRoyalePointsFromApi,
       crownAndAnchorPointsFromEffective: effectiveExtendedLoyalty?.crownAndAnchorPointsFromApi,
+      targetProfileId: targetProfile?.id,
+      targetSlotLabel,
+      isPrimarySyncTarget,
     });
     console.log('[RoyalCaribbeanSync] ========================================');
     console.log('[RoyalCaribbeanSync] ========================================');
@@ -2472,18 +2643,26 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       console.log('[RoyalCaribbeanSync] Step 1: Setting status to syncing...');
       setState(prev => ({ ...prev, status: 'syncing' }));
       addLog('🚀 Starting sync to app...', 'info');
+      addLog(`Sync target: ${targetSlotLabel}${targetProfile?.name ? ` (${targetProfile.name})` : ''}`, 'info');
 
       const persistenceFailures: string[] = [];
       
       console.log('[RoyalCaribbeanSync] Step 2: Creating sync preview...');
       addLog('Creating sync preview...', 'info');
 
-      const currentLoyalty = {
-        clubRoyalePoints: loyaltyContext.clubRoyalePoints,
-        clubRoyaleTier: loyaltyContext.clubRoyaleTier,
-        crownAndAnchorPoints: loyaltyContext.crownAnchorPoints,
-        crownAndAnchorLevel: loyaltyContext.crownAnchorLevel
-      };
+      const currentLoyalty = isPrimarySyncTarget
+        ? {
+            clubRoyalePoints: loyaltyContext.clubRoyalePoints,
+            clubRoyaleTier: loyaltyContext.clubRoyaleTier,
+            crownAndAnchorPoints: loyaltyContext.crownAnchorPoints,
+            crownAndAnchorLevel: loyaltyContext.crownAnchorLevel,
+          }
+        : {
+            clubRoyalePoints: targetProfile?.clubRoyalePoints ?? 0,
+            clubRoyaleTier: targetProfile?.clubRoyaleTier ?? '',
+            crownAndAnchorPoints: targetProfile?.loyaltyPoints ?? 0,
+            crownAndAnchorLevel: targetProfile?.crownAnchorLevel ?? '',
+          };
 
       console.log('[RoyalCaribbeanSync] Creating sync preview with:', {
         extractedOffers: state.extractedOffers.length,
@@ -2495,18 +2674,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
       const normalizedOffers = normalizeOfferRows(state.extractedOffers);
       const normalizedBookedCruises = normalizeBookedCruiseRows(state.extractedBookedCruises);
-      const syncOfferBreakdownMap = new Map<string, { offerName: string; offerCode?: string; cruiseCount: number }>();
-      normalizedOffers.forEach((offer) => {
-        const key = offer.offerCode || offer.offerName || 'Unknown';
-        const current = syncOfferBreakdownMap.get(key) || {
-          offerName: offer.offerName || offer.offerCode || 'Unknown Offer',
-          offerCode: offer.offerCode || undefined,
-          cruiseCount: 0,
-        };
-        if (offer.shipName || offer.sailingDate) current.cruiseCount += 1;
-        syncOfferBreakdownMap.set(key, current);
-      });
-      const syncOfferBreakdown = Array.from(syncOfferBreakdownMap.values());
 
       if (normalizedOffers.length !== state.extractedOffers.length) {
         addLog(`ℹ️ Sanitized ${state.extractedOffers.length - normalizedOffers.length} malformed offer row(s) before sync`, 'info');
@@ -2523,31 +2690,42 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         coreDataContext.cruises,
         coreDataContext.bookedCruises,
         currentLoyalty,
-        syncSource
+        syncSource,
+        ownershipOptions
       );
 
       console.log('[RoyalCaribbeanSync] Sync preview created successfully');
 
       const counts = calculateSyncCounts(preview);
       addLog(`Preview: ${counts.offersNew} new offers, ${counts.offersUpdated} updated offers`, 'info');
-      syncOfferBreakdown.forEach((offer) => {
-        addLog(`Preview: ${offer.offerName}${offer.offerCode ? ` (${offer.offerCode})` : ''} includes ${offer.cruiseCount} cruise(s)`, offer.cruiseCount > 0 ? 'info' : 'warning');
-      });
       addLog(`Preview: ${counts.cruisesNew} new available cruises, ${counts.cruisesUpdated} updated available cruises`, 'info');
       addLog(`Preview: ${counts.bookedCruisesNew} new booked cruises, ${counts.bookedCruisesUpdated} updated booked cruises`, 'info');
       addLog(`Preview: ${counts.upcomingCruises} upcoming, ${counts.courtesyHolds} holds`, 'info');
 
       setState(prev => ({ ...prev, syncPreview: preview }));
 
-      const allowOfferRemoval = normalizedOffers.length > 0;
-      const allowCruiseRemoval = normalizedOffers.some(offer => Boolean(offer.shipName || offer.sailingDate));
+      const authoritativeOfferRows = normalizedOffers.filter((offer) => {
+        const status = (offer.offerStatus || '').toLowerCase().replace(/[\s_-]+/g, ' ');
+        const isIncompleteFallback =
+          offer.isInProgress === true ||
+          status.includes('in progress') ||
+          status.includes('pending') ||
+          status.includes('processing') ||
+          status.includes('earning') ||
+          status.includes('fallback extraction incomplete') ||
+          (!offer.offerCode?.trim() && !offer.offerName?.trim()) ||
+          (offer.offerName?.trim().toLowerCase() === 'unknown offer' && !offer.offerCode?.trim());
+        return !isIncompleteFallback;
+      });
+      const offerRowsWithSailings = authoritativeOfferRows.filter((offer) => Boolean(offer.shipName?.trim() || offer.sailingDate?.trim()));
+      const allowOfferRemoval = authoritativeOfferRows.length > 0;
+      const allowCruiseRemoval = offerRowsWithSailings.length > 0;
       const allowBookedCruiseRemoval = normalizedBookedCruises.length > 0;
 
       if (!allowOfferRemoval) {
-        addLog(`⚠️ No ${config.loyaltyClubName} offer rows were captured, so existing offers and available sailings will be preserved`, 'warning');
-      }
-      if (!allowCruiseRemoval) {
-        addLog(`⚠️ Offer cards were captured but no ship/date sailing rows were captured; preserving existing available cruises instead of overwriting them with zero`, 'warning');
+        addLog(`⚠️ No authoritative ${config.loyaltyClubName} offer rows were captured, so existing offers and available sailings will be preserved`, 'warning');
+      } else if (!allowCruiseRemoval) {
+        addLog(`⚠️ ${config.loyaltyClubName} offers were captured without sailing detail, so existing available sailings will be preserved`, 'warning');
       }
       if (!allowBookedCruiseRemoval) {
         addLog(`⚠️ No booked cruise rows were captured for ${config.name}, so existing booked cruises will be preserved`, 'warning');
@@ -2564,6 +2742,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           allowOfferRemoval,
           allowCruiseRemoval,
           allowBookedCruiseRemoval,
+          targetOwnerProfileId: targetProfile?.id,
+          includeUnownedRecords: isPrimarySyncTarget,
         }
       );
 
@@ -2580,12 +2760,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
       const finalActiveBookedCruises = finalBookedCruises.filter(cruise => isActiveBookedCruise(cruise));
       const finalCourtesyHolds = finalBookedCruises.filter(cruise => isCourtesyHoldCruise(cruise));
-      const finalCompletedBookedCruises = finalBookedCruises.filter(cruise => {
-        const status = String((cruise as any).completionState || (cruise as any).status || '').toLowerCase();
-        if (status.includes('completed') || status.includes('past')) return true;
-        const sailDate = new Date((cruise as any).sailDate || (cruise as any).sailingStartDate || '');
-        return !Number.isNaN(sailDate.getTime()) && sailDate < new Date() && !isActiveBookedCruise(cruise) && !isCourtesyHoldCruise(cruise);
-      });
 
       console.log('[RoyalCaribbeanSync] Sync applied. Final counts:', {
         offers: finalOffers.length,
@@ -2593,7 +2767,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         bookedCruises: finalBookedCruises.length,
         activeBookedCruises: finalActiveBookedCruises.length,
         courtesyHolds: finalCourtesyHolds.length,
-        completedBookedCruises: finalCompletedBookedCruises.length,
       });
 
       console.log('[RoyalCaribbeanSync] Step: Persisting offers...');
@@ -2625,7 +2798,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       }
 
       console.log('[RoyalCaribbeanSync] Step: Persisting booked cruises...');
-      addLog(`Setting ${finalActiveBookedCruises.length} active booked cruise(s) and ${finalCompletedBookedCruises.length} completed cruise(s) in app (${finalBookedCruises.length} total including history)`, 'info');
+      addLog(`Setting ${finalActiveBookedCruises.length} active booked cruise(s) in app (${finalBookedCruises.length} total including history)`, 'info');
       try {
         console.log('[RoyalCaribbeanSync] Calling setBookedCruises()...');
         await coreDataContext.setBookedCruises(finalBookedCruises);
@@ -2642,7 +2815,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         throw new Error(`Sync could not persist required data: ${persistenceFailures.join('; ')}`);
       }
 
-      if (syncSource !== 'carnival' && preview.loyalty) {
+      if (syncSource !== 'carnival' && isPrimarySyncTarget && preview.loyalty) {
         try {
           if (preview.loyalty.clubRoyalePoints.changed) {
             addLog(`Updating Club Royale points: ${preview.loyalty.clubRoyalePoints.current} → ${preview.loyalty.clubRoyalePoints.synced}`, 'info');
@@ -2657,9 +2830,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           console.error('[RoyalCaribbeanSync] Error updating loyalty points:', loyaltyError);
           addLog(`⚠️ Warning: Failed to update loyalty points: ${String(loyaltyError)}`, 'warning');
         }
+      } else if (syncSource !== 'carnival' && !isPrimarySyncTarget) {
+        addLog('Secondary profile selected — loyalty totals will be saved to that profile only', 'info');
       }
       
-      if (syncSource !== 'carnival' && effectiveExtendedLoyalty && loyaltyContext.setExtendedLoyaltyData) {
+      if (syncSource !== 'carnival' && isPrimarySyncTarget && effectiveExtendedLoyalty && loyaltyContext.setExtendedLoyaltyData) {
         try {
           addLog('Syncing extended loyalty data...', 'info');
           
@@ -2682,12 +2857,12 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           console.error('[RoyalCaribbeanSync] Error syncing extended loyalty:', extLoyaltyError);
           addLog(`⚠️ Warning: Failed to sync extended loyalty data: ${String(extLoyaltyError)}`, 'warning');
         }
-      } else if (syncSource !== 'carnival') {
+      } else if (syncSource !== 'carnival' && !effectiveExtendedLoyalty) {
         addLog('⚠️ No extended loyalty payload available at sync time', 'warning');
       }
 
       // Sync user profile data: name from passenger data + loyalty numbers/tiers
-      if (syncSource !== 'carnival' && currentUser && updateUserProfile) {
+      if (syncSource !== 'carnival' && targetProfile && updateUserProfile) {
         try {
           const profileUpdates: Record<string, unknown> = {};
 
@@ -2706,15 +2881,35 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
               .trim();
             if (fullName.length > 1) {
               profileUpdates.name = fullName;
+              profileUpdates.displayName = fullName;
               addLog(`  → Name: ${fullName}`, 'info');
             }
           }
 
           // Extract Crown & Anchor number from extended loyalty data
+          const syncedClubRoyalePoints = effectiveExtendedLoyalty?.clubRoyalePointsFromApi ?? (state.loyaltyData?.clubRoyalePoints ? parseInt(String(state.loyaltyData.clubRoyalePoints).replace(/,/g, ''), 10) : undefined);
+          if (typeof syncedClubRoyalePoints === 'number' && Number.isFinite(syncedClubRoyalePoints)) {
+            profileUpdates.clubRoyalePoints = syncedClubRoyalePoints;
+            addLog(`  → Club Royale points: ${syncedClubRoyalePoints.toLocaleString()}`, 'info');
+          }
+
+          const syncedClubRoyaleTier = effectiveExtendedLoyalty?.clubRoyaleTierFromApi ?? state.loyaltyData?.clubRoyaleTier;
+          if (syncedClubRoyaleTier && syncedClubRoyaleTier.trim().length > 0) {
+            profileUpdates.clubRoyaleTier = syncedClubRoyaleTier.trim();
+            addLog(`  → Club Royale tier: ${syncedClubRoyaleTier.trim()}`, 'info');
+          }
+
           const cAndAId = effectiveExtendedLoyalty?.crownAndAnchorId;
           if (cAndAId && cAndAId.trim().length > 0) {
             profileUpdates.crownAnchorNumber = cAndAId.trim();
+            profileUpdates.royalCaribbeanNumber = cAndAId.trim();
             addLog(`  → Crown & Anchor #: ${cAndAId.trim()}`, 'info');
+          }
+
+          const syncedCrownAnchorPoints = effectiveExtendedLoyalty?.crownAndAnchorPointsFromApi ?? (state.loyaltyData?.crownAndAnchorPoints ? parseInt(String(state.loyaltyData.crownAndAnchorPoints).replace(/,/g, ''), 10) : undefined);
+          if (typeof syncedCrownAnchorPoints === 'number' && Number.isFinite(syncedCrownAnchorPoints)) {
+            profileUpdates.loyaltyPoints = syncedCrownAnchorPoints;
+            addLog(`  → Crown & Anchor points: ${syncedCrownAnchorPoints.toLocaleString()}`, 'info');
           }
 
           const cAndALevel = effectiveExtendedLoyalty?.crownAndAnchorTier;
@@ -2729,9 +2924,16 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
               profileUpdates.celebrityCaptainsClubPoints = effectiveExtendedLoyalty.captainsClubPoints;
               addLog(`  → Captain's Club points: ${effectiveExtendedLoyalty.captainsClubPoints}`, 'info');
             }
+            if (effectiveExtendedLoyalty.captainsClubId) {
+              profileUpdates.celebrityCaptainsClubNumber = effectiveExtendedLoyalty.captainsClubId;
+            }
             if (typeof effectiveExtendedLoyalty.celebrityBlueChipPoints === 'number') {
               profileUpdates.celebrityBlueChipPoints = effectiveExtendedLoyalty.celebrityBlueChipPoints;
               addLog(`  → Blue Chip points: ${effectiveExtendedLoyalty.celebrityBlueChipPoints}`, 'info');
+            }
+            if (effectiveExtendedLoyalty.celebrityBlueChipTier) {
+              profileUpdates.celebrityBlueChipTier = effectiveExtendedLoyalty.celebrityBlueChipTier;
+              addLog(`  → Blue Chip tier: ${effectiveExtendedLoyalty.celebrityBlueChipTier}`, 'info');
             }
             if (effectiveExtendedLoyalty.venetianSocietyTier) {
               profileUpdates.silverseaVenetianTier = effectiveExtendedLoyalty.venetianSocietyTier;
@@ -2742,10 +2944,16 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             }
           }
 
+          if (syncSource === 'royal') {
+            profileUpdates.preferredBrand = 'royal';
+          } else if (syncSource === 'celebrity') {
+            profileUpdates.preferredBrand = 'celebrity';
+          }
+
           if (Object.keys(profileUpdates).length > 0) {
-            addLog('Syncing user profile from loyalty data...', 'info');
-            await updateUserProfile(currentUser.id, profileUpdates as any);
-            addLog('✅ User profile updated from sync', 'success');
+            addLog(`Syncing ${targetSlotLabel.toLowerCase()} profile from loyalty data...`, 'info');
+            await updateUserProfile(targetProfile.id, profileUpdates as any);
+            addLog(`✅ ${targetSlotLabel} profile updated from sync`, 'success');
           } else {
             addLog('ℹ️ No passenger or loyalty profile fields found to update', 'info');
           }
@@ -2828,12 +3036,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         status: 'complete',
         lastSyncTimestamp: new Date().toISOString(),
         syncCounts: {
-          offerCount: finalOffers.length,
-          offerRows: finalCruises.length,
+          offerCount: prev.syncCounts?.offerCount ?? 0,
+          offerRows: prev.syncCounts?.offerRows ?? 0,
           upcomingCruises: finalActiveBookedCruises.length,
           courtesyHolds: finalCourtesyHolds.length,
-          completedCruises: finalCompletedBookedCruises.length,
-          offerBreakdown: syncOfferBreakdown
+          completedCruises: finalBookedCruises.filter((cruise) => cruise.completionState === 'completed' || String(cruise.status ?? '').toLowerCase() === 'completed').length
         }
       }));
       
@@ -2866,568 +3073,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     } finally {
       syncToAppInFlightRef.current = false;
     }
-  }, [state.extractedOffers, state.extractedBookedCruises, state.loyaltyData, extendedLoyaltyData, addLog, cruiseLine, authenticatedEmail, currentUser, updateUserProfile, normalizeBookedCruiseRows, normalizeOfferRows]);
-
-
-  const isCompletedBookedCruiseRow = useCallback((cruise: BookedCruiseRow): boolean => {
-    const status = `${cruise.status || ''} ${cruise.sourcePage || ''} ${(cruise as any).bookingStatus || ''}`.toLowerCase();
-    const sailDateValue = cruise.sailingStartDate || cruise.sailingDates;
-    if (sailDateValue) {
-      const raw = String(sailDateValue).trim();
-      let sailDate = new Date(raw);
-      if (Number.isNaN(sailDate.getTime())) {
-        const ymd = raw.match(/^(20\d{2})(\d{2})(\d{2})$/);
-        if (ymd) sailDate = new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]));
-      }
-      if (Number.isNaN(sailDate.getTime())) {
-        const mdy = raw.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](20\d{2})$/);
-        if (mdy) sailDate = new Date(Number(mdy[3]), Number(mdy[1]) - 1, Number(mdy[2]));
-      }
-      if (!Number.isNaN(sailDate.getTime())) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        sailDate.setHours(0, 0, 0, 0);
-        if (sailDate >= today) return false; // hard guard: future sailings can never be completed
-        return true;
-      }
-    }
-    return status.includes('completed') || status.includes('past') || status.includes('sail history') || status.includes('sailed');
-  }, []);
-
-  const runCompletedCruisesSync = useCallback(async (coreDataContext: any) => {
-    if (ingestionInFlightRef.current || syncToAppInFlightRef.current) {
-      addLog('Another sync is already running...', 'warning');
-      return;
-    }
-    if (state.status !== 'logged_in' && state.status !== 'complete') {
-      addLog('Cannot sync completed cruises: user not logged in', 'error');
-      return;
-    }
-    if (!webViewRef.current) {
-      addLog('WebView not available', 'error');
-      return;
-    }
-
-    ingestionInFlightRef.current = true;
-    completedCruisesSyncInProgressRef.current = true;
-    processedPayloads.current.clear();
-    extractedBookedCruisesRef.current = [];
-    setState(prev => ({
-      ...prev,
-      status: 'running_step_2',
-      extractedBookedCruises: [],
-      error: null,
-      syncPreview: null,
-      syncCounts: null,
-    }));
-
-    const finishCompletedCruisesFromPayload = (payload: any, sourceLabel: string): boolean => {
-      const sailings = getRoyalLoyaltyHistorySailings(payload);
-      if (sailings.length === 0) {
-        return false;
-      }
-
-      const completedRows = convertRoyalLoyaltyHistorySailingsToCompletedRows(sailings);
-      const preview = createSyncPreview(
-        [],
-        completedRows,
-        null,
-        coreDataContext.casinoOffers,
-        coreDataContext.cruises,
-        coreDataContext.bookedCruises,
-        {},
-        cruiseLine === 'celebrity' ? 'celebrity' : 'royal'
-      );
-      setState(prev => ({
-        ...prev,
-        status: 'awaiting_confirmation' as SyncStatus,
-        extractedOffers: [],
-        extractedBookedCruises: completedRows,
-        syncPreview: preview,
-        syncCounts: {
-          offerCount: 0,
-          offerRows: 0,
-          upcomingCruises: 0,
-          courtesyHolds: 0,
-          completedCruises: completedRows.length,
-        }
-      }));
-      extractedBookedCruisesRef.current = completedRows;
-      addLog(`✅ Captured ${completedRows.length} completed/past cruise(s) from ${sourceLabel}`, 'success');
-      completedRows.forEach((c, idx) => {
-        addLog(`   ✅ Completed ${idx + 1}: ${c.shipName} - ${c.sailingStartDate} (${c.numberOfNights || 'N/A'} nights)`, 'success');
-      });
-      addLog(`📊 SUMMARY: ${completedRows.length} past/completed cruise(s) found`, 'success');
-      addLog(`⏳ Found ${completedRows.length} past cruises. Please review and confirm to sync them to your app.`, 'info');
-      addLog('✅ COMPLETED CRUISES CAPTURE COMPLETE: awaiting Yes/No confirmation', 'success');
-      return true;
-    };
-
-    const navigateToPage = (url: string, maxWaitMs: number = 18000): Promise<void> => {
-      return new Promise((resolve) => {
-        navigationRequestIdRef.current += 1;
-        const requestId = navigationRequestIdRef.current;
-        pendingNavigationTargetRef.current = url;
-        const timeout = setTimeout(() => {
-          if (requestId !== navigationRequestIdRef.current) return;
-          addLog(`⚠️ Page load timeout for ${url} - continuing`, 'warning');
-          pageLoadResolver.current = null;
-          pendingNavigationTargetRef.current = null;
-          resolve();
-        }, maxWaitMs);
-        pageLoadResolver.current = () => {
-          if (requestId !== navigationRequestIdRef.current) return;
-          clearTimeout(timeout);
-          setTimeout(resolve, 2500);
-        };
-        addLog(`🌐 Navigating to: ${url}`, 'info');
-        setWebViewUrl(url);
-      });
-    };
-
-    const delay = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
-
-
-    const existingCompletedRowsFromCore = (): BookedCruiseRow[] => {
-      try {
-        const rows = ((coreDataContext?.bookedCruises || []) as any[])
-          .filter((c: any) => {
-            const rowLike: any = {
-              status: c.status || c.completionState,
-              sourcePage: c.sourcePage,
-              sailingStartDate: c.sailDate || c.sailingStartDate,
-              sailingDates: c.sailDate || c.sailingDates,
-              bookingStatus: c.bookingStatus,
-            };
-            return isCompletedBookedCruiseRow(rowLike as BookedCruiseRow);
-          })
-          .map((c: any) => ({
-            sourcePage: 'Completed',
-            shipName: c.shipName || '',
-            shipCode: c.shipCode || '',
-            cruiseTitle: c.cruiseTitle || c.itineraryName || c.destination || 'Completed Cruise',
-            sailingStartDate: c.sailDate || c.sailingStartDate || '',
-            sailingEndDate: c.returnDate || c.sailingEndDate || '',
-            sailingDates: c.sailDate || c.sailingDates || '',
-            itinerary: c.itineraryName || c.destination || '',
-            departurePort: c.departurePort || '',
-            arrivalPort: c.arrivalPort || '',
-            cabinType: c.cabinType || c.category || '',
-            cabinCategory: c.cabinCategory || '',
-            cabinNumberOrGTY: c.cabinNumber || c.stateroomNumber || '',
-            deckNumber: c.deckNumber || '',
-            bookingId: String(c.bookingId || c.reservationNumber || ''),
-            numberOfGuests: String(c.guests || c.numberOfGuests || 1),
-            numberOfNights: String(c.nights || c.numberOfNights || ''),
-            daysToGo: '0',
-            status: 'Completed',
-            holdExpiration: '',
-            loyaltyLevel: '',
-            loyaltyPoints: '',
-            paidInFull: '',
-            balanceDue: '',
-            musterStation: '',
-            bookingStatus: 'Completed',
-            packageCode: c.packageCode || '',
-            passengerStatus: c.passengerStatus || '',
-            stateroomNumber: c.stateroomNumber || c.cabinNumber || '',
-            stateroomCategoryCode: c.stateroomCategoryCode || c.cabinCategory || '',
-            stateroomType: c.stateroomType || c.cabinType || '',
-          } as unknown as BookedCruiseRow));
-        return rows;
-      } catch {
-        return [];
-      }
-    };
-
-    try {
-      addLog('🚢 ====== COMPLETED CRUISES SYNC ======', 'info');
-      // Start from only already-known completed rows from the current extraction.
-      // Do not let stale upcoming rows from a prior Sync Now run bleed into the completed-only flow.
-      const seedCompletedRows = normalizeBookedCruiseRows(extractedBookedCruisesRef.current).filter(isCompletedBookedCruiseRow);
-      extractedBookedCruisesRef.current = seedCompletedRows;
-      if (seedCompletedRows.length > 0) {
-        addLog(`📦 Seeded completed-only sync with ${seedCompletedRows.length} completed row(s) already captured in this session`, 'info');
-      }
-      if (cachedRoyalLoyaltyHistoryPayloadRef.current) {
-        addLog('📦 Replaying previously captured loyalty-history payload before touching My Account...', 'info');
-        if (finishCompletedCruisesFromPayload(cachedRoyalLoyaltyHistoryPayloadRef.current, 'cached Royal loyalty-history payload')) {
-          return;
-        }
-        addLog('⚠️ Cached loyalty-history payload did not contain a sailings array; continuing to live capture', 'warning');
-      }
-
-      addLog('📍 Visiting Royal loyalty page first to trigger the old working loyalty-history payload...', 'info');
-      await navigateToPage('https://www.royalcaribbean.com/account/loyalty-programs', 18000);
-      await delay(7000);
-      if (cachedRoyalLoyaltyHistoryPayloadRef.current) {
-        addLog('📦 Loyalty page produced a loyalty-history payload; parsing it now...', 'success');
-        if (finishCompletedCruisesFromPayload(cachedRoyalLoyaltyHistoryPayloadRef.current, 'live Royal loyalty-history payload')) {
-          return;
-        }
-      }
-
-      addLog('📍 Visiting Royal Caribbean My Account for past cruises...', 'info');
-      await navigateToPage('https://www.royalcaribbean.com/myaccount', 22000);
-      await delay(3000);
-
-      webViewRef.current.injectJavaScript(`
-        (function() {
-          function log(message, type) {
-            window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'log', message: message, logType: type || 'info' }));
-          }
-          function clickLikeUser(el) {
-            if (!el) return false;
-            try { el.scrollIntoView({ block: 'center', inline: 'center' }); } catch (e) {}
-            try { ['pointerdown','mousedown','mouseup','click'].forEach(function(t){ el.dispatchEvent(new MouseEvent(t,{bubbles:true,cancelable:true,view:window})); }); } catch(e) {}
-            try { if (typeof el.click === 'function') el.click(); } catch(e) {}
-            return true;
-          }
-          function findButton(re) {
-            return Array.prototype.slice.call(document.querySelectorAll('button,a,[role="button"],[role="tab"]')).find(function(el) {
-              var text = (el.innerText || el.textContent || el.getAttribute('aria-label') || '').replace(/\s+/g,' ').trim().toLowerCase();
-              return text && text.length < 80 && re.test(text);
-            });
-          }
-          try {
-            log('🔎 Completed cruise sync v8.6.3: opening View All, then explicitly switching to Past Sailings before extraction...', 'info');
-            function findByText(re) { return findButton(re); }
-            function allClickable() { return Array.prototype.slice.call(document.querySelectorAll('button,a,[role="button"],[role="tab"],li,div,span')).filter(function(el) {
-              var text = (el.innerText || el.textContent || el.getAttribute('aria-label') || '').replace(/\s+/g,' ').trim().toLowerCase();
-              return text && text.length < 120;
-            }); }
-            function findLoose(re) { return allClickable().find(function(el) {
-              var text = (el.innerText || el.textContent || el.getAttribute('aria-label') || '').replace(/\s+/g,' ').trim().toLowerCase();
-              return re.test(text);
-            }); }
-            function scrollTrips() {
-              try { window.scrollBy(0, Math.max(500, window.innerHeight || 700)); } catch(e) {}
-              Array.prototype.slice.call(document.querySelectorAll('main,section,div,[role="tabpanel"],[class*="trip" i],[class*="cruise" i]')).forEach(function(el){
-                try { if (el.scrollHeight > el.clientHeight + 80) el.scrollTop = el.scrollHeight; } catch(e) {}
-              });
-            }
-            function clickViewAll() {
-              var viewAll = findByText(/view\s*all|show\s*all|all\s*cruises|all\s*sailings|my\s*cruises/);
-              if (viewAll) { clickLikeUser(viewAll); log('✅ Clicked View All cruises control', 'success'); return true; }
-              log('⚠️ View All cruises control not found on this pass', 'warning');
-              return false;
-            }
-            function clickPast() {
-              var past = findByText(/past\s*sailings|past\s*cruises|completed\s*sailings|completed\s*cruises|sailing\s*history|cruise\s*history|^past(\s*\(\d+\))?$|^completed(\s*\(\d+\))?$/) ||
-                         findLoose(/past\s*sailings|past\s*cruises|completed\s*sailings|completed\s*cruises|sailing\s*history|cruise\s*history|^past(\s*\(\d+\))?$|^completed(\s*\(\d+\))?$/);
-              if (past) {
-                clickLikeUser(past);
-                log('✅ Clicked Past Sailings / Completed cruises control', 'success');
-                try { window.__easySeasPastSailingsActivated = true; } catch(e) {}
-                return true;
-              }
-              return false;
-            }
-            clickViewAll();
-            var attempts = 0;
-            var timer = setInterval(function() {
-              attempts += 1;
-              if (attempts === 2 || attempts === 5) clickViewAll();
-              scrollTrips();
-              if (clickPast()) { clearInterval(timer); return; }
-              if (attempts >= 12) {
-                clearInterval(timer);
-                log('⚠️ Past Sailings control not found after repeated View All/scroll attempts; scraping visible page and captured API payloads only', 'warning');
-              }
-            }, 1500);
-          } catch (e) {
-            log('⚠️ Completed cruises click helper failed: ' + (e && e.message ? e.message : String(e)), 'warning');
-          }
-          true;
-        })();
-      `);
-
-      webViewRef.current.injectJavaScript(`
-        (function() {
-          function post(msg){ try { window.ReactNativeWebView.postMessage(JSON.stringify(msg)); } catch(e) {} }
-          function log(message, type){ post({ type:'log', message: message, logType: type || 'info' }); }
-          function firstString() {
-            for (var i=0;i<arguments.length;i++) {
-              var v = arguments[i];
-              if (v === null || v === undefined) continue;
-              if (typeof v === 'number' && isFinite(v)) return String(v);
-              if (typeof v === 'string' && v.trim()) return v.trim();
-            }
-            return '';
-          }
-          function deepFind(obj, keys, depth) {
-            if (!obj || depth > 6) return '';
-            if (typeof obj !== 'object') return '';
-            for (var i=0;i<keys.length;i++) {
-              var k = keys[i];
-              if (obj[k] !== undefined && obj[k] !== null && String(obj[k]).trim()) return String(obj[k]).trim();
-            }
-            if (Array.isArray(obj)) {
-              for (var a=0;a<obj.length;a++) { var av = deepFind(obj[a], keys, depth+1); if (av) return av; }
-            } else {
-              var names = Object.keys(obj);
-              for (var n=0;n<names.length;n++) { var ov = deepFind(obj[names[n]], keys, depth+1); if (ov) return ov; }
-            }
-            return '';
-          }
-          async function fetchCompletedFromLoyaltyHistory() {
-            try {
-              var captured = window.capturedPayloads || {};
-              var loyalty = captured.loyalty || captured.loyaltyData || captured.extendedLoyalty || {};
-              var payload = loyalty.payload || loyalty.data || loyalty;
-              var allPayloads = [payload, loyalty, captured, window.capturedRequestHeaders || {}];
-              var accountId = '';
-              var loyaltyNumber = '';
-              for (var pi=0; pi<allPayloads.length && !accountId; pi++) {
-                accountId = firstString(allPayloads[pi].accountId, allPayloads[pi].guestAccountId, allPayloads[pi].accountID) || deepFind(allPayloads[pi], ['accountId','guestAccountId','accountID'], 0);
-              }
-              for (var li=0; li<allPayloads.length && !loyaltyNumber; li++) {
-                loyaltyNumber = firstString(
-                  allPayloads[li].loyaltyNumber,
-                  allPayloads[li].crownAndAnchorNumber,
-                  allPayloads[li].crownAnchorNumber,
-                  allPayloads[li].crownAndAnchorId,
-                  allPayloads[li].loyaltyId
-                ) || deepFind(allPayloads[li], ['loyaltyNumber','crownAndAnchorNumber','crownAnchorNumber','crownAndAnchorId','loyaltyId'], 0);
-              }
-              if (!accountId) {
-                var html = document.documentElement ? document.documentElement.innerHTML : '';
-                var accountMatch = html.match(/accountId[\"']?\s*[:=]\s*[\"']?([A-Z0-9]{5,})/i) || html.match(/guestAccountId[\"']?\s*[:=]\s*[\"']?([A-Z0-9]{5,})/i);
-                if (accountMatch) accountId = accountMatch[1];
-              }
-              if (!accountId) {
-                var injectedAccountId = '${String((extendedLoyaltyData as any)?.accountId || (extendedLoyaltyData as any)?.guestAccountId || (currentUser as any)?.accountId || (currentUser as any)?.guestAccountId || '').replace(/[^0-9A-Za-z_-]/g, '')}';
-                if (injectedAccountId) accountId = injectedAccountId;
-              }
-              if (!loyaltyNumber) {
-                var injectedLoyaltyNumber = '${String((extendedLoyaltyData as any)?.crownAndAnchorId || (extendedLoyaltyData as any)?.crownAnchorNumber || (extendedLoyaltyData as any)?.crownAndAnchorNumber || (extendedLoyaltyData as any)?.loyaltyNumber || (currentUser as any)?.crownAnchorNumber || (currentUser as any)?.crownAndAnchorNumber || '').replace(/[^0-9A-Za-z]/g, '')}';
-                if (injectedLoyaltyNumber) loyaltyNumber = injectedLoyaltyNumber;
-              }
-              if (!loyaltyNumber) {
-                var txt = document.body ? (document.body.innerText || document.body.textContent || '') : '';
-                var lm = txt.match(/(?:Crown\s*&\s*Anchor|Club\s*Royale)\s*#?\s*(\d{6,})/i) || txt.match(/#\s*(\d{6,})/);
-                if (lm) loyaltyNumber = lm[1];
-              }
-              if (!accountId || !loyaltyNumber) {
-                log('⚠️ Direct completed history fetch skipped: missing accountId or loyaltyNumber (accountId=' + (accountId || 'missing') + ', loyaltyNumber=' + (loyaltyNumber ? 'present' : 'missing') + ')', 'warning');
-                return;
-              }
-              var url = 'https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/loyalty/history/' + encodeURIComponent(accountId) + '?loyaltyNumber=' + encodeURIComponent(loyaltyNumber);
-              log('📡 Fetching completed cruises directly from loyalty history endpoint', 'info');
-              function safeJsonParseLocal(str) { try { return JSON.parse(str); } catch(e) { return null; } }
-              function tryFindAppKeyLocal() {
-                try {
-                  var keys = Object.keys(localStorage || {});
-                  for (var ki=0; ki<keys.length; ki++) {
-                    var k = keys[ki];
-                    if (/appkey/i.test(k) || /api[-_]?key/i.test(k)) {
-                      var v = localStorage.getItem(k);
-                      if (v && v.length > 10) return v;
-                    }
-                  }
-                } catch(e) {}
-                try {
-                  var winAny = window;
-                  var env = winAny.__ENV__ || winAny.__env__ || winAny.env || {};
-                  var envKey = env.APPKEY || env.appKey || env.appkey || env.API_KEY || env.apiKey || env.apigeeApiKey || winAny.RCLL_APPKEY || winAny.RCCL_APPKEY || winAny.APPKEY || '';
-                  if (typeof envKey === 'string' && envKey.length > 10) return envKey;
-                } catch(e) {}
-                return '';
-              }
-              function getAuthHeadersFromSessionLocal(accountIdParam) {
-                try {
-                  var sessionRaw = localStorage.getItem('persist:session');
-                  var session = sessionRaw ? safeJsonParseLocal(sessionRaw) : null;
-                  var token = session && session.token ? safeJsonParseLocal(session.token) : null;
-                  var user = session && session.user ? safeJsonParseLocal(session.user) : null;
-                  var rawAuth = token && token.toString ? token.toString() : '';
-                  var authorization = rawAuth ? (rawAuth.indexOf('Bearer ') === 0 ? rawAuth : ('Bearer ' + rawAuth)) : '';
-                  var sessionAccountId = user && user.accountId ? String(user.accountId) : '';
-                  var headers = { 'accept': 'application/json', 'accept-language': 'en-US,en;q=0.9', 'content-type': 'application/json' };
-                  if (accountIdParam || sessionAccountId) headers['account-id'] = accountIdParam || sessionAccountId;
-                  if (authorization) headers['authorization'] = authorization;
-                  var appKey = tryFindAppKeyLocal();
-                  if (appKey) { headers['appkey'] = appKey; headers['x-api-key'] = appKey; }
-                  return headers;
-                } catch(e) { return null; }
-              }
-              var headers = getAuthHeadersFromSessionLocal(accountId) || { 'accept': 'application/json' };
-              if ((window.capturedRequestHeaders||{}).apiKey) headers['x-api-key'] = window.capturedRequestHeaders.apiKey;
-              if ((window.capturedRequestHeaders||{}).authorization) headers['authorization'] = window.capturedRequestHeaders.authorization;
-              if ((window.capturedRequestHeaders||{}).accountId) headers['account-id'] = window.capturedRequestHeaders.accountId;
-              var resp = await fetch(url, { method: 'GET', credentials: 'include', headers: headers });
-              log('📡 Completed history endpoint status: ' + resp.status, resp.ok ? 'success' : 'warning');
-              if (!resp.ok) return;
-              var data = await resp.json();
-              post({ type:'network_capture', endpoint:'royalLoyaltyHistory', data:data, url:url });
-            } catch(e) {
-              log('⚠️ Direct completed history fetch failed: ' + (e && e.message ? e.message : String(e)), 'warning');
-            }
-          }
-          setTimeout(fetchCompletedFromLoyaltyHistory, 2500);
-          true;
-        })();
-      `);
-
-      addLog('⏳ Waiting for completed/past bookings API payload and visible page rows...', 'info');
-      await delay(22000);
-      if (cachedRoyalLoyaltyHistoryPayloadRef.current) {
-        addLog('📦 Loyalty-history payload appeared during completed sync; parsing before DOM fallback...', 'success');
-        if (finishCompletedCruisesFromPayload(cachedRoyalLoyaltyHistoryPayloadRef.current, 'completed-sync captured Royal loyalty-history payload')) {
-          return;
-        }
-      }
-
-      // DOM fallback: if Royal renders completed cruises without exposing a clean API payload, scrape the visible history cards.
-      webViewRef.current.injectJavaScript(`
-        (function() {
-          function post(msg){ try { window.ReactNativeWebView.postMessage(JSON.stringify(msg)); } catch(e) {} }
-          function log(message, type){ post({ type:'log', message: message, logType: type || 'info' }); }
-          function clean(s){ return String(s || '').replace(/\u00a0/g,' ').replace(/\s+/g,' ').trim(); }
-          function monthDateToYmd(s){
-            s = clean(s);
-            var d = new Date(s);
-            if (!isNaN(d.getTime())) return String(d.getFullYear()) + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0');
-            var m = s.match(/(20\d{2})[-\/](\d{1,2})[-\/](\d{1,2})/); if (m) return m[1] + m[2].padStart(2,'0') + m[3].padStart(2,'0');
-            return s;
-          }
-          try {
-            var text = document.body ? document.body.innerText || document.body.textContent || '' : '';
-            var lines = text.split(/\n+/).map(clean).filter(Boolean);
-            var shipRe = /([A-Z][A-Za-z' .-]+ of the Seas)/;
-            var dateRe = /(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2}(?:st|nd|rd|th)?[,]?\s+20\d{2}|20\d{2}[-\/]?\d{1,2}[-\/]?\d{1,2}|\d{1,2}[\/-]\d{1,2}[\/-]20\d{2}/i;
-            var rows = [];
-            var seen = {};
-            for (var i=0; i<lines.length; i++) {
-              var win = lines.slice(Math.max(0,i-3), Math.min(lines.length, i+9)).join(' | ');
-              var sm = win.match(shipRe);
-              var dm = win.match(dateRe);
-              if (!sm || !dm) continue;
-              var before = lines.slice(Math.max(0,i-8), i+1).join(' ').toLowerCase();
-              var after = lines.slice(i, Math.min(lines.length, i+12)).join(' ').toLowerCase();
-              var context = before + ' ' + after;
-              var pastActivated = !!window.__easySeasPastSailingsActivated;
-              var parsedDate = new Date(dm[0]);
-              if (isNaN(parsedDate.getTime())) { var ymdm = String(dm[0]).match(/^(20\d{2})(\d{2})(\d{2})$/); if (ymdm) parsedDate = new Date(Number(ymdm[1]), Number(ymdm[2])-1, Number(ymdm[3])); }
-              if (!isNaN(parsedDate.getTime())) { var today = new Date(); today.setHours(0,0,0,0); parsedDate.setHours(0,0,0,0); if (parsedDate >= today) continue; }
-              if (!(context.indexOf('past') >= 0 || context.indexOf('completed') >= 0 || context.indexOf('history') >= 0 || context.indexOf('sailed') >= 0 || (!isNaN(parsedDate.getTime()) && parsedDate < new Date()))) continue;
-              var nights = (win.match(/(\d{1,2})\s*(?:night|nt)/i) || [,''])[1];
-              var bookingId = (win.match(/(?:booking|reservation|confirmation)\s*(?:#|id|number)?\s*[:#]?\s*([A-Z0-9]{4,})/i) || [,''])[1];
-              var cabin = (win.match(/(Interior|Ocean\s*View|Oceanview|Balcony|Suite|GTY)/i) || [,''])[1];
-              var key = sm[1] + '|' + dm[0] + '|' + bookingId;
-              if (seen[key]) continue; seen[key] = true;
-              rows.push({
-                shipName: sm[1],
-                shipCode: '',
-                sailDate: monthDateToYmd(dm[0]),
-                departureDate: monthDateToYmd(dm[0]),
-                numberOfNights: nights || '',
-                cruiseTitle: nights ? (nights + ' Night Cruise') : 'Completed Cruise',
-                stateroomType: cabin || '',
-                stateroomNumber: '',
-                bookingId: bookingId || '',
-                bookingStatus: 'Completed',
-                status: 'Completed',
-                sourcePage: 'Completed',
-                rawDomText: win.substring(0,500)
-              });
-            }
-            if (rows.length > 0) {
-              log('✅ DOM fallback captured ' + rows.length + ' completed/past cruise row(s)', 'success');
-              post({ type:'network_capture', endpoint:'upcomingCruises', data:{ completedCruises: rows }, url:'dom://royal/myaccount/completed' });
-            } else {
-              log('⚠️ DOM fallback found no completed cruise rows on the visible page', 'warning');
-            }
-          } catch(e) { log('⚠️ Completed DOM scrape failed: ' + (e && e.message ? e.message : String(e)), 'warning'); }
-          true;
-        })();
-      `);
-      await delay(5000);
-
-      const normalizedRows = normalizeBookedCruiseRows(extractedBookedCruisesRef.current);
-      const completedRows = normalizedRows.filter(isCompletedBookedCruiseRow);
-
-      if (completedRows.length === 0) {
-        const existingCompleted = existingCompletedRowsFromCore();
-        if (existingCompleted.length > 0) {
-          addLog(`📦 Reusing ${existingCompleted.length} completed cruise(s) already captured by Sync Now/app storage`, 'success');
-          const preview = createSyncPreview(
-            [],
-            existingCompleted,
-            null,
-            coreDataContext.casinoOffers,
-            coreDataContext.cruises,
-            coreDataContext.bookedCruises,
-            {},
-            cruiseLine === 'celebrity' ? 'celebrity' : 'royal'
-          );
-          setState(prev => ({
-            ...prev,
-            status: 'awaiting_confirmation' as SyncStatus,
-            extractedOffers: [],
-            extractedBookedCruises: existingCompleted,
-            syncPreview: preview,
-            syncCounts: {
-              offerCount: 0,
-              offerRows: 0,
-              upcomingCruises: 0,
-              courtesyHolds: 0,
-              completedCruises: existingCompleted.length,
-            }
-          }));
-          extractedBookedCruisesRef.current = existingCompleted;
-          addLog(`📊 SUMMARY: ${existingCompleted.length} past/completed cruise(s) found`, 'success');
-          addLog(`⏳ Found ${existingCompleted.length} past cruises. Please review and confirm to sync them to your app.`, 'info');
-          addLog('✅ COMPLETED CRUISES CAPTURE COMPLETE: awaiting Yes/No confirmation', 'success');
-          return;
-        }
-        addLog(`⚠️ No completed cruises were captured. Captured ${normalizedRows.length} booking row(s), but none were marked completed/past.`, 'warning');
-        setState(prev => ({ ...prev, status: 'complete' }));
-        return;
-      }
-
-      addLog(`✅ Captured ${completedRows.length} completed cruise(s)`, 'success');
-      completedRows.forEach((c, idx) => {
-        addLog(`   ✅ Completed ${idx + 1}: ${c.shipName} - ${c.sailingStartDate} (${c.numberOfNights || 'N/A'} nights)`, 'success');
-      });
-
-      const preview = createSyncPreview(
-        [],
-        completedRows,
-        null,
-        coreDataContext.casinoOffers,
-        coreDataContext.cruises,
-        coreDataContext.bookedCruises,
-        {},
-        cruiseLine === 'celebrity' ? 'celebrity' : 'royal'
-      );
-      setState(prev => ({
-        ...prev,
-        status: 'awaiting_confirmation' as SyncStatus,
-        extractedOffers: [],
-        extractedBookedCruises: completedRows,
-        syncPreview: preview,
-        syncCounts: {
-          offerCount: 0,
-          offerRows: 0,
-          upcomingCruises: 0,
-          courtesyHolds: 0,
-          completedCruises: completedRows.length,
-        }
-      }));
-      extractedBookedCruisesRef.current = completedRows;
-      addLog(`📊 SUMMARY: ${completedRows.length} past/completed cruise(s) found`, 'success');
-      addLog(`⏳ Found ${completedRows.length} past cruises. Please review and confirm to sync them to your app.`, 'info');
-      addLog('✅ COMPLETED CRUISES CAPTURE COMPLETE: awaiting Yes/No confirmation', 'success');
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      setState(prev => ({ ...prev, status: 'error', error: errorMessage }));
-      addLog(`❌ Completed cruises sync failed: ${errorMessage}`, 'error');
-    } finally {
-      completedCruisesSyncInProgressRef.current = false;
-      ingestionInFlightRef.current = false;
-    }
-  }, [addLog, state.status, normalizeBookedCruiseRows, isCompletedBookedCruiseRow, cruiseLine, currentUser, extendedLoyaltyData]);
+  }, [state.extractedOffers, state.extractedBookedCruises, state.loyaltyData, extendedLoyaltyData, addLog, cruiseLine, authenticatedEmail, currentUser, users, updateUserProfile, normalizeBookedCruiseRows, normalizeOfferRows]);
 
   const cancelSync = useCallback(() => {
     ingestionInFlightRef.current = false;
@@ -3445,7 +3091,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     config,
     openLogin,
     runIngestion,
-    runCompletedCruisesSync,
     exportOffersCSV,
     exportBookedCruisesCSV,
     exportLog,
@@ -3461,7 +3106,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     webViewUrl,
     onPageLoaded
   }), [
-    state, webViewRef, cruiseLine, setCruiseLine, config, openLogin, runIngestion, runCompletedCruisesSync,
+    state, webViewRef, cruiseLine, setCruiseLine, config, openLogin, runIngestion,
     exportOffersCSV, exportBookedCruisesCSV, exportLog, resetState, syncToApp,
     cancelSync, handleWebViewMessage, addLog, extendedLoyaltyData, setExtendedLoyalty,
     staySignedIn, toggleStaySignedIn, webViewUrl, onPageLoaded

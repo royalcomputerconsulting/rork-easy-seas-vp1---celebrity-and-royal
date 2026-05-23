@@ -8,18 +8,21 @@ import { findFreeplayOBCByOfferCode, findFreeplayOBCByShipAndDate } from '@/cons
 export function applyKnownRetailValues(cruises: BookedCruise[]): BookedCruise[] {
   return cruises.map(cruise => {
     const knownValue = KNOWN_RETAIL_VALUES.find(kv => {
-      if (kv.cruiseId === cruise.id) return true;
-      if (kv.cruiseId === cruise.bookingId) return true;
-      
-      const shipMatch = cruise.shipName?.toLowerCase().includes(kv.ship.toLowerCase().split(' ')[0]);
+      if (kv.cruiseId === cruise.id || kv.cruiseId === cruise.bookingId || kv.cruiseId === cruise.reservationNumber) return true;
+
+      const normalizedShip = cruise.shipName?.toLowerCase().trim() ?? '';
+      const normalizedKnownShip = kv.ship.toLowerCase().trim();
+      const shipMatch = normalizedShip === normalizedKnownShip || normalizedShip.includes(normalizedKnownShip) || normalizedKnownShip.includes(normalizedShip);
       const dateMatch = cruise.sailDate === kv.departureDate;
       return shipMatch && dateMatch;
     });
     
-    if (knownValue && (!cruise.retailValue || cruise.retailValue === 0)) {
+    if (knownValue && !cruise.retailValue && !cruise.totalRetailCost && !cruise.originalPrice) {
       return {
         ...cruise,
         retailValue: knownValue.retailCabinValue,
+        totalRetailCost: knownValue.retailCabinValue,
+        originalPrice: knownValue.retailCabinValue,
       };
     }
     
@@ -32,14 +35,27 @@ export function enrichCruisesWithReceiptData(cruises: BookedCruise[]): BookedCru
     const receipt = findReceiptByShipAndDate(cruise.shipName, cruise.sailDate);
     
     if (receipt) {
+      const knownRetailValue = KNOWN_RETAIL_VALUES.find(kv => {
+        if (kv.cruiseId === cruise.id || kv.cruiseId === cruise.bookingId || kv.cruiseId === cruise.reservationNumber) return true;
+        const normalizedShip = cruise.shipName?.toLowerCase().trim() ?? '';
+        const normalizedKnownShip = kv.ship.toLowerCase().trim();
+        return kv.departureDate === cruise.sailDate && (normalizedShip === normalizedKnownShip || normalizedShip.includes(normalizedKnownShip) || normalizedKnownShip.includes(normalizedShip));
+      })?.retailCabinValue;
+      const importedRetailValue = cruise.retailValue || cruise.totalRetailCost || cruise.originalPrice || 0;
+      const retailValue = Math.max(importedRetailValue, knownRetailValue ?? 0, receipt.totalRetailCost);
+      const casinoDiscount = Math.max(receipt.totalCasinoDiscount, retailValue - receipt.pricePaid);
+
       return {
         ...cruise,
         pricePaid: receipt.pricePaid,
-        totalRetailCost: receipt.totalRetailCost,
-        totalCasinoDiscount: receipt.totalCasinoDiscount,
+        taxesFeesEstimate: cruise.taxesFeesEstimate ?? receipt.pricePaid,
+        netEffectivePaid: cruise.netEffectivePaid ?? receipt.pricePaid,
+        totalRetailCost: retailValue,
+        totalCasinoDiscount: casinoDiscount,
         cabinCategory: receipt.cabinCategory,
         cabinNumber: cruise.cabinNumber || receipt.cabinNumber,
-        retailValue: receipt.totalRetailCost,
+        retailValue,
+        originalPrice: retailValue,
       };
     }
     

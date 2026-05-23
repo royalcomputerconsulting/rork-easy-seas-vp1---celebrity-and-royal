@@ -1,6 +1,6 @@
 /*
   Easy Seas — Upcoming Cruises Grid
-  Adds a "SHOW ALL CRUISES" button on https://www.royalcaribbean.com/myaccount
+  Adds a "SHOW ALL CRUISES" button on https://www.royalcaribbean.com/account/upcoming-cruises
   Builds an on-page grid of upcoming cruises and supports CSV export.
 
   Design goals:

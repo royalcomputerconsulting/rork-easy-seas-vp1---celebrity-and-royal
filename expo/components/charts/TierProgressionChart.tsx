@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import { Trophy, TrendingUp, Calendar, Target, CheckCircle } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
 import { CLUB_ROYALE_TIERS, TIER_ORDER, getNextTier, getTierProgress } from '@/constants/clubRoyaleTiers';
+import { CLUB_ROYALE_SIGNATURE_RETAIN_POINTS } from '@/lib/casinoPointTruth';
 import { generateTimelineProjections, PlayerContext } from '@/lib/whatIfSimulator';
 import type { BookedCruise } from '@/types/models';
 import { formatNumber } from '@/lib/format';
@@ -73,7 +74,7 @@ export function TierProgressionChart({
       });
     });
 
-    const tierLines = TIER_ORDER.slice(1).map((tier) => {
+    const tierLines = TIER_ORDER.filter((tier) => tier === 'Signature' || tier === 'Masters').map((tier) => {
       const threshold = CLUB_ROYALE_TIERS[tier].threshold;
       const normalizedY = logScale(threshold, maxPoints);
       const y = chartHeight - normalizedY * chartHeight + CHART_PADDING;
@@ -95,6 +96,11 @@ export function TierProgressionChart({
   const tierProgress = getTierProgress(playerContext.currentPoints, playerContext.currentTier);
   const isAtHighestTier = playerContext.currentTier === 'Masters';
   const isAtSignatureOrHigher = currentTierIndex >= TIER_ORDER.indexOf('Signature');
+  const isSignatureRetainMode = playerContext.currentTier === 'Signature' && playerContext.currentPoints < CLUB_ROYALE_SIGNATURE_RETAIN_POINTS;
+  const signatureRetainGap = Math.max(0, CLUB_ROYALE_SIGNATURE_RETAIN_POINTS - playerContext.currentPoints);
+  const signatureRetainProgress = Math.min(100, Math.max(0, (playerContext.currentPoints / CLUB_ROYALE_SIGNATURE_RETAIN_POINTS) * 100));
+  const targetLabel = isAtHighestTier ? 'Status' : isSignatureRetainMode ? 'Next Target' : 'To Next Tier';
+  const targetValue = isAtHighestTier ? 'MAX' : isSignatureRetainMode ? formatNumber(CLUB_ROYALE_SIGNATURE_RETAIN_POINTS) : formatNumber(tierProgress.pointsToNext);
 
   return (
     <View style={styles.container}>
@@ -103,9 +109,9 @@ export function TierProgressionChart({
           <View style={[styles.headerIcon, { backgroundColor: 'rgba(139, 92, 246, 0.15)' }]}>
             <Trophy size={18} color="#8B5CF6" />
           </View>
-          <View>
-            <Text style={styles.title}>Tier Progression Forecast</Text>
-            <Text style={styles.subtitle}>Club Royale advancement timeline</Text>
+          <View style={styles.titleBlock}>
+            <Text style={styles.title} numberOfLines={1}>Tier Progression Forecast</Text>
+            <Text style={styles.subtitle} numberOfLines={1}>Signature retention, then Masters</Text>
           </View>
         </View>
         <View style={styles.timeframeBadge}>
@@ -138,6 +144,9 @@ export function TierProgressionChart({
               {chartData.points.map((point, index) => {
                 if (index === 0) return null;
                 const prevPoint = chartData.points[index - 1];
+                const isResetSegment = point.pointValue < prevPoint.pointValue;
+                if (isResetSegment) return null;
+
                 const width = Math.sqrt(
                   Math.pow(point.x - prevPoint.x, 2) + Math.pow(point.y - prevPoint.y, 2)
                 );
@@ -166,6 +175,24 @@ export function TierProgressionChart({
                 { left: chartData.points[0].x - 6, top: chartData.points[0].y - 6 },
               ]}
             />
+
+            {chartData.points.map((point, index) => {
+              if (index === 0) return null;
+              const prevPoint = chartData.points[index - 1];
+              if (point.pointValue >= prevPoint.pointValue) return null;
+
+              return (
+                <View
+                  key={`reset-${index}`}
+                  style={[
+                    styles.resetMarker,
+                    { left: point.x - 18, top: CHART_PADDING + 6 },
+                  ]}
+                >
+                  <Text style={styles.resetMarkerText}>Reset</Text>
+                </View>
+              );
+            })}
 
             {tierMilestones.length > 0 && (
               <View
@@ -210,9 +237,9 @@ export function TierProgressionChart({
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
-            <Text style={styles.statLabel}>{isAtHighestTier ? 'Status' : 'To Next Tier'}</Text>
+            <Text style={styles.statLabel}>{targetLabel}</Text>
             <Text style={[styles.statValue, { color: isAtHighestTier ? COLORS.goldAccent : COLORS.aquaAccent }]}>
-              {isAtHighestTier ? 'MAX' : formatNumber(tierProgress.pointsToNext)}
+              {targetValue}
             </Text>
           </View>
         </View>
@@ -221,11 +248,17 @@ export function TierProgressionChart({
           <View style={styles.achievedInfo}>
             <CheckCircle size={14} color={COLORS.success} />
             <Text style={styles.achievedText}>
-              You have achieved{' '}
-              <Text style={{ color: CLUB_ROYALE_TIERS[playerContext.currentTier]?.color || COLORS.success, fontWeight: '700' as const }}>
-                {playerContext.currentTier}
-              </Text>{' '}
-              status! {tierProgress.percentComplete.toFixed(0)}% progress to Masters.
+              {isSignatureRetainMode ? (
+                <>
+                  <Text style={{ color: CLUB_ROYALE_TIERS.Signature.color, fontWeight: '700' as const }}>Signature</Text>{' '}
+                  is active. Target 25,000 points to keep Signature ({signatureRetainProgress.toFixed(0)}% complete); {formatNumber(signatureRetainGap)} more needed, then Masters becomes the next chase.
+                </>
+              ) : (
+                <>
+                  <Text style={{ color: CLUB_ROYALE_TIERS.Signature.color, fontWeight: '700' as const }}>Signature</Text>{' '}
+                  retention is locked. Next target: Masters ({formatNumber(tierProgress.pointsToNext)} points away).
+                </>
+              )}
             </Text>
           </View>
         )}
@@ -294,6 +327,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: SPACING.sm,
     flex: 1,
+    minWidth: 0,
   },
   headerIcon: {
     width: 36,
@@ -301,6 +335,10 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  titleBlock: {
+    flex: 1,
+    minWidth: 0,
   },
   title: {
     fontSize: TYPOGRAPHY.fontSizeLG,
@@ -320,6 +358,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: BORDER_RADIUS.round,
     backgroundColor: 'rgba(139, 92, 246, 0.15)',
+    flexShrink: 0,
   },
   timeframeText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
@@ -330,12 +369,12 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
   },
   chartSection: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: '#FBFDFF',
+    borderRadius: BORDER_RADIUS.lg,
     marginBottom: SPACING.md,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#DCE7F4',
   },
   chart: {
     position: 'relative',
@@ -352,7 +391,7 @@ const styles = StyleSheet.create({
     height: 0,
     borderBottomWidth: 1,
     borderStyle: 'dashed',
-    opacity: 0.4,
+    opacity: 0.24,
   },
   tierLabelContainer: {
     position: 'absolute',
@@ -360,8 +399,11 @@ const styles = StyleSheet.create({
   },
   tierLineLabel: {
     fontSize: 9,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-    opacity: 0.8,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    opacity: 0.75,
+    backgroundColor: 'rgba(251, 253, 255, 0.92)',
+    paddingHorizontal: 4,
+    borderRadius: 4,
   },
   progressLine: {
     position: 'absolute',
@@ -372,9 +414,9 @@ const styles = StyleSheet.create({
   },
   lineSegment: {
     position: 'absolute',
-    height: 2,
-    backgroundColor: COLORS.aquaAccent,
-    borderRadius: 1,
+    height: 3,
+    backgroundColor: '#15B8D6',
+    borderRadius: 999,
     transformOrigin: 'left center',
   },
   currentPointMarker: {
@@ -382,9 +424,14 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: COLORS.aquaAccent,
+    backgroundColor: '#15B8D6',
     borderWidth: 2,
     borderColor: COLORS.white,
+    shadowColor: '#15B8D6',
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
   milestoneMarker: {
     position: 'absolute',
@@ -394,6 +441,20 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(76, 175, 80, 0.3)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  resetMarker: {
+    position: 'absolute',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 999,
+    backgroundColor: 'rgba(100, 116, 139, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(100, 116, 139, 0.24)',
+  },
+  resetMarkerText: {
+    fontSize: 8,
+    color: '#64748B',
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   xAxisLabels: {
     position: 'absolute',
@@ -411,7 +472,7 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
     backgroundColor: COLORS.white,
-    borderRadius: BORDER_RADIUS.md,
+    borderRadius: BORDER_RADIUS.lg,
     padding: SPACING.md,
     marginBottom: SPACING.sm,
     borderWidth: 1,
@@ -424,17 +485,19 @@ const styles = StyleSheet.create({
   statDivider: {
     width: 1,
     backgroundColor: '#E2E8F0',
-    marginHorizontal: SPACING.md,
+    marginHorizontal: SPACING.sm,
   },
   statLabel: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#64748B',
     marginBottom: 2,
+    textAlign: 'center',
   },
   statValue: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: '#1E293B',
+    textAlign: 'center',
   },
   milestoneInfo: {
     flexDirection: 'row',

@@ -36,8 +36,13 @@ import {
   Workflow,
   Radio,
   SlidersHorizontal,
+  Search,
+  CalendarDays,
+  ClipboardCheck,
 } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
+import { IntelligenceFilterStrip } from '@/components/IntelligenceFilterStrip';
+import type { AgentXMode } from '@/types/models';
 
 export interface ChatMessage {
   id: string;
@@ -47,6 +52,15 @@ export interface ChatMessage {
   isLoading?: boolean;
   toolName?: string;
   toolInput?: unknown;
+  contextSummary?: string;
+  suggestedActions?: { id: string; label: string; prompt: string }[];
+}
+
+export interface AgentXQuickAction {
+  id: string;
+  label: string;
+  icon: typeof Ship;
+  prompt: string;
 }
 
 interface AgentXChatProps {
@@ -58,15 +72,40 @@ interface AgentXChatProps {
   onClose?: () => void;
   showHeader?: boolean;
   placeholder?: string;
+  mode?: AgentXMode;
+  onModeChange?: (mode: AgentXMode) => void;
+  contextLabel?: string;
+  title?: string;
+  subtitle?: string;
+  welcomeTitle?: string;
+  welcomeSubtitle?: string;
+  disclaimerText?: string;
+  useSafeAreaPadding?: boolean;
+  showDevAssistant?: boolean;
+  showFilterStrip?: boolean;
+  quickActions?: AgentXQuickAction[];
+  defaultTtsEnabled?: boolean;
 }
 
 const STT_ENDPOINT = 'https://toolkit.rork.com/stt/transcribe/';
 
-const QUICK_ACTIONS = [
+const QUICK_ACTIONS: AgentXQuickAction[] = [
   { id: 'search', label: 'Search Cruises', icon: Ship, prompt: 'Search for available cruises' },
   { id: 'tier', label: 'Tier Progress', icon: Award, prompt: 'Show my tier progress to Signature' },
   { id: 'optimize', label: 'Optimize', icon: TrendingUp, prompt: 'Recommend cruises to maximize my points' },
   { id: 'offers', label: 'Offers', icon: Gift, prompt: 'Show expiring offers' },
+  { id: 'ask-data', label: 'Ask My Data', icon: Search, prompt: 'Ask my data: what offers, cruises, certificates, and calendar items need attention?' },
+];
+
+const AGENT_MODES: { id: AgentXMode; label: string; icon: typeof Ship }[] = [
+  { id: 'travelAgent', label: 'Travel Agent', icon: Ship },
+  { id: 'casinoHost', label: 'Casino Host', icon: Gift },
+  { id: 'certificateAdvisor', label: 'Certificate Advisor', icon: ClipboardCheck },
+  { id: 'loyaltyStrategist', label: 'Loyalty Strategist', icon: Award },
+  { id: 'apScout', label: 'AP Scout', icon: Radio },
+  { id: 'calendarPlanner', label: 'Calendar Planner', icon: CalendarDays },
+  { id: 'importAuditor', label: 'Import Auditor', icon: Workflow },
+  { id: 'easySeasGuide', label: 'EasySeas Guide', icon: Sparkles },
 ];
 
 const DEV_ASSISTANT_CAPABILITIES = [
@@ -156,6 +195,19 @@ export const AgentXChat = React.memo(function AgentXChat({
   onClose,
   showHeader = true,
   placeholder = 'Ask about cruises, tier progress, offers...',
+  mode = 'travelAgent',
+  onModeChange,
+  contextLabel = 'AgentX',
+  title = 'AI Analysis',
+  subtitle = 'Cruise Intelligence',
+  welcomeTitle = 'AI Analysis',
+  welcomeSubtitle = 'Your intelligent cruise advisor. Ask me anything about cruises, offers, tier progress, or portfolio optimization.',
+  disclaimerText = 'AI Analysis supports both voice and manual chat.',
+  useSafeAreaPadding = true,
+  showDevAssistant = true,
+  showFilterStrip = true,
+  quickActions = QUICK_ACTIONS,
+  defaultTtsEnabled = true,
 }: AgentXChatProps) {
   const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
@@ -163,7 +215,7 @@ export const AgentXChat = React.memo(function AgentXChat({
 
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [isTranscribing, setIsTranscribing] = useState<boolean>(false);
-  const [ttsEnabled, setTtsEnabled] = useState<boolean>(true);
+  const [ttsEnabled, setTtsEnabled] = useState<boolean>(defaultTtsEnabled);
   const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
   const [inputMode, setInputMode] = useState<'voice' | 'manual'>('manual');
   const [manualInput, setManualInput] = useState<string>('');
@@ -447,14 +499,19 @@ export const AgentXChat = React.memo(function AgentXChat({
     onSendMessage(prompt);
   }, [onSendMessage, isSpeaking, stopSpeaking]);
 
-  const handleModeChange = useCallback((mode: 'voice' | 'manual') => {
-    if (isRecording || isTranscribing || inputMode === mode) {
+  const handleModeChange = useCallback((inputModeValue: 'voice' | 'manual') => {
+    if (isRecording || isTranscribing || inputMode === inputModeValue) {
       return;
     }
 
-    console.log('[AgentXChat] Switching input mode to:', mode);
-    setInputMode(mode);
+    console.log('[AgentXChat] Switching input mode to:', inputModeValue);
+    setInputMode(inputModeValue);
   }, [inputMode, isRecording, isTranscribing]);
+
+  const handleAgentModeChange = useCallback((nextMode: AgentXMode) => {
+    console.log('[AgentXChat] Switching AgentX mode:', nextMode);
+    onModeChange?.(nextMode);
+  }, [onModeChange]);
 
   const handleManualSend = useCallback(() => {
     const trimmedInput = manualInput.trim();
@@ -504,15 +561,39 @@ export const AgentXChat = React.memo(function AgentXChat({
                 </Text>
               </View>
             ) : (
-              <ScrollView 
-                style={styles.messageScrollView}
-                nestedScrollEnabled={true}
-                showsVerticalScrollIndicator={true}
-              >
-                <Text style={[styles.messageText, isUser && styles.userMessageText]}>
-                  {message.content}
-                </Text>
-              </ScrollView>
+              <>
+                {!isUser && message.contextSummary ? (
+                  <View style={styles.contextBadge} testID={`agentx-answer-context-${message.id}`}>
+                    <SlidersHorizontal size={12} color="#0F766E" />
+                    <Text style={styles.contextBadgeText}>{message.contextSummary}</Text>
+                  </View>
+                ) : null}
+                <ScrollView 
+                  style={styles.messageScrollView}
+                  nestedScrollEnabled={true}
+                  showsVerticalScrollIndicator={true}
+                >
+                  <Text style={[styles.messageText, isUser && styles.userMessageText]}>
+                    {message.content}
+                  </Text>
+                </ScrollView>
+                {!isUser && message.suggestedActions && message.suggestedActions.length > 0 ? (
+                  <View style={styles.suggestedActionsRow} testID={`agentx-suggested-actions-${message.id}`}>
+                    {message.suggestedActions.map((action) => (
+                      <TouchableOpacity
+                        key={action.id}
+                        style={styles.suggestedActionChip}
+                        onPress={() => handleQuickAction(action.prompt)}
+                        activeOpacity={0.75}
+                        testID={`agentx-action-${action.id}`}
+                      >
+                        <Sparkles size={12} color="#0F766E" />
+                        <Text style={styles.suggestedActionText}>{action.label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                ) : null}
+              </>
             )}
             
             <View style={styles.messageFooter}>
@@ -540,7 +621,7 @@ export const AgentXChat = React.memo(function AgentXChat({
         </View>
       </Animated.View>
     );
-  }, [fadeAnim, speakText]);
+  }, [fadeAnim, handleQuickAction, speakText]);
 
   const renderWelcome = () => (
     <View style={styles.welcomeContainer}>
@@ -553,9 +634,9 @@ export const AgentXChat = React.memo(function AgentXChat({
         </LinearGradient>
       </View>
       
-      <Text style={styles.welcomeTitle}>AI Analysis</Text>
+      <Text style={styles.welcomeTitle}>{welcomeTitle}</Text>
       <Text style={styles.welcomeSubtitle}>
-        Your intelligent cruise advisor. Ask me anything about cruises, offers, tier progress, or portfolio optimization.
+        {welcomeSubtitle}
       </Text>
 
       <View style={styles.voiceHintContainer}>
@@ -563,63 +644,67 @@ export const AgentXChat = React.memo(function AgentXChat({
         <Text style={styles.voiceHintText}>Choose Voice or Manual below — speak naturally or type your request</Text>
       </View>
 
-      <View style={styles.devAssistantSection}>
-        <LinearGradient
-          colors={['#0F2439', '#1E3A5F', '#0097A7']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.devAssistantCard}
-        >
-          <View style={styles.devAssistantHeader}>
-            <View style={styles.devAssistantIconWrap}>
-              <Cpu size={20} color="#00E5FF" />
+      {showDevAssistant ? (
+        <View style={styles.devAssistantSection}>
+          <LinearGradient
+            colors={['#0F2439', '#1E3A5F', '#0097A7']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.devAssistantCard}
+          >
+            <View style={styles.devAssistantHeader}>
+              <View style={styles.devAssistantIconWrap}>
+                <Cpu size={20} color="#00E5FF" />
+              </View>
+              <View style={styles.devAssistantHeaderText}>
+                <Text style={styles.devAssistantTitle}>AI Dev Assistant</Text>
+                <Text style={styles.devAssistantDesc}>Build voice-enabled AI features</Text>
+              </View>
             </View>
-            <View style={styles.devAssistantHeaderText}>
-              <Text style={styles.devAssistantTitle}>AI Dev Assistant</Text>
-              <Text style={styles.devAssistantDesc}>Build voice-enabled AI features</Text>
-            </View>
-          </View>
 
-          <View style={styles.devCapabilitiesGrid}>
-            {DEV_ASSISTANT_CAPABILITIES.map((cap) => (
+            <View style={styles.devCapabilitiesGrid}>
+              {DEV_ASSISTANT_CAPABILITIES.map((cap) => (
+                <TouchableOpacity
+                  key={cap.id}
+                  style={styles.devCapabilityItem}
+                  onPress={() => handleQuickAction(cap.prompt)}
+                  activeOpacity={0.7}
+                  testID={`dev-cap-${cap.id}`}
+                >
+                  <View style={styles.devCapabilityIconWrap}>
+                    <cap.icon size={16} color="#00E5FF" />
+                  </View>
+                  <Text style={styles.devCapabilityLabel}>{cap.label}</Text>
+                  <Text style={styles.devCapabilityDesc}>{cap.desc}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </LinearGradient>
+        </View>
+      ) : null}
+      
+      {quickActions.length > 0 ? (
+        <View style={styles.quickActionsContainer}>
+          <Text style={styles.quickActionsLabel}>Quick Actions</Text>
+          <View style={styles.quickActionsGrid}>
+            {quickActions.map((action) => (
               <TouchableOpacity
-                key={cap.id}
-                style={styles.devCapabilityItem}
-                onPress={() => handleQuickAction(cap.prompt)}
+                key={action.id}
+                style={styles.quickActionButton}
+                onPress={() => handleQuickAction(action.prompt)}
                 activeOpacity={0.7}
-                testID={`dev-cap-${cap.id}`}
               >
-                <View style={styles.devCapabilityIconWrap}>
-                  <cap.icon size={16} color="#00E5FF" />
+                <View
+                  style={styles.quickActionGradient}
+                >
+                  <action.icon size={18} color={COLORS.white} />
+                  <Text style={styles.quickActionText}>{action.label}</Text>
                 </View>
-                <Text style={styles.devCapabilityLabel}>{cap.label}</Text>
-                <Text style={styles.devCapabilityDesc}>{cap.desc}</Text>
               </TouchableOpacity>
             ))}
           </View>
-        </LinearGradient>
-      </View>
-      
-      <View style={styles.quickActionsContainer}>
-        <Text style={styles.quickActionsLabel}>Quick Actions</Text>
-        <View style={styles.quickActionsGrid}>
-          {QUICK_ACTIONS.map((action) => (
-            <TouchableOpacity
-              key={action.id}
-              style={styles.quickActionButton}
-              onPress={() => handleQuickAction(action.prompt)}
-              activeOpacity={0.7}
-            >
-              <View
-                style={styles.quickActionGradient}
-              >
-                <action.icon size={18} color={COLORS.white} />
-                <Text style={styles.quickActionText}>{action.label}</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
         </View>
-      </View>
+      ) : null}
     </View>
   );
 
@@ -636,7 +721,7 @@ export const AgentXChat = React.memo(function AgentXChat({
         style={StyleSheet.absoluteFill}
       />
       
-      <View style={{ paddingTop: insets.top }}>
+      <View style={{ paddingTop: useSafeAreaPadding ? insets.top : 0 }}>
       
       {showHeader && (
           <View style={styles.header}>
@@ -645,8 +730,8 @@ export const AgentXChat = React.memo(function AgentXChat({
                 <Bot size={20} color={COLORS.white} />
               </View>
               <View>
-                <Text style={styles.headerTitle}>AI Analysis</Text>
-                <Text style={styles.headerSubtitle}>Cruise Intelligence</Text>
+                <Text style={styles.headerTitle}>{title}</Text>
+                <Text style={styles.headerSubtitle}>{subtitle}</Text>
               </View>
             </View>
             
@@ -690,6 +775,33 @@ export const AgentXChat = React.memo(function AgentXChat({
         )}
       </View>
 
+      <View style={styles.agentModeStrip} testID="agentx-mode-selector">
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.agentModeScroll}>
+          {AGENT_MODES.map((agentMode) => {
+            const ModeIcon = agentMode.icon;
+            const isActive = mode === agentMode.id;
+            return (
+              <TouchableOpacity
+                key={agentMode.id}
+                style={[styles.agentModeChip, isActive && styles.agentModeChipActive]}
+                onPress={() => handleAgentModeChange(agentMode.id)}
+                activeOpacity={0.75}
+                testID={`agentx-mode-${agentMode.id}`}
+              >
+                <ModeIcon size={13} color={isActive ? COLORS.white : COLORS.navyDeep} />
+                <Text style={[styles.agentModeChipText, isActive && styles.agentModeChipTextActive]}>{agentMode.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
+
+      {showFilterStrip ? (
+        <View style={styles.filterStripWrap}>
+          <IntelligenceFilterStrip contextLabel={contextLabel} compact={true} />
+        </View>
+      ) : null}
+
       {isRecording && (
         <View style={styles.recordingBanner}>
           <Animated.View style={[styles.recordingDot, { transform: [{ scale: pulseAnim }] }]} />
@@ -721,7 +833,7 @@ export const AgentXChat = React.memo(function AgentXChat({
         {messages.length === 0 ? renderWelcome() : messages.map(renderMessage)}
       </ScrollView>
 
-      {messages.length > 0 && (
+      {showDevAssistant && messages.length > 0 && (
         <View style={styles.devAssistantInlineBanner}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.devAssistantInlineScroll}>
             {DEV_ASSISTANT_CAPABILITIES.map((cap) => (
@@ -874,7 +986,7 @@ export const AgentXChat = React.memo(function AgentXChat({
         )}
 
         <Text style={styles.disclaimer}>
-          AI Analysis supports both voice and manual chat.
+          {disclaimerText}
         </Text>
       </View>
     </KeyboardAvoidingView>
@@ -936,6 +1048,44 @@ const styles = StyleSheet.create({
   },
   headerButtonActive: {
     backgroundColor: COLORS.navyDeep,
+  },
+  filterStripWrap: {
+    paddingHorizontal: SPACING.sm,
+    marginBottom: 4,
+  },
+  agentModeStrip: {
+    backgroundColor: 'rgba(255, 255, 255, 0.78)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 31, 63, 0.08)',
+  },
+  agentModeScroll: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    gap: SPACING.xs,
+  },
+  agentModeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderRadius: BORDER_RADIUS.round,
+    backgroundColor: 'rgba(30, 58, 95, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(30, 58, 95, 0.1)',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 6,
+    marginRight: SPACING.xs,
+  },
+  agentModeChipActive: {
+    backgroundColor: COLORS.navyDeep,
+    borderColor: COLORS.navyDeep,
+  },
+  agentModeChipText: {
+    fontSize: 11,
+    fontWeight: '800' as const,
+    color: COLORS.navyDeep,
+  },
+  agentModeChipTextActive: {
+    color: COLORS.white,
   },
   messagesContainer: {
     flex: 1,
@@ -1216,8 +1366,49 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
     flex: 1,
   },
+  contextBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(15, 118, 110, 0.08)',
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: 'rgba(15, 118, 110, 0.18)',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 6,
+    marginBottom: SPACING.xs,
+  },
+  contextBadgeText: {
+    flex: 1,
+    fontSize: 10,
+    fontWeight: '800' as const,
+    color: '#0F766E',
+    lineHeight: 14,
+  },
   messageScrollView: {
     maxHeight: 200,
+  },
+  suggestedActionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: SPACING.sm,
+  },
+  suggestedActionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(15, 118, 110, 0.08)',
+    borderRadius: BORDER_RADIUS.round,
+    borderWidth: 1,
+    borderColor: 'rgba(15, 118, 110, 0.2)',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 6,
+  },
+  suggestedActionText: {
+    fontSize: 11,
+    fontWeight: '800' as const,
+    color: '#0F766E',
   },
   userMessageContent: {
     backgroundColor: COLORS.navyDeep,

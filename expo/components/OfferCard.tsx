@@ -14,7 +14,7 @@ import { formatCurrency } from '@/lib/format';
 import { getDaysUntil, formatDate } from '@/lib/date';
 import { getUniqueImageForCruise, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
 import type { Cruise } from '@/types/models';
-import { calculateCruiseValue, calculateOfferAggregateValue, getCabinPriceFromEntity, GUEST_COUNT_DEFAULT, type ValueBreakdown, type OfferAggregateValue } from '@/lib/valueCalculator';
+import { calculateCruiseValue, calculateOfferAggregateValue, getCabinPriceFromEntity, getDoubleOccupancyRoomRetailValue, GUEST_COUNT_DEFAULT, type ValueBreakdown, type OfferAggregateValue } from '@/lib/valueCalculator';
 import { getCertificatePdfMatch, openCertificatePdf } from '@/lib/royalCaribbean/certificatePdf';
 
 interface OfferCardProps {
@@ -136,7 +136,7 @@ export const OfferCard = React.memo(function OfferCard({
     
     // Fallback: calculate manually using getCabinPriceFromEntity which supports estimation
     const roomType = offer.cabinType || 'Balcony';
-    let cabinPrice = getCabinPriceFromEntity(offer, roomType) || offer.price || 0;
+    let cabinPrice = getCabinPriceFromEntity(offer, roomType) ?? getDoubleOccupancyRoomRetailValue(offer.price) ?? 0;
     
     // If still no price, estimate based on cabin type and nights
     if (cabinPrice === 0 && offer.nights > 0) {
@@ -161,7 +161,7 @@ export const OfferCard = React.memo(function OfferCard({
     }
     
     const guestCount = offer.guests || GUEST_COUNT_DEFAULT;
-    const cabinValueForTwo = cabinPrice * guestCount;
+    const cabinValueForTwo = cabinPrice;
     
     // Estimate taxes if not provided (roughly $30/night per guest)
     let taxes = offer.taxes || 0;

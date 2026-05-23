@@ -51,6 +51,11 @@ export function EasySeasHero({
     return eta.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
   };
 
+  const formatProjectedDate = (date: Date | null): string => {
+    if (!date) return formatETA(pinnacleProgress.nightsToNext, 14);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+  };
+
   return (
     <View style={styles.container}>
       <LinearGradient
@@ -121,7 +126,7 @@ export function EasySeasHero({
           </View>
           <ProgressBar
             progress={pinnacleProgress.percentComplete}
-            eta={`ETA: ${formatETA(pinnacleProgress.nightsToNext, 7)} • ${pinnacleProgress.nightsToNext} nights`}
+            eta={`ETA: ${formatProjectedDate(pinnacleProgress.projectedDate)} • ${pinnacleProgress.currentPointsNeeded} pts needed`}
             height={8}
             gradientColors={[COLORS.points, COLORS.pointsLight]}
             surfaceTone="light"

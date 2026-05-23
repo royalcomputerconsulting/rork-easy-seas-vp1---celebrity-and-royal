@@ -7,6 +7,7 @@ export interface SeaPassWebPassData {
   reservation: string;
   ship: string;
   port: string;
+  terminal: string;
 }
 
 export interface SeaPassBarcodeBar {
@@ -15,6 +16,7 @@ export interface SeaPassBarcodeBar {
 }
 
 export type SeaPassOverlayKey = keyof SeaPassWebPassData | 'barcodeCaption';
+type SeaPassOverlayEraseMode = 'rect' | 'text' | 'none';
 
 export interface SeaPassOverlayMask {
   x: number;
@@ -56,6 +58,8 @@ export const SEA_PASS_VIEWBOX = {
   height: 1536,
 } as const;
 
+export const SEA_PASS_PORT = 'LOS ANGELES, CALIFORNIA';
+
 export const SEA_PASS_DEFAULTS: SeaPassWebPassData = {
   time: '10:30 am',
   date: 'Apr 07',
@@ -63,13 +67,17 @@ export const SEA_PASS_DEFAULTS: SeaPassWebPassData = {
   stateroom: '10134',
   muster: 'A4',
   reservation: '182213',
-  ship: 'SY',
-  port: 'GALVESTON, TEXAS',
+  ship: 'QN',
+  port: SEA_PASS_PORT,
+  terminal: '',
 };
+
+export const SEA_PASS_TERMINAL_SHIP_CODES = ['IC'] as const;
+export const SEA_PASS_TERMINAL_PORT = 'MIAMI, FLORIDA';
+export const SEA_PASS_TERMINAL_VALUE = 'A';
 
 export const SEA_PASS_NAME_LINES = ['Scott', 'Merlis'] as const;
 export const SEA_PASS_STATUS = 'DIAMOND PLUS • SIGNATURE';
-export const SEA_PASS_PORT = 'GALVESTON, TEXAS';
 export const SEA_PASS_LEGAL_LINES = [
   'Due to government regulations, all guests are',
   'required to be at the pier and checked in no later',
@@ -80,6 +88,7 @@ export const SEA_PASS_PREVIEW_BACKGROUND = '#EFF3F8';
 export const SEA_PASS_EXPORT_BACKGROUND = '#FFFFFF';
 export const SEA_PASS_FONT_STACK = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 export const SEA_PASS_APPROVED_SCREENSHOT_SOURCE_URL = 'https://r2-pub.rork.com/attachments/vvcelze4prvyhmkje7pah.png';
+export const SEA_PASS_APPROVED_SCREENSHOT_CORS_PROXY_URL = 'https://images.weserv.nl/?url=r2-pub.rork.com/attachments/vvcelze4prvyhmkje7pah.png&output=png';
 
 function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, '');
@@ -105,6 +114,18 @@ export const SEA_PASS_APPROVED_SCREENSHOT_URL = getSeaPassApprovedScreenshotUrl(
 
 let approvedSeaPassImageDataUrlPromise: Promise<string> | null = null;
 let approvedSeaPassSourceImageDataUrlPromise: Promise<string> | null = null;
+
+function getUniqueUrls(urls: string[]): string[] {
+  return urls.filter((url, index) => url.trim().length > 0 && urls.indexOf(url) === index);
+}
+
+function getSeaPassApprovedImageCandidates(): string[] {
+  return getUniqueUrls([
+    SEA_PASS_APPROVED_SCREENSHOT_URL,
+    SEA_PASS_APPROVED_SCREENSHOT_CORS_PROXY_URL,
+    SEA_PASS_APPROVED_SCREENSHOT_SOURCE_URL,
+  ]);
+}
 
 export const SEA_PASS_LAYOUT = {
   cardX: 24,
@@ -143,10 +164,10 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
       y: 36,
       width: 336,
       height: 84,
-      fill: '#5A3C8E',
-      radius: 8,
-      sampleX: 632,
-      sampleY: 228,
+      fill: '#6B459A',
+      radius: 0,
+      sampleX: 466,
+      sampleY: 148,
     },
   },
   date: {
@@ -161,11 +182,11 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
       x: 632,
       y: 104,
       width: 336,
-      height: 108,
-      fill: '#5A3C8E',
-      radius: 8,
-      sampleX: 632,
-      sampleY: 228,
+      height: 128,
+      fill: '#6B459A',
+      radius: 0,
+      sampleX: 414,
+      sampleY: 170,
     },
   },
   deck: {
@@ -261,21 +282,36 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
     },
   },
   port: {
-    x: 94,
-    y: 905,
+    x: 92,
+    y: 902,
     fill: '#30333A',
-    fontSize: 45,
+    fontSize: 52,
     fontWeight: '400',
-    letterSpacing: 0.5,
+    letterSpacing: -1,
     mask: {
       x: 78,
-      y: 844,
-      width: 720,
+      y: 852,
+      width: 884,
       height: 78,
-      fill: '#F4F4F5',
-      radius: 6,
-      sampleX: 474,
-      sampleY: 844,
+      fill: '#ECEDED',
+      radius: 0,
+    },
+  },
+  terminal: {
+    x: 930,
+    y: 903,
+    fill: '#30333A',
+    fontSize: 52,
+    fontWeight: '400',
+    letterSpacing: -0.8,
+    textAnchor: 'end',
+    mask: {
+      x: 744,
+      y: 804,
+      width: 216,
+      height: 132,
+      fill: '#F2F3F4',
+      radius: 0,
     },
   },
   barcodeCaption: {
@@ -313,6 +349,23 @@ function normalizeField(value: string | null | undefined, fallback: string): str
   return trimmed && trimmed.length > 0 ? trimmed : fallback;
 }
 
+function normalizePortDisplayValue(value: string): string {
+  return value.replace(/\s*,\s*/g, ', ');
+}
+
+function normalizeTerminalRuleValue(value: string): string {
+  return value.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '');
+}
+
+export function shouldShowSeaPassTerminal(input: Pick<SeaPassWebPassData, 'ship' | 'port'>): boolean {
+  const ship = normalizeTerminalRuleValue(input.ship);
+  const port = normalizeTerminalRuleValue(input.port);
+  const isIcon = ship === 'IC' || ship === 'ICON' || ship === 'ICONOFTHESEAS';
+  const isMiamiFlorida = port === normalizeTerminalRuleValue(SEA_PASS_TERMINAL_PORT);
+
+  return isIcon && isMiamiFlorida;
+}
+
 function getDynamicOverlayValue(key: SeaPassOverlayKey, data: SeaPassWebPassData, barcodeCaption: string): string {
   if (key === 'barcodeCaption') {
     return barcodeCaption;
@@ -321,58 +374,160 @@ function getDynamicOverlayValue(key: SeaPassOverlayKey, data: SeaPassWebPassData
   return data[key];
 }
 
-function shouldRenderDynamicOverlay(key: SeaPassOverlayKey, value: string): boolean {
+function getDefaultOverlayValue(key: SeaPassOverlayKey): string {
+  if (key === 'barcodeCaption') {
+    return getSeaPassBarcodeCaption(SEA_PASS_DEFAULTS);
+  }
+
+  return SEA_PASS_DEFAULTS[key];
+}
+
+function getSeaPassOverlayEraseMode(key: SeaPassOverlayKey): SeaPassOverlayEraseMode {
+  if (key === 'terminal') {
+    return 'none';
+  }
+
+  if (key === 'time' || key === 'date' || key === 'port') {
+    return 'text';
+  }
+
+  return 'rect';
+}
+
+function getSeaPassTextEraseStrokeWidth(key: SeaPassOverlayKey): number {
+  if (key === 'port') {
+    return 22;
+  }
+
+  if (key === 'date') {
+    return 34;
+  }
+
+  if (key === 'time') {
+    return 8;
+  }
+
+  return 8;
+}
+
+function getSeaPassTextEraseOffsets(key: SeaPassOverlayKey): { x: number; y: number }[] {
+  if (key === 'port') {
+    return [
+      { x: 0, y: 0 },
+      { x: -1, y: 0 },
+      { x: 1, y: 0 },
+      { x: 0, y: -1 },
+      { x: 0, y: 1 },
+    ];
+  }
+
+  if (key === 'date') {
+    return [
+      { x: -3, y: -6 },
+      { x: 0, y: -6 },
+      { x: 3, y: -6 },
+      { x: -3, y: -3 },
+      { x: 0, y: -3 },
+      { x: 3, y: -3 },
+      { x: -3, y: 0 },
+      { x: 0, y: 0 },
+      { x: 3, y: 0 },
+      { x: -3, y: 4 },
+      { x: 0, y: 4 },
+      { x: 3, y: 4 },
+      { x: -3, y: 8 },
+      { x: 0, y: 8 },
+      { x: 3, y: 8 },
+      { x: -3, y: 12 },
+      { x: 0, y: 12 },
+      { x: 3, y: 12 },
+      { x: -3, y: 16 },
+      { x: 0, y: 16 },
+      { x: 3, y: 16 },
+      { x: -3, y: 20 },
+      { x: 0, y: 20 },
+      { x: 3, y: 20 },
+    ];
+  }
+
+  return [{ x: 0, y: 0 }];
+}
+
+function shouldRenderDynamicOverlay(key: SeaPassOverlayKey, value: string, data: SeaPassWebPassData): boolean {
   if (key === 'barcodeCaption') {
     return value !== getSeaPassBarcodeCaption(SEA_PASS_DEFAULTS);
   }
 
-  // The approved shell image has a baked-in port, so always redraw the port field.
-  if (key === 'port') {
-    return true;
+  if (key === 'terminal') {
+    return shouldShowSeaPassTerminal(data) && value.trim().length > 0;
   }
 
   return value !== SEA_PASS_DEFAULTS[key];
 }
 
 async function fetchImageAsDataUrl(url: string): Promise<string> {
-  const response = await fetch(url);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 18_000);
 
-  if (!response.ok) {
-    throw new Error(`Unable to load approved SeaPass image (${response.status}).`);
+  try {
+    console.log('[SeaPassWebPass] Fetching approved shell for export', { url });
+    const response = await fetch(url, { signal: controller.signal });
+
+    if (!response.ok) {
+      throw new Error(`Unable to load approved SeaPass image (${response.status}).`);
+    }
+
+    const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
+
+    if (contentType.length > 0 && !contentType.includes('image')) {
+      throw new Error(`Approved SeaPass image returned ${contentType}.`);
+    }
+
+    const blob = await response.blob();
+
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+
+      reader.onloadend = () => {
+        const result = reader.result;
+
+        if (typeof result === 'string') {
+          resolve(result);
+          return;
+        }
+
+        reject(new Error('Unable to convert approved SeaPass image for web export.'));
+      };
+
+      reader.onerror = () => reject(new Error('Unable to read approved SeaPass image for web export.'));
+      reader.readAsDataURL(blob);
+    });
+  } finally {
+    clearTimeout(timeout);
   }
-
-  const blob = await response.blob();
-
-  return await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-
-    reader.onloadend = () => {
-      const result = reader.result;
-
-      if (typeof result === 'string') {
-        resolve(result);
-        return;
-      }
-
-      reject(new Error('Unable to convert approved SeaPass image for web export.'));
-    };
-
-    reader.onerror = () => reject(new Error('Unable to read approved SeaPass image for web export.'));
-    reader.readAsDataURL(blob);
-  });
 }
 
 async function getSeaPassApprovedScreenshotDataUrl(): Promise<string> {
   if (!approvedSeaPassImageDataUrlPromise) {
-    approvedSeaPassImageDataUrlPromise = fetchImageAsDataUrl(SEA_PASS_APPROVED_SCREENSHOT_URL)
-      .catch((error) => {
-        console.log('[SeaPassWebPass] API proxy fetch failed, falling back to source URL:', error instanceof Error ? error.message : String(error));
-        return fetchImageAsDataUrl(SEA_PASS_APPROVED_SCREENSHOT_SOURCE_URL);
-      })
-      .catch((error) => {
-        approvedSeaPassImageDataUrlPromise = null;
-        throw error;
-      });
+    approvedSeaPassImageDataUrlPromise = (async () => {
+      let lastError: unknown = null;
+
+      for (const url of getSeaPassApprovedImageCandidates()) {
+        try {
+          const dataUrl = await fetchImageAsDataUrl(url);
+          console.log('[SeaPassWebPass] Approved SeaPass shell ready for export', { url, length: dataUrl.length });
+          return dataUrl;
+        } catch (error) {
+          lastError = error;
+          console.log('[SeaPassWebPass] Approved shell candidate failed', { url, error: error instanceof Error ? error.message : String(error) });
+        }
+      }
+
+      throw lastError instanceof Error ? lastError : new Error('Unable to load approved SeaPass image for export.');
+    })().catch((error) => {
+      approvedSeaPassImageDataUrlPromise = null;
+      throw error;
+    });
   }
 
   return approvedSeaPassImageDataUrlPromise;
@@ -407,26 +562,53 @@ function buildSeaPassOverlaySvgMarkup(
       const textAnchor = overlay.textAnchor ? ` text-anchor="${overlay.textAnchor}"` : '';
       const letterSpacing = typeof overlay.letterSpacing === 'number' ? ` letter-spacing="${overlay.letterSpacing}"` : '';
       const value = escapeXml(getDynamicOverlayValue(overlay.key, data, barcodeCaption));
-      const hasSampleBackground = typeof mask.sampleX === 'number' && typeof mask.sampleY === 'number';
+      const eraseMode = getSeaPassOverlayEraseMode(overlay.key);
+      const hasSampleBackground = eraseMode === 'rect' && typeof mask.sampleX === 'number' && typeof mask.sampleY === 'number';
+      const definition = SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS[overlay.key];
 
-      let eraseMarkup = `<rect x="${mask.x}" y="${mask.y}" width="${mask.width}" height="${mask.height}" rx="${mask.radius}" fill="${mask.fill}" />`;
+      let eraseMarkup = '';
 
-      if (hasSampleBackground) {
-        const sampleX = mask.sampleX ?? 0;
-        const sampleY = mask.sampleY ?? 0;
-        defs.push(
-          `<clipPath id="${clipPathId}"><rect x="${mask.x}" y="${mask.y}" width="${mask.width}" height="${mask.height}" rx="${mask.radius}" ry="${mask.radius}" /></clipPath>`,
-        );
-        eraseMarkup = `<g clip-path="url(#${clipPathId})"><image href="${safeImageHref}" x="${mask.x - sampleX}" y="${mask.y - sampleY}" width="${SEA_PASS_VIEWBOX.width}" height="${SEA_PASS_VIEWBOX.height}" preserveAspectRatio="none" /></g>`;
+      if (eraseMode === 'text') {
+        const defaultValue = escapeXml(getDefaultOverlayValue(overlay.key));
+        const defaultTextAnchor = definition.textAnchor ? ` text-anchor="${definition.textAnchor}"` : '';
+        const defaultLetterSpacing = typeof definition.letterSpacing === 'number' ? ` letter-spacing="${definition.letterSpacing}"` : '';
+        const eraseStrokeWidth = getSeaPassTextEraseStrokeWidth(overlay.key);
+        const eraseTextMarkup = getSeaPassTextEraseOffsets(overlay.key)
+          .map((offset) => `<text x="${definition.x + offset.x}" y="${definition.y + offset.y}"${defaultTextAnchor}${defaultLetterSpacing} font-family="${SEA_PASS_FONT_STACK}" font-size="${definition.fontSize}" font-weight="${definition.fontWeight}" fill="{fill}" stroke="{fill}" stroke-width="${eraseStrokeWidth}" stroke-linecap="round" stroke-linejoin="round">${defaultValue}</text>`)
+          .join('');
+
+        if (typeof mask.sampleX === 'number' && typeof mask.sampleY === 'number') {
+          const textMaskId = `overlay-text-mask-${overlay.key}`;
+          defs.push(
+            `<mask id="${textMaskId}" maskUnits="userSpaceOnUse" x="0" y="0" width="${SEA_PASS_VIEWBOX.width}" height="${SEA_PASS_VIEWBOX.height}"><rect x="0" y="0" width="${SEA_PASS_VIEWBOX.width}" height="${SEA_PASS_VIEWBOX.height}" fill="#000000" />${eraseTextMarkup.replace(/\{fill\}/g, '#FFFFFF')}</mask>`,
+          );
+          eraseMarkup = `<image href="${safeImageHref}" x="${mask.x - mask.sampleX}" y="${mask.y - mask.sampleY}" width="${SEA_PASS_VIEWBOX.width}" height="${SEA_PASS_VIEWBOX.height}" preserveAspectRatio="none" mask="url(#${textMaskId})" />`;
+        } else {
+          eraseMarkup = eraseTextMarkup.replace(/\{fill\}/g, mask.fill);
+        }
+      } else if (eraseMode === 'rect') {
+        eraseMarkup = `<rect x="${mask.x}" y="${mask.y}" width="${mask.width}" height="${mask.height}" rx="${mask.radius}" fill="${mask.fill}" />`;
+
+        if (hasSampleBackground) {
+          const sampleX = mask.sampleX ?? 0;
+          const sampleY = mask.sampleY ?? 0;
+          defs.push(
+            `<clipPath id="${clipPathId}"><rect x="${mask.x}" y="${mask.y}" width="${mask.width}" height="${mask.height}" rx="${mask.radius}" ry="${mask.radius}" /></clipPath>`,
+          );
+          eraseMarkup = `<g clip-path="url(#${clipPathId})"><image href="${safeImageHref}" x="${mask.x - sampleX}" y="${mask.y - sampleY}" width="${SEA_PASS_VIEWBOX.width}" height="${SEA_PASS_VIEWBOX.height}" preserveAspectRatio="none" /></g>`;
+        }
       }
 
       return `${eraseMarkup}<text x="${overlay.x}" y="${overlay.y}"${textAnchor}${letterSpacing} font-family="${SEA_PASS_FONT_STACK}" font-size="${overlay.fontSize}" font-weight="${overlay.fontWeight}" fill="${overlay.fill}">${value}</text>`;
     })
     .join('');
+  const terminalLabelMarkup = shouldShowSeaPassTerminal(data) && data.terminal.trim().length > 0
+    ? `<text x="930" y="846" text-anchor="end" letter-spacing="0.2" font-family="${SEA_PASS_FONT_STACK}" font-size="34" font-weight="500" fill="#6D737C">TERMINAL</text>`
+    : '';
 
   return {
     defsMarkup: defs.join(''),
-    overlayMarkup,
+    overlayMarkup: `${overlayMarkup}${terminalLabelMarkup}`,
   };
 }
 
@@ -439,7 +621,8 @@ export function getSeaPassData(input: Partial<SeaPassWebPassData>): SeaPassWebPa
     muster: normalizeField(input.muster, SEA_PASS_DEFAULTS.muster),
     reservation: normalizeField(input.reservation, SEA_PASS_DEFAULTS.reservation),
     ship: normalizeField(input.ship, SEA_PASS_DEFAULTS.ship),
-    port: normalizeField(input.port, SEA_PASS_DEFAULTS.port),
+    port: normalizePortDisplayValue(normalizeField(input.port, SEA_PASS_DEFAULTS.port)),
+    terminal: normalizeField(input.terminal, SEA_PASS_DEFAULTS.terminal),
   };
 }
 
@@ -451,27 +634,30 @@ export function getSeaPassBarcodeCaption(input: Pick<SeaPassWebPassData, 'reserv
 export function getSeaPassDynamicOverlays(input: Partial<SeaPassWebPassData>): SeaPassDynamicOverlay[] {
   const data = getSeaPassData(input);
   const barcodeCaption = getSeaPassBarcodeCaption(data);
-  const orderedKeys: SeaPassOverlayKey[] = ['time', 'date', 'deck', 'stateroom', 'muster', 'reservation', 'ship', 'port', 'barcodeCaption'];
-  const topRightChanged = data.time !== SEA_PASS_DEFAULTS.time || data.date !== SEA_PASS_DEFAULTS.date;
+  const orderedKeys: SeaPassOverlayKey[] = ['time', 'date', 'deck', 'stateroom', 'muster', 'reservation', 'ship', 'port', 'terminal', 'barcodeCaption'];
 
   return orderedKeys.reduce<SeaPassDynamicOverlay[]>((accumulator, key) => {
     const overlayValue = getDynamicOverlayValue(key, data, barcodeCaption);
-    const shouldRender = key === 'time' || key === 'date'
-      ? topRightChanged
-      : shouldRenderDynamicOverlay(key, overlayValue);
+    const shouldRender = shouldRenderDynamicOverlay(key, overlayValue, data);
 
     if (!shouldRender) {
       return accumulator;
     }
 
     const definition = SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS[key];
+    const fontSize = key === 'port' && overlayValue.length > 26
+      ? 42
+      : key === 'port' && overlayValue.length > 20
+        ? 46
+        : definition.fontSize;
+
     accumulator.push({
       key,
       value: overlayValue,
       x: definition.x,
       y: definition.y,
       fill: definition.fill,
-      fontSize: definition.fontSize,
+      fontSize,
       fontWeight: definition.fontWeight,
       letterSpacing: definition.letterSpacing,
       textAnchor: definition.textAnchor,
@@ -549,7 +735,7 @@ export function buildSeaPassSvgMarkup(
 }
 
 export function buildSeaPassPrintHtml(input: Partial<SeaPassWebPassData>): string {
-  const svg = buildSeaPassSvgMarkup(input, SEA_PASS_EXPORT_BACKGROUND, SEA_PASS_APPROVED_SCREENSHOT_URL);
+  const svg = buildSeaPassSvgMarkup(input, SEA_PASS_EXPORT_BACKGROUND, SEA_PASS_APPROVED_SCREENSHOT_SOURCE_URL);
 
   return `
 <!DOCTYPE html>
@@ -597,7 +783,7 @@ export async function exportSeaPassPngOnWeb(input: Partial<SeaPassWebPassData>, 
     console.log('[SeaPassWebPass] Approved SeaPass shell embedded for exact PNG export');
   } catch (error) {
     console.error('[SeaPassWebPass] Unable to prepare approved SeaPass shell for PNG export', error);
-    throw new Error('The approved SeaPass artwork is not ready for export yet. Please try again in a moment.');
+    throw new Error('The approved SeaPass artwork could not be downloaded for PNG export. Please check your connection and try again.');
   }
 
   const svgMarkup = buildSeaPassSvgMarkup(input, SEA_PASS_EXPORT_BACKGROUND, approvedImageHref);

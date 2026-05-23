@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Animated, Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { Calendar, ChevronRight, Users, Ship, Heart, Sparkles, Anchor, Ticket } from 'lucide-react-native';
+import { Calendar, ChevronRight, Users, Ship, Heart, Sparkles, Anchor, Ticket, Gauge, AlertTriangle } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 
@@ -9,6 +9,8 @@ import { createDateFromString } from '@/lib/date';
 
 import { getUniqueImageForCruise, getImageForDestination, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
 import type { Cruise, BookedCruise, ItineraryDay } from '@/types/models';
+import { calculateSeaDayDensityScore } from '@/lib/cruisePlanningIntelligence';
+import { calculateCruiseValue } from '@/lib/valueCalculator';
 
 interface CruiseCardProps {
   cruise: Cruise | BookedCruise;
@@ -18,6 +20,7 @@ interface CruiseCardProps {
   mini?: boolean;
   variant?: 'default' | 'booked' | 'available' | 'completed';
   showRetailValue?: boolean;
+  conflictWarning?: string;
 }
 
 function getCruiseStatus(cruise: BookedCruise): 'upcoming' | 'completed' | 'active' {
@@ -36,6 +39,35 @@ function getCruiseStatus(cruise: BookedCruise): 'upcoming' | 'completed' | 'acti
   return 'upcoming';
 }
 
+type FutureTopTierBadge = {
+  text: 'PINNACLE' | 'ZENITH';
+  bg: string;
+  textColor: string;
+};
+
+const TOP_TIER_BADGE_START_DATE = new Date(2026, 6, 24);
+
+function getFutureTopTierBadge(cruise: Cruise | BookedCruise, isBooked: boolean): FutureTopTierBadge | null {
+  if (!isBooked || !cruise.sailDate) return null;
+
+  const sailDate = createDateFromString(cruise.sailDate);
+  sailDate.setHours(0, 0, 0, 0);
+
+  if (sailDate.getTime() <= TOP_TIER_BADGE_START_DATE.getTime()) return null;
+
+  const brandIdentifier = `${cruise.brand ?? ''} ${cruise.cruiseSource ?? ''} ${cruise.shipName ?? ''}`.toLowerCase();
+
+  if (brandIdentifier.includes('celebrity')) {
+    return { text: 'ZENITH', bg: '#2B2930', textColor: COLORS.white };
+  }
+
+  if (brandIdentifier.includes('royal')) {
+    return { text: 'PINNACLE', bg: COLORS.tierPinnacle, textColor: COLORS.white };
+  }
+
+  return null;
+}
+
 export const CruiseCard = React.memo(function CruiseCard({ 
   cruise, 
   onPress, 
@@ -44,6 +76,7 @@ export const CruiseCard = React.memo(function CruiseCard({
   mini = false,
   variant = 'default',
   showRetailValue = true,
+  conflictWarning,
 }: CruiseCardProps) {
   const isBooked = variant === 'booked' || variant === 'completed' || 'bookingId' in cruise || 'reservationNumber' in cruise;
   const bookedCruise = cruise as BookedCruise;
@@ -85,19 +118,7 @@ export const CruiseCard = React.memo(function CruiseCard({
 
   const retailValue = useMemo(() => {
     if (!showRetailValue) return null;
-    
-    const guestCount = cruise.guests || 2;
-    let cabinValueForTwo = 0;
-    
-    const bookedCruise = cruise as BookedCruise;
-    if (bookedCruise.totalRetailCost && bookedCruise.pricePaid !== undefined) {
-      cabinValueForTwo = bookedCruise.totalRetailCost * 2;
-    } else {
-      const cabinPrice = cruise.interiorPrice || cruise.oceanviewPrice || cruise.balconyPrice || cruise.suitePrice || cruise.price || 0;
-      cabinValueForTwo = cabinPrice * guestCount;
-    }
-    
-    return cabinValueForTwo;
+    return calculateCruiseValue(cruise).totalRetailValue;
   }, [cruise, showRetailValue]);
 
   const formatDateRange = (sailDate: string, returnDate?: string, nights?: number) => {
@@ -163,6 +184,14 @@ export const CruiseCard = React.memo(function CruiseCard({
   };
 
   const statusBadge = getStatusBadge();
+  const futureTopTierBadge = useMemo(
+    () => getFutureTopTierBadge(cruise, isBooked),
+    [cruise.sailDate, cruise.brand, cruise.cruiseSource, cruise.shipName, isBooked]
+  );
+
+  const seaDayDensity = useMemo(() => {
+    return calculateSeaDayDensityScore(cruise);
+  }, [cruise]);
 
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
@@ -245,18 +274,36 @@ export const CruiseCard = React.memo(function CruiseCard({
               <Ship size={13} color={COLORS.navyDeep} />
               <Text style={styles.miniShipName} numberOfLines={1}>{cruise.shipName}</Text>
             </View>
-            <View style={[styles.miniStatusBadge, { backgroundColor: statusBadge.bg }]}>
-              <Text style={[
-                styles.miniStatusBadgeText,
-                statusBadge.bg === COLORS.goldAccent || statusBadge.bg === COLORS.aquaAccent 
-                  ? { color: COLORS.navyDeep } 
-                  : { color: COLORS.white }
-              ]}>
-                {statusBadge.text}
-              </Text>
+            <View style={styles.miniBadgeStack}>
+              <View style={[styles.miniStatusBadge, { backgroundColor: statusBadge.bg }]}>
+                <Text style={[
+                  styles.miniStatusBadgeText,
+                  statusBadge.bg === COLORS.goldAccent || statusBadge.bg === COLORS.aquaAccent 
+                    ? { color: COLORS.navyDeep } 
+                    : { color: COLORS.white }
+                ]}>
+                  {statusBadge.text}
+                </Text>
+              </View>
+              {futureTopTierBadge ? (
+                <View style={[styles.miniTopTierBadge, { backgroundColor: futureTopTierBadge.bg }]} testID="cruise-card-top-tier-badge">
+                  <Text style={[styles.miniTopTierBadgeText, { color: futureTopTierBadge.textColor }]}>{futureTopTierBadge.text}</Text>
+                </View>
+              ) : null}
             </View>
           </View>
           <Text style={styles.miniItinerary} numberOfLines={1}>{getItineraryName()}</Text>
+          {conflictWarning ? (
+            <View style={styles.miniConflictRow} testID="cruise-card-overlap-warning">
+              <AlertTriangle size={11} color="#92400E" />
+              <Text style={styles.miniConflictText} numberOfLines={2}>{conflictWarning}</Text>
+            </View>
+          ) : null}
+          <View style={styles.miniPlanningRow} testID="cruise-card-mini-sea-day-score">
+            <Gauge size={10} color="#0F766E" />
+            <Text style={styles.miniPlanningText}>Casino Opp {seaDayDensity.casinoOpportunityScore}</Text>
+            <Text style={styles.miniPlanningMuted}>{seaDayDensity.seaDays} sea • {seaDayDensity.portDays} port</Text>
+          </View>
           <Text style={styles.miniDestination} numberOfLines={1}>
             {cruise.departurePort ? `From ${cruise.departurePort}` : cruise.destination}
           </Text>
@@ -502,15 +549,22 @@ export const CruiseCard = React.memo(function CruiseCard({
           <View style={styles.shipInfo}>
             <Ship size={16} color={COLORS.navyDeep} />
             <Text style={styles.shipName}>{cruise.shipName}</Text>
-            <View style={[styles.inlineStatusBadge, { backgroundColor: statusBadge.bg }]}>
-              <Text style={[
-                styles.inlineStatusBadgeText,
-                statusBadge.bg === COLORS.goldAccent || statusBadge.bg === COLORS.aquaAccent 
-                  ? { color: COLORS.navyDeep } 
-                  : { color: COLORS.white }
-              ]}>
-                {statusBadge.text}
-              </Text>
+            <View style={styles.inlineBadgeStack}>
+              <View style={[styles.inlineStatusBadge, { backgroundColor: statusBadge.bg }]}>
+                <Text style={[
+                  styles.inlineStatusBadgeText,
+                  statusBadge.bg === COLORS.goldAccent || statusBadge.bg === COLORS.aquaAccent 
+                    ? { color: COLORS.navyDeep } 
+                    : { color: COLORS.white }
+                ]}>
+                  {statusBadge.text}
+                </Text>
+              </View>
+              {futureTopTierBadge ? (
+                <View style={[styles.inlineTopTierBadge, { backgroundColor: futureTopTierBadge.bg }]} testID="cruise-card-top-tier-badge">
+                  <Text style={[styles.inlineTopTierBadgeText, { color: futureTopTierBadge.textColor }]}>{futureTopTierBadge.text}</Text>
+                </View>
+              ) : null}
             </View>
           </View>
           <View style={styles.actionIcons}>
@@ -524,6 +578,13 @@ export const CruiseCard = React.memo(function CruiseCard({
           <Text style={styles.routeLabel}>ROUNDTRIP FROM:</Text>
           <Text style={styles.routeValue}>{cruise.departurePort || cruise.destination}</Text>
         </View>
+
+        {conflictWarning ? (
+          <View style={styles.conflictRow} testID="cruise-card-overlap-warning">
+            <AlertTriangle size={14} color="#92400E" />
+            <Text style={styles.conflictText}>{conflictWarning}</Text>
+          </View>
+        ) : null}
 
         {bookedCruise.itinerary && bookedCruise.itinerary.length > 0 ? (
           <View style={styles.visitingSection}>
@@ -545,6 +606,14 @@ export const CruiseCard = React.memo(function CruiseCard({
             </Text>
           </View>
         ) : null}
+
+        <View style={styles.planningBadgeRow} testID="cruise-card-sea-day-score">
+          <View style={styles.planningBadge}>
+            <Gauge size={13} color="#0F766E" />
+            <Text style={styles.planningBadgeText}>Casino Opportunity {seaDayDensity.casinoOpportunityScore}</Text>
+          </View>
+          <Text style={styles.planningBadgeMeta}>{seaDayDensity.seaDays} sea • {seaDayDensity.portDays} port</Text>
+        </View>
 
         <View style={styles.dateGuestRow}>
           <View style={styles.dateInfo}>
@@ -695,6 +764,11 @@ const styles = StyleSheet.create({
     color: '#000000',
     marginBottom: 2,
   },
+  miniBadgeStack: {
+    alignItems: 'flex-end',
+    gap: 3,
+    marginLeft: 6,
+  },
   miniStatusBadge: {
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -705,10 +779,56 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.fontWeightBold,
     letterSpacing: 0.3,
   },
+  miniTopTierBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    minWidth: 54,
+    alignItems: 'center',
+  },
+  miniTopTierBadgeText: {
+    fontSize: 9,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    letterSpacing: 0.5,
+  },
   miniDestination: {
     fontSize: 13,
     color: COLORS.navyDeep,
     marginBottom: 2,
+  },
+  miniConflictRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 5,
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 5,
+    marginBottom: 5,
+  },
+  miniConflictText: {
+    flex: 1,
+    fontSize: 10,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: '#78350F',
+    lineHeight: 13,
+  },
+  miniPlanningRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 3,
+  },
+  miniPlanningText: {
+    fontSize: 10,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#0F766E',
+  },
+  miniPlanningMuted: {
+    fontSize: 10,
+    color: '#64748B',
   },
   miniPorts: {
     fontSize: 11,
@@ -1081,6 +1201,24 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeSM,
     color: '#1F2937',
   },
+  conflictRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING.xs,
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+    borderRadius: BORDER_RADIUS.sm,
+    padding: SPACING.sm,
+    marginBottom: SPACING.sm,
+  },
+  conflictText: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: '#78350F',
+    lineHeight: 17,
+  },
   visitingSection: {
     marginBottom: SPACING.sm,
   },
@@ -1101,6 +1239,34 @@ const styles = StyleSheet.create({
     color: COLORS.points,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
     marginTop: 4,
+  },
+  planningBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: SPACING.sm,
+    backgroundColor: '#ECFDF5',
+    borderRadius: BORDER_RADIUS.sm,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 7,
+    marginBottom: SPACING.sm,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  planningBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    flex: 1,
+  },
+  planningBadgeText: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#0F766E',
+  },
+  planningBadgeMeta: {
+    fontSize: 11,
+    color: '#475569',
   },
   dateGuestRow: {
     flexDirection: 'row',
@@ -1198,16 +1364,32 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
     color: COLORS.navyDeep,
   },
+  inlineBadgeStack: {
+    alignItems: 'flex-start',
+    gap: 3,
+    marginLeft: SPACING.xs,
+  },
   inlineStatusBadge: {
     paddingHorizontal: SPACING.xs,
     paddingVertical: 2,
     borderRadius: BORDER_RADIUS.xs,
-    marginLeft: SPACING.xs,
   },
   inlineStatusBadgeText: {
     fontSize: 9,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     letterSpacing: 0.3,
+  },
+  inlineTopTierBadge: {
+    paddingHorizontal: SPACING.xs,
+    paddingVertical: 2,
+    borderRadius: BORDER_RADIUS.xs,
+    minWidth: 58,
+    alignItems: 'center',
+  },
+  inlineTopTierBadgeText: {
+    fontSize: 8,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    letterSpacing: 0.5,
   },
   offerSection: {
     flexDirection: 'row',

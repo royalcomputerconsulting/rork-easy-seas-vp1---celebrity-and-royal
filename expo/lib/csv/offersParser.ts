@@ -1,4 +1,5 @@
 import type { Cruise, CasinoOffer } from '@/types/models';
+import { getDoubleOccupancyRoomRetailValue } from '@/lib/valueCalculator';
 import {
   parseCSVLine,
   normalizeDateString,
@@ -43,6 +44,11 @@ function inferCruiseSourceFromText(...values: string[]): Cruise['cruiseSource'] 
   if (joined.includes('celebrity') || joined.includes('blue chip') || joined.includes("captain's club")) return 'celebrity';
   if (joined.includes('royal caribbean') || joined.includes('club royale') || joined.includes('crown & anchor') || joined.includes(' of the seas')) return 'royal';
   return undefined;
+}
+
+function normalizeSourceEmail(value: string): string | undefined {
+  const normalized = value.toLowerCase().trim();
+  return normalized.includes('@') ? normalized : undefined;
 }
 
 function inferCruiseSourceFromShipName(shipName: string): Cruise['cruiseSource'] | undefined {
@@ -138,6 +144,7 @@ export function parseOffersCSV(content: string): { cruises: Cruise[]; offers: Ca
     nights: getColumnIndex(headerMap, ['nights', 'number of nights', 'total nights', 'duration', 'length']),
     departurePort: getColumnIndex(headerMap, ['departure port', 'departureport', 'depart port', 'home port', 'embarkation port', 'departs', 'port']),
     sourcePage: getColumnIndex(headerMap, ['source page', 'sourcepage', 'source']),
+    sourceEmail: getColumnIndex(headerMap, ['source email', 'sourceemail', 'account email', 'accountemail', 'owner email', 'owneremail', 'traveler email', 'traveleremail', 'profile email', 'profileemail', 'email']),
   };
 
   console.log('[OffersParser] Column indices:', colIndices);
@@ -185,11 +192,15 @@ export function parseOffersCSV(content: string): { cruises: Cruise[]; offers: Ca
     const priceBalcony = getNumericValue(colIndices.priceBalcony);
     const priceSuite = getNumericValue(colIndices.priceSuite);
     const taxesFees = getNumericValue(colIndices.taxesFees);
+    const selectedPerPersonPrice = getPriceForRoomType(roomType, priceInterior, priceOceanView, priceBalcony, priceSuite);
+    const selectedRoomPrice = getDoubleOccupancyRoomRetailValue(selectedPerPersonPrice);
+    const importedOfferRoomValue = getDoubleOccupancyRoomRetailValue(offerValue) ?? offerValue;
     const portsAndTimes = getValue(colIndices.portsAndTimes);
     const offerType = getValue(colIndices.offerType);
     const nights = getNumericValue(colIndices.nights) || 7;
     const departurePort = getValue(colIndices.departurePort);
     const sourcePage = getValue(colIndices.sourcePage);
+    const sourceEmail = normalizeSourceEmail(getValue(colIndices.sourceEmail));
     const parsedSource = inferCruiseSourceFromShipName(shipName)
       ?? inferCruiseSourceFromText(sourcePage, offerName, offerType, perks, itinerary, departurePort)
       ?? detectedSourceFromHeaders;
@@ -227,10 +238,10 @@ export function parseOffersCSV(content: string): { cruises: Cruise[]; offers: Ca
       balconyPrice: priceBalcony,
       suitePrice: priceSuite,
       taxes: taxesFees,
-      totalPrice: getPriceForRoomType(roomType, priceInterior, priceOceanView, priceBalcony, priceSuite),
+      totalPrice: selectedRoomPrice !== undefined ? selectedRoomPrice + taxesFees : undefined,
       offerCode,
       offerName: offerName || undefined,
-      offerValue,
+      offerValue: importedOfferRoomValue,
       offerExpiry: offerExpiryDate,
       tradeInValue: tradeInValue || undefined,
       itineraryName: itinerary,
@@ -240,6 +251,9 @@ export function parseOffersCSV(content: string): { cruises: Cruise[]; offers: Ca
       status: 'available',
       category: finalShipClass,
       cruiseSource: parsedSource,
+      sourceEmail,
+      importStatus: sourceEmail ? 'unassigned' : undefined,
+      reconciliationStatus: sourceEmail ? 'reviewNeeded' : undefined,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -256,7 +270,8 @@ export function parseOffersCSV(content: string): { cruises: Cruise[]; offers: Ca
         title: finalOfferName,
         offerType: mapOfferType(offerType),
         tradeInValue,
-        offerValue,
+        offerValue: importedOfferRoomValue,
+        value: selectedRoomPrice,
         expiryDate: offerExpiryDate,
         offerExpiryDate,
         expires: offerExpiryDate,
@@ -275,6 +290,9 @@ export function parseOffersCSV(content: string): { cruises: Cruise[]; offers: Ca
         taxesFees,
         status: 'active',
         offerSource: parsedSource,
+        sourceEmail,
+        importStatus: sourceEmail ? 'unassigned' : undefined,
+        reconciliationStatus: sourceEmail ? 'reviewNeeded' : undefined,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };

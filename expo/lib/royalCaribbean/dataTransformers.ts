@@ -1,7 +1,24 @@
 import { OfferRow, BookedCruiseRow, LoyaltyData } from './types';
 import { CasinoOffer, BookedCruise, Cruise } from '@/types/models';
+import { getDoubleOccupancyRoomRetailValue } from '@/lib/valueCalculator';
 
 export type SyncDataSource = NonNullable<Cruise['cruiseSource']>;
+
+export interface SyncOwnershipOptions {
+  ownerProfileId?: string;
+  sourceEmail?: string;
+  includeUnownedRecords?: boolean;
+}
+
+function getOwnershipFields(options?: SyncOwnershipOptions) {
+  const ownerProfileId = options?.ownerProfileId?.trim();
+  const sourceEmail = options?.sourceEmail?.trim();
+
+  return {
+    ...(ownerProfileId ? { ownerProfileId, importStatus: 'assigned' as const, reconciliationStatus: 'matched' as const } : {}),
+    ...(sourceEmail ? { sourceEmail } : {}),
+  };
+}
 
 function getBrandOfferFallback(source: SyncDataSource): string {
   if (source === 'celebrity') {
@@ -25,6 +42,14 @@ function parseDate(dateStr: string): string {
       const month = isoMatch[2];
       const day = isoMatch[3];
       console.log(`[parseDate] ISO date detected: ${trimmed} -> ${month}-${day}-${year}`);
+      return `${month}-${day}-${year}`;
+    }
+
+    const compactIsoMatch = trimmed.match(/^(\d{4})(\d{2})(\d{2})$/);
+    if (compactIsoMatch) {
+      const year = compactIsoMatch[1];
+      const month = compactIsoMatch[2];
+      const day = compactIsoMatch[3];
       return `${month}-${day}-${year}`;
     }
 
@@ -205,6 +230,18 @@ function getLowestPositivePrice(values: Array<number | undefined>): number | und
   return Math.min(...filtered);
 }
 
+function getBookedCabinRetailPrice(
+  cabinType: string | undefined,
+  prices: { interior?: number; oceanview?: number; balcony?: number; suite?: number }
+): number | undefined {
+  const normalized = (cabinType ?? '').toLowerCase();
+  if (normalized.includes('interior') || normalized.includes('inside')) return prices.interior;
+  if (normalized.includes('ocean') || normalized.includes('outside') || normalized.includes('view')) return prices.oceanview;
+  if (normalized.includes('balcony') || normalized.includes('verand')) return prices.balcony;
+  if (normalized.includes('suite')) return prices.suite;
+  return prices.balcony || prices.oceanview || prices.interior || prices.suite;
+}
+
 function parsePortList(portList: string | undefined): string[] | undefined {
   if (!portList) {
     return undefined;
@@ -232,9 +269,11 @@ function extractTradeInValue(perks: string): number | undefined {
 export function transformOfferRowsToCruisesAndOffers(
   offerRows: OfferRow[],
   _loyaltyData: LoyaltyData | null,
-  source: SyncDataSource = 'royal'
+  source: SyncDataSource = 'royal',
+  ownershipOptions?: SyncOwnershipOptions
 ): { cruises: Cruise[]; offers: CasinoOffer[] } {
   const cruises: Cruise[] = [];
+  const ownershipFields = getOwnershipFields(ownershipOptions);
   const offerMap = new Map<string, CasinoOffer>();
   const cruiseIdsByOfferKey = new Map<string, string[]>();
 
@@ -256,7 +295,8 @@ export function transformOfferRowsToCruisesAndOffers(
     const balconyPrice = parseMoneyValue(offer.balconyPrice);
     const suitePrice = parseMoneyValue(offer.suitePrice);
     const taxes = parseMoneyValue(offer.taxesAndFees);
-    const lowestPrice = getLowestPositivePrice([interiorPrice, oceanviewPrice, balconyPrice, suitePrice]);
+    const lowestPerPersonPrice = getLowestPositivePrice([interiorPrice, oceanviewPrice, balconyPrice, suitePrice]);
+    const lowestRoomPrice = getDoubleOccupancyRoomRetailValue(lowestPerPersonPrice);
     const ports = parsePortList(offer.portList);
 
     console.log(
@@ -272,13 +312,13 @@ export function transformOfferRowsToCruisesAndOffers(
       departurePort: offer.departurePort,
       destination: offer.itinerary,
       nights,
-      price: lowestPrice,
+      price: lowestPerPersonPrice,
       interiorPrice,
       oceanviewPrice,
       balconyPrice,
       suitePrice,
       taxes,
-      totalPrice: typeof lowestPrice === 'number' ? lowestPrice + (taxes ?? 0) : undefined,
+      totalPrice: typeof lowestRoomPrice === 'number' ? lowestRoomPrice + (taxes ?? 0) : undefined,
       cabinType: offer.cabinType || 'Balcony',
       offerCode: offer.offerCode,
       offerName: offer.offerName,
@@ -294,6 +334,7 @@ export function transformOfferRowsToCruisesAndOffers(
       tradeInValue: extractTradeInValue(safePerks),
       perks: safePerks ? [safePerks] : [],
       cruiseSource: source,
+      ...ownershipFields,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -335,8 +376,8 @@ export function transformOfferRowsToCruisesAndOffers(
         roomType: offer.cabinType || undefined,
         guestsInfo: offer.numberOfGuests || undefined,
         guests,
-        value: lowestPrice,
-        offerValue: lowestPrice,
+        value: lowestRoomPrice,
+        offerValue: lowestRoomPrice,
         interiorPrice,
         oceanviewPrice,
         balconyPrice,
@@ -354,6 +395,7 @@ export function transformOfferRowsToCruisesAndOffers(
         status: 'active',
         offerSource: source,
         bookingLink: offer.bookingLink || undefined,
+        ...ownershipFields,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -394,14 +436,15 @@ export function transformOfferRowsToCruisesAndOffers(
         aggregatedOffer.portCharges = getLowestPositivePrice([aggregatedOffer.portCharges, taxes]);
       }
 
-      const aggregatedBestPrice = getLowestPositivePrice([
+      const aggregatedBestPerPersonPrice = getLowestPositivePrice([
         aggregatedOffer.interiorPrice,
         aggregatedOffer.oceanviewPrice,
         aggregatedOffer.balconyPrice,
         aggregatedOffer.suitePrice,
       ]);
-      aggregatedOffer.value = aggregatedBestPrice;
-      aggregatedOffer.offerValue = aggregatedBestPrice;
+      const aggregatedBestRoomPrice = getDoubleOccupancyRoomRetailValue(aggregatedBestPerPersonPrice);
+      aggregatedOffer.value = aggregatedBestRoomPrice;
+      aggregatedOffer.offerValue = aggregatedBestRoomPrice;
       aggregatedOffer.updatedAt = new Date().toISOString();
     }
 
@@ -425,17 +468,21 @@ export function transformOfferRowsToCruisesAndOffers(
 export function transformOffersToCasinoOffers(
   offers: OfferRow[],
   loyaltyData: LoyaltyData | null,
-  source: SyncDataSource = 'royal'
+  source: SyncDataSource = 'royal',
+  ownershipOptions?: SyncOwnershipOptions
 ): CasinoOffer[] {
-  const { offers: casinoOffers } = transformOfferRowsToCruisesAndOffers(offers, loyaltyData, source);
+  const { offers: casinoOffers } = transformOfferRowsToCruisesAndOffers(offers, loyaltyData, source, ownershipOptions);
   return casinoOffers;
 }
 
 export function transformBookedCruisesToAppFormat(
   cruises: BookedCruiseRow[],
   _loyaltyData: LoyaltyData | null,
-  source: SyncDataSource = 'royal'
+  source: SyncDataSource = 'royal',
+  ownershipOptions?: SyncOwnershipOptions
 ): BookedCruise[] {
+  const ownershipFields = getOwnershipFields(ownershipOptions);
+
   return cruises.map((cruise) => {
     const startDate = parseDate(cruise.sailingStartDate);
     const endDate = parseDate(cruise.sailingEndDate);
@@ -488,8 +535,22 @@ export function transformBookedCruisesToAppFormat(
 
     console.log(`[DataTransformer] Final nights for ${cruise.shipName} (${startDate} to ${endDate}): ${nights} (method: ${calculationMethod})`);
 
-    const isCourtesyHold = cruise.status === 'Courtesy Hold' || cruise.status === 'Offer';
+    const normalizedStatus = (cruise.status || '').trim().toLowerCase();
+    const isCourtesyHold = normalizedStatus === 'courtesy hold' || normalizedStatus === 'hold' || normalizedStatus === 'offer';
+    const isCompleted = normalizedStatus === 'completed' || normalizedStatus === 'past' || cruise.sourcePage?.toLowerCase().includes('past') === true;
     const finalEndDate = endDate || calculateReturnDate(startDate, nights);
+    const interiorPrice = parseMoneyValue(cruise.interiorPrice);
+    const oceanviewPrice = parseMoneyValue(cruise.oceanviewPrice);
+    const balconyPrice = parseMoneyValue(cruise.balconyPrice);
+    const suitePrice = parseMoneyValue(cruise.suitePrice);
+    const taxesAndFees = parseMoneyValue(cruise.taxesAndFees);
+    const importedPerPersonCabinRetailValue = getBookedCabinRetailPrice(cruise.cabinType, {
+      interior: interiorPrice,
+      oceanview: oceanviewPrice,
+      balcony: balconyPrice,
+      suite: suitePrice,
+    });
+    const importedRoomCabinRetailValue = getDoubleOccupancyRoomRetailValue(importedPerPersonCabinRetailValue);
 
     const bookedCruise: BookedCruise = {
       sourcePayload: (cruise as { rawBooking?: unknown }).rawBooking,
@@ -503,14 +564,28 @@ export function transformBookedCruisesToAppFormat(
       cabinType: cruise.cabinType,
       cabinNumber: cruise.cabinNumberOrGTY && cruise.cabinNumberOrGTY !== 'GTY' ? cruise.cabinNumberOrGTY : undefined,
       cabinCategory: cruise.cabinCategory || cruise.stateroomCategoryCode,
+      price: importedPerPersonCabinRetailValue,
+      interiorPrice,
+      oceanviewPrice,
+      balconyPrice,
+      suitePrice,
+      taxes: taxesAndFees,
+      taxesFeesEstimate: taxesAndFees,
+      retailValue: importedRoomCabinRetailValue,
+      totalRetailCost: importedRoomCabinRetailValue,
+      originalPrice: importedRoomCabinRetailValue,
       deckNumber: cruise.deckNumber,
       bookingId: cruise.bookingId,
       reservationNumber: cruise.bookingId,
-      status: 'booked',
-      completionState: 'upcoming',
+      status: isCompleted ? 'completed' : isCourtesyHold ? 'courtesy hold' : 'booked',
+      completionState: isCompleted ? 'completed' : 'upcoming',
       isCourtesyHold,
       holdExpiration: cruise.holdExpiration || undefined,
-      notes: isCourtesyHold ? `Courtesy Hold${cruise.holdExpiration ? ` (expires ${cruise.holdExpiration})` : ''}` : undefined,
+      notes: isCompleted
+        ? 'Imported from Royal Caribbean Past Trips'
+        : isCourtesyHold
+          ? `Courtesy Hold${cruise.holdExpiration ? ` (expires ${cruise.holdExpiration})` : ''}`
+          : undefined,
       itineraryName: cruise.itinerary,
       itineraryRaw: cruise.itinerary ? [cruise.itinerary] : [],
       bookingStatus: cruise.bookingStatus,
@@ -521,6 +596,7 @@ export function transformBookedCruisesToAppFormat(
       stateroomType: cruise.stateroomType,
       musterStation: cruise.musterStation,
       cruiseSource: source,
+      ...ownershipFields,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };

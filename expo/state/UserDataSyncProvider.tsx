@@ -7,7 +7,8 @@ import { getUserScopedKey, ALL_STORAGE_KEYS } from "@/lib/storage/storageKeys";
 import { clearUserSpecificData } from "@/lib/storage/storageOperations";
 import { quotaSafeGetItem, quotaSafeSetItem, quotaSafeSetJsonItem, quotaSafeRemoveItem } from "@/lib/storage/quotaSafeStorage";
 import { buildOwnerScopeId, getInstallationId } from "@/lib/storage/installationId";
-import { filterRecordsForOwner, isOwnerScopeForEmail, isScopedDynamicKeyForOwner, stampRecordsForOwner, toOwnerScopedDynamicKey } from "@/lib/storage/dataOwnership";
+import { containsKnownForeignPersonalData, filterRecordsForOwner, isOwnerScopeForEmail, isScopedDynamicKeyForOwner, stampRecordsForOwner, toOwnerScopedDynamicKey } from "@/lib/storage/dataOwnership";
+import { normalizeAlertRulesFromStorage, serializeAlertRulesForStorage } from "@/lib/alertRules";
 
 const _BASE_LAST_SYNC_KEY = "easyseas_last_cloud_sync";
 const MAX_RETRY_ATTEMPTS = 1;
@@ -20,6 +21,8 @@ const DISMISSED_ALERT_IDS_STORAGE_BASE = '@easy_seas_dismissed_alerts';
 const DISMISSED_ALERT_ENTITIES_STORAGE_BASE = '@easy_seas_dismissed_entities';
 const SAILING_WEATHER_CACHE_STORAGE_BASE = '@easy_seas_sailing_weather_cache_v1';
 const CASINO_OPEN_HOURS_STORAGE_PREFIX = `${ALL_STORAGE_KEYS.CASINO_OPEN_HOURS}_`;
+const CURRENT_MACHINE_ENCYCLOPEDIA_KEY = 'easyseas_machine_encyclopedia_v2_262_only';
+const CURRENT_MY_SLOT_ATLAS_KEY = 'easyseas_my_slot_atlas_v2_262_only';
 const SETTINGS_USER_PROFILES_SYNC_KEY = '__easySeasUserProfiles';
 const SETTINGS_CURRENT_USER_ID_SYNC_KEY = '__easySeasCurrentUserId';
 
@@ -95,6 +98,19 @@ function parseStoredUnknownArray(value: string | null, label: string): unknown[]
   return parseStoredJson<unknown[]>(value, [], label);
 }
 
+function parseStoredAlertRules(value: string | null, label: string): Record<string, unknown>[] {
+  if (!value) {
+    return [];
+  }
+
+  try {
+    return normalizeAlertRulesFromStorage(JSON.parse(value)) as unknown as Record<string, unknown>[];
+  } catch (error) {
+    console.error(`[UserDataSync] Failed to parse ${label}:`, error);
+    return [];
+  }
+}
+
 function parseStoredUnknown(value: string | null, label: string): unknown {
   return parseStoredJson<unknown>(value, null, label);
 }
@@ -136,12 +152,25 @@ function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
+function asStringArray(value: unknown): string[] {
+  return asArray(value).filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+}
+
 function prepareOwnedRecords<T extends object>(records: T[], ownerScopeId: string | null | undefined, email: string | null | undefined, label: string): T[] {
   return stampRecordsForOwner(filterRecordsForOwner(records, ownerScopeId, email, label), ownerScopeId, email);
 }
 
 function prepareOwnedUnknownArray(value: unknown, ownerScopeId: string | null | undefined, email: string | null | undefined, label: string): unknown[] {
   return prepareOwnedRecords<Record<string, unknown>>(asArray(value).filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeId, email, label);
+}
+
+function sanitizeForeignValue<T>(value: T, email: string | null | undefined, label: string): T | null {
+  if (containsKnownForeignPersonalData(value, email)) {
+    console.warn('[UserDataSync] Dropped user-identifiable data outside active user scope:', { label, email });
+    return null;
+  }
+
+  return value;
 }
 
 function asString(value: unknown): string | null {
@@ -424,6 +453,8 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         legacyAlertsRaw,
         legacyAlertRulesRaw,
         slotAtlasRaw,
+        currentMachineEncyclopediaRaw,
+        currentMyAtlasRaw,
         extendedLoyaltyDataRaw,
         manualClubRoyalePointsRaw,
         manualCrownAnchorPointsRaw,
@@ -462,6 +493,8 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         quotaSafeGetItem(sk(ALL_STORAGE_KEYS.ALERTS)),
         quotaSafeGetItem(sk(ALL_STORAGE_KEYS.ALERT_RULES)),
         quotaSafeGetItem(sk(ALL_STORAGE_KEYS.MY_SLOT_ATLAS)),
+        quotaSafeGetItem(getUserScopedKey(CURRENT_MACHINE_ENCYCLOPEDIA_KEY, emailRef.current)),
+        quotaSafeGetItem(getUserScopedKey(CURRENT_MY_SLOT_ATLAS_KEY, emailRef.current)),
         quotaSafeGetItem(sk(ALL_STORAGE_KEYS.EXTENDED_LOYALTY_DATA)),
         quotaSafeGetItem(sk(ALL_STORAGE_KEYS.MANUAL_CLUB_ROYALE_POINTS)),
         quotaSafeGetItem(sk(ALL_STORAGE_KEYS.MANUAL_CROWN_ANCHOR_POINTS)),
@@ -507,14 +540,21 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
           }
         : null;
 
-      const parsedUserProfiles = parseStoredUnknownArray(usersRaw, 'userProfiles');
-      const parsedSettings = parseStoredUnknown(settingsRaw, 'settings');
+      const parsedUserProfiles = prepareOwnedRecords<Record<string, unknown>>(
+        parseStoredUnknownArray(usersRaw, 'userProfiles').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)),
+        ownerScopeIdRef.current,
+        emailRef.current,
+        'cloud-sync user profiles'
+      );
+      const parsedUserProfileIds = new Set(parsedUserProfiles.map((profile) => typeof profile.id === 'string' ? profile.id : null).filter((id): id is string => id !== null));
+      const parsedCurrentUserId = currentUserIdRaw && (parsedUserProfileIds.size === 0 || parsedUserProfileIds.has(currentUserIdRaw)) ? currentUserIdRaw : null;
+      const parsedSettings = sanitizeForeignValue(parseStoredUnknown(settingsRaw, 'settings'), emailRef.current, 'settings');
       const settingsWithProfileBackup = asRecord(parsedSettings);
       if (parsedUserProfiles.length > 0) {
         settingsWithProfileBackup[SETTINGS_USER_PROFILES_SYNC_KEY] = parsedUserProfiles;
       }
-      if (currentUserIdRaw) {
-        settingsWithProfileBackup[SETTINGS_CURRENT_USER_ID_SYNC_KEY] = currentUserIdRaw;
+      if (parsedCurrentUserId) {
+        settingsWithProfileBackup[SETTINGS_CURRENT_USER_ID_SYNC_KEY] = parsedCurrentUserId;
       }
       const syncableSettings = Object.keys(settingsWithProfileBackup).length > 0 ? settingsWithProfileBackup : parsedSettings;
 
@@ -540,21 +580,22 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         calendarEvents: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(calendarEventsRaw, 'calendarEvents').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync calendar events'),
         casinoSessions: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(casinoSessionsRaw, 'casinoSessions').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync casino sessions'),
         userProfiles: parsedUserProfiles,
-        currentUserId: currentUserIdRaw,
-        clubRoyaleProfile: parseStoredUnknown(clubProfileRaw, 'clubRoyaleProfile'),
+        currentUserId: parsedCurrentUserId,
+        clubRoyaleProfile: sanitizeForeignValue(parseStoredUnknown(clubProfileRaw, 'clubRoyaleProfile'), emailRef.current, 'clubRoyaleProfile'),
         settings: syncableSettings,
         userPoints: parseStoredInteger(userPointsRaw, 0),
         certificates: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(certificatesRaw, 'certificates').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync certificates'),
         alerts: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(alertsRaw, 'alerts').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync alerts'),
-        alertRules: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(alertRulesRaw, 'alertRules').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync alert rules'),
+        alertRules: prepareOwnedRecords<Record<string, unknown>>(parseStoredAlertRules(alertRulesRaw, 'alertRules'), ownerScopeIdRef.current, emailRef.current, 'cloud-sync alert rules'),
         dismissedAlertIds: parseStoredStringArray(dismissedAlertIdsRaw, 'dismissedAlertIds'),
         dismissedAlertEntities: parseStoredStringArray(dismissedAlertEntitiesRaw, 'dismissedAlertEntities'),
-        slotAtlas: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(slotAtlasRaw, 'slotAtlas').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync slot atlas'),
-        loyaltyData,
-        bankrollData: parseStoredUnknown(bankrollDataRaw, 'bankrollData'),
+        slotAtlas: asStringArray(parseStoredUnknownArray(currentMyAtlasRaw ?? slotAtlasRaw, 'slotAtlas')),
+        machineEncyclopedia: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(currentMachineEncyclopediaRaw, 'machineEncyclopedia').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync machine encyclopedia'),
+        loyaltyData: sanitizeForeignValue(loyaltyData, emailRef.current, 'loyaltyData'),
+        bankrollData: sanitizeForeignValue(parseStoredUnknown(bankrollDataRaw, 'bankrollData'), emailRef.current, 'bankrollData'),
         bankrollLimits: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(bankrollLimitsRaw, 'bankrollLimits').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync bankroll limits'),
         bankrollAlerts: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(bankrollAlertsRaw, 'bankrollAlerts').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync bankroll alerts'),
-        celebrityData,
+        celebrityData: sanitizeForeignValue(celebrityData, emailRef.current, 'celebrityData'),
         crewRecognitionEntries: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(crewEntriesRaw, 'crewRecognitionEntries').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync crew entries'),
         crewRecognitionSailings: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(crewSailingsRaw, 'crewRecognitionSailings').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync crew sailings'),
         userSlotMachines: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(userSlotMachinesRaw, 'userSlotMachines').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync user slot machines'),
@@ -574,6 +615,8 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         sessions: getArrayLength(data.casinoSessions),
         userProfiles: getArrayLength(data.userProfiles),
         alerts: getArrayLength(data.alerts),
+        machineEncyclopedia: getArrayLength(data.machineEncyclopedia),
+        slotAtlas: getArrayLength(data.slotAtlas),
         dismissedAlertIds: getArrayLength(data.dismissedAlertIds),
         bankrollLimits: getArrayLength(data.bankrollLimits),
         userSlotMachines: getArrayLength(data.userSlotMachines),
@@ -636,19 +679,18 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.CASINO_SESSIONS), prepareOwnedUnknownArray(cloudData.casinoSessions, currentOwnerScopeId, currentEmail, 'cloud-restore casino sessions')));
       }
       const cloudSettingsRecord = asNullableRecord(cloudData.settings);
-      const restoredUserProfiles = hasDefinedProperty(cloudData, 'userProfiles') ? cloudData.userProfiles : cloudSettingsRecord?.[SETTINGS_USER_PROFILES_SYNC_KEY];
-      const restoredCurrentUserId = hasDefinedProperty(cloudData, 'currentUserId') ? cloudData.currentUserId : cloudSettingsRecord?.[SETTINGS_CURRENT_USER_ID_SYNC_KEY];
-      if (Array.isArray(restoredUserProfiles)) {
-        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.USERS), restoredUserProfiles));
-      }
-      if (typeof restoredCurrentUserId === 'string') {
-        appendPromise(savePromises, buildStringSetPromise(sk(ALL_STORAGE_KEYS.CURRENT_USER), restoredCurrentUserId));
-      }
+      const restoredUserProfilesRaw = hasDefinedProperty(cloudData, 'userProfiles') ? cloudData.userProfiles : cloudSettingsRecord?.[SETTINGS_USER_PROFILES_SYNC_KEY];
+      const restoredUserProfiles = prepareOwnedUnknownArray(restoredUserProfilesRaw, currentOwnerScopeId, currentEmail, 'cloud-restore user profiles');
+      const restoredUserProfileIds = new Set(restoredUserProfiles.map((profile) => asRecord(profile).id).filter((id): id is string => typeof id === 'string'));
+      const restoredCurrentUserIdRaw = hasDefinedProperty(cloudData, 'currentUserId') ? cloudData.currentUserId : cloudSettingsRecord?.[SETTINGS_CURRENT_USER_ID_SYNC_KEY];
+      const restoredCurrentUserId = typeof restoredCurrentUserIdRaw === 'string' && (restoredUserProfileIds.size === 0 || restoredUserProfileIds.has(restoredCurrentUserIdRaw)) ? restoredCurrentUserIdRaw : null;
+      appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.USERS), restoredUserProfiles));
+      appendPromise(savePromises, buildStringSetPromise(sk(ALL_STORAGE_KEYS.CURRENT_USER), restoredCurrentUserId));
       if (hasDefinedProperty(cloudData, 'clubRoyaleProfile')) {
-        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.CLUB_PROFILE), cloudData.clubRoyaleProfile ?? null, { removeWhenNull: true }));
+        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.CLUB_PROFILE), sanitizeForeignValue(cloudData.clubRoyaleProfile ?? null, currentEmail, 'cloud-restore clubRoyaleProfile'), { removeWhenNull: true }));
       }
       if (hasDefinedProperty(cloudData, 'settings')) {
-        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.SETTINGS), cloudData.settings ?? null, { removeWhenNull: true }));
+        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.SETTINGS), sanitizeForeignValue(cloudData.settings ?? null, currentEmail, 'cloud-restore settings'), { removeWhenNull: true }));
       }
       if (hasDefinedProperty(cloudData, 'userPoints')) {
         appendPromise(savePromises, buildNumberSetPromise(sk(ALL_STORAGE_KEYS.USER_POINTS), asNumber(cloudData.userPoints) ?? 0));
@@ -660,7 +702,8 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         savePromises.push(...buildDualJsonSetPromises(scopedAlertsKey, sk(ALL_STORAGE_KEYS.ALERTS), prepareOwnedUnknownArray(cloudData.alerts, currentOwnerScopeId, currentEmail, 'cloud-restore alerts')));
       }
       if (hasDefinedProperty(cloudData, 'alertRules')) {
-        savePromises.push(...buildDualJsonSetPromises(scopedAlertRulesKey, sk(ALL_STORAGE_KEYS.ALERT_RULES), prepareOwnedUnknownArray(cloudData.alertRules, currentOwnerScopeId, currentEmail, 'cloud-restore alert rules')));
+        const restoredAlertRules = serializeAlertRulesForStorage(normalizeAlertRulesFromStorage(cloudData.alertRules));
+        savePromises.push(...buildDualJsonSetPromises(scopedAlertRulesKey, sk(ALL_STORAGE_KEYS.ALERT_RULES), restoredAlertRules));
       }
       if (hasDefinedProperty(cloudData, 'dismissedAlertIds')) {
         appendPromise(savePromises, buildJsonSetPromise(scopedDismissedAlertIdsKey, asArray(cloudData.dismissedAlertIds)));
@@ -668,11 +711,19 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       if (hasDefinedProperty(cloudData, 'dismissedAlertEntities')) {
         appendPromise(savePromises, buildJsonSetPromise(scopedDismissedAlertEntitiesKey, asArray(cloudData.dismissedAlertEntities)));
       }
+      if (hasDefinedProperty(cloudData, 'machineEncyclopedia')) {
+        const machineEncyclopedia = prepareOwnedUnknownArray(cloudData.machineEncyclopedia, currentOwnerScopeId, currentEmail, 'cloud-restore machine encyclopedia');
+        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.MACHINE_ENCYCLOPEDIA), machineEncyclopedia));
+        appendPromise(savePromises, buildJsonSetPromise(getUserScopedKey(CURRENT_MACHINE_ENCYCLOPEDIA_KEY, currentEmail), machineEncyclopedia));
+      }
       if (hasDefinedProperty(cloudData, 'slotAtlas')) {
-        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.MY_SLOT_ATLAS), prepareOwnedUnknownArray(cloudData.slotAtlas, currentOwnerScopeId, currentEmail, 'cloud-restore slot atlas')));
+        const slotAtlasIds = asStringArray(cloudData.slotAtlas);
+        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.MY_SLOT_ATLAS), slotAtlasIds));
+        appendPromise(savePromises, buildJsonSetPromise(getUserScopedKey(CURRENT_MY_SLOT_ATLAS_KEY, currentEmail), slotAtlasIds));
       }
       if (hasDefinedProperty(cloudData, 'loyaltyData')) {
-        const normalizedLoyaltyData = normalizeSyncedLoyaltyPayload(cloudData.loyaltyData);
+        const sanitizedCloudLoyaltyData = sanitizeForeignValue(cloudData.loyaltyData, currentEmail, 'cloud-restore loyaltyData');
+        const normalizedLoyaltyData = normalizeSyncedLoyaltyPayload(sanitizedCloudLoyaltyData);
         const extendedLoyaltyData = normalizedLoyaltyData?.extendedLoyaltyData ?? null;
         const manualClubRoyalePoints = normalizedLoyaltyData?.manualClubRoyalePoints ?? null;
         const manualCrownAnchorPoints = normalizedLoyaltyData?.manualCrownAnchorPoints ?? null;
@@ -680,10 +731,10 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.EXTENDED_LOYALTY_DATA), extendedLoyaltyData, { removeWhenNull: true }));
         appendPromise(savePromises, buildNumberSetPromise(sk(ALL_STORAGE_KEYS.MANUAL_CLUB_ROYALE_POINTS), manualClubRoyalePoints));
         appendPromise(savePromises, buildNumberSetPromise(sk(ALL_STORAGE_KEYS.MANUAL_CROWN_ANCHOR_POINTS), manualCrownAnchorPoints));
-        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.LOYALTY_DATA), cloudData.loyaltyData ?? null, { removeWhenNull: true }));
+        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.LOYALTY_DATA), sanitizedCloudLoyaltyData ?? null, { removeWhenNull: true }));
       }
       if (hasDefinedProperty(cloudData, 'bankrollData')) {
-        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.BANKROLL_DATA), cloudData.bankrollData ?? null, { removeWhenNull: true }));
+        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.BANKROLL_DATA), sanitizeForeignValue(cloudData.bankrollData ?? null, currentEmail, 'cloud-restore bankrollData'), { removeWhenNull: true }));
       }
       if (hasDefinedProperty(cloudData, 'bankrollLimits')) {
         appendPromise(savePromises, buildJsonSetPromise(scopedBankrollLimitsKey, prepareOwnedUnknownArray(cloudData.bankrollLimits, currentOwnerScopeId, currentEmail, 'cloud-restore bankroll limits')));
@@ -692,7 +743,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         appendPromise(savePromises, buildJsonSetPromise(scopedBankrollAlertsKey, prepareOwnedUnknownArray(cloudData.bankrollAlerts, currentOwnerScopeId, currentEmail, 'cloud-restore bankroll alerts')));
       }
       if (hasDefinedProperty(cloudData, 'celebrityData')) {
-        const celebrityDataRecord = asNullableRecord(cloudData.celebrityData);
+        const celebrityDataRecord = asNullableRecord(sanitizeForeignValue(cloudData.celebrityData, currentEmail, 'cloud-restore celebrityData'));
         appendPromise(savePromises, buildStringSetPromise(sk(ALL_STORAGE_KEYS.CELEBRITY_EMAIL), asString(celebrityDataRecord?.email ?? null)));
         appendPromise(savePromises, buildStringSetPromise(sk(ALL_STORAGE_KEYS.CELEBRITY_CAPTAINS_CLUB_NUMBER), asString(celebrityDataRecord?.captainsClubNumber ?? null)));
         appendPromise(savePromises, buildNumberSetPromise(sk(ALL_STORAGE_KEYS.CELEBRITY_CAPTAINS_CLUB_POINTS), asNumber(celebrityDataRecord?.captainsClubPoints ?? null)));
@@ -757,6 +808,8 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         sessions: getArrayLength(cloudData.casinoSessions),
         userProfiles: getArrayLength(cloudData.userProfiles),
         alerts: getArrayLength(cloudData.alerts),
+        machineEncyclopedia: getArrayLength(cloudData.machineEncyclopedia),
+        slotAtlas: getArrayLength(cloudData.slotAtlas),
         bankrollLimits: getArrayLength(cloudData.bankrollLimits),
         userSlotMachines: getArrayLength(cloudData.userSlotMachines),
         deckPlanLocations: getArrayLength(cloudData.deckPlanLocations),
