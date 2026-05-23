@@ -184,7 +184,7 @@ export const AUTH_DETECTION_SCRIPT = `
                 logType: response.ok ? 'success' : 'warning'
               }));
             }).catch(() => {});
-          } else if (response.ok && response.status === 200 && (!url.includes('/guestAccounts/loyalty/history/') && (url.includes('/loyalty') || url.includes('/guestAccounts/loyalty') || url.includes('/loyaltyInformation')) || url.includes('/loyalty-programs') || url.includes('/profile/loyalty') || url.includes('/account/info'))) {
+          } else if (response.ok && response.status === 200 && (!/\/guestAccounts\/loyalty\/history(?:\/|\?|$)/.test(url) && (url.includes('/loyalty') || url.includes('/guestAccounts/loyalty') || url.includes('/loyaltyInformation')) || url.includes('/loyalty-programs') || url.includes('/profile/loyalty') || url.includes('/account/info'))) {
             clonedResponse.json().then(data => {
               window.capturedPayloads.loyalty = data;
               window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -413,7 +413,7 @@ export const AUTH_DETECTION_SCRIPT = `
                 message: '📦 [XHR] Captured Loyalty API payload (' + this.status + ') from ' + this._url,
                 logType: this.status === 200 ? 'success' : 'warning'
               }));
-            } else if (this.status === 200 && (!this._url.includes('/guestAccounts/loyalty/history/') && (this._url.includes('/loyalty') || this._url.includes('/guestAccounts/loyalty') || this._url.includes('/loyaltyInformation')) || this._url.includes('/loyalty-programs') || this._url.includes('/profile/loyalty') || this._url.includes('/account/info'))) {
+            } else if (this.status === 200 && (!/\/guestAccounts\/loyalty\/history(?:\/|\?|$)/.test(this._url) && (this._url.includes('/loyalty') || this._url.includes('/guestAccounts/loyalty') || this._url.includes('/loyaltyInformation')) || this._url.includes('/loyalty-programs') || this._url.includes('/profile/loyalty') || this._url.includes('/account/info'))) {
               window.capturedPayloads.loyalty = data;
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'network_payload',

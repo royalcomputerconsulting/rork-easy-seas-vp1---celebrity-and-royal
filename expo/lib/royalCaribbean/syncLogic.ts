@@ -400,6 +400,33 @@ function normalizeSailDate(sailDate: string | undefined): string {
   return sailDate.trim();
 }
 
+function normalizeCasinoOfferCodeForSync(code: string | undefined): string {
+  const c = (code || '').trim().toUpperCase();
+  if (!c) return '';
+  if (/^26BCP105[A-Z]?$/.test(c)) return '26BCP105';
+  if (/^26JUL104[A-Z]?$/.test(c)) return '26JUL104';
+  if (/^26VTY104[A-Z]?$/.test(c)) return '26VTY104';
+  return c;
+}
+
+function countRoyalCruisesByOffer(cruises: Cruise[], syncSource: SyncDataSource): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const cruise of cruises) {
+    if (!isManagedCruiseSource(cruise, syncSource)) continue;
+    const code = normalizeCasinoOfferCodeForSync(cruise.offerCode);
+    if (!code) continue;
+    counts.set(code, (counts.get(code) || 0) + 1);
+  }
+  return counts;
+}
+
+function shouldTreatOfferAsUndercaptured(existingCount: number, incomingCount: number): boolean {
+  if (existingCount < 10) return false;
+  if (incomingCount <= 0) return true;
+  if (incomingCount < Math.min(existingCount - 10, Math.floor(existingCount * 0.8))) return true;
+  return false;
+}
+
 function findMatchingCruise(
   cruise: Cruise,
   existingCruises: Cruise[]
@@ -874,11 +901,30 @@ export function applySyncPreview(
   ];
 
   const updatedCruiseIds = new Set(preview.cruises.updates.map(u => u.existing.id));
+  const incomingSyncedCruises = [
+    ...preview.cruises.updates.map(u => u.updated),
+    ...preview.cruises.new
+  ];
+  const existingCruiseCountsByOffer = countRoyalCruisesByOffer(normalizedExistingCruises, syncSource);
+  const incomingCruiseCountsByOffer = countRoyalCruisesByOffer(incomingSyncedCruises, syncSource);
+  const undercapturedOfferCodes = new Set<string>();
+  for (const [offerCode, existingCount] of existingCruiseCountsByOffer.entries()) {
+    const incomingCount = incomingCruiseCountsByOffer.get(offerCode) || 0;
+    if (shouldTreatOfferAsUndercaptured(existingCount, incomingCount)) {
+      undercapturedOfferCodes.add(offerCode);
+      console.log(`[SyncLogic] Preserving existing cruises for under-captured offer ${offerCode}: incoming ${incomingCount}, existing ${existingCount}`);
+    }
+  }
   const finalCruises = [
     // Keep cruises from other sources; drop active-source cruises not in sync
     ...normalizedExistingCruises
       .filter(c => {
         if (allowCruiseRemoval && isManagedCruiseSource(c, syncSource) && !updatedCruiseIds.has(c.id)) {
+          const existingOfferCode = normalizeCasinoOfferCodeForSync(c.offerCode);
+          if (existingOfferCode && undercapturedOfferCodes.has(existingOfferCode)) {
+            console.log(`[SyncLogic] Preserving existing cruise for under-captured offer ${existingOfferCode}: ${c.shipName} on ${c.sailDate}`);
+            return true;
+          }
           const isBeingReplaced = preview.cruises.new.some(newCruise => 
             findMatchingCruise(newCruise, [c])
           );

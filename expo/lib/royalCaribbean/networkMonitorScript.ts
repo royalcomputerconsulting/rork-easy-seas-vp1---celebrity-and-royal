@@ -28,13 +28,39 @@ export const NETWORK_MONITOR_SCRIPT = `
 
   function normalizeRoyalHistorySailingsPayload(data) {
     try {
-      const sailings = data?.payload?.sailings || data?.sailings || data?.data?.sailings || [];
-      return Array.isArray(sailings) ? sailings : [];
+      const isSailing = (item) => {
+        if (!item || typeof item !== 'object') return false;
+        const ship = item.shipCode || item.ship || item.shipCd || item.shipName || item.shipDescription || item.shipDisplayName || item.shipLongName || item.vesselName;
+        const date = item.sailDate || item.departureDate || item.startDate || item.sailingDate || item.date || item.voyageStartDate || item.embarkDate || item.embarkationDate;
+        return !!(ship && date);
+      };
+      const direct = data?.payload?.sailings || data?.sailings || data?.data?.sailings || data?.payload?.pastSailings || data?.payload?.completedCruises || data?.data?.pastSailings || data?.data?.completedCruises || [];
+      if (Array.isArray(direct) && direct.some(isSailing)) return direct.filter(isSailing);
+      let best = [];
+      const seen = new Set();
+      const walk = (value, depth) => {
+        if (!value || depth > 9) return;
+        if (typeof value === 'object') { if (seen.has(value)) return; seen.add(value); }
+        if (Array.isArray(value)) {
+          const rows = value.filter(isSailing);
+          if (rows.length > best.length) best = rows;
+          value.forEach(v => walk(v, depth + 1));
+          return;
+        }
+        if (typeof value === 'object') {
+          Object.keys(value).forEach(k => {
+            const lower = String(k).toLowerCase();
+            if (lower.includes('sailing') || lower.includes('cruise') || lower.includes('history') || lower.includes('past') || lower.includes('completed') || lower === 'payload' || lower === 'data' || lower === 'items' || lower === 'results') walk(value[k], depth + 1);
+          });
+        }
+      };
+      walk(data, 0);
+      return best;
     } catch (e) { return []; }
   }
 
   function isRoyalLoyaltyHistoryUrl(url) {
-    return typeof url === 'string' && url.includes('/guestAccounts/loyalty/history/');
+    return typeof url === 'string' && /\/guestAccounts\/loyalty\/history(?:\/|\?|$)/.test(url);
   }
 
   function postRoyalHistorySailings(url, data, transport) {

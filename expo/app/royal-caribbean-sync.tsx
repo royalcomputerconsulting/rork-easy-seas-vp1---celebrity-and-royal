@@ -327,7 +327,10 @@ function RoyalCaribbeanSyncScreen() {
     }
   };
 
-  const canRunIngestion = state.status === 'logged_in' || state.status === 'complete';
+  // Do not disable Sync Now just because auth detection has not emitted a fresh logged_in state.
+  // Royal sessions can persist via cookies while our state briefly says not_logged_in after page transitions.
+  // The provider will still validate/capture during the actual sync flow.
+  const canRunIngestion = true;
   const isRunning = state.status.startsWith('running_') || state.status === 'syncing';
   const showConfirmation = state.status === 'awaiting_confirmation';
 
@@ -603,7 +606,7 @@ function RoyalCaribbeanSyncScreen() {
                 <Pressable 
                   style={[styles.quickActionButton, (!canRunIngestion || isRunning) && styles.buttonDisabled, isRunning && styles.syncActiveButton]}
                   onPress={runIngestion}
-                  disabled={!canRunIngestion || isRunning}
+                  disabled={isRunning}
                   testID="royal-sync-now-button"
                 >
                   {isRunning ? (
@@ -611,7 +614,7 @@ function RoyalCaribbeanSyncScreen() {
                       <ActivityIndicator size="small" color="#34d399" />
                     </Animated.View>
                   ) : (
-                    <RefreshCcw size={20} color={!canRunIngestion ? '#475569' : '#34d399'} />
+                    <RefreshCcw size={20} color={'#34d399'} />
                   )}
                   <Text style={[styles.quickActionLabel, isRunning && styles.syncActiveLabel]}>
                     {isRunning ? 'SYNCING...' : 'SYNC NOW'}

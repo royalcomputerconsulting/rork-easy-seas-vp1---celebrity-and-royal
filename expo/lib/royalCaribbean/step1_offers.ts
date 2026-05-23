@@ -740,6 +740,33 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
         }
       }
 
+      if (brandCode === 'R') {
+        const mergedEndpoint = baseUrl + '/api/casino/v2/offers/merged';
+        try {
+          log('📡 Calling Royal merged offers endpoint first: ' + mergedEndpoint);
+          const mergedResponse = await fetch(mergedEndpoint, {
+            method: 'GET',
+            headers: headers,
+            credentials: 'include'
+          });
+          log('  Royal merged response status: ' + mergedResponse.status, mergedResponse.ok ? 'info' : 'warning');
+          const mergedText = await mergedResponse.text();
+          if (mergedResponse.ok) {
+            let mergedRaw = null;
+            try { mergedRaw = JSON.parse(mergedText); } catch (jsonErr) { mergedRaw = null; }
+            if (mergedRaw) {
+              const normalizedMerged = normalizeOffersApiResponse(mergedRaw);
+              if (normalizedMerged.offers && normalizedMerged.offers.length > 0) {
+                log('✅ Royal merged endpoint returned ' + normalizedMerged.offers.length + ' offer(s)', 'success');
+                return normalizedMerged;
+              }
+            }
+          }
+        } catch (mergedErr) {
+          log('⚠️ Royal merged offers endpoint failed: ' + String(mergedErr), 'warning');
+        }
+      }
+
       log('📡 Calling ' + brandLabel + ' Casino Offers API with cookies/captured auth...');
       log('Endpoint: ' + endpoint);
       const requestBodies = [];
@@ -1538,9 +1565,19 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
   }
 
   function mergeSailingRows(existing, incoming) {
-    const seen = new Set(existing.map(r => [r.offerCode || r.offerName, r.shipName, r.sailingDate, r.itinerary].join('|')));
+    function rowIdentity(r) {
+      return [
+        normalizeCasinoOfferCode(r.offerCode || '') || cleanOfferText(r.offerName || ''),
+        cleanOfferText(r.shipName || '').toLowerCase(),
+        cleanOfferText(r.sailingDate || r.departureDate || ''),
+        cleanOfferText(r.itinerary || '').toLowerCase(),
+        cleanOfferText(r.cabinType || r.roomType || r.stateroomType || '').toLowerCase(),
+        cleanOfferText(r.numberOfGuests || r.guests || '').toLowerCase()
+      ].join('|');
+    }
+    const seen = new Set(existing.map(rowIdentity));
     incoming.forEach(row => {
-      const key = [row.offerCode || row.offerName, row.shipName, row.sailingDate, row.itinerary].join('|');
+      const key = rowIdentity(row);
       if (!seen.has(key) && (row.shipName || row.sailingDate)) {
         seen.add(key);
         existing.push(row);
