@@ -491,6 +491,17 @@ export function transformBookedCruisesToAppFormat(
     const isCourtesyHold = cruise.status === 'Courtesy Hold' || cruise.status === 'Offer';
     const finalEndDate = endDate || calculateReturnDate(startDate, nights);
 
+    const rawStatusText = String(cruise.status || cruise.bookingStatus || cruise.sourcePage || '').toLowerCase();
+    const todayForStatus = new Date();
+    todayForStatus.setHours(0, 0, 0, 0);
+    const sailDateForStatus = startDate ? new Date(startDate) : null;
+    if (sailDateForStatus) sailDateForStatus.setHours(0, 0, 0, 0);
+    const returnDateForStatus = finalEndDate ? new Date(finalEndDate) : null;
+    if (returnDateForStatus) returnDateForStatus.setHours(0, 0, 0, 0);
+    const explicitlyCompleted = /completed|past|sailed|history/.test(rawStatusText);
+    const dateCompleted = returnDateForStatus ? returnDateForStatus < todayForStatus : (sailDateForStatus ? sailDateForStatus < todayForStatus && explicitlyCompleted : false);
+    const isCompleted = !isCourtesyHold && (explicitlyCompleted || dateCompleted) && !(sailDateForStatus && sailDateForStatus >= todayForStatus);
+
     const bookedCruise: BookedCruise = {
       sourcePayload: (cruise as { rawBooking?: unknown }).rawBooking,
       id: generateId(),
@@ -506,8 +517,8 @@ export function transformBookedCruisesToAppFormat(
       deckNumber: cruise.deckNumber,
       bookingId: cruise.bookingId,
       reservationNumber: cruise.bookingId,
-      status: 'booked',
-      completionState: 'upcoming',
+      status: isCompleted ? 'completed' : 'booked',
+      completionState: isCompleted ? 'completed' : 'upcoming',
       isCourtesyHold,
       holdExpiration: cruise.holdExpiration || undefined,
       notes: isCourtesyHold ? `Courtesy Hold${cruise.holdExpiration ? ` (expires ${cruise.holdExpiration})` : ''}` : undefined,
