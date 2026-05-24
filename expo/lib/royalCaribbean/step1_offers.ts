@@ -111,15 +111,21 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
     dec: 12, december: 12
   };
 
-  // Normalize Royal's occasional one-letter DOM suffixes for the three known May offer families.
-  // This prevents 26BCP105E / 26JUL104O / 26VTY104B from becoming duplicate pseudo-offers.
-  // It is NOT a row-count cap; live Royal data still determines the number of rows.
+  // Normalize Royal/Celebrity's occasional one-letter DOM suffixes for known offer families.
+  // This prevents 26BCP105E / 26JUL104O / 26VTY104B / 2605C03AB / 26TOC208A from becoming
+  // duplicate pseudo-offers. It is NOT a row-count cap; live Royal data still determines
+  // the number of rows.
+  var KNOWN_CASINO_OFFER_CODES = ['26BCP105', '26JUL104', '26VTY104', '2605C03A', '26TOC208'];
   function normalizeCasinoOfferCode(code) {
-    let c = safeStr(code).trim().toUpperCase();
+    var c = safeStr(code).trim().toUpperCase();
     if (!c) return '';
-    if (/^26BCP105[A-Z]?$/.test(c)) return '26BCP105';
-    if (/^26JUL104[A-Z]?$/.test(c)) return '26JUL104';
-    if (/^26VTY104[A-Z]?$/.test(c)) return '26VTY104';
+    for (var i = 0; i < KNOWN_CASINO_OFFER_CODES.length; i += 1) {
+      var canonical = KNOWN_CASINO_OFFER_CODES[i];
+      if (c === canonical) return canonical;
+      if (c.length === canonical.length + 1 && c.indexOf(canonical) === 0 && /^[A-Z]$/.test(c.charAt(canonical.length))) {
+        return canonical;
+      }
+    }
     return c;
   }
 
@@ -1277,7 +1283,9 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
 
   function parseOfferFromText(text, fallbackIndex) {
     const clean = cleanOfferText(text);
-    const codeMatch = clean.match(/(\d{2}[A-Z]{2,8}\d{2,5}[A-Z]?)/);
+    // Match both the long-standing YY+letters+digits style (e.g. 26BCP105 / 26TOC208) AND
+    // Royal's newer YYMM+letter+digits+letter style (e.g. 2605C03A) that appeared in 2026.
+    const codeMatch = clean.match(/(\d{2}[A-Z]{2,8}\d{2,5}[A-Z]?|\d{4}[A-Z]\d{1,3}[A-Z]?)/);
     const offerCode = codeMatch ? normalizeCasinoOfferCode(codeMatch[1]) : '';
     let offerName = '';
     if (offerCode) {
@@ -1286,7 +1294,7 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
       offerName = normalizeOfferName(bits.length ? bits[bits.length - 1] : before);
     }
     if (!offerName) {
-      const nameMatch = clean.match(/([A-Z][A-Za-z0-9 '&-]{2,80})\s*\d{2}[A-Z]{2,8}\d{2,5}[A-Z]?/);
+      const nameMatch = clean.match(/([A-Z][A-Za-z0-9 '&-]{2,80})\s*(?:\d{2}[A-Z]{2,8}\d{2,5}[A-Z]?|\d{4}[A-Z]\d{1,3}[A-Z]?)/);
       offerName = normalizeOfferName(nameMatch ? nameMatch[1] : ('Casino Offer ' + fallbackIndex));
     }
     const expiryMatch = clean.match(/Redeem\s+by\s+([A-Za-z]{3,9}\s+\d{1,2},\s+\d{4})/i);
@@ -1310,7 +1318,7 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
   function parseOfferCardsFromWholePage() {
     const pageText = cleanOfferText(document.body?.textContent || '');
     const byCode = new Map();
-    const codeRegex = /(\d{2}[A-Z]{2,8}\d{2,5}[A-Z]?)/g;
+    const codeRegex = /(\d{2}[A-Z]{2,8}\d{2,5}[A-Z]?|\d{4}[A-Z]\d{1,3}[A-Z]?)/g;
     const codes = [];
     let m;
     while ((m = codeRegex.exec(pageText)) !== null) {
@@ -1326,7 +1334,7 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
       if (parsed.offerCode) byCode.set(parsed.offerCode, parsed);
     }
     // A second, very specific pass for the current Royal page shape: Name Code Description Redeem by Date.
-    const re = /([A-Z][A-Za-z0-9 '&-]{2,80})\s*(\d{2}[A-Z]{2,8}\d{2,5}[A-Z]?)\s*(.{0,260}?)\s+Redeem\s+by\s+([A-Za-z]{3,9}\s+\d{1,2},\s+\d{4})/g;
+    const re = /([A-Z][A-Za-z0-9 '&-]{2,80})\s*(\d{2}[A-Z]{2,8}\d{2,5}[A-Z]?|\d{4}[A-Z]\d{1,3}[A-Z]?)\s*(.{0,260}?)\s+Redeem\s+by\s+([A-Za-z]{3,9}\s+\d{1,2},\s+\d{4})/g;
     while ((m = re.exec(pageText)) !== null) {
       const parsed = {
         offerName: normalizeOfferName(m[1]),
@@ -1349,7 +1357,7 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
     let best = null;
     for (let i = 0; node && i < 7; i += 1) {
       const txt = cleanOfferText(node.textContent || '');
-      const hasOneOffer = (txt.match(/\d{2}[A-Z]{2,8}\d{2,5}[A-Z]?/g) || []).length === 1;
+      const hasOneOffer = (txt.match(/\d{2}[A-Z]{2,8}\d{2,5}[A-Z]?|\d{4}[A-Z]\d{1,3}[A-Z]?/g) || []).length === 1;
       if (txt && txt.length < 1200 && hasOneOffer && /Redeem\s+by/i.test(txt)) best = node;
       node = node.parentElement;
     }

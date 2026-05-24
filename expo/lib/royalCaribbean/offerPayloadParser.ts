@@ -46,12 +46,27 @@ function getString(value: unknown): string {
 }
 
 
+// Known canonical casino offer codes that Royal/Celebrity occasionally render with a
+// trailing one-letter DOM suffix (e.g. 26BCP105E, 2605C03AB). Normalizing these here
+// prevents the same logical offer from being counted twice, while still letting any
+// unknown code flow through unchanged so it can be picked up live.
+const KNOWN_CASINO_OFFER_CODES = [
+  '26BCP105',
+  '26JUL104',
+  '26VTY104',
+  '2605C03A',
+  '26TOC208',
+] as const;
+
 function normalizeCasinoOfferCode(value: unknown): string {
   const code = getString(value).trim().toUpperCase();
   if (!code) return '';
-  if (/^26BCP105[A-Z]?$/.test(code)) return '26BCP105';
-  if (/^26JUL104[A-Z]?$/.test(code)) return '26JUL104';
-  if (/^26VTY104[A-Z]?$/.test(code)) return '26VTY104';
+  for (const canonical of KNOWN_CASINO_OFFER_CODES) {
+    if (code === canonical) return canonical;
+    if (code.startsWith(canonical) && /^[A-Z]$/.test(code.slice(canonical.length))) {
+      return canonical;
+    }
+  }
   return code;
 }
 
