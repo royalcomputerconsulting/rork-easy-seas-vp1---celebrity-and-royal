@@ -2,7 +2,7 @@
   "expo": {
     "name": "Easy Seas",
     "slug": "easy-seas",
-    "version": "9.9.9",
+    "version": "9.9.11",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "rork-app",
@@ -16,7 +16,10 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "app.rork.easy-seas-vp1-celebrity-and-royal",
-      "usesIcloudStorage": true
+      "usesIcloudStorage": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -52,6 +55,14 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "origin": "https://rork.com/"
+      },
+      "eas": {
+        "projectId": "ec1e9b5a-face-45ad-8dc2-b95c780654f7"
+      }
     }
   }
 }

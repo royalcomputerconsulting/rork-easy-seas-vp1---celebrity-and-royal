@@ -146,7 +146,7 @@ export const NETWORK_MONITOR_SCRIPT = `
       const clonedResponse = response.clone();
       
       try {
-        if (url.includes('/casino-offers') || url.includes('/api/casino/casino-offers')) {
+        if (url.includes('/casino-offers') || url.includes('/api/casino/casino-offers') || url.includes('/api/casino/v2/offers/merged')) {
           log('📦 Captured Casino Offers API payload', 'info');
           const data = await clonedResponse.json();
           const offers = data?.payload?.casinoOffers || data?.payload?.offers || data?.casinoOffers || data?.offers || [];
@@ -366,7 +366,7 @@ export const NETWORK_MONITOR_SCRIPT = `
         const url = this.responseURL || _url || '';
         
         try {
-          if (url.includes('/casino-offers') || url.includes('/api/casino/casino-offers')) {
+          if (url.includes('/casino-offers') || url.includes('/api/casino/casino-offers') || url.includes('/api/casino/v2/offers/merged')) {
             const data = JSON.parse(this.responseText);
             const offers = data?.payload?.casinoOffers || data?.payload?.offers || data?.casinoOffers || data?.offers || [];
             window.capturedPayloads.offers = data;

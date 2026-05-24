@@ -85,7 +85,7 @@ export const AUTH_DETECTION_SCRIPT = `
         const url = (typeof args[0] === 'string') ? args[0] : (args[0] && args[0].url ? args[0].url : '');
         
         if (typeof url === 'string' && url) {
-          if (url.includes('/api/casino/casino-offers') || url.includes('/casino-offers')) {
+          if (url.includes('/api/casino/casino-offers') || url.includes('/casino-offers') || url.includes('/api/casino/v2/offers/merged')) {
             if (response.ok && response.status === 200) {
               clonedResponse.json().then(data => {
                 window.capturedPayloads.offers = data;
@@ -200,7 +200,7 @@ export const AUTH_DETECTION_SCRIPT = `
               }));
             }).catch(() => {});
           }
-          if (response.ok && response.status === 200 && typeof url === 'string' && url && !(url.includes('/api/casino/casino-offers') || url.includes('/casino-offers'))) {
+          if (response.ok && response.status === 200 && typeof url === 'string' && url && !(url.includes('/api/casino/casino-offers') || url.includes('/casino-offers') || url.includes('/api/casino/v2/offers/merged'))) {
             try {
               clonedResponse.clone().json().then(function(data) {
                 easySeasMaybeCaptureOfferSailingPayload(url, data, 'Fetch-broad');
@@ -331,7 +331,7 @@ export const AUTH_DETECTION_SCRIPT = `
           try {
             const data = JSON.parse(this.responseText);
             
-            if (this._url.includes('/api/casino/casino-offers') || this._url.includes('/casino-offers')) {
+            if (this._url.includes('/api/casino/casino-offers') || this._url.includes('/casino-offers') || this._url.includes('/api/casino/v2/offers/merged')) {
               window.capturedPayloads.offers = data;
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'network_payload',
@@ -346,7 +346,7 @@ export const AUTH_DETECTION_SCRIPT = `
               }));
             }
             
-            if (!(this._url.includes('/api/casino/casino-offers') || this._url.includes('/casino-offers'))) {
+            if (!(this._url.includes('/api/casino/casino-offers') || this._url.includes('/casino-offers') || this._url.includes('/api/casino/v2/offers/merged'))) {
               easySeasMaybeCaptureOfferSailingPayload(this._url, data, 'XHR-broad');
             }
 

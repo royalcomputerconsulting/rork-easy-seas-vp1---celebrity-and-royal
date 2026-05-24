@@ -21,12 +21,13 @@ import { convertLoyaltyInfoToExtended, mergeExtendedLoyaltyData } from '@/lib/ro
 import { rcLogger } from '@/lib/royalCaribbean/logger';
 import { generateOffersCSV, generateBookedCruisesCSV } from '@/lib/royalCaribbean/csvGenerator';
 import { injectOffersExtraction } from '@/lib/royalCaribbean/step1_offers';
+import { AUTH_DETECTION_SCRIPT } from '@/lib/royalCaribbean/authDetection';
+import { NETWORK_MONITOR_SCRIPT } from '@/lib/royalCaribbean/networkMonitorScript';
 import { injectCarnivalOffersExtraction, injectCarnivalBookingsScrape, injectCarnivalCruiseSearchScrape, injectCarnivalTgoExtract } from '@/lib/carnival/carnivalOffersExtraction';
 import { createSyncPreview, calculateSyncCounts, applySyncPreview } from '@/lib/royalCaribbean/syncLogic';
 import { parseCasinoOffersPayload } from '@/lib/royalCaribbean/offerPayloadParser';
 import { healImportedData } from '@/lib/dataHealing';
 import { isActiveBookedCruise, isCourtesyHoldCruise } from '@/lib/bookedCruiseStatus';
-import { augmentRoyalOffersWithVerifiedBaseline } from '@/lib/royalCaribbean/verifiedRoyalOfferBaselines';
 import { COMPLETED_CRUISES_DATA } from '@/mocks/completedCruises';
 
 export type CruiseLine = 'royal_caribbean' | 'celebrity' | 'carnival';
@@ -89,6 +90,33 @@ function normalizeRoyalCompactDate(value: any): string {
   const d = new Date(raw);
   if (!Number.isNaN(d.getTime())) return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
   return raw;
+}
+
+function normalizeCruiseDateKey(value: any): string {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const compact = raw.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (compact) return `${compact[1]}-${compact[2]}-${compact[3]}`;
+  const iso = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (iso) return `${iso[1]}-${iso[2].padStart(2, '0')}-${iso[3].padStart(2, '0')}`;
+  const mdy = raw.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+  if (mdy) return `${mdy[3]}-${mdy[1].padStart(2, '0')}-${mdy[2].padStart(2, '0')}`;
+  const d = new Date(raw.includes('T') ? raw : `${raw}T12:00:00`);
+  if (!Number.isNaN(d.getTime())) return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return raw.toLowerCase().replace(/\s+/g, ' ');
+}
+
+function completedCruiseIdentityKey(row: Pick<BookedCruiseRow, 'bookingId' | 'shipName' | 'sailingStartDate' | 'sailingDates' | 'numberOfNights'>): string {
+  const ship = String(row.shipName || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const date = normalizeCruiseDateKey(row.sailingStartDate || row.sailingDates || '');
+  // Royal completed-history rows can arrive twice with the same ship/date but different generated
+  // booking ids, date formats, or missing/verbose night values. Ship + normalized sail date is the
+  // stable identity for completed-history rows and prevents the 54 -> 108 duplicate inflation.
+  if (ship && date) return `${ship}|${date}`;
+  const rawNights = String(row.numberOfNights ?? '').trim().toLowerCase();
+  const parsedNights = Number.parseInt(rawNights.replace(/[^0-9]/g, ''), 10);
+  const nights = Number.isFinite(parsedNights) ? String(parsedNights) : rawNights.replace(/\s+/g, ' ');
+  return `${ship}|${date}|${nights}`;
 }
 
 function getRoyalLoyaltyHistorySailings(data: any): any[] {
@@ -510,7 +538,14 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         stateroomType: stringifyValue(row.stateroomType) || undefined,
       };
 
-      const dedupeKey = normalizedRow.bookingId || `${normalizedRow.shipName}|${normalizedRow.sailingStartDate}`;
+      const statusText = [normalizedRow.status, normalizedRow.sourcePage, normalizedRow.bookingStatus]
+        .map(v => String(v || '').toLowerCase())
+        .join(' ');
+      const looksCompleted = /completed|past|history|sailed/.test(statusText);
+      const generatedCompletedId = /^completed_/i.test(String(normalizedRow.bookingId || ''));
+      const dedupeKey = looksCompleted || generatedCompletedId
+        ? `completed|${completedCruiseIdentityKey(normalizedRow)}`
+        : (normalizedRow.bookingId ? `booking|${String(normalizedRow.bookingId).trim().toLowerCase()}` : `shipdate|${String(normalizedRow.shipName || '').trim().toLowerCase()}|${normalizeCruiseDateKey(normalizedRow.sailingStartDate)}`);
       if (seenKeys.has(dedupeKey)) {
         return;
       }
@@ -1116,8 +1151,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           if (sailings.length > 0) {
             const completedRows = convertRoyalLoyaltyHistorySailingsToCompletedRows(sailings).filter(isCompletedBookedCruiseRow);
             setState(prev => {
-              const existingKeys = new Set(prev.extractedBookedCruises.map(c => `${c.bookingId}|${c.shipName}|${c.sailingStartDate}`));
-              const deduped = completedRows.filter(c => !existingKeys.has(`${c.bookingId}|${c.shipName}|${c.sailingStartDate}`));
+              const existingKeys = new Set(prev.extractedBookedCruises.map(c => completedCruiseIdentityKey(c)));
+              const deduped = completedRows.filter(c => !existingKeys.has(completedCruiseIdentityKey(c)));
               const newCruises = [...prev.extractedBookedCruises, ...deduped];
               extractedBookedCruisesRef.current = newCruises;
               return { ...prev, extractedBookedCruises: newCruises };
@@ -1144,8 +1179,12 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           );
           const isHistoryOrPastUrl = /past|completed|history|sailed/i.test(bookingCaptureUrl);
           if (isCompletedOnlyCapture && !hasExplicitCompletedPayload && !isHistoryOrPastUrl) {
-            addLog(`🛡️ Ignoring current/upcoming bookings payload during completed-only sync: ${bookingCaptureUrl || endpoint}`, 'info');
-            break;
+            // Do not throw away the current bookings payload entirely. Royal sometimes marks the
+            // just-finished sailing as Completed in this otherwise-current endpoint before it appears
+            // in the full history payload. We will parse it, then the completed-only finalization keeps
+            // ONLY rows that pass the completed/past date/status guard, so future upcoming bookings are
+            // not synced as completed.
+            addLog(`🛡️ Completed-only sync is parsing current bookings payload only to extract already-completed rows: ${bookingCaptureUrl || endpoint}`, 'info');
           }
           addLog(`📦 Processing captured ${endpoint} API payload...`, 'info');
           if (dataKeys.length > 0) {
@@ -1750,6 +1789,19 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     };
 
     const delay = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
+
+    const installNetworkMonitor = async (reason: string) => {
+      if (!webViewRef.current) return;
+      try {
+        addLog(`🌐 Ensuring Royal network capture is active (${reason})`, 'info');
+        webViewRef.current.injectJavaScript(`${AUTH_DETECTION_SCRIPT}
+${NETWORK_MONITOR_SCRIPT}
+true;`);
+        await delay(1000);
+      } catch (error) {
+        addLog(`⚠️ Could not install network capture before ${reason}: ${String(error)}`, 'warning');
+      }
+    };
     
     const isCarnivalMode = cruiseLine === 'carnival';
     const syncSource = cruiseLine === 'carnival' ? 'carnival' : cruiseLine === 'celebrity' ? 'celebrity' : 'royal';
@@ -1799,7 +1851,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         // Also run the standard extraction on the offers page DOM for offer names/descriptions
         addLog('🎪 Injecting Carnival offers page extraction...', 'info');
       } else {
+        // Install the network monitor before and after the offers page is loaded. The working v8.6.2 logs
+        // captured /api/casino/v2/offers/merged from the page itself; direct POST fallbacks now 404.
+        await installNetworkMonitor('pre-offers navigation');
         await navigateToPage(config.offersUrl, 20000);
+        await installNetworkMonitor('post-offers navigation before opening View Sailings');
       }
       
       if (webViewRef.current) {
@@ -1819,18 +1875,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       setState(prev => {
         let normalizedExtractedOffers = normalizeOfferRows(prev.extractedOffers);
-        if (syncSource === 'royal') {
-          const augmented = augmentRoyalOffersWithVerifiedBaseline(normalizedExtractedOffers);
-          const addedEntries = Object.entries(augmented.addedByCode).filter(([, count]) => Number(count) > 0);
-          if (addedEntries.length > 0) {
-            normalizedExtractedOffers = augmented.rows;
-            addedEntries.forEach(([code]) => {
-              const incoming = augmented.incomingByCode[code] || 0;
-              const expected = augmented.expectedByCode[code] || 0;
-              addLog(`⚠️ Royal under-captured ${code} (${incoming}/${expected}); preserving verified complete offer rows for this run`, 'warning');
-            });
-          }
-        }
         if (normalizedExtractedOffers.length !== prev.extractedOffers.length) {
           extractedOffersRef.current = normalizedExtractedOffers;
         }
@@ -2341,18 +2385,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       setState(prev => {
         let normalizedExtractedOffers = normalizeOfferRows(prev.extractedOffers);
-        if (syncSource === 'royal') {
-          const augmented = augmentRoyalOffersWithVerifiedBaseline(normalizedExtractedOffers);
-          const addedEntries = Object.entries(augmented.addedByCode).filter(([, count]) => Number(count) > 0);
-          if (addedEntries.length > 0) {
-            normalizedExtractedOffers = augmented.rows;
-            addedEntries.forEach(([code]) => {
-              const incoming = augmented.incomingByCode[code] || 0;
-              const expected = augmented.expectedByCode[code] || 0;
-              addLog(`⚠️ Royal under-captured ${code} (${incoming}/${expected}); preserving verified complete offer rows for this run`, 'warning');
-            });
-          }
-        }
         if (normalizedExtractedOffers.length !== prev.extractedOffers.length) {
           extractedOffersRef.current = normalizedExtractedOffers;
         }
@@ -2648,18 +2680,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       });
 
       let normalizedOffers = normalizeOfferRows(state.extractedOffers);
-      if (syncSource === 'royal') {
-        const augmented = augmentRoyalOffersWithVerifiedBaseline(normalizedOffers);
-        const addedEntries = Object.entries(augmented.addedByCode).filter(([, count]) => Number(count) > 0);
-        if (addedEntries.length > 0) {
-          normalizedOffers = augmented.rows;
-          addedEntries.forEach(([code]) => {
-            const incoming = augmented.incomingByCode[code] || 0;
-            const expected = augmented.expectedByCode[code] || 0;
-            addLog(`⚠️ Royal only exposed ${incoming}/${expected} sailing row(s) for ${code}; preserving verified complete rows for that offer instead of downgrading`, 'warning');
-          });
-        }
-      }
       const normalizedBookedCruises = normalizeBookedCruiseRows(state.extractedBookedCruises);
       const syncOfferBreakdownMap = new Map<string, { offerName: string; offerCode?: string; cruiseCount: number }>();
       normalizedOffers.forEach((offer) => {
@@ -3004,14 +3024,18 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       console.log('[RoyalCaribbeanSync] Setting status to complete...');
       addLog('✅ Data synced successfully to app!', 'success');
       
-      // Set complete status immediately - don't wait for refresh
+      // Set complete status immediately - don't wait for refresh.
+      // If this run intentionally skipped offer/cruise persistence (completed-only or non-authoritative
+      // offer capture), keep the displayed counts aligned with preserved app data instead of showing zero.
+      const displayedOfferCount = (!allowOfferRemoval || isCompletedOnlySync) ? coreDataContext.casinoOffers.length : finalOffers.length;
+      const displayedCruiseCount = (!allowCruiseRemoval || isCompletedOnlySync) ? coreDataContext.cruises.length : finalCruises.length;
       setState(prev => ({ 
         ...prev, 
         status: 'complete',
         lastSyncTimestamp: new Date().toISOString(),
         syncCounts: {
-          offerCount: finalOffers.length,
-          offerRows: finalCruises.length,
+          offerCount: displayedOfferCount,
+          offerRows: displayedCruiseCount,
           upcomingCruises: finalActiveBookedCruises.length,
           courtesyHolds: finalCourtesyHolds.length,
           completedCruises: finalCompletedBookedCruises.length,
@@ -3108,7 +3132,27 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         return false;
       }
 
-      const completedRows = convertRoyalLoyaltyHistorySailingsToCompletedRows(sailings).filter(isCompletedBookedCruiseRow);
+      let completedRows = convertRoyalLoyaltyHistorySailingsToCompletedRows(sailings).filter(isCompletedBookedCruiseRow);
+      // Final safety pass: collapse duplicate completed-history rows regardless of whether they came
+      // from stored app state, seeded Royal history, DOM scrape, or live payload. This fixes the observed
+      // 54 -> 108 duplicate inflation caused by the same cruise appearing in both MM-DD-YYYY and YYYY-MM-DD formats.
+      if (completedRows.length > 0) {
+        const beforeDedupeCount = completedRows.length;
+        const dedupedCompletedRows: BookedCruiseRow[] = [];
+        const seenCompletedKeys = new Set<string>();
+        completedRows.forEach((row) => {
+          const key = completedCruiseIdentityKey(row);
+          if (!key.replace(/\|/g, '').trim()) return;
+          if (seenCompletedKeys.has(key)) return;
+          seenCompletedKeys.add(key);
+          dedupedCompletedRows.push(row);
+        });
+        completedRows = dedupedCompletedRows;
+        if (completedRows.length < beforeDedupeCount) {
+          addLog(`ℹ️ Deduped completed cruises ${beforeDedupeCount} → ${completedRows.length} using ship + normalized sailing date + nights`, 'info');
+        }
+      }
+
       if (completedRows.length === 0) {
         addLog(`⚠️ ${sourceLabel} contained ${sailings.length} sailing candidate(s), but none were completed/past after future-date validation`, 'warning');
         return false;
@@ -3172,16 +3216,29 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
     const delay = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
+    const installNetworkMonitor = async (reason: string) => {
+      if (!webViewRef.current) return;
+      try {
+        addLog(`🌐 Ensuring Royal network capture is active (${reason})`, 'info');
+        webViewRef.current.injectJavaScript(`${AUTH_DETECTION_SCRIPT}
+${NETWORK_MONITOR_SCRIPT}
+true;`);
+        await delay(1000);
+      } catch (error) {
+        addLog(`⚠️ Could not install network capture before ${reason}: ${String(error)}`, 'warning');
+      }
+    };
+
 
     const appCompletedCruiseToRow = (c: any, sourcePage = 'Completed'): BookedCruiseRow => ({
       sourcePage,
       shipName: c.shipName || '',
       shipCode: c.shipCode || '',
-      cruiseTitle: c.cruiseTitle || c.itineraryName || c.destination || 'Completed Cruise',
-      sailingStartDate: c.sailDate || c.sailingStartDate || '',
+      cruiseTitle: c.cruiseTitle || c.itineraryName || c.itinerary || c.destination || 'Completed Cruise',
+      sailingStartDate: c.sailDate || c.sailingStartDate || c.sailingDate || c.startDate || c.departureDate || '',
       sailingEndDate: c.returnDate || c.sailingEndDate || '',
-      sailingDates: c.sailDate || c.sailingDates || '',
-      itinerary: c.itineraryName || c.destination || '',
+      sailingDates: c.sailDate || c.sailingDates || c.sailingDate || c.startDate || c.departureDate || '',
+      itinerary: c.itineraryName || c.itinerary || c.destination || '',
       departurePort: c.departurePort || '',
       arrivalPort: c.arrivalPort || '',
       cabinType: c.cabinType || c.category || '',
@@ -3190,7 +3247,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       deckNumber: c.deckNumber || '',
       bookingId: String(c.bookingId || c.reservationNumber || ''),
       numberOfGuests: String(c.guests || c.numberOfGuests || 1),
-      numberOfNights: Number(c.nights || c.numberOfNights || 0) || undefined,
+      numberOfNights: (() => { const rawNights = String(c.nights || c.numberOfNights || c.duration || c.length || ''); const parsed = Number.parseInt(rawNights.replace(/[^0-9]/g, ''), 10); return Number.isFinite(parsed) ? parsed : undefined; })(),
       daysToGo: '0',
       status: 'Completed',
       holdExpiration: '',
@@ -3232,11 +3289,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         const merged: BookedCruiseRow[] = [];
         const seen = new Set<string>();
         [...sourceRows, ...seededRoyalHistoryRows].forEach((row) => {
-          const key = [
-            String(row.bookingId || '').trim(),
-            String(row.shipName || '').trim().toLowerCase(),
-            String(row.sailingStartDate || row.sailingDates || '').trim(),
-          ].join('|');
+          const key = completedCruiseIdentityKey(row);
+          if (!key.replace(/\|/g, '').trim()) return;
           if (seen.has(key)) return;
           seen.add(key);
           merged.push(row);
@@ -3265,7 +3319,9 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       }
 
       addLog('📍 Visiting Royal loyalty page first to trigger the old working loyalty-history payload...', 'info');
+      await installNetworkMonitor('completed sync before loyalty page');
       await navigateToPage('https://www.royalcaribbean.com/account/loyalty-programs', 18000);
+      await installNetworkMonitor('completed sync after loyalty page load');
       await delay(2500);
       webViewRef.current.injectJavaScript(`
         (function() {
@@ -3318,7 +3374,9 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       }
 
       addLog('📍 Visiting Royal Caribbean My Account for past cruises...', 'info');
+      await installNetworkMonitor('completed sync before My Account');
       await navigateToPage('https://www.royalcaribbean.com/myaccount', 22000);
+      await installNetworkMonitor('completed sync after My Account load');
       await delay(3000);
 
       webViewRef.current.injectJavaScript(`
@@ -3614,11 +3672,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         const mergedCompleted: BookedCruiseRow[] = [];
         const seenCompleted = new Set<string>();
         [...storedCompletedHistory, ...completedRows].forEach((row) => {
-          const key = [
-            String(row.bookingId || '').trim().toLowerCase(),
-            String(row.shipName || '').trim().toLowerCase(),
-            String(row.sailingStartDate || row.sailingDates || '').trim(),
-          ].join('|');
+          const key = completedCruiseIdentityKey(row);
+          if (!key.replace(/\|/g, '').trim()) return;
           if (seenCompleted.has(key)) return;
           seenCompleted.add(key);
           mergedCompleted.push(row);

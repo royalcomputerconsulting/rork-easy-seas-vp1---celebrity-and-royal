@@ -1208,13 +1208,21 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
           log('⚠️ API/direct offer fetch failed after DOM extraction: ' + (apiFallbackError && apiFallbackError.message ? apiFallbackError.message : String(apiFallbackError)), 'warning');
         }
 
-        // Ensure each visible offer tile survives even if Royal hides its sailing rows, but never count closed-card summaries as a complete sailing list.
+        // Closed offer cards are not authoritative sailings. Keep the visible card metadata internally,
+        // but if no real ship/date rows were captured, send zero rows so the app preserves existing offers.
         visibleOffers.forEach(function(offer) {
           const hasRowsForOffer = mergedRows.some(function(row) { return (offer.offerCode && normalizeCasinoOfferCode(row.offerCode) === normalizeCasinoOfferCode(offer.offerCode)) || (!offer.offerCode && row.offerName === offer.offerName); });
           if (!hasRowsForOffer) mergedRows.push(blankRowForOffer(offer, 'Offer captured from DOM; full View Sailings rows were not exposed'));
         });
 
         const mergedRowsWithSailings = mergedRows.filter(r => r && r.shipName && r.sailingDate).length;
+        if (mergedRowsWithSailings === 0) {
+          log('⚠️ STEP 1 captured only summary/card rows and 0 real ship/date sailing rows; preserving existing offer data instead of syncing partial rows', 'warning');
+          sendOfferRowsInChunks([], visibleOffers.length);
+          log('✅ STEP 1 ALL-OFFER MERGE COMPLETE: captured ' + visibleOffers.length + ' visible offer card(s) with 0 authoritative sailing row(s)', 'warning');
+          return;
+        }
+
         sendOfferRowsInChunks(mergedRows, visibleOffers.length);
         log('✅ STEP 1 ALL-OFFER MERGE COMPLETE: captured ' + visibleOffers.length + ' visible offer card(s) with ' + mergedRows.length + ' row(s), ' + mergedRowsWithSailings + ' real ship/date sailing row(s)', 'success');
         return;
