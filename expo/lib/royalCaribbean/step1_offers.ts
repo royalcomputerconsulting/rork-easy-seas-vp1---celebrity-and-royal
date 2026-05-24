@@ -1170,7 +1170,7 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
   async function extractOffers() {
     try {
       log('Extracting Club Royale data...');
-      log('🛠️ Offer sync engine v8.6.5 active: all-offer payload sweep + strict expanded-sailing extraction + completed-history guard', 'info');
+      log('🛠️ Offer sync engine v8.7.0 active: all-offer payload sweep + strict expanded-sailing extraction + active loyalty-history click & direct-fetch probe', 'info');
       await extractClubRoyaleStatus();
       log('Loading Club Royale Offers page...');
       await wait(2000);

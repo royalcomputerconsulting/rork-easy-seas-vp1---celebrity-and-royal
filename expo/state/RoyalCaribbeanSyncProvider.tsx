@@ -2105,15 +2105,210 @@ true;`);
           }
         }
 
-        // Restore the pre-button behavior that made completed cruises work:
-        // Always give Royal's loyalty-history page a chance to fire the
-        // /guestAccounts/loyalty/history/{accountId}?loyaltyNumber=... payload,
-        // even when ordinary loyalty info was already captured earlier from another page.
-        // The previous early break skipped this page and therefore missed the 55 past cruises.
+        // Sync engine v8.7.0:
+        // Royal's Loyalty Programs page does NOT auto-fire the /guestAccounts/loyalty/history
+        // endpoint on initial page load — the user has to click "Cruise History" / "Past Cruises"
+        // for it to be triggered. Previously Sync Now just navigated + waited which silently
+        // missed the entire past-cruise payload. Restore the pre-button behavior by actively
+        // injecting the same click helper + direct API fetch that the dedicated completed-cruise
+        // button uses so Sync Now consistently captures all past cruises in one pass.
         if (!isCarnivalMode && !isCelebrityMode && cruiseLine === 'royal_caribbean') {
-          addLog('📍 Probing Loyalty Programs page for Royal past-cruise history payload...', 'info');
+          addLog('📍 Probing Loyalty Programs page for Royal past-cruise history payload (v8.7.0)...', 'info');
           await navigateToPage(config.loyaltyPageUrl, 22000);
-          await delay(12000);
+          await delay(3000);
+
+          if (webViewRef.current) {
+            webViewRef.current.injectJavaScript(`
+              (function() {
+                function post(msg){ try { window.ReactNativeWebView.postMessage(JSON.stringify(msg)); } catch(e) {} }
+                function log(message, type){ post({ type:'log', message: message, logType: type || 'info' }); }
+                function textOf(el){ return String((el && (el.innerText || el.textContent || el.getAttribute('aria-label') || el.getAttribute('title'))) || '').replace(/\\s+/g,' ').trim().toLowerCase(); }
+                function hrefOf(el){ try { return String(el && (el.href || el.getAttribute('href') || '') || '').toLowerCase(); } catch(e) { return ''; } }
+                function clickLikeUser(el) {
+                  if (!el) return false;
+                  try { el.scrollIntoView({ block: 'center', inline: 'center' }); } catch(e) {}
+                  try { ['pointerdown','mousedown','mouseup','click'].forEach(function(t){ el.dispatchEvent(new MouseEvent(t,{bubbles:true,cancelable:true,view:window})); }); } catch(e) {}
+                  try { if (typeof el.click === 'function') el.click(); } catch(e) {}
+                  return true;
+                }
+                function findHistoryLink() {
+                  var nodes = Array.prototype.slice.call(document.querySelectorAll('a,button,[role="button"],[role="tab"],div,span'));
+                  var strong = nodes.find(function(el) {
+                    var t = textOf(el); var h = hrefOf(el);
+                    return /cruise\\s*history|sailing\\s*history|past\\s*cruises|past\\s*sailings|completed\\s*cruises|completed\\s*sailings/.test(t + ' ' + h);
+                  });
+                  if (strong) return strong;
+                  return nodes.find(function(el) {
+                    var t = textOf(el); var h = hrefOf(el);
+                    return ((/history|past|completed/.test(t + ' ' + h)) && (/cruise|sailing|voyage|trip/.test(t + ' ' + h)));
+                  });
+                }
+                try {
+                  var link = findHistoryLink();
+                  if (link) {
+                    log('✅ Clicking Royal cruise history link from Loyalty Programs page', 'success');
+                    clickLikeUser(link);
+                    setTimeout(function(){
+                      var more = findHistoryLink();
+                      if (more && more !== link) { log('✅ Clicking nested past cruises link', 'success'); clickLikeUser(more); }
+                    }, 2500);
+                  } else {
+                    log('ℹ️ Cruise history link not found on loyalty page; falling back to direct API fetch', 'info');
+                  }
+                } catch(e) { log('⚠️ Loyalty history click helper failed: ' + (e && e.message ? e.message : String(e)), 'warning'); }
+                true;
+              })();
+            `);
+            await delay(7000);
+          }
+
+          // Direct API fetch fallback. If clicking the link didn't trigger the
+          // loyalty/history endpoint (link missing, page didn't render the tab, etc.)
+          // we hit the API directly using captured auth headers + accountId/loyaltyNumber
+          // we already learned from the regular loyalty payload.
+          if (!cachedRoyalLoyaltyHistoryPayloadRef.current && webViewRef.current) {
+            const safeAlnum = (raw: unknown) => String(raw ?? '').replace(/[^0-9A-Za-z_-]/g, '');
+            const safeNumeric = (raw: unknown) => String(raw ?? '').replace(/[^0-9A-Za-z]/g, '');
+            const injectedAccountId = safeAlnum(
+              (extendedLoyaltyData as any)?.accountId ||
+              (extendedLoyaltyData as any)?.guestAccountId ||
+              (currentUser as any)?.accountId ||
+              (currentUser as any)?.guestAccountId ||
+              ''
+            );
+            const injectedLoyaltyNumber = safeNumeric(
+              (extendedLoyaltyData as any)?.crownAndAnchorId ||
+              (extendedLoyaltyData as any)?.crownAnchorNumber ||
+              (extendedLoyaltyData as any)?.crownAndAnchorNumber ||
+              (extendedLoyaltyData as any)?.loyaltyNumber ||
+              (currentUser as any)?.crownAnchorNumber ||
+              (currentUser as any)?.crownAndAnchorNumber ||
+              ''
+            );
+
+            webViewRef.current.injectJavaScript(`
+              (function() {
+                function post(msg){ try { window.ReactNativeWebView.postMessage(JSON.stringify(msg)); } catch(e) {} }
+                function log(message, type){ post({ type:'log', message: message, logType: type || 'info' }); }
+                function firstString() {
+                  for (var i=0;i<arguments.length;i++) {
+                    var v = arguments[i];
+                    if (v === null || v === undefined) continue;
+                    if (typeof v === 'number' && isFinite(v)) return String(v);
+                    if (typeof v === 'string' && v.trim()) return v.trim();
+                  }
+                  return '';
+                }
+                function deepFind(obj, keys, depth) {
+                  if (!obj || depth > 6) return '';
+                  if (typeof obj !== 'object') return '';
+                  for (var i=0;i<keys.length;i++) {
+                    var k = keys[i];
+                    if (obj[k] !== undefined && obj[k] !== null && String(obj[k]).trim()) return String(obj[k]).trim();
+                  }
+                  if (Array.isArray(obj)) {
+                    for (var a=0;a<obj.length;a++) { var av = deepFind(obj[a], keys, depth+1); if (av) return av; }
+                  } else {
+                    var names = Object.keys(obj);
+                    for (var n=0;n<names.length;n++) { var ov = deepFind(obj[names[n]], keys, depth+1); if (ov) return ov; }
+                  }
+                  return '';
+                }
+                async function fetchHistory() {
+                  try {
+                    var captured = window.capturedPayloads || {};
+                    var loyalty = captured.loyalty || captured.loyaltyData || captured.extendedLoyalty || {};
+                    var payload = loyalty.payload || loyalty.data || loyalty;
+                    var allPayloads = [payload, loyalty, captured, window.capturedRequestHeaders || {}];
+                    var accountId = '';
+                    var loyaltyNumber = '';
+                    for (var pi=0; pi<allPayloads.length && !accountId; pi++) {
+                      accountId = firstString(allPayloads[pi].accountId, allPayloads[pi].guestAccountId, allPayloads[pi].accountID) || deepFind(allPayloads[pi], ['accountId','guestAccountId','accountID'], 0);
+                    }
+                    for (var li=0; li<allPayloads.length && !loyaltyNumber; li++) {
+                      loyaltyNumber = firstString(
+                        allPayloads[li].loyaltyNumber,
+                        allPayloads[li].crownAndAnchorNumber,
+                        allPayloads[li].crownAnchorNumber,
+                        allPayloads[li].crownAndAnchorId,
+                        allPayloads[li].loyaltyId
+                      ) || deepFind(allPayloads[li], ['loyaltyNumber','crownAndAnchorNumber','crownAnchorNumber','crownAndAnchorId','loyaltyId'], 0);
+                    }
+                    if (!accountId) {
+                      var injectedAccountId = '${injectedAccountId}';
+                      if (injectedAccountId) accountId = injectedAccountId;
+                    }
+                    if (!loyaltyNumber) {
+                      var injectedLoyaltyNumber = '${injectedLoyaltyNumber}';
+                      if (injectedLoyaltyNumber) loyaltyNumber = injectedLoyaltyNumber;
+                    }
+                    if (!accountId || !loyaltyNumber) {
+                      log('ℹ️ Sync Now loyalty-history direct fetch skipped: accountId=' + (accountId || 'missing') + ', loyaltyNumber=' + (loyaltyNumber ? 'present' : 'missing'), 'info');
+                      return;
+                    }
+                    var urls = [
+                      'https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/loyalty/history/' + encodeURIComponent(accountId) + '?loyaltyNumber=' + encodeURIComponent(loyaltyNumber),
+                      'https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/loyalty/history?accountId=' + encodeURIComponent(accountId) + '&loyaltyNumber=' + encodeURIComponent(loyaltyNumber),
+                      'https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/' + encodeURIComponent(accountId) + '/loyalty/history?loyaltyNumber=' + encodeURIComponent(loyaltyNumber)
+                    ];
+                    function safeJsonParseLocal(str) { try { return JSON.parse(str); } catch(e) { return null; } }
+                    function tryFindAppKeyLocal() {
+                      try {
+                        var keys = Object.keys(localStorage || {});
+                        for (var ki=0; ki<keys.length; ki++) {
+                          var k = keys[ki];
+                          if (/appkey/i.test(k) || /api[-_]?key/i.test(k)) {
+                            var v = localStorage.getItem(k);
+                            if (v && v.length > 10) return v;
+                          }
+                        }
+                      } catch(e) {}
+                      return '';
+                    }
+                    function getAuthHeadersFromSessionLocal(accountIdParam) {
+                      try {
+                        var sessionRaw = localStorage.getItem('persist:session');
+                        var session = sessionRaw ? safeJsonParseLocal(sessionRaw) : null;
+                        var token = session && session.token ? safeJsonParseLocal(session.token) : null;
+                        var rawAuth = token && token.toString ? token.toString() : '';
+                        var authorization = rawAuth ? (rawAuth.indexOf('Bearer ') === 0 ? rawAuth : ('Bearer ' + rawAuth)) : '';
+                        var headers = { 'accept': 'application/json', 'accept-language': 'en-US,en;q=0.9', 'content-type': 'application/json' };
+                        if (accountIdParam) headers['account-id'] = accountIdParam;
+                        if (authorization) headers['authorization'] = authorization;
+                        var appKey = tryFindAppKeyLocal();
+                        if (appKey) { headers['appkey'] = appKey; headers['x-api-key'] = appKey; }
+                        return headers;
+                      } catch(e) { return null; }
+                    }
+                    var headers = getAuthHeadersFromSessionLocal(accountId) || { 'accept': 'application/json' };
+                    if ((window.capturedRequestHeaders||{}).apiKey) headers['x-api-key'] = window.capturedRequestHeaders.apiKey;
+                    if ((window.capturedRequestHeaders||{}).authorization) headers['authorization'] = window.capturedRequestHeaders.authorization;
+                    if ((window.capturedRequestHeaders||{}).accountId) headers['account-id'] = window.capturedRequestHeaders.accountId;
+                    log('📡 Sync Now: fetching Royal loyalty history directly with captured headers', 'info');
+                    for (var ui=0; ui<urls.length; ui++) {
+                      var url = urls[ui];
+                      try {
+                        var resp = await fetch(url, { method: 'GET', credentials: 'include', headers: headers });
+                        log('📡 Loyalty-history attempt ' + (ui + 1) + ' status: ' + resp.status, resp.ok ? 'success' : 'warning');
+                        if (!resp.ok) continue;
+                        var data = await resp.json();
+                        post({ type:'network_capture', endpoint:'royalLoyaltyHistory', data:data, url:url });
+                        return;
+                      } catch(fetchErr) {
+                        log('⚠️ Loyalty-history attempt ' + (ui + 1) + ' failed: ' + (fetchErr && fetchErr.message ? fetchErr.message : String(fetchErr)), 'warning');
+                      }
+                    }
+                  } catch(e) {
+                    log('⚠️ Loyalty-history direct fetch helper failed: ' + (e && e.message ? e.message : String(e)), 'warning');
+                  }
+                }
+                setTimeout(fetchHistory, 1500);
+                true;
+              })();
+            `);
+            await delay(8000);
+          }
+
           if (cachedRoyalLoyaltyHistoryPayloadRef.current) {
             const historyCount = getRoyalLoyaltyHistorySailings(cachedRoyalLoyaltyHistoryPayloadRef.current).length;
             addLog(`✅ Royal loyalty-history probe captured ${historyCount} completed sailing(s)`, historyCount > 0 ? 'success' : 'info');
@@ -3398,7 +3593,7 @@ true;`);
             });
           }
           try {
-            log('🔎 Completed cruise sync v8.6.3: opening View All, then explicitly switching to Past Sailings before extraction...', 'info');
+            log('🔎 Completed cruise sync v8.7.0: opening View All, then explicitly switching to Past Sailings before extraction...', 'info');
             function findByText(re) { return findButton(re); }
             function allClickable() { return Array.prototype.slice.call(document.querySelectorAll('button,a,[role="button"],[role="tab"],li,div,span')).filter(function(el) {
               var text = (el.innerText || el.textContent || el.getAttribute('aria-label') || '').replace(/\s+/g,' ').trim().toLowerCase();
