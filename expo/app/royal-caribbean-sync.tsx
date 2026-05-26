@@ -818,11 +818,19 @@ true;`}
                         {state.syncCounts.offerCount} unique offer{state.syncCounts.offerCount !== 1 ? 's' : ''}
                       </Text>
                     )}
-                    {state.syncCounts?.offerBreakdown?.map((offer, idx) => (
-                      <Text key={`offer-breakdown-${idx}`} style={styles.countDetail}>
-                        • {offer.offerName}{offer.offerCode ? ` (${offer.offerCode})` : ''}: {offer.cruiseCount} cruise{offer.cruiseCount !== 1 ? 's' : ''}
-                      </Text>
-                    ))}
+                    {state.syncCounts?.offerBreakdown?.map((offer, idx) => {
+                      const cruiseLabel = `${offer.cruiseCount} cruise${offer.cruiseCount !== 1 ? 's' : ''}`;
+                      const extra = offer.cruiseCount === 0 && (offer.totalRows ?? 0) > 0
+                        ? ` (offer card only, ${offer.totalRows} row${offer.totalRows !== 1 ? 's' : ''})`
+                        : (offer.totalRows ?? 0) > offer.cruiseCount && offer.cruiseCount > 0
+                          ? ` (${offer.totalRows} row${offer.totalRows !== 1 ? 's' : ''} captured)`
+                          : '';
+                      return (
+                        <Text key={`offer-breakdown-${idx}`} style={styles.countDetail}>
+                          • {offer.offerName}{offer.offerCode ? ` (${offer.offerCode})` : ''}: {cruiseLabel}{extra}
+                        </Text>
+                      );
+                    })}
                   </View>
                 </View>
 
@@ -1075,11 +1083,19 @@ true;`}
                     <Ship size={14} color="#60a5fa" />
                     <Text style={styles.successLoyaltyTitle}>Offers & Available Cruises Synced</Text>
                   </View>
-                  {state.syncCounts.offerBreakdown.map((offer, idx) => (
-                    <View key={`success-offer-breakdown-${idx}`} style={styles.successLoyaltyRow}>
-                      <Text style={styles.successLoyaltyText}>• {offer.offerName}{offer.offerCode ? ` (${offer.offerCode})` : ''}: {offer.cruiseCount} cruise{offer.cruiseCount !== 1 ? 's' : ''}</Text>
-                    </View>
-                  ))}
+                  {state.syncCounts.offerBreakdown.map((offer, idx) => {
+                    const cruiseLabel = `${offer.cruiseCount} cruise${offer.cruiseCount !== 1 ? 's' : ''}`;
+                    const extra = offer.cruiseCount === 0 && (offer.totalRows ?? 0) > 0
+                      ? ` (offer card only, ${offer.totalRows} row${offer.totalRows !== 1 ? 's' : ''})`
+                      : (offer.totalRows ?? 0) > offer.cruiseCount && offer.cruiseCount > 0
+                        ? ` (${offer.totalRows} row${offer.totalRows !== 1 ? 's' : ''} captured)`
+                        : '';
+                    return (
+                      <View key={`success-offer-breakdown-${idx}`} style={styles.successLoyaltyRow}>
+                        <Text style={styles.successLoyaltyText}>• {offer.offerName}{offer.offerCode ? ` (${offer.offerCode})` : ''}: {cruiseLabel}{extra}</Text>
+                      </View>
+                    );
+                  })}
                 </View>
               ) : null}
 

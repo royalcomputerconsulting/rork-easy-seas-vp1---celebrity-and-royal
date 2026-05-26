@@ -268,14 +268,17 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
     fontWeight: '400',
     letterSpacing: 0.5,
     mask: {
-      x: 78,
-      y: 844,
-      width: 720,
-      height: 78,
+      // The approved shell image already has "LOS ANGELES, CALIFORNIA" baked into the port row.
+      // A sample-based erasure pulled pixels from within that baked text and re-stamped
+      // them next to the new port value, producing the doubled / overlapping characters
+      // visible in the exported PNG. Use a solid fill (matching the card body) and a
+      // mask wide enough to cover any reasonably long port name end-to-end.
+      x: 70,
+      y: 838,
+      width: 900,
+      height: 92,
       fill: '#F4F4F5',
       radius: 6,
-      sampleX: 474,
-      sampleY: 844,
     },
   },
   barcodeCaption: {

@@ -2466,14 +2466,16 @@ true;`);
         console.log('[RoyalCaribbeanSync] Status counts - Upcoming:', upcomingCruises, ', Completed:', completedCruises, ', Courtesy Holds:', courtesyHolds);
         
         // Group by offer name/code to get unique offer count and per-offer sailing/cruise counts
-        const offersByName = new Map<string, { offerName: string; offerCode?: string; cruiseCount: number }>();
+        const offersByName = new Map<string, { offerName: string; offerCode?: string; cruiseCount: number; totalRows: number }>();
         normalizedExtractedOffers.forEach(offer => {
           const key = offer.offerCode || offer.offerName || 'Unknown';
           const existing = offersByName.get(key) || {
             offerName: offer.offerName || offer.offerCode || 'Unknown Offer',
             offerCode: offer.offerCode || undefined,
             cruiseCount: 0,
+            totalRows: 0,
           };
+          existing.totalRows += 1;
           if (offer.shipName || offer.sailingDate) {
             existing.cruiseCount += 1;
           }
@@ -2528,7 +2530,17 @@ true;`);
         
         addLog(`📊 SUMMARY: ${uniqueOffers} casino offer(s) with ${normalizedExtractedOffers.length} total row(s)`, 'success');
         offerBreakdown.forEach((offer) => {
-          addLog(`   • ${offer.offerName}${offer.offerCode ? ` (${offer.offerCode})` : ''}: ${offer.cruiseCount} cruise(s)`, offer.cruiseCount > 0 ? 'success' : 'warning');
+          const label = `${offer.offerName}${offer.offerCode ? ` (${offer.offerCode})` : ''}`;
+          if (offer.cruiseCount > 0) {
+            const detail = offer.totalRows > offer.cruiseCount
+              ? ` (${offer.totalRows} row${offer.totalRows !== 1 ? 's' : ''} captured)`
+              : '';
+            addLog(`   • ${label}: ${offer.cruiseCount} cruise(s)${detail}`, 'success');
+          } else if (offer.totalRows > 0) {
+            addLog(`   • ${label}: offer captured (${offer.totalRows} row${offer.totalRows !== 1 ? 's' : ''}), sailing details not exposed by site`, 'warning');
+          } else {
+            addLog(`   • ${label}: 0 cruise(s)`, 'warning');
+          }
         });
         const statusParts: string[] = [];
         if (upcomingCruises > 0) statusParts.push(`${upcomingCruises} upcoming`);
@@ -2731,14 +2743,16 @@ true;`);
 
       let normalizedOffers = normalizeOfferRows(state.extractedOffers);
       const normalizedBookedCruises = normalizeBookedCruiseRows(state.extractedBookedCruises);
-      const syncOfferBreakdownMap = new Map<string, { offerName: string; offerCode?: string; cruiseCount: number }>();
+      const syncOfferBreakdownMap = new Map<string, { offerName: string; offerCode?: string; cruiseCount: number; totalRows: number }>();
       normalizedOffers.forEach((offer) => {
         const key = offer.offerCode || offer.offerName || 'Unknown';
         const current = syncOfferBreakdownMap.get(key) || {
           offerName: offer.offerName || offer.offerCode || 'Unknown Offer',
           offerCode: offer.offerCode || undefined,
           cruiseCount: 0,
+          totalRows: 0,
         };
+        current.totalRows += 1;
         if (offer.shipName || offer.sailingDate) current.cruiseCount += 1;
         syncOfferBreakdownMap.set(key, current);
       });
@@ -2767,7 +2781,17 @@ true;`);
       const counts = calculateSyncCounts(preview);
       addLog(`Preview: ${counts.offersNew} new offers, ${counts.offersUpdated} updated offers`, 'info');
       syncOfferBreakdown.forEach((offer) => {
-        addLog(`Preview: ${offer.offerName}${offer.offerCode ? ` (${offer.offerCode})` : ''} includes ${offer.cruiseCount} cruise(s)`, offer.cruiseCount > 0 ? 'info' : 'warning');
+        const label = `${offer.offerName}${offer.offerCode ? ` (${offer.offerCode})` : ''}`;
+        if (offer.cruiseCount > 0) {
+          const detail = offer.totalRows > offer.cruiseCount
+            ? ` (${offer.totalRows} row${offer.totalRows !== 1 ? 's' : ''} captured)`
+            : '';
+          addLog(`Preview: ${label} includes ${offer.cruiseCount} cruise(s)${detail}`, 'info');
+        } else if (offer.totalRows > 0) {
+          addLog(`Preview: ${label} captured as offer card only (${offer.totalRows} placeholder row${offer.totalRows !== 1 ? 's' : ''}) - no sailing detail rows from site`, 'warning');
+        } else {
+          addLog(`Preview: ${label} includes 0 cruise(s)`, 'warning');
+        }
       });
       addLog(`Preview: ${counts.cruisesNew} new available cruises, ${counts.cruisesUpdated} updated available cruises`, 'info');
       addLog(`Preview: ${counts.bookedCruisesNew} new booked cruises, ${counts.bookedCruisesUpdated} updated booked cruises`, 'info');
