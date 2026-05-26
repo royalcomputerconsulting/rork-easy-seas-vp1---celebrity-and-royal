@@ -3,6 +3,7 @@ import { createDateFromString } from '@/lib/date';
 import { OfferRow, BookedCruiseRow, LoyaltyData } from './types';
 import { transformOfferRowsToCruisesAndOffers, transformBookedCruisesToAppFormat, type SyncDataSource } from './dataTransformers';
 import { isActiveBookedCruise, isCourtesyHoldCruise } from '@/lib/bookedCruiseStatus';
+import { normalizeCasinoOfferCode } from './offerCodeNormalizer';
 
 const CELEBRITY_SHIP_NAMES = new Set([
   'ascent',
@@ -401,12 +402,7 @@ function normalizeSailDate(sailDate: string | undefined): string {
 }
 
 function normalizeCasinoOfferCodeForSync(code: string | undefined): string {
-  const c = (code || '').trim().toUpperCase();
-  if (!c) return '';
-  if (/^26BCP105[A-Z]?$/.test(c)) return '26BCP105';
-  if (/^26JUL104[A-Z]?$/.test(c)) return '26JUL104';
-  if (/^26VTY104[A-Z]?$/.test(c)) return '26VTY104';
-  return c;
+  return normalizeCasinoOfferCode(code);
 }
 
 function countRoyalCruisesByOffer(cruises: Cruise[], syncSource: SyncDataSource): Map<string, number> {

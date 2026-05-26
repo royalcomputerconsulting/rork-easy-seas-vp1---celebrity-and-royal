@@ -2165,10 +2165,72 @@ true;`);
           }
         }
 
-        // Sync Now intentionally does not run the long Royal completed-history probe here.
-        // Completed cruises are handled by the separate Sync Completed Cruises button, which is
-        // currently working and is left unchanged. This prevents the normal Sync Now button from
-        // getting stuck in the old loyalty/courtesy page loop after offer/upcoming capture.
+        // v9.10.10: Sync Now now also probes Royal's loyalty-history endpoint with a tight
+        // timeout so completed cruises sync alongside offers + upcoming bookings. The
+        // dedicated Sync Completed Cruises button still works for a thorough deep-scrape.
+        if (!isCarnivalMode && !isCelebrityMode && !cachedRoyalLoyaltyHistoryPayloadRef.current) {
+          try {
+            addLog('🚢 ====== STEP 2.5: ROYAL COMPLETED CRUISES PROBE ======', 'info');
+            addLog('📍 Probing /account/loyalty-programs for completed-cruise history (tight timeout)...', 'info');
+            await installNetworkMonitor('Sync Now completed-cruise probe');
+            await navigateToPage('https://www.royalcaribbean.com/account/loyalty-programs', 15000);
+            await installNetworkMonitor('Sync Now completed-cruise probe after page load');
+            await delay(2500);
+
+            // Click the "Cruise History" / "Past Sailings" link if Royal exposes it,
+            // because the history payload only fires after that click on the current site.
+            if (webViewRef.current) {
+              webViewRef.current.injectJavaScript(`
+                (function() {
+                  function post(msg){ try { window.ReactNativeWebView.postMessage(JSON.stringify(msg)); } catch(e) {} }
+                  function log(message, type){ post({ type:'log', message: message, logType: type || 'info' }); }
+                  function textOf(el){ return String((el && (el.innerText || el.textContent || el.getAttribute('aria-label') || el.getAttribute('title'))) || '').replace(/\\s+/g,' ').trim().toLowerCase(); }
+                  function hrefOf(el){ try { return String(el && (el.href || el.getAttribute('href') || '') || '').toLowerCase(); } catch(e) { return ''; } }
+                  function clickLikeUser(el) {
+                    if (!el) return false;
+                    try { el.scrollIntoView({ block: 'center', inline: 'center' }); } catch(e) {}
+                    try { ['pointerdown','mousedown','mouseup','click'].forEach(function(t){ el.dispatchEvent(new MouseEvent(t,{bubbles:true,cancelable:true,view:window})); }); } catch(e) {}
+                    try { if (typeof el.click === 'function') el.click(); } catch(e) {}
+                    return true;
+                  }
+                  function findHistoryLink() {
+                    var nodes = Array.prototype.slice.call(document.querySelectorAll('a,button,[role="button"],[role="tab"],div,span'));
+                    var strong = nodes.find(function(el) {
+                      var t = textOf(el); var h = hrefOf(el);
+                      return /cruise\\s*history|sailing\\s*history|past\\s*cruises|past\\s*sailings|completed\\s*cruises|completed\\s*sailings/.test(t + ' ' + h);
+                    });
+                    return strong || null;
+                  }
+                  try {
+                    var link = findHistoryLink();
+                    if (link) {
+                      log('✅ Sync Now: clicking Royal cruise-history link to trigger loyalty/history payload', 'success');
+                      clickLikeUser(link);
+                    } else {
+                      log('ℹ️ Sync Now: Cruise History link not exposed on this Royal loyalty page', 'info');
+                    }
+                  } catch(e) {
+                    log('⚠️ Sync Now history click helper failed: ' + (e && e.message ? e.message : String(e)), 'warning');
+                  }
+                  true;
+                })();
+              `);
+            }
+
+            // Tight wait: 20s max, returns as soon as the payload is cached so we don't loop.
+            const probeStart = Date.now();
+            while (Date.now() - probeStart < 20000 && !cachedRoyalLoyaltyHistoryPayloadRef.current) {
+              await delay(1500);
+            }
+            if (cachedRoyalLoyaltyHistoryPayloadRef.current) {
+              addLog('✅ Sync Now: loyalty-history payload captured during Step 2.5', 'success');
+            } else {
+              addLog('ℹ️ Sync Now: no loyalty-history payload exposed; existing completed cruises are preserved', 'info');
+            }
+          } catch (historyProbeError) {
+            addLog(`⚠️ Step 2.5 completed-cruise probe failed: ${String(historyProbeError)} - continuing with collected data`, 'warning');
+          }
+        }
       } catch (step2Error) {
         addLog(`Step 2 error: ${String(step2Error)} - continuing with collected data`, 'warning');
       }

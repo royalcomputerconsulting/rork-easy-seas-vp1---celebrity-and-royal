@@ -503,9 +503,12 @@ export function transformBookedCruisesToAppFormat(
     const rawStatusText = String(cruise.status || cruise.bookingStatus || cruise.sourcePage || '').toLowerCase();
     const todayForStatus = new Date();
     todayForStatus.setHours(0, 0, 0, 0);
-    const sailDateForStatus = startDate ? new Date(startDate) : null;
+    // CRITICAL: startDate/finalEndDate are MM-DD-YYYY strings (from parseDate). `new Date("06-12-2026")`
+    // returns Invalid Date in iOS/Android JS engines, which silently broke the date-based completed
+    // check. Use parseDateString so we get a real Date and date-based completion actually works.
+    const sailDateForStatus = startDate ? parseDateString(startDate) : null;
     if (sailDateForStatus) sailDateForStatus.setHours(0, 0, 0, 0);
-    const returnDateForStatus = finalEndDate ? new Date(finalEndDate) : null;
+    const returnDateForStatus = finalEndDate ? parseDateString(finalEndDate) : null;
     if (returnDateForStatus) returnDateForStatus.setHours(0, 0, 0, 0);
     const explicitlyCompleted = /completed|past|sailed|history/.test(rawStatusText);
     const dateCompleted = returnDateForStatus ? returnDateForStatus < todayForStatus : (sailDateForStatus ? sailDateForStatus < todayForStatus && explicitlyCompleted : false);

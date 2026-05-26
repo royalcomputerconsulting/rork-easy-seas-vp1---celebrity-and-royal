@@ -1070,14 +1070,30 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
     return (text || '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
   }
 
+  // Keep this list in sync with offerCodeNormalizer.ts → KNOWN_CASINO_OFFER_CODES.
+  // It lets the in-WebView scraper collapse DOM suffix variants the same way the
+  // app-side parser does, so the same offer doesn't appear twice in counts.
+  var KNOWN_CASINO_OFFER_CODES = ['26BCP105','26JUL104','26VTY104','26WCR403','26TOC208','2605C03A'];
+
   function normalizeRoyalCasinoOfferCode(code) {
-    let value = cleanOfferText(code || '').toUpperCase();
-    // Royal offer codes appear in at least two families:
-    //   26BCP105 / 26JUL104 / 26WCR403B
-    //   2605C03A (monthly certificate format)
-    // Royal also concatenates the next cabin word in DOM text:
-    //   26BCP105Exterior / 26JUL104Oceanview
-    if (/^26[A-Z]{2,8}\d{2,5}[EO]$/.test(value)) value = value.slice(0, -1);
+    var value = cleanOfferText(code || '').toUpperCase().replace(/\s+/g, '');
+    if (!value) return '';
+    // 1) Direct hit on a known canonical code.
+    if (KNOWN_CASINO_OFFER_CODES.indexOf(value) !== -1) return value;
+    // 2) Strip a single trailing letter (covers 26BCP105B, 2605C03AB, 26TOC208A, etc.)
+    if (value.length > 4) {
+      var stripped = value.slice(0, -1);
+      if (KNOWN_CASINO_OFFER_CODES.indexOf(stripped) !== -1) return stripped;
+    }
+    // 3) Generic family-aware strip for the 26XXX/2605X code shapes. Anything
+    // beyond the canonical 8-character base is treated as DOM noise from Royal
+    // fusing the next cabin word (26BCP105Exterior, 26JUL104Oceanview, etc.).
+    var familyMatch = value.match(/^(26[A-Z]{2,4}\d{2,5}|2\d{3}[A-Z]\d{2}[A-Z])/);
+    if (familyMatch) {
+      var base = familyMatch[1];
+      if (KNOWN_CASINO_OFFER_CODES.indexOf(base) !== -1) return base;
+      if (/^26[A-Z]{2,4}\d{2,5}$/.test(base) && value.length > base.length) return base;
+    }
     return value;
   }
 
