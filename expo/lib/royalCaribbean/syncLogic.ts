@@ -3,7 +3,6 @@ import { createDateFromString } from '@/lib/date';
 import { OfferRow, BookedCruiseRow, LoyaltyData } from './types';
 import { transformOfferRowsToCruisesAndOffers, transformBookedCruisesToAppFormat, type SyncDataSource } from './dataTransformers';
 import { isActiveBookedCruise, isCourtesyHoldCruise } from '@/lib/bookedCruiseStatus';
-import { normalizeCasinoOfferCode } from './offerCodeNormalizer';
 
 const CELEBRITY_SHIP_NAMES = new Set([
   'ascent',
@@ -402,7 +401,12 @@ function normalizeSailDate(sailDate: string | undefined): string {
 }
 
 function normalizeCasinoOfferCodeForSync(code: string | undefined): string {
-  return normalizeCasinoOfferCode(code);
+  const c = (code || '').trim().toUpperCase();
+  if (!c) return '';
+  if (/^26BCP105[A-Z]?$/.test(c)) return '26BCP105';
+  if (/^26JUL104[A-Z]?$/.test(c)) return '26JUL104';
+  if (/^26VTY104[A-Z]?$/.test(c)) return '26VTY104';
+  return c;
 }
 
 function countRoyalCruisesByOffer(cruises: Cruise[], syncSource: SyncDataSource): Map<string, number> {
@@ -640,22 +644,25 @@ function deduplicateExtractedCruises(cruises: BookedCruiseRow[]): BookedCruiseRo
     const shipName = (cruise.shipName || '').toLowerCase().trim().replace(/\s+/g, ' ');
     const sailDate = normalizeBookedCruiseDateForDedupe(cruise.sailingStartDate || cruise.sailingDates || (cruise as any).sailDate || (cruise as any).departureDate || (cruise as any).startDate || (cruise as any).sailingDate || '');
     const completed = isCompletedExtractedCruise(cruise);
-    // Royal history rows can have different generated booking ids for the same completed sailing.
-    // Completed history must dedupe by ship + normalized sail date first, not by generated id.
-    const bookingId = completed ? '' : rawBookingId;
-    const shipDateKey = `${shipName}|${sailDate}`;
+    const itinerary = (cruise.itinerary || cruise.cruiseTitle || '').toString().toLowerCase().trim().replace(/\s+/g, ' ').slice(0, 80);
+    const cabin = ((cruise as any).cabinNumberOrGTY || (cruise as any).stateroomNumber || cruise.cabinCategory || cruise.cabinType || '').toString().toLowerCase().trim().replace(/\s+/g, ' ').slice(0, 40);
+    const rawNights = String(cruise.numberOfNights || '').replace(/[^0-9]/g, '');
+    const bookingId = rawBookingId;
+    const shipDateKey = completed
+      ? `${shipName}|${sailDate}|${rawNights}|${itinerary}|${cabin}|${/^completed_/i.test(bookingId) ? bookingId : ''}`
+      : `${shipName}|${sailDate}`;
     
     if (shipName && sailDate && byShipDate.has(shipDateKey)) {
-      console.log(`[SyncLogic] Dedup: Skipping duplicate ship+date: ${cruise.shipName} on ${sailDate}`);
+      console.log(`[SyncLogic] Dedup: Skipping exact duplicate completed/current key: ${cruise.shipName} on ${sailDate}`);
       continue;
     }
 
-    if (bookingId && byBookingId.has(bookingId)) {
+    if (!completed && bookingId && byBookingId.has(bookingId)) {
       console.log(`[SyncLogic] Dedup: Skipping duplicate bookingId: ${bookingId} (${cruise.shipName})`);
       continue;
     }
     
-    if (bookingId) byBookingId.set(bookingId, cruise);
+    if (!completed && bookingId) byBookingId.set(bookingId, cruise);
     if (shipName && sailDate) byShipDate.set(shipDateKey, cruise);
     result.push(cruise);
   }
@@ -1020,7 +1027,17 @@ export function applySyncPreview(
       const completed = cruise.completionState === 'completed' || cruise.status === 'completed';
       const ship = (cruise.shipName || '').toLowerCase().trim().replace(/\s+/g, ' ');
       const date = normalizeBookedCruiseDateForDedupe(cruise.sailDate || (cruise as any).sailingStartDate || (cruise as any).sailingDates || (cruise as any).departureDate || (cruise as any).startDate || (cruise as any).sailingDate || '');
-      const key = completed && ship && date ? `completed|${ship}|${date}` : `booking|${(cruise.bookingId || cruise.id || '').toString().trim()}|${ship}|${date}`;
+      const bookingId = (cruise.bookingId || cruise.id || '').toString().trim().toLowerCase();
+      const nights = String((cruise as any).nights || (cruise as any).numberOfNights || '').replace(/[^0-9]/g, '');
+      const itinerary = String((cruise as any).itinerary || (cruise as any).cruiseTitle || '').toLowerCase().trim().replace(/\s+/g, ' ').slice(0, 80);
+      const cabin = String((cruise as any).cabinNumberOrGTY || (cruise as any).stateroomNumber || (cruise as any).cabinCategory || (cruise as any).cabinType || '').toLowerCase().trim().replace(/\s+/g, ' ').slice(0, 40);
+      // Never collapse completed history to ship+date only. Royal's visible Past tab can include
+      // distinct legitimate history rows that share a ship/date family, and earlier builds reduced
+      // 57 visible past sailings to 54 by deduping too aggressively. Use the same identity model as
+      // the completed-sync provider: booking/reservation when present, otherwise ship+date+nights+itinerary+cabin.
+      const key = completed && ship && date
+        ? `completed|${ship}|${date}|${bookingId}|${nights}|${itinerary}|${cabin}`
+        : `booking|${bookingId}|${ship}|${date}`;
       if (seen.has(key)) continue;
       seen.add(key);
       rows.push(cruise);

@@ -968,7 +968,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 154,
+    minHeight: 224,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderWidth: 1,
@@ -978,7 +978,7 @@ const styles = StyleSheet.create({
 
   heroImageShell: {
     width: '100%',
-    minHeight: 132,
+    minHeight: 198,
     borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
     alignItems: 'center',
@@ -988,7 +988,7 @@ const styles = StyleSheet.create({
 
   heroLogoImage: {
     width: '100%',
-    height: 132,
+    height: 198,
   },
   sectionHeader: {
     flexDirection: 'row',

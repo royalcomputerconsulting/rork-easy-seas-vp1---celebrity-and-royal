@@ -284,13 +284,8 @@ export interface SyncDataCounts {
   courtesyHolds: number;
   /** Past/completed cruise rows captured by the dedicated Sync Completed Cruises flow. */
   completedCruises?: number;
-  /**
-   * Per-offer breakdown shown in preview and completion cards.
-   * - `cruiseCount`: rows that included real ship/sail-date sailing details.
-   * - `totalRows`: every captured row for that offer, including placeholder rows used when
-   *   the offer card was detected but Royal's DOM did not expose the sailing list.
-   */
-  offerBreakdown?: { offerName: string; offerCode?: string; cruiseCount: number; totalRows: number }[];
+  /** Per-offer sailing/cruise counts shown in preview and completion cards. */
+  offerBreakdown?: { offerName: string; offerCode?: string; cruiseCount: number }[];
 }
 
 export interface RoyalCaribbeanSyncState {

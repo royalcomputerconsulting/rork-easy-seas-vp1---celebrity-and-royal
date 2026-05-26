@@ -1,6 +1,5 @@
 import { getShipNameFromCode } from './apiTypes';
 import { OfferRow } from './types';
-import { normalizeCasinoOfferCode as canonicalizeCasinoOfferCode } from './offerCodeNormalizer';
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -48,7 +47,12 @@ function getString(value: unknown): string {
 
 
 function normalizeCasinoOfferCode(value: unknown): string {
-  return canonicalizeCasinoOfferCode(getString(value));
+  const code = getString(value).trim().toUpperCase();
+  if (!code) return '';
+  if (/^26BCP105[A-Z]?$/.test(code)) return '26BCP105';
+  if (/^26JUL104[A-Z]?$/.test(code)) return '26JUL104';
+  if (/^26VTY104[A-Z]?$/.test(code)) return '26VTY104';
+  return code;
 }
 
 function getNumber(value: unknown): number | undefined {

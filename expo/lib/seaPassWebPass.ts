@@ -78,6 +78,7 @@ export const SEA_PASS_LEGAL_LINES = [
 
 export const SEA_PASS_PREVIEW_BACKGROUND = '#EFF3F8';
 export const SEA_PASS_EXPORT_BACKGROUND = '#FFFFFF';
+export const SEA_PASS_FIELD_NEUTRAL_BACKGROUND = '#F4F4F5';
 export const SEA_PASS_FONT_STACK = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 export const SEA_PASS_APPROVED_SCREENSHOT_SOURCE_URL = 'https://r2-pub.rork.com/attachments/vvcelze4prvyhmkje7pah.png';
 
@@ -261,24 +262,24 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
     },
   },
   port: {
+    // Port is an editable value just like deck/stateroom/reservation.
+    // Do NOT sample/shift the background image here: the approved shell contains a baked-in
+    // port value, and sampling the shell can copy that old text back into the legal paragraph.
+    // A local mask using the exact same SeaPass field background tone (#F4F4F5) cleanly erases only the old port VALUE line, then redraws the
+    // current form value in the same visual slot under the baked-in PORT label.
     x: 94,
     y: 905,
     fill: '#30333A',
-    fontSize: 45,
+    fontSize: 46,
     fontWeight: '400',
-    letterSpacing: 0.5,
+    letterSpacing: -0.7,
     mask: {
-      // The approved shell image already has "LOS ANGELES, CALIFORNIA" baked into the port row.
-      // A sample-based erasure pulled pixels from within that baked text and re-stamped
-      // them next to the new port value, producing the doubled / overlapping characters
-      // visible in the exported PNG. Use a solid fill (matching the card body) and a
-      // mask wide enough to cover any reasonably long port name end-to-end.
-      x: 70,
-      y: 838,
-      width: 900,
-      height: 92,
-      fill: '#F4F4F5',
-      radius: 6,
+      x: 72,
+      y: 848,
+      width: 790,
+      height: 90,
+      fill: SEA_PASS_FIELD_NEUTRAL_BACKGROUND,
+      radius: 3,
     },
   },
   barcodeCaption: {

@@ -24,6 +24,9 @@ const SHIP_CODE_MAP: Record<string, string> = {
   'RH': 'Rhapsody of the Seas',
   'SE': 'Serenade of the Seas',
   'SP': 'Spectrum of the Seas',
+  'ST': 'Star of the Seas',
+  'SG': 'Star of the Seas',
+  'SN': 'Star of the Seas',
   'SY': 'Symphony of the Seas',
   'UT': 'Utopia of the Seas',
   'VI': 'Vision of the Seas',
@@ -708,10 +711,10 @@ export const STEP2_UPCOMING_SCRIPT = `
           ? performance.getEntriesByType('resource').map(function(e) { return e && e.name ? String(e.name) : ''; })
           : [];
         const candidates = perfUrls.filter(function(u) {
-          return /royalcaribbean\.com/i.test(u) && /(profileBookings|bookings|myaccount|managebooking|cruise|sailing)/i.test(u) && !/\.js|\.css|\.png|\.jpg|\.svg|\.woff/i.test(u);
+          return /(royalcaribbean\.com|api\.rccl\.com)/i.test(u) && /(profileBookings|bookings|myaccount|managebooking|cruise|sailing|voyages)/i.test(u) && !/\.js|\.css|\.png|\.jpg|\.svg|\.woff/i.test(u);
         }).slice(-12);
         if (candidates.length) {
-          log('🔁 Refetching ' + candidates.length + ' Royal booking candidate endpoint(s) from performance entries...', 'info');
+          log('🔁 Refetching ' + candidates.length + ' Royal booking/API candidate endpoint(s) from performance entries...', 'info');
         }
         for (let ci = 0; ci < candidates.length; ci += 1) {
           try {
