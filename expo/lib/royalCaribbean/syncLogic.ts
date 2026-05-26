@@ -614,24 +614,48 @@ function mergeBookedCruise(existing: BookedCruise, synced: BookedCruise): Booked
   };
 }
 
+
+function normalizeBookedCruiseDateForDedupe(value?: string): string {
+  const raw = (value || '').toString().trim();
+  if (!raw) return '';
+  const compact = raw.match(/^(20\d{2})(\d{2})(\d{2})$/);
+  if (compact) return `${compact[1]}-${compact[2]}-${compact[3]}`;
+  const iso = raw.match(/^(20\d{2})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (iso) return `${iso[1]}-${iso[2].padStart(2, '0')}-${iso[3].padStart(2, '0')}`;
+  const mdy = raw.match(/^(\d{1,2})[-/](\d{1,2})[-/](20\d{2})$/);
+  if (mdy) return `${mdy[3]}-${mdy[1].padStart(2, '0')}-${mdy[2].padStart(2, '0')}`;
+  const d = new Date(raw.includes('T') ? raw : `${raw}T12:00:00`);
+  if (!Number.isNaN(d.getTime())) return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return raw.toLowerCase().replace(/\s+/g, ' ');
+}
+
+function isCompletedExtractedCruise(cruise: BookedCruiseRow): boolean {
+  const status = `${cruise.status || ''} ${cruise.sourcePage || ''} ${(cruise as any).bookingStatus || ''}`.toLowerCase();
+  return status.includes('completed') || status.includes('past') || status.includes('history') || status.includes('sailed');
+}
+
 function deduplicateExtractedCruises(cruises: BookedCruiseRow[]): BookedCruiseRow[] {
   const byBookingId = new Map<string, BookedCruiseRow>();
   const byShipDate = new Map<string, BookedCruiseRow>();
   const result: BookedCruiseRow[] = [];
   
   for (const cruise of cruises) {
-    const bookingId = (cruise.bookingId || '').toString().trim();
-    const shipName = (cruise.shipName || '').toLowerCase().trim();
-    const sailDate = (cruise.sailingStartDate || '').trim();
+    const rawBookingId = (cruise.bookingId || '').toString().trim();
+    const shipName = (cruise.shipName || '').toLowerCase().trim().replace(/\s+/g, ' ');
+    const sailDate = normalizeBookedCruiseDateForDedupe(cruise.sailingStartDate || cruise.sailingDates || (cruise as any).sailDate || (cruise as any).departureDate || (cruise as any).startDate || (cruise as any).sailingDate || '');
+    const completed = isCompletedExtractedCruise(cruise);
+    // Royal history rows can have different generated booking ids for the same completed sailing.
+    // Completed history must dedupe by ship + normalized sail date first, not by generated id.
+    const bookingId = completed ? '' : rawBookingId;
     const shipDateKey = `${shipName}|${sailDate}`;
     
-    if (bookingId && byBookingId.has(bookingId)) {
-      console.log(`[SyncLogic] Dedup: Skipping duplicate bookingId: ${bookingId} (${cruise.shipName})`);
+    if (shipName && sailDate && byShipDate.has(shipDateKey)) {
+      console.log(`[SyncLogic] Dedup: Skipping duplicate ship+date: ${cruise.shipName} on ${sailDate}`);
       continue;
     }
-    
-    if (!bookingId && shipName && sailDate && byShipDate.has(shipDateKey)) {
-      console.log(`[SyncLogic] Dedup: Skipping duplicate ship+date: ${cruise.shipName} on ${sailDate}`);
+
+    if (bookingId && byBookingId.has(bookingId)) {
+      console.log(`[SyncLogic] Dedup: Skipping duplicate bookingId: ${bookingId} (${cruise.shipName})`);
       continue;
     }
     
@@ -993,6 +1017,24 @@ export function applySyncPreview(
     ...preview.bookedCruises.new
   ];
 
+  const dedupedFinalBookedCruises = (() => {
+    const seen = new Set<string>();
+    const rows: BookedCruise[] = [];
+    for (const cruise of finalBookedCruises) {
+      const completed = cruise.completionState === 'completed' || cruise.status === 'completed';
+      const ship = (cruise.shipName || '').toLowerCase().trim().replace(/\s+/g, ' ');
+      const date = normalizeBookedCruiseDateForDedupe(cruise.sailDate || (cruise as any).sailingStartDate || (cruise as any).sailingDates || (cruise as any).departureDate || (cruise as any).startDate || (cruise as any).sailingDate || '');
+      const key = completed && ship && date ? `completed|${ship}|${date}` : `booking|${(cruise.bookingId || cruise.id || '').toString().trim()}|${ship}|${date}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      rows.push(cruise);
+    }
+    if (rows.length < finalBookedCruises.length) {
+      console.log(`[SyncLogic] Final booked cruise deduplication: ${finalBookedCruises.length} -> ${rows.length}`);
+    }
+    return rows;
+  })();
+
   console.log('[SyncLogic] applySyncPreview final counts:', {
     syncSource,
     allowOfferRemoval,
@@ -1003,10 +1045,10 @@ export function applySyncPreview(
     existingCruises: normalizedExistingCruises.length,
     finalCruises: finalCruises.length,
     existingBooked: normalizedExistingBookedCruises.length,
-    finalBooked: finalBookedCruises.length,
+    finalBooked: dedupedFinalBookedCruises.length,
     managedOffersDelta: finalOffers.filter(o => isManagedOfferSource(o, syncSource)).length - normalizedExistingOffers.filter(o => isManagedOfferSource(o, syncSource)).length,
     managedCruisesDelta: finalCruises.filter(c => isManagedCruiseSource(c, syncSource)).length - normalizedExistingCruises.filter(c => isManagedCruiseSource(c, syncSource)).length,
   });
 
-  return { offers: finalOffers, cruises: finalCruises, bookedCruises: finalBookedCruises };
+  return { offers: finalOffers, cruises: finalCruises, bookedCruises: dedupedFinalBookedCruises };
 }

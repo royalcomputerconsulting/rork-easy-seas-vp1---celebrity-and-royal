@@ -28,7 +28,7 @@ import {
 } from 'lucide-react-native';
 
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
-import { IMAGES, LOCAL_IMAGES } from '@/constants/images';
+import { LOCAL_IMAGES } from '@/constants/images';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { useUser } from '@/state/UserProvider';
 import { useAuth } from '@/state/AuthProvider';
@@ -185,7 +185,6 @@ function OverviewScreenContent() {
   const [showCertificateModal, setShowCertificateModal] = useState(false);
   const [showCertificateExplorerModal, setShowCertificateExplorerModal] = useState(false);
   const [showAlertsModal, setShowAlertsModal] = useState(false);
-  const [heroSignatureFailed, setHeroSignatureFailed] = useState<boolean>(false);
   const { 
     certificates, 
     addCertificate, 
@@ -606,40 +605,18 @@ function OverviewScreenContent() {
       <View style={styles.headerContent}>
         <View style={styles.heroCard}>
           <LinearGradient
-            colors={['#3AAFA9', '#2B7A78', '#17A398', '#1E8C82', '#3AAFA9']}
+            colors={['rgba(9, 20, 39, 0.98)', 'rgba(14, 45, 72, 0.96)']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={StyleSheet.absoluteFill}
           />
-          <LinearGradient
-            colors={['rgba(255,255,255,0.18)', 'transparent', 'rgba(255,255,255,0.12)', 'transparent', 'rgba(255,255,255,0.08)']}
-            start={{ x: 0.2, y: 0 }}
-            end={{ x: 0.8, y: 1 }}
-            style={StyleSheet.absoluteFill}
-          />
-
-          <View style={styles.heroOverlay}>
-            <Text style={styles.heroTitle}>Easy Seas™</Text>
-            <Text style={styles.heroSubtitle}>Manage your Nautical Lifestyle™</Text>
-            {!heroSignatureFailed ? (
-              <Image
-                source={{ uri: IMAGES.signature }}
-                style={styles.heroSignature}
-                resizeMode="contain"
-                onError={() => {
-                  console.warn('[Overview] Signature image failed to load, using bundled fallback');
-                  setHeroSignatureFailed(true);
-                }}
-                testID="offers-hero-signature-image"
-              />
-            ) : (
-              <Image
-                source={LOCAL_IMAGES.signature}
-                style={styles.heroSignature}
-                resizeMode="contain"
-                testID="offers-hero-signature-fallback-image"
-              />
-            )}
+          <View style={styles.heroImageShell}>
+            <Image
+              source={LOCAL_IMAGES.header}
+              style={styles.heroLogoImage}
+              resizeMode="contain"
+              testID="easy-seas-formatted-logo-header-image"
+            />
           </View>
         </View>
 
@@ -991,35 +968,27 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 200,
+    minHeight: 154,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.16)',
+    ...SHADOW.card,
   },
 
-  heroOverlay: {
+  heroImageShell: {
+    width: '100%',
+    minHeight: 132,
+    borderRadius: BORDER_RADIUS.lg,
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: SPACING.xl,
-    paddingHorizontal: SPACING.lg,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
   },
-  heroTitle: {
-    fontSize: 32,
-    fontWeight: '800' as const,
-    color: '#1A1A1A',
-    letterSpacing: 1,
-    textAlign: 'center',
-  },
-  heroSubtitle: {
-    fontSize: 15,
-    fontWeight: '500' as const,
-    color: 'rgba(0,0,0,0.65)',
-    marginTop: 6,
-    letterSpacing: 0.3,
-    textAlign: 'center',
-  },
-  heroSignature: {
-    width: 240,
-    height: 100,
-    marginTop: 14,
-    opacity: 0.8,
+
+  heroLogoImage: {
+    width: '100%',
+    height: 132,
   },
   sectionHeader: {
     flexDirection: 'row',

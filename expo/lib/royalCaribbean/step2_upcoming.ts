@@ -580,11 +580,13 @@ export const STEP2_UPCOMING_SCRIPT = `
 
   async function extractUpcomingCruises() {
     try {
+      window.capturedPayloads = window.capturedPayloads || {};
+      window.capturedRequestHeaders = window.capturedRequestHeaders || {};
       log('🚀 ====== STEP 2: UPCOMING CRUISES ======', 'info');
       log('🔍 Starting upcoming cruises extraction...', 'info');
       log('📍 Current URL: ' + window.location.href, 'info');
 
-      log('⏳ Waiting 8 seconds for page to load and make API calls...', 'info');
+      log('⏳ Waiting for Royal My Account network payloads using restored May-8/v861 capture path...', 'info');
       await wait(8000);
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -699,6 +701,36 @@ export const STEP2_UPCOMING_SCRIPT = `
         }
       }
       
+      // If the monitor installed after the page's first API calls, recover by looking at
+      // same-origin performance entries and re-fetching likely booking/profile endpoints with cookies.
+      try {
+        const perfUrls = (performance && performance.getEntriesByType)
+          ? performance.getEntriesByType('resource').map(function(e) { return e && e.name ? String(e.name) : ''; })
+          : [];
+        const candidates = perfUrls.filter(function(u) {
+          return /royalcaribbean\.com/i.test(u) && /(profileBookings|bookings|myaccount|managebooking|cruise|sailing)/i.test(u) && !/\.js|\.css|\.png|\.jpg|\.svg|\.woff/i.test(u);
+        }).slice(-12);
+        if (candidates.length) {
+          log('🔁 Refetching ' + candidates.length + ' Royal booking candidate endpoint(s) from performance entries...', 'info');
+        }
+        for (let ci = 0; ci < candidates.length; ci += 1) {
+          try {
+            const resp = await fetch(candidates[ci], { credentials: 'include' });
+            const ct = resp.headers && resp.headers.get ? (resp.headers.get('content-type') || '') : '';
+            if (!resp.ok || ct.indexOf('json') === -1) continue;
+            const data = await resp.json();
+            const maybe = (data && data.payload && data.payload.profileBookings) || data.profileBookings || (data && data.payload && data.payload.sailingInfo) || data.sailingInfo;
+            if (Array.isArray(maybe) && maybe.length > 0) {
+              window.capturedPayloads.upcomingCruises = data;
+              log('✅ Recovered upcoming cruise payload from performance refetch: ' + maybe.length + ' booking(s)', 'success');
+              return extractUpcomingCruises();
+            }
+          } catch (e) {}
+        }
+      } catch (perfErr) {
+        log('⚠️ Performance refetch fallback failed: ' + (perfErr && perfErr.message ? perfErr.message : String(perfErr)), 'warning');
+      }
+
       log('⚠️ No API payload captured - falling back to DOM scraping', 'warning');
       log('💡 Tip: If this happens consistently, try refreshing the page before syncing', 'info');
       

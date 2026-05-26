@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, Dimensions, ScrollView, KeyboardAvoidingView, Platform, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, TYPOGRAPHY } from '@/constants/theme';
-import { IMAGES } from '@/constants/images';
+import { IMAGES, LOCAL_IMAGES } from '@/constants/images';
 
 import { ADMIN_EMAILS, useAuth } from '@/state/AuthProvider';
 
@@ -68,7 +68,7 @@ export function LoginScreen() {
           <View style={styles.logoContainer}>
             {!logoError ? (
               <Image
-                source={{ uri: IMAGES.logo }}
+                source={LOCAL_IMAGES.logo}
                 style={styles.logoImage}
                 resizeMode="contain"
                 onError={() => {
@@ -79,7 +79,7 @@ export function LoginScreen() {
               />
             ) : (
               <Image
-                source={require('@/assets/images/icon.png')}
+                source={LOCAL_IMAGES.logo}
                 style={styles.logoImage}
                 resizeMode="contain"
                 testID="login-logo-fallback-image"

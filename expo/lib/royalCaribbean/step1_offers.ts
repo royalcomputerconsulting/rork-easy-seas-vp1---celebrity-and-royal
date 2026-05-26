@@ -1,7 +1,7 @@
 export const STEP1_OFFERS_SCRIPT = String.raw`
 (function() {
-  const BATCH_SIZE = 150;
-  const MAX_BATCH_CHARS = 120000;
+  const BATCH_SIZE = 50;
+  const MAX_BATCH_CHARS = 45000;
   
   function wait(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -22,6 +22,16 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
     });
   }
 
+  function compactOfferRowForBridge(rawRow) {
+    const row = Object.assign({}, rawRow || {});
+    ['rawCardText', 'cardText', '_raw', '_sourceText', '_debugText', '_key'].forEach(function(k) { try { delete row[k]; } catch (e) {} });
+    ['itinerary', 'perks', 'offerStatus', 'portList'].forEach(function(k) {
+      if (typeof row[k] === 'string' && row[k].length > 1200) row[k] = row[k].slice(0, 1200);
+    });
+    if (Array.isArray(row.dayByDayItinerary) && row.dayByDayItinerary.length > 30) row.dayByDayItinerary = row.dayByDayItinerary.slice(0, 30);
+    return row;
+  }
+
   function sendOfferRowsInChunks(offerRows, offerCount) {
     if (!Array.isArray(offerRows) || offerRows.length === 0) {
       sendOfferBatch([], true, 0, offerCount);
@@ -33,7 +43,8 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
     let sentCount = 0;
     let batchIndex = 0;
 
-    for (const row of offerRows) {
+    for (const rawRow of offerRows) {
+      const row = compactOfferRowForBridge(rawRow);
       let rowChars = 0;
       try {
         rowChars = JSON.stringify(row).length;
@@ -96,80 +107,32 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
     return String(value).padStart(2, '0');
   }
 
-  const MONTH_INDEX = {
-    jan: 1, january: 1,
-    feb: 2, february: 2,
-    mar: 3, march: 3,
-    apr: 4, april: 4,
-    may: 5,
-    jun: 6, june: 6,
-    jul: 7, july: 7,
-    aug: 8, august: 8,
-    sep: 9, sept: 9, september: 9,
-    oct: 10, october: 10,
-    nov: 11, november: 11,
-    dec: 12, december: 12
-  };
-
-  // Normalize Royal/Celebrity's occasional one-letter DOM suffixes for known offer families.
-  // This prevents 26BCP105E / 26JUL104O / 26VTY104B / 2605C03AB / 26TOC208A from becoming
-  // duplicate pseudo-offers. It is NOT a row-count cap; live Royal data still determines
-  // the number of rows.
-  var KNOWN_CASINO_OFFER_CODES = ['26BCP105', '26JUL104', '26VTY104', '2605C03A', '26TOC208'];
-  function normalizeCasinoOfferCode(code) {
-    var c = safeStr(code).trim().toUpperCase();
-    if (!c) return '';
-    for (var i = 0; i < KNOWN_CASINO_OFFER_CODES.length; i += 1) {
-      var canonical = KNOWN_CASINO_OFFER_CODES[i];
-      if (c === canonical) return canonical;
-      if (c.length === canonical.length + 1 && c.indexOf(canonical) === 0 && /^[A-Z]$/.test(c.charAt(canonical.length))) {
-        return canonical;
-      }
-    }
-    return c;
-  }
-
-  function normalizeYear(value) {
-    const year = String(value || '').trim();
-    if (!year) return null;
-    return year.length === 2 ? 2000 + parseInt(year, 10) : parseInt(year, 10);
-  }
-
-  function validateDateParts(year, month, day) {
-    if (!year || !month || !day) return null;
-    if (year < 2020 || year > 2035 || month < 1 || month > 12 || day < 1 || day > 31) return null;
-    const check = new Date(year, month - 1, day);
-    if (check.getFullYear() !== year || check.getMonth() + 1 !== month || check.getDate() !== day) return null;
-    return { year: year, month: month, day: day };
-  }
-
   function getDateParts(dateStr) {
     if (!dateStr) return null;
-    const normalized = String(dateStr)
-      .trim()
-      .replace(/\u00a0/g, ' ')
-      .replace(/\s+/g, ' ')
-      .replace(/\.$/, '');
-    let match = normalized.match(/^(\d{4})[-\/]?(\d{2})[-\/]?(\d{2})(?:[T\s].*)?$/);
+    const normalized = String(dateStr).trim();
+    let match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s].*)?$/);
     if (match) {
-      return validateDateParts(parseInt(match[1], 10), parseInt(match[2], 10), parseInt(match[3], 10));
+      return { year: parseInt(match[1], 10), month: parseInt(match[2], 10), day: parseInt(match[3], 10) };
+    }
+    match = normalized.match(/^(\d{4})(\d{2})(\d{2})$/);
+    if (match) {
+      return { year: parseInt(match[1], 10), month: parseInt(match[2], 10), day: parseInt(match[3], 10) };
     }
     match = normalized.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
     if (match) {
-      return validateDateParts(normalizeYear(match[3]), parseInt(match[1], 10), parseInt(match[2], 10));
+      const year = match[3].length === 2 ? 2000 + parseInt(match[3], 10) : parseInt(match[3], 10);
+      return { year: year, month: parseInt(match[1], 10), day: parseInt(match[2], 10) };
     }
-    match = normalized.match(/^([A-Za-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?[,]?\s+(\d{2,4})$/i);
+    match = normalized.match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\s+(\d{1,2})(?:st|nd|rd|th)?(?:,)?\s+(20\d{2})$/i);
     if (match) {
-      return validateDateParts(normalizeYear(match[3]), MONTH_INDEX[match[1].toLowerCase().replace('.', '')], parseInt(match[2], 10));
-    }
-    match = normalized.match(/^(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]{3,9})\.?[,]?\s+(\d{2,4})$/i);
-    if (match) {
-      return validateDateParts(normalizeYear(match[3]), MONTH_INDEX[match[2].toLowerCase().replace('.', '')], parseInt(match[1], 10));
+      const monthMap = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, sept:9, oct:10, nov:11, dec:12 };
+      const key = match[1].toLowerCase().slice(0, match[1].toLowerCase().startsWith('sept') ? 4 : 3);
+      return { year: parseInt(match[3], 10), month: monthMap[key] || monthMap[key.slice(0,3)] || 0, day: parseInt(match[2], 10) };
     }
     try {
-      const date = new Date(normalized.includes('T') ? normalized : normalized + 'T12:00:00');
+      const date = new Date(normalized);
       if (!isNaN(date.getTime())) {
-        return validateDateParts(date.getFullYear(), date.getMonth() + 1, date.getDate());
+        return { year: date.getFullYear(), month: date.getMonth() + 1, day: date.getDate() };
       }
     } catch (e) {}
     return null;
@@ -429,23 +392,15 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
         // Deliberately do not click random screen coordinates; earlier builds clicked the entire page container.
       }
 
-      // Bounded lazy-load pass: enough to reveal larger offer sets without hanging Step 1.
-      let lastButtonCount = 0;
-      let stablePasses = 0;
-      for (let pass = 0; pass < 4; pass += 1) {
-        for (let i = 0; i < 6; i += 1) {
-          window.scrollBy(0, 650);
-          await wait(300);
+      for (let pass = 0; pass < 1; pass += 1) {
+        for (let i = 0; i < 5; i += 1) {
+          window.scrollBy(0, 550);
+          await wait(350);
         }
-        const currentButtonCount = getViewSailingsButtons().length;
-        if (currentButtonCount === lastButtonCount) stablePasses += 1;
-        else stablePasses = 0;
-        lastButtonCount = currentButtonCount;
-        if (expectedBefore && currentButtonCount >= expectedBefore) break;
-        if (!expectedBefore && currentButtonCount > 0 && stablePasses >= 1) break;
+        window.scrollTo(0, 0);
+        await wait(900);
+        if (getViewSailingsButtons().length >= Math.max(1, expectedBefore || 1)) break;
       }
-      window.scrollTo(0, 0);
-      await wait(900);
       const expectedAfter = getAllOffersExpectedCount();
       const viewButtons = getViewSailingsButtons().length;
       log('📊 Offer page expanded: expected ' + (expectedAfter || expectedBefore || 'unknown') + ' offer(s), found ' + viewButtons + ' View Sailings button(s)', viewButtons > 0 ? 'success' : 'warning');
@@ -746,33 +701,6 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
         }
       }
 
-      if (brandCode === 'R') {
-        const mergedEndpoint = baseUrl + '/api/casino/v2/offers/merged';
-        try {
-          log('📡 Calling Royal merged offers endpoint first: ' + mergedEndpoint);
-          const mergedResponse = await fetch(mergedEndpoint, {
-            method: 'GET',
-            headers: headers,
-            credentials: 'include'
-          });
-          log('  Royal merged response status: ' + mergedResponse.status, mergedResponse.ok ? 'info' : 'warning');
-          const mergedText = await mergedResponse.text();
-          if (mergedResponse.ok) {
-            let mergedRaw = null;
-            try { mergedRaw = JSON.parse(mergedText); } catch (jsonErr) { mergedRaw = null; }
-            if (mergedRaw) {
-              const normalizedMerged = normalizeOffersApiResponse(mergedRaw);
-              if (normalizedMerged.offers && normalizedMerged.offers.length > 0) {
-                log('✅ Royal merged endpoint returned ' + normalizedMerged.offers.length + ' offer(s)', 'success');
-                return normalizedMerged;
-              }
-            }
-          }
-        } catch (mergedErr) {
-          log('⚠️ Royal merged offers endpoint failed: ' + String(mergedErr), 'warning');
-        }
-      }
-
       log('📡 Calling ' + brandLabel + ' Casino Offers API with cookies/captured auth...');
       log('Endpoint: ' + endpoint);
       const requestBodies = [];
@@ -949,43 +877,6 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
     return allOfferRows;
   }
 
-
-  function collectSailingArraysDeep(value, depth) {
-    if (!value || depth > 8) return [];
-    const arrays = [];
-    if (Array.isArray(value)) {
-      const looksLikeSailing = value.some(function(item) {
-        return item && typeof item === 'object' && (item.shipName || item.shipCode || item.sailDate || item.sailingDate || item.departureDate || item.startDate || item.masterSailing || item.itinerary);
-      });
-      if (looksLikeSailing) arrays.push(value);
-      value.forEach(function(item) { arrays.push.apply(arrays, collectSailingArraysDeep(item, depth + 1)); });
-      return arrays;
-    }
-    if (typeof value !== 'object') return [];
-    Object.keys(value).forEach(function(key) {
-      const lk = String(key || '').toLowerCase();
-      const child = value[key];
-      if (Array.isArray(child) && (lk.includes('sail') || lk.includes('cruise') || lk.includes('voyage') || lk.includes('itinerar') || lk.includes('eligible') || lk.includes('available'))) {
-        const looksLikeSailing = child.some(function(item) {
-          return item && typeof item === 'object' && (item.shipName || item.shipCode || item.sailDate || item.sailingDate || item.departureDate || item.startDate || item.masterSailing || item.itinerary);
-        });
-        if (looksLikeSailing) arrays.push(child);
-      }
-      arrays.push.apply(arrays, collectSailingArraysDeep(child, depth + 1));
-    });
-    return arrays;
-  }
-
-  function extractSailingsForOffer(offer, co) {
-    const direct = co.sailings || co.availableSailings || co.eligibleSailings || co.sailingInfo || co.offerSailings || co.sailingList || co.cruises || co.voyages || co.availableCruises || co.cruiseOptions || co.sailingOptions || offer.sailings || offer.availableSailings || offer.eligibleSailings || offer.sailingInfo || offer.offerSailings || offer.sailingList || offer.cruises || offer.voyages || offer.availableCruises || offer.cruiseOptions || offer.sailingOptions || [];
-    if (Array.isArray(direct) && direct.length > 0) return direct;
-    const arrays = collectSailingArraysDeep(offer, 0).concat(collectSailingArraysDeep(co, 0));
-    for (let i = 0; i < arrays.length; i += 1) {
-      if (Array.isArray(arrays[i]) && arrays[i].length > 0) return arrays[i];
-    }
-    return [];
-  }
-
   function processAPIResponse(data, scrapePricing) {
     const allOfferRows = [];
     let totalSailings = 0;
@@ -1000,7 +891,7 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
       const offer = validOffers[i];
       const co = getCampaignOffer(offer);
       const offerName = co.name || co.title || co.offerName || co.marketingTitle || '';
-      const offerCode = normalizeCasinoOfferCode(co.offerCode || co.marketingCouponCode || co.couponCode || co.code || '');
+      const offerCode = co.offerCode || co.marketingCouponCode || co.couponCode || co.code || '';
       const offerExpiry = formatDate(co.reserveByDate);
       const tradeInValue = co.tradeInValue ? '$' + Number(co.tradeInValue).toFixed(2) : '';
       const perks = tradeInValue ? 'Trade-in value: ' + tradeInValue : '';
@@ -1016,7 +907,7 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
       if (offerStatus) {
         log('  Status: ' + offerStatus, offerIsInProgress ? 'warning' : 'info');
       }
-      const sailings = extractSailingsForOffer(offer, co);
+      const sailings = co.sailings || co.availableSailings || co.eligibleSailings || co.sailingInfo || co.offerSailings || offer.sailings || offer.availableSailings || offer.eligibleSailings || offer.sailingInfo || offer.offerSailings || [];
       if (sailings.length === 0) {
         log('  ⚠️ No sailings available for this offer', 'warning');
         allOfferRows.push({
@@ -1057,12 +948,9 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
       let offerSailingCount = 0;
       for (let sailingIndex = 0; sailingIndex < sailings.length; sailingIndex += 1) {
         const sailing = sailings[sailingIndex];
-        const masterSailing = sailing.masterSailing || {};
-        const masterItinerary = masterSailing.itinerary || {};
-        const masterShip = masterItinerary.ship || masterSailing.ship || {};
-        const shipName = sailing.shipName || sailing.ship?.name || masterShip.name || '';
-        const shipCode = sailing.shipCode || sailing.ship?.code || masterShip.code || '';
-        const sailDate = formatSailDate(sailing.sailDate || sailing.sailingDate || sailing.departureDate || sailing.startDate);
+        const shipName = sailing.shipName || '';
+        const shipCode = sailing.shipCode || '';
+        const sailDate = formatSailDate(sailing.sailDate);
         const departurePort = safeStr(sailing.departurePort?.name || sailing.departurePortName || sailing.departurePort || '');
         const itinerary = safeStr(sailing.itineraryDescription || sailing.sailingType?.name || sailing.sailingType || '');
         const cabinType = safeStr(sailing.roomType || sailing.stateroomType || '');
@@ -1136,47 +1024,10 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
     return { offerRows: allOfferRows, offerCount: validOffers.length, totalSailings };
   }
 
-
-  function processAllCapturedOfferPayloads() {
-    let rows = [];
-    let offerCount = 0;
-    try {
-      const payloads = [];
-      const captured = window.capturedPayloads || {};
-      if (captured.offers) payloads.push({ source: 'capturedPayloads.offers', data: captured.offers });
-      if (Array.isArray(captured.offerPayloads)) {
-        captured.offerPayloads.forEach(function(item, idx) { payloads.push({ source: item.url || ('capturedPayloads.offerPayloads[' + idx + ']'), data: item.data || item }); });
-      }
-      if (Array.isArray(window.capturedOfferPayloads)) {
-        window.capturedOfferPayloads.forEach(function(item, idx) { payloads.push({ source: item.url || ('capturedOfferPayloads[' + idx + ']'), data: item.data || item }); });
-      }
-      const seenPayloads = new Set();
-      payloads.forEach(function(payload, idx) {
-        if (!payload || !payload.data) return;
-        let key = '';
-        try { key = (payload.source || '') + '|' + JSON.stringify(payload.data).slice(0, 1000); } catch(e) { key = (payload.source || '') + '|' + idx; }
-        if (seenPayloads.has(key)) return;
-        seenPayloads.add(key);
-        const normalized = normalizeOffersApiResponse(payload.data);
-        if (!normalized.offers || normalized.offers.length === 0) return;
-        const parsed = processAPIResponse(normalized, SCRAPE_PRICING_AND_ITINERARY);
-        const parsedRows = (parsed && parsed.offerRows) || [];
-        if (parsedRows.length > 0) {
-          rows = mergeSailingRows(rows, parsedRows);
-          offerCount += parsed.offerCount || normalized.offers.length || 0;
-          log('📦 Payload sweep parsed ' + parsedRows.length + ' sailing row(s) from ' + (payload.source || 'captured payload'), 'success');
-        }
-      });
-    } catch (e) {
-      log('⚠️ Captured offer payload sweep failed: ' + (e && e.message ? e.message : String(e)), 'warning');
-    }
-    return { offerRows: rows, offerCount: offerCount, totalSailings: rows.length };
-  }
-
   async function extractOffers() {
     try {
       log('Extracting Club Royale data...');
-      log('🛠️ Offer sync engine v8.7.0 active: all-offer payload sweep + strict expanded-sailing extraction + active loyalty-history click & direct-fetch probe', 'info');
+      log('🛠️ Offer sync engine v9.0.3 active: v861 button-driven offers + 2605C03A code support + real ship/date parser + Step2 monitor repair; completed-history path unchanged', 'info');
       await extractClubRoyaleStatus();
       log('Loading Club Royale Offers page...');
       await wait(2000);
@@ -1191,46 +1042,9 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
       log('DOM-first offer scan: expected ' + expected + ' offer(s), parsed ' + visibleOffers.length + ' card(s), found ' + viewSailingsButtons.length + ' View Sailings button(s)', visibleOffers.length ? 'success' : 'warning');
 
       if (visibleOffers.length > 0) {
-        let domRows = await scrapeSailingsForVisibleOffers(visibleOffers);
-        let mergedRows = [];
-        domRows.forEach(function(row) { mergedRows = mergeSailingRows(mergedRows, [row]); });
-
-        const capturedResult = processAllCapturedOfferPayloads();
-        if (capturedResult.offerRows && capturedResult.offerRows.length > 0) {
-          mergedRows = mergeSailingRows(mergedRows, capturedResult.offerRows);
-        }
-
-        try {
-          const authContext = await getAuthContext();
-          const offersData = await fetchOffersFromAPI(authContext);
-          let apiResult = processAPIResponse(offersData, SCRAPE_PRICING_AND_ITINERARY);
-          let apiRows = apiResult.offerRows || [];
-          if (SCRAPE_PRICING_AND_ITINERARY && apiRows.length > 0) {
-            log('🔄 Starting pricing and itinerary enrichment for API/direct rows...', 'info');
-            apiRows = await enrichWithPricingData(apiRows, authContext.baseUrl);
-          }
-          if (apiRows.length > 0) mergedRows = mergeSailingRows(mergedRows, apiRows);
-        } catch (apiFallbackError) {
-          log('⚠️ API/direct offer fetch failed after DOM extraction: ' + (apiFallbackError && apiFallbackError.message ? apiFallbackError.message : String(apiFallbackError)), 'warning');
-        }
-
-        // Closed offer cards are not authoritative sailings. Keep the visible card metadata internally,
-        // but if no real ship/date rows were captured, send zero rows so the app preserves existing offers.
-        visibleOffers.forEach(function(offer) {
-          const hasRowsForOffer = mergedRows.some(function(row) { return (offer.offerCode && normalizeCasinoOfferCode(row.offerCode) === normalizeCasinoOfferCode(offer.offerCode)) || (!offer.offerCode && row.offerName === offer.offerName); });
-          if (!hasRowsForOffer) mergedRows.push(blankRowForOffer(offer, 'Offer captured from DOM; full View Sailings rows were not exposed'));
-        });
-
-        const mergedRowsWithSailings = mergedRows.filter(r => r && r.shipName && r.sailingDate).length;
-        if (mergedRowsWithSailings === 0) {
-          log('⚠️ STEP 1 captured only summary/card rows and 0 real ship/date sailing rows; preserving existing offer data instead of syncing partial rows', 'warning');
-          sendOfferRowsInChunks([], visibleOffers.length);
-          log('✅ STEP 1 ALL-OFFER MERGE COMPLETE: captured ' + visibleOffers.length + ' visible offer card(s) with 0 authoritative sailing row(s)', 'warning');
-          return;
-        }
-
-        sendOfferRowsInChunks(mergedRows, visibleOffers.length);
-        log('✅ STEP 1 ALL-OFFER MERGE COMPLETE: captured ' + visibleOffers.length + ' visible offer card(s) with ' + mergedRows.length + ' row(s), ' + mergedRowsWithSailings + ' real ship/date sailing row(s)', 'success');
+        const domRows = await scrapeSailingsForVisibleOffers(visibleOffers);
+        sendOfferRowsInChunks(domRows, visibleOffers.length);
+        log('✅ STEP 1 DOM-FIRST COMPLETE: captured ' + visibleOffers.length + ' offer(s) with ' + domRows.length + ' row(s)', 'success');
         return;
       }
 
@@ -1255,6 +1069,18 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
   function cleanOfferText(text) {
     return (text || '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
   }
+
+  function normalizeRoyalCasinoOfferCode(code) {
+    let value = cleanOfferText(code || '').toUpperCase();
+    // Royal offer codes appear in at least two families:
+    //   26BCP105 / 26JUL104 / 26WCR403B
+    //   2605C03A (monthly certificate format)
+    // Royal also concatenates the next cabin word in DOM text:
+    //   26BCP105Exterior / 26JUL104Oceanview
+    if (/^26[A-Z]{2,8}\d{2,5}[EO]$/.test(value)) value = value.slice(0, -1);
+    return value;
+  }
+
 
   function normalizeOfferName(name) {
     let value = cleanOfferText(name);
@@ -1283,10 +1109,8 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
 
   function parseOfferFromText(text, fallbackIndex) {
     const clean = cleanOfferText(text);
-    // Match both the long-standing YY+letters+digits style (e.g. 26BCP105 / 26TOC208) AND
-    // Royal's newer YYMM+letter+digits+letter style (e.g. 2605C03A) that appeared in 2026.
-    const codeMatch = clean.match(/(\d{2}[A-Z]{2,8}\d{2,5}[A-Z]?|\d{4}[A-Z]\d{1,3}[A-Z]?)/);
-    const offerCode = codeMatch ? normalizeCasinoOfferCode(codeMatch[1]) : '';
+    const codeMatch = clean.match(/(\d{4}[A-Z]\d{2}[A-Z]?|(?:\d{4}[A-Z]\d{2}[A-Z]?|\d{2}[A-Z]{2,8}\d{2,5}[A-Z]?))/);
+    const offerCode = codeMatch ? normalizeRoyalCasinoOfferCode(codeMatch[1]) : '';
     let offerName = '';
     if (offerCode) {
       const before = clean.slice(0, Math.max(0, clean.indexOf(offerCode))).trim();
@@ -1294,7 +1118,7 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
       offerName = normalizeOfferName(bits.length ? bits[bits.length - 1] : before);
     }
     if (!offerName) {
-      const nameMatch = clean.match(/([A-Z][A-Za-z0-9 '&-]{2,80})\s*(?:\d{2}[A-Z]{2,8}\d{2,5}[A-Z]?|\d{4}[A-Z]\d{1,3}[A-Z]?)/);
+      const nameMatch = clean.match(/([A-Z][A-Za-z0-9 '&-]{2,80})\s*(?:\d{4}[A-Z]\d{2}[A-Z]?|\d{2}[A-Z]{2,8}\d{2,5}[A-Z]?)/);
       offerName = normalizeOfferName(nameMatch ? nameMatch[1] : ('Casino Offer ' + fallbackIndex));
     }
     const expiryMatch = clean.match(/Redeem\s+by\s+([A-Za-z]{3,9}\s+\d{1,2},\s+\d{4})/i);
@@ -1310,20 +1134,19 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
       offerExpirationDate: expiryMatch ? expiryMatch[1] : '',
       cabinType: inferCabinFromDescription(desc),
       numberOfGuests: inferGuestsFromDescription(desc),
-      perks: desc,
-      rawCardText: clean
+      perks: desc
     };
   }
 
   function parseOfferCardsFromWholePage() {
     const pageText = cleanOfferText(document.body?.textContent || '');
     const byCode = new Map();
-    const codeRegex = /(\d{2}[A-Z]{2,8}\d{2,5}[A-Z]?|\d{4}[A-Z]\d{1,3}[A-Z]?)/g;
+    const codeRegex = /(\d{4}[A-Z]\d{2}[A-Z]?|(?:\d{4}[A-Z]\d{2}[A-Z]?|\d{2}[A-Z]{2,8}\d{2,5}[A-Z]?))/g;
     const codes = [];
     let m;
     while ((m = codeRegex.exec(pageText)) !== null) {
-      const code = m[1];
-      if (!byCode.has(code)) codes.push({ code, index: m.index, end: m.index + code.length });
+      const code = normalizeRoyalCasinoOfferCode(m[1]);
+      if (!byCode.has(code)) codes.push({ code, index: m.index, end: m.index + m[1].length });
     }
     for (let i = 0; i < codes.length; i += 1) {
       const item = codes[i];
@@ -1334,11 +1157,11 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
       if (parsed.offerCode) byCode.set(parsed.offerCode, parsed);
     }
     // A second, very specific pass for the current Royal page shape: Name Code Description Redeem by Date.
-    const re = /([A-Z][A-Za-z0-9 '&-]{2,80})\s*(\d{2}[A-Z]{2,8}\d{2,5}[A-Z]?|\d{4}[A-Z]\d{1,3}[A-Z]?)\s*(.{0,260}?)\s+Redeem\s+by\s+([A-Za-z]{3,9}\s+\d{1,2},\s+\d{4})/g;
+    const re = /([A-Z][A-Za-z0-9 '&-]{2,80})\s*((?:\d{4}[A-Z]\d{2}[A-Z]?|\d{2}[A-Z]{2,8}\d{2,5}[A-Z]?))\s*(.{0,260}?)\s+Redeem\s+by\s+([A-Za-z]{3,9}\s+\d{1,2},\s+\d{4})/g;
     while ((m = re.exec(pageText)) !== null) {
       const parsed = {
         offerName: normalizeOfferName(m[1]),
-        offerCode: normalizeCasinoOfferCode(m[2]),
+        offerCode: normalizeRoyalCasinoOfferCode(m[2]),
         perks: cleanOfferText(m[3]),
         offerExpirationDate: m[4],
         cabinType: inferCabinFromDescription(m[3]),
@@ -1357,7 +1180,7 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
     let best = null;
     for (let i = 0; node && i < 7; i += 1) {
       const txt = cleanOfferText(node.textContent || '');
-      const hasOneOffer = (txt.match(/\d{2}[A-Z]{2,8}\d{2,5}[A-Z]?|\d{4}[A-Z]\d{1,3}[A-Z]?/g) || []).length === 1;
+      const hasOneOffer = (txt.match(/(?:\d{4}[A-Z]\d{2}[A-Z]?|\d{2}[A-Z]{2,8}\d{2,5}[A-Z]?)/g) || []).length === 1;
       if (txt && txt.length < 1200 && hasOneOffer && /Redeem\s+by/i.test(txt)) best = node;
       node = node.parentElement;
     }
@@ -1399,14 +1222,23 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
       }
     });
 
-    return Array.from(byCode.values()).filter(o => o.offerName && !/club royale|crown|anchor|tier credits/i.test(o.offerName));
+    return Array.from(byCode.values()).filter(o => {
+      const name = cleanOfferText(o.offerName || '');
+      const code = cleanOfferText(o.offerCode || '');
+      if (!name) return false;
+      if (/club royale|crown|anchor|tier credits/i.test(name)) return false;
+      if (/ready to play|casino credit|apply for credit|marker account/i.test(name) && !/^26[A-Z0-9]/i.test(code)) return false;
+      // Keep real coded Royal casino offers even when surrounding page chrome contains banner text.
+      if (/^26[A-Z0-9]/i.test(code)) return true;
+      return !/^UNKNOWN_/.test(code);
+    });
   }
 
   function blankRowForOffer(offer, status) {
     return {
       sourcePage: 'Offers',
       offerName: offer.offerName || 'Casino Offer',
-      offerCode: normalizeCasinoOfferCode(offer.offerCode || ''),
+      offerCode: offer.offerCode || '',
       offerExpirationDate: offer.offerExpirationDate || '',
       offerType: offer.numberOfGuests || 'Club Royale',
       shipName: '',
@@ -1434,138 +1266,60 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
     };
   }
 
-  function getDateRegex(globalFlag) {
-    const month = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t|tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\\.?';
-    const textualMDY = month + '\\s+\\d{1,2}(?:st|nd|rd|th)?[,]?\\s+20\\d{2}';
-    const textualDMY = '\\d{1,2}(?:st|nd|rd|th)?\\s+' + month + '[,]?\\s+20\\d{2}';
-    const numeric = '\\b(?:\\d{1,2}[\\/\\-]\\d{1,2}[\\/\\-]20\\d{2}|20\\d{2}[\\/\\-]?\\d{2}[\\/\\-]?\\d{2})\\b';
-    return new RegExp(textualMDY + '|' + textualDMY + '|' + numeric, globalFlag ? 'ig' : 'i');
-  }
-
-  function isLikelyExpirationDateContext(text, index, rawDate) {
-    const rawLength = String(rawDate || '').length;
-    const before = text.slice(Math.max(0, index - 140), index).toLowerCase();
-    const after = text.slice(index + rawLength, index + rawLength + 80).toLowerCase();
-    const local = text.slice(Math.max(0, index - 140), index + rawLength + 80).toLowerCase();
-    // Strong expiry guard: Royal cards often place Redeem by / Reserve by near a real ship
-    // name, which previously created fake sailings like Feb 14, 2026 for every offer.
-    if (/(redeem|reserve|book|expires?|expiration|valid|use)\s*(by|before|until|thru|through)?[^\n|]{0,80}$/.test(before)) return true;
-    if (/^\s*(expiration|deadline|offer\s*ends|redeem|reserve|book|expires?)/.test(after)) return true;
-    if (/(redeem\s*by|reserve\s*by|book\s*by|expires?\s*(on|by)?|expiration\s*date|valid\s*(until|through|thru))[^\n|]{0,90}$/.test(local)) return true;
-    return false;
-  }
-
-
-  function expandRoyalDateLine(rawText) {
-    const text = cleanOfferText(rawText || '');
-    if (!text) return [];
-    const out = [];
-    const seen = new Set();
-    function add(raw) {
-      const formatted = formatSailDate(raw);
-      if (!formatted || formatted === raw) return;
-      if (!seen.has(formatted)) { seen.add(formatted); out.push(formatted); }
-    }
-    // Full dates anywhere in the string.
-    const fullRe = getDateRegex(true);
-    let m;
-    while ((m = fullRe.exec(text)) !== null) {
-      if (!isLikelyExpirationDateContext(text, m.index, m[0])) add(m[0]);
-    }
-    // Royal offer-card shorthand: "Dates 2026 Aug 29, Sep 26, Oct 24, Oct 30".
-    const yearMatch = text.match(/\b(20\d{2})\b/);
-    const sharedYear = yearMatch ? parseInt(yearMatch[1], 10) : null;
-    if (sharedYear) {
-      const afterYear = text.slice(yearMatch.index + yearMatch[0].length);
-      const monthDayRe = /\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t)?(?:ember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+(\d{1,2})(?:st|nd|rd|th)?\b/ig;
-      let md;
-      while ((md = monthDayRe.exec(afterYear)) !== null) {
-        const absoluteIndex = yearMatch.index + yearMatch[0].length + md.index;
-        if (isLikelyExpirationDateContext(text, absoluteIndex, md[0])) continue;
-        add(md[1] + ' ' + md[2] + ', ' + sharedYear);
-      }
-    }
-    return out;
-  }
-
-  function parseSailingsFromOfferCardText(offer) {
-    const cardText = cleanOfferText(offer.rawCardText || offer.cardText || '');
-    if (!cardText) return [];
-    const shipSearchText = cardText.replace(/.*?Ship\s*name/i, '').replace(/.*?Shipname/i, '');
-    const shipMatch = shipSearchText.match(/([A-Z][A-Za-z' .-]{1,40} of the Seas)/i);
-    const datesLabel = cardText.match(/(?:Dates?|Sail(?:ing)?\s*Dates?|Depart(?:ure)?\s*Dates?)\s*[:\-]?\s*(.{0,260})/i);
-    if (!datesLabel) return [];
-    const dateSource = datesLabel[1];
-    const dates = expandRoyalDateLine(dateSource);
-    if (!shipMatch || dates.length === 0) return [];
-    const rows = [];
-    dates.forEach(function(date) {
-      const row = blankRowForOffer(offer, 'Sailing expanded from offer card date list');
-      row.shipName = shipMatch[1];
-      row.sailingDate = date;
-      row.itinerary = cardText;
-      rows.push(row);
-    });
-    if (rows.length > 1) {
-      log('✅ Expanded offer card for ' + (offer.offerName || offer.offerCode) + ' into ' + rows.length + ' sailing date(s): ' + dates.join(', '), 'success');
-    }
-    return rows;
-  }
-
-  function extractSailingDateFromWindow(windowText) {
-    const matches = [];
-    const re = getDateRegex(true);
-    let m;
-    while ((m = re.exec(windowText)) !== null) {
-      const raw = m[0];
-      const parts = getDateParts(raw);
-      if (!parts) continue;
-      const context = windowText.slice(Math.max(0, m.index - 60), Math.min(windowText.length, m.index + raw.length + 60));
-      if (isLikelyExpirationDateContext(windowText, m.index, raw)) continue;
-      let score = 0;
-      if (/sail|depart|embark|cruise|night|itinerary|ship|arrival/i.test(context)) score += 3;
-      if (/redeem|reserve|expires?|expiration/i.test(context)) score -= 4;
-      matches.push({ raw: raw, index: m.index, score: score });
-    }
-    if (matches.length === 0) return null;
-    matches.sort((a, b) => b.score - a.score || a.index - b.index);
-    return matches[0].raw;
+  function makeSailingRow(offer, shipName, dateText, contextText) {
+    const row = blankRowForOffer(offer, 'Sailing captured from View Sailings page/modal');
+    row.shipName = cleanOfferText(shipName || '');
+    row.sailingDate = formatSailDate(cleanOfferText(dateText || ''));
+    row.itinerary = cleanOfferText(contextText || '').slice(0, 900);
+    const nightMatch = row.itinerary.match(/(\d{1,2})\s*(?:Night|Nt)\b/i);
+    row.totalNights = nightMatch ? parseInt(nightMatch[1], 10) : null;
+    row._key = [row.offerCode || row.offerName, row.shipName, row.sailingDate].join('|');
+    return row;
   }
 
   function parseSailingsFromCurrentText(offer, beforeText) {
-    const text = (document.body?.textContent || '').replace(/\r/g, '\n');
-    const changedText = beforeText && beforeText.length ? text.replace(beforeText, '') : text;
-    const targetText = changedText.length > 200 ? changedText : text;
+    const fullTextRaw = (document.body?.innerText || document.body?.textContent || '').replace(/\r/g, '\n');
+    const fullFlat = cleanOfferText(fullTextRaw);
+    const changedText = beforeText && beforeText.length ? fullTextRaw.replace(beforeText, '') : fullTextRaw;
+    const targetRaw = changedText && changedText.length > 200 ? changedText : fullTextRaw;
+    const targetFlat = cleanOfferText(targetRaw);
     const rows = [];
-    const dateRe = getDateRegex(false);
-    const shipRe = /([A-Z][A-Za-z' .-]+ of the Seas)/i;
-    const lines = targetText.split(/\n+/).map(l => l.replace(/\s+/g, ' ').trim()).filter(Boolean);
-    for (let i = 0; i < lines.length; i += 1) {
-      const windowText = lines.slice(i, i + 10).join(' | ');
-      const shipSearchText = windowText.replace(/.*?Ship\s*name/i, '').replace(/.*?Shipname/i, '');
-      if (!shipRe.test(shipSearchText)) continue;
-      const sm = shipSearchText.match(shipRe);
-      const sailingDates = expandRoyalDateLine(windowText);
-      if (!dateRe.test(windowText) && sailingDates.length === 0) continue;
-      if (sailingDates.length === 0) {
-        const sailingDateRaw = extractSailingDateFromWindow(windowText);
-        if (sailingDateRaw) sailingDates.push(formatSailDate(sailingDateRaw));
-      }
-      if (sailingDates.length === 0) continue;
-      const nightMatch = windowText.match(/(\d{1,2})\s*(?:Night|Nt)\b/i);
-      sailingDates.forEach(function(sailingDate) {
-        const key = (sm ? sm[1] : '') + '|' + sailingDate + '|' + windowText.slice(0, 120);
-        if (rows.some(r => r._key === key)) return;
-        const row = blankRowForOffer(offer, 'Sailing captured from View Sailings page/modal');
-        row.shipName = sm ? sm[1] : '';
-        row.sailingDate = sailingDate;
-        row.itinerary = windowText;
-        row.totalNights = nightMatch ? parseInt(nightMatch[1], 10) : null;
-        row._key = key;
-        rows.push(row);
-      });
+    const seen = new Set();
+    function add(row) {
+      if (!row || !row.shipName || !row.sailingDate) return;
+      const key = row._key || [row.offerCode || row.offerName, row.shipName, row.sailingDate].join('|');
+      if (seen.has(key)) return;
+      seen.add(key);
+      try { delete row._key; } catch(e) {}
+      rows.push(row);
     }
-    rows.forEach(r => { try { delete r._key; } catch(e) {} });
+
+    // Current Royal modal/table text often arrives as one long concatenated string:
+    // "View detailsShip nameJewel of the Seas - 06/12/2026". This is the real ship/date row;
+    // previous builds only captured the offer card placeholder because they required newlines.
+    const shipDatePatterns = [
+      /(?:Ship\s*name|Ship)\s*[:\-]?\s*([A-Z][A-Za-z' .-]+ of the Seas)\s*[-–—]\s*((?:\d{1,2}[\/\-]\d{1,2}[\/\-]20\d{2})|(?:20\d{6})|(?:(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\s+\d{1,2}(?:st|nd|rd|th)?,?\s+20\d{2}))/gi,
+      /([A-Z][A-Za-z' .-]+ of the Seas)\s*[-–—]\s*((?:\d{1,2}[\/\-]\d{1,2}[\/\-]20\d{2})|(?:20\d{6})|(?:(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\s+\d{1,2}(?:st|nd|rd|th)?,?\s+20\d{2}))/gi
+    ];
+    shipDatePatterns.forEach(function(re) {
+      let m;
+      while ((m = re.exec(targetFlat)) !== null) {
+        const context = targetFlat.slice(Math.max(0, m.index - 120), Math.min(targetFlat.length, re.lastIndex + 260));
+        add(makeSailingRow(offer, m[1], m[2], context));
+      }
+    });
+
+    const month = '(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*';
+    const dateRe = new RegExp(month + '\\s+\\d{1,2}(?:st|nd|rd|th)?(?:,)?\\s+20\\d{2}|\\d{1,2}[\\/\\-]\\d{1,2}[\\/\\-]20\\d{2}|20\\d{6}', 'i');
+    const shipRe = /([A-Z][A-Za-z' .-]+ of the Seas)/i;
+    const lines = targetRaw.split(/\n+/).map(l => cleanOfferText(l)).filter(Boolean);
+    for (let i = 0; i < lines.length; i += 1) {
+      const windowText = lines.slice(i, i + 14).join(' | ');
+      if (!dateRe.test(windowText) || !shipRe.test(windowText)) continue;
+      const sm = windowText.match(shipRe);
+      const dm = windowText.match(dateRe);
+      add(makeSailingRow(offer, sm ? sm[1] : '', dm ? dm[0] : '', windowText));
+    }
     return rows;
   }
 
@@ -1581,19 +1335,9 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
   }
 
   function mergeSailingRows(existing, incoming) {
-    function rowIdentity(r) {
-      return [
-        normalizeCasinoOfferCode(r.offerCode || '') || cleanOfferText(r.offerName || ''),
-        cleanOfferText(r.shipName || '').toLowerCase(),
-        cleanOfferText(r.sailingDate || r.departureDate || ''),
-        cleanOfferText(r.itinerary || '').toLowerCase(),
-        cleanOfferText(r.cabinType || r.roomType || r.stateroomType || '').toLowerCase(),
-        cleanOfferText(r.numberOfGuests || r.guests || '').toLowerCase()
-      ].join('|');
-    }
-    const seen = new Set(existing.map(rowIdentity));
+    const seen = new Set(existing.map(r => [r.offerCode || r.offerName, r.shipName, r.sailingDate, r.itinerary].join('|')));
     incoming.forEach(row => {
-      const key = rowIdentity(row);
+      const key = [row.offerCode || row.offerName, row.shipName, row.sailingDate, row.itinerary].join('|');
       if (!seen.has(key) && (row.shipName || row.sailingDate)) {
         seen.add(key);
         existing.push(row);
@@ -1663,31 +1407,17 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
       sendOfferProgress(i + 1, offers.length, offer.offerName || offer.offerCode, 0, 'processing');
       let rows = [];
       const freshOffers = parseVisibleOfferCards();
-      const fresh = freshOffers.find(o => (offer.offerCode && normalizeCasinoOfferCode(o.offerCode) === normalizeCasinoOfferCode(offer.offerCode)) || o.offerName === offer.offerName) || freshOffers[i] || offer;
+      const fresh = freshOffers.find(o => (offer.offerCode && o.offerCode === offer.offerCode) || o.offerName === offer.offerName) || freshOffers[i] || offer;
       offer = Object.assign({}, offer, { button: fresh.button || offer.button, offerName: offer.offerName || fresh.offerName, offerCode: offer.offerCode || fresh.offerCode });
       if (offer.button) {
         const before = document.body?.textContent || '';
         log('👆 Opening View Sailings for ' + (offer.offerName || offer.offerCode) + ' (' + (i + 1) + '/' + offers.length + ')', 'info');
         clickElementLikeUser(offer.button);
-        await wait(4500);
+        await wait(6500);
         rows = await collectAllVisibleSailingRows(offer, before);
         await returnToOffersList();
         await wait(1200);
       }
-      // Safety gate: a closed-card summary may contain a ship name plus a Redeem-by date.
-      // Those rows are not a valid expanded sailing list and must not be counted as cruises.
-      rows = rows.filter(function(row) {
-        const itinerary = cleanOfferText(row.itinerary || '');
-        if (!row.shipName || !row.sailingDate) return false;
-        if (/redeem\s*by|reserve\s*by|book\s*by|expires?|expiration\s*date|valid\s*(until|through|thru)/i.test(itinerary) &&
-            !/(sailing\s*date|sailing\s*dates|departure\s*date|departure\s*dates|dates?\s*:)/i.test(itinerary)) {
-          log('⚠️ Rejected probable offer-expiration row for ' + (offer.offerName || offer.offerCode) + ': ' + row.shipName + ' - ' + row.sailingDate, 'warning');
-          return false;
-        }
-        return true;
-      });
-      const cardRows = parseSailingsFromOfferCardText(offer);
-      if (cardRows.length > 0) rows = mergeSailingRows(rows, cardRows);
       if (rows.length === 0) rows = [blankRowForOffer(offer, 'Offer captured; sailings were not exposed in readable DOM during sync')];
       rows.forEach(r => allRows.push(r));
       sendOfferProgress(i + 1, offers.length, offer.offerName || offer.offerCode, rows.length, 'complete');

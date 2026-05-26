@@ -25,7 +25,7 @@ import {
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
-import { IMAGES } from '@/constants/images';
+import { LOCAL_IMAGES } from '@/constants/images';
 import { calculateCruiseValue } from '@/lib/valueCalculator';
 import { useAppState } from '@/state/AppStateProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
@@ -519,7 +519,7 @@ export default function OfferDetailsScreen() {
           <View style={styles.featuredOfferSection}>
             <View style={styles.offerLogoGroup}>
               <Image 
-                source={{ uri: IMAGES.logo }}
+                source={LOCAL_IMAGES.logo}
                 style={styles.offerLogo}
                 resizeMode="contain"
               />

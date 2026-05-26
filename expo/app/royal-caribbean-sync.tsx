@@ -7,6 +7,7 @@ import { useLoyalty } from '@/state/LoyaltyProvider';
 import { ChevronDown, ChevronUp, LoaderCircle, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, DollarSign, Anchor, Crown, Star, Award, Download, FileDown, Cookie } from 'lucide-react-native';
 import { WebViewMessage } from '@/lib/royalCaribbean/types';
 import { AUTH_DETECTION_SCRIPT } from '@/lib/royalCaribbean/authDetection';
+import { NETWORK_MONITOR_SCRIPT } from '@/lib/royalCaribbean/networkMonitorScript';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { WebSyncCredentialsModal } from '@/components/WebSyncCredentialsModal';
 import { WebCookieSyncModal } from '@/components/WebCookieSyncModal';
@@ -468,7 +469,10 @@ function RoyalCaribbeanSyncScreen() {
                 domStorageEnabled={true}
                 sharedCookiesEnabled={true}
                 thirdPartyCookiesEnabled={true}
-                injectedJavaScriptBeforeContentLoaded={AUTH_DETECTION_SCRIPT}
+                injectedJavaScriptBeforeContentLoaded={`try { window.networkMonitorInstalled = false; window.__easySeasNetworkMonitorVersion = 'v886-before-content'; } catch (e) {}
+${AUTH_DETECTION_SCRIPT}
+${NETWORK_MONITOR_SCRIPT}
+true;`}
                 keyboardDisplayRequiresUserAction={false}
                 allowsInlineMediaPlayback={true}
                 mediaPlaybackRequiresUserAction={false}

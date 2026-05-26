@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Crown, Star } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
-import { IMAGES } from '@/constants/images';
+import { LOCAL_IMAGES } from '@/constants/images';
 import { formatNumber } from '@/lib/format';
 
 interface HeroHeaderCompactProps {
@@ -39,7 +39,7 @@ export function HeroHeaderCompact({
         <View style={styles.welcomeSection}>
           <View style={styles.iconContainer}>
             <Image 
-              source={{ uri: IMAGES.logo }}
+              source={LOCAL_IMAGES.logo}
               style={styles.logoImage}
               resizeMode="contain"
             />

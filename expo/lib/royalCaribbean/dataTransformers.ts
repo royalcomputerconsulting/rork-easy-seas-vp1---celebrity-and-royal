@@ -19,6 +19,15 @@ function parseDate(dateStr: string): string {
   const trimmed = dateStr.trim();
 
   try {
+    const compactYmdMatch = trimmed.match(/^(20\d{2})(\d{2})(\d{2})$/);
+    if (compactYmdMatch) {
+      const year = compactYmdMatch[1];
+      const month = compactYmdMatch[2];
+      const day = compactYmdMatch[3];
+      console.log(`[parseDate] Compact YYYYMMDD date detected: ${trimmed} -> ${month}-${day}-${year}`);
+      return `${month}-${day}-${year}`;
+    }
+
     const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
     if (isoMatch) {
       const year = isoMatch[1];

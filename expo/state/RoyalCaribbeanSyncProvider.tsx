@@ -21,6 +21,7 @@ import { convertLoyaltyInfoToExtended, mergeExtendedLoyaltyData } from '@/lib/ro
 import { rcLogger } from '@/lib/royalCaribbean/logger';
 import { generateOffersCSV, generateBookedCruisesCSV } from '@/lib/royalCaribbean/csvGenerator';
 import { injectOffersExtraction } from '@/lib/royalCaribbean/step1_offers';
+import { injectUpcomingCruisesExtraction } from '@/lib/royalCaribbean/step2_upcoming';
 import { AUTH_DETECTION_SCRIPT } from '@/lib/royalCaribbean/authDetection';
 import { NETWORK_MONITOR_SCRIPT } from '@/lib/royalCaribbean/networkMonitorScript';
 import { injectCarnivalOffersExtraction, injectCarnivalBookingsScrape, injectCarnivalCruiseSearchScrape, injectCarnivalTgoExtract } from '@/lib/carnival/carnivalOffersExtraction';
@@ -84,11 +85,16 @@ function normalizeRoyalCompactDate(value: any): string {
   const raw = String(value || '').trim();
   if (!raw) return '';
   const compact = raw.match(/^(\d{4})(\d{2})(\d{2})$/);
-  if (compact) return `${compact[1]}${compact[2]}${compact[3]}`;
-  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (iso) return `${iso[1]}${iso[2]}${iso[3]}`;
-  const d = new Date(raw);
-  if (!Number.isNaN(d.getTime())) return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+  if (compact) return `${compact[2]}-${compact[3]}-${compact[1]}`;
+  const iso = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (iso) return `${iso[2].padStart(2, '0')}-${iso[3].padStart(2, '0')}-${iso[1]}`;
+  const mdy = raw.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})$/);
+  if (mdy) {
+    const year = mdy[3].length === 2 ? `20${mdy[3]}` : mdy[3];
+    return `${mdy[1].padStart(2, '0')}-${mdy[2].padStart(2, '0')}-${year}`;
+  }
+  const d = new Date(raw.includes('T') ? raw : `${raw}T12:00:00`);
+  if (!Number.isNaN(d.getTime())) return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}-${d.getFullYear()}`;
   return raw;
 }
 
@@ -106,14 +112,14 @@ function normalizeCruiseDateKey(value: any): string {
   return raw.toLowerCase().replace(/\s+/g, ' ');
 }
 
-function completedCruiseIdentityKey(row: Pick<BookedCruiseRow, 'bookingId' | 'shipName' | 'sailingStartDate' | 'sailingDates' | 'numberOfNights'>): string {
+function completedCruiseIdentityKey(row: Partial<BookedCruiseRow> & { sailDate?: string; departureDate?: string; startDate?: string; sailingDate?: string; nights?: number | string }): string {
   const ship = String(row.shipName || '').trim().toLowerCase().replace(/\s+/g, ' ');
-  const date = normalizeCruiseDateKey(row.sailingStartDate || row.sailingDates || '');
+  const date = normalizeCruiseDateKey(row.sailingStartDate || row.sailingDates || row.sailDate || row.departureDate || row.startDate || row.sailingDate || '');
   // Royal completed-history rows can arrive twice with the same ship/date but different generated
   // booking ids, date formats, or missing/verbose night values. Ship + normalized sail date is the
   // stable identity for completed-history rows and prevents the 54 -> 108 duplicate inflation.
   if (ship && date) return `${ship}|${date}`;
-  const rawNights = String(row.numberOfNights ?? '').trim().toLowerCase();
+  const rawNights = String(row.numberOfNights ?? row.nights ?? '').trim().toLowerCase();
   const parsedNights = Number.parseInt(rawNights.replace(/[^0-9]/g, ''), 10);
   const nights = Number.isFinite(parsedNights) ? String(parsedNights) : rawNights.replace(/\s+/g, ' ');
   return `${ship}|${date}|${nights}`;
@@ -665,6 +671,19 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         : '';
 
     console.log('[RoyalCaribbeanSync] Page finished loading:', loadedUrl || '(unknown URL)');
+
+    // Critical: WebView page navigations wipe injected JS. Reinstall auth + network capture
+    // immediately on every Royal/Celebrity page load so the first offer/bookings payload is
+    // captured before Step 1 clicks View Sailings or Step 2 loads My Account.
+    try {
+      if (webViewRef.current && loadedUrl && (loadedUrl.includes('royalcaribbean.com') || loadedUrl.includes('celebritycruises.com'))) {
+        webViewRef.current.injectJavaScript(`${AUTH_DETECTION_SCRIPT}
+${NETWORK_MONITOR_SCRIPT}
+true;`);
+      }
+    } catch (error) {
+      console.warn('[RoyalCaribbeanSync] Failed to reinstall page-load capture scripts:', error);
+    }
 
     const pendingTarget = pendingNavigationTargetRef.current;
     if (!pageLoadResolver.current) {
@@ -1793,11 +1812,19 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     const installNetworkMonitor = async (reason: string) => {
       if (!webViewRef.current) return;
       try {
-        addLog(`🌐 Ensuring Royal network capture is active (${reason})`, 'info');
-        webViewRef.current.injectJavaScript(`${AUTH_DETECTION_SCRIPT}
+        addLog(`🌐 Ensuring Royal/Celebrity network capture is active (${reason})`, 'info');
+        // v886: force a fresh install into the current WebView document. Several failing builds
+        // had the old "networkMonitorInstalled" flag set while the fetch/XHR wrappers were not
+        // actually attached after Royal page transitions, causing 0 offers / 0 bookings.
+        webViewRef.current.injectJavaScript(`
+try {
+  window.networkMonitorInstalled = false;
+  window.__easySeasNetworkMonitorVersion = 'v886-reset';
+} catch (e) {}
+${AUTH_DETECTION_SCRIPT}
 ${NETWORK_MONITOR_SCRIPT}
 true;`);
-        await delay(1000);
+        await delay(1200);
       } catch (error) {
         addLog(`⚠️ Could not install network capture before ${reason}: ${String(error)}`, 'warning');
       }
@@ -2029,6 +2056,7 @@ true;`);
       }
 
       // Step 2: Passive capture loop - visit pages to trigger API calls
+      await installNetworkMonitor('before bookings/loyalty capture loop');
       setState(prev => ({ ...prev, status: 'running_step_2' }));
       addLog('🚀 ====== STEP 2: BOOKINGS & LOYALTY ======', 'info');
       addLog('📡 Visiting account pages to capture API data...', 'info');
@@ -2047,14 +2075,23 @@ true;`);
               { url: 'https://www.carnival.com/profilemanagement/profiles/offers', section: 'loyalty', name: 'My Offers' },
               { url: accountHomeUrl, section: 'loyalty', name: 'Account Home' },
             ]
-          : [
+          : isCelebrityMode
+          ? [
               { url: config.upcomingUrl, section: 'bookings', name: 'Upcoming Cruises' },
               { url: config.holdsUrl, section: 'bookings', name: 'Courtesy Holds' },
               { url: config.loyaltyPageUrl, section: 'loyalty', name: 'Loyalty Programs' },
               { url: accountHomeUrl, section: 'loyalty', name: 'Account Home' },
+            ]
+          : [
+              // Royal changed the account area. The current working entry point for both upcoming
+              // and past/current cruise payloads is /myaccount. The old /account/courtesy-holds
+              // and /account/loyalty-programs pages now commonly timeout and made Sync Now look
+              // like it was looping after Step 1.
+              { url: 'https://www.royalcaribbean.com/myaccount', section: 'bookings', name: 'My Account Cruises' },
+              { url: 'https://www.royalcaribbean.com/myaccount', section: 'loyalty', name: 'My Account Loyalty Probe' },
             ];
         
-        const MAX_CYCLES = 3;
+        const MAX_CYCLES = isCarnivalMode ? 3 : isCelebrityMode ? 2 : 1;
         
         for (let cycle = 0; cycle < MAX_CYCLES; cycle++) {
           const needBookings = !capturedSections.current.bookings;
@@ -2077,6 +2114,14 @@ true;`);
             
             addLog(`📍 Visiting ${page.name}...`, 'info');
             await navigateToPage(page.url, 18000);
+
+            // v8.9.8: Royal /myaccount can replace the document after the initial navigation.
+            // Reinstall the same capture hooks immediately after load/timeout before waiting for
+            // bookings or injecting the hydrated-page extractor. This prevents
+            // window.capturedPayloads: MISSING in Sync Now while leaving completed sync untouched.
+            if (!isCarnivalMode && !isCelebrityMode && page.url.includes('royalcaribbean.com/myaccount')) {
+              await installNetworkMonitor(`${page.name} after navigation`);
+            }
             
             if (isCarnivalMode) {
               await delay(3000);
@@ -2101,221 +2146,29 @@ true;`);
               if (capturedSections.current[page.section]) {
                 addLog(`✅ ${page.name} data captured after wait!`, 'success');
               }
+
+              // v890: Royal /myaccount now often hydrates bookings in page state without emitting
+              // the legacy /profileBookings/enriched URL. Use the same additive, hydrated-page
+              // strategy that made Sync Completed Cruises reliable: after /myaccount has had time
+              // to load, inject the dedicated upcoming-cruise extractor against the current page
+              // instead of waiting forever for an old endpoint name.
+              if (!isCarnivalMode && !isCelebrityMode && page.section === 'bookings' && !capturedSections.current.bookings && webViewRef.current) {
+                addLog('🧭 Injecting Royal My Account upcoming-cruise extractor on hydrated page...', 'info');
+                webViewRef.current.injectJavaScript(injectUpcomingCruisesExtraction() + '; true;');
+                try {
+                  await waitForStepComplete(2, 45000);
+                } catch (upcomingExtractError) {
+                  addLog(`⚠️ Royal upcoming extractor timed out; preserving existing booked/upcoming cruises: ${String(upcomingExtractError)}`, 'warning');
+                }
+              }
             }
           }
         }
 
-        // Sync engine v8.7.0:
-        // Royal's Loyalty Programs page does NOT auto-fire the /guestAccounts/loyalty/history
-        // endpoint on initial page load — the user has to click "Cruise History" / "Past Cruises"
-        // for it to be triggered. Previously Sync Now just navigated + waited which silently
-        // missed the entire past-cruise payload. Restore the pre-button behavior by actively
-        // injecting the same click helper + direct API fetch that the dedicated completed-cruise
-        // button uses so Sync Now consistently captures all past cruises in one pass.
-        if (!isCarnivalMode && !isCelebrityMode && cruiseLine === 'royal_caribbean') {
-          addLog('📍 Probing Loyalty Programs page for Royal past-cruise history payload (v8.7.0)...', 'info');
-          await navigateToPage(config.loyaltyPageUrl, 22000);
-          await delay(3000);
-
-          if (webViewRef.current) {
-            webViewRef.current.injectJavaScript(`
-              (function() {
-                function post(msg){ try { window.ReactNativeWebView.postMessage(JSON.stringify(msg)); } catch(e) {} }
-                function log(message, type){ post({ type:'log', message: message, logType: type || 'info' }); }
-                function textOf(el){ return String((el && (el.innerText || el.textContent || el.getAttribute('aria-label') || el.getAttribute('title'))) || '').replace(/\\s+/g,' ').trim().toLowerCase(); }
-                function hrefOf(el){ try { return String(el && (el.href || el.getAttribute('href') || '') || '').toLowerCase(); } catch(e) { return ''; } }
-                function clickLikeUser(el) {
-                  if (!el) return false;
-                  try { el.scrollIntoView({ block: 'center', inline: 'center' }); } catch(e) {}
-                  try { ['pointerdown','mousedown','mouseup','click'].forEach(function(t){ el.dispatchEvent(new MouseEvent(t,{bubbles:true,cancelable:true,view:window})); }); } catch(e) {}
-                  try { if (typeof el.click === 'function') el.click(); } catch(e) {}
-                  return true;
-                }
-                function findHistoryLink() {
-                  var nodes = Array.prototype.slice.call(document.querySelectorAll('a,button,[role="button"],[role="tab"],div,span'));
-                  var strong = nodes.find(function(el) {
-                    var t = textOf(el); var h = hrefOf(el);
-                    return /cruise\\s*history|sailing\\s*history|past\\s*cruises|past\\s*sailings|completed\\s*cruises|completed\\s*sailings/.test(t + ' ' + h);
-                  });
-                  if (strong) return strong;
-                  return nodes.find(function(el) {
-                    var t = textOf(el); var h = hrefOf(el);
-                    return ((/history|past|completed/.test(t + ' ' + h)) && (/cruise|sailing|voyage|trip/.test(t + ' ' + h)));
-                  });
-                }
-                try {
-                  var link = findHistoryLink();
-                  if (link) {
-                    log('✅ Clicking Royal cruise history link from Loyalty Programs page', 'success');
-                    clickLikeUser(link);
-                    setTimeout(function(){
-                      var more = findHistoryLink();
-                      if (more && more !== link) { log('✅ Clicking nested past cruises link', 'success'); clickLikeUser(more); }
-                    }, 2500);
-                  } else {
-                    log('ℹ️ Cruise history link not found on loyalty page; falling back to direct API fetch', 'info');
-                  }
-                } catch(e) { log('⚠️ Loyalty history click helper failed: ' + (e && e.message ? e.message : String(e)), 'warning'); }
-                true;
-              })();
-            `);
-            await delay(7000);
-          }
-
-          // Direct API fetch fallback. If clicking the link didn't trigger the
-          // loyalty/history endpoint (link missing, page didn't render the tab, etc.)
-          // we hit the API directly using captured auth headers + accountId/loyaltyNumber
-          // we already learned from the regular loyalty payload.
-          if (!cachedRoyalLoyaltyHistoryPayloadRef.current && webViewRef.current) {
-            const safeAlnum = (raw: unknown) => String(raw ?? '').replace(/[^0-9A-Za-z_-]/g, '');
-            const safeNumeric = (raw: unknown) => String(raw ?? '').replace(/[^0-9A-Za-z]/g, '');
-            const injectedAccountId = safeAlnum(
-              (extendedLoyaltyData as any)?.accountId ||
-              (extendedLoyaltyData as any)?.guestAccountId ||
-              (currentUser as any)?.accountId ||
-              (currentUser as any)?.guestAccountId ||
-              ''
-            );
-            const injectedLoyaltyNumber = safeNumeric(
-              (extendedLoyaltyData as any)?.crownAndAnchorId ||
-              (extendedLoyaltyData as any)?.crownAnchorNumber ||
-              (extendedLoyaltyData as any)?.crownAndAnchorNumber ||
-              (extendedLoyaltyData as any)?.loyaltyNumber ||
-              (currentUser as any)?.crownAnchorNumber ||
-              (currentUser as any)?.crownAndAnchorNumber ||
-              ''
-            );
-
-            webViewRef.current.injectJavaScript(`
-              (function() {
-                function post(msg){ try { window.ReactNativeWebView.postMessage(JSON.stringify(msg)); } catch(e) {} }
-                function log(message, type){ post({ type:'log', message: message, logType: type || 'info' }); }
-                function firstString() {
-                  for (var i=0;i<arguments.length;i++) {
-                    var v = arguments[i];
-                    if (v === null || v === undefined) continue;
-                    if (typeof v === 'number' && isFinite(v)) return String(v);
-                    if (typeof v === 'string' && v.trim()) return v.trim();
-                  }
-                  return '';
-                }
-                function deepFind(obj, keys, depth) {
-                  if (!obj || depth > 6) return '';
-                  if (typeof obj !== 'object') return '';
-                  for (var i=0;i<keys.length;i++) {
-                    var k = keys[i];
-                    if (obj[k] !== undefined && obj[k] !== null && String(obj[k]).trim()) return String(obj[k]).trim();
-                  }
-                  if (Array.isArray(obj)) {
-                    for (var a=0;a<obj.length;a++) { var av = deepFind(obj[a], keys, depth+1); if (av) return av; }
-                  } else {
-                    var names = Object.keys(obj);
-                    for (var n=0;n<names.length;n++) { var ov = deepFind(obj[names[n]], keys, depth+1); if (ov) return ov; }
-                  }
-                  return '';
-                }
-                async function fetchHistory() {
-                  try {
-                    var captured = window.capturedPayloads || {};
-                    var loyalty = captured.loyalty || captured.loyaltyData || captured.extendedLoyalty || {};
-                    var payload = loyalty.payload || loyalty.data || loyalty;
-                    var allPayloads = [payload, loyalty, captured, window.capturedRequestHeaders || {}];
-                    var accountId = '';
-                    var loyaltyNumber = '';
-                    for (var pi=0; pi<allPayloads.length && !accountId; pi++) {
-                      accountId = firstString(allPayloads[pi].accountId, allPayloads[pi].guestAccountId, allPayloads[pi].accountID) || deepFind(allPayloads[pi], ['accountId','guestAccountId','accountID'], 0);
-                    }
-                    for (var li=0; li<allPayloads.length && !loyaltyNumber; li++) {
-                      loyaltyNumber = firstString(
-                        allPayloads[li].loyaltyNumber,
-                        allPayloads[li].crownAndAnchorNumber,
-                        allPayloads[li].crownAnchorNumber,
-                        allPayloads[li].crownAndAnchorId,
-                        allPayloads[li].loyaltyId
-                      ) || deepFind(allPayloads[li], ['loyaltyNumber','crownAndAnchorNumber','crownAnchorNumber','crownAndAnchorId','loyaltyId'], 0);
-                    }
-                    if (!accountId) {
-                      var injectedAccountId = '${injectedAccountId}';
-                      if (injectedAccountId) accountId = injectedAccountId;
-                    }
-                    if (!loyaltyNumber) {
-                      var injectedLoyaltyNumber = '${injectedLoyaltyNumber}';
-                      if (injectedLoyaltyNumber) loyaltyNumber = injectedLoyaltyNumber;
-                    }
-                    if (!accountId || !loyaltyNumber) {
-                      log('ℹ️ Sync Now loyalty-history direct fetch skipped: accountId=' + (accountId || 'missing') + ', loyaltyNumber=' + (loyaltyNumber ? 'present' : 'missing'), 'info');
-                      return;
-                    }
-                    var urls = [
-                      'https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/loyalty/history/' + encodeURIComponent(accountId) + '?loyaltyNumber=' + encodeURIComponent(loyaltyNumber),
-                      'https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/loyalty/history?accountId=' + encodeURIComponent(accountId) + '&loyaltyNumber=' + encodeURIComponent(loyaltyNumber),
-                      'https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/' + encodeURIComponent(accountId) + '/loyalty/history?loyaltyNumber=' + encodeURIComponent(loyaltyNumber)
-                    ];
-                    function safeJsonParseLocal(str) { try { return JSON.parse(str); } catch(e) { return null; } }
-                    function tryFindAppKeyLocal() {
-                      try {
-                        var keys = Object.keys(localStorage || {});
-                        for (var ki=0; ki<keys.length; ki++) {
-                          var k = keys[ki];
-                          if (/appkey/i.test(k) || /api[-_]?key/i.test(k)) {
-                            var v = localStorage.getItem(k);
-                            if (v && v.length > 10) return v;
-                          }
-                        }
-                      } catch(e) {}
-                      return '';
-                    }
-                    function getAuthHeadersFromSessionLocal(accountIdParam) {
-                      try {
-                        var sessionRaw = localStorage.getItem('persist:session');
-                        var session = sessionRaw ? safeJsonParseLocal(sessionRaw) : null;
-                        var token = session && session.token ? safeJsonParseLocal(session.token) : null;
-                        var rawAuth = token && token.toString ? token.toString() : '';
-                        var authorization = rawAuth ? (rawAuth.indexOf('Bearer ') === 0 ? rawAuth : ('Bearer ' + rawAuth)) : '';
-                        var headers = { 'accept': 'application/json', 'accept-language': 'en-US,en;q=0.9', 'content-type': 'application/json' };
-                        if (accountIdParam) headers['account-id'] = accountIdParam;
-                        if (authorization) headers['authorization'] = authorization;
-                        var appKey = tryFindAppKeyLocal();
-                        if (appKey) { headers['appkey'] = appKey; headers['x-api-key'] = appKey; }
-                        return headers;
-                      } catch(e) { return null; }
-                    }
-                    var headers = getAuthHeadersFromSessionLocal(accountId) || { 'accept': 'application/json' };
-                    if ((window.capturedRequestHeaders||{}).apiKey) headers['x-api-key'] = window.capturedRequestHeaders.apiKey;
-                    if ((window.capturedRequestHeaders||{}).authorization) headers['authorization'] = window.capturedRequestHeaders.authorization;
-                    if ((window.capturedRequestHeaders||{}).accountId) headers['account-id'] = window.capturedRequestHeaders.accountId;
-                    log('📡 Sync Now: fetching Royal loyalty history directly with captured headers', 'info');
-                    for (var ui=0; ui<urls.length; ui++) {
-                      var url = urls[ui];
-                      try {
-                        var resp = await fetch(url, { method: 'GET', credentials: 'include', headers: headers });
-                        log('📡 Loyalty-history attempt ' + (ui + 1) + ' status: ' + resp.status, resp.ok ? 'success' : 'warning');
-                        if (!resp.ok) continue;
-                        var data = await resp.json();
-                        post({ type:'network_capture', endpoint:'royalLoyaltyHistory', data:data, url:url });
-                        return;
-                      } catch(fetchErr) {
-                        log('⚠️ Loyalty-history attempt ' + (ui + 1) + ' failed: ' + (fetchErr && fetchErr.message ? fetchErr.message : String(fetchErr)), 'warning');
-                      }
-                    }
-                  } catch(e) {
-                    log('⚠️ Loyalty-history direct fetch helper failed: ' + (e && e.message ? e.message : String(e)), 'warning');
-                  }
-                }
-                setTimeout(fetchHistory, 1500);
-                true;
-              })();
-            `);
-            await delay(8000);
-          }
-
-          if (cachedRoyalLoyaltyHistoryPayloadRef.current) {
-            const historyCount = getRoyalLoyaltyHistorySailings(cachedRoyalLoyaltyHistoryPayloadRef.current).length;
-            addLog(`✅ Royal loyalty-history probe captured ${historyCount} completed sailing(s)`, historyCount > 0 ? 'success' : 'info');
-          } else {
-            addLog('⚠️ Royal loyalty-history probe did not expose the completed-cruise payload on this pass', 'warning');
-          }
-        }
+        // Sync Now intentionally does not run the long Royal completed-history probe here.
+        // Completed cruises are handled by the separate Sync Completed Cruises button, which is
+        // currently working and is left unchanged. This prevents the normal Sync Now button from
+        // getting stuck in the old loyalty/courtesy page loop after offer/upcoming capture.
       } catch (step2Error) {
         addLog(`Step 2 error: ${String(step2Error)} - continuing with collected data`, 'warning');
       }
@@ -2345,6 +2198,8 @@ true;`);
         if (!capturedSections.current.loyalty) {
           addLog('⚠️ No Carnival loyalty data captured - VIFP info may not be available', 'warning');
         }
+      } else if (cruiseLine === 'royal_caribbean') {
+        addLog('ℹ️ Royal loyalty direct fallback skipped during Sync Now; old loyalty pages time out and completed-history sync is handled by the separate working button', 'info');
       } else {
       addLog('🚀 ====== STEP 3: LOYALTY DIRECT FETCH ======', 'info');
       addLog('📡 Attempting direct loyalty API call as fallback...', 'info');
@@ -2946,7 +2801,7 @@ true;`);
       }
 
       addLog('Applying sync...', 'info');
-      const { offers: rawOffers, cruises: rawCruises, bookedCruises: finalBookedCruises } = applySyncPreview(
+      const { offers: rawOffers, cruises: rawCruises, bookedCruises: appliedBookedCruises } = applySyncPreview(
         preview,
         coreDataContext.casinoOffers,
         coreDataContext.cruises,
@@ -2958,6 +2813,23 @@ true;`);
           allowBookedCruiseRemoval,
         }
       );
+
+      // v886 safety: clean already-stored duplicate completed history during every sync.
+      // A previous failing build could store the same 54 cruises twice in different date formats;
+      // this collapses those before persisting so completed history returns to the true count.
+      const finalBookedCruises: BookedCruiseRow[] = [];
+      const seenCompletedHistoryKeys = new Set<string>();
+      appliedBookedCruises.forEach((cruise: BookedCruiseRow) => {
+        if (isCompletedBookedCruiseRow(cruise)) {
+          const key = completedCruiseIdentityKey(cruise);
+          if (key.replace(/\|/g, '').trim() && seenCompletedHistoryKeys.has(key)) return;
+          if (key.replace(/\|/g, '').trim()) seenCompletedHistoryKeys.add(key);
+        }
+        finalBookedCruises.push(cruise);
+      });
+      if (finalBookedCruises.length < appliedBookedCruises.length) {
+        addLog(`ℹ️ Cleaned duplicate completed-history rows ${appliedBookedCruises.length} → ${finalBookedCruises.length}`, 'info');
+      }
 
       console.log('[RoyalCaribbeanSync] Running data healing pass...');
       const { cruises: finalCruises, offers: finalOffers, report: healingReport } = healImportedData(rawCruises, rawOffers);
@@ -3022,17 +2894,21 @@ true;`);
       }
 
       console.log('[RoyalCaribbeanSync] Step: Persisting booked cruises...');
-      addLog(`Setting ${finalActiveBookedCruises.length} active booked cruise(s) and ${finalCompletedBookedCruises.length} completed cruise(s) in app (${finalBookedCruises.length} total including history)`, 'info');
-      try {
-        console.log('[RoyalCaribbeanSync] Calling setBookedCruises()...');
-        await coreDataContext.setBookedCruises(finalBookedCruises);
-        console.log('[RoyalCaribbeanSync] setBookedCruises() completed');
-        addLog('✅ Booked cruises persisted to storage', 'success');
-      } catch (bookedError) {
-        const bookedErrorMessage = bookedError instanceof Error ? bookedError.message : String(bookedError);
-        console.error('[RoyalCaribbeanSync] Error persisting booked cruises:', bookedError);
-        persistenceFailures.push(`booked cruises (${bookedErrorMessage})`);
-        addLog(`⚠️ Warning: Failed to persist booked cruises: ${bookedErrorMessage}`, 'warning');
+      if (normalizedBookedCruises.length === 0 && coreDataContext.bookedCruises.length > 0) {
+        addLog('ℹ️ Existing booked/completed cruises preserved; this sync did not capture authoritative booking rows', 'info');
+      } else {
+        addLog(`Setting ${finalActiveBookedCruises.length} active booked cruise(s) and ${finalCompletedBookedCruises.length} completed cruise(s) in app (${finalBookedCruises.length} total including history)`, 'info');
+        try {
+          console.log('[RoyalCaribbeanSync] Calling setBookedCruises()...');
+          await coreDataContext.setBookedCruises(finalBookedCruises);
+          console.log('[RoyalCaribbeanSync] setBookedCruises() completed');
+          addLog('✅ Booked cruises persisted to storage', 'success');
+        } catch (bookedError) {
+          const bookedErrorMessage = bookedError instanceof Error ? bookedError.message : String(bookedError);
+          console.error('[RoyalCaribbeanSync] Error persisting booked cruises:', bookedError);
+          persistenceFailures.push(`booked cruises (${bookedErrorMessage})`);
+          addLog(`⚠️ Warning: Failed to persist booked cruises: ${bookedErrorMessage}`, 'warning');
+        }
       }
 
       if (persistenceFailures.length > 0) {
@@ -3414,11 +3290,19 @@ true;`);
     const installNetworkMonitor = async (reason: string) => {
       if (!webViewRef.current) return;
       try {
-        addLog(`🌐 Ensuring Royal network capture is active (${reason})`, 'info');
-        webViewRef.current.injectJavaScript(`${AUTH_DETECTION_SCRIPT}
+        addLog(`🌐 Ensuring Royal/Celebrity network capture is active (${reason})`, 'info');
+        // v886: force a fresh install into the current WebView document. Several failing builds
+        // had the old "networkMonitorInstalled" flag set while the fetch/XHR wrappers were not
+        // actually attached after Royal page transitions, causing 0 offers / 0 bookings.
+        webViewRef.current.injectJavaScript(`
+try {
+  window.networkMonitorInstalled = false;
+  window.__easySeasNetworkMonitorVersion = 'v886-reset';
+} catch (e) {}
+${AUTH_DETECTION_SCRIPT}
 ${NETWORK_MONITOR_SCRIPT}
 true;`);
-        await delay(1000);
+        await delay(1200);
       } catch (error) {
         addLog(`⚠️ Could not install network capture before ${reason}: ${String(error)}`, 'warning');
       }
@@ -3496,6 +3380,27 @@ true;`);
       }
     };
 
+    const waitForRoyalCompletedHistory = async (label: string, maxMs: number = 45000): Promise<boolean> => {
+      const started = Date.now();
+      let lastCount = 0;
+      while (Date.now() - started < maxMs) {
+        if (cachedRoyalLoyaltyHistoryPayloadRef.current) {
+          const count = getRoyalLoyaltyHistorySailings(cachedRoyalLoyaltyHistoryPayloadRef.current).length;
+          lastCount = count;
+          // The Royal page can briefly expose 0/6 placeholder rows before the full history arrives.
+          // Keep polling until the real completed history hydrates instead of accepting an early partial result.
+          if (count >= 20 || Date.now() - started > 30000) {
+            addLog(`✅ ${label}: loyalty-history payload available with ${count} sailing row(s)`, count > 0 ? 'success' : 'warning');
+            return count > 0;
+          }
+          addLog(`⏳ ${label}: only ${count} completed sailing row(s) so far; waiting for Royal history hydration...`, 'info');
+        }
+        await delay(3000);
+      }
+      addLog(`⚠️ ${label}: loyalty-history hydration wait ended after ${Math.round(maxMs / 1000)}s with ${lastCount} row(s)`, 'warning');
+      return lastCount > 0;
+    };
+
     try {
       addLog('🚢 ====== COMPLETED CRUISES SYNC ======', 'info');
       // Start from only already-known completed rows from the current extraction.
@@ -3560,7 +3465,7 @@ true;`);
           true;
         })();
       `);
-      await delay(9000);
+      await waitForRoyalCompletedHistory('Loyalty page history probe', 45000);
       if (cachedRoyalLoyaltyHistoryPayloadRef.current) {
         addLog('📦 Loyalty page produced a loyalty-history payload; parsing it now...', 'success');
         if (finishCompletedCruisesFromPayload(cachedRoyalLoyaltyHistoryPayloadRef.current, 'live Royal loyalty-history payload')) {
@@ -3593,7 +3498,7 @@ true;`);
             });
           }
           try {
-            log('🔎 Completed cruise sync v8.7.0: opening View All, then explicitly switching to Past Sailings before extraction...', 'info');
+            log('🔎 Completed cruise sync v8.6.3: opening View All, then explicitly switching to Past Sailings before extraction...', 'info');
             function findByText(re) { return findButton(re); }
             function allClickable() { return Array.prototype.slice.call(document.querySelectorAll('button,a,[role="button"],[role="tab"],li,div,span')).filter(function(el) {
               var text = (el.innerText || el.textContent || el.getAttribute('aria-label') || '').replace(/\s+/g,' ').trim().toLowerCase();
@@ -3786,7 +3691,7 @@ true;`);
       `);
 
       addLog('⏳ Waiting for completed/past bookings API payload and visible page rows...', 'info');
-      await delay(22000);
+      await waitForRoyalCompletedHistory('My Account completed-history probe', 45000);
       if (cachedRoyalLoyaltyHistoryPayloadRef.current) {
         addLog('📦 Loyalty-history payload appeared during completed sync; parsing before DOM fallback...', 'success');
         if (finishCompletedCruisesFromPayload(cachedRoyalLoyaltyHistoryPayloadRef.current, 'completed-sync captured Royal loyalty-history payload')) {

@@ -1,15 +1,18 @@
 export const NETWORK_MONITOR_SCRIPT = `
 (function() {
+  // Always create these first. v8.9.8 logs showed window.networkMonitorInstalled could be true
+  // while window.capturedPayloads was missing after Royal document transitions, causing Step 2
+  // to fail before it could even inspect captured bookings.
+  window.capturedPayloads = window.capturedPayloads || {};
+  window.capturedRequestHeaders = window.capturedRequestHeaders || {};
+  window.capturedOfferPayloads = window.capturedOfferPayloads || [];
   if (window.networkMonitorInstalled) {
-    console.log('[NetworkMonitor] Already installed, skipping');
+    console.log('[NetworkMonitor] Already installed; payload containers verified');
     return;
   }
   window.networkMonitorInstalled = true;
   
   console.log('[NetworkMonitor] Installing comprehensive network monitor');
-  
-  window.capturedPayloads = window.capturedPayloads || {};
-  window.capturedRequestHeaders = window.capturedRequestHeaders || {};
   
   function log(message, type = 'info') {
     try {
