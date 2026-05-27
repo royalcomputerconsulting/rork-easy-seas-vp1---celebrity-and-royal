@@ -25,6 +25,9 @@ export interface SeaPassOverlayMask {
   radius: number;
   sampleX?: number;
   sampleY?: number;
+  sampleWidth?: number;
+  sampleHeight?: number;
+  stretchSample?: boolean;
 }
 
 export interface SeaPassDynamicOverlay {
@@ -78,6 +81,8 @@ export const SEA_PASS_LEGAL_LINES = [
 
 export const SEA_PASS_PREVIEW_BACKGROUND = '#EFF3F8';
 export const SEA_PASS_EXPORT_BACKGROUND = '#FFFFFF';
+// Fallback only. Editable SeaPass fields should prefer source-image sampled masks so
+// the erase area matches the approved shell artwork exactly.
 export const SEA_PASS_FIELD_NEUTRAL_BACKGROUND = '#F4F4F5';
 export const SEA_PASS_FONT_STACK = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 export const SEA_PASS_APPROVED_SCREENSHOT_SOURCE_URL = 'https://r2-pub.rork.com/attachments/vvcelze4prvyhmkje7pah.png';
@@ -263,10 +268,11 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
   },
   port: {
     // Port is an editable value just like deck/stateroom/reservation.
-    // Do NOT sample/shift the background image here: the approved shell contains a baked-in
-    // port value, and sampling the shell can copy that old text back into the legal paragraph.
-    // A local mask using the exact same SeaPass field background tone (#F4F4F5) cleanly erases only the old port VALUE line, then redraws the
-    // current form value in the same visual slot under the baked-in PORT label.
+    // The approved shell contains a baked-in port value, so we cannot sample from the
+    // old port text itself. Instead, this mask samples a clean blank patch from the same
+    // white SeaPass card panel to the right of the port line and stretches that exact
+    // artwork/background over the old value. This avoids a guessed white/off-white
+    // rectangle while also preventing old baked-in text from bleeding into the legal copy.
     x: 94,
     y: 905,
     fill: '#30333A',
@@ -280,6 +286,11 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
       height: 90,
       fill: SEA_PASS_FIELD_NEUTRAL_BACKGROUND,
       radius: 3,
+      sampleX: 560,
+      sampleY: 848,
+      sampleWidth: 300,
+      sampleHeight: 90,
+      stretchSample: true,
     },
   },
   barcodeCaption: {
@@ -421,7 +432,14 @@ function buildSeaPassOverlaySvgMarkup(
         defs.push(
           `<clipPath id="${clipPathId}"><rect x="${mask.x}" y="${mask.y}" width="${mask.width}" height="${mask.height}" rx="${mask.radius}" ry="${mask.radius}" /></clipPath>`,
         );
-        eraseMarkup = `<g clip-path="url(#${clipPathId})"><image href="${safeImageHref}" x="${mask.x - sampleX}" y="${mask.y - sampleY}" width="${SEA_PASS_VIEWBOX.width}" height="${SEA_PASS_VIEWBOX.height}" preserveAspectRatio="none" /></g>`;
+
+        if (mask.stretchSample) {
+          const sampleWidth = mask.sampleWidth ?? mask.width;
+          const sampleHeight = mask.sampleHeight ?? mask.height;
+          eraseMarkup = `<g clip-path="url(#${clipPathId})"><svg x="${mask.x}" y="${mask.y}" width="${mask.width}" height="${mask.height}" viewBox="${sampleX} ${sampleY} ${sampleWidth} ${sampleHeight}" preserveAspectRatio="none"><image href="${safeImageHref}" x="0" y="0" width="${SEA_PASS_VIEWBOX.width}" height="${SEA_PASS_VIEWBOX.height}" preserveAspectRatio="none" /></svg></g>`;
+        } else {
+          eraseMarkup = `<g clip-path="url(#${clipPathId})"><image href="${safeImageHref}" x="${mask.x - sampleX}" y="${mask.y - sampleY}" width="${SEA_PASS_VIEWBOX.width}" height="${SEA_PASS_VIEWBOX.height}" preserveAspectRatio="none" /></g>`;
+        }
       }
 
       return `${eraseMarkup}<text x="${overlay.x}" y="${overlay.y}"${textAnchor}${letterSpacing} font-family="${SEA_PASS_FONT_STACK}" font-size="${overlay.fontSize}" font-weight="${overlay.fontWeight}" fill="${overlay.fill}">${value}</text>`;

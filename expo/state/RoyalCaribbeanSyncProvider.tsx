@@ -37,10 +37,10 @@ export const CRUISE_LINE_CONFIG = {
     name: 'Royal Caribbean',
     loginUrl: 'https://www.royalcaribbean.com/club-royale',
     offersUrl: 'https://www.royalcaribbean.com/club-royale/offers',
-    upcomingUrl: 'https://www.royalcaribbean.com/account/upcoming-cruises',
+    upcomingUrl: 'https://www.royalcaribbean.com/myaccount',
     holdsUrl: 'https://www.royalcaribbean.com/account/courtesy-holds',
     loyaltyClubName: 'Club Royale',
-    loyaltyPageUrl: 'https://www.royalcaribbean.com/account/loyalty-programs',
+    loyaltyPageUrl: 'https://www.royalcaribbean.com/myaccount/loyalty-programs',
   },
   celebrity: {
     name: 'Celebrity Cruises',

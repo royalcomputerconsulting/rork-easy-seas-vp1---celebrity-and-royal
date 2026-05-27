@@ -149,7 +149,7 @@ export const NETWORK_MONITOR_SCRIPT = `
       const clonedResponse = response.clone();
       
       try {
-        if (url.includes('/casino-offers') || url.includes('/api/casino/casino-offers') || url.includes('/api/casino/v2/offers/merged')) {
+        if (url.includes('/casino-offers') || url.includes('/api/casino/casino-offers') || url.includes('/api/casino/v2/offers/merged') || url.includes('/api/casino/v2/offers/facets')) {
           log('📦 Captured Casino Offers API payload', 'info');
           const data = await clonedResponse.json();
           const offers = data?.payload?.casinoOffers || data?.payload?.offers || data?.casinoOffers || data?.offers || [];
@@ -171,7 +171,7 @@ export const NETWORK_MONITOR_SCRIPT = `
           }));
         }
         
-        else if (url.includes('/profileBookings/enriched') || url.includes('/upcomingCruises') || url.includes('/profilemanagement/profiles/cruises') || url.includes('/api/profile/bookings') || url.includes('/api/booking/cruises') || url.includes('/pastCruises') || url.includes('/completedCruises') || url.includes('/upcomingCruises') || url.includes('/profilemanagement/profiles/cruises') || url.includes('/api/profile/bookings') || url.includes('/api/booking/cruises') || url.includes('/pastCruises') || url.includes('/completedCruises')) {
+        else if (url.includes('/profileBookings/enriched') || url.includes('/profileBookings/searchAddGetProfileBookings') || url.includes('/upcomingCruises') || url.includes('/profilemanagement/profiles/cruises') || url.includes('/api/profile/bookings') || url.includes('/api/booking/cruises') || url.includes('/pastCruises') || url.includes('/completedCruises') || url.includes('/upcomingCruises') || url.includes('/profilemanagement/profiles/cruises') || url.includes('/api/profile/bookings') || url.includes('/api/booking/cruises') || url.includes('/pastCruises') || url.includes('/completedCruises')) {
           const data = await clonedResponse.json();
           const bookings = data?.payload?.profileBookings || [];
           window.capturedPayloads.upcomingCruises = data;
@@ -369,7 +369,7 @@ export const NETWORK_MONITOR_SCRIPT = `
         const url = this.responseURL || _url || '';
         
         try {
-          if (url.includes('/casino-offers') || url.includes('/api/casino/casino-offers') || url.includes('/api/casino/v2/offers/merged')) {
+          if (url.includes('/casino-offers') || url.includes('/api/casino/casino-offers') || url.includes('/api/casino/v2/offers/merged') || url.includes('/api/casino/v2/offers/facets')) {
             const data = JSON.parse(this.responseText);
             const offers = data?.payload?.casinoOffers || data?.payload?.offers || data?.casinoOffers || data?.offers || [];
             window.capturedPayloads.offers = data;
@@ -385,7 +385,7 @@ export const NETWORK_MONITOR_SCRIPT = `
             }));
             log(\`📦 [XHR] Captured Casino Offers API payload with \${Array.isArray(offers) ? offers.length : 0} offers from \${url}\`, 'success');
           }
-          else if (url.includes('/profileBookings/enriched') || url.includes('/upcomingCruises') || url.includes('/profilemanagement/profiles/cruises') || url.includes('/api/profile/bookings') || url.includes('/api/booking/cruises') || url.includes('/pastCruises') || url.includes('/completedCruises')) {
+          else if (url.includes('/profileBookings/enriched') || url.includes('/profileBookings/searchAddGetProfileBookings') || url.includes('/upcomingCruises') || url.includes('/profilemanagement/profiles/cruises') || url.includes('/api/profile/bookings') || url.includes('/api/booking/cruises') || url.includes('/pastCruises') || url.includes('/completedCruises')) {
             const data = JSON.parse(this.responseText);
             const bookings = data?.payload?.profileBookings || [];
             window.capturedPayloads.upcomingCruises = data;
