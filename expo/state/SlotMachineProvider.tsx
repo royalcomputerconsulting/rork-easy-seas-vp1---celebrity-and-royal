@@ -92,12 +92,18 @@ export const [SlotMachineProvider, useSlotMachines] = createContextHook((): Slot
         const parsed = JSON.parse(userMachinesData);
         setUserMachines(parsed);
         console.log('[SlotMachine] Loaded', parsed.length, 'user machines');
+      } else {
+        setUserMachines([]);
+        console.log('[SlotMachine] No scoped user machines found, using empty state');
       }
       
       if (deckLocationsData) {
         const parsed = JSON.parse(deckLocationsData);
         setDeckLocations(parsed);
         console.log('[SlotMachine] Loaded', parsed.length, 'deck locations');
+      } else {
+        setDeckLocations([]);
+        console.log('[SlotMachine] No scoped deck locations found, using empty state');
       }
       
       console.log('[SlotMachine] Total machines available:', globalData.length + (userMachinesData ? JSON.parse(userMachinesData).length : 0));

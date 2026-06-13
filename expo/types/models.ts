@@ -1,3 +1,67 @@
+export type TravelBrand = 'royal' | 'celebrity' | 'carnival' | 'silversea' | 'unknown';
+export type AgentXMode = 'travelAgent' | 'casinoHost' | 'certificateAdvisor' | 'loyaltyStrategist' | 'apScout' | 'calendarPlanner' | 'importAuditor' | 'easySeasGuide';
+export type MachineLogDecision = 'played' | 'passed' | 'watched';
+export type CasinoProgram = 'clubRoyale' | 'blueChip' | 'playersClub' | 'venetianSociety' | 'none' | 'unknown';
+export type ImportReviewStatus = 'assigned' | 'unassigned' | 'reviewNeeded' | 'matched' | 'overlap' | 'error';
+export type OfferArchiveStatus = 'active' | 'expiringSoon' | 'expired' | 'archived' | 'reviewNeeded' | 'replaced';
+export type DataRecordStatus = 'active' | 'available' | 'booked' | 'completed' | 'cancelled' | 'Courtesy Hold' | 'expired' | 'used' | 'archived' | 'reviewNeeded' | 'replaced' | 'skipped';
+
+export interface TravelerProfile {
+  id: string;
+  displayName: string;
+  relationshipLabel?: string;
+  email?: string;
+  royalCaribbeanNumber?: string;
+  clubRoyaleId?: string;
+  celebrityCaptainsClubNumber?: string;
+  blueChipId?: string;
+  defaultProfile?: boolean;
+  active?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MachineConditionLog extends SharedOwnershipFields {
+  id: string;
+  shipName: string;
+  casinoLocation: string;
+  machineId?: string;
+  machineName: string;
+  seatBankPosition: string;
+  denomination: string;
+  betLevel: string;
+  majorAmount?: number;
+  grandAmount?: number;
+  visibleMachineState: string;
+  bonusMeterCondition: string;
+  timeObserved: string;
+  decision: MachineLogDecision;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SharedOwnershipFields {
+  ownerProfileId?: string;
+  sourceEmail?: string;
+  brand?: TravelBrand | string;
+  casinoProgram?: CasinoProgram;
+  importStatus?: ImportReviewStatus;
+  archiveStatus?: OfferArchiveStatus;
+  reconciliationStatus?: ImportReviewStatus;
+}
+
+export interface ImportReconciliationSummary {
+  addedRows: number;
+  updatedRows: number;
+  removedMissingRows: number;
+  suggestedArchiveRows: number;
+  changedOffers: number;
+  duplicateOverlappingSailings: number;
+  reviewNeededItems: number;
+  errors: string[];
+}
+
 export type CabinCategory = 
   | 'Interior GTY'
   | 'Interior'
@@ -31,7 +95,7 @@ export const CABIN_HIERARCHY: CabinCategory[] = [
   'Penthouse Suite',
 ];
 
-export interface Cruise {
+export interface Cruise extends SharedOwnershipFields {
   id: string;
   shipName: string;
   sailDate: string;
@@ -40,7 +104,7 @@ export interface Cruise {
   destination: string;
   nights: number;
   category?: string;
-  brand?: string;
+  brand?: TravelBrand | string;
   price?: number;
   pricePerNight?: number;
   cabinType?: CabinCategory | 'Interior' | 'Oceanview' | 'Balcony' | 'Suite' | string;
@@ -69,7 +133,7 @@ export interface Cruise {
   offerValue?: number;
   perks?: string[];
   percentOff?: number;
-  status?: 'available' | 'booked' | 'completed' | 'cancelled' | 'Courtesy Hold';
+  status?: 'available' | 'booked' | 'completed' | 'cancelled' | 'Courtesy Hold' | 'archived' | 'reviewNeeded';
   notes?: string;
   imageUrl?: string;
   itinerary?: ItineraryDay[];
@@ -90,6 +154,7 @@ export interface Cruise {
   seaDays?: number;
   portDays?: number;
   received?: string;
+  programCharter?: string;
   cruiseSource?: 'royal' | 'celebrity' | 'carnival';
   createdAt?: string;
   updatedAt?: string;
@@ -184,6 +249,10 @@ export interface BookedCruise extends Cruise {
   netEffectivePaid?: number;
   winningsBroughtHome?: number;
   casinoChargesRoomBilled?: number;
+  instantCertificateWon?: boolean;
+  instantCertificateOfferCode?: string;
+  instantCertificateValue?: number;
+  instantCertificateNotes?: string;
   coinIn?: number;
   houseEdge?: number;
   pointsEarned?: number;
@@ -209,7 +278,7 @@ export type OfferClassification =
   | 'comped'
   | 'partial';
 
-export interface CasinoOffer {
+export interface CasinoOffer extends SharedOwnershipFields {
   id: string;
   cruiseId?: string;
   cruiseIds?: string[];
@@ -267,7 +336,7 @@ export interface CasinoOffer {
   validFrom?: string;
   validUntil?: string;
   
-  status?: 'active' | 'expired' | 'used' | 'booked';
+  status?: 'active' | 'expired' | 'used' | 'booked' | 'archived' | 'reviewNeeded' | 'replaced' | 'skipped';
   has2025Badge?: boolean;
   
   termsConditions?: string;
@@ -285,7 +354,7 @@ export interface CasinoOffer {
   updatedAt?: string;
 }
 
-export interface CalendarEvent {
+export interface CalendarEvent extends SharedOwnershipFields {
   id: string;
   title: string;
   startDate: string;
@@ -304,7 +373,7 @@ export interface CalendarEvent {
   source?: 'manual' | 'tripit' | 'import';
 }
 
-export interface FinancialsRecord {
+export interface FinancialsRecord extends SharedOwnershipFields {
   id: string;
   sourceType: 'receipt' | 'statement';
   date: string;
@@ -386,9 +455,9 @@ export interface ClubRoyaleProfile {
 
 export const CLUB_ROYALE_TIERS: Record<ClubRoyaleTier, { threshold: number; color: string }> = {
   Choice: { threshold: 0, color: '#6B7280' },
-  Prime: { threshold: 2501, color: '#3B82F6' },
-  Signature: { threshold: 25001, color: '#8B5CF6' },
-  Masters: { threshold: 100001, color: '#F59E0B' },
+  Prime: { threshold: 2500, color: '#3B82F6' },
+  Signature: { threshold: 25000, color: '#8B5CF6' },
+  Masters: { threshold: 100000, color: '#F59E0B' },
 };
 
 export const CROWN_ANCHOR_LEVELS: Record<CrownAnchorLevel, { cruiseNights: number; color: string }> = {
@@ -496,7 +565,7 @@ export interface PortfolioMetrics {
   lowROICruises: number;
 }
 
-export interface Certificate {
+export interface Certificate extends SharedOwnershipFields {
   id: string;
   type: 'NextCruise' | 'FPP' | 'OBC' | 'Upgrade';
   value: number;
@@ -644,10 +713,9 @@ export function calculateTotalValue(
   taxesFees: number,
   freePlay: number = 0,
   obc: number = 0,
-  guestCount: number = 2
+  _guestCount: number = 2
 ): number {
-  const cabinValueForTwo = cabinPrice * guestCount;
-  return cabinValueForTwo + taxesFees + freePlay + obc;
+  return cabinPrice + taxesFees + freePlay + obc;
 }
 
 export function calculateROI(

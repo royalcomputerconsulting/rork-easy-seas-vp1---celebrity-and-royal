@@ -17,7 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Database, Search, X, Star, ChevronDown, ChevronUp, Plus, Download } from 'lucide-react-native';
-import { COLORS, SPACING, BORDER_RADIUS } from '@/constants/theme';
+import { COLORS, SPACING, BORDER_RADIUS, SHADOW } from '@/constants/theme';
 import { IMAGES } from '@/constants/images';
 import { useSlotMachineLibrary } from '@/state/SlotMachineLibraryProvider';
 import { useCasinoSessions, type CasinoSession } from '@/state/CasinoSessionProvider';
@@ -33,6 +33,7 @@ import { PlayingHoursCard } from '@/components/ui/PlayingHoursCard';
 import { CasinoOpenHoursCard, type CasinoOpenHoursData } from '@/components/ui/CasinoOpenHoursCard';
 import { CasinoSessionTracker } from '@/components/CasinoSessionTracker';
 import { AddSessionModal } from '@/components/AddSessionModal';
+import { MachineConditionLogsPanel } from '@/components/MachineConditionLogsPanel';
 import { useUser, DEFAULT_PLAYING_HOURS } from '@/state/UserProvider';
 import type { PlayingHours } from '@/state/UserProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
@@ -626,28 +627,14 @@ export default function AtlasScreen() {
   const listHeader = useMemo(() => {
     return (
       <>
-        <View style={styles.heroCard}>
-          <LinearGradient
-            colors={['#3AAFA9', '#2B7A78', '#17A398', '#1E8C82', '#3AAFA9']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={StyleSheet.absoluteFill}
+        <View style={styles.heroCard} testID="slots-brand-logo-card">
+          <Image
+            source={require('../../assets/images/easyseas-scott-astin-logo.jpeg')}
+            style={styles.heroLogoImage}
+            resizeMode="cover"
+            accessibilityLabel="Easy Seas Scott Astin nautical lifestyle brand logo"
+            testID="slots-brand-logo-image"
           />
-          <LinearGradient
-            colors={['rgba(255,255,255,0.18)', 'transparent', 'rgba(255,255,255,0.12)', 'transparent', 'rgba(255,255,255,0.08)']}
-            start={{ x: 0.2, y: 0 }}
-            end={{ x: 0.8, y: 1 }}
-            style={StyleSheet.absoluteFill}
-          />
-          <View style={styles.heroOverlay}>
-            <Text style={styles.heroTitle}>Easy Seas™</Text>
-            <Text style={styles.heroSubtitle}>Manage your Nautical Lifestyle™</Text>
-            <Image
-              source={{ uri: IMAGES.signature }}
-              style={styles.heroSignature}
-              resizeMode="contain"
-            />
-          </View>
         </View>
 
         <View style={styles.header}>
@@ -727,6 +714,8 @@ export default function AtlasScreen() {
             <Text style={styles.loadingText}>Building machine index...</Text>
           </View>
         )}
+
+        <MachineConditionLogsPanel defaultShipName={nextUpcomingCruise?.shipName} />
 
         <View style={styles.hoursCardsSection}>
           <PlayingHoursCard
@@ -1222,7 +1211,15 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 200,
+    height: 270,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: '#D4AF37',
+    ...SHADOW.card,
+  },
+  heroLogoImage: {
+    width: '100%',
+    height: '100%',
   },
   heroOverlay: {
     alignItems: 'center',

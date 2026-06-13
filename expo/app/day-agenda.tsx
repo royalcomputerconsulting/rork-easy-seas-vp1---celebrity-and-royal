@@ -1,3 +1,4 @@
+import { buildCruiseDetailsParams } from '@/lib/navigation/cruiseDetails';
 import React, { useMemo, useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
@@ -681,8 +682,8 @@ export default function DayAgendaScreen() {
     if (item.type === 'cruise' && 'sailDate' in item.data) {
       const cruiseData = item.data as MergedCruiseData;
       router.push({
-        pathname: '/(tabs)/(overview)/cruise-details' as any,
-        params: { id: cruiseData.id },
+        pathname: '/cruise-details' as any,
+        params: buildCruiseDetailsParams(cruiseData, { source: 'day-agenda' }),
       });
     }
   }, [router]);
@@ -949,6 +950,14 @@ export default function DayAgendaScreen() {
 
     return Array.from(cruiseMap.values());
   }, [fallbackCruisesForWeather, mergedCruiseBookings, upcomingCruisesForWeather]);
+
+  const weatherAlertCruises = useMemo(() => {
+    return mergedCruiseBookings.length > 0 ? mergedCruiseBookings : allWeatherCruises;
+  }, [allWeatherCruises, mergedCruiseBookings]);
+
+  const weatherAlertDaysAhead = useMemo(() => {
+    return mergedCruiseBookings.length > 0 ? 0 : upcomingCruisesForWeather.length > 0 ? 7 : 0;
+  }, [mergedCruiseBookings.length, upcomingCruisesForWeather.length]);
 
   useEffect(() => {
     if (!isWeatherHydrated || allWeatherCruises.length === 0) {
@@ -1272,7 +1281,7 @@ export default function DayAgendaScreen() {
       );
       const cruiseEvents: CalendarEvent[] = generateCruiseCalendarEvents(normalizedBookedCruises);
       const allEvents = [...existingEvents, ...cruiseEvents];
-      coreData.setCalendarEvents(allEvents);
+      await coreData.setCalendarEvents(allEvents);
       
       console.log('[DayAgenda] Synced generated cruise events', {
         generatedEvents: cruiseEvents.length,
@@ -1601,12 +1610,14 @@ export default function DayAgendaScreen() {
             {allWeatherCruises.length > 0 ? (
               <>
                 <MarineAlertsPanel
-                  cruises={allWeatherCruises}
+                  cruises={weatherAlertCruises}
                   startDate={selectedDate}
-                  daysAhead={upcomingCruisesForWeather.length > 0 ? 7 : 0}
+                  daysAhead={weatherAlertDaysAhead}
                   maxItems={3}
                   title="Rough seas / weather alerts"
-                  description="Heads-up for rough conditions in your sailing window."
+                  description={mergedCruiseBookings.length > 0
+                    ? 'Heads-up for rough conditions on this selected cruise day.'
+                    : 'Heads-up for rough conditions in your sailing window.'}
                   testID="agenda-marine-alerts-panel"
                 />
                 <View style={styles.weatherCardsStack}>

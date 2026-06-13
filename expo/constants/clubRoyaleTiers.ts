@@ -23,7 +23,7 @@ export const CLUB_ROYALE_TIERS: Record<string, ClubRoyaleTierInfo> = {
   },
   Prime: {
     name: 'Prime',
-    threshold: 2501,
+    threshold: 2500,
     color: CLUB_ROYALE_TIER_COLORS.Prime,
     bgColor: withAlpha(CLUB_ROYALE_TIER_COLORS.Prime, 0.15),
     benefits: [
@@ -36,7 +36,7 @@ export const CLUB_ROYALE_TIERS: Record<string, ClubRoyaleTierInfo> = {
   },
   Signature: {
     name: 'Signature',
-    threshold: 25001,
+    threshold: 25000,
     color: CLUB_ROYALE_TIER_COLORS.Signature,
     bgColor: withAlpha(CLUB_ROYALE_TIER_COLORS.Signature, 0.12),
     benefits: [
@@ -50,7 +50,7 @@ export const CLUB_ROYALE_TIERS: Record<string, ClubRoyaleTierInfo> = {
   },
   Masters: {
     name: 'Masters',
-    threshold: 100001,
+    threshold: 100000,
     color: CLUB_ROYALE_TIER_COLORS.Masters,
     bgColor: withAlpha(CLUB_ROYALE_TIER_COLORS.Masters, 0.15),
     benefits: [

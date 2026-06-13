@@ -1,18 +1,15 @@
 export const NETWORK_MONITOR_SCRIPT = `
 (function() {
-  // Always create these first. v8.9.8 logs showed window.networkMonitorInstalled could be true
-  // while window.capturedPayloads was missing after Royal document transitions, causing Step 2
-  // to fail before it could even inspect captured bookings.
-  window.capturedPayloads = window.capturedPayloads || {};
-  window.capturedRequestHeaders = window.capturedRequestHeaders || {};
-  window.capturedOfferPayloads = window.capturedOfferPayloads || [];
   if (window.networkMonitorInstalled) {
-    console.log('[NetworkMonitor] Already installed; payload containers verified');
+    console.log('[NetworkMonitor] Already installed, skipping');
     return;
   }
   window.networkMonitorInstalled = true;
   
   console.log('[NetworkMonitor] Installing comprehensive network monitor');
+  
+  window.capturedPayloads = window.capturedPayloads || {};
+  window.capturedRequestHeaders = window.capturedRequestHeaders || {};
   
   function log(message, type = 'info') {
     try {
@@ -26,64 +23,7 @@ export const NETWORK_MONITOR_SCRIPT = `
     }
   }
   
-  log('🌐 Network monitoring active - will capture all API payloads', 'info');
-
-
-  function normalizeRoyalHistorySailingsPayload(data) {
-    try {
-      const isSailing = (item) => {
-        if (!item || typeof item !== 'object') return false;
-        const ship = item.shipCode || item.ship || item.shipCd || item.shipName || item.shipDescription || item.shipDisplayName || item.shipLongName || item.vesselName;
-        const date = item.sailDate || item.departureDate || item.startDate || item.sailingDate || item.date || item.voyageStartDate || item.embarkDate || item.embarkationDate;
-        return !!(ship && date);
-      };
-      const direct = data?.payload?.sailings || data?.sailings || data?.data?.sailings || data?.payload?.pastSailings || data?.payload?.completedCruises || data?.data?.pastSailings || data?.data?.completedCruises || [];
-      if (Array.isArray(direct) && direct.some(isSailing)) return direct.filter(isSailing);
-      let best = [];
-      const seen = new Set();
-      const walk = (value, depth) => {
-        if (!value || depth > 9) return;
-        if (typeof value === 'object') { if (seen.has(value)) return; seen.add(value); }
-        if (Array.isArray(value)) {
-          const rows = value.filter(isSailing);
-          if (rows.length > best.length) best = rows;
-          value.forEach(v => walk(v, depth + 1));
-          return;
-        }
-        if (typeof value === 'object') {
-          Object.keys(value).forEach(k => {
-            const lower = String(k).toLowerCase();
-            if (lower.includes('sailing') || lower.includes('cruise') || lower.includes('history') || lower.includes('past') || lower.includes('completed') || lower === 'payload' || lower === 'data' || lower === 'items' || lower === 'results') walk(value[k], depth + 1);
-          });
-        }
-      };
-      walk(data, 0);
-      return best;
-    } catch (e) { return []; }
-  }
-
-  function isRoyalLoyaltyHistoryUrl(url) {
-    return typeof url === 'string' && /\/guestAccounts\/loyalty\/history(?:\/|\?|$)/.test(url);
-  }
-
-  function postRoyalHistorySailings(url, data, transport) {
-    try {
-      const sailings = normalizeRoyalHistorySailingsPayload(data);
-      if (!sailings.length) return false;
-      window.capturedPayloads.completedCruises = data;
-      window.capturedPayloads.loyaltyHistory = data;
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'network_capture',
-        endpoint: 'royalLoyaltyHistory',
-        data: data,
-        url: url
-      }));
-      log('📦 [' + transport + '] Captured Royal Caribbean Loyalty History payload with ' + sailings.length + ' completed cruise(s) from ' + url, 'success');
-      return true;
-    } catch (e) {
-      return false;
-    }
-  }
+  log('🌐 Network monitoring active - will capture all API payloads, including full casino offers v2 response bodies', 'info');
   
   function extractHeaderValue(headers, name) {
     try {
@@ -152,26 +92,28 @@ export const NETWORK_MONITOR_SCRIPT = `
         if (url.includes('/casino-offers') || url.includes('/api/casino/casino-offers') || url.includes('/api/casino/v2/offers/merged') || url.includes('/api/casino/v2/offers/facets')) {
           log('📦 Captured Casino Offers API payload', 'info');
           const data = await clonedResponse.json();
-          const offers = data?.payload?.casinoOffers || data?.payload?.offers || data?.casinoOffers || data?.offers || [];
+          const offers = data?.payload?.casinoOffers || data?.casinoOffers || data?.payload?.offers || data?.offers || [];
+          const capture = { url, data, method: options?.method || 'GET', requestBody: options?.body || null, transport: 'fetch', capturedAt: new Date().toISOString() };
           window.capturedPayloads.offers = data;
           window.capturedPayloads.offerPayloads = window.capturedPayloads.offerPayloads || [];
-          window.capturedPayloads.offerPayloads.push({ url: url, data: data, transport: 'Fetch', capturedAt: new Date().toISOString() });
+          window.capturedPayloads.offerPayloads.push(capture);
           window.capturedOfferPayloads = window.capturedOfferPayloads || [];
-          window.capturedOfferPayloads.push({ url: url, data: data, transport: 'Fetch', capturedAt: new Date().toISOString() });
+          window.capturedOfferPayloads.push(capture);
           window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'network_payload',
-            endpoint: 'offers',
+            type: 'network_capture',
+            endpoint: 'casinoOffersV2',
             data: data,
-            url: url
+            url: url,
+            requestBody: options?.body || null
           }));
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'log',
-            message: \`📦 Captured Casino Offers API payload with \${Array.isArray(offers) ? offers.length : 0} offers from \${url}\`,
-            logType: 'success'
+            message: \`📦 Captured Casino Offers API payload with \${offers.length} top-level offer item(s) from \${url}\`,
+            logType: 'info'
           }));
         }
         
-        else if (url.includes('/profileBookings/enriched') || url.includes('/profileBookings/searchAddGetProfileBookings') || url.includes('/upcomingCruises') || url.includes('/profilemanagement/profiles/cruises') || url.includes('/api/profile/bookings') || url.includes('/api/booking/cruises') || url.includes('/pastCruises') || url.includes('/completedCruises') || url.includes('/upcomingCruises') || url.includes('/profilemanagement/profiles/cruises') || url.includes('/api/profile/bookings') || url.includes('/api/booking/cruises') || url.includes('/pastCruises') || url.includes('/completedCruises')) {
+        else if (url.includes('/profileBookings/enriched') || url.includes('/upcomingCruises')) {
           const data = await clonedResponse.json();
           const bookings = data?.payload?.profileBookings || [];
           window.capturedPayloads.upcomingCruises = data;
@@ -196,11 +138,6 @@ export const NETWORK_MONITOR_SCRIPT = `
           }));
           
           log(\`📦 [Fetch] Captured Voyage Enrichment data from \${url}\`, 'info');
-        }
-        
-        else if (isRoyalLoyaltyHistoryUrl(url)) {
-          const data = await clonedResponse.json();
-          postRoyalHistorySailings(url, data, 'Fetch');
         }
         
         else if (url.includes('/guestAccounts/loyalty/info')) {
@@ -371,21 +308,23 @@ export const NETWORK_MONITOR_SCRIPT = `
         try {
           if (url.includes('/casino-offers') || url.includes('/api/casino/casino-offers') || url.includes('/api/casino/v2/offers/merged') || url.includes('/api/casino/v2/offers/facets')) {
             const data = JSON.parse(this.responseText);
-            const offers = data?.payload?.casinoOffers || data?.payload?.offers || data?.casinoOffers || data?.offers || [];
+            const offers = data?.payload?.casinoOffers || data?.casinoOffers || data?.payload?.offers || data?.offers || [];
+            const capture = { url, data, method: 'XHR', requestBody: null, transport: 'xhr', capturedAt: new Date().toISOString() };
             window.capturedPayloads.offers = data;
             window.capturedPayloads.offerPayloads = window.capturedPayloads.offerPayloads || [];
-            window.capturedPayloads.offerPayloads.push({ url: url, data: data, transport: 'XHR', capturedAt: new Date().toISOString() });
+            window.capturedPayloads.offerPayloads.push(capture);
             window.capturedOfferPayloads = window.capturedOfferPayloads || [];
-            window.capturedOfferPayloads.push({ url: url, data: data, transport: 'XHR', capturedAt: new Date().toISOString() });
+            window.capturedOfferPayloads.push(capture);
             window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'network_payload',
-              endpoint: 'offers',
+              type: 'network_capture',
+              endpoint: 'casinoOffersV2',
               data: data,
               url: url
             }));
-            log(\`📦 [XHR] Captured Casino Offers API payload with \${Array.isArray(offers) ? offers.length : 0} offers from \${url}\`, 'success');
+            log(\`📦 [XHR] Captured Casino Offers API payload with \${offers.length} top-level offer item(s) from \${url}\`, 'info');
           }
-          else if (url.includes('/profileBookings/enriched') || url.includes('/profileBookings/searchAddGetProfileBookings') || url.includes('/upcomingCruises') || url.includes('/profilemanagement/profiles/cruises') || url.includes('/api/profile/bookings') || url.includes('/api/booking/cruises') || url.includes('/pastCruises') || url.includes('/completedCruises')) {
+          
+          else if (url.includes('/profileBookings/enriched')) {
             const data = JSON.parse(this.responseText);
             const bookings = data?.payload?.profileBookings || [];
             window.capturedPayloads.upcomingCruises = data;
@@ -410,11 +349,6 @@ export const NETWORK_MONITOR_SCRIPT = `
             }));
             
             log(\`📦 [XHR] Captured Voyage Enrichment data from \${url}\`, 'info');
-          }
-          
-          else if (isRoyalLoyaltyHistoryUrl(url)) {
-            const data = JSON.parse(this.responseText);
-            postRoyalHistorySailings(url, data, 'XHR');
           }
           
           else if (url.includes('/guestAccounts/loyalty/info')) {

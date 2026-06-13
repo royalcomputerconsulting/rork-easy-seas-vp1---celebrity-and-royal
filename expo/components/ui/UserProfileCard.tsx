@@ -3,9 +3,9 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator,
 import { Save, CheckCircle, AlertCircle, Star, Anchor, Ship, Edit2, X, User } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
-import { getLevelByNights, CROWN_ANCHOR_LEVELS } from '@/constants/crownAnchor';
-import { getTierByPoints, CLUB_ROYALE_TIERS } from '@/constants/clubRoyaleTiers';
-import { getCelebrityCaptainsClubLevelByPoints, CELEBRITY_CAPTAINS_CLUB_LEVELS } from '@/constants/celebrityCaptainsClub';
+import { getLevelByNights, getLevelProgress, CROWN_ANCHOR_LEVELS } from '@/constants/crownAnchor';
+import { getTierByPoints, getTierProgress, CLUB_ROYALE_TIERS } from '@/constants/clubRoyaleTiers';
+import { getCelebrityCaptainsClubLevelByPoints, getCelebrityCaptainsClubLevelProgress, CELEBRITY_CAPTAINS_CLUB_LEVELS } from '@/constants/celebrityCaptainsClub';
 import { getCelebrityBlueChipTierByLevel, CELEBRITY_BLUE_CHIP_TIERS } from '@/constants/celebrityBlueChipClub';
 import { BrandToggle, BrandType } from './BrandToggle';
 import { LoyaltyPill } from '@/components/ui/LoyaltyPill';
@@ -80,6 +80,11 @@ interface UserProfileCardProps {
   enrichmentData?: EnrichmentData | null;
   onSave: (data: UserProfileData) => void | Promise<void>;
   isSaving?: boolean;
+  primaryProfileLabel?: string;
+  secondaryProfileLabel?: string;
+  activeProfileSlot?: 'primary' | 'secondary';
+  onProfileSlotPress?: (slot: 'primary' | 'secondary') => void;
+  showProfileSwitch?: boolean;
 }
 
 export function UserProfileCard({
@@ -87,6 +92,11 @@ export function UserProfileCard({
   enrichmentData,
   onSave,
   isSaving = false,
+  primaryProfileLabel = 'User',
+  secondaryProfileLabel = 'Second User',
+  activeProfileSlot = 'primary',
+  onProfileSlotPress,
+  showProfileSwitch = false,
 }: UserProfileCardProps) {
   const entitlement = useEntitlement();
   const [formData, setFormData] = useState<UserProfileData>(currentValues);
@@ -102,16 +112,23 @@ export function UserProfileCard({
 
   const calculatedLevel = getLevelByNights(formData.loyaltyPoints);
   const calculatedLevelInfo = CROWN_ANCHOR_LEVELS[calculatedLevel];
+  const calculatedLevelProgress = getLevelProgress(currentValues.loyaltyPoints, getLevelByNights(currentValues.loyaltyPoints));
   
-  const calculatedTier = getTierByPoints(formData.clubRoyalePoints);
+  const authoritativeClubRoyalePoints = Number(enrichmentData?.clubRoyalePointsFromApi ?? currentValues.clubRoyalePoints ?? formData.clubRoyalePoints ?? 0);
+  const calculatedTier = getTierByPoints(authoritativeClubRoyalePoints);
+  const displayedClubRoyaleTier = enrichmentData?.clubRoyaleTierFromApi || calculatedTier;
+  const displayedClubRoyaleTierInfo = CLUB_ROYALE_TIERS[displayedClubRoyaleTier] || CLUB_ROYALE_TIERS[calculatedTier];
   const calculatedTierInfo = CLUB_ROYALE_TIERS[calculatedTier];
+  const calculatedTierProgress = getTierProgress(authoritativeClubRoyalePoints, calculatedTier);
+  const nextClubRoyaleTierInfo = calculatedTierProgress.nextTier ? CLUB_ROYALE_TIERS[calculatedTierProgress.nextTier] : undefined;
 
   const calculatedCelebrityLevel = getCelebrityCaptainsClubLevelByPoints(formData.celebrityCaptainsClubPoints || 0);
   const calculatedCelebrityLevelInfo = CELEBRITY_CAPTAINS_CLUB_LEVELS[calculatedCelebrityLevel];
+  const calculatedCelebrityProgress = getCelebrityCaptainsClubLevelProgress(currentValues.celebrityCaptainsClubPoints || 0, getCelebrityCaptainsClubLevelByPoints(currentValues.celebrityCaptainsClubPoints || 0));
   
   const celebrityBlueChipLevel = 1;
-  const calculatedCelebrityTier = getCelebrityBlueChipTierByLevel(celebrityBlueChipLevel);
-  const calculatedCelebrityTierInfo = CELEBRITY_BLUE_CHIP_TIERS[calculatedCelebrityTier];
+  const calculatedCelebrityTier = formData.celebrityBlueChipTier?.trim() || getCelebrityBlueChipTierByLevel(celebrityBlueChipLevel);
+  const calculatedCelebrityTierInfo = CELEBRITY_BLUE_CHIP_TIERS[calculatedCelebrityTier] ?? CELEBRITY_BLUE_CHIP_TIERS.Pearl;
 
   const handleSave = async () => {
     await onSave({
@@ -248,10 +265,12 @@ export function UserProfileCard({
         {renderValueCard('Crown & Anchor #', enrichmentData?.crownAndAnchorId || currentValues.crownAnchorNumber, undefined, true)}
         {renderValueCard('C&A Level', enrichmentData?.crownAndAnchorTier || calculatedLevel, calculatedLevelInfo?.color, false, true)}
         {renderValueCard('Loyalty Points', currentValues.loyaltyPoints, COLORS.loyalty)}
-        {renderValueCard('Club Royale Tier', enrichmentData?.clubRoyaleTierFromApi || calculatedTier, calculatedTierInfo?.color, false, true)}
-        {renderValueCard('Casino Points', enrichmentData?.clubRoyalePointsFromApi ?? currentValues.clubRoyalePoints, COLORS.points)}
-        {!!enrichmentData?.crownAndAnchorNextTier && renderValueCard('Next C&A Level', enrichmentData.crownAndAnchorNextTier, calculatedLevelInfo?.color, false, true)}
-        {enrichmentData?.crownAndAnchorRemainingPoints !== undefined && renderValueCard('Points to Next', enrichmentData.crownAndAnchorRemainingPoints)}
+        {renderValueCard('Club Royale Tier', displayedClubRoyaleTier, displayedClubRoyaleTierInfo?.color, false, true)}
+        {renderValueCard('Casino Points', authoritativeClubRoyalePoints, COLORS.points)}
+        {calculatedLevelProgress.nextLevel && renderValueCard('Next C&A Level', calculatedLevelProgress.nextLevel, calculatedLevelInfo?.color, false, true)}
+        {renderValueCard('Points to Next', calculatedLevelProgress.nightsToNext)}
+        {calculatedTierProgress.nextTier && renderValueCard('Next Club Royale Tier', calculatedTierProgress.nextTier, nextClubRoyaleTierInfo?.color, false, true)}
+        {renderValueCard('Casino Points to Next', calculatedTierProgress.pointsToNext, COLORS.points)}
       </View>
     );
   };
@@ -268,8 +287,8 @@ export function UserProfileCard({
         {renderValueCard('Club Points', enrichmentData?.captainsClubPoints ?? currentValues.celebrityCaptainsClubPoints, COLORS.loyalty)}
         {renderValueCard('Blue Chip Tier', enrichmentData?.celebrityBlueChipTier || calculatedCelebrityTier, calculatedCelebrityTierInfo?.color, false, true)}
         {renderValueCard('Casino Points', enrichmentData?.celebrityBlueChipPoints ?? currentValues.celebrityBlueChipPoints, COLORS.points)}
-        {!!enrichmentData?.captainsClubNextTier && renderValueCard('Next Level', enrichmentData.captainsClubNextTier, calculatedCelebrityLevelInfo?.color, false, true)}
-        {enrichmentData?.captainsClubRemainingPoints !== undefined && renderValueCard('Points to Next', enrichmentData.captainsClubRemainingPoints)}
+        {calculatedCelebrityProgress.nextLevel && renderValueCard('Next Level', calculatedCelebrityProgress.nextLevel, calculatedCelebrityLevelInfo?.color, false, true)}
+        {renderValueCard('Points to Next', calculatedCelebrityProgress.pointsToNext)}
       </View>
     );
   };
@@ -444,6 +463,16 @@ export function UserProfileCard({
             </View>
           </View>
           <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Blue Chip Tier</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.celebrityBlueChipTier || ''}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, celebrityBlueChipTier: text }))}
+              placeholder="e.g., Pearl, Onyx, Amethyst, Sapphire, Ruby"
+              placeholderTextColor="#9CA3AF"
+            />
+          </View>
+          <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Blue Chip Points</Text>
             <TextInput
               style={styles.input}
@@ -595,15 +624,45 @@ export function UserProfileCard({
           <View style={styles.headerText}>
             <Text style={styles.headerTitle}>{getBrandTitle()}</Text>
             <Text style={styles.headerSubtitle}>
-              {hasSyncedData ? 'Synced with account' : 'Manual entry'}
+              {`${activeProfileSlot === 'secondary' ? secondaryProfileLabel : primaryProfileLabel} • ${hasSyncedData ? 'Synced with account' : 'Manual entry'}`}
             </Text>
           </View>
         </View>
         {renderEnrichmentBadge(hasSyncedData)}
       </LinearGradient>
 
+      {showProfileSwitch ? (
+        <View style={styles.profileSwitchContainer}>
+          <TouchableOpacity
+            style={[styles.profileSwitchButton, activeProfileSlot === 'primary' && styles.profileSwitchButtonActive]}
+            onPress={() => onProfileSlotPress?.('primary')}
+            activeOpacity={0.75}
+            testID="profile-switch-primary"
+          >
+            <Text style={[styles.profileSwitchText, activeProfileSlot === 'primary' && styles.profileSwitchTextActive]} numberOfLines={1}>
+              {primaryProfileLabel}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.profileSwitchButton, activeProfileSlot === 'secondary' && styles.profileSwitchButtonActive]}
+            onPress={() => onProfileSlotPress?.('secondary')}
+            activeOpacity={0.75}
+            testID="profile-switch-secondary"
+          >
+            <Text style={[styles.profileSwitchText, activeProfileSlot === 'secondary' && styles.profileSwitchTextActive]} numberOfLines={1}>
+              {secondaryProfileLabel}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+
       <View style={styles.brandToggleContainer}>
-        <BrandToggle activeBrand={activeBrand} onToggle={handleBrandToggle} showSilversea={true} />
+        <BrandToggle
+          activeBrand={activeBrand}
+          onToggle={handleBrandToggle}
+          showSilversea={true}
+          showCarnival={!showProfileSwitch}
+        />
       </View>
 
       <View style={styles.currentValuesSection}>
@@ -762,6 +821,39 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     textTransform: 'uppercase' as const,
     letterSpacing: 0.3,
+  },
+  profileSwitchContainer: {
+    flexDirection: 'row',
+    marginHorizontal: SPACING.md,
+    marginTop: SPACING.sm,
+    padding: 4,
+    borderRadius: BORDER_RADIUS.lg,
+    backgroundColor: 'rgba(15, 23, 42, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(15, 23, 42, 0.10)',
+    gap: 4,
+  },
+  profileSwitchButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 36,
+    borderRadius: BORDER_RADIUS.md,
+    paddingHorizontal: SPACING.sm,
+  },
+  profileSwitchButtonActive: {
+    backgroundColor: '#0F766E',
+    ...SHADOW.sm,
+  },
+  profileSwitchText: {
+    fontSize: 11,
+    fontWeight: '800' as const,
+    color: '#334155',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase' as const,
+  },
+  profileSwitchTextActive: {
+    color: COLORS.white,
   },
   brandToggleContainer: {
     padding: SPACING.sm,

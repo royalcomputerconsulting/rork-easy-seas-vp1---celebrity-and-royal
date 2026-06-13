@@ -1,3 +1,4 @@
+import { buildCruiseDetailsParams } from '@/lib/navigation/cruiseDetails';
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   View,
@@ -10,6 +11,8 @@ import {
   ActivityIndicator,
   Animated,
   Image,
+  Modal,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -25,10 +28,18 @@ import {
   Ship,
   Calendar,
   Coins,
+  Gauge,
+  FileText,
+  Calculator,
+  Archive,
+  CheckCircle,
+  Clock,
+  BookOpen,
+  DatabaseZap,
 } from 'lucide-react-native';
 
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
-import { LOCAL_IMAGES } from '@/constants/images';
+import { IMAGES, LOCAL_IMAGES } from '@/constants/images';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { useUser } from '@/state/UserProvider';
 import { useAuth } from '@/state/AuthProvider';
@@ -39,21 +50,36 @@ import { CompactDashboardHeader } from '@/components/CompactDashboardHeader';
 import { CasinoCertificatesCard } from '@/components/CasinoCertificatesCard';
 import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
 import { CertificateManagerModal } from '@/components/CertificateManagerModal';
-import { AgentXChat } from '@/components/AgentXChat';
 import { useCertificates } from '@/state/CertificatesProvider';
 import { OfferCard } from '@/components/OfferCard';
 import { ResponsiveContainer } from '@/components/ResponsiveContainer';
 import { CasinoOfferCard, OfferSummaryCard } from '@/components/CasinoOfferCard';
 import { AlertsManagerModal } from '@/components/AlertsManagerModal';
-import { AgentXAnalysisCard } from '@/components/AgentXAnalysisCard';
 import { QuickActionsFAB } from '@/components/ui/QuickActionsFAB';
 import { createDateFromString, getDaysUntil, isDateInPast, formatDate } from '@/lib/date';
 import { isActiveBookedCruise } from '@/lib/bookedCruiseStatus';
 import { MachineStrategyCard } from '@/components/MachineStrategyCard';
+import { ShipMachinesExplorer } from '@/components/ShipMachinesExplorer';
 import { CertificateExplorerModal } from '@/components/CertificateExplorerModal';
+import { IntelligenceFilterStrip } from '@/components/IntelligenceFilterStrip';
+import { useIntelligenceFilters } from '@/state/IntelligenceFiltersProvider';
+import { filterRecordsByIntelligence } from '@/lib/intelligenceFilters';
+import { getBookedCruiseCasinoPoints, getBookedCruiseWinningsBroughtHome } from '@/lib/casinoPointTruth';
 
 import type { Cruise, BookedCruise, CasinoOffer } from '@/types/models';
-import { getCabinPriceFromEntity, GUEST_COUNT_DEFAULT } from '@/lib/valueCalculator';
+import { getCabinPriceFromEntity, getDoubleOccupancyRoomRetailValue, GUEST_COUNT_DEFAULT } from '@/lib/valueCalculator';
+
+const OFFERS_TITLE_LOGO_URL = 'https://r2-pub.rork.com/attachments/4hm4mwycibyktcoe3b7eo.png';
+import { formatCurrency } from '@/lib/format';
+import {
+  buildCommandCenterBuckets,
+  calculateOfferIntelligenceScore,
+  decodeOffer,
+  getOfferDisplayCode,
+  type DecodedOffer,
+  type CommandCenterBucket,
+  type CommandCenterOffer,
+} from '@/lib/offerIntelligence';
 
 function AnimatedEmptyState({ onImportPress }: { onImportPress: () => void }) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -135,6 +161,7 @@ interface CasinoOfferCardData {
   freePlay?: number;
   obc?: number;
   perks?: string[];
+  representativeOffer?: CasinoOffer;
   cruises: Cruise[];
 }
 
@@ -173,10 +200,11 @@ function isOfferLinkedCruiseInProgress(cruise: BookedCruise, today: Date): boole
 
 function OverviewScreenContent() {
   const router = useRouter();
-  const { cruises, bookedCruises: allBookedCruises, casinoOffers, clubRoyaleProfile } = useCoreData();
-  const { currentUser } = useUser();
+  const { cruises, bookedCruises: allBookedCruises, casinoOffers, clubRoyaleProfile, updateCasinoOffer } = useCoreData();
+  const { currentUser, users } = useUser();
+  const { selectedProfileId, selectedBrand, selectedProgram } = useIntelligenceFilters();
   const { logout } = useAuth();
-  const { messages, isLoading: agentLoading, sendMessage, isVisible, setVisible, toggleExpanded, isExpanded, refreshAnalysis } = useAgentX();
+  const { sendMessage, setMode: setAgentMode } = useAgentX();
   const { summary } = useAlerts();
   
   usePriceTrackingSync();
@@ -185,6 +213,8 @@ function OverviewScreenContent() {
   const [showCertificateModal, setShowCertificateModal] = useState(false);
   const [showCertificateExplorerModal, setShowCertificateExplorerModal] = useState(false);
   const [showAlertsModal, setShowAlertsModal] = useState(false);
+  const [decodedOffer, setDecodedOffer] = useState<DecodedOffer | null>(null);
+  const [heroSignatureFailed, setHeroSignatureFailed] = useState<boolean>(false);
   const { 
     certificates, 
     addCertificate, 
@@ -193,9 +223,15 @@ function OverviewScreenContent() {
     getCertificatesByType,
   } = useCertificates();
 
-  const cruisesData = useMemo(() => cruises, [cruises]);
+  const intelligenceFilterSnapshot = useMemo(() => ({
+    selectedProfileId,
+    selectedBrand,
+    selectedProgram,
+  }), [selectedBrand, selectedProfileId, selectedProgram]);
 
-  const offersData = useMemo(() => casinoOffers, [casinoOffers]);
+  const cruisesData = useMemo(() => filterRecordsByIntelligence(cruises, intelligenceFilterSnapshot, users), [cruises, intelligenceFilterSnapshot, users]);
+
+  const offersData = useMemo(() => filterRecordsByIntelligence(casinoOffers, intelligenceFilterSnapshot, users), [casinoOffers, intelligenceFilterSnapshot, users]);
 
   const offerNameByCode = useMemo(() => {
     const map = new Map<string, string>();
@@ -224,7 +260,7 @@ function OverviewScreenContent() {
     return map;
   }, [offersData]);
 
-  const bookedCruises = useMemo(() => allBookedCruises, [allBookedCruises]);
+  const bookedCruises = useMemo(() => filterRecordsByIntelligence(allBookedCruises, intelligenceFilterSnapshot, users), [allBookedCruises, intelligenceFilterSnapshot, users]);
 
   const activeBookedCruises = useMemo(() => {
     return bookedCruises.filter((cruise: BookedCruise) => isActiveBookedCruise(cruise));
@@ -264,7 +300,8 @@ function OverviewScreenContent() {
       }
 
       const normalizedStatus = offer.status?.trim().toLowerCase();
-      const hasBlockedStatus = normalizedStatus === 'used' || normalizedStatus === 'booked' || normalizedStatus === 'expired';
+      const normalizedArchiveStatus = offer.archiveStatus?.trim().toLowerCase();
+      const hasBlockedStatus = normalizedStatus === 'used' || normalizedStatus === 'booked' || normalizedStatus === 'expired' || normalizedStatus === 'archived' || normalizedStatus === 'replaced' || normalizedStatus === 'skipped' || normalizedArchiveStatus === 'archived' || normalizedArchiveStatus === 'replaced';
       const isLinkedToInProgressCruise = !!offer.offerCode && inProgressOfferKeys.has(normalizeOfferKey(offer.offerCode));
 
       if (hasBlockedStatus || isLinkedToInProgressCruise) {
@@ -337,6 +374,7 @@ function OverviewScreenContent() {
           freePlay: offer.freePlay ?? offer.freeplayAmount ?? 0,
           obc,
           perks: offer.perks ?? [],
+          representativeOffer: offer,
           cruises: [],
         });
         return;
@@ -365,6 +403,7 @@ function OverviewScreenContent() {
           obc: shouldUpgradeOBC ? obc : existing.obc,
           freePlay: shouldUpgradeFreePlay ? (offer.freePlay ?? offer.freeplayAmount ?? 0) : existing.freePlay,
           perks: shouldUpgradePerks ? (offer.perks ?? []) : existing.perks,
+          representativeOffer: existing.representativeOffer ?? offer,
         });
       }
     });
@@ -420,18 +459,51 @@ function OverviewScreenContent() {
     ];
   }, [getCertificatesByType]);
 
-  const expiringSoonCount = useMemo(() => {
-    let count = 0;
-    groupedOffers.forEach(offer => {
-      if (offer.expiryDate) {
-        const days = getDaysUntil(offer.expiryDate);
-        if (days > 0 && days <= 7) {
-          count++;
-        }
-      }
-    });
-    return count;
-  }, [groupedOffers]);
+  const currentTravelerProfile = useMemo(() => {
+    if (!currentUser) return null;
+    return {
+      id: currentUser.id,
+      displayName: currentUser.displayName || currentUser.name,
+      email: currentUser.email,
+      royalCaribbeanNumber: currentUser.royalCaribbeanNumber || currentUser.crownAnchorNumber,
+      clubRoyaleId: currentUser.clubRoyaleId,
+      celebrityCaptainsClubNumber: currentUser.celebrityCaptainsClubNumber,
+      blueChipId: currentUser.blueChipId,
+      active: currentUser.active,
+      defaultProfile: currentUser.defaultProfile,
+      createdAt: currentUser.createdAt,
+      updatedAt: currentUser.updatedAt,
+    };
+  }, [currentUser]);
+
+  const commandCenterBuckets = useMemo((): CommandCenterBucket[] => {
+    return buildCommandCenterBuckets(offersData, cruisesData, certificates, currentTravelerProfile);
+  }, [offersData, cruisesData, certificates, currentTravelerProfile]);
+
+  const commandCenterTotalCount = useMemo(() => {
+    return commandCenterBuckets.reduce((sum, bucket) => sum + bucket.offers.length, 0);
+  }, [commandCenterBuckets]);
+
+  const commandCenterBucketCounts = useMemo(() => {
+    const getBucketCount = (id: CommandCenterBucket['id']): number => commandCenterBuckets.find((bucket) => bucket.id === id)?.offers.length ?? 0;
+    const expires7 = getBucketCount('expires7');
+    const expires14 = getBucketCount('expires14');
+    const expires30 = getBucketCount('expires30');
+    const recentlyExpired = getBucketCount('recentlyExpired');
+    const needsReview = getBucketCount('needsReview');
+    return {
+      expires7,
+      expires14,
+      expires30,
+      recentlyExpired,
+      needsReview,
+      urgentExpiring: expires7 + expires14,
+    };
+  }, [commandCenterBuckets]);
+
+  const topCommandCenterBuckets = useMemo(() => {
+    return commandCenterBuckets.filter((bucket) => bucket.offers.length > 0).slice(0, 3);
+  }, [commandCenterBuckets]);
 
   const [sortMode, setSortMode] = useState<'soonest' | 'highestValue'>('soonest');
 
@@ -461,7 +533,7 @@ function OverviewScreenContent() {
       const roomType = offer.cruises[0]?.cabinType || 'Balcony';
       
       offer.cruises.forEach(cruise => {
-        let cabinPrice = getCabinPriceFromEntity(cruise, roomType) || cruise.price || 0;
+        let cabinPrice = getCabinPriceFromEntity(cruise, roomType) ?? getDoubleOccupancyRoomRetailValue(cruise.price) ?? 0;
         
         // Estimate cabin price if not available
         if (cabinPrice === 0 && cruise.nights > 0) {
@@ -472,7 +544,7 @@ function OverviewScreenContent() {
         }
         
         const guestCount = cruise.guests || GUEST_COUNT_DEFAULT;
-        const cabinValueForTwo = cabinPrice * guestCount;
+        const cabinValueForTwo = cabinPrice;
         
         // Estimate taxes if not provided (~$30/night per guest)
         let taxesFees = cruise.taxes || 0;
@@ -499,18 +571,19 @@ function OverviewScreenContent() {
   }, [groupedOffers]);
 
   const cruisesWithCasinoData = useMemo(() => {
-    const allCruises = [...allBookedCruises, ...cruises];
-    return allCruises.filter((cruise: BookedCruise) => {
-      const hasWinnings = cruise.winnings !== undefined && cruise.winnings !== 0;
-      const hasPoints = (cruise.earnedPoints !== undefined && cruise.earnedPoints > 0) || 
-                       (cruise.casinoPoints !== undefined && cruise.casinoPoints > 0);
-      return hasWinnings || hasPoints;
+    // Keep dashboard tab switches responsive after large offer imports.
+    // Available offer rows can exceed 1,000 records and are already represented in the offer cards;
+    // this history strip should summarize booked/completed gaming activity only.
+    return bookedCruises.filter((cruise: BookedCruise) => {
+      const winnings = getBookedCruiseWinningsBroughtHome(cruise);
+      const points = getBookedCruiseCasinoPoints(cruise);
+      return winnings !== 0 || points > 0;
     }).sort((a, b) => {
       const dateA = new Date(a.sailDate).getTime();
       const dateB = new Date(b.sailDate).getTime();
       return dateB - dateA;
-    });
-  }, [allBookedCruises, cruises]);
+    }).slice(0, 25);
+  }, [bookedCruises]);
 
   const sortedOffers = useMemo(() => {
     if (groupedOffers.length === 0) return nonExpiredOffers;
@@ -553,14 +626,50 @@ function OverviewScreenContent() {
     if ('cruises' in offer) {
       router.push(`/offer-details?offerCode=${encodeURIComponent(offer.offerCode)}` as any);
     } else {
-      router.push(`/cruise-details?id=${offer.id}` as any);
+      router.push({
+        pathname: '/cruise-details' as any,
+        params: buildCruiseDetailsParams(offer, { source: 'available' }),
+      });
     }
   }, [router]);
 
+  const handleDecodeOffer = useCallback((offer: CasinoOffer) => {
+    console.log('[Overview] Decode offer pressed:', offer.offerCode);
+    setDecodedOffer(decodeOffer(offer, cruisesData, currentTravelerProfile));
+  }, [cruisesData, currentTravelerProfile]);
+
+  const handleCommandCenterAction = useCallback((action: 'view' | 'decode' | 'compare' | 'archive' | 'skip', item: CommandCenterOffer) => {
+    const offerCodeForLog = getOfferDisplayCode(item.offer);
+    console.log('[Overview] Command Center action:', { action, offerCode: offerCodeForLog });
+    if (action === 'view') {
+      router.push(`/offer-details?offerCode=${encodeURIComponent(getOfferDisplayCode(item.offer))}` as any);
+      return;
+    }
+    if (action === 'decode') {
+      handleDecodeOffer(item.offer);
+      return;
+    }
+    if (action === 'compare') {
+      setAgentMode('travelAgent');
+      router.push('/ask-my-data' as any);
+      void sendMessage(`Compare offer ${getOfferDisplayCode(item.offer)} against my other active offers using score, expiration, casino-paid value, certificate fit, and profile ownership.`);
+      return;
+    }
+    if (action === 'archive') {
+      updateCasinoOffer(item.offer.id, { status: 'archived', archiveStatus: 'archived' });
+      return;
+    }
+    updateCasinoOffer(item.offer.id, { status: 'skipped' });
+  }, [handleDecodeOffer, router, sendMessage, setAgentMode, updateCasinoOffer]);
+
   const handleCruiseItemPress = useCallback((cruiseId: string) => {
     console.log('[Overview] Cruise item pressed:', cruiseId);
-    router.push(`/cruise-details?id=${cruiseId}` as any);
-  }, [router]);
+    const cruise = cruisesData.find((item) => item.id === cruiseId) as any;
+    router.push({
+      pathname: '/cruise-details' as any,
+      params: buildCruiseDetailsParams(cruise, { id: cruiseId, source: 'overview' }),
+    });
+  }, [router, cruisesData]);
 
   const handleSettingsPress = useCallback(() => {
     router.push('/settings' as any);
@@ -603,21 +712,14 @@ function OverviewScreenContent() {
   const renderHeader = () => (
     <ResponsiveContainer>
       <View style={styles.headerContent}>
-        <View style={styles.heroCard}>
-          <LinearGradient
-            colors={['rgba(9, 20, 39, 0.98)', 'rgba(14, 45, 72, 0.96)']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={StyleSheet.absoluteFill}
+        <View style={styles.titleLogoCard} testID="offers-brand-logo-card">
+          <Image
+            source={require('../../../assets/images/easyseas-scott-astin-logo.jpeg')}
+            style={styles.titleLogoImage}
+            resizeMode="cover"
+            accessibilityLabel="Easy Seas Scott Astin nautical lifestyle brand logo"
+            testID="offers-title-logo-card-image"
           />
-          <View style={styles.heroImageShell}>
-            <Image
-              source={LOCAL_IMAGES.header}
-              style={styles.heroLogoImage}
-              resizeMode="contain"
-              testID="easy-seas-formatted-logo-header-image"
-            />
-          </View>
         </View>
 
         <CompactDashboardHeader
@@ -635,18 +737,49 @@ function OverviewScreenContent() {
           onOffersPress={() => console.log('Active offers pressed')}
         />
 
-        <CollapsibleSection
-          title="AI Analysis"
-          subtitle="Performance insights"
-          icon={<Bot size={18} color="#FFFFFF" />}
-          defaultExpanded={true}
-          showBorder={false}
+        <IntelligenceFilterStrip contextLabel="Offers" variant="bookedCruises" />
+
+
+        <TouchableOpacity
+          style={styles.learnSystemCard}
+          onPress={() => router.push('/ask-my-data' as any)}
+          activeOpacity={0.85}
+          testID="dashboard-ask-my-data"
         >
-          <AgentXAnalysisCard
-            onViewDetails={() => setVisible(true)}
-            onRefresh={refreshAnalysis}
-          />
-        </CollapsibleSection>
+          <LinearGradient colors={['#061826', '#0F766E', '#115E59']} style={styles.learnSystemGradient}>
+            <View style={styles.learnSystemIcon}>
+              <DatabaseZap size={20} color="#A7F3D0" />
+            </View>
+            <View style={styles.learnSystemCopy}>
+              <Text style={styles.learnSystemTitle}>Ask My Data</Text>
+              <Text style={styles.learnSystemSubtitle}>Standalone natural-language search for scoped offers, cruises, certificates, and calendar records.</Text>
+            </View>
+            <Text style={styles.learnSystemAction}>Open</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+
+        <View style={styles.advisorGrid} testID="dashboard-advisor-grid">
+          <TouchableOpacity
+            style={styles.advisorTile}
+            onPress={() => router.push('/advisor' as any)}
+            activeOpacity={0.85}
+            testID="dashboard-casino-cruise-advisor"
+          >
+            <Gauge size={18} color={COLORS.navyDeep} />
+            <Text style={styles.advisorTileTitle}>Best Offer Right Now</Text>
+            <Text style={styles.advisorTileText}>Rank offers by value, conflict risk, casino time, and upgrade math.</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.advisorTile}
+            onPress={() => router.push('/data-health' as any)}
+            activeOpacity={0.85}
+            testID="dashboard-data-health"
+          >
+            <DatabaseZap size={18} color={COLORS.navyDeep} />
+            <Text style={styles.advisorTileTitle}>Data Health</Text>
+            <Text style={styles.advisorTileText}>Check duplicates, brand scopes, completed cruises, and inflated counts.</Text>
+          </TouchableOpacity>
+        </View>
 
         {offerSummary && (
           <OfferSummaryCard
@@ -659,23 +792,131 @@ function OverviewScreenContent() {
           />
         )}
 
+        {renderCommandCenter()}
+
         <View style={styles.sectionHeader}>
           <View style={styles.sectionTitleRow}>
             <Tag size={18} color={COLORS.navyDeep} />
             <Text style={styles.sectionTitle}>CASINO OFFERS</Text>
           </View>
-          {expiringSoonCount > 0 && (
-            <View style={styles.expiringAlert}>
-              <AlertTriangle size={14} color={COLORS.warning} />
-              <Text style={styles.expiringAlertText}>
-                {expiringSoonCount} expiring soon
-              </Text>
-            </View>
-          )}
         </View>
       </View>
     </ResponsiveContainer>
   );
+
+  const renderCommandCenter = () => {
+    if (commandCenterTotalCount === 0) {
+      return null;
+    }
+
+    return (
+      <View style={styles.commandCenterCard} testID="offer-expiration-command-center">
+        <LinearGradient
+          colors={['#172554', '#0F766E']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.commandCenterGradient}
+        >
+          <View style={styles.commandCenterHeader}>
+            <View style={styles.commandCenterTitleRow}>
+              <Clock size={18} color="#FDE68A" />
+              <Text style={styles.commandCenterTitle}>Expiration Command Center</Text>
+            </View>
+            <View style={styles.commandCenterCountPill}>
+              <Text style={styles.commandCenterCountText}>{commandCenterBucketCounts.urgentExpiring}</Text>
+              <Text style={styles.commandCenterCountLabel}>expiring</Text>
+            </View>
+          </View>
+          <Text style={styles.commandCenterSubtitle}>
+            Urgent expiring offers are now counted in one place: {commandCenterBucketCounts.urgentExpiring} total, with {commandCenterBucketCounts.expires7} expiring in 0-7 days and {commandCenterBucketCounts.expires14} expiring in 8-14 days. {commandCenterTotalCount} total timing item{commandCenterTotalCount === 1 ? '' : 's'} need attention.
+          </Text>
+          <View style={styles.commandCenterSummaryRow} testID="command-center-expiring-summary">
+            <View style={styles.commandCenterUrgentChip}>
+              <AlertTriangle size={13} color="#172554" />
+              <Text style={styles.commandCenterUrgentChipText}>Urgent: {commandCenterBucketCounts.urgentExpiring} total</Text>
+            </View>
+            <View style={styles.commandCenterMiniChip}>
+              <Text style={styles.commandCenterMiniChipValue}>{commandCenterBucketCounts.expires7}</Text>
+              <Text style={styles.commandCenterMiniChipLabel}>expire in 0-7 days</Text>
+            </View>
+            <View style={styles.commandCenterMiniChip}>
+              <Text style={styles.commandCenterMiniChipValue}>{commandCenterBucketCounts.expires14}</Text>
+              <Text style={styles.commandCenterMiniChipLabel}>expire in 8-14 days</Text>
+            </View>
+            {commandCenterBucketCounts.expires30 > 0 && (
+              <View style={styles.commandCenterMiniChipMuted}>
+                <Text style={styles.commandCenterMiniChipMutedValue}>{commandCenterBucketCounts.expires30}</Text>
+                <Text style={styles.commandCenterMiniChipMutedLabel}>15-30 days</Text>
+              </View>
+            )}
+          </View>
+          <TouchableOpacity
+            style={styles.commandCenterOpenButton}
+            onPress={() => router.push('/command-center' as any)}
+            activeOpacity={0.82}
+            testID="open-full-command-center"
+          >
+            <Text style={styles.commandCenterOpenButtonText}>Open Full Command Center</Text>
+          </TouchableOpacity>
+
+          {topCommandCenterBuckets.map((bucket) => (
+            <View key={bucket.id} style={styles.commandCenterBucket}>
+              <View style={styles.commandCenterBucketHeader}>
+                <Text style={styles.commandCenterBucketTitle}>{bucket.title}</Text>
+                <Text style={styles.commandCenterBucketSubtitle}>{bucket.offers.length} item{bucket.offers.length === 1 ? '' : 's'}</Text>
+              </View>
+              {bucket.offers.slice(0, 2).map((item) => (
+                <View key={item.offer.id} style={styles.commandCenterOfferRow}>
+                  <View style={styles.commandCenterScoreBubble}>
+                    <Gauge size={14} color="#A7F3D0" />
+                    <Text style={styles.commandCenterScoreText}>{item.intelligence.score}</Text>
+                  </View>
+                  <View style={styles.commandCenterOfferCopy}>
+                    <Text style={styles.commandCenterOfferTitle} numberOfLines={1}>{item.offer.offerName || item.offer.title || item.offer.offerCode || 'Casino Offer'}</Text>
+                    <Text style={styles.commandCenterOfferMeta} numberOfLines={1}>{item.intelligence.rating} · {item.intelligence.daysUntilExpiration === null ? 'No expiry found' : `${item.intelligence.daysUntilExpiration} days`} · {formatCurrency(item.intelligence.casinoPaysFor.casinoCoveredValue)}</Text>
+                  </View>
+                  <View style={styles.commandCenterActions}>
+                    <TouchableOpacity style={styles.commandCenterAction} onPress={() => handleCommandCenterAction('view', item)} testID="command-center-view">
+                      <Text style={styles.commandCenterActionText}>View</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.commandCenterAction} onPress={() => handleCommandCenterAction('decode', item)} testID="command-center-decode">
+                      <Text style={styles.commandCenterActionText}>Decode</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.commandCenterActionsWide}>
+                    <TouchableOpacity style={styles.commandCenterActionMuted} onPress={() => handleCommandCenterAction('compare', item)} testID="command-center-compare">
+                      <Calculator size={12} color="#CBD5E1" />
+                      <Text style={styles.commandCenterActionMutedText}>Compare</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.commandCenterActionMuted} onPress={() => handleCommandCenterAction('archive', item)} testID="command-center-archive">
+                      <Archive size={12} color="#CBD5E1" />
+                      <Text style={styles.commandCenterActionMutedText}>Archive</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.commandCenterActionMuted} onPress={() => handleCommandCenterAction('skip', item)} testID="command-center-skip">
+                      <CheckCircle size={12} color="#CBD5E1" />
+                      <Text style={styles.commandCenterActionMutedText}>Mark skipped</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.commandCenterActionMuted}
+                      onPress={() => {
+                        setAgentMode('casinoHost');
+                        router.push('/ask-my-data' as any);
+                        void sendMessage(`Advise me on offer ${getOfferDisplayCode(item.offer)} using the current profile and filters.`);
+                      }}
+                      testID="command-center-ask-agentx"
+                    >
+                      <Bot size={12} color="#CBD5E1" />
+                      <Text style={styles.commandCenterActionMutedText}>Ask</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+            </View>
+          ))}
+        </LinearGradient>
+      </View>
+    );
+  };
 
   const renderFooter = () => (
     <ResponsiveContainer>
@@ -697,6 +938,24 @@ function OverviewScreenContent() {
           />
         </CollapsibleSection>
 
+        <TouchableOpacity
+          style={styles.learnSystemCard}
+          onPress={() => router.push('/learn-system' as any)}
+          activeOpacity={0.85}
+          testID="dashboard-learn-system"
+        >
+          <LinearGradient colors={['#0F2439', '#1E3A5F', '#0F766E']} style={styles.learnSystemGradient}>
+            <View style={styles.learnSystemIcon}>
+              <BookOpen size={20} color="#A7F3D0" />
+            </View>
+            <View style={styles.learnSystemCopy}>
+              <Text style={styles.learnSystemTitle}>Learn the System</Text>
+              <Text style={styles.learnSystemSubtitle}>Offer math, certificates, loyalty basics, machine logs, and EasySeas tutorials.</Text>
+            </View>
+            <Text style={styles.learnSystemAction}>Open</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+
         <CollapsibleSection
           title="Machine Strategy"
           subtitle="Personalized recommendations"
@@ -705,6 +964,16 @@ function OverviewScreenContent() {
           showBorder={false}
         >
           <MachineStrategyCard />
+        </CollapsibleSection>
+
+        <CollapsibleSection
+          title="Ship Machine Explorer"
+          subtitle="Browse slots by ship across the fleet"
+          icon={<BookOpen size={18} color="#FFFFFF" />}
+          defaultExpanded={false}
+          showBorder={false}
+        >
+          <ShipMachinesExplorer />
         </CollapsibleSection>
 
         {cruisesWithCasinoData.length > 0 && (
@@ -719,8 +988,8 @@ function OverviewScreenContent() {
               </Text>
             </View>
             {cruisesWithCasinoData.map((cruise: BookedCruise) => {
-              const winnings = cruise.winnings || 0;
-              const earnedPoints = cruise.earnedPoints || cruise.casinoPoints || 0;
+              const winnings = getBookedCruiseWinningsBroughtHome(cruise);
+              const earnedPoints = getBookedCruiseCasinoPoints(cruise);
               const isWin = winnings >= 0;
               const itineraryText = `${cruise.nights} night${cruise.nights !== 1 ? 's' : ''} to ${cruise.destination || cruise.itineraryName || 'Caribbean'}`;
 
@@ -774,6 +1043,10 @@ function OverviewScreenContent() {
 
   const renderOfferCard = useCallback(({ item, index }: { item: CasinoOfferCardData | Cruise; index: number }) => {
     if ('cruises' in item) {
+      const intelligence = item.representativeOffer
+        ? calculateOfferIntelligenceScore(item.representativeOffer, cruisesData, certificates, currentTravelerProfile)
+        : undefined;
+
       return (
         <ResponsiveContainer>
           <CasinoOfferCard
@@ -788,20 +1061,16 @@ function OverviewScreenContent() {
           onCruisePress={handleCruiseItemPress}
           bookedCruiseIds={bookedCruiseIds}
           isBestValue={index === 0}
+          intelligenceScore={intelligence?.score}
+          intelligenceRating={intelligence?.rating}
+          intelligenceExplanation={intelligence?.explanation}
+          onDecodePress={item.representativeOffer ? () => handleDecodeOffer(item.representativeOffer as CasinoOffer) : undefined}
           />
         </ResponsiveContainer>
       );
     }
 
     const offerNameOverride = item.offerCode ? offerNameByCode.get(item.offerCode) : undefined;
-    if (item.offerCode) {
-      console.log('[Overview] OfferCard name resolution:', {
-        cruiseId: item.id,
-        offerCode: item.offerCode,
-        cruiseOfferName: item.offerName,
-        offerNameOverride,
-      });
-    }
 
     return (
       <ResponsiveContainer>
@@ -815,7 +1084,7 @@ function OverviewScreenContent() {
         />
       </ResponsiveContainer>
     );
-  }, [handleOfferPress, handleCruiseItemPress, bookedCruiseIds, cruisesData, offerNameByCode]);
+  }, [handleOfferPress, handleCruiseItemPress, bookedCruiseIds, cruisesData, offerNameByCode, certificates, currentTravelerProfile, handleDecodeOffer]);
 
   const keyExtractor = useCallback((item: CasinoOfferCardData | Cruise) => item.id, []);
 
@@ -839,27 +1108,36 @@ function OverviewScreenContent() {
         visible={showAlertsModal}
         onClose={() => setShowAlertsModal(false)}
       />
-      
-      {isVisible && (
-        <View style={styles.agentChatOverlay}>
-          <TouchableOpacity 
-            style={styles.agentChatBackdrop} 
-            activeOpacity={1} 
-            onPress={() => setVisible(false)}
-          />
-          <View style={[styles.agentChatContainer, isExpanded && styles.agentChatExpanded]}>
-            <AgentXChat
-              messages={messages}
-              onSendMessage={sendMessage}
-              isLoading={agentLoading}
-              isExpanded={isExpanded}
-              onToggleExpand={toggleExpanded}
-              onClose={() => setVisible(false)}
-              showHeader={true}
-            />
+
+      <Modal
+        visible={decodedOffer !== null}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setDecodedOffer(null)}
+      >
+        <View style={styles.decodeOverlay}>
+          <View style={styles.decodeCard} testID="decoded-offer-modal">
+            <LinearGradient colors={['#ECFEFF', '#F8FAFC']} style={styles.decodeHeader}>
+              <View style={styles.decodeTitleRow}>
+                <FileText size={20} color={COLORS.navyDeep} />
+                <Text style={styles.decodeTitle}>{decodedOffer?.title ?? 'Decoded Offer'}</Text>
+              </View>
+              <TouchableOpacity style={styles.decodeClose} onPress={() => setDecodedOffer(null)} testID="decoded-offer-close">
+                <Text style={styles.decodeCloseText}>Close</Text>
+              </TouchableOpacity>
+            </LinearGradient>
+            <ScrollView style={styles.decodeScroll} contentContainerStyle={styles.decodeScrollContent}>
+              {decodedOffer?.bullets.map((bullet, index) => (
+                <View key={`${bullet}-${index}`} style={styles.decodeBulletRow}>
+                  <Calculator size={15} color="#0F766E" />
+                  <Text style={styles.decodeBulletText}>{bullet}</Text>
+                </View>
+              ))}
+              <Text style={styles.decodeDisclaimer}>{decodedOffer?.disclaimer}</Text>
+            </ScrollView>
           </View>
         </View>
-      )}
+      </Modal>
       
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <QuickActionsFAB
@@ -957,6 +1235,23 @@ const styles = StyleSheet.create({
   headerContent: {
     marginBottom: SPACING.md,
   },
+  titleLogoCard: {
+    marginTop: SPACING.sm,
+    marginBottom: SPACING.md,
+    borderRadius: BORDER_RADIUS.xl,
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: '#D4AF37',
+    height: 270,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...SHADOW.card,
+  },
+  titleLogoImage: {
+    width: '100%',
+    height: '100%',
+  },
   footerContent: {
     marginTop: SPACING.md,
   },
@@ -968,27 +1263,35 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 224,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.16)',
-    ...SHADOW.card,
+    minHeight: 200,
   },
 
-  heroImageShell: {
-    width: '100%',
-    minHeight: 198,
-    borderRadius: BORDER_RADIUS.lg,
-    overflow: 'hidden',
+  heroOverlay: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    paddingVertical: SPACING.xl,
+    paddingHorizontal: SPACING.lg,
   },
-
-  heroLogoImage: {
-    width: '100%',
-    height: 198,
+  heroTitle: {
+    fontSize: 32,
+    fontWeight: '800' as const,
+    color: '#1A1A1A',
+    letterSpacing: 1,
+    textAlign: 'center',
+  },
+  heroSubtitle: {
+    fontSize: 15,
+    fontWeight: '500' as const,
+    color: 'rgba(0,0,0,0.65)',
+    marginTop: 6,
+    letterSpacing: 0.3,
+    textAlign: 'center',
+  },
+  heroSignature: {
+    width: 240,
+    height: 100,
+    marginTop: 14,
+    opacity: 0.8,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -1235,32 +1538,348 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
     color: COLORS.white,
   },
-  agentChatOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 60,
-    zIndex: 1000,
+  learnSystemCard: {
+    borderRadius: BORDER_RADIUS.xl,
+    overflow: 'hidden',
+    marginBottom: SPACING.md,
+    ...SHADOW.md,
   },
-  agentChatBackdrop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'transparent',
+  learnSystemGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    padding: SPACING.md,
   },
-  agentChatContainer: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 0,
-    right: 0,
+  learnSystemIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: 'rgba(167, 243, 208, 0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(167, 243, 208, 0.24)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  agentChatExpanded: {
-    top: 0,
-    bottom: 0,
+  learnSystemCopy: {
+    flex: 1,
+  },
+  learnSystemTitle: {
+    fontSize: 15,
+    fontWeight: '900' as const,
+    color: '#FFFFFF',
+  },
+  learnSystemSubtitle: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.72)',
+    lineHeight: 17,
+    marginTop: 2,
+  },
+  learnSystemAction: {
+    fontSize: 12,
+    fontWeight: '900' as const,
+    color: '#A7F3D0',
+  },
+  commandCenterCard: {
+    borderRadius: BORDER_RADIUS.xl,
+    overflow: 'hidden',
+    marginBottom: SPACING.md,
+    ...SHADOW.lg,
+  },
+  commandCenterGradient: {
+    padding: SPACING.md,
+  },
+  commandCenterHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  commandCenterTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  commandCenterTitle: {
+    fontSize: 18,
+    fontWeight: '900' as const,
+    color: '#FFFFFF',
+  },
+  commandCenterCountPill: {
+    minWidth: 72,
+    minHeight: 32,
+    borderRadius: 16,
+    backgroundColor: '#FDE68A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+  },
+  commandCenterCountText: {
+    fontSize: 15,
+    fontWeight: '900' as const,
+    color: '#172554',
+    lineHeight: 17,
+  },
+  commandCenterCountLabel: {
+    fontSize: 9,
+    fontWeight: '900' as const,
+    color: '#172554',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase' as const,
+  },
+  commandCenterSubtitle: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.78)',
+    lineHeight: 17,
+    marginBottom: SPACING.sm,
+  },
+  commandCenterSummaryRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.xs,
+    marginBottom: SPACING.sm,
+  },
+  commandCenterUrgentChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#FDE68A',
+    borderRadius: BORDER_RADIUS.round,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 7,
+  },
+  commandCenterUrgentChipText: {
+    fontSize: 12,
+    fontWeight: '900' as const,
+    color: '#172554',
+  },
+  commandCenterMiniChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(186, 230, 253, 0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(186, 230, 253, 0.3)',
+    borderRadius: BORDER_RADIUS.round,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 7,
+  },
+  commandCenterMiniChipValue: {
+    fontSize: 12,
+    fontWeight: '900' as const,
+    color: '#FFFFFF',
+  },
+  commandCenterMiniChipLabel: {
+    fontSize: 11,
+    fontWeight: '800' as const,
+    color: '#BAE6FD',
+  },
+  commandCenterMiniChipMuted: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    borderRadius: BORDER_RADIUS.round,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 7,
+  },
+  commandCenterMiniChipMutedValue: {
+    fontSize: 12,
+    fontWeight: '900' as const,
+    color: '#FFFFFF',
+  },
+  commandCenterMiniChipMutedLabel: {
+    fontSize: 11,
+    fontWeight: '800' as const,
+    color: 'rgba(255,255,255,0.68)',
+  },
+  commandCenterOpenButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#FDE68A',
+    borderRadius: BORDER_RADIUS.round,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 8,
+    marginBottom: SPACING.sm,
+  },
+  commandCenterOpenButtonText: {
+    color: '#172554',
+    fontSize: 12,
+    fontWeight: '900' as const,
+  },
+  commandCenterBucket: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+    marginTop: SPACING.sm,
+  },
+  commandCenterBucketHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.xs,
+  },
+  commandCenterBucketTitle: {
+    fontSize: 13,
+    fontWeight: '800' as const,
+    color: '#FFFFFF',
+  },
+  commandCenterBucketSubtitle: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.68)',
+  },
+  commandCenterOfferRow: {
+    backgroundColor: 'rgba(15, 23, 42, 0.28)',
+    borderRadius: BORDER_RADIUS.sm,
+    padding: SPACING.sm,
+    marginTop: SPACING.xs,
+  },
+  commandCenterScoreBubble: {
+    position: 'absolute',
+    top: SPACING.sm,
+    left: SPACING.sm,
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  commandCenterScoreText: {
+    fontSize: 13,
+    fontWeight: '900' as const,
+    color: '#FFFFFF',
+  },
+  commandCenterOfferCopy: {
+    marginLeft: 52,
+    marginRight: 0,
+    marginBottom: SPACING.sm,
+  },
+  commandCenterOfferTitle: {
+    fontSize: 13,
+    fontWeight: '800' as const,
+    color: '#FFFFFF',
+  },
+  commandCenterOfferMeta: {
+    fontSize: 11,
+    color: '#BAE6FD',
+    marginTop: 2,
+  },
+  commandCenterActions: {
+    flexDirection: 'row',
+    gap: SPACING.xs,
+    marginLeft: 52,
+  },
+  commandCenterActionsWide: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.xs,
+    marginLeft: 52,
+    marginTop: SPACING.xs,
+  },
+  commandCenterAction: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: BORDER_RADIUS.sm,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 6,
+  },
+  commandCenterActionText: {
+    fontSize: 12,
+    fontWeight: '800' as const,
+    color: COLORS.navyDeep,
+  },
+  commandCenterActionMuted: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: BORDER_RADIUS.sm,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 5,
+  },
+  commandCenterActionMutedText: {
+    fontSize: 11,
+    fontWeight: '700' as const,
+    color: '#CBD5E1',
+  },
+  decodeOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(2, 6, 23, 0.62)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: SPACING.lg,
+  },
+  decodeCard: {
+    width: '100%',
+    maxWidth: 520,
+    maxHeight: '82%',
+    borderRadius: BORDER_RADIUS.xl,
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
+    ...SHADOW.lg,
+  },
+  decodeHeader: {
+    padding: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  decodeTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    paddingRight: 82,
+  },
+  decodeTitle: {
+    flex: 1,
+    fontSize: 17,
+    fontWeight: '900' as const,
+    color: COLORS.navyDeep,
+  },
+  decodeClose: {
+    position: 'absolute',
+    top: SPACING.md,
+    right: SPACING.md,
+    backgroundColor: COLORS.navyDeep,
+    borderRadius: BORDER_RADIUS.round,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 7,
+  },
+  decodeCloseText: {
+    fontSize: 12,
+    fontWeight: '800' as const,
+    color: '#FFFFFF',
+  },
+  decodeScroll: {
+    maxHeight: 520,
+  },
+  decodeScrollContent: {
+    padding: SPACING.md,
+    gap: SPACING.sm,
+  },
+  decodeBulletRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING.sm,
+    backgroundColor: '#F8FAFC',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  decodeBulletText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#1E293B',
+    lineHeight: 19,
+  },
+  decodeDisclaimer: {
+    fontSize: 12,
+    color: '#64748B',
+    lineHeight: 18,
+    marginTop: SPACING.sm,
   },
   casinoHistorySection: {
     backgroundColor: 'rgba(255,255,255,0.95)',
@@ -1357,4 +1976,32 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeXS,
     color: '#94A3B8',
   },
+  advisorGrid: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: SPACING.md,
+  },
+  advisorTile: {
+    flex: 1,
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    ...SHADOW.small,
+  },
+  advisorTileTitle: {
+    color: COLORS.navyDeep,
+    fontSize: 13,
+    fontWeight: '900',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  advisorTileText: {
+    color: COLORS.textDarkGrey,
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: '600',
+  },
+
 });

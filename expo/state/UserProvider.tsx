@@ -39,16 +39,27 @@ export const DEFAULT_PLAYING_HOURS: PlayingHours = {
 export interface UserProfile {
   id: string;
   name: string;
+  displayName?: string;
+  relationshipLabel?: string;
   email: string;
   isOwner?: boolean;
+  defaultProfile?: boolean;
+  active?: boolean;
   avatarUrl?: string;
   crownAnchorNumber?: string;
+  royalCaribbeanNumber?: string;
+  clubRoyaleId?: string;
+  clubRoyalePoints?: number;
+  clubRoyaleTier?: string;
   crownAnchorLevel?: string;
+  loyaltyPoints?: number;
   playingHours?: PlayingHours;
   celebrityEmail?: string;
   celebrityCaptainsClubNumber?: string;
+  blueChipId?: string;
   celebrityCaptainsClubPoints?: number;
   celebrityBlueChipPoints?: number;
+  celebrityBlueChipTier?: string;
   preferredBrand?: 'royal' | 'celebrity' | 'silversea' | 'carnival';
   silverseaEmail?: string;
   silverseaVenetianNumber?: string;
@@ -86,10 +97,14 @@ const DEFAULT_OWNER = {
   email: 'player@easyseas.app',
   crownAnchorNumber: '',
   crownAnchorLevel: '',
+  loyaltyPoints: 0,
+  clubRoyalePoints: 0,
+  clubRoyaleTier: '',
   celebrityEmail: '',
   celebrityCaptainsClubNumber: '',
   celebrityCaptainsClubPoints: 0,
   celebrityBlueChipPoints: 0,
+  celebrityBlueChipTier: '',
   preferredBrand: 'royal' as const,
   silverseaEmail: '',
   silverseaVenetianNumber: '',
@@ -119,14 +134,25 @@ function createOwnerProfile(email: string | null): UserProfile {
   return {
     id: `user_${Date.now()}`,
     name: DEFAULT_OWNER.name,
+    displayName: DEFAULT_OWNER.name,
+    relationshipLabel: 'Self',
     email: email ?? DEFAULT_OWNER.email,
     isOwner: true,
+    defaultProfile: true,
+    active: true,
     crownAnchorNumber: DEFAULT_OWNER.crownAnchorNumber,
+    royalCaribbeanNumber: DEFAULT_OWNER.crownAnchorNumber,
+    clubRoyaleId: '',
+    clubRoyalePoints: DEFAULT_OWNER.clubRoyalePoints,
+    clubRoyaleTier: DEFAULT_OWNER.clubRoyaleTier,
     crownAnchorLevel: DEFAULT_OWNER.crownAnchorLevel,
+    loyaltyPoints: DEFAULT_OWNER.loyaltyPoints,
     celebrityEmail: DEFAULT_OWNER.celebrityEmail,
     celebrityCaptainsClubNumber: DEFAULT_OWNER.celebrityCaptainsClubNumber,
+    blueChipId: '',
     celebrityCaptainsClubPoints: DEFAULT_OWNER.celebrityCaptainsClubPoints,
     celebrityBlueChipPoints: DEFAULT_OWNER.celebrityBlueChipPoints,
+    celebrityBlueChipTier: DEFAULT_OWNER.celebrityBlueChipTier,
     preferredBrand: DEFAULT_OWNER.preferredBrand,
     silverseaEmail: DEFAULT_OWNER.silverseaEmail,
     silverseaVenetianNumber: DEFAULT_OWNER.silverseaVenetianNumber,
@@ -188,16 +214,27 @@ function sanitizeUserProfile(user: unknown, fallbackEmail: string | null, index:
   return {
     id: typeof userRecord.id === 'string' && userRecord.id.trim().length > 0 ? userRecord.id : `user_${Date.now()}_${index}`,
     name: typeof userRecord.name === 'string' && userRecord.name.trim().length > 0 ? userRecord.name : DEFAULT_OWNER.name,
+    displayName: typeof userRecord.displayName === 'string' && userRecord.displayName.trim().length > 0 ? userRecord.displayName : (typeof userRecord.name === 'string' && userRecord.name.trim().length > 0 ? userRecord.name : DEFAULT_OWNER.name),
+    relationshipLabel: typeof userRecord.relationshipLabel === 'string' ? userRecord.relationshipLabel : (userRecord.isOwner === true ? 'Self' : ''),
     email: normalizedEmail,
     isOwner: userRecord.isOwner === true,
+    defaultProfile: userRecord.defaultProfile === true || userRecord.isOwner === true,
+    active: userRecord.active !== false,
     avatarUrl: typeof userRecord.avatarUrl === 'string' ? userRecord.avatarUrl : undefined,
     crownAnchorNumber: typeof userRecord.crownAnchorNumber === 'string' ? userRecord.crownAnchorNumber : DEFAULT_OWNER.crownAnchorNumber,
+    royalCaribbeanNumber: typeof userRecord.royalCaribbeanNumber === 'string' ? userRecord.royalCaribbeanNumber : (typeof userRecord.crownAnchorNumber === 'string' ? userRecord.crownAnchorNumber : DEFAULT_OWNER.crownAnchorNumber),
+    clubRoyaleId: typeof userRecord.clubRoyaleId === 'string' ? userRecord.clubRoyaleId : '',
+    clubRoyalePoints: typeof userRecord.clubRoyalePoints === 'number' ? userRecord.clubRoyalePoints : DEFAULT_OWNER.clubRoyalePoints,
+    clubRoyaleTier: typeof userRecord.clubRoyaleTier === 'string' ? userRecord.clubRoyaleTier : DEFAULT_OWNER.clubRoyaleTier,
     crownAnchorLevel: typeof userRecord.crownAnchorLevel === 'string' ? userRecord.crownAnchorLevel : DEFAULT_OWNER.crownAnchorLevel,
+    loyaltyPoints: typeof userRecord.loyaltyPoints === 'number' ? userRecord.loyaltyPoints : DEFAULT_OWNER.loyaltyPoints,
     playingHours: sanitizePlayingHours(userRecord.playingHours),
     celebrityEmail: typeof userRecord.celebrityEmail === 'string' ? userRecord.celebrityEmail : DEFAULT_OWNER.celebrityEmail,
     celebrityCaptainsClubNumber: typeof userRecord.celebrityCaptainsClubNumber === 'string' ? userRecord.celebrityCaptainsClubNumber : DEFAULT_OWNER.celebrityCaptainsClubNumber,
+    blueChipId: typeof userRecord.blueChipId === 'string' ? userRecord.blueChipId : '',
     celebrityCaptainsClubPoints: typeof userRecord.celebrityCaptainsClubPoints === 'number' ? userRecord.celebrityCaptainsClubPoints : DEFAULT_OWNER.celebrityCaptainsClubPoints,
     celebrityBlueChipPoints: typeof userRecord.celebrityBlueChipPoints === 'number' ? userRecord.celebrityBlueChipPoints : DEFAULT_OWNER.celebrityBlueChipPoints,
+    celebrityBlueChipTier: typeof userRecord.celebrityBlueChipTier === 'string' ? userRecord.celebrityBlueChipTier : DEFAULT_OWNER.celebrityBlueChipTier,
     preferredBrand: userRecord.preferredBrand === 'royal' || userRecord.preferredBrand === 'celebrity' || userRecord.preferredBrand === 'silversea' || userRecord.preferredBrand === 'carnival'
       ? userRecord.preferredBrand
       : DEFAULT_OWNER.preferredBrand,
@@ -466,12 +503,17 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
     const now = new Date().toISOString();
     const normalizedEmail = normalizeEmail(user.email) ?? normalizedAuthenticatedEmail ?? DEFAULT_OWNER.email;
 
+    const isFirstUser = users.length === 0;
     const newUser: UserProfile = {
       id: user.id || `user_${Date.now()}`,
       name: user.name,
+      displayName: user.name,
+      relationshipLabel: isFirstUser ? 'Self' : '',
       email: normalizedEmail,
       avatarUrl: user.avatarUrl,
-      isOwner: users.length === 0,
+      isOwner: isFirstUser,
+      defaultProfile: isFirstUser,
+      active: true,
       createdAt: now,
       updatedAt: now,
     };
@@ -551,6 +593,7 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
         email: updates.email !== undefined ? (normalizeEmail(updates.email) ?? normalizedAuthenticatedEmail ?? DEFAULT_OWNER.email) : updates.email,
       };
 
+      const targetUserBeforeUpdate = currentUsers.find((user) => user.id === userId) ?? null;
       const updatedUsers = currentUsers.map((user) => (
         user.id === userId
           ? { ...user, ...normalizedUpdates, updatedAt: new Date().toISOString() }
@@ -560,7 +603,7 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
       await AsyncStorage.setItem(scopedKeys.USERS, JSON.stringify(updatedUsers));
 
       const normalizedTargetEmail = updates.email !== undefined ? normalizeEmail(updates.email) : normalizedAuthenticatedEmail;
-      if (normalizedTargetEmail && normalizedTargetEmail !== normalizedAuthenticatedEmail) {
+      if (targetUserBeforeUpdate?.isOwner === true && normalizedTargetEmail && normalizedTargetEmail !== normalizedAuthenticatedEmail) {
         const targetScopedKeys = getScopedUserKeys(normalizedTargetEmail);
         const targetScopedUsers = updatedUsers.map((user) => (
           user.id === userId

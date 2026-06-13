@@ -11,23 +11,47 @@ function isValidDate(date: Date): boolean {
   return time >= minTime && time <= maxTime;
 }
 
+const casinoAvailabilityWarned = new Set<string>();
+const casinoAvailabilityWarnCounts = new Map<string, number>();
+function warnOnce(key: string, ...args: any[]): void {
+  const count = (casinoAvailabilityWarnCounts.get(key) ?? 0) + 1;
+  casinoAvailabilityWarnCounts.set(key, count);
+  if (casinoAvailabilityWarned.has(key)) return;
+  casinoAvailabilityWarned.add(key);
+  console.warn(...args, count > 1 ? `(first warning; repeated ${count}x)` : '');
+}
+function isAvailableOfferCatalogCruise(cruise: Cruise | BookedCruise): boolean {
+  const anyCruise = cruise as any;
+  const status = String(anyCruise.status || anyCruise.bookingStatus || '').toLowerCase();
+  return Boolean(anyCruise.offerCode) && !anyCruise.bookingId && !anyCruise.reservationNumber && !status.includes('booked') && !status.includes('completed');
+}
+
+function parseCruiseDateValue(raw: string | undefined): Date | null {
+  if (!raw) return null;
+  const value = String(raw).trim();
+  let m = value.match(/^(20\d{2})[-\/](\d{1,2})[-\/](\d{1,2})/);
+  if (m) {
+    const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    return isValidDate(d) ? d : null;
+  }
+  m = value.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](20\d{2})/);
+  if (m) {
+    const d = new Date(Number(m[3]), Number(m[1]) - 1, Number(m[2]));
+    return isValidDate(d) ? d : null;
+  }
+  const parsed = new Date(value);
+  return isValidDate(parsed) ? parsed : null;
+}
+
 function safeParseSailDate(sailDate: string | undefined): Date {
+  const parsed = parseCruiseDateValue(sailDate);
+  if (parsed) return parsed;
   if (!sailDate) {
-    console.warn('[CasinoAvailability] No sailDate provided, using current date');
-    return new Date();
+    warnOnce('missing-sail-date', '[CasinoAvailability] No sailDate provided, using current date');
+  } else {
+    warnOnce('invalid-sail-date', '[CasinoAvailability] Invalid sailDate format encountered; examples are summarized, not spammed. First example:', sailDate, '- using current date');
   }
-  
-  try {
-    const parsed = new Date(sailDate);
-    if (isValidDate(parsed)) {
-      return parsed;
-    }
-    console.warn('[CasinoAvailability] Invalid sailDate:', sailDate, '- using current date');
-    return new Date();
-  } catch (e) {
-    console.warn('[CasinoAvailability] Error parsing sailDate:', sailDate, e);
-    return new Date();
-  }
+  return new Date();
 }
 
 function safeFormatDate(date: Date): string {
@@ -158,12 +182,16 @@ export interface CasinoAvailability {
   reason: string;
   arrivalTime?: string;
   departureTime?: string;
+  estimatedCasinoHours: number;
+  casinoOpenTime?: string;
+  casinoCloseTime?: string;
 }
 
 export interface CruiseCasinoSummary {
   totalDays: number;
   seaDays: number;
   portDays: number;
+  overnightPorts: number;
   casinoOpenDays: number;
   casinoClosedDays: number;
   usPortDays: number;
@@ -464,10 +492,10 @@ function parsePortsAndTimes(portsAndTimesStr: string): ItineraryDay[] {
   console.log('[CasinoAvailability] Parsing Ports&Times:', portsAndTimesStr);
   
   const result: ItineraryDay[] = [];
-  const lines = portsAndTimesStr.split(/\r?\n/).filter(line => line.trim());
+  const lines = portsAndTimesStr.split(/\r?\n|>/).filter(line => line.trim());
   
   lines.forEach((line, index) => {
-    const parts = line.split(/[;,|\t]/).map(p => p.trim());
+    const parts = line.split(/[;,|\t]/).map(p => p.trim()).filter(Boolean);
     
     if (parts.length >= 1) {
       const port = parts[0];
@@ -489,11 +517,149 @@ function parsePortsAndTimes(portsAndTimesStr: string): ItineraryDay[] {
   return result;
 }
 
+function normalizePortName(port: string): string {
+  return port.toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function countOvernightPorts(days: CasinoAvailability[]): number {
+  let overnightPorts = 0;
+  for (let index = 1; index < days.length; index += 1) {
+    const previous = days[index - 1];
+    const current = days[index];
+    if (
+      previous &&
+      current &&
+      !previous.isSeaDay &&
+      !current.isSeaDay &&
+      current.day !== days.length &&
+      normalizePortName(previous.port) === normalizePortName(current.port) &&
+      normalizePortName(current.port).length > 0
+    ) {
+      overnightPorts += 1;
+    }
+  }
+  return overnightPorts;
+}
+
+function normalizePortForComparison(port: string | undefined): string {
+  return (port ?? '')
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\b(california|florida|texas|washington|british columbia|bc|usa|united states)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function portsLikelyMatch(left: string | undefined, right: string | undefined): boolean {
+  const normalizedLeft = normalizePortForComparison(left);
+  const normalizedRight = normalizePortForComparison(right);
+  if (!normalizedLeft || !normalizedRight) return false;
+  if (normalizedLeft === normalizedRight) return true;
+  if (normalizedLeft.includes(normalizedRight) || normalizedRight.includes(normalizedLeft)) return true;
+  if (normalizedLeft.includes('los angeles') && (normalizedRight.includes('los angeles') || normalizedRight.includes('san pedro'))) return true;
+  if (normalizedRight.includes('los angeles') && (normalizedLeft.includes('los angeles') || normalizedLeft.includes('san pedro'))) return true;
+  if (normalizedLeft.includes('port canaveral') && normalizedRight.includes('orlando')) return true;
+  if (normalizedRight.includes('port canaveral') && normalizedLeft.includes('orlando')) return true;
+  return false;
+}
+
+function buildInferredSeaDay(day: number): ItineraryDay {
+  return {
+    day,
+    port: 'At Sea',
+    isSeaDay: true,
+    notes: 'Inferred sea day to complete the sailing length.',
+  };
+}
+
+function normalizeKnownItineraryDay(day: ItineraryDay, dayNumber: number): ItineraryDay {
+  return {
+    ...day,
+    day: dayNumber,
+    isSeaDay: day.isSeaDay || determineSeaDay(day.port),
+  };
+}
+
+function expandItineraryToExpectedDays(
+  itinerary: ItineraryDay[],
+  expectedDays: number,
+  cruise: Cruise | BookedCruise
+): ItineraryDay[] {
+  if (expectedDays <= 0 || itinerary.length === 0) return itinerary;
+
+  const sortedItinerary = itinerary
+    .slice()
+    .sort((left: ItineraryDay, right: ItineraryDay) => left.day - right.day)
+    .map((day: ItineraryDay, index: number) => normalizeKnownItineraryDay(day, Number.isFinite(day.day) && day.day > 0 ? day.day : index + 1));
+
+  if (sortedItinerary.length >= expectedDays) return sortedItinerary;
+
+  const maxExistingDay = Math.max(...sortedItinerary.map((day: ItineraryDay) => day.day));
+  const hasExplicitDayGaps = sortedItinerary.some((day: ItineraryDay, index: number) => day.day !== index + 1) || maxExistingDay === expectedDays;
+
+  if (hasExplicitDayGaps && maxExistingDay <= expectedDays) {
+    const byDay = new Map<number, ItineraryDay>();
+    sortedItinerary.forEach((day: ItineraryDay) => byDay.set(day.day, day));
+    const expandedExplicitDays: ItineraryDay[] = [];
+    for (let dayNumber = 1; dayNumber <= expectedDays; dayNumber += 1) {
+      const exactDay = byDay.get(dayNumber);
+      expandedExplicitDays.push(exactDay ? normalizeKnownItineraryDay(exactDay, dayNumber) : buildInferredSeaDay(dayNumber));
+    }
+    return expandedExplicitDays;
+  }
+
+  const firstDay = sortedItinerary[0];
+  const lastDay = sortedItinerary[sortedItinerary.length - 1];
+  const lastLooksLikeDisembarkation = sortedItinerary.length > 1 && (
+    portsLikelyMatch(firstDay?.port, lastDay?.port) ||
+    portsLikelyMatch(lastDay?.port, cruise.departurePort)
+  );
+
+  if (lastLooksLikeDisembarkation && firstDay && lastDay) {
+    const expanded: ItineraryDay[] = [normalizeKnownItineraryDay(firstDay, 1)];
+    const middleDays = sortedItinerary.slice(1, -1);
+    middleDays.forEach((day: ItineraryDay, index: number) => {
+      const dayNumber = Math.min(index + 2, expectedDays - 1);
+      expanded.push(normalizeKnownItineraryDay(day, dayNumber));
+    });
+
+    for (let dayNumber = expanded.length + 1; dayNumber < expectedDays; dayNumber += 1) {
+      expanded.push(buildInferredSeaDay(dayNumber));
+    }
+
+    expanded.push(normalizeKnownItineraryDay(lastDay, expectedDays));
+    return expanded;
+  }
+
+  const expandedSequential = sortedItinerary.map((day: ItineraryDay, index: number) => normalizeKnownItineraryDay(day, index + 1));
+  for (let dayNumber = expandedSequential.length + 1; dayNumber <= expectedDays; dayNumber += 1) {
+    expandedSequential.push(buildInferredSeaDay(dayNumber));
+  }
+  return expandedSequential;
+}
+
 export function calculateCasinoAvailabilityForCruise(
   cruise: Cruise | BookedCruise,
   offers?: { offerCode?: string; portsAndTimes?: string; ports?: string[] }[]
 ): CruiseCasinoSummary {
   const dailyAvailability: CasinoAvailability[] = [];
+  if (isAvailableOfferCatalogCruise(cruise)) {
+    return {
+      totalDays: Number((cruise as any).nights || (cruise as any).numberOfNights || 0) || 0,
+      seaDays: 0,
+      portDays: 0,
+      overnightPorts: 0,
+      casinoOpenDays: 0,
+      casinoClosedDays: 0,
+      usPortDays: 0,
+      foreignPortDays: 0,
+      estimatedCasinoHours: 0,
+      dailyAvailability: [],
+      bestGamblingDays: [],
+      gamblingWindowsDescription: 'Available offer catalog row: casino availability calculated only when booked, watched, or opened in detail.',
+    };
+  }
   
   // Calculate accurate nights from sailDate and returnDate if available
   let accurateNights = cruise.nights || 7;
@@ -510,7 +676,7 @@ export function calculateCasinoAvailabilityForCruise(
   let itineraryToUse: ItineraryDay[] = [];
   
   if (cruise.itinerary && cruise.itinerary.length > 0) {
-    itineraryToUse = cruise.itinerary;
+    itineraryToUse = cruise.itinerary.slice().sort((left, right) => left.day - right.day);
     console.log('[CasinoAvailability] Using cruise.itinerary:', itineraryToUse.length, 'days');
   } else {
     // Try to find matching cruise in BOOKED_CRUISES_DATA for accurate itinerary
@@ -571,6 +737,17 @@ export function calculateCasinoAvailabilityForCruise(
   const expectedDays = accurateNights + 1;
   
   if (itineraryToUse.length > 0) {
+    const expandedItinerary = expandItineraryToExpectedDays(itineraryToUse, expectedDays, cruise);
+    if (expandedItinerary.length !== itineraryToUse.length) {
+      console.log('[CasinoAvailability] Expanded itinerary to match sailing length:', {
+        cruiseId: cruise.id,
+        originalDays: itineraryToUse.length,
+        expectedDays,
+        expandedDays: expandedItinerary.length,
+      });
+    }
+    itineraryToUse = expandedItinerary;
+
     itineraryToUse.forEach((day: ItineraryDay, index: number) => {
       const isSeaDay = day.isSeaDay || determineSeaDay(day.port);
       const isDepartureDay = index === 0;
@@ -612,120 +789,45 @@ export function calculateCasinoAvailabilityForCruise(
         reason: availability.reason,
         arrivalTime: day.arrival,
         departureTime: day.departure,
+        estimatedCasinoHours: availability.estimatedHours,
+        casinoOpenTime: availability.openTime,
+        casinoCloseTime: availability.closeTime,
       });
     });
     
     if (dailyAvailability.length < expectedDays) {
-      console.log('[CasinoAvailability] Itinerary has fewer days than expected, extending:', {
+      warnOnce('incomplete-itinerary-'+String(cruise.id || cruise.shipName || ''), '[CasinoAvailability] Exact itinerary is incomplete; not fabricating missing days:', {
         actual: dailyAvailability.length,
         expected: expectedDays,
         nights: cruise.nights,
       });
-      
-      const existingDays = dailyAvailability.length;
-      for (let i = existingDays; i < expectedDays; i++) {
-        const isLastDay = i === expectedDays - 1;
-        const isSeaDay = !isLastDay && i % 2 === 0;
-        const port = isLastDay 
-          ? (cruise.departurePort || 'Return Port') 
-          : (isSeaDay ? 'At Sea' : 'Port of Call');
-        
-        const context: CasinoDayContext = {
-          dayNumber: i + 1,
-          totalDays: expectedDays,
-          isSeaDay,
-          isDepartureDay: false,
-          isDisembarkDay: isLastDay,
-          nextDayIsSeaDay: !isLastDay && (i + 1) % 2 === 0,
-          sailAwayTime: '17:00',
-          port,
-        };
-        
-        const availability = determineCasinoHoursWithContext(context);
-        
-        const sailDate = safeParseSailDate(cruise.sailDate);
-        const dayDate = safeAddDays(sailDate, i);
-        
-        dailyAvailability.push({
-          day: i + 1,
-          date: safeFormatDate(dayDate),
-          port,
-          isSeaDay,
-          isUSPort: isUSPort(port),
-          isUSTerritory: false,
-          casinoOpen: availability.open,
-          casinoOpenHours: availability.hours,
-          reason: availability.reason,
-        });
-      }
     }
   } else {
-    const nights = cruise.nights || 7;
-    for (let i = 0; i < nights + 1; i++) {
-      const isFirstDay = i === 0;
-      const isLastDay = i === nights;
-      const isSeaDay = !isFirstDay && !isLastDay && i % 2 === 0;
-      const port = (isFirstDay || isLastDay)
-        ? (cruise.departurePort || 'Departure Port') 
-        : (isSeaDay ? 'At Sea' : 'Port of Call');
-      
-      const nextDayIsSeaDay = (i + 1) < nights && (i + 1) % 2 === 0;
-      
-      const context: CasinoDayContext = {
-        dayNumber: i + 1,
-        totalDays: nights + 1,
-        isSeaDay,
-        isDepartureDay: isFirstDay,
-        isDisembarkDay: isLastDay,
-        nextDayIsSeaDay,
-        sailAwayTime: '17:00',
-        port,
-      };
-      
-      const availability = determineCasinoHoursWithContext(context);
-      
-      const sailDate = safeParseSailDate(cruise.sailDate);
-      const dayDate = safeAddDays(sailDate, i);
-      
-      dailyAvailability.push({
-        day: i + 1,
-        date: safeFormatDate(dayDate),
-        port,
-        isSeaDay,
-        isUSPort: isUSPort(port),
-        isUSTerritory: false,
-        casinoOpen: availability.open,
-        casinoOpenHours: availability.hours,
-        reason: availability.reason,
-      });
-    }
+    warnOnce('missing-itinerary-'+String(cruise.id || cruise.shipName || ''), '[CasinoAvailability] Exact itinerary unavailable; casino schedule requires imported day-by-day ports and times:', {
+      cruiseId: cruise.id,
+      shipName: cruise.shipName,
+      sailDate: cruise.sailDate,
+    });
   }
   
   const totalDays = dailyAvailability.length;
   const seaDays = dailyAvailability.filter(d => d.isSeaDay).length;
-  const portDays = totalDays - seaDays;
+  const portCallDays = dailyAvailability.filter(d => !d.isSeaDay && d.day !== 1 && d.day !== totalDays).length;
+  const overnightPorts = countOvernightPorts(dailyAvailability);
   const casinoOpenDays = dailyAvailability.filter(d => d.casinoOpen).length;
   const casinoClosedDays = totalDays - casinoOpenDays;
-  const usPortDays = dailyAvailability.filter(d => d.isUSPort && !d.isSeaDay).length;
-  const foreignPortDays = portDays - usPortDays;
-  
-  let estimatedCasinoHours = 0;
-  dailyAvailability.forEach(day => {
-    if (day.casinoOpen) {
-      if (day.isSeaDay) {
-        estimatedCasinoHours += 16;
-      } else {
-        estimatedCasinoHours += 8;
-      }
-    }
-  });
+  const usPortDays = dailyAvailability.filter(d => d.isUSPort && !d.isSeaDay && d.day !== 1 && d.day !== totalDays).length;
+  const foreignPortDays = Math.max(0, portCallDays - usPortDays);
+  const estimatedCasinoHours = dailyAvailability.reduce((sum, day) => sum + (day.casinoOpen ? day.estimatedCasinoHours : 0), 0);
   
   const bestGamblingDays = dailyAvailability
     .filter(d => d.casinoOpen)
     .map(d => d.day);
   
   let gamblingWindowsDescription = '';
-  if (casinoOpenDays === 0) {
+  if (totalDays === 0) {
+    gamblingWindowsDescription = 'Exact itinerary missing; import day-by-day ports and times to calculate casino availability.';
+  } else if (casinoOpenDays === 0) {
     gamblingWindowsDescription = 'No casino availability on this cruise (US territorial waters only)';
   } else if (casinoOpenDays === totalDays) {
     gamblingWindowsDescription = 'Casino open every day of the cruise';
@@ -733,22 +835,26 @@ export function calculateCasinoAvailabilityForCruise(
     gamblingWindowsDescription = `Casino open ${casinoOpenDays} of ${totalDays} days: ${seaDays} sea days + ${foreignPortDays} foreign port days`;
   }
 
-  console.log('[CasinoAvailability] Cruise analysis:', {
-    cruiseId: cruise.id,
-    shipName: cruise.shipName,
-    totalDays,
-    seaDays,
-    portDays,
-    casinoOpenDays,
-    usPortDays,
-    foreignPortDays,
-    estimatedCasinoHours,
-  });
+  if ((globalThis as any).__EASYSEAS_VERBOSE_CASINO_AVAILABILITY === true) {
+    console.log('[CasinoAvailability] Cruise analysis:', {
+      cruiseId: cruise.id,
+      shipName: cruise.shipName,
+      totalDays,
+      seaDays,
+      portDays: portCallDays,
+      overnightPorts,
+      casinoOpenDays,
+      usPortDays,
+      foreignPortDays,
+      estimatedCasinoHours,
+    });
+  }
 
   return {
     totalDays,
     seaDays,
-    portDays,
+    portDays: portCallDays,
+    overnightPorts,
     casinoOpenDays,
     casinoClosedDays,
     usPortDays,
@@ -768,6 +874,7 @@ export function formatCasinoAvailabilityText(summary: CruiseCasinoSummary): stri
     `Total Days: ${summary.totalDays}`,
     `Sea Days: ${summary.seaDays}`,
     `Port Days: ${summary.portDays}`,
+    `Overnight Ports: ${summary.overnightPorts}`,
     ``,
     `Casino Open Days: ${summary.casinoOpenDays}`,
     `Casino Closed Days: ${summary.casinoClosedDays}`,
@@ -1007,21 +1114,14 @@ export function calculatePersonalizedPlayEstimate(
     if (!day.casinoOpen) {
       notes = 'Casino closed - no play';
     } else if (useGoldenHours && enabledSessions.length > 0) {
-      const context: CasinoDayContext = {
-        dayNumber: day.day,
-        totalDays,
-        isSeaDay: day.isSeaDay,
-        isDepartureDay: isFirstDay,
-        isDisembarkDay: isLastDay,
-        port: day.port,
-      };
-      const casinoInfo = determineCasinoHoursWithContext(context);
+      const casinoOpenTime = day.casinoOpenTime ?? (day.isSeaDay ? '05:00' : undefined);
+      const casinoCloseTime = day.casinoCloseTime;
       
-      if (casinoInfo.open && casinoInfo.openTime) {
+      if (day.casinoOpen && casinoOpenTime) {
         enabledSessions.forEach(session => {
           const overlap = calculateTimeOverlap(
-            casinoInfo.openTime!,
-            casinoInfo.closeTime,
+            casinoOpenTime,
+            casinoCloseTime,
             session.startTime,
             session.endTime
           );
@@ -1030,7 +1130,7 @@ export function calculatePersonalizedPlayEstimate(
             goldenWindows.push(overlap);
           }
         });
-      } else if (casinoInfo.open && day.isSeaDay) {
+      } else if (day.casinoOpen && day.isSeaDay) {
         enabledSessions.forEach(session => {
           const overlap = calculateTimeOverlap(
             '05:00',

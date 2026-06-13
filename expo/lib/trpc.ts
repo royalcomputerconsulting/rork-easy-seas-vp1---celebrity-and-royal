@@ -3,6 +3,7 @@ import { createTRPCReact } from "@trpc/react-query";
 import superjson from "superjson";
 
 import type { AppRouter } from "@/backend/trpc/app-router";
+import { isCloudBackupEnabledByEnv } from "@/lib/localFirstMode";
 
 export const trpc = createTRPCReact<AppRouter>();
 
@@ -16,7 +17,9 @@ export const RENDER_BACKEND_URL = trimTrailingSlash(
   process.env.EXPO_PUBLIC_RENDER_BACKEND_URL?.trim() || DEFAULT_RENDER_URL
 );
 
-export const isRenderBackendAvailable = () => true;
+export const isCloudBackupEnabled = (): boolean => isCloudBackupEnabledByEnv();
+
+export const isRenderBackendAvailable = () => isCloudBackupEnabled();
 
 const getBackendUrl = (): string => RENDER_BACKEND_URL;
 
@@ -27,6 +30,12 @@ const HEALTH_CHECK_TIMEOUT = 8_000;
 let _healthCheckPromise: Promise<boolean> | null = null;
 
 const checkBackendHealth = async (): Promise<boolean> => {
+  if (!isCloudBackupEnabled()) {
+    _backendReachable = false;
+    _lastHealthCheck = Date.now();
+    return false;
+  }
+
   const baseUrl = getBackendUrl();
 
   const now = Date.now();
@@ -68,13 +77,16 @@ const checkBackendHealth = async (): Promise<boolean> => {
 };
 
 export const isBackendAvailable = (): boolean => {
+  if (!isCloudBackupEnabled()) {
+    return false;
+  }
   if (_backendReachable === false && Date.now() - _lastHealthCheck < HEALTH_CHECK_INTERVAL) {
     return false;
   }
   return true;
 };
 
-export const isWebSyncAvailable = (): boolean => true;
+export const isWebSyncAvailable = (): boolean => isCloudBackupEnabled();
 
 export const isBackendReachable = async (): Promise<boolean> => {
   return checkBackendHealth();

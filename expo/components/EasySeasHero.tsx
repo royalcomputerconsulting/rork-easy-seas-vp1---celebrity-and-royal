@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Settings, Bell } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, GRADIENTS } from '@/constants/theme';
-import { LOCAL_IMAGES } from '@/constants/images';
+import { IMAGES } from '@/constants/images';
 import { TierBadgeGroup } from '@/components/ui/TierBadge';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { CLUB_ROYALE_TIERS } from '@/constants/clubRoyaleTiers';
@@ -51,6 +51,11 @@ export function EasySeasHero({
     return eta.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
   };
 
+  const formatProjectedDate = (date: Date | null): string => {
+    if (!date) return formatETA(pinnacleProgress.nightsToNext, 14);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+  };
+
   return (
     <View style={styles.container}>
       <LinearGradient
@@ -64,7 +69,7 @@ export function EasySeasHero({
         <View style={styles.brandingSection}>
           <View style={styles.logoContainer}>
             <Image 
-              source={LOCAL_IMAGES.logo}
+              source={require('../assets/images/easyseas-scott-astin-logo.jpeg')}
               style={styles.logoImage}
               resizeMode="contain"
             />
@@ -121,7 +126,7 @@ export function EasySeasHero({
           </View>
           <ProgressBar
             progress={pinnacleProgress.percentComplete}
-            eta={`ETA: ${formatETA(pinnacleProgress.nightsToNext, 7)} • ${pinnacleProgress.nightsToNext} nights`}
+            eta={`ETA: ${formatProjectedDate(pinnacleProgress.projectedDate)} • ${pinnacleProgress.currentPointsNeeded} pts needed`}
             height={8}
             gradientColors={[COLORS.points, COLORS.pointsLight]}
             surfaceTone="light"
@@ -209,7 +214,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   logoImage: {
-    width: 48,
+    width: 72,
     height: 48,
     borderRadius: BORDER_RADIUS.sm,
   },

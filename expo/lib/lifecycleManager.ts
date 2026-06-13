@@ -185,7 +185,11 @@ export function updateAllCruiseLifecycles(cruises: BookedCruise[]): {
   updatedCruises: BookedCruise[];
   report: LifecycleReport;
 } {
-  console.log(`[LifecycleManager] Updating lifecycle for ${cruises.length} cruises`);
+  const activeCruises = cruises.filter((cruise: any) => !(cruise.offerCode && !cruise.bookingId && !cruise.reservationNumber));
+  if (activeCruises.length !== cruises.length) {
+    console.log(`[LifecycleManager] Skipping ${cruises.length - activeCruises.length} available offer catalog row(s); lifecycle only runs on booked/completed cruises`);
+  }
+  console.log(`[LifecycleManager] Updating lifecycle for ${activeCruises.length} cruises`);
 
   const updates: LifecycleUpdateResult[] = [];
   const validationResults: BookingValidationResult[] = [];
@@ -196,9 +200,9 @@ export function updateAllCruiseLifecycles(cruises: BookedCruise[]): {
   let upcomingCount = 0;
   let inProgressCount = 0;
   let completedCount = 0;
-  const cancelledCount = cruises.filter(c => c.status === 'cancelled').length;
+  const cancelledCount = activeCruises.filter(c => c.status === 'cancelled').length;
 
-  for (const cruise of cruises) {
+  for (const cruise of activeCruises) {
     const lifecycleResult = updateCruiseLifecycle(cruise);
     updates.push(lifecycleResult);
 

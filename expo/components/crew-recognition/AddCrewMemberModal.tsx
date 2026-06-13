@@ -25,6 +25,7 @@ interface AddCrewMemberModalProps {
     roleTitle?: string;
     notes?: string;
     sailingId?: string;
+    sailingSnapshot?: Sailing;
   }) => Promise<void>;
   sailings: Sailing[];
   bookedCruises?: BookedCruise[];
@@ -68,9 +69,29 @@ export function AddCrewMemberModal({ visible, onClose, onSubmit, sailings, booke
   const [showSailingPicker, setShowSailingPicker] = useState(false);
   const [autoLinked, setAutoLinked] = useState(false);
 
+  const sailingOptions = useMemo(() => {
+    const map = new Map<string, Sailing>();
+    sailings.forEach((sailing) => map.set(sailing.id, sailing));
+    bookedCruises.forEach((cruise) => {
+      if (!cruise.shipName || !cruise.sailDate) return;
+      const id = cruise.id || cruise.bookingId || cruise.reservationNumber || `${cruise.shipName}-${cruise.sailDate}`;
+      if (!map.has(id)) {
+        map.set(id, {
+          id,
+          shipName: cruise.shipName,
+          sailStartDate: cruise.sailDate,
+          sailEndDate: cruise.returnDate || cruise.sailDate,
+          nights: cruise.nights,
+          userId: String((cruise as any).ownerProfileId || (cruise as any).sourceEmail || 'local'),
+        });
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => (b.sailStartDate || '').localeCompare(a.sailStartDate || ''));
+  }, [sailings, bookedCruises]);
+
   const currentAboardSailing = useMemo(
-    () => findCurrentAboardSailing(sailings, bookedCruises),
-    [sailings, bookedCruises]
+    () => findCurrentAboardSailing(sailingOptions, bookedCruises),
+    [sailingOptions, bookedCruises]
   );
 
   useEffect(() => {
@@ -101,6 +122,7 @@ export function AddCrewMemberModal({ visible, onClose, onSubmit, sailings, booke
         roleTitle: roleTitle.trim() || undefined,
         notes: notes.trim() || undefined,
         sailingId: sailingId || undefined,
+        sailingSnapshot: sailingOptions.find(s => s.id === sailingId),
       });
 
       setFullName('');
@@ -117,7 +139,7 @@ export function AddCrewMemberModal({ visible, onClose, onSubmit, sailings, booke
     }
   };
 
-  const selectedSailing = sailings.find(s => s.id === sailingId);
+  const selectedSailing = sailingOptions.find(s => s.id === sailingId);
 
   return (
     <Modal visible={visible} animationType="slide" transparent>
@@ -224,7 +246,7 @@ export function AddCrewMemberModal({ visible, onClose, onSubmit, sailings, booke
                   >
                     <Text style={styles.pickerOptionText}>None</Text>
                   </TouchableOpacity>
-                  {sailings.map(sailing => (
+                  {sailingOptions.map(sailing => (
                     <TouchableOpacity
                       key={sailing.id}
                       style={styles.pickerOption}

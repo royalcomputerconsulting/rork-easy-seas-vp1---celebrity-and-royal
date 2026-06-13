@@ -2,7 +2,7 @@
   "expo": {
     "name": "Easy Seas",
     "slug": "easy-seas",
-    "version": "9.10.33",
+    "version": "9.10.89",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "rork-app",
@@ -17,7 +17,7 @@
       "supportsTablet": false,
       "bundleIdentifier": "app.rork.easy-seas-vp1-celebrity-and-royal",
       "usesIcloudStorage": true,
-      "buildNumber": "9.10.33"
+      "buildNumber": "9.10.89"
     },
     "android": {
       "adaptiveIcon": {
@@ -31,7 +31,7 @@
         "INTERNET",
         "android.permission.VIBRATE"
       ],
-      "versionCode": 9133
+      "versionCode": 91089
     },
     "web": {
       "favicon": "./assets/images/favicon.png"

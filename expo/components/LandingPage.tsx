@@ -29,9 +29,9 @@ export function LandingPage({ onContinue }: LandingPageProps) {
       >
         <View style={styles.content}>
           <Image 
-            source={require('@/assets/images/icon.png')}
+            source={require('../assets/images/easyseas-scott-astin-logo.jpeg')}
             style={styles.logo}
-            resizeMode="contain"
+            resizeMode="cover"
           />
           <Text style={styles.title}>EASY SEAS™</Text>
           <Text style={styles.subtitle}>Manage your Nautical Lifestyle</Text>
@@ -77,8 +77,8 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   logo: {
-    width: 200,
-    height: 200,
+    width: '100%',
+    height: 260,
     alignSelf: 'center',
     marginBottom: SPACING.sm,
   },

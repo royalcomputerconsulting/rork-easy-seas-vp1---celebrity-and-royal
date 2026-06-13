@@ -7,8 +7,13 @@ import {
   applyFreeplayOBCData,
 } from "./dataEnrichment";
 import { updateAllCruiseLifecycles } from "@/lib/lifecycleManager";
+import { applyKnownBookingCorrectionsToCruise, applyUserConfirmedBookedCruiseManifest, isKnownInvalidBookedCruise } from "@/lib/cruiseOverlapGuards";
 import { STORAGE_KEYS, DEFAULT_SETTINGS, getScopedStorageKeys, type AppSettings } from "./storageConfig";
 import { quotaSafeGetItem } from "@/lib/storage/quotaSafeStorage";
+import { containsKnownForeignPersonalData } from "@/lib/storage/dataOwnership";
+import { dedupeBookedCruises, dedupeCalendarEvents } from "@/lib/dataIdentity";
+import { generateCruiseCalendarEvents } from "@/lib/calendar/cruiseEvents";
+import { getKnownCasinoProfileCruises } from "@/lib/knownProfileFallback";
 
 export interface StorageSnapshot {
   cruisesData: string | null;
@@ -51,12 +56,17 @@ export interface ProcessedMetadata {
 }
 
 export function filterDemoCruises(cruises: BookedCruise[]): BookedCruise[] {
-  return cruises.filter((cruise) =>
-    !cruise.id?.includes('demo-') &&
-    !cruise.id?.includes('booked-virtual') &&
-    cruise.reservationNumber !== 'DEMO123' &&
-    cruise.reservationNumber !== 'DEMO456' &&
-    cruise.shipName !== 'Virtually a Ship of the Seas'
+  return applyUserConfirmedBookedCruiseManifest(
+    cruises
+      .filter((cruise) =>
+        !cruise.id?.includes('demo-') &&
+        !cruise.id?.includes('booked-virtual') &&
+        cruise.reservationNumber !== 'DEMO123' &&
+        cruise.reservationNumber !== 'DEMO456' &&
+        cruise.shipName !== 'Virtually a Ship of the Seas' &&
+        !isKnownInvalidBookedCruise(cruise)
+      )
+      .map(applyKnownBookingCorrectionsToCruise)
   );
 }
 
@@ -117,7 +127,7 @@ export function determineUserStatus(
   const hasImported = hasImportedData === 'true';
   const hasAnyExistingData = !!(bookedData || offersData || profileData || pointsData || cruisesData);
 
-  const parsedBookedData: BookedCruise[] = bookedData ? JSON.parse(bookedData) : [];
+  const parsedBookedData: BookedCruise[] = bookedData ? dedupeBookedCruises(JSON.parse(bookedData) as BookedCruise[], 'stored booked cruises') : [];
   const parsedOffersData: CasinoOffer[] = offersData ? JSON.parse(offersData) : [];
   const realBookedData = filterDemoCruises(parsedBookedData);
   const realOffersData = filterDemoOffers(parsedOffersData);
@@ -154,9 +164,13 @@ export async function processBookedCruises(
   if (bookedData && parsedBookedData.length > 0) {
     console.log('[CoreData] Found existing booked data, processing...');
 
+    const knownProfileCruises = getKnownCasinoProfileCruises(email);
     const nonMockCruises = filterDemoCruises(parsedBookedData);
+    const mergedKnownProfileCruises = knownProfileCruises.length > 0
+      ? dedupeBookedCruises([...knownProfileCruises, ...nonMockCruises], 'known-profile + stored booked cruises')
+      : nonMockCruises;
 
-    if (nonMockCruises.length === 0 && !hasRealData) {
+    if (nonMockCruises.length === 0 && !hasRealData && knownProfileCruises.length === 0) {
       console.log('[CoreData] Existing booked data only contains demo records - loading isolated sample demo data');
       const { sampleCruises, sampleOffers } = getFirstTimeUserSampleData();
       const enrichedSample = enrichCruisePipeline(sampleCruises);
@@ -172,21 +186,41 @@ export async function processBookedCruises(
     console.log('[CoreData] Filtered cruises:', {
       original: parsedBookedData.length,
       afterFilter: nonMockCruises.length,
+      knownProfileFallback: knownProfileCruises.length,
+      merged: mergedKnownProfileCruises.length,
     });
 
-    const withNormalizedLifecycle = normalizeCruiseLifecycle(nonMockCruises);
+    const dedupedNonMockCruises = dedupeBookedCruises(mergedKnownProfileCruises, 'processed booked cruises');
+    const withNormalizedLifecycle = normalizeCruiseLifecycle(dedupedNonMockCruises);
     const enrichedBooked = enrichCruisePipeline(withNormalizedLifecycle);
+    const cleanedKnownData = parsedBookedData.length !== nonMockCruises.length || JSON.stringify(parsedBookedData) !== JSON.stringify(nonMockCruises);
 
     return {
       bookedCruises: enrichedBooked,
       finalBookedCount: enrichedBooked.length,
-      shouldPersistMergedCruises: false,
+      shouldPersistMergedCruises: cleanedKnownData || dedupedNonMockCruises.length !== nonMockCruises.length || knownProfileCruises.length > 0,
       shouldPersistFirstTimeData: false,
     };
   }
 
-  if (isFirstTimeUser && !hasRealData) {
-    console.log('[CoreData] First time user with no real data - loading sample demo data');
+  const knownProfileCruises = getKnownCasinoProfileCruises(email);
+  if (knownProfileCruises.length > 0) {
+    console.log('[CoreData] Restoring known casino profile cruise history fallback:', {
+      email,
+      cruiseCount: knownProfileCruises.length,
+    });
+    const withNormalizedLifecycle = normalizeCruiseLifecycle(knownProfileCruises);
+    const enrichedKnownProfileCruises = enrichCruisePipeline(withNormalizedLifecycle);
+    return {
+      bookedCruises: enrichedKnownProfileCruises,
+      finalBookedCount: enrichedKnownProfileCruises.length,
+      shouldPersistMergedCruises: true,
+      shouldPersistFirstTimeData: false,
+    };
+  }
+
+  if (isFirstTimeUser && !hasRealData && false) {
+    console.log('[CoreData] First time user demo data disabled in production local-first mode');
     const { sampleCruises, sampleOffers } = getFirstTimeUserSampleData();
     const enrichedSample = enrichCruisePipeline(sampleCruises);
     console.log('[CoreData] Sample demo data loaded:', enrichedSample.length, 'cruises,', sampleOffers.length, 'offers');
@@ -217,7 +251,7 @@ export function processCalendarEvents(
   const { eventsData, bookedData } = snapshot;
   const { parsedBookedData } = status;
 
-  let parsedEvents: CalendarEvent[] = eventsData ? JSON.parse(eventsData) : [];
+  let parsedEvents: CalendarEvent[] = eventsData ? dedupeCalendarEvents(JSON.parse(eventsData) as CalendarEvent[], 'stored calendar events') : [];
 
   if (parsedEvents.length === 0 && finalBookedCount > 0) {
     console.log('[CoreData] No calendar events found but', finalBookedCount, 'booked cruises exist - auto-generating events');
@@ -229,19 +263,7 @@ export function processCalendarEvents(
       return [];
     })();
 
-    parsedEvents = currentBookedState
-      .filter((cruise: BookedCruise) => cruise.sailDate && cruise.returnDate)
-      .map((cruise: BookedCruise): CalendarEvent => ({
-        id: `cruise-${cruise.id}`,
-        title: cruise.shipName,
-        description: cruise.itineraryName || `${cruise.nights} Night Cruise`,
-        startDate: cruise.sailDate,
-        endDate: cruise.returnDate,
-        type: 'cruise',
-        allDay: true,
-        location: cruise.departurePort,
-        cruiseId: cruise.id,
-      }));
+    parsedEvents = generateCruiseCalendarEvents(dedupeBookedCruises(currentBookedState, 'auto-generated event cruises'));
 
     console.log('[CoreData] Auto-generated', parsedEvents.length, 'calendar events from booked cruises');
 
@@ -255,11 +277,13 @@ export function processCalendarEvents(
 export function processMetadata(
   snapshot: StorageSnapshot,
   isFirstTimeUser: boolean,
+  email?: string | null,
 ): ProcessedMetadata {
   const { settingsData, pointsData, profileData } = snapshot;
 
-  const settings: AppSettings | null = settingsData
-    ? { ...DEFAULT_SETTINGS, ...JSON.parse(settingsData) }
+  const parsedSettings = settingsData ? JSON.parse(settingsData) : null;
+  const settings: AppSettings | null = parsedSettings && !containsKnownForeignPersonalData(parsedSettings, email)
+    ? { ...DEFAULT_SETTINGS, ...parsedSettings }
     : null;
 
   const userPoints: number | null = pointsData
@@ -268,8 +292,13 @@ export function processMetadata(
 
   let clubRoyaleProfile: ClubRoyaleProfile | null = null;
   if (profileData) {
-    clubRoyaleProfile = JSON.parse(profileData);
-    console.log('[CoreData] Loaded existing loyalty profile');
+    const parsedProfile = JSON.parse(profileData) as ClubRoyaleProfile;
+    if (!containsKnownForeignPersonalData(parsedProfile, email)) {
+      clubRoyaleProfile = parsedProfile;
+      console.log('[CoreData] Loaded existing loyalty profile');
+    } else {
+      console.warn('[CoreData] Ignored loyalty profile outside active user scope');
+    }
   } else if (isFirstTimeUser) {
     console.log('[CoreData] First time user - initializing with default loyalty profile');
     clubRoyaleProfile = SAMPLE_CLUB_ROYALE_PROFILE;

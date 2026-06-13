@@ -1,25 +1,23 @@
-import React, { useCallback, useState, useMemo, useEffect } from 'react';
+import React, { useCallback, useState, useMemo, useEffect, useRef } from 'react';
 import { 
   View, 
   Text, 
   StyleSheet, 
   ScrollView, 
   TouchableOpacity, 
-  Switch, 
   Alert, 
   Linking, 
   ActivityIndicator,
   TextInput,
   Image,
   Platform,
+  Modal,
+  FlatList,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { 
   Settings as SettingsIcon, 
-  Bell, 
-  Moon, 
-  DollarSign, 
   Download, 
   Upload,
   Trash2, 
@@ -47,6 +45,8 @@ import {
   Link2,
   Copy,
   Rss,
+  MailQuestion,
+  X,
 } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME, SHADOW } from '@/constants/theme';
@@ -80,16 +80,27 @@ import { generateCalendarFeed, generateFeedToken } from '@/lib/calendar/feedGene
 import {
   getImportedSource,
   getImportedSourceLabel,
-  mergeImportedBookedCruises,
-  mergeImportedCruises,
-  mergeImportedOffers,
+  mergeImportedBookedCruisesWithReconciliation,
+  mergeImportedCruisesWithReconciliation,
+  mergeImportedOffersWithReconciliation,
 } from '@/lib/importMerge';
-import { RENDER_BACKEND_URL, trpc } from '@/lib/trpc';
+import { RENDER_BACKEND_URL, isCloudBackupEnabled, trpc } from '@/lib/trpc';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import * as XLSX from 'xlsx';
-import type { BookedCruise } from '@/types/models';
-import { getCalendarEventsWithGeneratedCruiseEvents } from '@/lib/calendar/cruiseEvents';
+import type { BookedCruise, CalendarEvent, CasinoOffer, Cruise, ImportReconciliationSummary } from '@/types/models';
+import { getCalendarEventsWithGeneratedCruiseEvents, getDayAgendaEventCountForYear } from '@/lib/calendar/cruiseEvents';
+import { getImportAssignmentReviewItems } from '@/lib/importAssignmentReview';
+import { applyFoundationFields } from '@/lib/dataFoundation';
+import {
+  buildBookedImportReviewRows,
+  buildCalendarImportReviewRows,
+  buildOffersImportReviewRows,
+  combineReconciliationSummaries,
+  createSimpleReconciliationSummary,
+  getSmartImportActionLabel,
+  type SmartImportReviewRow,
+} from '@/lib/importReconciliationReview';
 
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import { UserProfileCard } from '@/components/ui/UserProfileCard';
@@ -105,6 +116,10 @@ import { ResponsiveContainer } from '@/components/ResponsiveContainer';
 import { useEntitlement } from '@/state/EntitlementProvider';
 import { useCrewRecognition } from '@/state/CrewRecognitionProvider';
 import { useUserDataSync } from '@/state/UserDataSyncProvider';
+import { useIntelligenceFilters } from '@/state/IntelligenceFiltersProvider';
+import { getSecondProfileForUnassignedRecords } from '@/lib/intelligenceFilters';
+import { buildDiagnosticExport, clearDiagnosticEvents, recordDiagnosticEvent } from '@/lib/diagnosticLogger';
+import { getDoubleOccupancyRoomRetailValue } from '@/lib/valueCalculator';
 
 function normalizeAccountEmail(email: string | null | undefined): string | null {
   if (!email) {
@@ -119,19 +134,30 @@ function isAdminAccountEmail(email: string): boolean {
   return ADMIN_EMAILS.includes(email.toLowerCase().trim() as typeof ADMIN_EMAILS[number]);
 }
 
+type PendingSmartImportReview = {
+  title: string;
+  fileName: string;
+  summary: ImportReconciliationSummary;
+  rows: SmartImportReviewRow[];
+  applyLabel: string;
+  onApply: () => Promise<void>;
+};
+
 export default function SettingsScreen() {
   const router = useRouter();
   const entitlement = useEntitlement();
-  const { settings, updateSettings, clearLocalData, setLocalData, localData } = useAppState();
+  const { clearLocalData, setLocalData, localData } = useAppState();
   const coreData = useCoreData();
   const { clearAllData, bookedCruises, setCruises, casinoOffers, setBookedCruises, setCasinoOffers } = coreData;
   const cruises = coreData.cruises;
   const {
     currentUser,
     updateUser,
+    addUser,
     ensureOwner,
     syncFromStorage: syncUserFromStorage,
     isLoading: isUserLoading,
+    users,
   } = useUser();
   const {
     clubRoyalePoints: loyaltyClubRoyalePoints,
@@ -155,6 +181,7 @@ export default function SettingsScreen() {
   const [isDownloadingExtension, setIsDownloadingExtension] = useState(false);
   const [isDownloadingTemplate, setIsDownloadingTemplate] = useState(false);
   const [isDownloadingSeaPass, setIsDownloadingSeaPass] = useState(false);
+  const [isExportingDiagnostics, setIsExportingDiagnostics] = useState(false);
 
   const [isImportingMachines, setIsImportingMachines] = useState(false);
   const [isExportingMachines, setIsExportingMachines] = useState(false);
@@ -168,30 +195,61 @@ export default function SettingsScreen() {
   const [isPublishingFeed, setIsPublishingFeed] = useState(false);
   const [feedLastUpdated, setFeedLastUpdated] = useState<string | null>(null);
   const [isCopied, setIsCopied] = useState(false);
+  const [pendingSmartImportReview, setPendingSmartImportReview] = useState<PendingSmartImportReview | null>(null);
 
   const { myAtlasMachines, exportMachinesJSON, importMachinesJSON, reload: reloadMachines } = useSlotMachineLibrary();
   const { reload: reloadCasinoSessions } = useCasinoSessions();
   const { isAdmin, getWhitelist, addToWhitelist, removeFromWhitelist, updateEmail, authenticatedEmail } = useAuth();
   const { stats: crewStats } = useCrewRecognition();
   const { forceSyncNow: forceProfileSyncNow } = useUserDataSync();
+  const { selectedProfileId, setSelectedProfileId } = useIntelligenceFilters();
+  const linkedProfileEnsuredRef = useRef(false);
 
   const normalizedAuthenticatedEmail = useMemo(() => normalizeAccountEmail(authenticatedEmail), [authenticatedEmail]);
-  const normalizedCurrentUserEmail = useMemo(() => normalizeAccountEmail(currentUser?.email), [currentUser?.email]);
+  const activeUserProfiles = useMemo(() => users.filter((profile) => profile.active !== false), [users]);
+  const primaryProfileUser = useMemo(() => {
+    if (currentUser) {
+      return currentUser;
+    }
+
+    return activeUserProfiles.find((profile) => profile.isOwner || normalizeAccountEmail(profile.email) === normalizedAuthenticatedEmail)
+      ?? activeUserProfiles[0]
+      ?? null;
+  }, [activeUserProfiles, currentUser, normalizedAuthenticatedEmail]);
+  const linkedSecondProfile = useMemo(() => getSecondProfileForUnassignedRecords(activeUserProfiles), [activeUserProfiles]);
+  const selectedSettingsProfile = useMemo(() => {
+    if (selectedProfileId !== 'all' && selectedProfileId !== 'unassigned') {
+      const explicitProfile = activeUserProfiles.find((profile) => profile.id === selectedProfileId);
+      if (explicitProfile) {
+        return explicitProfile;
+      }
+    }
+
+    if (selectedProfileId === 'unassigned' && linkedSecondProfile) {
+      return linkedSecondProfile;
+    }
+
+    return primaryProfileUser;
+  }, [activeUserProfiles, linkedSecondProfile, primaryProfileUser, selectedProfileId]);
+  const normalizedSelectedProfileEmail = useMemo(() => normalizeAccountEmail(selectedSettingsProfile?.email), [selectedSettingsProfile?.email]);
   const profileDisplayUser = useMemo(() => {
-    if (!currentUser) {
+    if (!selectedSettingsProfile) {
       return null;
     }
 
-    if (normalizedAuthenticatedEmail && normalizedCurrentUserEmail && normalizedCurrentUserEmail !== normalizedAuthenticatedEmail) {
+    const isPrimaryProfile = selectedSettingsProfile.id === primaryProfileUser?.id;
+    if (isPrimaryProfile && normalizedAuthenticatedEmail && normalizedSelectedProfileEmail && normalizedSelectedProfileEmail !== normalizedAuthenticatedEmail) {
       console.log('[Settings] Hiding stale profile values while account storage catches up:', {
         authenticatedEmail: normalizedAuthenticatedEmail,
-        profileEmail: normalizedCurrentUserEmail,
+        profileEmail: normalizedSelectedProfileEmail,
       });
       return null;
     }
 
-    return currentUser;
-  }, [currentUser, normalizedAuthenticatedEmail, normalizedCurrentUserEmail]);
+    return selectedSettingsProfile;
+  }, [normalizedAuthenticatedEmail, normalizedSelectedProfileEmail, primaryProfileUser?.id, selectedSettingsProfile]);
+  const isPrimaryProfileSelected = profileDisplayUser?.id === primaryProfileUser?.id;
+  const activeProfileSlot = linkedSecondProfile && profileDisplayUser?.id === linkedSecondProfile.id ? 'secondary' : 'primary';
   const isProfileDisplayReady = true;
 
 
@@ -225,6 +283,50 @@ export default function SettingsScreen() {
       console.error('[Settings] Failed to ensure owner profile:', error);
     });
   }, [authenticatedEmail, currentUser, ensureOwner, isUserLoading]);
+
+  useEffect(() => {
+    if (isUserLoading || !authenticatedEmail || !primaryProfileUser || linkedSecondProfile || linkedProfileEnsuredRef.current) {
+      return;
+    }
+
+    linkedProfileEnsuredRef.current = true;
+    addUser({ name: 'Second User', email: authenticatedEmail })
+      .then((createdProfile) => {
+        console.log('[Settings] Created linked second profile for filtering:', createdProfile.id);
+        if (selectedProfileId === 'unassigned') {
+          setSelectedProfileId(createdProfile.id);
+        }
+      })
+      .catch((error) => {
+        linkedProfileEnsuredRef.current = false;
+        console.error('[Settings] Failed to create linked second profile:', error);
+      });
+  }, [addUser, authenticatedEmail, isUserLoading, linkedSecondProfile, primaryProfileUser, selectedProfileId, setSelectedProfileId]);
+
+  useEffect(() => {
+    if (!linkedSecondProfile || linkedSecondProfile.name !== 'Unassigned') {
+      return;
+    }
+
+    updateUser(linkedSecondProfile.id, {
+      name: 'Second User',
+      displayName: 'Second User',
+      relationshipLabel: 'Second User',
+    }).catch((error) => {
+      console.error('[Settings] Failed to rename linked second profile:', error);
+    });
+  }, [linkedSecondProfile, updateUser]);
+
+  const handleProfileSlotPress = useCallback((slot: 'primary' | 'secondary') => {
+    if (slot === 'secondary') {
+      setSelectedProfileId(linkedSecondProfile?.id ?? 'unassigned');
+      return;
+    }
+
+    if (primaryProfileUser) {
+      setSelectedProfileId(primaryProfileUser.id);
+    }
+  }, [linkedSecondProfile?.id, primaryProfileUser, setSelectedProfileId]);
 
   const handleAddToWhitelist = async () => {
     if (!newWhitelistEmail.trim() || !newWhitelistEmail.includes('@')) {
@@ -271,15 +373,15 @@ export default function SettingsScreen() {
     name: profileDisplayUser?.name || '',
     email: profileDisplayUser?.email || authenticatedEmail || '',
     crownAnchorNumber: profileDisplayUser?.crownAnchorNumber || '',
-    clubRoyalePoints: loyaltyClubRoyalePoints,
-    clubRoyaleTier: loyaltyClubRoyaleTier,
-    loyaltyPoints: loyaltyCrownAnchorPoints,
-    crownAnchorLevel: loyaltyCrownAnchorLevel,
+    clubRoyalePoints: isPrimaryProfileSelected ? loyaltyClubRoyalePoints : (profileDisplayUser?.clubRoyalePoints ?? 0),
+    clubRoyaleTier: isPrimaryProfileSelected ? loyaltyClubRoyaleTier : (profileDisplayUser?.clubRoyaleTier || ''),
+    loyaltyPoints: isPrimaryProfileSelected ? loyaltyCrownAnchorPoints : (profileDisplayUser?.loyaltyPoints ?? 0),
+    crownAnchorLevel: isPrimaryProfileSelected ? loyaltyCrownAnchorLevel : (profileDisplayUser?.crownAnchorLevel || ''),
     celebrityEmail: profileDisplayUser?.celebrityEmail || '',
     celebrityCaptainsClubNumber: profileDisplayUser?.celebrityCaptainsClubNumber || '',
     celebrityCaptainsClubPoints: profileDisplayUser?.celebrityCaptainsClubPoints || 0,
     celebrityBlueChipPoints: profileDisplayUser?.celebrityBlueChipPoints || 0,
-    celebrityBlueChipTier: 'Pearl',
+    celebrityBlueChipTier: profileDisplayUser?.celebrityBlueChipTier || 'Pearl',
     celebrityCaptainsClubLevel: 'Preview',
     preferredBrand: profileDisplayUser?.preferredBrand || 'royal',
     silverseaEmail: profileDisplayUser?.silverseaEmail || '',
@@ -296,6 +398,7 @@ export default function SettingsScreen() {
     loyaltyClubRoyalePoints,
     loyaltyClubRoyaleTier,
     loyaltyCrownAnchorLevel,
+    isPrimaryProfileSelected,
     loyaltyCrownAnchorPoints,
     profileDisplayUser,
   ]);
@@ -303,8 +406,8 @@ export default function SettingsScreen() {
 
 
   const enrichmentData = useMemo(() => {
-    if (!isProfileDisplayReady) return null;
-    if (!extendedLoyalty && !currentUser?.carnivalVifpNumber) return null;
+    if (!isProfileDisplayReady || !isPrimaryProfileSelected) return null;
+    if (!extendedLoyalty && !profileDisplayUser?.carnivalVifpNumber) return null;
 
     return {
       accountId: extendedLoyalty?.accountId,
@@ -340,16 +443,16 @@ export default function SettingsScreen() {
       venetianSocietyEnrolled: venetianSociety?.enrolled || extendedLoyalty?.venetianSocietyEnrolled,
       venetianSocietyLoyaltyMatchTier: extendedLoyalty?.venetianSocietyLoyaltyMatchTier,
 
-      carnivalVifpTier: currentUser?.carnivalVifpTier,
-      carnivalVifpNumber: currentUser?.carnivalVifpNumber,
-      carnivalPlayersClubTier: currentUser?.carnivalPlayersClubTier,
-      carnivalPlayersClubPoints: currentUser?.carnivalPlayersClubPoints,
+      carnivalVifpTier: profileDisplayUser?.carnivalVifpTier,
+      carnivalVifpNumber: profileDisplayUser?.carnivalVifpNumber,
+      carnivalPlayersClubTier: profileDisplayUser?.carnivalPlayersClubTier,
+      carnivalPlayersClubPoints: profileDisplayUser?.carnivalPlayersClubPoints,
 
       hasCoBrandCard: extendedLoyalty?.hasCoBrandCard,
       coBrandCardStatus: extendedLoyalty?.coBrandCardStatus,
       coBrandCardErrorMessage: extendedLoyalty?.coBrandCardErrorMessage,
     };
-  }, [captainsClub, currentUser, extendedLoyalty, isProfileDisplayReady, venetianSociety]);
+  }, [captainsClub, extendedLoyalty, isPrimaryProfileSelected, isProfileDisplayReady, profileDisplayUser, venetianSociety]);
 
   const dataStats = useMemo(() => {
     const allOffers = casinoOffers.length > 0 ? casinoOffers : (localData.offers || []);
@@ -367,9 +470,10 @@ export default function SettingsScreen() {
     const allBooked = bookedCruises.length > 0 ? bookedCruises : (localData.booked || []);
     const upcoming = allBooked.filter(c => isActiveBookedCruise(c)).length;
     const completed = allBooked.filter(c => isCompletedBookedCruise(c)).length;
-    const generatedCalendarEvents = getCalendarEventsWithGeneratedCruiseEvents(
+    const dayAgendaEventsThisYear = getDayAgendaEventCountForYear(
       allBooked,
-      [...(localData.calendar || []), ...(localData.tripit || [])]
+      [...(localData.calendar || []), ...(localData.tripit || [])],
+      new Date().getFullYear()
     );
 
     return {
@@ -379,11 +483,22 @@ export default function SettingsScreen() {
       completed,
       sailings: allOffers.length,
       uniqueOffers: uniqueOfferCount,
-      events: generatedCalendarEvents.length,
+      events: dayAgendaEventsThisYear,
       machines: myAtlasMachines.length || 0,
       crewMembers: crewStats?.crewMemberCount || 0,
     };
   }, [cruises, bookedCruises, casinoOffers, localData, myAtlasMachines, crewStats]);
+
+  const importAssignmentReviewCount = useMemo(() => {
+    const reviewItems = getImportAssignmentReviewItems({
+      offers: casinoOffers.length > 0 ? casinoOffers : (localData.offers || []),
+      cruises: cruises.length > 0 ? cruises : (localData.cruises || []),
+      bookedCruises: bookedCruises.length > 0 ? bookedCruises : (localData.booked || []),
+      calendarEvents: localData.calendar || [],
+      users,
+    });
+    return reviewItems.length;
+  }, [bookedCruises, casinoOffers, cruises, localData.booked, localData.calendar, localData.cruises, localData.offers, users]);
 
   const handleImportOffersCSV = useCallback(async () => {
     try {
@@ -418,8 +533,25 @@ export default function SettingsScreen() {
       const existingCruises = cruises.length > 0 ? cruises : (localData.cruises || []);
       const existingOffers = casinoOffers.length > 0 ? casinoOffers : (localData.offers || []);
       const importedSource = getImportedSource({ cruises: parsedCruises, offers: parsedOffers });
-      const mergedCruises = mergeImportedCruises(existingCruises, parsedCruises);
-      const mergedOffers = mergeImportedOffers(existingOffers, parsedOffers);
+      const importOwnerOptions = {
+        ownerProfileId: currentUser?.id ?? normalizedAuthenticatedEmail,
+        sourceEmail: authenticatedEmail ?? currentUser?.email ?? normalizedAuthenticatedEmail,
+        knownProfiles: users,
+      };
+      const cruisesMergeResult = mergeImportedCruisesWithReconciliation(existingCruises, parsedCruises, importOwnerOptions);
+      const offersMergeResult = mergeImportedOffersWithReconciliation(existingOffers, parsedOffers, importOwnerOptions);
+      const mergedCruises = cruisesMergeResult.merged;
+      const mergedOffers = offersMergeResult.merged;
+      const assignmentReviewCount = getImportAssignmentReviewItems({
+        offers: mergedOffers,
+        cruises: mergedCruises,
+        bookedCruises: [],
+        calendarEvents: [],
+        users,
+      }).length;
+      const reviewNeededCount = cruisesMergeResult.reconciliation.reviewNeededItems + offersMergeResult.reconciliation.reviewNeededItems;
+      const overlapCount = cruisesMergeResult.reconciliation.duplicateOverlappingSailings + offersMergeResult.reconciliation.duplicateOverlappingSailings;
+      const suggestedArchiveCount = cruisesMergeResult.reconciliation.suggestedArchiveRows + offersMergeResult.reconciliation.suggestedArchiveRows;
 
       console.log('[Settings] Merged imported offers CSV:', {
         importedSource,
@@ -429,26 +561,59 @@ export default function SettingsScreen() {
         parsedOffers: parsedOffers.length,
         mergedCruises: mergedCruises.length,
         mergedOffers: mergedOffers.length,
+        cruiseReconciliation: cruisesMergeResult.reconciliation,
+        offerReconciliation: offersMergeResult.reconciliation,
       });
-
-      await setCruises(mergedCruises);
-      await setCasinoOffers(mergedOffers);
-      await setLocalData({
-        cruises: mergedCruises,
-        offers: mergedOffers,
-      });
-
-      await AsyncStorage.setItem('easyseas_has_launched_before', 'true');
-      console.log('[Settings] Set HAS_LAUNCHED_BEFORE flag to prevent data wipe on restart');
 
       const sourceLabel = getImportedSourceLabel(importedSource);
       const healNote = healingReport.fieldsFixed.length > 0 ? `\n\nData healing fixed ${healingReport.fieldsFixed.length} field(s).` : '';
-      setLastImportResult({ type: 'offers', count: parsedCruises.length });
-      Alert.alert(
-        'Import Successful', 
-        `${sourceLabel} import updated ${parsedCruises.length} cruises and ${parsedOffers.length} offers from ${result.fileName}.${healNote}`
-      );
-      console.log('[Settings] Import complete:', parsedCruises.length, 'cruises,', parsedOffers.length, 'offers');
+      const reconciliationNote = reviewNeededCount > 0 || overlapCount > 0 || suggestedArchiveCount > 0
+        ? `\n\nReconciliation: ${reviewNeededCount} item(s) need review, ${overlapCount} overlapping sailing(s) were preserved, ${suggestedArchiveCount} missing row(s) were flagged instead of deleted.`
+        : '';
+      const assignmentNote = assignmentReviewCount > 0 ? `\n\nImport Assignment: ${assignmentReviewCount} item(s) need account/profile assignment.` : '';
+      setPendingSmartImportReview({
+        title: `${sourceLabel} Offers Import Review`,
+        fileName: result.fileName,
+        summary: combineReconciliationSummaries([cruisesMergeResult.reconciliation, offersMergeResult.reconciliation]),
+        rows: buildOffersImportReviewRows({
+          existingCruises,
+          importedCruises: parsedCruises,
+          existingOffers,
+          importedOffers: parsedOffers,
+          mergedCruises,
+          mergedOffers,
+        }),
+        applyLabel: `Apply ${parsedCruises.length + parsedOffers.length} row(s)`,
+        onApply: async () => {
+          try {
+            setIsImporting(true);
+            console.log('[Settings] Applying reviewed offers import:', { fileName: result.fileName, cruises: parsedCruises.length, offers: parsedOffers.length });
+            await setCruises(mergedCruises);
+            await setCasinoOffers(mergedOffers);
+            await setLocalData({ cruises: mergedCruises, offers: mergedOffers });
+            await AsyncStorage.setItem('easyseas_has_launched_before', 'true');
+            setLastImportResult({ type: 'offers', count: parsedCruises.length });
+            setPendingSmartImportReview(null);
+            Alert.alert(
+              'Import Applied',
+              `${sourceLabel} import updated ${parsedCruises.length} cruises and ${parsedOffers.length} offers from ${result.fileName}.${healNote}${reconciliationNote}${assignmentNote}`,
+              assignmentReviewCount > 0
+                ? [
+                    { text: 'Later', style: 'cancel' },
+                    { text: 'Review Assignments', onPress: () => router.push('/import-review' as any) },
+                  ]
+                : undefined
+            );
+            console.log('[Settings] Reviewed import applied:', parsedCruises.length, 'cruises,', parsedOffers.length, 'offers');
+          } catch (applyError) {
+            console.error('[Settings] Failed to apply reviewed offers import:', applyError);
+            Alert.alert('Apply Failed', 'The reviewed import could not be applied. Please try again.');
+          } finally {
+            setIsImporting(false);
+          }
+        },
+      });
+      console.log('[Settings] Prepared smart import review:', parsedCruises.length, 'cruises,', parsedOffers.length, 'offers');
     } catch (error) {
       console.error('[Settings] Import error:', error);
       
@@ -471,7 +636,7 @@ export default function SettingsScreen() {
     } finally {
       setIsImporting(false);
     }
-  }, [casinoOffers, cruises, localData.cruises, localData.offers, setCruises, setCasinoOffers, setLocalData]);
+  }, [authenticatedEmail, casinoOffers, cruises, currentUser?.email, currentUser?.id, localData.cruises, localData.offers, normalizedAuthenticatedEmail, router, setCruises, setCasinoOffers, setLocalData, users]);
 
   const fetchICSMutation = trpc.calendar.fetchICS.useMutation();
   const saveCalendarFeedMutation = trpc.calendar.saveCalendarFeed.useMutation();
@@ -646,7 +811,12 @@ export default function SettingsScreen() {
                 
                 console.log('[Settings] Fetched', content.length, 'characters via backend');
                 
-                const events = parseICSFile(content);
+                const events = applyFoundationFields(parseICSFile(content), {
+                  fallbackOwnerProfileId: currentUser?.id ?? normalizedAuthenticatedEmail,
+                  fallbackSourceEmail: authenticatedEmail ?? currentUser?.email ?? normalizedAuthenticatedEmail,
+                  markUnassigned: true,
+                  knownProfiles: users,
+                });
                 
                 if (events.length === 0) {
                   Alert.alert('Import Failed', 'No valid events found in the ICS file. Please check the URL and file format.');
@@ -654,16 +824,55 @@ export default function SettingsScreen() {
                   return;
                 }
 
-                await setLocalData({
-                  calendar: [...(localData.calendar || []), ...events],
+                const existingEvents = (localData.calendar || []) as CalendarEvent[];
+                const mergedEvents = [...existingEvents, ...events];
+                const calendarAssignmentReviewCount = getImportAssignmentReviewItems({
+                  offers: [],
+                  cruises: [],
+                  bookedCruises: [],
+                  calendarEvents: events,
+                  users,
+                }).length;
+                const calendarSummary = createSimpleReconciliationSummary({
+                  addedRows: events.length,
+                  reviewNeededItems: calendarAssignmentReviewCount,
                 });
-
-                setLastImportResult({ type: 'calendar', count: events.length });
-                Alert.alert(
-                  'Import Successful', 
-                  `Imported ${events.length} calendar events from URL`
-                );
-                console.log('[Settings] Import complete:', events.length, 'events');
+                setPendingSmartImportReview({
+                  title: 'Calendar Import Review',
+                  fileName: trimmedUrl,
+                  summary: calendarSummary,
+                  rows: buildCalendarImportReviewRows({
+                    existingEvents,
+                    importedEvents: events as CalendarEvent[],
+                    mergedEvents,
+                  }),
+                  applyLabel: `Apply ${events.length} event(s)`,
+                  onApply: async () => {
+                    try {
+                      setIsImporting(true);
+                      console.log('[Settings] Applying reviewed calendar URL import:', { url: trimmedUrl, events: events.length });
+                      await setLocalData({ calendar: mergedEvents });
+                      setLastImportResult({ type: 'calendar', count: events.length });
+                      setPendingSmartImportReview(null);
+                      Alert.alert(
+                        'Import Applied',
+                        `Imported ${events.length} calendar events from URL${calendarAssignmentReviewCount > 0 ? `. ${calendarAssignmentReviewCount} event(s) need account assignment review.` : ''}`,
+                        calendarAssignmentReviewCount > 0
+                          ? [
+                              { text: 'Later', style: 'cancel' },
+                              { text: 'Review Assignments', onPress: () => router.push('/import-review' as any) },
+                            ]
+                          : undefined
+                      );
+                    } catch (applyError) {
+                      console.error('[Settings] Failed to apply reviewed calendar URL import:', applyError);
+                      Alert.alert('Apply Failed', 'The reviewed calendar import could not be applied. Please try again.');
+                    } finally {
+                      setIsImporting(false);
+                    }
+                  },
+                });
+                console.log('[Settings] Prepared calendar URL smart import review:', events.length, 'events');
               } catch (error) {
                 console.error('[Settings] URL import error:', error);
                 Alert.alert(
@@ -685,7 +894,7 @@ export default function SettingsScreen() {
       Alert.alert('Import Error', 'Failed to start import. Please try again.');
       setIsImporting(false);
     }
-  }, [setLocalData, localData.calendar, fetchICSMutation]);
+  }, [authenticatedEmail, currentUser?.email, currentUser?.id, fetchICSMutation, localData.calendar, normalizedAuthenticatedEmail, router, setLocalData, users]);
 
   const handleImportCalendarFromFile = useCallback(async () => {
     try {
@@ -701,7 +910,12 @@ export default function SettingsScreen() {
       }
 
       console.log('[Settings] File selected:', result.fileName);
-      const events = parseICSFile(result.content);
+      const events = applyFoundationFields(parseICSFile(result.content), {
+        fallbackOwnerProfileId: currentUser?.id ?? normalizedAuthenticatedEmail,
+        fallbackSourceEmail: authenticatedEmail ?? currentUser?.email ?? normalizedAuthenticatedEmail,
+        markUnassigned: true,
+        knownProfiles: users,
+      });
       
       if (events.length === 0) {
         Alert.alert('Import Failed', 'No valid events found in the ICS file. Please check the file format.');
@@ -709,23 +923,62 @@ export default function SettingsScreen() {
         return;
       }
 
-      await setLocalData({
-        calendar: [...(localData.calendar || []), ...events],
+      const existingEvents = (localData.calendar || []) as CalendarEvent[];
+      const mergedEvents = [...existingEvents, ...events];
+      const calendarAssignmentReviewCount = getImportAssignmentReviewItems({
+        offers: [],
+        cruises: [],
+        bookedCruises: [],
+        calendarEvents: events,
+        users,
+      }).length;
+      const calendarSummary = createSimpleReconciliationSummary({
+        addedRows: events.length,
+        reviewNeededItems: calendarAssignmentReviewCount,
       });
-
-      setLastImportResult({ type: 'calendar', count: events.length });
-      Alert.alert(
-        'Import Successful', 
-        `Imported ${events.length} calendar events from ${result.fileName}`
-      );
-      console.log('[Settings] Import complete:', events.length, 'events');
+      setPendingSmartImportReview({
+        title: 'Calendar Import Review',
+        fileName: result.fileName,
+        summary: calendarSummary,
+        rows: buildCalendarImportReviewRows({
+          existingEvents,
+          importedEvents: events as CalendarEvent[],
+          mergedEvents,
+        }),
+        applyLabel: `Apply ${events.length} event(s)`,
+        onApply: async () => {
+          try {
+            setIsImporting(true);
+            console.log('[Settings] Applying reviewed calendar file import:', { fileName: result.fileName, events: events.length });
+            await setLocalData({ calendar: mergedEvents });
+            setLastImportResult({ type: 'calendar', count: events.length });
+            setPendingSmartImportReview(null);
+            Alert.alert(
+              'Import Applied',
+              `Imported ${events.length} calendar events from ${result.fileName}${calendarAssignmentReviewCount > 0 ? `. ${calendarAssignmentReviewCount} event(s) need account assignment review.` : ''}`,
+              calendarAssignmentReviewCount > 0
+                ? [
+                    { text: 'Later', style: 'cancel' },
+                    { text: 'Review Assignments', onPress: () => router.push('/import-review' as any) },
+                  ]
+                : undefined
+            );
+          } catch (applyError) {
+            console.error('[Settings] Failed to apply reviewed calendar file import:', applyError);
+            Alert.alert('Apply Failed', 'The reviewed calendar import could not be applied. Please try again.');
+          } finally {
+            setIsImporting(false);
+          }
+        },
+      });
+      console.log('[Settings] Prepared calendar file smart import review:', events.length, 'events');
     } catch (error) {
       console.error('[Settings] Import error:', error);
       Alert.alert('Import Error', 'Failed to import the file. Please check the file format and try again.');
     } finally {
       setIsImporting(false);
     }
-  }, [setLocalData, localData.calendar]);
+  }, [authenticatedEmail, currentUser?.email, currentUser?.id, localData.calendar, normalizedAuthenticatedEmail, router, setLocalData, users]);
 
   const handleImportCalendarICS = useCallback(() => {
     Alert.alert(
@@ -776,30 +1029,72 @@ export default function SettingsScreen() {
       }
 
       const importedSource = getImportedSource({ bookedCruises: parsedBooked });
-      const mergedBooked = mergeImportedBookedCruises(existingBooked, parsedBooked);
+      const bookedMergeResult = mergeImportedBookedCruisesWithReconciliation(existingBooked, parsedBooked, {
+        ownerProfileId: currentUser?.id ?? normalizedAuthenticatedEmail,
+        sourceEmail: authenticatedEmail ?? currentUser?.email ?? normalizedAuthenticatedEmail,
+        knownProfiles: users,
+      });
+      const mergedBooked = bookedMergeResult.merged;
       console.log('[Settings] Merged booked cruises:', {
         importedSource,
         existingBooked: existingBooked.length,
         parsedBooked: parsedBooked.length,
         mergedBooked: mergedBooked.length,
+        reconciliation: bookedMergeResult.reconciliation,
       });
-
-      await setBookedCruises(mergedBooked);
-      await setLocalData({
-        booked: mergedBooked,
-      });
-
-      await AsyncStorage.setItem('easyseas_has_launched_before', 'true');
-      console.log('[Settings] Set HAS_LAUNCHED_BEFORE flag to prevent data wipe on restart');
 
       const sourceLabel = getImportedSourceLabel(importedSource);
-      setLastImportResult({ type: 'booked', count: parsedBooked.length });
-      
-      Alert.alert(
-        'Import Successful', 
-        `${sourceLabel} booked cruises updated from ${result.fileName}. Imported ${parsedBooked.length} cruise row(s).`
-      );
-      console.log('[Settings] Booked import complete:', parsedBooked.length, 'cruise rows imported');
+      const bookedAssignmentReviewCount = getImportAssignmentReviewItems({
+        offers: [],
+        cruises: [],
+        bookedCruises: mergedBooked,
+        calendarEvents: [],
+        users,
+      }).length;
+      const bookedReconciliationNote = bookedMergeResult.reconciliation.reviewNeededItems > 0 || bookedMergeResult.reconciliation.duplicateOverlappingSailings > 0
+        ? ` ${bookedMergeResult.reconciliation.reviewNeededItems} item(s) need review and ${bookedMergeResult.reconciliation.duplicateOverlappingSailings} overlapping sailing(s) were preserved.`
+        : '';
+      const bookedAssignmentNote = bookedAssignmentReviewCount > 0 ? ` ${bookedAssignmentReviewCount} item(s) need account assignment review.` : '';
+      setPendingSmartImportReview({
+        title: `${sourceLabel} Booked Cruise Import Review`,
+        fileName: result.fileName,
+        summary: bookedMergeResult.reconciliation,
+        rows: buildBookedImportReviewRows({
+          existingBooked,
+          importedBooked: parsedBooked,
+          mergedBooked,
+          kind: 'Booked Cruise',
+        }),
+        applyLabel: `Apply ${parsedBooked.length} booked row(s)`,
+        onApply: async () => {
+          try {
+            setIsImporting(true);
+            console.log('[Settings] Applying reviewed booked import:', { fileName: result.fileName, bookedRows: parsedBooked.length });
+            await setBookedCruises(mergedBooked);
+            await setLocalData({ booked: mergedBooked });
+            await AsyncStorage.setItem('easyseas_has_launched_before', 'true');
+            setLastImportResult({ type: 'booked', count: parsedBooked.length });
+            setPendingSmartImportReview(null);
+            Alert.alert(
+              'Import Applied',
+              `${sourceLabel} booked cruises updated from ${result.fileName}. Imported ${parsedBooked.length} cruise row(s).${bookedReconciliationNote}${bookedAssignmentNote}`,
+              bookedAssignmentReviewCount > 0
+                ? [
+                    { text: 'Later', style: 'cancel' },
+                    { text: 'Review Assignments', onPress: () => router.push('/import-review' as any) },
+                  ]
+                : undefined
+            );
+            console.log('[Settings] Reviewed booked import applied:', parsedBooked.length, 'cruise rows imported');
+          } catch (applyError) {
+            console.error('[Settings] Failed to apply reviewed booked import:', applyError);
+            Alert.alert('Apply Failed', 'The reviewed booked import could not be applied. Please try again.');
+          } finally {
+            setIsImporting(false);
+          }
+        },
+      });
+      console.log('[Settings] Prepared smart booked import review:', parsedBooked.length, 'cruise rows');
     } catch (error) {
       console.error('[Settings] Booked import error:', error);
       
@@ -822,7 +1117,7 @@ export default function SettingsScreen() {
     } finally {
       setIsImporting(false);
     }
-  }, [bookedCruises, localData.booked, setBookedCruises, setLocalData]);
+  }, [authenticatedEmail, bookedCruises, currentUser?.email, currentUser?.id, localData.booked, normalizedAuthenticatedEmail, router, setBookedCruises, setLocalData, users]);
 
   const handleImportCompletedCruisesXLSX = useCallback(async () => {
     try {
@@ -914,9 +1209,12 @@ export default function SettingsScreen() {
       const colReservation = findCol(['reservation', 'booking', 'res']);
       const colCabin = findCol(['cabin', 'stateroom', 'room type']);
       const colGuests = findCol(['guests', 'pax', 'passengers']);
-      const colPrice = findCol(['price', 'cost', 'paid', 'amount']);
+      const colPrice = findCol(['retail price', 'retail value', 'total retail', 'cruise fare', 'fare', 'price', 'cost'], ['paid', 'amount paid', 'net', 'tax']);
+      const colPaid = findCol(['price paid', 'paid', 'amount paid', 'net paid', 'out of pocket'], ['retail']);
+      const colTaxes = findCol(['port taxes', 'taxes and fees', 'taxes & fees', 'taxes', 'fees', 'port charges']);
       const colWinnings = findCol(['winnings', 'casino win']);
       const colProgram = findCol(['program', 'charter']);
+      const colSourceEmail = findCol(['source email', 'account email', 'owner email', 'traveler email', 'profile email', 'email']);
 
       console.log('[Settings] XLSX mapped columns:', {
         ship: colShip, sailDate: colSailDate, returnDate: colReturnDate,
@@ -947,8 +1245,11 @@ export default function SettingsScreen() {
         const cabinType = getCol(colCabin);
         const guests = getCol(colGuests);
         const price = getCol(colPrice);
+        const paid = getCol(colPaid);
+        const taxes = getCol(colTaxes);
         const winnings = getCol(colWinnings);
         const program = getCol(colProgram);
+        const sourceEmail = normalizeAccountEmail(getCol(colSourceEmail)) ?? undefined;
 
         if (!shipName && !sailDateRaw) continue;
 
@@ -995,6 +1296,10 @@ export default function SettingsScreen() {
 
         const portsList = portsVisited ? portsVisited.split(',').map(p => p.trim()).filter(Boolean) : [];
         const itineraryLabel = destination || fullItinerary || `${nights} Night Cruise`;
+        const perPersonRetailPrice = price ? parseFloat(price.replace(/[^0-9.]/g, '')) || undefined : undefined;
+        const roomRetailPrice = getDoubleOccupancyRoomRetailValue(perPersonRetailPrice);
+        const paidAmount = paid ? parseFloat(paid.replace(/[^0-9.]/g, '')) || undefined : undefined;
+        const taxesAmount = taxes ? parseFloat(taxes.replace(/[^0-9.]/g, '')) || undefined : undefined;
 
         const cruise: BookedCruise = {
           id: `completed-xlsx-${Date.now()}-${i}`,
@@ -1011,12 +1316,25 @@ export default function SettingsScreen() {
           cabinType: cabinType || 'Balcony',
           guests: parseInt(guests) || 2,
           guestNames: [],
-          price: price ? parseFloat(price.replace(/[^0-9.]/g, '')) || undefined : undefined,
+          price: perPersonRetailPrice,
+          totalPrice: roomRetailPrice !== undefined ? roomRetailPrice + (taxesAmount ?? 0) : undefined,
+          retailValue: roomRetailPrice,
+          totalRetailCost: roomRetailPrice,
+          originalPrice: roomRetailPrice,
+          pricePaid: paidAmount,
+          amountPaid: paidAmount,
+          netEffectivePaid: paidAmount,
+          taxes: taxesAmount,
+          taxesFeesEstimate: taxesAmount,
+          totalCasinoDiscount: roomRetailPrice !== undefined && paidAmount !== undefined ? Math.max(0, roomRetailPrice + (taxesAmount ?? 0) - paidAmount) : undefined,
           winnings: winnings ? parseFloat(winnings.replace(/[^0-9.]/g, '')) || undefined : undefined,
           notes: notesVal || (program ? `Program: ${program}` : undefined),
           status: 'completed',
           completionState: 'completed',
           cruiseSource,
+          sourceEmail,
+          importStatus: sourceEmail ? 'unassigned' : undefined,
+          reconciliationStatus: sourceEmail ? 'reviewNeeded' : undefined,
           createdAt: new Date().toISOString(),
         };
 
@@ -1036,24 +1354,75 @@ export default function SettingsScreen() {
         return;
       }
 
-      const merged = [...existingBooked, ...importedCruises];
-      await setBookedCruises(merged);
-      await setLocalData({ booked: merged });
-      await AsyncStorage.setItem('easyseas_has_launched_before', 'true');
+      const preparedImportedCruises = applyFoundationFields(importedCruises, {
+        fallbackOwnerProfileId: currentUser?.id ?? normalizedAuthenticatedEmail,
+        fallbackSourceEmail: authenticatedEmail ?? currentUser?.email ?? normalizedAuthenticatedEmail,
+        markUnassigned: true,
+        knownProfiles: users,
+      });
+      const completedAssignmentReviewCount = getImportAssignmentReviewItems({
+        offers: [],
+        cruises: [],
+        bookedCruises: preparedImportedCruises,
+        calendarEvents: [],
+        users,
+      }).length;
+      const merged = [...existingBooked, ...preparedImportedCruises];
+      const completedSummary = createSimpleReconciliationSummary({
+        addedRows: preparedImportedCruises.length,
+        updatedRows: 0,
+        removedMissingRows: skippedCount,
+        suggestedArchiveRows: 0,
+        reviewNeededItems: completedAssignmentReviewCount,
+      });
 
-      setLastImportResult({ type: 'completed', count: importedCruises.length });
-      Alert.alert(
-        'Import Successful',
-        `Imported ${importedCruises.length} completed cruise${importedCruises.length !== 1 ? 's' : ''} from ${asset.name}.`
-      );
-      console.log('[Settings] XLSX import complete:', importedCruises.length, 'new completed cruises');
+      setPendingSmartImportReview({
+        title: 'Completed Cruise Import Review',
+        fileName: asset.name,
+        summary: completedSummary,
+        rows: buildBookedImportReviewRows({
+          existingBooked,
+          importedBooked: preparedImportedCruises,
+          mergedBooked: merged,
+          kind: 'Completed Cruise',
+        }),
+        applyLabel: `Apply ${preparedImportedCruises.length} completed row(s)`,
+        onApply: async () => {
+          try {
+            setIsImporting(true);
+            console.log('[Settings] Applying reviewed completed cruises import:', { fileName: asset.name, completedRows: preparedImportedCruises.length });
+            await setBookedCruises(merged);
+            await setLocalData({ booked: merged });
+            await AsyncStorage.setItem('easyseas_has_launched_before', 'true');
+            setLastImportResult({ type: 'completed', count: importedCruises.length });
+            setPendingSmartImportReview(null);
+            Alert.alert(
+              'Import Applied',
+              `Imported ${importedCruises.length} completed cruise${importedCruises.length !== 1 ? 's' : ''} from ${asset.name}.${completedAssignmentReviewCount > 0 ? ` ${completedAssignmentReviewCount} item(s) need account assignment review.` : ''}`,
+              completedAssignmentReviewCount > 0
+                ? [
+                    { text: 'Later', style: 'cancel' },
+                    { text: 'Review Assignments', onPress: () => router.push('/import-review' as any) },
+                  ]
+                : undefined
+            );
+            console.log('[Settings] Reviewed completed import applied:', importedCruises.length, 'new completed cruises');
+          } catch (applyError) {
+            console.error('[Settings] Failed to apply reviewed completed import:', applyError);
+            Alert.alert('Apply Failed', 'The reviewed completed-cruise import could not be applied. Please try again.');
+          } finally {
+            setIsImporting(false);
+          }
+        },
+      });
+      console.log('[Settings] Prepared completed cruises smart import review:', importedCruises.length, 'new completed cruises');
     } catch (error) {
       console.error('[Settings] XLSX import error:', error);
       Alert.alert('Import Error', 'Failed to import the XLSX file. Please check the file format and try again.');
     } finally {
       setIsImporting(false);
     }
-  }, [bookedCruises, localData.booked, setBookedCruises, setLocalData]);
+  }, [authenticatedEmail, bookedCruises, currentUser?.email, currentUser?.id, localData.booked, normalizedAuthenticatedEmail, router, setBookedCruises, setLocalData, users]);
 
   const handleExportBookedCSV = useCallback(async () => {
     try {
@@ -1235,17 +1604,64 @@ export default function SettingsScreen() {
 
 
 
+
+  const handleExportDiagnosticLogs = useCallback(async () => {
+    try {
+      setIsExportingDiagnostics(true);
+      const snapshot = {
+        version: '9.10.89',
+        exportedAt: new Date().toISOString(),
+        counts: {
+          availableCruises: cruises.length,
+          bookedCruises: bookedCruises.length,
+          offers: casinoOffers.length,
+          completedCruises: bookedCruises.filter(c => isCompletedBookedCruise(c)).length,
+        },
+        activeUser: currentUser?.email || authenticatedEmail || null,
+        dataMode: isCloudBackupEnabled() ? 'cloud-backup-enabled' : 'local-first-self-contained',
+      };
+      recordDiagnosticEvent({ level: 'info', category: 'ADMIN', event: 'EXPORT_DIAGNOSTIC_LOGS', message: 'Admin exported diagnostic logs', data: snapshot });
+      const bundle = await buildDiagnosticExport(snapshot);
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const content = [
+        bundle.summaryText,
+        '',
+        '--- RAW JSONL ---',
+        bundle.rawJsonl,
+        '',
+        '--- STATE SNAPSHOT ---',
+        bundle.stateSnapshot,
+      ].join('\n');
+      const success = await exportFile(content, `easyseas_diagnostic_logs_${stamp}.txt`);
+      Alert.alert(success ? 'Export Successful' : 'Export Info', success ? 'Diagnostic logs exported.' : 'Diagnostic log file was created, but sharing may not be available on this device.');
+    } catch (error) {
+      console.error('[Settings] Diagnostic log export error:', error);
+      Alert.alert('Export Error', 'Failed to export diagnostic logs.');
+    } finally {
+      setIsExportingDiagnostics(false);
+    }
+  }, [authenticatedEmail, bookedCruises, casinoOffers, cruises.length, currentUser?.email]);
+
+  const handleClearDiagnosticLogs = useCallback(async () => {
+    await clearDiagnosticEvents();
+    Alert.alert('Diagnostic Logs Cleared', 'The local diagnostic log buffer has been cleared.');
+  }, []);
+
   const handleExportAllData = useCallback(async () => {
     try {
       setIsExportingAll(true);
       console.log('[Settings] Starting full data export...');
       
-      const result = await exportAllDataToFile(authenticatedEmail);
+      const result = await exportAllDataToFile(authenticatedEmail, {
+        authenticatedEmail,
+        activeProfileId: currentUser?.id ?? null,
+        activeProfileEmail: currentUser?.email ?? authenticatedEmail ?? null,
+      });
       
       if (result.success) {
         Alert.alert(
           'Export Successful',
-          `All app data has been exported to ${result.fileName}. This includes cruises, offers, booked cruises, events, casino sessions, certificates, machines, crew members, user profile (name, C&A #, playing hours), Club Royale points, loyalty points, and settings.`
+          result.summaryText ?? `All app data has been exported to ${result.fileName ?? 'backup file'}.`
         );
       } else {
         Alert.alert('Export Failed', result.error || 'Failed to export data.');
@@ -1256,14 +1672,18 @@ export default function SettingsScreen() {
     } finally {
       setIsExportingAll(false);
     }
-  }, [authenticatedEmail]);
+  }, [authenticatedEmail, currentUser?.email, currentUser?.id]);
 
   const handleImportAllData = useCallback(async () => {
     try {
       setIsImportingAll(true);
       console.log('[Settings] Starting full data import...');
       
-      const result = await importAllDataFromFile(authenticatedEmail);
+      const result = await importAllDataFromFile(authenticatedEmail, {
+        authenticatedEmail,
+        activeProfileId: currentUser?.id ?? null,
+        activeProfileEmail: currentUser?.email ?? authenticatedEmail ?? null,
+      });
       
       if (!result.success) {
         if (result.error !== 'Import cancelled') {
@@ -1319,6 +1739,8 @@ export default function SettingsScreen() {
         console.log('[Settings] Triggering final refresh to propagate to UI...');
         await new Promise(resolve => setTimeout(resolve, 300));
         await coreData.refreshData();
+        await coreData.syncToBackend();
+        await forceProfileSyncNow();
         
         try {
           if (typeof window !== 'undefined' && typeof window.dispatchEvent !== 'undefined') {
@@ -1340,7 +1762,7 @@ export default function SettingsScreen() {
     } finally {
       setIsImportingAll(false);
     }
-  }, [authenticatedEmail, coreData, reloadCasinoSessions, reloadMachines, setLocalData, syncLoyaltyFromStorage, syncUserFromStorage]);
+  }, [authenticatedEmail, coreData, currentUser?.email, currentUser?.id, forceProfileSyncNow, reloadCasinoSessions, reloadMachines, setLocalData, syncLoyaltyFromStorage, syncUserFromStorage]);
 
   const handleDownloadExtension = useCallback(async () => {
     try {
@@ -1459,7 +1881,8 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
       
       const oldEmail = profileDisplayUser?.email?.toLowerCase().trim() || authenticatedEmail?.toLowerCase().trim();
       const newEmail = profileData.email.toLowerCase().trim();
-      const emailChanged = oldEmail && oldEmail !== newEmail;
+      const profileEmailChanged = Boolean(oldEmail && oldEmail !== newEmail);
+      const emailChanged = isPrimaryProfileSelected && profileEmailChanged;
       
       console.log('[Settings] Email change check:', { oldEmail, newEmail, emailChanged });
       
@@ -1560,10 +1983,15 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
           name: profileData.name,
           email: profileData.email,
           crownAnchorNumber: profileData.crownAnchorNumber,
+          clubRoyalePoints: profileData.clubRoyalePoints,
+          clubRoyaleTier: profileData.clubRoyaleTier,
+          crownAnchorLevel: profileData.crownAnchorLevel,
+          loyaltyPoints: profileData.loyaltyPoints,
           celebrityEmail: profileData.celebrityEmail,
           celebrityCaptainsClubNumber: profileData.celebrityCaptainsClubNumber,
           celebrityCaptainsClubPoints: profileData.celebrityCaptainsClubPoints,
           celebrityBlueChipPoints: profileData.celebrityBlueChipPoints,
+          celebrityBlueChipTier: profileData.celebrityBlueChipTier,
           preferredBrand: profileData.preferredBrand,
           silverseaEmail: profileData.silverseaEmail,
           silverseaVenetianNumber: profileData.silverseaVenetianNumber,
@@ -1576,10 +2004,12 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
           birthdate: profileData.birthdate || undefined,
         });
       
-      // Update Royal Caribbean loyalty data
-      await setManualClubRoyalePoints(profileData.clubRoyalePoints);
-      await setManualCrownAnchorPoints(profileData.loyaltyPoints);
+      if (isPrimaryProfileSelected) {
+        await setManualClubRoyalePoints(profileData.clubRoyalePoints);
+        await setManualCrownAnchorPoints(profileData.loyaltyPoints);
+      }
       console.log('[Settings] ✓ Updated Royal Caribbean loyalty:', {
+        profileId: editableUser.id,
         clubRoyale: profileData.clubRoyalePoints,
         crownAnchor: profileData.loyaltyPoints
       });
@@ -1604,7 +2034,9 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
       });
       
       await syncUserFromStorage();
-      await syncLoyaltyFromStorage();
+      if (isPrimaryProfileSelected) {
+        await syncLoyaltyFromStorage();
+      }
       await forceProfileSyncNow();
       
       if (emailChanged) {
@@ -1790,16 +2222,6 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
     </TouchableOpacity>
   );
 
-  const renderToggle = (value: boolean, onToggle: (val: boolean) => void) => (
-    <Switch
-      value={value}
-      onValueChange={onToggle}
-      trackColor={{ false: '#E5E7EB', true: 'rgba(0, 31, 63, 0.3)' }}
-      thumbColor={value ? COLORS.navyDeep : '#9CA3AF'}
-      ios_backgroundColor="#E5E7EB"
-    />
-  );
-
   const renderSectionHeader = (
     icon: React.ReactNode,
     title: string,
@@ -1821,6 +2243,40 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
       </View>
     </LinearGradient>
   );
+
+  const renderSmartImportReviewRow = useCallback((row: SmartImportReviewRow) => (
+    <View key={row.id} style={styles.smartImportRow} testID={`smart-import-review-row-${row.id}`}>
+      <View style={styles.smartImportRowTop}>
+        <View style={styles.smartImportKindPill}>
+          <Text style={styles.smartImportKindText}>{row.kind}</Text>
+        </View>
+        <View style={[
+          styles.smartImportActionPill,
+          row.action === 'add' ? styles.smartImportActionAdd : row.action === 'update' ? styles.smartImportActionUpdate : row.action === 'preserve' ? styles.smartImportActionPreserve : styles.smartImportActionReview,
+        ]}>
+          <Text style={styles.smartImportActionText}>{getSmartImportActionLabel(row.action)}</Text>
+        </View>
+      </View>
+      <Text style={styles.smartImportRowTitle} numberOfLines={1}>{row.title}</Text>
+      <Text style={styles.smartImportRowSubtitle} numberOfLines={2}>{row.subtitle}</Text>
+      <Text style={styles.smartImportRowMeta} numberOfLines={2}>{row.meta}</Text>
+      {row.before ? <Text style={styles.smartImportDiffText} numberOfLines={2}>Before: {row.before}</Text> : null}
+      {row.after ? <Text style={styles.smartImportDiffText} numberOfLines={2}>After: {row.after}</Text> : null}
+      {row.fieldDiffs.length > 0 ? (
+        <View style={styles.smartImportFieldDiffList}>
+          {row.fieldDiffs.slice(0, 5).map((diff) => (
+            <View key={`${row.id}-${diff.field}`} style={styles.smartImportFieldDiffRow}>
+              <Text style={styles.smartImportFieldName}>{diff.field}</Text>
+              <Text style={styles.smartImportFieldBefore} numberOfLines={1}>{diff.before || 'blank'}</Text>
+              <ChevronRight size={12} color="#94A3B8" />
+              <Text style={styles.smartImportFieldAfter} numberOfLines={1}>{diff.after || 'blank'}</Text>
+            </View>
+          ))}
+          {row.fieldDiffs.length > 5 ? <Text style={styles.smartImportMoreDiffs}>+{row.fieldDiffs.length - 5} more changed field(s)</Text> : null}
+        </View>
+      ) : null}
+    </View>
+  ), []);
 
   return (
     <View style={styles.container}>
@@ -1914,7 +2370,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
               <View style={[styles.quickActionIconSmall, { backgroundColor: 'rgba(0, 112, 201, 0.1)' }]}>
                 <Ship size={16} color="#0070C9" />
               </View>
-              <Text style={styles.quickActionLabelInline}>Sync Club Royale</Text>
+              <Text style={styles.quickActionLabelInline}>Sync Royal / Celebrity Casino</Text>
               <ChevronRight size={16} color={CLEAN_THEME.text.secondary} />
             </TouchableOpacity>
             {isAdmin && (
@@ -1957,6 +2413,22 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
               <Text style={styles.quickActionLabelInline}>Load Import Offers.CSV</Text>
               <ChevronRight size={16} color={CLEAN_THEME.text.secondary} />
             </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.quickActionFullWidth} 
+              onPress={() => router.push('/import-review' as any)}
+              activeOpacity={0.7}
+              testID="settings-open-import-review"
+            >
+              <View style={[styles.quickActionIconSmall, { backgroundColor: 'rgba(15, 118, 110, 0.1)' }]}> 
+                <MailQuestion size={16} color="#0F766E" />
+              </View>
+              <Text style={styles.quickActionLabelInline}>Review Import Assignments</Text>
+              {importAssignmentReviewCount > 0 ? (
+                <Text style={styles.countBadge}>{importAssignmentReviewCount}</Text>
+              ) : (
+                <ChevronRight size={16} color={CLEAN_THEME.text.secondary} />
+              )}
+            </TouchableOpacity>
             <View style={styles.quickActionsRow}>
               <TouchableOpacity 
                 style={styles.quickActionHalf} 
@@ -1993,49 +2465,17 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
           </View>
 
           <UserProfileCard
-            key={`profile-${normalizedAuthenticatedEmail ?? 'guest'}`}
+            key={`profile-${profileDisplayUser?.id ?? normalizedAuthenticatedEmail ?? 'guest'}`}
             currentValues={currentProfileValues}
             enrichmentData={enrichmentData}
             onSave={handleSaveProfile}
             isSaving={isSaving}
+            primaryProfileLabel="User"
+            secondaryProfileLabel="Second User"
+            activeProfileSlot={activeProfileSlot}
+            onProfileSlotPress={handleProfileSlotPress}
+            showProfileSwitch={true}
           />
-
-          <View style={styles.section}>
-            <View style={styles.sectionCard}>
-              {renderSectionHeader(<Moon size={18} color={COLORS.white} />, 'Display Preferences', 'Customize how data appears')}
-              {renderSettingRow(
-                <DollarSign size={18} color={COLORS.navyDeep} />,
-                'Show Taxes in List',
-                renderToggle(settings.showTaxesInList, (val) => updateSettings({ showTaxesInList: val }))
-              )}
-              {renderSettingRow(
-                <DollarSign size={18} color={COLORS.navyDeep} />,
-                'Price Per Night',
-                renderToggle(settings.showPricePerNight, (val) => updateSettings({ showPricePerNight: val }))
-              )}
-              {renderSettingRow(
-                <Moon size={18} color={COLORS.navyDeep} />,
-                'Theme',
-                settings.theme === 'dark' ? 'Dark' : settings.theme === 'light' ? 'Light' : 'System'
-              )}
-            </View>
-          </View>
-
-          <View style={styles.section}>
-            <View style={styles.sectionCard}>
-              {renderSectionHeader(<Bell size={18} color={COLORS.white} />, 'Notifications', 'Alert preferences')}
-              {renderSettingRow(
-                <Bell size={18} color={COLORS.navyDeep} />,
-                'Price Drop Alerts',
-                renderToggle(settings.priceDropAlerts, (val) => updateSettings({ priceDropAlerts: val }))
-              )}
-              {renderSettingRow(
-                <Bell size={18} color={COLORS.navyDeep} />,
-                'Daily Summary',
-                renderToggle(settings.dailySummaryNotifications || false, (val) => updateSettings({ dailySummaryNotifications: val }))
-              )}
-            </View>
-          </View>
 
           <View style={styles.section}>
             <View style={styles.sectionCard}>
@@ -2082,6 +2522,16 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
                   </View>
                 ) : undefined,
                 handleImportCalendarICS
+              )}
+              {renderSettingRow(
+                <MailQuestion size={18} color="#0F766E" />,
+                'Import Assignment Review',
+                importAssignmentReviewCount > 0 ? (
+                  <Text style={styles.countBadge}>{importAssignmentReviewCount} review</Text>
+                ) : (
+                  <Text style={styles.countBadge}>Clear</Text>
+                ),
+                () => router.push('/import-review' as any)
               )}
 <View style={styles.dataDivider} />
 
@@ -2280,7 +2730,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
 
             </View>
             <Text style={styles.backupHint}>
-              Full backup includes all cruises, offers, events, casino sessions, certificates, user profile (name, C&A #, playing hours), Club Royale points, loyalty points, and settings.
+              Full backup includes all cruises, offers, events, casino sessions, certificates, user profile (name, C&A #, playing hours), casino program points, loyalty points, and settings.
             </Text>
             <Text style={styles.extensionHint}>
               The Chrome extension automatically syncs offers, bookings, and loyalty data from Royal Caribbean and Celebrity cruise websites.
@@ -2311,8 +2761,8 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
 
 STEP 2: Scrape Your Offers
 ━━━━━━━━━━━━━━━━━━━━━━━━━
-1. Sign in to Club Royale:
-   www.royalcaribbean.com/Club-Royale
+1. Sign in to the matching casino program:
+   Royal Caribbean Club Royale or Celebrity Blue Chip
 2. Look for two new buttons at the top of the page
 3. Click "SHOW ALL OFFERS" button
 4. Follow all prompts until you see the full grid
@@ -2347,6 +2797,12 @@ STEP 4: Optional Calendar Import
                 'User Manual',
                 <ChevronRight size={14} color={CLEAN_THEME.text.secondary} />,
                 () => setIsUserManualVisible(true)
+              )}
+              {renderSettingRow(
+                <BookOpen size={18} color={COLORS.navyDeep} />,
+                'Learn the System',
+                <ChevronRight size={14} color={CLEAN_THEME.text.secondary} />,
+                () => router.push('/learn-system' as any)
               )}
               {renderSettingRow(
                 <BookOpen size={18} color={COLORS.navyDeep} />,
@@ -2394,13 +2850,15 @@ STEP 4: Optional Calendar Import
                 <View style={styles.subscriptionStatusText}>
                   <Text style={styles.subscriptionStatusTitle}>
                     {entitlement.subscriptionDisplayStatus === 'free_use' ? (entitlement.subscriptionLevel ?? 'Free Use of App') :
-                     entitlement.subscriptionDisplayStatus === 'monthly' || entitlement.subscriptionDisplayStatus === 'annual' ? 'Monthly Subscription' :
+                     entitlement.subscriptionDisplayStatus === 'annual' ? 'Annual Subscription' :
+                     entitlement.subscriptionDisplayStatus === 'monthly' ? 'Monthly / Redeemed Access' :
                      entitlement.subscriptionDisplayStatus === 'grace_period' ? '5-Day Grace Period' :
                      'Subscription Expired'}
                   </Text>
                   <Text style={styles.subscriptionStatusSubtitle}>
                     {entitlement.subscriptionDisplayStatus === 'free_use' ? 'Admin-granted free access — all app features unlocked' :
-                     entitlement.subscriptionDisplayStatus === 'monthly' || entitlement.subscriptionDisplayStatus === 'annual' ? 'Monthly plan active — all features unlocked' :
+                     entitlement.subscriptionDisplayStatus === 'annual' ? 'Annual plan or App Store redeemed access active — all features unlocked' :
+                     entitlement.subscriptionDisplayStatus === 'monthly' ? 'Monthly plan or App Store redeemed access active — all features unlocked' :
                      entitlement.subscriptionDisplayStatus === 'grace_period' ? `${entitlement.trialDaysRemaining} day${entitlement.trialDaysRemaining !== 1 ? 's' : ''} remaining — full access` :
                      'Purchase a monthly subscription ($9.99/month) to continue'}
                   </Text>
@@ -2412,6 +2870,12 @@ STEP 4: Optional Calendar Import
                 'Restore Purchases',
                 <ChevronRight size={14} color={CLEAN_THEME.text.secondary} />,
                 () => { void entitlement.restore(); }
+              )}
+              {renderSettingRow(
+                <Star size={18} color={COLORS.navyDeep} />,
+                'Redeem App Store Code',
+                <ChevronRight size={14} color={CLEAN_THEME.text.secondary} />,
+                () => { void entitlement.redeemOfferCode(); }
               )}
               {renderSettingRow(
                 <ExternalLink size={18} color={COLORS.navyDeep} />,
@@ -2440,7 +2904,7 @@ STEP 4: Optional Calendar Import
               )}
             </View>
             <Text style={styles.subscriptionHint}>
-              Manage your subscription status, restore previous purchases, and review legal terms. Whitelisted accounts show as Free Use of App and do not need a paid subscription.
+              Manage your subscription status, redeem App Store offer codes, restore previous purchases, and review legal terms. Whitelisted accounts show as Free Use of App and do not need a paid subscription.
             </Text>
           </View>
 
@@ -2455,6 +2919,22 @@ STEP 4: Optional Calendar Import
                   </Text>
                 </View>
                 
+
+                <View style={styles.dataDivider} />
+                {renderSettingRow(
+                  <FileDown size={18} color={COLORS.navyDeep} />,
+                  isExportingDiagnostics ? 'Exporting Diagnostic Logs...' : 'Export Diagnostic Logs',
+                  <Text style={styles.countBadge}>Admin</Text>,
+                  handleExportDiagnosticLogs,
+                  isExportingDiagnostics
+                )}
+                {renderSettingRow(
+                  <Trash2 size={18} color="#EF4444" />,
+                  'Clear Diagnostic Logs',
+                  <ChevronRight size={14} color={CLEAN_THEME.text.secondary} />,
+                  handleClearDiagnosticLogs
+                )}
+
                 <View style={styles.addEmailContainer}>
                   <TextInput
                     style={styles.addEmailInput}
@@ -2686,6 +3166,81 @@ STEP 4: Optional Calendar Import
         visible={isUserManualVisible}
         onClose={() => setIsUserManualVisible(false)}
       />
+
+      <Modal
+        visible={pendingSmartImportReview !== null}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setPendingSmartImportReview(null)}
+      >
+        <View style={styles.smartImportModalBackdrop}>
+          <View style={styles.smartImportModalCard} testID="smart-import-pre-apply-review">
+            <View style={styles.smartImportModalHeader}>
+              <View style={styles.smartImportHeaderIcon}>
+                <FileSpreadsheet size={20} color="#A7F3D0" />
+              </View>
+              <View style={styles.smartImportHeaderCopy}>
+                <Text style={styles.smartImportModalTitle}>{pendingSmartImportReview?.title ?? 'Smart Import Review'}</Text>
+                <Text style={styles.smartImportModalSubtitle} numberOfLines={1}>{pendingSmartImportReview?.fileName ?? 'Pending file'}</Text>
+              </View>
+              <TouchableOpacity style={styles.smartImportCloseButton} onPress={() => setPendingSmartImportReview(null)} activeOpacity={0.75} testID="smart-import-review-close">
+                <X size={18} color={COLORS.white} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.smartImportSummaryGrid}>
+              <View style={styles.smartImportSummaryCell}>
+                <Text style={styles.smartImportSummaryValue}>{pendingSmartImportReview?.summary.addedRows ?? 0}</Text>
+                <Text style={styles.smartImportSummaryLabel}>Add</Text>
+              </View>
+              <View style={styles.smartImportSummaryCell}>
+                <Text style={styles.smartImportSummaryValue}>{pendingSmartImportReview?.summary.updatedRows ?? 0}</Text>
+                <Text style={styles.smartImportSummaryLabel}>Update</Text>
+              </View>
+              <View style={styles.smartImportSummaryCell}>
+                <Text style={styles.smartImportSummaryValue}>{pendingSmartImportReview?.summary.reviewNeededItems ?? 0}</Text>
+                <Text style={styles.smartImportSummaryLabel}>Review</Text>
+              </View>
+              <View style={styles.smartImportSummaryCell}>
+                <Text style={styles.smartImportSummaryValue}>{pendingSmartImportReview?.summary.suggestedArchiveRows ?? 0}</Text>
+                <Text style={styles.smartImportSummaryLabel}>Preserve</Text>
+              </View>
+            </View>
+
+            <Text style={styles.smartImportReviewIntro}>Review each imported row before applying. Nothing is written until you tap Apply.</Text>
+
+            <FlatList
+              style={styles.smartImportRowsScroll}
+              contentContainerStyle={styles.smartImportRowsContent}
+              data={pendingSmartImportReview?.rows ?? []}
+              renderItem={({ item }) => renderSmartImportReviewRow(item)}
+              keyExtractor={(item) => item.id}
+              showsVerticalScrollIndicator={true}
+              initialNumToRender={12}
+              maxToRenderPerBatch={12}
+              windowSize={8}
+              updateCellsBatchingPeriod={32}
+              removeClippedSubviews={Platform.OS !== 'web'}
+            />
+
+            <View style={styles.smartImportFooter}>
+              <TouchableOpacity style={styles.smartImportCancelButton} onPress={() => setPendingSmartImportReview(null)} activeOpacity={0.8} testID="smart-import-review-cancel">
+                <Text style={styles.smartImportCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.smartImportApplyButton, isImporting && styles.smartImportApplyButtonDisabled]}
+                onPress={() => { void pendingSmartImportReview?.onApply(); }}
+                activeOpacity={0.86}
+                disabled={isImporting || pendingSmartImportReview === null}
+                testID="smart-import-review-apply"
+              >
+                {isImporting ? <ActivityIndicator size="small" color={COLORS.white} /> : <CheckCircle size={16} color={COLORS.white} />}
+                <Text style={styles.smartImportApplyText}>{pendingSmartImportReview?.applyLabel ?? 'Apply Import'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -3478,6 +4033,252 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeXS,
     color: 'rgba(255, 255, 255, 0.9)',
     marginTop: 2,
+  },
+  smartImportModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(2, 6, 23, 0.72)',
+    justifyContent: 'flex-end',
+  },
+  smartImportModalCard: {
+    maxHeight: '88%',
+    backgroundColor: '#F8FAFC',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    overflow: 'hidden',
+  },
+  smartImportModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    padding: SPACING.md,
+    backgroundColor: COLORS.navyDeep,
+  },
+  smartImportHeaderIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(167, 243, 208, 0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(167, 243, 208, 0.25)',
+  },
+  smartImportHeaderCopy: {
+    flex: 1,
+  },
+  smartImportModalTitle: {
+    fontSize: TYPOGRAPHY.fontSizeLG,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.white,
+  },
+  smartImportModalSubtitle: {
+    marginTop: 2,
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: 'rgba(255,255,255,0.74)',
+  },
+  smartImportCloseButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+  },
+  smartImportSummaryGrid: {
+    flexDirection: 'row',
+    gap: SPACING.xs,
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.md,
+  },
+  smartImportSummaryCell: {
+    flex: 1,
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.md,
+    paddingVertical: SPACING.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(3, 105, 161, 0.12)',
+  },
+  smartImportSummaryValue: {
+    fontSize: 20,
+    fontWeight: '900' as const,
+    color: COLORS.navyDeep,
+  },
+  smartImportSummaryLabel: {
+    marginTop: 2,
+    fontSize: 10,
+    fontWeight: '800' as const,
+    color: '#64748B',
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.6,
+  },
+  smartImportReviewIntro: {
+    marginHorizontal: SPACING.md,
+    marginTop: SPACING.sm,
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: '#475569',
+    lineHeight: 19,
+  },
+  smartImportRowsScroll: {
+    marginTop: SPACING.sm,
+  },
+  smartImportRowsContent: {
+    paddingHorizontal: SPACING.md,
+    paddingBottom: SPACING.md,
+    gap: SPACING.sm,
+  },
+  smartImportRow: {
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...SHADOW.sm,
+  },
+  smartImportRowTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.xs,
+  },
+  smartImportKindPill: {
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: BORDER_RADIUS.round,
+    backgroundColor: '#E0F2FE',
+  },
+  smartImportKindText: {
+    fontSize: 10,
+    fontWeight: '900' as const,
+    color: '#075985',
+  },
+  smartImportActionPill: {
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: BORDER_RADIUS.round,
+    borderWidth: 1,
+  },
+  smartImportActionAdd: {
+    backgroundColor: '#DCFCE7',
+    borderColor: '#86EFAC',
+  },
+  smartImportActionUpdate: {
+    backgroundColor: '#FEF3C7',
+    borderColor: '#FDE68A',
+  },
+  smartImportActionPreserve: {
+    backgroundColor: '#EDE9FE',
+    borderColor: '#C4B5FD',
+  },
+  smartImportActionReview: {
+    backgroundColor: '#FEE2E2',
+    borderColor: '#FECACA',
+  },
+  smartImportActionText: {
+    fontSize: 10,
+    fontWeight: '900' as const,
+    color: '#0F172A',
+  },
+  smartImportRowTitle: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  smartImportRowSubtitle: {
+    marginTop: 3,
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: '#334155',
+    lineHeight: 18,
+  },
+  smartImportRowMeta: {
+    marginTop: 5,
+    fontSize: 11,
+    color: '#64748B',
+    lineHeight: 15,
+  },
+  smartImportDiffText: {
+    marginTop: 5,
+    fontSize: 11,
+    color: '#0F766E',
+    lineHeight: 16,
+  },
+  smartImportFieldDiffList: {
+    marginTop: SPACING.sm,
+    gap: 5,
+  },
+  smartImportFieldDiffRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#F8FAFC',
+    borderRadius: BORDER_RADIUS.sm,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: SPACING.xs,
+    paddingVertical: 6,
+  },
+  smartImportFieldName: {
+    width: 82,
+    fontSize: 10,
+    fontWeight: '900' as const,
+    color: COLORS.navyDeep,
+  },
+  smartImportFieldBefore: {
+    flex: 1,
+    fontSize: 10,
+    color: '#64748B',
+    textDecorationLine: 'line-through' as const,
+  },
+  smartImportFieldAfter: {
+    flex: 1,
+    fontSize: 10,
+    fontWeight: '800' as const,
+    color: '#0F766E',
+  },
+  smartImportMoreDiffs: {
+    fontSize: 10,
+    fontWeight: '800' as const,
+    color: '#64748B',
+  },
+  smartImportFooter: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    padding: SPACING.md,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    backgroundColor: COLORS.white,
+  },
+  smartImportCancelButton: {
+    flex: 0.85,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingVertical: 13,
+  },
+  smartImportCancelText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#334155',
+  },
+  smartImportApplyButton: {
+    flex: 1.4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.xs,
+    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: '#0F766E',
+    paddingVertical: 13,
+  },
+  smartImportApplyButtonDisabled: {
+    opacity: 0.7,
+  },
+  smartImportApplyText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.white,
   },
   quickActionsBody: {
     padding: 12,

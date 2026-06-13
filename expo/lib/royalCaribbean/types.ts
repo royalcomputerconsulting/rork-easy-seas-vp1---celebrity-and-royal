@@ -204,6 +204,7 @@ export interface BookedCruiseRow {
   oceanviewPrice?: string;
   balconyPrice?: string;
   suitePrice?: string;
+  taxesAndFees?: string;
   portList?: string;
   stateroomDescription?: string;
   bookingChannel?: string;
@@ -282,10 +283,7 @@ export interface SyncDataCounts {
   offerRows: number;
   upcomingCruises: number;
   courtesyHolds: number;
-  /** Past/completed cruise rows captured by the dedicated Sync Completed Cruises flow. */
   completedCruises?: number;
-  /** Per-offer sailing/cruise counts shown in preview and completion cards. */
-  offerBreakdown?: { offerName: string; offerCode?: string; cruiseCount: number }[];
 }
 
 export interface RoyalCaribbeanSyncState {

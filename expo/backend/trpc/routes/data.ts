@@ -1,7 +1,8 @@
 import * as z from "zod";
 import { getDb } from "@/backend/db";
 import { createTRPCRouter, publicProcedure } from "../create-context";
-import { isOwnerScopeForEmail } from "@/lib/storage/dataOwnership";
+import { containsKnownForeignPersonalData, filterRecordsForOwner, isOwnerScopeForEmail, stampRecordsForOwner } from "@/lib/storage/dataOwnership";
+import { dedupeBookedCruises, dedupeCalendarEvents, dedupeCasinoOffers, dedupeCruises } from "@/lib/dataIdentity";
 
 const UserDataSchema = z.object({
   email: z.string().email(),
@@ -20,6 +21,7 @@ const UserDataSchema = z.object({
   alerts: z.array(z.any()).optional(),
   alertRules: z.array(z.any()).optional(),
   slotAtlas: z.array(z.any()).optional(),
+  machineEncyclopedia: z.array(z.any()).optional(),
   loyaltyData: z.any().optional(),
   bankrollData: z.any().optional(),
   celebrityData: z.any().optional(),
@@ -38,6 +40,46 @@ const UserDataSchema = z.object({
   w2gRecords: z.array(z.any()).optional(),
 });
 
+function prepareOwnedDataArray(value: any[] | undefined, fallback: any[] | undefined, ownerScopeId: string, email: string, label: string): any[] {
+  const source = Array.isArray(value) ? value : Array.isArray(fallback) ? fallback : [];
+  return stampRecordsForOwner(filterRecordsForOwner(source, ownerScopeId, email, label), ownerScopeId, email);
+}
+
+function prepareOwnedCruises(value: any[] | undefined, fallback: any[] | undefined, ownerScopeId: string, email: string, label: string): any[] {
+  return dedupeCruises(prepareOwnedDataArray(value, fallback, ownerScopeId, email, label), label);
+}
+
+function prepareOwnedBookedCruises(value: any[] | undefined, fallback: any[] | undefined, ownerScopeId: string, email: string, label: string): any[] {
+  return dedupeBookedCruises(prepareOwnedDataArray(value, fallback, ownerScopeId, email, label), label);
+}
+
+function prepareOwnedCasinoOffers(value: any[] | undefined, fallback: any[] | undefined, ownerScopeId: string, email: string, label: string): any[] {
+  return dedupeCasinoOffers(prepareOwnedDataArray(value, fallback, ownerScopeId, email, label), label);
+}
+
+function prepareOwnedCalendarEvents(value: any[] | undefined, fallback: any[] | undefined, ownerScopeId: string, email: string, label: string): any[] {
+  return dedupeCalendarEvents(prepareOwnedDataArray(value, fallback, ownerScopeId, email, label), label);
+}
+
+function prepareStringArray(value: any[] | undefined, fallback: any[] | undefined): string[] {
+  const source = Array.isArray(value) ? value : Array.isArray(fallback) ? fallback : [];
+  return Array.from(new Set(source.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)));
+}
+
+function sanitizeForeignValue<T>(value: T | undefined, fallback: T | undefined, email: string, label: string): T | undefined {
+  const source = value !== undefined ? value : fallback;
+  if (source === undefined || source === null) {
+    return source;
+  }
+
+  if (containsKnownForeignPersonalData(source, email)) {
+    console.warn('[API] Dropped user-identifiable data outside active user scope:', { email, label });
+    return undefined;
+  }
+
+  return source;
+}
+
 interface StoredUserData {
   email: string;
   ownerScopeId?: string;
@@ -54,7 +96,8 @@ interface StoredUserData {
   certificates?: any[];
   alerts?: any[];
   alertRules?: any[];
-  slotAtlas?: any[];
+  slotAtlas?: string[];
+  machineEncyclopedia?: any[];
   loyaltyData?: any;
   bankrollData?: any;
   celebrityData?: any;
@@ -154,46 +197,67 @@ export const dataRouter = createTRPCRouter({
         { ownerScopeId, email: normalizedEmail }
       );
 
-      const existingData = existingResults?.[0]?.[0];
+      const exactExistingData: StoredUserData | undefined = existingResults?.[0]?.[0];
+      let existingData: StoredUserData | undefined = exactExistingData;
+
+      if (!existingData) {
+        const fallbackResults = await db.query<[StoredUserData[]]>(
+          `SELECT * FROM user_profiles WHERE email = $email ORDER BY updatedAt DESC LIMIT 5`,
+          { email: normalizedEmail }
+        );
+        existingData = fallbackResults?.[0]?.find((record) => isOwnerScopeForEmail(record?.ownerScopeId, normalizedEmail));
+        if (existingData) {
+          console.log('[API] Found same-email profile under prior owner scope; carrying data into current scope:', {
+            email: normalizedEmail,
+            previousOwnerScopeId: existingData.ownerScopeId,
+            currentOwnerScopeId: ownerScopeId,
+          });
+        }
+      }
       
+      const userProfiles = prepareOwnedDataArray(input.userProfiles, existingData?.userProfiles, ownerScopeId, normalizedEmail, 'api-save user profiles');
+      const userProfileIds = new Set(userProfiles.map((profile) => typeof profile?.id === 'string' ? profile.id : null).filter((id): id is string => id !== null));
+      const currentUserId = input.currentUserId ?? existingData?.currentUserId ?? null;
+
       const dataToSave: StoredUserData = {
         email: normalizedEmail,
         ownerScopeId,
-        cruises: input.cruises ?? existingData?.cruises ?? [],
-        bookedCruises: input.bookedCruises ?? existingData?.bookedCruises ?? [],
-        casinoOffers: input.casinoOffers ?? existingData?.casinoOffers ?? [],
-        calendarEvents: input.calendarEvents ?? existingData?.calendarEvents ?? [],
-        casinoSessions: input.casinoSessions ?? existingData?.casinoSessions ?? [],
-        userProfiles: input.userProfiles ?? existingData?.userProfiles ?? [],
-        currentUserId: input.currentUserId ?? existingData?.currentUserId ?? null,
-        clubRoyaleProfile: input.clubRoyaleProfile ?? existingData?.clubRoyaleProfile,
-        settings: input.settings ?? existingData?.settings,
+        cruises: prepareOwnedCruises(input.cruises, existingData?.cruises, ownerScopeId, normalizedEmail, 'api-save available cruises'),
+        bookedCruises: prepareOwnedBookedCruises(input.bookedCruises, existingData?.bookedCruises, ownerScopeId, normalizedEmail, 'api-save booked cruises'),
+        casinoOffers: prepareOwnedCasinoOffers(input.casinoOffers, existingData?.casinoOffers, ownerScopeId, normalizedEmail, 'api-save casino offers'),
+        calendarEvents: prepareOwnedCalendarEvents(input.calendarEvents, existingData?.calendarEvents, ownerScopeId, normalizedEmail, 'api-save calendar events'),
+        casinoSessions: prepareOwnedDataArray(input.casinoSessions, existingData?.casinoSessions, ownerScopeId, normalizedEmail, 'api-save casino sessions'),
+        userProfiles,
+        currentUserId: currentUserId && (userProfileIds.size === 0 || userProfileIds.has(currentUserId)) ? currentUserId : null,
+        clubRoyaleProfile: sanitizeForeignValue(input.clubRoyaleProfile, existingData?.clubRoyaleProfile, normalizedEmail, 'api-save clubRoyaleProfile'),
+        settings: sanitizeForeignValue(input.settings, existingData?.settings, normalizedEmail, 'api-save settings'),
         userPoints: input.userPoints ?? existingData?.userPoints ?? 0,
-        certificates: input.certificates ?? existingData?.certificates ?? [],
-        alerts: input.alerts ?? existingData?.alerts ?? [],
-        alertRules: input.alertRules ?? existingData?.alertRules ?? [],
-        slotAtlas: input.slotAtlas ?? existingData?.slotAtlas ?? [],
-        loyaltyData: input.loyaltyData ?? existingData?.loyaltyData,
-        bankrollData: input.bankrollData ?? existingData?.bankrollData,
-        celebrityData: input.celebrityData ?? existingData?.celebrityData,
+        certificates: prepareOwnedDataArray(input.certificates, existingData?.certificates, ownerScopeId, normalizedEmail, 'api-save certificates'),
+        alerts: prepareOwnedDataArray(input.alerts, existingData?.alerts, ownerScopeId, normalizedEmail, 'api-save alerts'),
+        alertRules: prepareOwnedDataArray(input.alertRules, existingData?.alertRules, ownerScopeId, normalizedEmail, 'api-save alert rules'),
+        slotAtlas: prepareStringArray(input.slotAtlas, existingData?.slotAtlas),
+        machineEncyclopedia: prepareOwnedDataArray(input.machineEncyclopedia, existingData?.machineEncyclopedia, ownerScopeId, normalizedEmail, 'api-save machine encyclopedia'),
+        loyaltyData: sanitizeForeignValue(input.loyaltyData, existingData?.loyaltyData, normalizedEmail, 'api-save loyaltyData'),
+        bankrollData: sanitizeForeignValue(input.bankrollData, existingData?.bankrollData, normalizedEmail, 'api-save bankrollData'),
+        celebrityData: sanitizeForeignValue(input.celebrityData, existingData?.celebrityData, normalizedEmail, 'api-save celebrityData'),
         dismissedAlertIds: input.dismissedAlertIds ?? existingData?.dismissedAlertIds ?? [],
         dismissedAlertEntities: input.dismissedAlertEntities ?? existingData?.dismissedAlertEntities ?? [],
-        bankrollLimits: input.bankrollLimits ?? existingData?.bankrollLimits ?? [],
-        bankrollAlerts: input.bankrollAlerts ?? existingData?.bankrollAlerts ?? [],
-        crewRecognitionEntries: input.crewRecognitionEntries ?? existingData?.crewRecognitionEntries ?? [],
-        crewRecognitionSailings: input.crewRecognitionSailings ?? existingData?.crewRecognitionSailings ?? [],
-        userSlotMachines: input.userSlotMachines ?? existingData?.userSlotMachines ?? [],
-        deckPlanLocations: input.deckPlanLocations ?? existingData?.deckPlanLocations ?? [],
-        favoriteStaterooms: input.favoriteStaterooms ?? existingData?.favoriteStaterooms ?? [],
-        sailingWeatherCache: input.sailingWeatherCache ?? existingData?.sailingWeatherCache ?? {},
-        casinoOpenHours: input.casinoOpenHours ?? existingData?.casinoOpenHours ?? {},
-        compItems: input.compItems ?? existingData?.compItems ?? [],
-        w2gRecords: input.w2gRecords ?? existingData?.w2gRecords ?? [],
+        bankrollLimits: prepareOwnedDataArray(input.bankrollLimits, existingData?.bankrollLimits, ownerScopeId, normalizedEmail, 'api-save bankroll limits'),
+        bankrollAlerts: prepareOwnedDataArray(input.bankrollAlerts, existingData?.bankrollAlerts, ownerScopeId, normalizedEmail, 'api-save bankroll alerts'),
+        crewRecognitionEntries: prepareOwnedDataArray(input.crewRecognitionEntries, existingData?.crewRecognitionEntries, ownerScopeId, normalizedEmail, 'api-save crew entries'),
+        crewRecognitionSailings: prepareOwnedDataArray(input.crewRecognitionSailings, existingData?.crewRecognitionSailings, ownerScopeId, normalizedEmail, 'api-save crew sailings'),
+        userSlotMachines: prepareOwnedDataArray(input.userSlotMachines, existingData?.userSlotMachines, ownerScopeId, normalizedEmail, 'api-save user slot machines'),
+        deckPlanLocations: prepareOwnedDataArray(input.deckPlanLocations, existingData?.deckPlanLocations, ownerScopeId, normalizedEmail, 'api-save deck plan locations'),
+        favoriteStaterooms: prepareOwnedDataArray(input.favoriteStaterooms, existingData?.favoriteStaterooms, ownerScopeId, normalizedEmail, 'api-save favorite staterooms'),
+        sailingWeatherCache: sanitizeForeignValue(input.sailingWeatherCache, existingData?.sailingWeatherCache, normalizedEmail, 'api-save sailingWeatherCache') ?? {},
+        casinoOpenHours: sanitizeForeignValue(input.casinoOpenHours, existingData?.casinoOpenHours, normalizedEmail, 'api-save casinoOpenHours') ?? {},
+        compItems: prepareOwnedDataArray(input.compItems, existingData?.compItems, ownerScopeId, normalizedEmail, 'api-save comp items'),
+        w2gRecords: prepareOwnedDataArray(input.w2gRecords, existingData?.w2gRecords, ownerScopeId, normalizedEmail, 'api-save W-2G records'),
         updatedAt: now,
         createdAt: existingData?.createdAt ?? now,
       };
 
-      if (existingData) {
+      if (exactExistingData) {
         await db.query(
           `UPDATE user_profiles SET 
             cruises = $cruises,
@@ -210,6 +274,7 @@ export const dataRouter = createTRPCRouter({
             alerts = $alerts,
             alertRules = $alertRules,
             slotAtlas = $slotAtlas,
+            machineEncyclopedia = $machineEncyclopedia,
             loyaltyData = $loyaltyData,
             bankrollData = $bankrollData,
             celebrityData = $celebrityData,
@@ -274,8 +339,58 @@ export const dataRouter = createTRPCRouter({
         { ownerScopeId, email: normalizedEmail }
       );
 
-      if (results && results[0] && results[0].length > 0) {
-        const data = results[0][0];
+      let rawData: StoredUserData | undefined = results?.[0]?.[0];
+
+      if (!rawData) {
+        const fallbackResults = await db.query<[StoredUserData[]]>(
+          `SELECT * FROM user_profiles WHERE email = $email ORDER BY updatedAt DESC LIMIT 5`,
+          { email: normalizedEmail }
+        );
+        rawData = fallbackResults?.[0]?.find((record) => isOwnerScopeForEmail(record?.ownerScopeId, normalizedEmail));
+        if (rawData) {
+          console.log('[API] Found user data under prior owner scope; restoring into current scope:', {
+            email: normalizedEmail,
+            previousOwnerScopeId: rawData.ownerScopeId,
+            currentOwnerScopeId: ownerScopeId,
+          });
+        }
+      }
+
+      if (rawData) {
+        const data: StoredUserData = {
+          ...rawData,
+          email: normalizedEmail,
+          ownerScopeId,
+          cruises: prepareOwnedCruises(rawData.cruises, undefined, ownerScopeId, normalizedEmail, 'api-restore available cruises'),
+          bookedCruises: prepareOwnedBookedCruises(rawData.bookedCruises, undefined, ownerScopeId, normalizedEmail, 'api-restore booked cruises'),
+          casinoOffers: prepareOwnedCasinoOffers(rawData.casinoOffers, undefined, ownerScopeId, normalizedEmail, 'api-restore casino offers'),
+          calendarEvents: prepareOwnedCalendarEvents(rawData.calendarEvents, undefined, ownerScopeId, normalizedEmail, 'api-restore calendar events'),
+          casinoSessions: prepareOwnedDataArray(rawData.casinoSessions, undefined, ownerScopeId, normalizedEmail, 'api-restore casino sessions'),
+          userProfiles: prepareOwnedDataArray(rawData.userProfiles, undefined, ownerScopeId, normalizedEmail, 'api-restore user profiles'),
+          clubRoyaleProfile: sanitizeForeignValue(rawData.clubRoyaleProfile, undefined, normalizedEmail, 'api-restore clubRoyaleProfile'),
+          settings: sanitizeForeignValue(rawData.settings, undefined, normalizedEmail, 'api-restore settings'),
+          loyaltyData: sanitizeForeignValue(rawData.loyaltyData, undefined, normalizedEmail, 'api-restore loyaltyData'),
+          bankrollData: sanitizeForeignValue(rawData.bankrollData, undefined, normalizedEmail, 'api-restore bankrollData'),
+          celebrityData: sanitizeForeignValue(rawData.celebrityData, undefined, normalizedEmail, 'api-restore celebrityData'),
+          certificates: prepareOwnedDataArray(rawData.certificates, undefined, ownerScopeId, normalizedEmail, 'api-restore certificates'),
+          alerts: prepareOwnedDataArray(rawData.alerts, undefined, ownerScopeId, normalizedEmail, 'api-restore alerts'),
+          alertRules: prepareOwnedDataArray(rawData.alertRules, undefined, ownerScopeId, normalizedEmail, 'api-restore alert rules'),
+          slotAtlas: prepareStringArray(rawData.slotAtlas, undefined),
+          machineEncyclopedia: prepareOwnedDataArray(rawData.machineEncyclopedia, undefined, ownerScopeId, normalizedEmail, 'api-restore machine encyclopedia'),
+          bankrollLimits: prepareOwnedDataArray(rawData.bankrollLimits, undefined, ownerScopeId, normalizedEmail, 'api-restore bankroll limits'),
+          bankrollAlerts: prepareOwnedDataArray(rawData.bankrollAlerts, undefined, ownerScopeId, normalizedEmail, 'api-restore bankroll alerts'),
+          crewRecognitionEntries: prepareOwnedDataArray(rawData.crewRecognitionEntries, undefined, ownerScopeId, normalizedEmail, 'api-restore crew entries'),
+          crewRecognitionSailings: prepareOwnedDataArray(rawData.crewRecognitionSailings, undefined, ownerScopeId, normalizedEmail, 'api-restore crew sailings'),
+          userSlotMachines: prepareOwnedDataArray(rawData.userSlotMachines, undefined, ownerScopeId, normalizedEmail, 'api-restore user slot machines'),
+          deckPlanLocations: prepareOwnedDataArray(rawData.deckPlanLocations, undefined, ownerScopeId, normalizedEmail, 'api-restore deck plan locations'),
+          favoriteStaterooms: prepareOwnedDataArray(rawData.favoriteStaterooms, undefined, ownerScopeId, normalizedEmail, 'api-restore favorite staterooms'),
+          sailingWeatherCache: sanitizeForeignValue(rawData.sailingWeatherCache, undefined, normalizedEmail, 'api-restore sailingWeatherCache') ?? {},
+          casinoOpenHours: sanitizeForeignValue(rawData.casinoOpenHours, undefined, normalizedEmail, 'api-restore casinoOpenHours') ?? {},
+          compItems: prepareOwnedDataArray(rawData.compItems, undefined, ownerScopeId, normalizedEmail, 'api-restore comp items'),
+          w2gRecords: prepareOwnedDataArray(rawData.w2gRecords, undefined, ownerScopeId, normalizedEmail, 'api-restore W-2G records'),
+        };
+        const restoredUserProfileIds = new Set((data.userProfiles ?? []).map((profile) => typeof profile?.id === 'string' ? profile.id : null).filter((id): id is string => id !== null));
+        data.currentUserId = data.currentUserId && (restoredUserProfileIds.size === 0 || restoredUserProfileIds.has(data.currentUserId)) ? data.currentUserId : null;
         console.log('[API] Found user data:', {
           email: normalizedEmail,
           ownerScopeId,
@@ -303,6 +418,7 @@ export const dataRouter = createTRPCRouter({
             alerts: data.alerts ?? [],
             alertRules: data.alertRules ?? [],
             slotAtlas: data.slotAtlas ?? [],
+            machineEncyclopedia: data.machineEncyclopedia ?? [],
             loyaltyData: data.loyaltyData,
             bankrollData: data.bankrollData,
             celebrityData: data.celebrityData,

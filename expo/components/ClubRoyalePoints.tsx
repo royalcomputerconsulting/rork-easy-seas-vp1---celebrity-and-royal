@@ -50,7 +50,7 @@ export function ClubRoyalePoints({
   const signatureThreshold = CLUB_ROYALE_TIERS.Signature.threshold;
   const mastersThreshold = CLUB_ROYALE_TIERS.Masters.threshold;
   
-  // Only show Signature progress if user has exceeded the Signature threshold (25,001+)
+  // Only show Signature progress if user has exceeded the Signature threshold (25,000+)
   const hasAchievedSignature = clubRoyalePoints >= signatureThreshold;
   // Calculate actual progress to Signature for users who haven't achieved it yet
   const primeThreshold = CLUB_ROYALE_TIERS.Prime.threshold;
@@ -75,7 +75,7 @@ export function ClubRoyalePoints({
           <View>
             <Text style={styles.title}>Casino & Cruise Loyalty</Text>
             <Text style={styles.pointsText}>
-              {clubRoyalePoints.toLocaleString()} Casino pts • {crownAnchorPoints} C&A nights
+              {clubRoyalePoints.toLocaleString()} Casino pts • {crownAnchorPoints} C&A points
             </Text>
           </View>
         </View>
@@ -91,8 +91,8 @@ export function ClubRoyalePoints({
         <>
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>{pinnacleProgress.nightsToNext}</Text>
-              <Text style={styles.statLabel}>Nights to Pinnacle</Text>
+              <Text style={styles.statValue}>{pinnacleProgress.currentPointsNeeded}</Text>
+              <Text style={styles.statLabel}>Points to Pinnacle</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
@@ -113,15 +113,15 @@ export function ClubRoyalePoints({
                 gradientColors={[COLORS.points, COLORS.pointsLight]}
                 surfaceTone="light"
               />
-              {pinnacleProgress.pinnacleShip && pinnacleProgress.pinnacleSailDate && pinnacleProgress.nightsToNext > 0 && (
+              {pinnacleProgress.thresholdCrossedShip && pinnacleProgress.thresholdCrossedSailDate && pinnacleProgress.nightsToNext > 0 && (
                 <View style={styles.pinnacleAchievementBadge}>
                   <Text style={styles.pinnacleAchievementText}>
-                    ⭐ {pinnacleProgress.pinnacleShip} - {String(pinnacleProgress.pinnacleSailDate || '').match(/^(\d{4})-(\d{1,2})-(\d{1,2})/) ? (() => {
-                      const m = String(pinnacleProgress.pinnacleSailDate).match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-                      if (!m) return pinnacleProgress.pinnacleSailDate;
+                    Pinnacle path: {crownAnchorPoints} → {pinnacleProgress.projectedPointsAtPinnacle} by {String(pinnacleProgress.thresholdCrossedSailDate || '').match(/^(\d{4})-(\d{1,2})-(\d{1,2})/) ? (() => {
+                      const m = String(pinnacleProgress.thresholdCrossedSailDate).match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+                      if (!m) return pinnacleProgress.thresholdCrossedSailDate;
                       const [, y, mo, da] = m;
                       return `${String(mo).padStart(2, '0')}/${String(da).padStart(2, '0')}/${y}`;
-                    })() : pinnacleProgress.pinnacleSailDate}
+                    })() : pinnacleProgress.thresholdCrossedSailDate}
                   </Text>
                 </View>
               )}

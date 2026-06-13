@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
 import type { 
   Alert, 
@@ -19,6 +18,8 @@ import {
 } from '@/lib/anomalyDetection';
 import { 
   DEFAULT_ALERT_RULES,
+  normalizeAlertRulesFromStorage,
+  serializeAlertRulesForStorage,
   processAnomaliesWithRules,
   filterActiveAlerts,
   sortAlertsByPriority,
@@ -32,11 +33,44 @@ import { useEntitlement } from './EntitlementProvider';
 import { useAuth } from './AuthProvider';
 import { useLoyalty } from './LoyaltyProvider';
 import { getUserScopedKey } from '@/lib/storage/storageKeys';
+import { quotaSafeGetItem, quotaSafeSetJsonItem } from '@/lib/storage/quotaSafeStorage';
 
 const BASE_ALERTS_KEY = '@easy_seas_alerts';
 const BASE_RULES_KEY = '@easy_seas_alert_rules';
 const BASE_DISMISSED_IDS_KEY = '@easy_seas_dismissed_alerts';
 const BASE_DISMISSED_ENTITIES_KEY = '@easy_seas_dismissed_entities';
+const MAX_STORED_ALERTS = 250;
+const MAX_STORED_DISMISSED_IDS = 500;
+const MAX_STORED_DISMISSED_ENTITIES = 500;
+
+function describeAlertsStorageError(error: unknown): string {
+  if (error instanceof Error) {
+    return `${error.name}: ${error.message}`;
+  }
+  if (error && typeof error === 'object') {
+    const record = error as { name?: unknown; message?: unknown; code?: unknown; nativeEvent?: { message?: unknown } };
+    const parts = [record.name, record.message, record.nativeEvent?.message]
+      .filter((part): part is string => typeof part === 'string' && part.length > 0);
+    if (typeof record.code === 'string' || typeof record.code === 'number') {
+      parts.push(`code=${String(record.code)}`);
+    }
+    if (parts.length > 0) return parts.join(': ');
+  }
+  return String(error);
+}
+
+function pruneAlertsForStorage(nextAlerts: Alert[]): Alert[] {
+  return [...nextAlerts]
+    .sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime())
+    .slice(0, MAX_STORED_ALERTS)
+    .reverse();
+}
+
+function trimStoredStrings(values: Iterable<string>, maxCount: number): string[] {
+  return Array.from(new Set(values))
+    .filter((value) => typeof value === 'string' && value.trim().length > 0)
+    .slice(-maxCount);
+}
 
 interface AlertsState {
   alerts: Alert[];
@@ -108,53 +142,91 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
   useEffect(() => { dismissedIdsRef.current = dismissedIds; }, [dismissedIds]);
   useEffect(() => { dismissedEntitiesRef.current = dismissedEntities; }, [dismissedEntities]);
 
+  const loadStoredData = useCallback(async () => {
+    try {
+      const scopedKeys = {
+        ALERTS: getUserScopedKey(BASE_ALERTS_KEY, authenticatedEmail),
+        RULES: getUserScopedKey(BASE_RULES_KEY, authenticatedEmail),
+        DISMISSED_IDS: getUserScopedKey(BASE_DISMISSED_IDS_KEY, authenticatedEmail),
+        DISMISSED_ENTITIES: getUserScopedKey(BASE_DISMISSED_ENTITIES_KEY, authenticatedEmail),
+      };
+      skRef.current = scopedKeys;
+      const [storedAlerts, storedRules, storedDismissed, storedDismissedEntities] = await Promise.all([
+        quotaSafeGetItem(scopedKeys.ALERTS),
+        quotaSafeGetItem(scopedKeys.RULES),
+        quotaSafeGetItem(scopedKeys.DISMISSED_IDS),
+        quotaSafeGetItem(scopedKeys.DISMISSED_ENTITIES),
+      ]);
+
+      const parsedAlerts = pruneAlertsForStorage(storedAlerts ? JSON.parse(storedAlerts) as Alert[] : []);
+      setAlerts(parsedAlerts);
+      console.log('[AlertsProvider] Loaded scoped alerts:', { email: authenticatedEmail, count: parsedAlerts.length });
+
+      const parsedRules = storedRules ? normalizeAlertRulesFromStorage(JSON.parse(storedRules)) : DEFAULT_ALERT_RULES;
+      setRules(parsedRules);
+      console.log('[AlertsProvider] Loaded scoped rules:', { email: authenticatedEmail, count: parsedRules.length });
+
+      const parsedDismissed = trimStoredStrings(storedDismissed ? JSON.parse(storedDismissed) as string[] : [], MAX_STORED_DISMISSED_IDS);
+      setDismissedIds(new Set(parsedDismissed));
+      console.log('[AlertsProvider] Loaded scoped dismissed IDs:', { email: authenticatedEmail, count: parsedDismissed.length });
+
+      const parsedDismissedEntities = trimStoredStrings(storedDismissedEntities ? JSON.parse(storedDismissedEntities) as string[] : [], MAX_STORED_DISMISSED_ENTITIES);
+      setDismissedEntities(new Set(parsedDismissedEntities));
+      console.log('[AlertsProvider] Loaded scoped dismissed entities:', { email: authenticatedEmail, count: parsedDismissedEntities.length });
+    } catch (error) {
+      console.error('[AlertsProvider] Error loading scoped stored data:', describeAlertsStorageError(error));
+      setAlerts([]);
+      setRules(DEFAULT_ALERT_RULES);
+      setDismissedIds(new Set());
+      setDismissedEntities(new Set());
+    }
+  }, [authenticatedEmail]);
+
   useEffect(() => {
-    const loadStoredData = async () => {
-      try {
-        const [storedAlerts, storedRules, storedDismissed] = await Promise.all([
-          AsyncStorage.getItem(skRef.current.ALERTS),
-          AsyncStorage.getItem(skRef.current.RULES),
-          AsyncStorage.getItem(skRef.current.DISMISSED_IDS),
-        ]);
+    setAlerts([]);
+    setRules(DEFAULT_ALERT_RULES);
+    setDismissedIds(new Set());
+    setDismissedEntities(new Set());
+    void loadStoredData();
+  }, [authenticatedEmail, loadStoredData]);
 
-        if (storedAlerts) {
-          const parsed = JSON.parse(storedAlerts);
-          setAlerts(parsed);
-          console.log('[AlertsProvider] Loaded stored alerts:', parsed.length);
-        }
-
-        if (storedRules) {
-          const parsed = JSON.parse(storedRules);
-          setRules(parsed);
-          console.log('[AlertsProvider] Loaded stored rules:', parsed.length);
-        }
-
-        if (storedDismissed) {
-          const parsed = JSON.parse(storedDismissed);
-          setDismissedIds(new Set(parsed));
-          console.log('[AlertsProvider] Loaded dismissed IDs:', parsed.length);
-        }
-
-        const storedDismissedEntities = await AsyncStorage.getItem(skRef.current.DISMISSED_ENTITIES);
-        if (storedDismissedEntities) {
-          const parsed = JSON.parse(storedDismissedEntities);
-          setDismissedEntities(new Set(parsed));
-          console.log('[AlertsProvider] Loaded dismissed entities:', parsed.length);
-        }
-      } catch (error) {
-        console.error('[AlertsProvider] Error loading stored data:', error);
-      }
+  useEffect(() => {
+    const handleDataCleared = () => {
+      console.log('[AlertsProvider] Data cleared event detected, resetting scoped alerts');
+      setAlerts([]);
+      setRules(DEFAULT_ALERT_RULES);
+      setAnomalies([]);
+      setInsights([]);
+      setDismissedIds(new Set());
+      setDismissedEntities(new Set());
+      setLastDetectionRun(null);
     };
 
-    void loadStoredData();
-  }, []);
+    const handleCloudRestore = () => {
+      console.log('[AlertsProvider] Cloud data restored, reloading scoped alerts');
+      void loadStoredData();
+    };
+
+    try {
+      if (typeof window !== 'undefined' && typeof window.addEventListener !== 'undefined') {
+        window.addEventListener('appDataCleared', handleDataCleared);
+        window.addEventListener('cloudDataRestored', handleCloudRestore);
+        return () => {
+          window.removeEventListener('appDataCleared', handleDataCleared);
+          window.removeEventListener('cloudDataRestored', handleCloudRestore);
+        };
+      }
+    } catch (error) {
+      console.log('[AlertsProvider] Could not set up scoped storage event listeners:', error);
+    }
+  }, [loadStoredData]);
 
   useEffect(() => {
     const saveAlerts = async () => {
       try {
-        await AsyncStorage.setItem(skRef.current.ALERTS, JSON.stringify(alerts));
+        await quotaSafeSetJsonItem(skRef.current.ALERTS, pruneAlertsForStorage(alerts));
       } catch (error) {
-        console.error('[AlertsProvider] Error saving alerts:', error);
+        console.error('[AlertsProvider] Error saving alerts:', describeAlertsStorageError(error));
       }
     };
 
@@ -166,9 +238,9 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
   useEffect(() => {
     const saveRules = async () => {
       try {
-        await AsyncStorage.setItem(skRef.current.RULES, JSON.stringify(rules));
+        await quotaSafeSetJsonItem(skRef.current.RULES, serializeAlertRulesForStorage(rules));
       } catch (error) {
-        console.error('[AlertsProvider] Error saving rules:', error);
+        console.error('[AlertsProvider] Error saving rules:', describeAlertsStorageError(error));
       }
     };
 
@@ -178,9 +250,9 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
   useEffect(() => {
     const saveDismissed = async () => {
       try {
-        await AsyncStorage.setItem(skRef.current.DISMISSED_IDS, JSON.stringify([...dismissedIds]));
+        await quotaSafeSetJsonItem(skRef.current.DISMISSED_IDS, trimStoredStrings(dismissedIds, MAX_STORED_DISMISSED_IDS));
       } catch (error) {
-        console.error('[AlertsProvider] Error saving dismissed IDs:', error);
+        console.error('[AlertsProvider] Error saving dismissed IDs:', describeAlertsStorageError(error));
       }
     };
 
@@ -190,9 +262,9 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
   useEffect(() => {
     const saveDismissedEntities = async () => {
       try {
-        await AsyncStorage.setItem(skRef.current.DISMISSED_ENTITIES, JSON.stringify([...dismissedEntities]));
+        await quotaSafeSetJsonItem(skRef.current.DISMISSED_ENTITIES, trimStoredStrings(dismissedEntities, MAX_STORED_DISMISSED_ENTITIES));
       } catch (error) {
-        console.error('[AlertsProvider] Error saving dismissed entities:', error);
+        console.error('[AlertsProvider] Error saving dismissed entities:', describeAlertsStorageError(error));
       }
     };
 
@@ -250,7 +322,7 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
       });
 
       if (filteredNewAlerts.length > 0) {
-        setAlerts(prev => [...prev, ...filteredNewAlerts]);
+        setAlerts(prev => pruneAlertsForStorage([...prev, ...filteredNewAlerts]));
       }
 
       setLastDetectionRun(new Date().toISOString());
@@ -260,7 +332,7 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
         newAlerts: filteredNewAlerts.length,
       });
     } catch (error) {
-      console.error('[AlertsProvider] Detection error:', error);
+      console.error('[AlertsProvider] Detection error:', describeAlertsStorageError(error));
     } finally {
       setIsLoading(false);
     }
@@ -280,10 +352,10 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
     const alertToRemove = alerts.find(a => a.id === alertId);
     if (alertToRemove) {
       const entityKey = `${alertToRemove.type}_${alertToRemove.relatedEntityId || 'global'}`;
-      setDismissedEntities(prev => new Set([...prev, entityKey]));
+      setDismissedEntities(prev => new Set(trimStoredStrings([...prev, entityKey], MAX_STORED_DISMISSED_ENTITIES)));
     }
     setAlerts(prev => prev.filter(a => a.id !== alertId));
-    setDismissedIds(prev => new Set([...prev, alertId]));
+    setDismissedIds(prev => new Set(trimStoredStrings([...prev, alertId], MAX_STORED_DISMISSED_IDS)));
     console.log('[AlertsProvider] Dismissed and removed alert:', alertId);
   }, [alerts]);
 
@@ -306,14 +378,14 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
     const allEntityKeys = alerts.map(a => `${a.type}_${a.relatedEntityId || 'global'}`);
     
     setAlerts([]);
-    setDismissedIds(new Set(allIds));
-    setDismissedEntities(prev => new Set([...prev, ...allEntityKeys]));
+    setDismissedIds(new Set(trimStoredStrings(allIds, MAX_STORED_DISMISSED_IDS)));
+    setDismissedEntities(prev => new Set(trimStoredStrings([...prev, ...allEntityKeys], MAX_STORED_DISMISSED_ENTITIES)));
     
     try {
-      await AsyncStorage.setItem(skRef.current.ALERTS, JSON.stringify([]));
+      await quotaSafeSetJsonItem(skRef.current.ALERTS, []);
       console.log('[AlertsProvider] Cleared all alerts from storage');
     } catch (error) {
-      console.error('[AlertsProvider] Error clearing alerts from storage:', error);
+      console.error('[AlertsProvider] Error clearing alerts from storage:', describeAlertsStorageError(error));
     }
     
     console.log('[AlertsProvider] Cleared all alerts:', allIds.length);

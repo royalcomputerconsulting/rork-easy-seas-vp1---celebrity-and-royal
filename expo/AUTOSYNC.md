@@ -222,7 +222,7 @@ const OFFER_SELECTORS = {
 ```
 
 #### Page 2: Upcoming Cruises
-**URL:** `https://www.royalcaribbean.com/myaccount`
+**URL:** `https://www.royalcaribbean.com/account/upcoming-cruises`
 
 **Extract:**
 - Sailing date, ship, itinerary

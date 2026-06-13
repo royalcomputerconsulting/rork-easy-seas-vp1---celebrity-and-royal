@@ -10,13 +10,16 @@ import {
   Ship,
   DollarSign,
   Tag,
+  Gauge,
+  FileText,
 } from 'lucide-react-native';
 import { SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, COLORS } from '@/constants/theme';
 import { createDateFromString } from '@/lib/date';
 import { getUniqueImageForCruise, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
 import type { Cruise, CasinoOffer } from '@/types/models';
+import type { OfferRatingLabel } from '@/lib/offerIntelligence';
 import { useAppState } from '@/state/AppStateProvider';
-import { getCabinPriceFromEntity, GUEST_COUNT_DEFAULT } from '@/lib/valueCalculator';
+import { getCabinPriceFromEntity, getDoubleOccupancyRoomRetailValue, GUEST_COUNT_DEFAULT } from '@/lib/valueCalculator';
 import { getCertificatePdfMatch, openCertificatePdf } from '@/lib/royalCaribbean/certificatePdf';
 
 interface CasinoOfferCardProps {
@@ -32,6 +35,10 @@ interface CasinoOfferCardProps {
   bookedCruiseIds?: Set<string>;
   isActive?: boolean;
   isBestValue?: boolean;
+  intelligenceScore?: number;
+  intelligenceRating?: OfferRatingLabel;
+  intelligenceExplanation?: string;
+  onDecodePress?: () => void;
 }
 
 interface OfferSummaryCardProps {
@@ -252,6 +259,10 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
   bookedCruiseIds: _bookedCruiseIds = new Set(),
   isActive = true,
   isBestValue = false,
+  intelligenceScore,
+  intelligenceRating,
+  intelligenceExplanation,
+  onDecodePress,
 }: CasinoOfferCardProps) {
   const { localData } = useAppState();
   const [showOfferImage, setShowOfferImage] = useState(false);
@@ -345,6 +356,14 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
 
   const statusBadge = getStatusBadge();
 
+  const scoreColor = useMemo(() => {
+    if (intelligenceScore === undefined) return COLORS.navyDeep;
+    if (intelligenceScore >= 85) return '#047857';
+    if (intelligenceScore >= 70) return '#0F766E';
+    if (intelligenceScore >= 50) return '#B45309';
+    return '#B91C1C';
+  }, [intelligenceScore]);
+
   const getExpiryDaysLeft = () => {
     if (!expiryDate) return null;
     const expiry = createDateFromString(expiryDate);
@@ -381,8 +400,9 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
       "Owner's Suite": 600,
     };
     
-    cruises.forEach(cruise => {
-      let cabinPrice = getCabinPriceFromEntity(cruise, roomType) || cruise.price || 0;
+    const aggregateSample = cruises.length > 250 ? cruises.slice(0, 250) : cruises;
+    aggregateSample.forEach(cruise => {
+      let cabinPrice = getCabinPriceFromEntity(cruise, roomType) ?? getDoubleOccupancyRoomRetailValue(cruise.price) ?? 0;
       
       // Estimate cabin price if not available
       if (cabinPrice === 0 && cruise.nights > 0) {
@@ -393,7 +413,7 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
       }
       
       const guestCount = cruise.guests || GUEST_COUNT_DEFAULT;
-      const cabinValueForTwo = cabinPrice * guestCount;
+      const cabinValueForTwo = cabinPrice;
       
       // Estimate taxes if not provided (~$30/night per guest)
       let taxesFees = cruise.taxes || 0;
@@ -405,22 +425,16 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
       totalTaxesFees += taxesFees;
       totalOfferValue += cruise.offerValue || 0;
     });
+    if (aggregateSample.length > 0 && aggregateSample.length < cruises.length) {
+      const scaleFactor = cruises.length / aggregateSample.length;
+      totalCabinValue = Math.round(totalCabinValue * scaleFactor);
+      totalTaxesFees = Math.round(totalTaxesFees * scaleFactor);
+      totalOfferValue = Math.round(totalOfferValue * scaleFactor);
+    }
     
     const totalFreePlay = firstCruise?.freePlay || freePlay || 0;
     const totalOBC = firstCruise?.freeOBC || obc || 0;
     const aggregateTotalValue = totalCabinValue + totalTaxesFees + totalFreePlay + totalOBC + totalOfferValue;
-    
-    console.log('[CasinoOfferCard] Aggregate value calculated:', {
-      offerCode,
-      roomType,
-      cruiseCount: cruises.length,
-      totalCabinValue,
-      totalTaxesFees,
-      totalFreePlay,
-      totalOBC,
-      totalOfferValue,
-      aggregateTotalValue,
-    });
     
     return {
       totalCabinValue,
@@ -456,7 +470,7 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
     let total = 0;
     if (firstCruise) {
       const roomType = offerDetails.roomType || firstCruise.cabinType || 'Balcony';
-      let cabinPrice = getCabinPriceFromEntity(firstCruise, roomType) || firstCruise.price || 0;
+      let cabinPrice = getCabinPriceFromEntity(firstCruise, roomType) ?? getDoubleOccupancyRoomRetailValue(firstCruise.price) ?? 0;
       
       // Estimate cabin price if not available
       if (cabinPrice === 0 && firstCruise.nights > 0) {
@@ -467,7 +481,7 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
       }
       
       const guestCount = firstCruise.guests || GUEST_COUNT_DEFAULT;
-      const cabinValueForTwo = cabinPrice * guestCount;
+      const cabinValueForTwo = cabinPrice;
       
       // Estimate taxes if not provided (~$30/night per guest)
       let taxes = firstCruise.taxes || 0;
@@ -479,18 +493,6 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
       const obcValue = firstCruise.freeOBC || obc || 0;
       
       total = cabinValueForTwo + taxes + freePlayValue + obcValue;
-      
-      console.log('[CasinoOfferCard] Total value calculated:', {
-        offerCode,
-        roomType,
-        cabinPrice,
-        guestCount,
-        cabinValueForTwo,
-        taxes,
-        freePlayValue,
-        obcValue,
-        total,
-      });
     }
     
     return total;
@@ -498,7 +500,8 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
 
   const uniqueDestinations = useMemo(() => {
     const destinations = new Set<string>();
-    cruises.forEach(cruise => {
+    const aggregateSample = cruises.length > 250 ? cruises.slice(0, 250) : cruises;
+    aggregateSample.forEach(cruise => {
       if (cruise.destination) {
         destinations.add(cruise.destination);
       }
@@ -560,7 +563,21 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
           </View>
         )}
 
-        {/* Key Info Row: Room Type, Expiration, Total Value */}
+        {intelligenceScore !== undefined ? (
+          <View style={styles.intelligenceStrip} testID="casino-offer-card.intelligence-score">
+            <View style={[styles.scorePuck, { borderColor: scoreColor }]}> 
+              <Gauge size={16} color={scoreColor} />
+              <Text style={[styles.scorePuckValue, { color: scoreColor }]}>{intelligenceScore}</Text>
+            </View>
+            <View style={styles.scoreCopy}>
+              <Text style={styles.scoreTitle}>Offer Intelligence</Text>
+              <Text style={styles.scoreSubtitle} numberOfLines={2}>
+                {intelligenceRating ?? 'Scored'}{intelligenceExplanation ? ` · ${intelligenceExplanation}` : ''}
+              </Text>
+            </View>
+          </View>
+        ) : null}
+
         <View style={styles.keyInfoRow}>
           {offerDetails.roomType && offerDetails.roomType !== 'N/A' && (
             <View style={styles.roomTypeBadge}>
@@ -596,6 +613,20 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
             <ChevronRight size={18} color={COLORS.white} />
           </TouchableOpacity>
 
+          {onDecodePress ? (
+            <TouchableOpacity
+              style={styles.secondaryButtonLarge}
+              onPress={(event) => {
+                event.stopPropagation();
+                onDecodePress();
+              }}
+              testID="casino-offer-card.decode-offer"
+            >
+              <FileText size={16} color={COLORS.navyDeep} />
+              <Text style={styles.secondaryButtonLargeText}>Decode</Text>
+            </TouchableOpacity>
+          ) : null}
+
           {certificatePdfMatch ? (
             <TouchableOpacity
               style={styles.secondaryButtonLarge}
@@ -606,7 +637,7 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
               testID="casino-offer-card.view-pdf-of-offer"
             >
               <ExternalLink size={16} color={COLORS.navyDeep} />
-              <Text style={styles.secondaryButtonLargeText}>View PDF of Offer</Text>
+              <Text style={styles.secondaryButtonLargeText}>PDF</Text>
             </TouchableOpacity>
           ) : null}
         </View>
@@ -760,6 +791,48 @@ const styles = StyleSheet.create({
   },
   contentSection: {
     padding: SPACING.md,
+  },
+  intelligenceStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+    marginBottom: SPACING.sm,
+  },
+  scorePuck: {
+    minWidth: 58,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1.5,
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scorePuckValue: {
+    fontSize: 18,
+    fontWeight: '900' as const,
+    marginTop: 2,
+  },
+  scoreCopy: {
+    flex: 1,
+  },
+  scoreTitle: {
+    fontSize: 11,
+    fontWeight: '800' as const,
+    color: COLORS.navyDeep,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase' as const,
+  },
+  scoreSubtitle: {
+    fontSize: 12,
+    color: '#475569',
+    lineHeight: 16,
+    marginTop: 2,
   },
   keyInfoRow: {
     flexDirection: 'row',

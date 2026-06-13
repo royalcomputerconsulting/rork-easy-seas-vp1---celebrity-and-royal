@@ -1,5 +1,6 @@
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import type { BookedCruise } from '@/types/models';
+import { getBookedCruiseCasinoPoints } from '@/lib/casinoPointTruth';
 import { calculateCruiseValue } from '@/lib/valueCalculator';
 import { COLORS, SPACING, BORDER_RADIUS } from '@/constants/theme';
 
@@ -9,6 +10,7 @@ interface CruiseValueReportProps {
 
 export function CruiseValueReport({ cruise }: CruiseValueReportProps) {
   const breakdown = calculateCruiseValue(cruise);
+  const clubRoyalePoints = getBookedCruiseCasinoPoints(cruise);
   const hasReceiptData = Boolean(cruise.totalRetailCost && cruise.pricePaid !== undefined);
 
   return (
@@ -73,13 +75,13 @@ export function CruiseValueReport({ cruise }: CruiseValueReportProps) {
           </View>
         )}
 
-        {(cruise.earnedPoints || cruise.casinoPoints) ? (
+        {clubRoyalePoints > 0 ? (
           <View style={styles.row}>
             <Text style={styles.label}>
-              Club Royale Points ({(cruise.earnedPoints || cruise.casinoPoints || 0).toLocaleString()} pts)
+              Club Royale Points ({clubRoyalePoints.toLocaleString()} pts)
             </Text>
             <Text style={styles.value}>
-              ${((cruise.earnedPoints || cruise.casinoPoints || 0) * 0.01).toFixed(2)}
+              ${(clubRoyalePoints * 0.01).toFixed(2)}
             </Text>
           </View>
         ) : null}

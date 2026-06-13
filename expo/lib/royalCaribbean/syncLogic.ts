@@ -1,7 +1,7 @@
 import { CasinoOffer, BookedCruise, Cruise } from '@/types/models';
 import { createDateFromString } from '@/lib/date';
 import { OfferRow, BookedCruiseRow, LoyaltyData } from './types';
-import { transformOfferRowsToCruisesAndOffers, transformBookedCruisesToAppFormat, type SyncDataSource } from './dataTransformers';
+import { transformOfferRowsToCruisesAndOffers, transformBookedCruisesToAppFormat, type SyncDataSource, type SyncOwnershipOptions } from './dataTransformers';
 import { isActiveBookedCruise, isCourtesyHoldCruise } from '@/lib/bookedCruiseStatus';
 
 const CELEBRITY_SHIP_NAMES = new Set([
@@ -37,12 +37,43 @@ const CELEBRITY_SHIP_NAMES = new Set([
   'celebrity xcel',
 ]);
 
+
+function normalizeIsoDateForSync(value: unknown): string {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '';
+  let match = raw.match(/^(20\d{2})(\d{2})(\d{2})$/);
+  if (match) return `${match[1]}-${match[2]}-${match[3]}`;
+  match = raw.match(/^(20\d{2})[-\/](\d{1,2})[-\/](\d{1,2})/);
+  if (match) return `${match[1]}-${String(match[2]).padStart(2, '0')}-${String(match[3]).padStart(2, '0')}`;
+  match = raw.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](20\d{2})/);
+  if (match) return `${match[3]}-${String(match[1]).padStart(2, '0')}-${String(match[2]).padStart(2, '0')}`;
+  const parsed = createDateFromString(raw);
+  return Number.isNaN(parsed.getTime()) ? raw.toLowerCase() : `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`;
+}
+
+function completedCanonicalKey(row: BookedCruiseRow): string {
+  const bookingId = String(row.bookingId || '').trim().toLowerCase();
+  if (bookingId && !/^booking_\d+$/i.test(bookingId)) return `booking:${bookingId}`;
+  const ship = String(row.shipName || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const sail = normalizeIsoDateForSync(row.sailingStartDate || (row as any).sailDate);
+  const end = normalizeIsoDateForSync(row.sailingEndDate || (row as any).returnDate);
+  const nights = String(row.numberOfNights || '').trim();
+  const itin = String((row as any).itineraryName || row.itinerary || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  return `fallback:${ship}|${sail}|${end}|${nights}|${itin}`;
+}
+
 function normalizeSyncSource(source: string | undefined): SyncDataSource | undefined {
-  if (source === 'royal' || source === 'celebrity' || source === 'carnival') {
-    return source;
+  const normalized = String(source || '').trim();
+  const lowered = normalized.toLowerCase();
+  if (lowered === 'royal' || lowered === 'celebrity' || lowered === 'carnival') {
+    return lowered as SyncDataSource;
   }
 
-  if (source === 'royal_caribbean') {
+  if (lowered === 'bluechip' || lowered === 'captainsclub' || lowered === 'celebrity_blue_chip' || lowered === "captain's club") {
+    return 'celebrity';
+  }
+
+  if (lowered === 'clubroyale' || lowered === 'crownanchor' || lowered === 'royal_caribbean' || lowered === 'crown & anchor') {
     return 'royal';
   }
 
@@ -97,6 +128,11 @@ function resolveCruiseSource(cruise: Cruise | BookedCruise): SyncDataSource | un
     return explicitSource;
   }
 
+  const brandSource = normalizeSyncSource(String((cruise as any).brand || ''));
+  if (brandSource) return brandSource;
+  const casinoProgramSource = normalizeSyncSource(String((cruise as any).casinoProgram || ''));
+  if (casinoProgramSource) return casinoProgramSource;
+
   const shipName = cruise.shipName?.trim().toLowerCase() ?? '';
   if (shipName.includes('of the seas')) {
     return 'royal';
@@ -123,6 +159,11 @@ function resolveOfferSource(offer: CasinoOffer): SyncDataSource | undefined {
   if (explicitSource) {
     return explicitSource;
   }
+
+  const brandSource = normalizeSyncSource(String((offer as any).brand || ''));
+  if (brandSource) return brandSource;
+  const casinoProgramSource = normalizeSyncSource(String((offer as any).casinoProgram || ''));
+  if (casinoProgramSource) return casinoProgramSource;
 
   const shipName = offer.shipName?.trim().toLowerCase() ?? '';
   if (shipName.includes('of the seas')) {
@@ -182,12 +223,36 @@ function areSourcesCompatible(sourceA: SyncDataSource | undefined, sourceB: Sync
   return sourceA === sourceB;
 }
 
-function isManagedOfferSource(offer: CasinoOffer, syncSource: SyncDataSource): boolean {
-  return resolveOfferSource(offer) === syncSource;
+function normalizeOwnerId(ownerProfileId: string | undefined): string {
+  return ownerProfileId?.trim() ?? '';
 }
 
-function isManagedCruiseSource(cruise: Cruise | BookedCruise, syncSource: SyncDataSource): boolean {
-  return resolveCruiseSource(cruise) === syncSource;
+function areOwnersCompatible(incomingOwnerProfileId: string | undefined, existingOwnerProfileId: string | undefined, includeUnownedRecords: boolean = true): boolean {
+  const incomingOwner = normalizeOwnerId(incomingOwnerProfileId);
+  const existingOwner = normalizeOwnerId(existingOwnerProfileId);
+  if (!incomingOwner) {
+    return true;
+  }
+
+  return existingOwner === incomingOwner || (!existingOwner && includeUnownedRecords);
+}
+
+function matchesSyncOwner(recordOwnerProfileId: string | undefined, targetOwnerProfileId?: string, includeUnownedRecords: boolean = true): boolean {
+  const targetOwner = normalizeOwnerId(targetOwnerProfileId);
+  if (!targetOwner) {
+    return true;
+  }
+
+  const recordOwner = normalizeOwnerId(recordOwnerProfileId);
+  return recordOwner === targetOwner || (!recordOwner && includeUnownedRecords);
+}
+
+function isManagedOfferSource(offer: CasinoOffer, syncSource: SyncDataSource, targetOwnerProfileId?: string, includeUnownedRecords: boolean = true): boolean {
+  return resolveOfferSource(offer) === syncSource && matchesSyncOwner(offer.ownerProfileId, targetOwnerProfileId, includeUnownedRecords);
+}
+
+function isManagedCruiseSource(cruise: Cruise | BookedCruise, syncSource: SyncDataSource, targetOwnerProfileId?: string, includeUnownedRecords: boolean = true): boolean {
+  return resolveCruiseSource(cruise) === syncSource && matchesSyncOwner(cruise.ownerProfileId, targetOwnerProfileId, includeUnownedRecords);
 }
 
 export function normalizeOfferSources(offers: CasinoOffer[]): CasinoOffer[] {
@@ -324,7 +389,7 @@ function isEmptyOfferRow(row: OfferRow): boolean {
 }
 
 function getOfferExpiry(offer: CasinoOffer): string {
-  return normalizeSailDate(offer.offerExpiryDate || offer.expiryDate || offer.expires || offer.offerExpiry || '');
+  return normalizeSailDate(offer.offerExpiryDate || offer.expiryDate || offer.expires || (offer as any).offerExpiry || '');
 }
 
 function getOfferNameKey(offer: CasinoOffer): string {
@@ -333,7 +398,8 @@ function getOfferNameKey(offer: CasinoOffer): string {
 
 function findMatchingOffer(
   offer: CasinoOffer,
-  existingOffers: CasinoOffer[]
+  existingOffers: CasinoOffer[],
+  includeUnownedRecords: boolean = true
 ): CasinoOffer | null {
   const offerSource = resolveOfferSource(offer);
   const offerCode = (offer.offerCode || '').trim().toUpperCase();
@@ -342,7 +408,7 @@ function findMatchingOffer(
   
   return existingOffers.find(existing => {
     const existingSource = resolveOfferSource(existing);
-    if (!areSourcesCompatible(offerSource, existingSource)) {
+    if (!areSourcesCompatible(offerSource, existingSource) || !areOwnersCompatible(offer.ownerProfileId, existing.ownerProfileId, includeUnownedRecords)) {
       return false;
     }
 
@@ -351,13 +417,10 @@ function findMatchingOffer(
     const existingName = getOfferNameKey(existing);
     
     if (offerCode && existingCode && offerCode === existingCode) {
-      if (offerExpiry || existingExpiry) {
-        return offerExpiry === existingExpiry;
-      }
-      if (offerName && existingName) {
-        return offerName === existingName;
-      }
-      return !isInstantRewardOrCertificate(offer.offerCode, offer.offerName) && !isInstantRewardOrCertificate(existing.offerCode, existing.offerName);
+      // Royal/Celebrity casino offer codes are the authoritative identity for a current Sync Now pull.
+      // Earlier builds also required matching expiration/name, which caused the same 5 Royal offers
+      // to be appended as 5 new records when the display metadata changed.
+      return true;
     }
     
     if (
@@ -385,9 +448,18 @@ function normalizeShipName(shipName: string | undefined): string {
 
 function normalizeSailDate(sailDate: string | undefined): string {
   if (!sailDate) return '';
-  // Normalize to MM-DD-YYYY format
+  const raw = String(sailDate).trim();
+  let match = raw.match(/^(20\d{2})(\d{2})(\d{2})$/);
+  if (match) return `${match[2]}-${match[3]}-${match[1]}`;
+  match = raw.match(/^(20\d{2})[-\/](\d{1,2})[-\/](\d{1,2})/);
+  if (match) return `${String(match[2]).padStart(2, '0')}-${String(match[3]).padStart(2, '0')}-${match[1]}`;
+  match = raw.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{2,4})/);
+  if (match) {
+    const year = match[3].length === 2 ? `20${match[3]}` : match[3];
+    return `${String(match[1]).padStart(2, '0')}-${String(match[2]).padStart(2, '0')}-${year}`;
+  }
   try {
-    const date = new Date(sailDate);
+    const date = new Date(raw);
     if (!isNaN(date.getTime())) {
       const month = String(date.getMonth() + 1).padStart(2, '0');
       const day = String(date.getDate()).padStart(2, '0');
@@ -397,39 +469,13 @@ function normalizeSailDate(sailDate: string | undefined): string {
   } catch {
     // Fall through
   }
-  return sailDate.trim();
-}
-
-function normalizeCasinoOfferCodeForSync(code: string | undefined): string {
-  const c = (code || '').trim().toUpperCase();
-  if (!c) return '';
-  if (/^26BCP105[A-Z]?$/.test(c)) return '26BCP105';
-  if (/^26JUL104[A-Z]?$/.test(c)) return '26JUL104';
-  if (/^26VTY104[A-Z]?$/.test(c)) return '26VTY104';
-  return c;
-}
-
-function countRoyalCruisesByOffer(cruises: Cruise[], syncSource: SyncDataSource): Map<string, number> {
-  const counts = new Map<string, number>();
-  for (const cruise of cruises) {
-    if (!isManagedCruiseSource(cruise, syncSource)) continue;
-    const code = normalizeCasinoOfferCodeForSync(cruise.offerCode);
-    if (!code) continue;
-    counts.set(code, (counts.get(code) || 0) + 1);
-  }
-  return counts;
-}
-
-function shouldTreatOfferAsUndercaptured(existingCount: number, incomingCount: number): boolean {
-  if (existingCount < 10) return false;
-  if (incomingCount <= 0) return true;
-  if (incomingCount < Math.min(existingCount - 10, Math.floor(existingCount * 0.8))) return true;
-  return false;
+  return raw;
 }
 
 function findMatchingCruise(
   cruise: Cruise,
-  existingCruises: Cruise[]
+  existingCruises: Cruise[],
+  includeUnownedRecords: boolean = true
 ): Cruise | null {
   const cruiseShip = normalizeShipName(cruise.shipName);
   const cruiseDate = normalizeSailDate(cruise.sailDate);
@@ -440,7 +486,7 @@ function findMatchingCruise(
   
   return existingCruises.find(existing => {
     const existingSource = resolveCruiseSource(existing);
-    if (!areSourcesCompatible(cruiseSource, existingSource)) {
+    if (!areSourcesCompatible(cruiseSource, existingSource) || !areOwnersCompatible(cruise.ownerProfileId, existing.ownerProfileId, includeUnownedRecords)) {
       return false;
     }
 
@@ -521,13 +567,14 @@ function findMatchingCruise(
 
 function findMatchingBookedCruise(
   cruise: BookedCruise,
-  existingCruises: BookedCruise[]
+  existingCruises: BookedCruise[],
+  includeUnownedRecords: boolean = true
 ): BookedCruise | null {
   const cruiseSource = resolveCruiseSource(cruise);
 
   return existingCruises.find(existing => {
     const existingSource = resolveCruiseSource(existing);
-    if (!areSourcesCompatible(cruiseSource, existingSource)) {
+    if (!areSourcesCompatible(cruiseSource, existingSource) || !areOwnersCompatible(cruise.ownerProfileId, existing.ownerProfileId, includeUnownedRecords)) {
       return false;
     }
 
@@ -614,61 +661,35 @@ function mergeBookedCruise(existing: BookedCruise, synced: BookedCruise): Booked
   };
 }
 
-
-function normalizeBookedCruiseDateForDedupe(value?: string): string {
-  const raw = (value || '').toString().trim();
-  if (!raw) return '';
-  const compact = raw.match(/^(20\d{2})(\d{2})(\d{2})$/);
-  if (compact) return `${compact[1]}-${compact[2]}-${compact[3]}`;
-  const iso = raw.match(/^(20\d{2})[-/](\d{1,2})[-/](\d{1,2})/);
-  if (iso) return `${iso[1]}-${iso[2].padStart(2, '0')}-${iso[3].padStart(2, '0')}`;
-  const mdy = raw.match(/^(\d{1,2})[-/](\d{1,2})[-/](20\d{2})$/);
-  if (mdy) return `${mdy[3]}-${mdy[1].padStart(2, '0')}-${mdy[2].padStart(2, '0')}`;
-  const d = new Date(raw.includes('T') ? raw : `${raw}T12:00:00`);
-  if (!Number.isNaN(d.getTime())) return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  return raw.toLowerCase().replace(/\s+/g, ' ');
-}
-
-function isCompletedExtractedCruise(cruise: BookedCruiseRow): boolean {
-  const status = `${cruise.status || ''} ${cruise.sourcePage || ''} ${(cruise as any).bookingStatus || ''}`.toLowerCase();
-  return status.includes('completed') || status.includes('past') || status.includes('history') || status.includes('sailed');
-}
-
 function deduplicateExtractedCruises(cruises: BookedCruiseRow[]): BookedCruiseRow[] {
-  const byBookingId = new Map<string, BookedCruiseRow>();
-  const byShipDate = new Map<string, BookedCruiseRow>();
-  const result: BookedCruiseRow[] = [];
-  
+  const byCanonical = new Map<string, BookedCruiseRow>();
+
   for (const cruise of cruises) {
-    const rawBookingId = (cruise.bookingId || '').toString().trim();
-    const shipName = (cruise.shipName || '').toLowerCase().trim().replace(/\s+/g, ' ');
-    const sailDate = normalizeBookedCruiseDateForDedupe(cruise.sailingStartDate || cruise.sailingDates || (cruise as any).sailDate || (cruise as any).departureDate || (cruise as any).startDate || (cruise as any).sailingDate || '');
-    const completed = isCompletedExtractedCruise(cruise);
-    const itinerary = (cruise.itinerary || cruise.cruiseTitle || '').toString().toLowerCase().trim().replace(/\s+/g, ' ').slice(0, 80);
-    const cabin = ((cruise as any).cabinNumberOrGTY || (cruise as any).stateroomNumber || cruise.cabinCategory || cruise.cabinType || '').toString().toLowerCase().trim().replace(/\s+/g, ' ').slice(0, 40);
-    const rawNights = String(cruise.numberOfNights || '').replace(/[^0-9]/g, '');
-    const bookingId = rawBookingId;
-    const shipDateKey = completed
-      ? `${shipName}|${sailDate}|${rawNights}|${itinerary}|${cabin}|${/^completed_/i.test(bookingId) ? bookingId : ''}`
-      : `${shipName}|${sailDate}`;
-    
-    if (shipName && sailDate && byShipDate.has(shipDateKey)) {
-      console.log(`[SyncLogic] Dedup: Skipping exact duplicate completed/current key: ${cruise.shipName} on ${sailDate}`);
+    const normalizedCruise: BookedCruiseRow = {
+      ...cruise,
+      sailingStartDate: normalizeIsoDateForSync(cruise.sailingStartDate || (cruise as any).sailDate),
+      sailingEndDate: normalizeIsoDateForSync(cruise.sailingEndDate || (cruise as any).returnDate),
+    };
+    const key = completedCanonicalKey(normalizedCruise);
+    const existing = byCanonical.get(key);
+    if (!existing) {
+      byCanonical.set(key, normalizedCruise);
       continue;
     }
 
-    if (!completed && bookingId && byBookingId.has(bookingId)) {
-      console.log(`[SyncLogic] Dedup: Skipping duplicate bookingId: ${bookingId} (${cruise.shipName})`);
-      continue;
+    const existingScore = JSON.stringify(existing).length;
+    const nextScore = JSON.stringify(normalizedCruise).length;
+    if (nextScore > existingScore) {
+      byCanonical.set(key, normalizedCruise);
+      console.log(`[SyncLogic] Dedup: Replaced weaker completed/booked duplicate for ${normalizedCruise.shipName} ${normalizedCruise.sailingStartDate}`);
+    } else {
+      console.log(`[SyncLogic] Dedup: Skipping duplicate completed/booked row for ${normalizedCruise.shipName} ${normalizedCruise.sailingStartDate}`);
     }
-    
-    if (!completed && bookingId) byBookingId.set(bookingId, cruise);
-    if (shipName && sailDate) byShipDate.set(shipDateKey, cruise);
-    result.push(cruise);
   }
-  
+
+  const result = Array.from(byCanonical.values());
   if (result.length < cruises.length) {
-    console.log(`[SyncLogic] Deduplication: ${cruises.length} -> ${result.length} extracted cruises (removed ${cruises.length - result.length} duplicates)`);
+    console.log(`[SyncLogic] Canonical completed/booked dedupe: ${cruises.length} -> ${result.length} extracted cruises (removed ${cruises.length - result.length} duplicates)`);
   }
   return result;
 }
@@ -681,7 +702,8 @@ export function createSyncPreview(
   existingCruises: Cruise[],
   existingBookedCruises: BookedCruise[],
   currentLoyalty: { clubRoyalePoints: number; clubRoyaleTier: string; crownAndAnchorPoints: number; crownAndAnchorLevel: string },
-  syncSource: SyncDataSource = 'royal'
+  syncSource: SyncDataSource = 'royal',
+  ownershipOptions?: SyncOwnershipOptions
 ): SyncPreview {
   const normalizedExistingOffers = normalizeOfferSources(existingOffers);
   const normalizedExistingCruises = normalizeCruiseSources(existingCruises);
@@ -704,8 +726,9 @@ export function createSyncPreview(
     console.log(`[SyncLogic] Filtered out ${inProgressCount} IN PROGRESS offer(s) from sync`);
   }
 
-  const { cruises: transformedCruises, offers: transformedOffers } = transformOfferRowsToCruisesAndOffers(filteredOffers, loyaltyData, syncSource);
-  const transformedBookedCruises = transformBookedCruisesToAppFormat(dedupedBookedCruises, loyaltyData, syncSource);
+  const includeUnownedRecords = ownershipOptions?.includeUnownedRecords ?? true;
+  const { cruises: transformedCruises, offers: transformedOffers } = transformOfferRowsToCruisesAndOffers(filteredOffers, loyaltyData, syncSource, ownershipOptions);
+  const transformedBookedCruises = transformBookedCruisesToAppFormat(dedupedBookedCruises, loyaltyData, syncSource, ownershipOptions);
 
   console.log(`[SyncLogic] Transformed ${transformedCruises.length} cruise records from ${filteredOffers.length} offer rows`);
 
@@ -714,7 +737,7 @@ export function createSyncPreview(
   const offersUnchanged: CasinoOffer[] = [];
 
   for (const offer of transformedOffers) {
-    const match = findMatchingOffer(offer, normalizedExistingOffers);
+    const match = findMatchingOffer(offer, normalizedExistingOffers, includeUnownedRecords);
     if (match) {
       const merged = mergeOffer(match, offer);
       offersUpdates.push({ existing: match, updated: merged });
@@ -724,8 +747,8 @@ export function createSyncPreview(
   }
 
   for (const existing of normalizedExistingOffers) {
-    const isMatched = transformedOffers.some(offer => findMatchingOffer(offer, [existing]));
-    if (!isMatched && existing.offerSource === 'royal') {
+    const isMatched = transformedOffers.some(offer => findMatchingOffer(offer, [existing], includeUnownedRecords));
+    if (!isMatched && resolveOfferSource(existing) === syncSource) {
       offersUnchanged.push(existing);
     } else if (!isMatched) {
       offersUnchanged.push(existing);
@@ -737,7 +760,7 @@ export function createSyncPreview(
   const cruisesUnchanged: Cruise[] = [];
 
   for (const cruise of transformedCruises) {
-    const match = findMatchingCruise(cruise, normalizedExistingCruises);
+    const match = findMatchingCruise(cruise, normalizedExistingCruises, includeUnownedRecords);
     if (match) {
       const merged = mergeCruise(match, cruise);
       cruisesUpdates.push({ existing: match, updated: merged });
@@ -747,8 +770,8 @@ export function createSyncPreview(
   }
 
   for (const existing of normalizedExistingCruises) {
-    const isMatched = transformedCruises.some(cruise => findMatchingCruise(cruise, [existing]));
-    if (!isMatched && existing.cruiseSource === 'royal') {
+    const isMatched = transformedCruises.some(cruise => findMatchingCruise(cruise, [existing], includeUnownedRecords));
+    if (!isMatched && resolveCruiseSource(existing) === syncSource) {
       cruisesUnchanged.push(existing);
     } else if (!isMatched) {
       cruisesUnchanged.push(existing);
@@ -760,7 +783,7 @@ export function createSyncPreview(
   const bookedCruisesUnchanged: BookedCruise[] = [];
 
   for (const cruise of transformedBookedCruises) {
-    const match = findMatchingBookedCruise(cruise, normalizedExistingBookedCruises);
+    const match = findMatchingBookedCruise(cruise, normalizedExistingBookedCruises, includeUnownedRecords);
     if (match) {
       const merged = mergeBookedCruise(match, cruise);
       bookedCruisesUpdates.push({ existing: match, updated: merged });
@@ -770,8 +793,8 @@ export function createSyncPreview(
   }
 
   for (const existing of normalizedExistingBookedCruises) {
-    const isMatched = transformedBookedCruises.some(cruise => findMatchingBookedCruise(cruise, [existing]));
-    if (!isMatched && existing.cruiseSource === 'royal') {
+    const isMatched = transformedBookedCruises.some(cruise => findMatchingBookedCruise(cruise, [existing], includeUnownedRecords));
+    if (!isMatched && resolveCruiseSource(existing) === syncSource) {
       bookedCruisesUnchanged.push(existing);
     } else if (!isMatched) {
       bookedCruisesUnchanged.push(existing);
@@ -878,6 +901,68 @@ export interface ApplySyncPreviewOptions {
   allowOfferRemoval?: boolean;
   allowCruiseRemoval?: boolean;
   allowBookedCruiseRemoval?: boolean;
+  targetOwnerProfileId?: string;
+  includeUnownedRecords?: boolean;
+}
+
+
+function isAvailableOfferCatalogCruise(cruise: Cruise): boolean {
+  const status = String(cruise.status || '').trim().toLowerCase();
+  return status === 'available' || Boolean(String(cruise.offerCode || '').trim());
+}
+
+function isCompletedSyncBookedCruise(cruise: BookedCruise): boolean {
+  const status = `${cruise.status || ''} ${cruise.bookingStatus || ''} ${cruise.completionState || ''}`.toLowerCase();
+  return status.includes('completed') || status.includes('past') || cruise.completionState === 'completed';
+}
+
+function collectedOfferCodesFromPreview(preview: SyncPreview): Set<string> {
+  const codes = new Set<string>();
+  const add = (code?: string) => {
+    const normalized = String(code || '').trim().toUpperCase();
+    if (normalized) codes.add(normalized);
+  };
+  preview.offers.new.forEach(o => add(o.offerCode));
+  preview.offers.updates.forEach(u => add(u.updated.offerCode || u.existing.offerCode));
+  preview.cruises.new.forEach(c => add(c.offerCode));
+  preview.cruises.updates.forEach(u => add(u.updated.offerCode || u.existing.offerCode));
+  return codes;
+}
+
+
+function offerIdentityKey(offer: CasinoOffer): string {
+  const source = resolveOfferSource(offer) || 'unknown';
+  const owner = normalizeOwnerId(offer.ownerProfileId) || 'unowned';
+  const code = String(offer.offerCode || '').trim().toUpperCase();
+  const name = getOfferNameKey(offer);
+  return `${source}|${owner}|${code || name}`;
+}
+
+function cruiseIdentityKey(cruise: Cruise): string {
+  const source = resolveCruiseSource(cruise) || 'unknown';
+  const owner = normalizeOwnerId(cruise.ownerProfileId) || 'unowned';
+  const code = String(cruise.offerCode || '').trim().toUpperCase();
+  return `${source}|${owner}|${code}|${normalizeShipName(cruise.shipName)}|${normalizeSailDate(cruise.sailDate)}|${normalizeCabinType(cruise.cabinType)}|${normalizeComparableText(cruise.itineraryName || cruise.destination || '')}`;
+}
+
+function bookedIdentityKey(cruise: BookedCruise): string {
+  const source = resolveCruiseSource(cruise) || 'unknown';
+  const owner = normalizeOwnerId(cruise.ownerProfileId) || 'unowned';
+  const booking = String(cruise.bookingId || cruise.reservationNumber || '').trim().toLowerCase();
+  if (booking && !/^booking_\d+/i.test(booking)) return `${source}|${owner}|booking:${booking}`;
+  return `${source}|${owner}|${normalizeShipName(cruise.shipName)}|${normalizeSailDate(cruise.sailDate)}|${normalizeSailDate(cruise.returnDate)}|${normalizeCabinType(cruise.cabinType)}|${normalizeComparableText(cruise.itineraryName || cruise.destination || '')}`;
+}
+
+function dedupeByKey<T>(items: T[], keyFn: (item: T) => string, label: string): T[] {
+  const map = new Map<string, T>();
+  for (const item of items) {
+    const key = keyFn(item);
+    if (!map.has(key)) map.set(key, item);
+  }
+  if (map.size < items.length) {
+    console.log(`[SyncLogic] Final ${label} dedupe: ${items.length} -> ${map.size}`);
+  }
+  return Array.from(map.values());
 }
 
 export function applySyncPreview(
@@ -894,159 +979,181 @@ export function applySyncPreview(
   const allowOfferRemoval = options?.allowOfferRemoval ?? true;
   const allowCruiseRemoval = options?.allowCruiseRemoval ?? true;
   const allowBookedCruiseRemoval = options?.allowBookedCruiseRemoval ?? true;
+  const targetOwnerProfileId = options?.targetOwnerProfileId;
+  const includeUnownedRecords = options?.includeUnownedRecords ?? true;
 
   // STRATEGY: Synced data is the SOURCE OF TRUTH for the active sync source.
   // Items from that source NOT present in the sync are REMOVED only when we captured
   // authoritative data for that section in the current sync. Other sources are always preserved.
   // When a section failed to capture any rows, preserve the existing data to avoid destructive overwrites.
 
+  const collectedOfferCodes = collectedOfferCodesFromPreview(preview);
+  const incomingCruiseCount = preview.cruises.new.length + preview.cruises.updates.length;
+  const hasAuthoritativeOfferCatalog = allowOfferRemoval && (
+    (syncSource === 'royal' && collectedOfferCodes.size >= 5 && incomingCruiseCount >= 1000) ||
+    (syncSource === 'celebrity' && collectedOfferCodes.size >= 1 && incomingCruiseCount > 0) ||
+    (syncSource === 'carnival' && collectedOfferCodes.size >= 1 && incomingCruiseCount > 0)
+  );
   const updatedOfferIds = new Set(preview.offers.updates.map(u => u.existing.id));
-  const finalOffers = [
-    // Keep offers from other sources; drop active-source offers not present in this sync
-    ...normalizedExistingOffers
-      .filter(o => {
-        if (allowOfferRemoval && isManagedOfferSource(o, syncSource) && !updatedOfferIds.has(o.id)) {
-          const isBeingReplaced = preview.offers.new.some(newOffer => 
-            findMatchingOffer(newOffer, [o])
-          );
-          if (!isBeingReplaced) {
-            console.log(`[SyncLogic] Removing stale ${syncSource}-source offer: ${o.offerCode} - ${o.offerName}`);
+  const incomingOfferRecords = [
+    ...preview.offers.updates.map(u => u.updated),
+    ...preview.offers.new,
+  ];
+  const finalOffers = hasAuthoritativeOfferCatalog
+    ? [
+        ...normalizedExistingOffers.filter(o => {
+          const code = String(o.offerCode || '').trim().toUpperCase();
+          const isRoyalManaged = resolveOfferSource(o) === syncSource || (code && collectedOfferCodes.has(code));
+          if (isRoyalManaged) {
+            console.log(`[SyncLogic] Replacing ${syncSource} offer catalog record: ${o.offerCode || 'no-code'} - ${o.offerName || o.title || ''}`);
             return false;
           }
-        }
-        return true;
-      })
-      .filter(o => !updatedOfferIds.has(o.id))
-      .filter(o => {
-        const isBeingReplaced = preview.offers.new.some(newOffer => 
-          findMatchingOffer(newOffer, [o])
-        );
-        return !isBeingReplaced;
-      }),
-    ...preview.offers.updates.map(u => u.updated),
-    ...preview.offers.new
-  ];
+          return true;
+        }),
+        ...incomingOfferRecords,
+      ]
+    : [
+        // Keep offers from other sources; drop active-source offers not present in this sync
+        ...normalizedExistingOffers
+          .filter(o => {
+            if (allowOfferRemoval && isManagedOfferSource(o, syncSource, targetOwnerProfileId, includeUnownedRecords) && !updatedOfferIds.has(o.id)) {
+              const isBeingReplaced = preview.offers.new.some(newOffer => 
+                findMatchingOffer(newOffer, [o], includeUnownedRecords)
+              );
+              if (!isBeingReplaced) {
+                console.log(`[SyncLogic] Removing stale ${syncSource}-source offer: ${o.offerCode} - ${o.offerName}`);
+                return false;
+              }
+            }
+            return true;
+          })
+          .filter(o => !updatedOfferIds.has(o.id))
+          .filter(o => {
+            const isBeingReplaced = preview.offers.new.some(newOffer => 
+              findMatchingOffer(newOffer, [o])
+            );
+            return !isBeingReplaced;
+          }),
+        ...incomingOfferRecords,
+      ];
 
   const updatedCruiseIds = new Set(preview.cruises.updates.map(u => u.existing.id));
-  const incomingSyncedCruises = [
+  const incomingCruiseRecords = [
     ...preview.cruises.updates.map(u => u.updated),
-    ...preview.cruises.new
+    ...preview.cruises.new,
   ];
-  const existingCruiseCountsByOffer = countRoyalCruisesByOffer(normalizedExistingCruises, syncSource);
-  const incomingCruiseCountsByOffer = countRoyalCruisesByOffer(incomingSyncedCruises, syncSource);
-  const undercapturedOfferCodes = new Set<string>();
-  for (const [offerCode, existingCount] of existingCruiseCountsByOffer.entries()) {
-    const incomingCount = incomingCruiseCountsByOffer.get(offerCode) || 0;
-    if (shouldTreatOfferAsUndercaptured(existingCount, incomingCount)) {
-      undercapturedOfferCodes.add(offerCode);
-      console.log(`[SyncLogic] Preserving existing cruises for under-captured offer ${offerCode}: incoming ${incomingCount}, existing ${existingCount}`);
-    }
-  }
-  const finalCruises = [
-    // Keep cruises from other sources; drop active-source cruises not in sync
-    ...normalizedExistingCruises
-      .filter(c => {
-        if (allowCruiseRemoval && isManagedCruiseSource(c, syncSource) && !updatedCruiseIds.has(c.id)) {
-          const existingOfferCode = normalizeCasinoOfferCodeForSync(c.offerCode);
-          if (existingOfferCode && undercapturedOfferCodes.has(existingOfferCode)) {
-            console.log(`[SyncLogic] Preserving existing cruise for under-captured offer ${existingOfferCode}: ${c.shipName} on ${c.sailDate}`);
-            return true;
-          }
-          const isBeingReplaced = preview.cruises.new.some(newCruise => 
-            findMatchingCruise(newCruise, [c])
+  const finalCruises = hasAuthoritativeOfferCatalog
+    ? [
+        ...normalizedExistingCruises.filter(c => {
+          const code = String(c.offerCode || '').trim().toUpperCase();
+          const isManagedOfferCatalogRow = isAvailableOfferCatalogCruise(c) && (
+            resolveCruiseSource(c) === syncSource ||
+            Boolean(code && collectedOfferCodes.has(code)) ||
+            (syncSource === 'royal' && resolveCruiseSource(c) === 'royal') ||
+            (syncSource === 'celebrity' && resolveCruiseSource(c) === 'celebrity') ||
+            (syncSource === 'carnival' && resolveCruiseSource(c) === 'carnival')
           );
-          if (!isBeingReplaced) {
-            console.log(`[SyncLogic] Removing stale ${syncSource}-source cruise: ${c.shipName} on ${c.sailDate}`);
+          if (isManagedOfferCatalogRow) {
+            console.log(`[SyncLogic] Replacing ${syncSource} available-catalog cruise: ${c.offerCode || 'no-code'} | ${c.shipName} | ${c.sailDate}`);
             return false;
           }
-        }
-        return true;
-      })
-      .filter(c => !updatedCruiseIds.has(c.id))
-      .filter(c => {
-        const isBeingReplaced = preview.cruises.new.some(newCruise => 
-          findMatchingCruise(newCruise, [c])
-        );
-        return !isBeingReplaced;
-      }),
-    ...preview.cruises.updates.map(u => u.updated),
-    ...preview.cruises.new
-  ];
+          return true;
+        }),
+        ...incomingCruiseRecords,
+      ]
+    : [
+        // Keep cruises from other sources; drop active-source cruises not in sync
+        ...normalizedExistingCruises
+          .filter(c => {
+            if (allowCruiseRemoval && isManagedCruiseSource(c, syncSource, targetOwnerProfileId, includeUnownedRecords) && !updatedCruiseIds.has(c.id)) {
+              const isBeingReplaced = preview.cruises.new.some(newCruise => 
+                findMatchingCruise(newCruise, [c], includeUnownedRecords)
+              );
+              if (!isBeingReplaced) {
+                console.log(`[SyncLogic] Removing stale ${syncSource}-source cruise: ${c.shipName} on ${c.sailDate}`);
+                return false;
+              }
+            }
+            return true;
+          })
+          .filter(c => !updatedCruiseIds.has(c.id))
+          .filter(c => {
+            const isBeingReplaced = preview.cruises.new.some(newCruise => 
+              findMatchingCruise(newCruise, [c], includeUnownedRecords)
+            );
+            return !isBeingReplaced;
+          }),
+        ...incomingCruiseRecords,
+      ];
 
   const updatedBookedCruiseIds = new Set(preview.bookedCruises.updates.map(u => u.existing.id));
+  const incomingBookedRecords = [
+    ...preview.bookedCruises.updates.map(u => u.updated),
+    ...preview.bookedCruises.new,
+  ];
+  const incomingCompletedCount = incomingBookedRecords.filter(isCompletedSyncBookedCruise).length;
+  const incomingActiveCount = incomingBookedRecords.filter(c => !isCompletedSyncBookedCruise(c)).length;
+  const hasAuthoritativeBookedOrHistory = allowBookedCruiseRemoval && incomingBookedRecords.length > 0;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const finalBookedCruises = [
-    // Keep booked cruises from other sources; drop active-source UPCOMING cruises not in sync
-    // ALWAYS preserve completed cruises — sync only captures currently visible website bookings
-    ...normalizedExistingBookedCruises
-      .filter(c => {
-        if (allowBookedCruiseRemoval && isManagedCruiseSource(c, syncSource) && !updatedBookedCruiseIds.has(c.id)) {
-          const isCompleted = c.completionState === 'completed' || c.status === 'completed';
-          const isInProgress = isInProgressBookedCruise(c, today);
-          let isPastReturnDate = false;
-          if (c.returnDate) {
-            try {
-              const returnDate = createDateFromString(c.returnDate);
-              returnDate.setHours(0, 0, 0, 0);
-              isPastReturnDate = returnDate < today;
-            } catch {
-              isPastReturnDate = false;
-            }
-          }
-          if (isCompleted || isPastReturnDate || isInProgress) {
-            console.log(`[SyncLogic] Preserving ${isInProgress ? 'in-progress' : 'completed'} ${syncSource}-source booked cruise: ${c.shipName} on ${c.sailDate}`);
-            return true;
-          }
-
-          const isBeingReplaced = preview.bookedCruises.new.some(newCruise => 
-            findMatchingBookedCruise(newCruise, [c])
-          );
-          if (!isBeingReplaced) {
-            console.log(`[SyncLogic] Removing stale ${syncSource}-source booked cruise: ${c.shipName} on ${c.sailDate}`);
+  const finalBookedCruises = hasAuthoritativeBookedOrHistory
+    ? [
+        ...normalizedExistingBookedCruises.filter(c => {
+          const isManagedSourceRecord = resolveCruiseSource(c) === syncSource;
+          if (isManagedSourceRecord) {
+            console.log(`[SyncLogic] Replacing ${syncSource} booked/history record from authoritative sync: ${c.shipName} on ${c.sailDate} (${c.status || c.completionState || 'unknown'})`);
             return false;
           }
-        }
-        return true;
-      })
-      .filter(c => !updatedBookedCruiseIds.has(c.id))
-      .filter(c => {
-        const isBeingReplaced = preview.bookedCruises.new.some(newCruise => 
-          findMatchingBookedCruise(newCruise, [c])
-        );
-        return !isBeingReplaced;
-      }),
-    ...preview.bookedCruises.updates.map(u => u.updated),
-    ...preview.bookedCruises.new
-  ];
+          return true;
+        }),
+        ...incomingBookedRecords,
+      ]
+    : [
+        // Keep booked cruises from other sources; drop active-source UPCOMING cruises not in sync
+        // ALWAYS preserve completed cruises — sync only captures currently visible website bookings
+        ...normalizedExistingBookedCruises
+          .filter(c => {
+            if (allowBookedCruiseRemoval && isManagedCruiseSource(c, syncSource, targetOwnerProfileId, includeUnownedRecords) && !updatedBookedCruiseIds.has(c.id)) {
+              const isCompleted = c.completionState === 'completed' || c.status === 'completed';
+              const isInProgress = isInProgressBookedCruise(c, today);
+              let isPastReturnDate = false;
+              if (c.returnDate) {
+                try {
+                  const returnDate = createDateFromString(c.returnDate);
+                  returnDate.setHours(0, 0, 0, 0);
+                  isPastReturnDate = returnDate < today;
+                } catch {
+                  isPastReturnDate = false;
+                }
+              }
+              if (isCompleted || isPastReturnDate || isInProgress) {
+                console.log(`[SyncLogic] Preserving ${isInProgress ? 'in-progress' : 'completed'} ${syncSource}-source booked cruise: ${c.shipName} on ${c.sailDate}`);
+                return true;
+              }
 
-  const dedupedFinalBookedCruises = (() => {
-    const seen = new Set<string>();
-    const rows: BookedCruise[] = [];
-    for (const cruise of finalBookedCruises) {
-      const completed = cruise.completionState === 'completed' || cruise.status === 'completed';
-      const ship = (cruise.shipName || '').toLowerCase().trim().replace(/\s+/g, ' ');
-      const date = normalizeBookedCruiseDateForDedupe(cruise.sailDate || (cruise as any).sailingStartDate || (cruise as any).sailingDates || (cruise as any).departureDate || (cruise as any).startDate || (cruise as any).sailingDate || '');
-      const bookingId = (cruise.bookingId || cruise.id || '').toString().trim().toLowerCase();
-      const nights = String((cruise as any).nights || (cruise as any).numberOfNights || '').replace(/[^0-9]/g, '');
-      const itinerary = String((cruise as any).itinerary || (cruise as any).cruiseTitle || '').toLowerCase().trim().replace(/\s+/g, ' ').slice(0, 80);
-      const cabin = String((cruise as any).cabinNumberOrGTY || (cruise as any).stateroomNumber || (cruise as any).cabinCategory || (cruise as any).cabinType || '').toLowerCase().trim().replace(/\s+/g, ' ').slice(0, 40);
-      // Never collapse completed history to ship+date only. Royal's visible Past tab can include
-      // distinct legitimate history rows that share a ship/date family, and earlier builds reduced
-      // 57 visible past sailings to 54 by deduping too aggressively. Use the same identity model as
-      // the completed-sync provider: booking/reservation when present, otherwise ship+date+nights+itinerary+cabin.
-      const key = completed && ship && date
-        ? `completed|${ship}|${date}|${bookingId}|${nights}|${itinerary}|${cabin}`
-        : `booking|${bookingId}|${ship}|${date}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      rows.push(cruise);
-    }
-    if (rows.length < finalBookedCruises.length) {
-      console.log(`[SyncLogic] Final booked cruise deduplication: ${finalBookedCruises.length} -> ${rows.length}`);
-    }
-    return rows;
-  })();
+              const isBeingReplaced = preview.bookedCruises.new.some(newCruise => 
+                findMatchingBookedCruise(newCruise, [c], includeUnownedRecords)
+              );
+              if (!isBeingReplaced) {
+                console.log(`[SyncLogic] Removing stale ${syncSource}-source booked cruise: ${c.shipName} on ${c.sailDate}`);
+                return false;
+              }
+            }
+            return true;
+          })
+          .filter(c => !updatedBookedCruiseIds.has(c.id))
+          .filter(c => {
+            const isBeingReplaced = preview.bookedCruises.new.some(newCruise => 
+              findMatchingBookedCruise(newCruise, [c])
+            );
+            return !isBeingReplaced;
+          }),
+        ...incomingBookedRecords,
+      ];
+
+  if (hasAuthoritativeBookedOrHistory) {
+    console.log(`[SyncLogic] Authoritative booked/history replacement applied: incoming active=${incomingActiveCount}, incoming completed=${incomingCompletedCount}, total incoming=${incomingBookedRecords.length}`);
+  }
 
   console.log('[SyncLogic] applySyncPreview final counts:', {
     syncSource,
@@ -1058,10 +1165,16 @@ export function applySyncPreview(
     existingCruises: normalizedExistingCruises.length,
     finalCruises: finalCruises.length,
     existingBooked: normalizedExistingBookedCruises.length,
-    finalBooked: dedupedFinalBookedCruises.length,
-    managedOffersDelta: finalOffers.filter(o => isManagedOfferSource(o, syncSource)).length - normalizedExistingOffers.filter(o => isManagedOfferSource(o, syncSource)).length,
-    managedCruisesDelta: finalCruises.filter(c => isManagedCruiseSource(c, syncSource)).length - normalizedExistingCruises.filter(c => isManagedCruiseSource(c, syncSource)).length,
+    finalBooked: finalBookedCruises.length,
+    targetOwnerProfileId,
+    includeUnownedRecords,
+    managedOffersDelta: finalOffers.filter(o => isManagedOfferSource(o, syncSource, targetOwnerProfileId, includeUnownedRecords)).length - normalizedExistingOffers.filter(o => isManagedOfferSource(o, syncSource, targetOwnerProfileId, includeUnownedRecords)).length,
+    managedCruisesDelta: finalCruises.filter(c => isManagedCruiseSource(c, syncSource, targetOwnerProfileId, includeUnownedRecords)).length - normalizedExistingCruises.filter(c => isManagedCruiseSource(c, syncSource, targetOwnerProfileId, includeUnownedRecords)).length,
   });
 
-  return { offers: finalOffers, cruises: finalCruises, bookedCruises: dedupedFinalBookedCruises };
+  const dedupedFinalOffers = dedupeByKey(finalOffers, offerIdentityKey, 'offers');
+  const dedupedFinalCruises = dedupeByKey(finalCruises, cruiseIdentityKey, 'available cruises');
+  const dedupedFinalBookedCruises = dedupeByKey(finalBookedCruises, bookedIdentityKey, 'booked/completed cruises');
+
+  return { offers: dedupedFinalOffers, cruises: dedupedFinalCruises, bookedCruises: dedupedFinalBookedCruises };
 }

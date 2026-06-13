@@ -230,7 +230,7 @@ function getPageScriptJS(): string {
     if (url.indexOf('/api/casino/casino-offers') !== -1 || url.indexOf('/players-club/offers') !== -1 || url.indexOf('/profilemanagement/api/offers') !== -1 || url.indexOf('/api/profile/offers') !== -1) {
       return 'offers';
     }
-    if (url.indexOf('/profileBookings/enriched') !== -1 || url.indexOf('/api/account/upcoming-cruises') !== -1 || url.indexOf('/api/profile/bookings') !== -1 || url.indexOf('/myaccount') !== -1 || url.indexOf('/upcomingCruises') !== -1 || url.indexOf('/profilemanagement/profiles/cruises') !== -1 || url.indexOf('/api/booking/cruises') !== -1 || url.indexOf('/profilemanagement/api/bookings') !== -1) {
+    if (url.indexOf('/profileBookings/enriched') !== -1 || url.indexOf('/api/account/upcoming-cruises') !== -1 || url.indexOf('/api/profile/bookings') !== -1 || url.indexOf('/upcomingCruises') !== -1 || url.indexOf('/profilemanagement/profiles/cruises') !== -1 || url.indexOf('/api/booking/cruises') !== -1 || url.indexOf('/profilemanagement/api/bookings') !== -1) {
       return 'upcomingCruises';
     }
     if (url.indexOf('/api/account/courtesy-holds') !== -1 || url.indexOf('/courtesyHolds') !== -1) {
@@ -336,7 +336,7 @@ function getContentJS(): string {
     HM: 'Harmony of the Seas', IC: 'Icon of the Seas', ID: 'Independence of the Seas', JW: 'Jewel of the Seas',
     LB: 'Liberty of the Seas', MR: 'Mariner of the Seas', NV: 'Navigator of the Seas', OA: 'Oasis of the Seas',
     OV: 'Ovation of the Seas', OY: 'Odyssey of the Seas', QN: 'Quantum of the Seas', RD: 'Radiance of the Seas',
-    RH: 'Rhapsody of the Seas', SE: 'Serenade of the Seas', SP: 'Spectrum of the Seas', SY: 'Symphony of the Seas',
+    RH: 'Rhapsody of the Seas', SE: 'Serenade of the Seas', SP: 'Spectrum of the Seas', ST: 'Star of the Seas', SG: 'Star of the Seas', SY: 'Symphony of the Seas',
     UT: 'Utopia of the Seas', VI: 'Vision of the Seas', VY: 'Voyager of the Seas', WN: 'Wonder of the Seas'
   };
 
@@ -1010,7 +1010,7 @@ function getContentJS(): string {
         ]
       : [
           'https://www.royalcaribbean.com/club-royale/offers',
-          'https://www.royalcaribbean.com/myaccount',
+          'https://www.royalcaribbean.com/account/upcoming-cruises',
           'https://www.royalcaribbean.com/account/courtesy-holds',
           'https://www.royalcaribbean.com/account/loyalty-programs'
         ];
@@ -1134,7 +1134,7 @@ function getContentJS(): string {
       : (capturedData.loyalty && capturedData.loyalty.payload && capturedData.loyalty.payload.loyaltyInformation ? capturedData.loyalty.payload.loyaltyInformation : null);
     var loyaltyLevel = loyaltyInfo ? (loyaltyInfo.crownAndAnchorLevel || loyaltyInfo.clubRoyaleTier || '') : '';
     var loyaltyPoints = loyaltyInfo ? (loyaltyInfo.crownAndAnchorPoints || loyaltyInfo.vifpNumber || '') : '';
-    var header = ['Source','Ship Name','Sail Date','Return Date','Nights','Itinerary','Departure Port','Cabin Type','Cabin #','Booking ID','Status','Loyalty Level','Loyalty Points'].map(esc).join(',');
+    var header = ['Source','Ship Name','Sail Date','Return Date','Nights','Itinerary','Departure Port','Cabin Type','Cabin #','Booking ID','Status','Loyalty Level','Loyalty Points','Interior Price','Oceanview Price','Balcony Price','Suite Price','Port Taxes & Fees'].map(esc).join(',');
 
     if (capturedData.cruiseLine === 'carnival') {
       if (!capturedData.carnivalBookingsRows.length) return null;
@@ -1143,7 +1143,7 @@ function getContentJS(): string {
         carnivalRows.push([
           esc(row.source || row.status || 'Upcoming'), esc(row.shipName || ''), esc(row.sailDate || ''), esc(row.returnDate || ''), esc(row.nights || ''),
           esc(row.itinerary || ''), esc(row.departurePort || ''), esc(row.cabinType || ''), esc(row.cabinNumber || ''), esc(row.bookingId || ''), esc(row.status || row.source || 'Upcoming'),
-          esc(loyaltyLevel), esc(loyaltyPoints)
+          esc(loyaltyLevel), esc(loyaltyPoints), esc(row.interiorPrice || ''), esc(row.oceanviewPrice || ''), esc(row.balconyPrice || ''), esc(row.suitePrice || ''), esc(row.taxesAndFees || row.taxes || '')
         ].join(','));
       });
       return carnivalRows.join('\n');
@@ -1171,7 +1171,12 @@ function getContentJS(): string {
         esc(booking.bookingId || booking.masterBookingId || ''),
         esc(booking.bookingStatus === 'OF' ? 'Courtesy Hold' : entry.source),
         esc(loyaltyLevel),
-        esc(loyaltyPoints)
+        esc(loyaltyPoints),
+        esc(fmtPrice(booking.interiorPrice || '')),
+        esc(fmtPrice(booking.oceanviewPrice || '')),
+        esc(fmtPrice(booking.balconyPrice || '')),
+        esc(fmtPrice(booking.suitePrice || '')),
+        esc(fmtPrice(booking.taxesAndFees || booking.taxes || ''))
       ].join(','));
     });
     return rows.join('\n');

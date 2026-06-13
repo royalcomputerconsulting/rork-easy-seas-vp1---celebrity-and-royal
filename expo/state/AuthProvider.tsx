@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import createContextHook from "@nkzw/create-context-hook";
 import { STORAGE_KEYS } from "@/lib/storage/storageKeys";
-import { trpcClient } from "@/lib/trpc";
+import { isCloudBackupEnabled, trpcClient } from "@/lib/trpc";
 
 const ADMIN_PASSWORD = "a1";
 const AUTH_KEY = "easyseas_authenticated";
@@ -182,6 +182,10 @@ function applyPendingWhitelistMutations(whitelist: string[], pending: WhitelistP
 }
 
 async function flushPendingWhitelistMutations(): Promise<void> {
+  if (!isCloudBackupEnabled()) {
+    return;
+  }
+
   const pending = await readPendingWhitelistMutations();
   if (pending.length === 0) {
     return;
@@ -233,12 +237,16 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
       const pendingMutations = await readPendingWhitelistMutations();
       let cloudWhitelist: string[] = [];
 
-      try {
-        const cloudResult = await trpcClient.access.getWhitelist.query();
-        cloudWhitelist = cloudResult.whitelist;
-        console.log('[AuthProvider] Loaded cloud global whitelist:', { count: cloudWhitelist.length });
-      } catch (cloudError) {
-        console.warn('[AuthProvider] Cloud global whitelist unavailable, using local global whitelist cache:', cloudError);
+      if (isCloudBackupEnabled()) {
+        try {
+          const cloudResult = await trpcClient.access.getWhitelist.query();
+          cloudWhitelist = cloudResult.whitelist;
+          console.log('[AuthProvider] Loaded cloud global whitelist:', { count: cloudWhitelist.length });
+        } catch (cloudError) {
+          console.warn('[AuthProvider] Cloud global whitelist unavailable, using local global whitelist cache:', cloudError);
+        }
+      } else {
+        console.log('[AuthProvider] Local-first mode: using local whitelist cache only');
       }
 
       const mergedWhitelist = applyPendingWhitelistMutations(mergeWhitelistEmails(localWhitelist, cloudWhitelist), pendingMutations);
@@ -310,12 +318,14 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
       await writeGlobalWhitelist(updated);
       await queueWhitelistMutation({ email: normalizedEmail, action: 'add', adminEmail: adminEmail ?? PRIMARY_ADMIN_EMAIL, createdAt: new Date().toISOString() });
 
-      try {
-        await trpcClient.access.addToWhitelist.mutate({ adminEmail: adminEmail ?? PRIMARY_ADMIN_EMAIL, email: normalizedEmail });
-        await removeQueuedWhitelistMutation(normalizedEmail, 'add');
-        console.log('[AuthProvider] Cloud global whitelist add confirmed:', normalizedEmail);
-      } catch (cloudError) {
-        console.warn('[AuthProvider] Cloud global whitelist add pending retry:', cloudError);
+      if (isCloudBackupEnabled()) {
+        try {
+          await trpcClient.access.addToWhitelist.mutate({ adminEmail: adminEmail ?? PRIMARY_ADMIN_EMAIL, email: normalizedEmail });
+          await removeQueuedWhitelistMutation(normalizedEmail, 'add');
+          console.log('[AuthProvider] Cloud global whitelist add confirmed:', normalizedEmail);
+        } catch (cloudError) {
+          console.warn('[AuthProvider] Cloud global whitelist add pending retry:', cloudError);
+        }
       }
 
       if (normalizeEmail(authenticatedEmail) === normalizedEmail) {
@@ -348,12 +358,14 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
       await writeGlobalWhitelist(updated);
       await queueWhitelistMutation({ email: normalizedEmail, action: 'remove', adminEmail: adminEmail ?? PRIMARY_ADMIN_EMAIL, createdAt: new Date().toISOString() });
 
-      try {
-        await trpcClient.access.removeFromWhitelist.mutate({ adminEmail: adminEmail ?? PRIMARY_ADMIN_EMAIL, email: normalizedEmail });
-        await removeQueuedWhitelistMutation(normalizedEmail, 'remove');
-        console.log('[AuthProvider] Cloud global whitelist remove confirmed:', normalizedEmail);
-      } catch (cloudError) {
-        console.warn('[AuthProvider] Cloud global whitelist remove pending retry:', cloudError);
+      if (isCloudBackupEnabled()) {
+        try {
+          await trpcClient.access.removeFromWhitelist.mutate({ adminEmail: adminEmail ?? PRIMARY_ADMIN_EMAIL, email: normalizedEmail });
+          await removeQueuedWhitelistMutation(normalizedEmail, 'remove');
+          console.log('[AuthProvider] Cloud global whitelist remove confirmed:', normalizedEmail);
+        } catch (cloudError) {
+          console.warn('[AuthProvider] Cloud global whitelist remove pending retry:', cloudError);
+        }
       }
 
       if (normalizeEmail(authenticatedEmail) === normalizedEmail) {
