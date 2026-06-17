@@ -4,6 +4,12 @@
       "name": "Expo",
       "path": "expo",
       "framework": "react-native"
+    },
+    {
+      "name": "Easy Seas",
+      "path": "ios",
+      "framework": "swift"
     }
-  ]
+  ],
+  "$schema": "https://rork.com/schema/rork.json"
 }
