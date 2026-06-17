@@ -27,11 +27,12 @@ struct CruisesScreen: View {
                     filterBar
 
                     ForEach(filteredSailings) { sailing in
-                        CruiseSailingCardView(sailing: sailing) {
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                                store.book(sailing)
-                            }
+                        NavigationLink {
+                            CruiseDetailScreen(store: store, sailing: sailing)
+                        } label: {
+                            CruiseSailingCardView(sailing: sailing)
                         }
+                        .buttonStyle(.plain)
                     }
 
                     if filteredSailings.isEmpty {

@@ -40,7 +40,12 @@ struct BookedScreen: View {
                     }
 
                     ForEach(visibleCruises) { cruise in
-                        BookedCruiseCardView(cruise: cruise)
+                        NavigationLink {
+                            BookedCruiseDetailScreen(cruise: cruise)
+                        } label: {
+                            BookedCruiseCardView(cruise: cruise)
+                        }
+                        .buttonStyle(.plain)
                     }
 
                     if visibleCruises.isEmpty {

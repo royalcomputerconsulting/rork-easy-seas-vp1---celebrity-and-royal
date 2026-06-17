@@ -45,7 +45,12 @@ struct CasinoScreen: View {
                     SectionHeader(title: "Completed Cruise ROI", subtitle: "Value history from completed sailings only.", systemImage: "dollarsign.circle.fill")
 
                     ForEach(store.completedBookedCruises) { cruise in
-                        BookedCruiseCardView(cruise: cruise)
+                        NavigationLink {
+                            BookedCruiseDetailScreen(cruise: cruise)
+                        } label: {
+                            BookedCruiseCardView(cruise: cruise)
+                        }
+                        .buttonStyle(.plain)
                     }
 
                     if store.completedBookedCruises.isEmpty {

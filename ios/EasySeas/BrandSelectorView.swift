@@ -8,7 +8,7 @@ struct BrandSelectorView: View {
             ForEach(CruiseBrand.allCases) { brand in
                 Button {
                     withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
-                        store.selectedBrand = brand
+                        store.setSelectedBrand(brand)
                     }
                 } label: {
                     BrandPill(brand: brand, isSelected: store.selectedBrand == brand)

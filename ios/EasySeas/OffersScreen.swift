@@ -12,10 +12,15 @@ struct OffersScreen: View {
                     SectionHeader(title: "Active Casino Offers", subtitle: "Grouped by offer code with every eligible sailing counted.", systemImage: "tag.fill")
 
                     ForEach(store.activeOffers) { offer in
-                        OfferCardView(
-                            offer: offer,
-                            sailingCount: store.sailings.filter { $0.brand == store.selectedBrand && $0.offerCode == offer.code }.count
-                        )
+                        NavigationLink {
+                            OfferDetailScreen(store: store, offer: offer)
+                        } label: {
+                            OfferCardView(
+                                offer: offer,
+                                sailingCount: store.sailings.filter { $0.brand == store.selectedBrand && $0.offerCode.caseInsensitiveCompare(offer.code) == .orderedSame }.count
+                            )
+                        }
+                        .buttonStyle(.plain)
                     }
 
                     if store.activeOffers.isEmpty {
