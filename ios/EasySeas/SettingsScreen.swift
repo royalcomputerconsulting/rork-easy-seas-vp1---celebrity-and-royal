@@ -14,6 +14,8 @@ struct SettingsScreen: View {
                     profileCard
                     syncCard
                     toolsCard
+                    moreToolsCard
+                    premiumCard
                     legalCard
                 }
                 .padding(.horizontal, 16)
@@ -93,7 +95,7 @@ struct SettingsScreen: View {
 
     private var toolsCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionHeader(title: "Native Clone Tools", subtitle: "Expo companion flows now available in Swift.", systemImage: "square.grid.2x2.fill")
+            SectionHeader(title: "Native Clone Tools", subtitle: "Full feature parity with the Expo EasySeas app.", systemImage: "square.grid.2x2.fill")
             toolLink("Advisor", "Offer intelligence and trip-stack recommendations", "sparkles") {
                 AdvisorScreen(store: store)
             }
@@ -105,6 +107,65 @@ struct SettingsScreen: View {
             }
             toolLink("SeaPass Generator", "Generate a safe native pass preview", "creditcard.fill") {
                 SeaPassGeneratorScreen(store: store)
+            }
+            toolLink("Ask My Data", "Natural-language search across your cruise data", "wand.and.stars") {
+                AskMyDataScreen(store: store)
+            }
+            toolLink("Command Center", "Offer expiration urgency buckets and management", "clock.badge") {
+                WarRoomScreen(store: store)
+            }
+            toolLink("Learn the System", "Offer math, certificates, loyalty, machine logs, and tutorials", "book.fill") {
+                LearnSystemScreen()
+            }
+        }
+        .padding(16)
+        .background(.white, in: .rect(cornerRadius: 20))
+        .overlay(RoundedRectangle(cornerRadius: 20).stroke(EasySeasTheme.border, lineWidth: 1))
+        .cardShadow()
+    }
+
+    private var moreToolsCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionHeader(title: "Planning & Reference", subtitle: "Cruise planning, ports, destinations, and ship layouts.", systemImage: "map.fill")
+            toolLink("Carnival Sync", "Sync Carnival VIFP casino offers and loyalty data", "ferry.fill") {
+                CarnivalSyncScreen(store: store)
+            }
+            toolLink("Import Cruises", "Import casino offers, booked cruises, and sailing data", "square.and.arrow.down.fill") {
+                ImportCruisesScreen(store: store)
+            }
+            toolLink("Passenger Calendar", "Upcoming and completed cruises by passenger type", "person.2.fill") {
+                PassengerCalendarScreen(store: store)
+            }
+            toolLink("Port History", "Departure ports across all booked cruises", "map.fill") {
+                PortHistoryScreen(store: store)
+            }
+            toolLink("Pricing Summary", "Retail value, paid, and net value per cruise", "dollarsign.circle.fill") {
+                PricingSummaryScreen(store: store)
+            }
+            toolLink("Destination Map", "Destination distribution from cruise portfolio", "globe.americas.fill") {
+                CountriesScreen(store: store)
+            }
+            toolLink("Day Agenda", "Today's events, weekly schedule, and offer deadlines", "calendar.badge.clock") {
+                DayAgendaScreen(store: store)
+            }
+            toolLink("Global Library", "Complete slot machine encyclopedia", "books.vertical.fill") {
+                GlobalLibraryScreen(store: store)
+            }
+            toolLink("Deck Plan", "Ship deck layouts and cabin zones", "square.grid.3x3.fill") {
+                DeckPlanScreen(store: store)
+            }
+        }
+        .padding(16)
+        .background(.white, in: .rect(cornerRadius: 20))
+        .overlay(RoundedRectangle(cornerRadius: 20).stroke(EasySeasTheme.border, lineWidth: 1))
+        .cardShadow()
+    }
+
+    private var premiumCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionHeader(title: "Premium", subtitle: "Unlock advanced features with EasySeas Premium.", systemImage: "crown.fill")
+            toolLink("EasySeas Premium", "Advanced analytics, auto-sync, AI advisor, and more", "crown.fill") {
+                PaywallScreen()
             }
             Button(role: .destructive) {
                 showingResetConfirmation = true

@@ -3,10 +3,16 @@ import SwiftUI
 struct StatTile: View {
     let value: String
     let label: String
+    var systemImage: String? = nil
     var color: Color = EasySeasTheme.navy
 
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 6) {
+            if let systemImage {
+                Image(systemName: systemImage)
+                    .font(.caption)
+                    .foregroundStyle(color)
+            }
             Text(value)
                 .font(.system(.title3, design: .rounded, weight: .heavy))
                 .foregroundStyle(color)
@@ -18,6 +24,7 @@ struct StatTile: View {
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
         .accessibilityElement(children: .combine)
     }
 }
