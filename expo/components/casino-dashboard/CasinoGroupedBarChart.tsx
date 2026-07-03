@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { CASINO_DASHBOARD_COLORS } from '@/constants/casinoDashboardTheme';
+import { DARK_ROYAL_COLORS as CASINO_DASHBOARD_COLORS } from '@/constants/darkRoyalTheme';
 
 export type BarGroup = {
   key: string;

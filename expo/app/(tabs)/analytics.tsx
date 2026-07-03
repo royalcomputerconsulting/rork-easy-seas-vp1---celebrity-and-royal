@@ -121,7 +121,7 @@ import {
   normalizeCruiseCasinoPerformance,
 } from '@/lib/casinoPointTruth';
 import { buildDataHealthSummary, isActiveUpcomingCruise } from '@/lib/easySeasAdvisor';
-import { CASINO_DASHBOARD_COLORS, casinoDashboardStyles, casinoValueColor } from '@/constants/casinoDashboardTheme';
+import { DARK_ROYAL_COLORS as CASINO_DASHBOARD_COLORS, darkRoyalDashboardStyles as casinoDashboardStyles, darkRoyalValueColor as casinoValueColor } from '@/constants/darkRoyalTheme';
 import { useDrillDown, type CalculationDrillDownData } from '@/components/casino-dashboard/CalculationDrillDownDrawer';
 import { CasinoDonutChart } from '@/components/casino-dashboard/CasinoDonutChart';
 import { CasinoGroupedBarChart } from '@/components/casino-dashboard/CasinoGroupedBarChart';
@@ -4556,6 +4556,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: CASINO_DASHBOARD_COLORS.background,
   },
+  screenBackgroundAccent: {
+    ...StyleSheet.absoluteFillObject,
+  },
   safeArea: {
     flex: 1,
   },
@@ -4576,13 +4579,12 @@ const styles = StyleSheet.create({
   },
   quickStatsRow: {
     flexDirection: 'row',
-    backgroundColor: COLORS.white,
+    backgroundColor: CASINO_DASHBOARD_COLORS.card,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.sm,
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    ...SHADOW.sm,
+    borderColor: CASINO_DASHBOARD_COLORS.border,
   },
   quickStatItem: {
     flex: 1,
@@ -4592,21 +4594,20 @@ const styles = StyleSheet.create({
   quickStatValue: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
     marginTop: 4,
   },
   quickStatLabel: {
     fontSize: 10,
-    color: '#64748B',
+    color: CASINO_DASHBOARD_COLORS.textSecondary,
     marginTop: 2,
   },
   cleanCard: {
-    backgroundColor: COLORS.white,
+    backgroundColor: CASINO_DASHBOARD_COLORS.card,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    ...SHADOW.sm,
+    borderColor: CASINO_DASHBOARD_COLORS.border,
   },
   cleanCardHeader: {
     flexDirection: 'row',
@@ -4615,12 +4616,12 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
     paddingBottom: SPACING.sm,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: CASINO_DASHBOARD_COLORS.border,
   },
   cleanCardTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
   },
   dataGrid: {
     gap: SPACING.xs,
@@ -4637,7 +4638,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
     fontSize: TYPOGRAPHY.fontSizeSM,
     lineHeight: 18,
-    color: '#64748B',
+    color: CASINO_DASHBOARD_COLORS.textSecondary,
   },
   dataValue: {
     flexShrink: 0,
@@ -4646,36 +4647,36 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeSM,
     lineHeight: 18,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
   },
   avgStatsRow: {
     marginTop: SPACING.sm,
     paddingTop: SPACING.sm,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: CASINO_DASHBOARD_COLORS.border,
   },
   avgStatText: {
     fontSize: 11,
-    color: '#64748B',
+    color: CASINO_DASHBOARD_COLORS.textSecondary,
     textAlign: 'center',
   },
   discrepancyNotice: {
     marginTop: SPACING.sm,
     padding: SPACING.sm,
     borderRadius: BORDER_RADIUS.sm,
-    backgroundColor: '#FFFBEB',
+    backgroundColor: 'rgba(240, 180, 41, 0.12)',
     borderWidth: 1,
-    borderColor: '#F59E0B',
+    borderColor: CASINO_DASHBOARD_COLORS.gold,
   },
   discrepancyTitle: {
     fontSize: 12,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#92400E',
+    color: CASINO_DASHBOARD_COLORS.goldText,
     marginBottom: 2,
   },
   discrepancyText: {
     fontSize: 11,
-    color: '#92400E',
+    color: CASINO_DASHBOARD_COLORS.goldText,
     lineHeight: 15,
   },
   header: {
@@ -4698,7 +4699,7 @@ const styles = StyleSheet.create({
   appTitle: {
     fontSize: TYPOGRAPHY.fontSizeXL,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#000000',
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
     letterSpacing: 0.5,
   },
   tierBadges: {
@@ -4719,21 +4720,21 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.sm,
     borderRadius: BORDER_RADIUS.md,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: CASINO_DASHBOARD_COLORS.card,
     borderWidth: 1,
-    borderColor: 'rgba(212, 165, 116, 0.2)',
+    borderColor: CASINO_DASHBOARD_COLORS.border,
   },
   tabButtonActive: {
-    backgroundColor: 'rgba(212, 165, 116, 0.15)',
-    borderColor: '#D4A574',
+    backgroundColor: 'rgba(240, 180, 41, 0.15)',
+    borderColor: CASINO_DASHBOARD_COLORS.gold,
   },
   tabButtonText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: '#000000',
+    color: CASINO_DASHBOARD_COLORS.textSecondary,
   },
   tabButtonTextActive: {
-    color: '#000000',
+    color: CASINO_DASHBOARD_COLORS.goldText,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   tabContent: {
@@ -4782,12 +4783,12 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#000000',
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
   },
   portfolioTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#000000',
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
     marginBottom: SPACING.sm,
   },
   filterTabsRow: {
@@ -4878,18 +4879,18 @@ const styles = StyleSheet.create({
   },
   portfolioLimitText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#64748B',
+    color: CASINO_DASHBOARD_COLORS.textSecondary,
     fontStyle: 'italic' as const,
   },
   portfolioHintText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#475569',
+    color: CASINO_DASHBOARD_COLORS.textSecondary,
     marginTop: -4,
     marginBottom: SPACING.sm,
     lineHeight: 16,
   },
   portfolioCard: {
-    backgroundColor: COLORS.white,
+    backgroundColor: CASINO_DASHBOARD_COLORS.card,
     borderRadius: BORDER_RADIUS.md,
     overflow: 'hidden',
     flexDirection: 'row',
@@ -4959,7 +4960,7 @@ const styles = StyleSheet.create({
   portfolioCardShipName: {
     fontSize: 13,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
     flex: 1,
     marginRight: 4,
   },
@@ -4975,12 +4976,12 @@ const styles = StyleSheet.create({
   portfolioCardItinerary: {
     fontSize: 14,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#000000',
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
     marginBottom: 2,
   },
   portfolioCardDestination: {
     fontSize: 12,
-    color: COLORS.navyDeep,
+    color: CASINO_DASHBOARD_COLORS.textSecondary,
     marginBottom: 4,
   },
   portfolioCardMetaRow: {
@@ -4996,13 +4997,13 @@ const styles = StyleSheet.create({
   },
   portfolioCardMetaText: {
     fontSize: 11,
-    color: COLORS.navyDeep,
+    color: CASINO_DASHBOARD_COLORS.textSecondary,
   },
   portfolioCardNights: {
     fontSize: 11,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
-    backgroundColor: '#E0F2F1',
+    color: CASINO_DASHBOARD_COLORS.skyBlue,
+    backgroundColor: 'rgba(79, 141, 255, 0.14)',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
@@ -5024,13 +5025,13 @@ const styles = StyleSheet.create({
   },
   portfolioMetricLabel: {
     fontSize: 9,
-    color: CLEAN_THEME.text.secondary,
+    color: CASINO_DASHBOARD_COLORS.textSecondary,
     marginBottom: 1,
   },
   portfolioMetricValue: {
     fontSize: 11,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
     flexShrink: 1,
   },
   portfolioCardFooter: {
@@ -5042,8 +5043,8 @@ const styles = StyleSheet.create({
   },
   portfolioCardCabin: {
     fontSize: 10,
-    color: COLORS.navyDeep,
-    backgroundColor: '#E0F2F1',
+    color: CASINO_DASHBOARD_COLORS.skyBlue,
+    backgroundColor: 'rgba(79, 141, 255, 0.14)',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 3,
@@ -5079,7 +5080,7 @@ const styles = StyleSheet.create({
     color: '#047857',
   },
   portfolioEditButton: {
-    backgroundColor: 'rgba(0, 31, 63, 0.08)',
+    backgroundColor: 'rgba(240, 180, 41, 0.12)',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 4,
@@ -5087,7 +5088,7 @@ const styles = StyleSheet.create({
   portfolioEditButtonText: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
+    color: CASINO_DASHBOARD_COLORS.goldText,
   },
   viewMoreButton: {
     flexDirection: 'row',
@@ -5095,27 +5096,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: SPACING.xs,
     padding: SPACING.md,
-    backgroundColor: CLEAN_THEME.background.tertiary,
+    backgroundColor: CASINO_DASHBOARD_COLORS.card,
     borderRadius: BORDER_RADIUS.md,
     borderWidth: 1,
-    borderColor: CLEAN_THEME.border.light,
+    borderColor: CASINO_DASHBOARD_COLORS.border,
   },
   viewMoreText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.navyDeep,
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
   emptyPortfolio: {
     alignItems: 'center',
     paddingVertical: SPACING.xl,
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    backgroundColor: CASINO_DASHBOARD_COLORS.card,
     borderRadius: BORDER_RADIUS.md,
     borderWidth: 1,
-    borderColor: 'rgba(212, 165, 116, 0.15)',
+    borderColor: CASINO_DASHBOARD_COLORS.border,
   },
   emptyPortfolioText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: CLEAN_THEME.text.secondary,
+    color: CASINO_DASHBOARD_COLORS.textSecondary,
     marginTop: SPACING.sm,
   },
   destinationsCard: {
@@ -5132,24 +5133,24 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: CASINO_DASHBOARD_COLORS.cardAlt,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: SPACING.sm,
   },
   destinationRankTop: {
-    backgroundColor: '#D4A574',
+    backgroundColor: CASINO_DASHBOARD_COLORS.gold,
   },
   rankNumber: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#000000',
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
   },
   rankNumberTop: {
-    color: COLORS.white,
+    color: CASINO_DASHBOARD_COLORS.background,
   },
   destinationBadge: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: CASINO_DASHBOARD_COLORS.cardAlt,
     paddingHorizontal: SPACING.sm,
     paddingVertical: 2,
     borderRadius: BORDER_RADIUS.sm,
@@ -5164,12 +5165,12 @@ const styles = StyleSheet.create({
   },
   destinationLabel: {
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: '#000000',
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   destinationValue: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#000000',
+    color: CASINO_DASHBOARD_COLORS.textSecondary,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
   emptyState: {
@@ -5181,7 +5182,7 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: CASINO_DASHBOARD_COLORS.cardAlt,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: SPACING.lg,
@@ -5189,12 +5190,12 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: TYPOGRAPHY.fontSizeXL,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#000000',
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
     marginBottom: SPACING.sm,
   },
   emptyText: {
     fontSize: TYPOGRAPHY.fontSizeMD,
-    color: '#000000',
+    color: CASINO_DASHBOARD_COLORS.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
   },
@@ -6086,12 +6087,11 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   shipCard: {
-    backgroundColor: COLORS.white,
+    backgroundColor: CASINO_DASHBOARD_COLORS.card,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    ...SHADOW.sm,
+    borderColor: CASINO_DASHBOARD_COLORS.border,
   },
   shipCardTop: {
     flexDirection: 'row',
@@ -6103,11 +6103,11 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
     marginRight: SPACING.sm,
   },
   shipCardBadge: {
-    backgroundColor: 'rgba(0, 31, 63, 0.06)',
+    backgroundColor: 'rgba(240, 180, 41, 0.14)',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: BORDER_RADIUS.round,
@@ -6115,7 +6115,7 @@ const styles = StyleSheet.create({
   shipCardBadgeText: {
     fontSize: 11,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: CASINO_DASHBOARD_COLORS.goldText,
   },
   shipMetricsRow: {
     flexDirection: 'row',
@@ -6127,12 +6127,12 @@ const styles = StyleSheet.create({
   },
   shipMetricLabel: {
     fontSize: 10,
-    color: '#94A3B8',
+    color: CASINO_DASHBOARD_COLORS.textSecondary,
   },
   shipMetricValue: {
     fontSize: 13,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
     marginTop: 1,
   },
   dataHealthCard: {
@@ -6142,14 +6142,15 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
     borderRadius: BORDER_RADIUS.md,
     borderWidth: 1,
+    backgroundColor: CASINO_DASHBOARD_COLORS.card,
   },
   dataHealthCardGood: {
-    backgroundColor: '#ECFDF5',
-    borderColor: '#10B981',
+    backgroundColor: 'rgba(51, 199, 126, 0.12)',
+    borderColor: CASINO_DASHBOARD_COLORS.green,
   },
   dataHealthCardWarning: {
-    backgroundColor: '#FFFBEB',
-    borderColor: '#F59E0B',
+    backgroundColor: 'rgba(240, 180, 41, 0.12)',
+    borderColor: CASINO_DASHBOARD_COLORS.gold,
   },
   dataHealthTextBlock: {
     flex: 1,
@@ -6157,11 +6158,11 @@ const styles = StyleSheet.create({
   dataHealthTitle: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
   },
   dataHealthSubtitle: {
     fontSize: 11,
-    color: '#64748B',
+    color: CASINO_DASHBOARD_COLORS.textSecondary,
     marginTop: 2,
   },
   actionRow: {

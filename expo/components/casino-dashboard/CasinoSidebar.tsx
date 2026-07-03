@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { Award, DollarSign, Zap, LineChart, Settings as SettingsIcon, LayoutGrid } from 'lucide-react-native';
-import { CASINO_DASHBOARD_COLORS } from '@/constants/casinoDashboardTheme';
+import { DARK_ROYAL_COLORS as CASINO_DASHBOARD_COLORS } from '@/constants/darkRoyalTheme';
 
 export type CasinoSidebarTab = 'portfolio' | 'value' | 'action' | 'history';
 
@@ -58,7 +58,7 @@ export function CasinoSidebar({
               onPress={() => onTabChange(key)}
               testID={`sidebar-nav-${key}`}
             >
-              <Icon size={18} color={active ? '#FFFFFF' : CASINO_DASHBOARD_COLORS.darkText} />
+              <Icon size={18} color={active ? CASINO_DASHBOARD_COLORS.white : CASINO_DASHBOARD_COLORS.darkText} />
               <Text style={active ? styles.navLabelActive : styles.navLabelInactive}>{label}</Text>
             </TouchableOpacity>
           );
@@ -88,7 +88,7 @@ const SIDEBAR_WIDTH = 220;
 const styles = StyleSheet.create({
   sidebar: {
     width: SIDEBAR_WIDTH,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: CASINO_DASHBOARD_COLORS.sidebar,
     borderRightWidth: 1,
     borderRightColor: CASINO_DASHBOARD_COLORS.border,
     paddingVertical: 16,
@@ -107,12 +107,12 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   navItemActive: {
-    backgroundColor: '#006BFF',
+    backgroundColor: CASINO_DASHBOARD_COLORS.royalBlue,
   },
   navLabelActive: {
     fontSize: 14,
     fontWeight: '700' as const,
-    color: '#FFFFFF',
+    color: CASINO_DASHBOARD_COLORS.white,
   },
   navLabelInactive: {
     fontSize: 14,
@@ -124,12 +124,14 @@ const styles = StyleSheet.create({
     marginTop: 16,
     padding: 14,
     borderRadius: 14,
-    backgroundColor: CASINO_DASHBOARD_COLORS.deepNavy,
+    backgroundColor: CASINO_DASHBOARD_COLORS.cardAlt,
+    borderWidth: 1,
+    borderColor: CASINO_DASHBOARD_COLORS.borderStrong,
   },
   statusBrand: {
     fontSize: 11,
     fontWeight: '700' as const,
-    color: 'rgba(255,255,255,0.6)',
+    color: CASINO_DASHBOARD_COLORS.goldText,
     textTransform: 'uppercase' as const,
     letterSpacing: 0.5,
   },
@@ -137,31 +139,31 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700' as const,
     fontStyle: 'italic' as const,
-    color: '#FFFFFF',
+    color: CASINO_DASHBOARD_COLORS.white,
     marginTop: 2,
   },
   statusPoints: {
     fontSize: 20,
     fontWeight: '800' as const,
-    color: '#FFFFFF',
+    color: CASINO_DASHBOARD_COLORS.white,
     marginTop: 6,
   },
   statusSubLabel: {
     fontSize: 11,
-    color: 'rgba(255,255,255,0.7)',
+    color: CASINO_DASHBOARD_COLORS.textSecondary,
     marginTop: 2,
   },
   progressTrack: {
     height: 6,
     borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: 'rgba(255,255,255,0.12)',
     marginTop: 10,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
     borderRadius: 3,
-    backgroundColor: '#0074FF',
+    backgroundColor: CASINO_DASHBOARD_COLORS.gold,
   },
 });
 

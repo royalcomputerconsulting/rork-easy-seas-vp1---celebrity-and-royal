@@ -2,11 +2,11 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { AlertTriangle, ChevronRight, Pencil, X } from 'lucide-react-native';
 import {
-  CASINO_DASHBOARD_COLORS,
   SOURCE_CONFIDENCE_COLOR,
   SOURCE_CONFIDENCE_LABEL,
   type SourceConfidence,
 } from '@/constants/casinoDashboardTheme';
+import { DARK_ROYAL_COLORS as CASINO_DASHBOARD_COLORS } from '@/constants/darkRoyalTheme';
 
 export type DrillDownSourceRecord = {
   label: string;
@@ -248,10 +248,10 @@ const blockStyles = StyleSheet.create({
     color: CASINO_DASHBOARD_COLORS.darkText,
   },
   formulaBox: {
-    backgroundColor: '#F1F5FE',
+    backgroundColor: CASINO_DASHBOARD_COLORS.cardAlt,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#DCE6FA',
+    borderColor: CASINO_DASHBOARD_COLORS.borderStrong,
     padding: 12,
   },
   formulaText: {
@@ -309,16 +309,16 @@ const blockStyles = StyleSheet.create({
   warningBox: {
     flexDirection: 'row',
     gap: 8,
-    backgroundColor: '#FEF6E7',
+    backgroundColor: 'rgba(240, 180, 41, 0.12)',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#F6E2B8',
+    borderColor: 'rgba(240, 180, 41, 0.35)',
     padding: 12,
   },
   warningText: {
     fontSize: 12.5,
     lineHeight: 18,
-    color: '#8A5B10',
+    color: CASINO_DASHBOARD_COLORS.goldText,
     fontWeight: '600' as const,
   },
   editLink: {
@@ -342,7 +342,7 @@ const drawerStyles = StyleSheet.create({
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(7, 27, 77, 0.45)',
+    backgroundColor: 'rgba(2, 8, 25, 0.65)',
   },
   sheet: {
     backgroundColor: CASINO_DASHBOARD_COLORS.card,

@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Line, Polyline, Circle as SvgCircle } from 'react-native-svg';
-import { CASINO_DASHBOARD_COLORS } from '@/constants/casinoDashboardTheme';
+import { DARK_ROYAL_COLORS as CASINO_DASHBOARD_COLORS } from '@/constants/darkRoyalTheme';
 
 export type LineSeriesPoint = { x: string; y: number };
 export type LineSeries = {
