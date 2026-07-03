@@ -124,6 +124,7 @@ import {
 import { buildDataHealthSummary, isActiveUpcomingCruise } from '@/lib/easySeasAdvisor';
 import { DARK_ROYAL_COLORS as CASINO_DASHBOARD_COLORS, darkRoyalDashboardStyles as casinoDashboardStyles, darkRoyalValueColor as casinoValueColor } from '@/constants/darkRoyalTheme';
 import { useDrillDown, type CalculationDrillDownData } from '@/components/casino-dashboard/CalculationDrillDownDrawer';
+import type { SourceConfidence } from '@/constants/casinoDashboardTheme';
 import { CasinoDonutChart } from '@/components/casino-dashboard/CasinoDonutChart';
 import { CasinoGroupedBarChart } from '@/components/casino-dashboard/CasinoGroupedBarChart';
 import { CasinoLineChart } from '@/components/casino-dashboard/CasinoLineChart';
@@ -139,6 +140,19 @@ type CruisePerformanceForm = {
   instantCertificateOfferCode: string;
   instantCertificateValue: string;
   instantCertificateNotes: string;
+  buyIn: string;
+  cashOut: string;
+  freePlayUsed: string;
+  freePlayWon: string;
+  w2gJackpotAmount: string;
+  offerCode: string;
+  bwoNumber: string;
+  obc: string;
+  voomValue: string;
+  diningValue: string;
+  spaValue: string;
+  beverageValue: string;
+  casinoNotes: string;
 };
 
 type DetailModalRow = { label: string; value: string };
@@ -156,6 +170,19 @@ const EMPTY_PERFORMANCE_FORM: CruisePerformanceForm = {
   instantCertificateOfferCode: '',
   instantCertificateValue: '',
   instantCertificateNotes: '',
+  buyIn: '',
+  cashOut: '',
+  freePlayUsed: '',
+  freePlayWon: '',
+  w2gJackpotAmount: '',
+  offerCode: '',
+  bwoNumber: '',
+  obc: '',
+  voomValue: '',
+  diningValue: '',
+  spaValue: '',
+  beverageValue: '',
+  casinoNotes: '',
 };
 
 function parseNumberInput(value: string): number {
@@ -292,6 +319,7 @@ export default function AnalyticsScreen() {
   } = useTax();
   const { certificates } = useCertificates();
   const cruiseValueDrill = useDrillDown();
+  const portfolioDrill = useDrillDown();
 
   const showDetail = useCallback((title: string, rows: DetailModalRow[], subtitle?: string) => {
     void haptics.trigger('selection');
@@ -580,6 +608,8 @@ export default function AnalyticsScreen() {
       cruise.instantCertificateNotes,
     );
 
+    const numOrEmpty = (value: number | undefined | null) => typeof value === 'number' && Number.isFinite(value) ? String(value) : '';
+
     setSelectedPerformanceCruise(cruise);
     setPerformanceForm({
       winLoss: typeof existingWinLoss === 'number' && Number.isFinite(existingWinLoss) ? String(existingWinLoss) : '',
@@ -588,6 +618,19 @@ export default function AnalyticsScreen() {
       instantCertificateOfferCode: cruise.instantCertificateOfferCode ?? '',
       instantCertificateValue: typeof cruise.instantCertificateValue === 'number' && Number.isFinite(cruise.instantCertificateValue) ? String(cruise.instantCertificateValue) : '',
       instantCertificateNotes: cruise.instantCertificateNotes ?? '',
+      buyIn: numOrEmpty(cruise.buyIn),
+      cashOut: numOrEmpty(cruise.cashOut),
+      freePlayUsed: numOrEmpty(cruise.freePlayUsed ?? cruise.freePlay),
+      freePlayWon: numOrEmpty(cruise.freePlayWon),
+      w2gJackpotAmount: numOrEmpty(cruise.w2gJackpotAmount),
+      offerCode: cruise.offerCode ?? '',
+      bwoNumber: cruise.bwoNumber ?? '',
+      obc: numOrEmpty(cruise.freeOBC),
+      voomValue: numOrEmpty(cruise.voomValue),
+      diningValue: numOrEmpty(cruise.diningValue),
+      spaValue: numOrEmpty(cruise.spaValue),
+      beverageValue: numOrEmpty(cruise.beverageValue),
+      casinoNotes: cruise.casinoNotes ?? '',
     });
     void haptics.trigger('selection');
   }, [haptics]);
@@ -649,6 +692,20 @@ export default function AnalyticsScreen() {
       instantCertificateOfferCode: instantCertificateWon ? performanceForm.instantCertificateOfferCode.trim() : '',
       instantCertificateValue: instantCertificateWon ? certificateValue : 0,
       instantCertificateNotes: instantCertificateWon ? performanceForm.instantCertificateNotes.trim() : '',
+      buyIn: parseNumberInput(performanceForm.buyIn),
+      cashOut: parseNumberInput(performanceForm.cashOut),
+      freePlayUsed: parseNumberInput(performanceForm.freePlayUsed),
+      freePlay: parseNumberInput(performanceForm.freePlayUsed),
+      freePlayWon: parseNumberInput(performanceForm.freePlayWon),
+      w2gJackpotAmount: parseNumberInput(performanceForm.w2gJackpotAmount),
+      offerCode: performanceForm.offerCode.trim() || selectedPerformanceCruise.offerCode,
+      bwoNumber: performanceForm.bwoNumber.trim() || selectedPerformanceCruise.bwoNumber,
+      freeOBC: parseNumberInput(performanceForm.obc),
+      voomValue: parseNumberInput(performanceForm.voomValue),
+      diningValue: parseNumberInput(performanceForm.diningValue),
+      spaValue: parseNumberInput(performanceForm.spaValue),
+      beverageValue: parseNumberInput(performanceForm.beverageValue),
+      casinoNotes: performanceForm.casinoNotes.trim(),
       completionState: 'completed',
       status: 'completed',
       calculationConfidence: 'actual',
@@ -1571,7 +1628,27 @@ export default function AnalyticsScreen() {
       <TouchableOpacity
         key={cruise.id}
         style={styles.portfolioCard}
-        onPress={() => openCruiseDetailFromPortfolio(cruise)}
+        onPress={() => portfolioDrill.open({
+          title: `${cruise.shipName || 'Cruise'} — Casino Performance`,
+          subtitle: cruise.sailDate ? formatDateRange(cruise.sailDate, cruise.returnDate, cruise.nights) : undefined,
+          summary: 'Casino cruise performance drill-down: tap Edit Casino Record to change points, win/loss, or certificate results.',
+          inputs: [
+            { label: 'Casino points', value: formatNumber(economicsRow?.points ?? earnedPoints) },
+            { label: 'Coin-in (points × $5)', value: formatCurrencyDetailed((economicsRow?.points ?? earnedPoints) * DOLLARS_PER_POINT) },
+            { label: 'Win/Loss', value: formatSignedCurrencyDetailed(economicsRow?.netCash ?? winnings) },
+            { label: 'FreePlay', value: formatCurrency(cruise.freePlay ?? 0) },
+            { label: 'OBC', value: formatCurrency(cruise.freeOBC ?? 0) },
+            { label: 'Instant certificate', value: cruise.instantCertificateWon ? `Won — ${formatCurrency(cruise.instantCertificateValue ?? 0)}` : 'Not won' },
+            { label: 'Offer used', value: cruise.offerCode || 'None recorded' },
+            { label: 'Total economic value', value: formatSignedCurrencyDetailed(economicsRow?.totalEconomic ?? breakdown.totalProfit) },
+          ],
+          missing: (economicsRow?.netCash === undefined && !cruise.winningsBroughtHome) ? ['Win/loss has not been recorded for this cruise yet.'] : [],
+          sourceRecords: [{ label: 'Confidence', value: economicsRow?.calculationConfidence === 'actual' ? 'Actual' : economicsRow?.calculationConfidence === 'mixed' ? 'Mixed' : 'Estimated' }],
+          relatedActions: [
+            { label: 'Edit Casino Record', onPress: () => { portfolioDrill.close(); openCruisePerformanceEditorById(cruise.id); } },
+            { label: 'Open Cruise Detail', emphasis: 'secondary', onPress: () => { portfolioDrill.close(); openCruiseDetailFromPortfolio(cruise); } },
+          ],
+        })}
         activeOpacity={0.85}
       >
         <View style={styles.portfolioImageContainer}>
@@ -1712,56 +1789,244 @@ export default function AnalyticsScreen() {
             <Text style={styles.cleanCardTitle}>Current vs Historical</Text>
           </View>
           <View style={styles.dataGrid}>
-            <View style={styles.dataRow}>
+            <TouchableOpacity
+              style={styles.dataRow}
+              activeOpacity={0.7}
+              testID="portfolio-row-status-tier"
+              onPress={() => portfolioDrill.open({
+                title: 'Current Status Tier',
+                summary: 'Your current Club Royale casino tier — this is a casino tier, not your Crown & Anchor cruise loyalty level.',
+                formula: 'Tier = highest Club Royale point threshold reached by current-season casino points',
+                inputs: [
+                  { label: 'Current season points', value: formatNumber(currentYearPoints) },
+                  { label: 'Tier year', value: `${currentSeasonMetrics.seasonStart} to ${currentSeasonMetrics.seasonEnd}` },
+                  { label: 'Choice threshold', value: formatNumber(CLUB_ROYALE_TIERS.Choice.threshold) },
+                  { label: 'Prime threshold', value: formatNumber(CLUB_ROYALE_TIERS.Prime.threshold) },
+                  { label: 'Signature threshold', value: formatNumber(CLUB_ROYALE_TIERS.Signature.threshold) },
+                  { label: 'Masters threshold', value: formatNumber(CLUB_ROYALE_TIERS.Masters.threshold) },
+                ],
+                sourceRecords: [{ label: 'Source', value: loyaltyClubRoyaleTier ? 'Royal Caribbean loyalty sync' : 'App-calculated from cruise history', confidence: loyaltyClubRoyaleTier ? 'imported-csv' : 'estimated-default' }],
+                relatedActions: [{ label: 'View Full Loyalty Data', onPress: () => { portfolioDrill.close(); router.push('/casino/loyalty-data' as any); } }],
+              })}
+            >
               <Text style={styles.dataLabel}>Current Status Tier</Text>
               <Text style={[styles.dataValue, { color: CASINO_DASHBOARD_COLORS.textPrimary }]}>{clubRoyaleTier}</Text>
-            </View>
-            <View style={styles.dataRow}>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.dataRow}
+              activeOpacity={0.7}
+              testID="portfolio-row-season-points"
+              onPress={() => portfolioDrill.open({
+                title: 'Current Season Points',
+                summary: 'Sum of all Royal Caribbean Club Royale casino points earned during the current casino year (April 1 – March 31). Crown & Anchor loyalty points, Celebrity points, and Virgin/charter sailings are always excluded.',
+                formula: 'Current Season Points = SUM(casino points earned on completed Royal Caribbean cruises within the current casino year)',
+                inputs: [
+                  { label: 'Cruises counted', value: String(currentSeasonMetrics.cruises) },
+                  { label: 'Nights counted', value: String(currentSeasonMetrics.nights) },
+                  { label: 'Season window', value: `${currentSeasonMetrics.seasonStart} to ${currentSeasonMetrics.seasonEnd}` },
+                ],
+                sourceRecords: cruiseEconomicsSummary.rows
+                  .filter((row) => row.sailDate >= currentSeasonMetrics.seasonStart && row.sailDate < currentSeasonMetrics.seasonEnd)
+                  .slice(0, 10)
+                  .map((row) => ({ label: `${row.ship} — ${row.sailDate}`, value: `${formatNumber(row.pointsEarned ?? 0)} pts`, confidence: (row.calculationConfidence === 'actual' ? 'verified-invoice' : row.calculationConfidence === 'mixed' ? 'calculated' : 'estimated-default') as SourceConfidence })),
+                missing: currentSeasonMetrics.cruises === 0 ? ['No completed Royal Caribbean cruises found inside the current casino year yet.'] : [],
+              })}
+            >
               <Text style={styles.dataLabel}>Current Season Points</Text>
               <Text style={styles.dataValue}>{formatNumber(currentYearPoints)}</Text>
-            </View>
-            <View style={styles.dataRow}>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.dataRow}
+              activeOpacity={0.7}
+              testID="portfolio-row-retain-gap"
+              onPress={() => portfolioDrill.open({
+                title: 'Signature Retain Gap',
+                summary: 'How many more current-season casino points are needed to retain Signature status through the next reset.',
+                formula: 'Signature Retain Gap = max(25,000 − current season points, 0)',
+                inputs: [
+                  { label: 'Current season points', value: formatNumber(currentYearPoints) },
+                  { label: 'Signature retain target', value: '25,000 pts' },
+                  { label: 'Points still needed', value: `${formatNumber(currentSeasonMetrics.pointsNeededForSignature)} pts` },
+                  { label: 'Coin-in still needed (points × $5)', value: formatCurrencyDetailed(currentSeasonMetrics.pointsNeededForSignature * DOLLARS_PER_POINT) },
+                ],
+                assumptions: ['Uses the Royal Caribbean slot coin-in rule of $5 wagered per point earned.'],
+                missing: currentSeasonMetrics.pointsNeededForSignature === 0 ? [] : ['Projected points from upcoming booked cruises are not yet factored into this gap — check the Simulator tab for a full pace projection.'],
+              })}
+            >
               <Text style={styles.dataLabel}>Signature Retain Gap</Text>
               <Text style={[styles.dataValue, { color: currentSeasonMetrics.pointsNeededForSignature === 0 ? CASINO_DASHBOARD_COLORS.green : CASINO_DASHBOARD_COLORS.orange }]}>{formatNumber(currentSeasonMetrics.pointsNeededForSignature)} pts</Text>
-            </View>
-            <View style={styles.dataRow}>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.dataRow}
+              activeOpacity={0.7}
+              testID="portfolio-row-season-coinin"
+              onPress={() => portfolioDrill.open({
+                title: 'Current Season Coin-In',
+                summary: "Estimated slot wagering volume behind your current-season points, using Royal Caribbean's $5-wagered-per-point rule. This is wagering volume, not cash spent or lost.",
+                formula: 'Current Season Coin-In = current season casino points × $5',
+                inputs: [
+                  { label: 'Current season points', value: formatNumber(currentYearPoints) },
+                  { label: 'Dollars per point', value: `$${DOLLARS_PER_POINT}` },
+                ],
+                sourceRecords: cruiseEconomicsSummary.rows
+                  .filter((row) => row.sailDate >= currentSeasonMetrics.seasonStart && row.sailDate < currentSeasonMetrics.seasonEnd)
+                  .slice(0, 10)
+                  .map((row) => ({ label: `${row.ship} — ${row.sailDate}`, value: formatCurrencyDetailed((row.pointsEarned ?? 0) * DOLLARS_PER_POINT) })),
+                missing: ['No manual coin-in overrides are currently applied — every cruise here uses the points × $5 rule.'],
+              })}
+            >
               <Text style={styles.dataLabel}>Current Season Coin-In</Text>
               <Text style={styles.dataValue}>{formatCurrencyDetailed(currentSeasonMetrics.coinIn)}</Text>
-            </View>
-            <View style={styles.dataRow}>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.dataRow}
+              activeOpacity={0.7}
+              testID="portfolio-row-avg-ppn"
+              onPress={() => portfolioDrill.open({
+                title: 'Avg Points / Night',
+                summary: 'Current-season casino points divided by completed casino nights this season.',
+                formula: 'Avg Points / Night = current season points ÷ completed casino nights this season',
+                inputs: [
+                  { label: 'Current season points', value: formatNumber(currentSeasonMetrics.points) },
+                  { label: 'Completed nights this season', value: String(currentSeasonMetrics.nights) },
+                  { label: 'Result', value: currentSeasonMetrics.averagePointsPerNight.toFixed(2) },
+                ],
+                missing: ['A points-per-casino-open-day alternate view requires itinerary casino-open-day data, which is not fully tracked for every sailing yet.'],
+              })}
+            >
               <Text style={styles.dataLabel}>Avg Points / Night</Text>
               <Text style={styles.dataValue}>{currentSeasonMetrics.averagePointsPerNight.toFixed(2)}</Text>
-            </View>
-            <View style={styles.dataRow}>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.dataRow}
+              activeOpacity={0.7}
+              testID="portfolio-row-est-play-hours"
+              onPress={() => portfolioDrill.open({
+                title: 'Estimated Casino Play Hours',
+                summary: sessions.length > 0
+                  ? 'Uses your actual logged casino session hours first; falls back to an estimate from points ÷ assumed points-per-hour only where session data is missing.'
+                  : 'No logged casino sessions yet, so this is fully estimated from points ÷ an assumed points-per-hour rate.',
+                formula: `Estimated Play Hours = actual logged session hours, else current season points ÷ ${DEFAULT_ESTIMATED_POINTS_PER_PLAY_HOUR} pts/hr`,
+                inputs: [
+                  { label: 'Current season points', value: formatNumber(currentSeasonMetrics.points) },
+                  { label: 'Assumed points per hour', value: `${DEFAULT_ESTIMATED_POINTS_PER_PLAY_HOUR} pts/hr` },
+                  { label: 'Result', value: `${currentSeasonMetrics.estimatedPlayHours.toFixed(1)} hrs` },
+                  { label: 'Logged sessions this account', value: String(sessions.length) },
+                ],
+                missing: sessions.length === 0 ? ['No logged Live PPH sessions found — this figure is 100% estimated, not actual.'] : [],
+              })}
+            >
               <Text style={styles.dataLabel}>Est. Casino Play</Text>
               <Text style={styles.dataValue}>{currentSeasonMetrics.estimatedPlayHours.toFixed(1)} hrs</Text>
-            </View>
-            <View style={styles.dataRow}>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.dataRow}
+              activeOpacity={0.7}
+              testID="portfolio-row-est-daily-hours"
+              onPress={() => portfolioDrill.open({
+                title: 'Estimated Daily Play Hours',
+                summary: 'Estimated casino play hours divided by completed casino nights this season (not blindly divided by total cruise nights).',
+                formula: 'Estimated Daily Play Hours = estimated casino play hours ÷ completed casino nights',
+                inputs: [
+                  { label: 'Estimated play hours', value: `${currentSeasonMetrics.estimatedPlayHours.toFixed(1)} hrs` },
+                  { label: 'Completed nights this season', value: String(currentSeasonMetrics.nights) },
+                  { label: 'Result', value: `${currentSeasonMetrics.averageDailyPlayHours.toFixed(2)} hrs/day` },
+                ],
+                missing: ['Casino-open-day data per itinerary is not fully tracked yet, so this uses total nights rather than casino-open days only.'],
+              })}
+            >
               <Text style={styles.dataLabel}>Est. Daily Play Hours</Text>
               <Text style={styles.dataValue}>{currentSeasonMetrics.averageDailyPlayHours.toFixed(2)} hrs/day</Text>
-            </View>
-            <View style={styles.dataRow}>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.dataRow}
+              activeOpacity={0.7}
+              testID="portfolio-row-historical-points"
+              onPress={() => portfolioDrill.open({
+                title: 'Historical Points Earned',
+                summary: 'Lifetime Royal Caribbean Club Royale casino points across every completed casino cruise, never resets. Crown & Anchor loyalty points are always excluded.',
+                formula: 'Historical Points = current season points + all prior-season casino points',
+                inputs: [
+                  { label: 'Current season points', value: formatNumber(currentYearPoints) },
+                  { label: 'Prior season points', value: formatNumber(Math.max(0, historicalPoints - currentYearPoints)) },
+                  { label: 'Historical total', value: formatNumber(historicalPoints) },
+                ],
+                sourceRecords: [{ label: 'Source', value: 'Cruise Portfolio economics ledger across all completed Royal Caribbean casino cruises', confidence: 'calculated' }],
+              })}
+            >
               <Text style={styles.dataLabel}>Historical Points Earned</Text>
               <Text style={[styles.dataValue, { color: CASINO_DASHBOARD_COLORS.gold }]}>{formatNumber(historicalPoints)}</Text>
-            </View>
-            <View style={styles.dataRow}>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.dataRow}
+              activeOpacity={0.7}
+              testID="portfolio-row-historical-tier"
+              onPress={() => portfolioDrill.open({
+                title: 'Historical Tier Earned',
+                summary: 'The highest Club Royale casino tier ever reached, based on historical casino points only — never Crown & Anchor cruise loyalty points.',
+                formula: 'Historical Tier = highest tier whose threshold ≤ historical points earned',
+                inputs: [
+                  { label: 'Historical points earned', value: formatNumber(historicalPoints) },
+                  { label: 'Prime threshold', value: formatNumber(CLUB_ROYALE_TIERS.Prime.threshold) },
+                  { label: 'Signature threshold', value: formatNumber(CLUB_ROYALE_TIERS.Signature.threshold) },
+                  { label: 'Masters threshold', value: formatNumber(CLUB_ROYALE_TIERS.Masters.threshold) },
+                  { label: 'Highest tier reached', value: historicalClubRoyaleTier },
+                ],
+              })}
+            >
               <Text style={styles.dataLabel}>Historical Tier Earned</Text>
               <Text style={[styles.dataValue, { color: CASINO_DASHBOARD_COLORS.green }]}>{historicalClubRoyaleTier}</Text>
-            </View>
-            <View style={styles.dataRow}>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.dataRow}
+              activeOpacity={0.7}
+              testID="portfolio-row-reset-date"
+              onPress={() => portfolioDrill.open({
+                title: 'Next Reset Date',
+                summary: "Club Royale's casino year runs April 1 through March 31. Current-season points reset to zero on this date every year.",
+                formula: 'Next Reset Date = the next upcoming April 1',
+                inputs: [
+                  { label: 'Current casino-year start', value: currentSeasonMetrics.seasonStart },
+                  { label: 'Next reset date', value: resetDateLabel },
+                  { label: 'Current season points', value: formatNumber(currentYearPoints) },
+                  { label: 'Points needed for Prime by reset', value: formatNumber(Math.max(0, CLUB_ROYALE_TIERS.Prime.threshold - currentYearPoints)) },
+                  { label: 'Points needed to retain Signature by reset', value: formatNumber(currentSeasonMetrics.pointsNeededForSignature) },
+                  { label: 'Points needed for Masters by reset', value: formatNumber(Math.max(0, CLUB_ROYALE_TIERS.Masters.threshold - currentYearPoints)) },
+                ],
+              })}
+            >
               <Text style={styles.dataLabel}>Next Reset Date</Text>
               <Text style={styles.dataValue}>{resetDateLabel}</Text>
-            </View>
+            </TouchableOpacity>
           </View>
           <View style={styles.avgStatsRow}>
             <Text style={styles.avgStatText}>April 1 resets current-year Club Royale points only. Historical ROI, coin-in, cash result, and annual cruise analytics stay historical.</Text>
             <Text style={styles.avgStatText}>Current season uses {currentSeasonMetrics.cruises} completed Royal Caribbean cruise(s), {currentSeasonMetrics.nights} nights, and {formatNumber(currentSeasonMetrics.points)} app-entered points.</Text>
           </View>
           {clubRoyaleSyncDiscrepancy.hasDiscrepancy && clubRoyaleSyncDiscrepancy.message ? (
-            <View style={styles.discrepancyNotice} testID="club-royale-discrepancy-notice">
+            <TouchableOpacity
+              style={styles.discrepancyNotice}
+              activeOpacity={0.75}
+              testID="club-royale-discrepancy-notice"
+              onPress={() => portfolioDrill.open({
+                title: 'Club Royale Sync Discrepancy',
+                summary: 'Your app-entered current-season points differ from what Royal Caribbean\'s Club Royale site reported on last sync. App-entered points stay authoritative on screen until you resolve this.',
+                formula: 'Difference = app-entered current season points − last synced Club Royale points',
+                inputs: [
+                  { label: 'App-entered points', value: formatNumber(clubRoyaleSyncDiscrepancy.appPoints) },
+                  { label: 'Last synced points', value: clubRoyaleSyncDiscrepancy.syncedPoints !== null ? formatNumber(clubRoyaleSyncDiscrepancy.syncedPoints) : 'Not yet synced' },
+                  { label: 'Difference', value: formatNumber(Math.abs(clubRoyaleSyncDiscrepancy.difference)) },
+                ],
+                missing: ['Records missing an imported confirmation are shown in the Cruise Portfolio list below — check each for a Sync Now refresh.'],
+                relatedActions: [
+                  { label: 'Open Loyalty Data', onPress: () => { portfolioDrill.close(); router.push('/casino/loyalty-data' as any); } },
+                  { label: 'Data Health', emphasis: 'secondary', onPress: () => { portfolioDrill.close(); router.push('/data-health' as any); } },
+                ],
+              })}
+            >
               <Text style={styles.discrepancyTitle}>Club Royale sync discrepancy</Text>
               <Text style={styles.discrepancyText}>{clubRoyaleSyncDiscrepancy.message}</Text>
-            </View>
+            </TouchableOpacity>
           ) : null}
           <TouchableOpacity
             style={styles.sectionLinkRow}
@@ -1780,6 +2045,26 @@ export default function AnalyticsScreen() {
           playerContext={playerContext}
           bookedCruises={bookedCruises}
           monthsAhead={24}
+          onThresholdPress={(tier, threshold) => portfolioDrill.open({
+            title: `${tier} Threshold`,
+            summary: `The ${tier} tier is reached at ${formatNumber(threshold)} points on the projected pace shown in this chart.`,
+            formula: 'Points needed = tier threshold − current points; Coin-in needed = points needed × $5',
+            inputs: [
+              { label: 'Tier threshold', value: `${formatNumber(threshold)} pts` },
+              { label: 'Current points', value: formatNumber(playerContext.currentPoints) },
+              { label: 'Points needed', value: `${formatNumber(Math.max(0, threshold - playerContext.currentPoints))} pts` },
+              { label: 'Coin-in needed (points × $5)', value: formatCurrencyDetailed(Math.max(0, threshold - playerContext.currentPoints) * DOLLARS_PER_POINT) },
+            ],
+            assumptions: ['Projection is seeded from your own historical points-per-cruise pace, not a generic assumption.'],
+          })}
+          onCurrentPositionPress={() => portfolioDrill.open({
+            title: 'Current Position',
+            summary: 'Where you stand right now on the tier progression chart.',
+            inputs: [
+              { label: 'Current tier', value: playerContext.currentTier },
+              { label: 'Current points', value: formatNumber(playerContext.currentPoints) },
+            ],
+          })}
         />
       </View>
 
@@ -4512,6 +4797,166 @@ export default function AnalyticsScreen() {
                   </View>
                 </View>
               )}
+
+              <Text style={styles.performanceSectionHeading}>Casino ledger details</Text>
+              <View style={styles.performanceInputGrid}>
+                <View style={styles.performanceInputGroup}>
+                  <Text style={styles.performanceInputLabel}>Buy-in</Text>
+                  <TextInput
+                    style={styles.performanceTextInput}
+                    value={performanceForm.buyIn}
+                    onChangeText={(value) => setPerformanceForm((prev) => ({ ...prev, buyIn: value }))}
+                    placeholder="1000"
+                    placeholderTextColor={CASINO_DASHBOARD_COLORS.textMuted}
+                    keyboardType="number-pad"
+                    testID="cruise-performance-buyin-input"
+                  />
+                </View>
+                <View style={styles.performanceInputGroup}>
+                  <Text style={styles.performanceInputLabel}>Cash-out</Text>
+                  <TextInput
+                    style={styles.performanceTextInput}
+                    value={performanceForm.cashOut}
+                    onChangeText={(value) => setPerformanceForm((prev) => ({ ...prev, cashOut: value }))}
+                    placeholder="1500"
+                    placeholderTextColor={CASINO_DASHBOARD_COLORS.textMuted}
+                    keyboardType="number-pad"
+                    testID="cruise-performance-cashout-input"
+                  />
+                </View>
+                <View style={styles.performanceInputGroup}>
+                  <Text style={styles.performanceInputLabel}>FreePlay used</Text>
+                  <TextInput
+                    style={styles.performanceTextInput}
+                    value={performanceForm.freePlayUsed}
+                    onChangeText={(value) => setPerformanceForm((prev) => ({ ...prev, freePlayUsed: value }))}
+                    placeholder="300"
+                    placeholderTextColor={CASINO_DASHBOARD_COLORS.textMuted}
+                    keyboardType="number-pad"
+                    testID="cruise-performance-freeplay-used-input"
+                  />
+                </View>
+                <View style={styles.performanceInputGroup}>
+                  <Text style={styles.performanceInputLabel}>FreePlay won</Text>
+                  <TextInput
+                    style={styles.performanceTextInput}
+                    value={performanceForm.freePlayWon}
+                    onChangeText={(value) => setPerformanceForm((prev) => ({ ...prev, freePlayWon: value }))}
+                    placeholder="0"
+                    placeholderTextColor={CASINO_DASHBOARD_COLORS.textMuted}
+                    keyboardType="number-pad"
+                    testID="cruise-performance-freeplay-won-input"
+                  />
+                </View>
+                <View style={styles.performanceInputGroup}>
+                  <Text style={styles.performanceInputLabel}>W2G jackpot amount</Text>
+                  <TextInput
+                    style={styles.performanceTextInput}
+                    value={performanceForm.w2gJackpotAmount}
+                    onChangeText={(value) => setPerformanceForm((prev) => ({ ...prev, w2gJackpotAmount: value }))}
+                    placeholder="0"
+                    placeholderTextColor={CASINO_DASHBOARD_COLORS.textMuted}
+                    keyboardType="number-pad"
+                    testID="cruise-performance-w2g-input"
+                  />
+                </View>
+                <View style={styles.performanceInputGroup}>
+                  <Text style={styles.performanceInputLabel}>OBC</Text>
+                  <TextInput
+                    style={styles.performanceTextInput}
+                    value={performanceForm.obc}
+                    onChangeText={(value) => setPerformanceForm((prev) => ({ ...prev, obc: value }))}
+                    placeholder="75"
+                    placeholderTextColor={CASINO_DASHBOARD_COLORS.textMuted}
+                    keyboardType="number-pad"
+                    testID="cruise-performance-obc-input"
+                  />
+                </View>
+                <View style={styles.performanceInputGroup}>
+                  <Text style={styles.performanceInputLabel}>Offer used (code)</Text>
+                  <TextInput
+                    style={styles.performanceTextInput}
+                    value={performanceForm.offerCode}
+                    onChangeText={(value) => setPerformanceForm((prev) => ({ ...prev, offerCode: value }))}
+                    placeholder="25RCLV123"
+                    placeholderTextColor={CASINO_DASHBOARD_COLORS.textMuted}
+                    autoCapitalize="characters"
+                    testID="cruise-performance-offer-code-input"
+                  />
+                </View>
+                <View style={styles.performanceInputGroup}>
+                  <Text style={styles.performanceInputLabel}>BWO number</Text>
+                  <TextInput
+                    style={styles.performanceTextInput}
+                    value={performanceForm.bwoNumber}
+                    onChangeText={(value) => setPerformanceForm((prev) => ({ ...prev, bwoNumber: value }))}
+                    placeholder="BWO123456"
+                    placeholderTextColor={CASINO_DASHBOARD_COLORS.textMuted}
+                    testID="cruise-performance-bwo-input"
+                  />
+                </View>
+                <View style={styles.performanceInputGroup}>
+                  <Text style={styles.performanceInputLabel}>VOOM value</Text>
+                  <TextInput
+                    style={styles.performanceTextInput}
+                    value={performanceForm.voomValue}
+                    onChangeText={(value) => setPerformanceForm((prev) => ({ ...prev, voomValue: value }))}
+                    placeholder="210"
+                    placeholderTextColor={CASINO_DASHBOARD_COLORS.textMuted}
+                    keyboardType="number-pad"
+                    testID="cruise-performance-voom-input"
+                  />
+                </View>
+                <View style={styles.performanceInputGroup}>
+                  <Text style={styles.performanceInputLabel}>Specialty dining value</Text>
+                  <TextInput
+                    style={styles.performanceTextInput}
+                    value={performanceForm.diningValue}
+                    onChangeText={(value) => setPerformanceForm((prev) => ({ ...prev, diningValue: value }))}
+                    placeholder="0"
+                    placeholderTextColor={CASINO_DASHBOARD_COLORS.textMuted}
+                    keyboardType="number-pad"
+                    testID="cruise-performance-dining-input"
+                  />
+                </View>
+                <View style={styles.performanceInputGroup}>
+                  <Text style={styles.performanceInputLabel}>Spa value</Text>
+                  <TextInput
+                    style={styles.performanceTextInput}
+                    value={performanceForm.spaValue}
+                    onChangeText={(value) => setPerformanceForm((prev) => ({ ...prev, spaValue: value }))}
+                    placeholder="0"
+                    placeholderTextColor={CASINO_DASHBOARD_COLORS.textMuted}
+                    keyboardType="number-pad"
+                    testID="cruise-performance-spa-input"
+                  />
+                </View>
+                <View style={styles.performanceInputGroup}>
+                  <Text style={styles.performanceInputLabel}>Beverage package value</Text>
+                  <TextInput
+                    style={styles.performanceTextInput}
+                    value={performanceForm.beverageValue}
+                    onChangeText={(value) => setPerformanceForm((prev) => ({ ...prev, beverageValue: value }))}
+                    placeholder="0"
+                    placeholderTextColor={CASINO_DASHBOARD_COLORS.textMuted}
+                    keyboardType="number-pad"
+                    testID="cruise-performance-beverage-input"
+                  />
+                </View>
+              </View>
+              <View style={styles.performanceInputGroup}>
+                <Text style={styles.performanceInputLabel}>Notes</Text>
+                <TextInput
+                  style={[styles.performanceTextInput, styles.performanceNotesInput]}
+                  value={performanceForm.casinoNotes}
+                  onChangeText={(value) => setPerformanceForm((prev) => ({ ...prev, casinoNotes: value }))}
+                  placeholder="Anything else worth remembering about this cruise's casino play..."
+                  placeholderTextColor={CASINO_DASHBOARD_COLORS.textMuted}
+                  multiline={true}
+                  textAlignVertical="top"
+                  testID="cruise-performance-notes-input"
+                />
+              </View>
             </ScrollView>
 
             <View style={styles.performanceModalActions}>
@@ -5900,6 +6345,14 @@ const styles = StyleSheet.create({
   },
   performanceInputGrid: {
     gap: SPACING.md,
+  },
+  performanceSectionHeading: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: CASINO_DASHBOARD_COLORS.textSecondary,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.4,
+    marginTop: SPACING.sm,
   },
   performanceInputGroup: {
     gap: 6,

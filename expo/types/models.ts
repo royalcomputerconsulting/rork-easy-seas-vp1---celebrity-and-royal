@@ -266,6 +266,17 @@ export interface BookedCruise extends Cruise {
   pointsPerHour?: number;
   valuePerHour?: number;
   calculationConfidence?: 'actual' | 'estimated' | 'mixed';
+  /** Stage 9.2 checklist item 21: expanded per-cruise casino ledger fields. */
+  buyIn?: number;
+  cashOut?: number;
+  freePlayUsed?: number;
+  freePlayWon?: number;
+  w2gJackpotAmount?: number;
+  voomValue?: number;
+  diningValue?: number;
+  spaValue?: number;
+  beverageValue?: number;
+  casinoNotes?: string;
 }
 
 export type OfferClassification = 
