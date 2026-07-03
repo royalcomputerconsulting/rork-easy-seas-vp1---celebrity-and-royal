@@ -1862,7 +1862,28 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         }
       }
       
-      const step1CompletedCleanly = await waitForStepComplete(1, isCarnivalMode ? 180000 : 1200000);
+      let step1CompletedCleanly = await waitForStepComplete(1, isCarnivalMode ? 180000 : 1200000);
+
+      if (extractedOffersRef.current.length === 0) {
+        addLog('Offer extraction came back empty on the first attempt - retrying once before giving up', 'warning');
+        await navigateToPage(config.offersUrl, 20000);
+        await delay(2500);
+        if (webViewRef.current) {
+          if (isCarnivalMode) {
+            addLog('Re-injecting Carnival extraction on offers page (retry)...', 'info');
+            webViewRef.current.injectJavaScript(injectCarnivalOffersExtraction() + '; true;');
+          } else {
+            webViewRef.current.injectJavaScript(injectOffersExtraction(state.scrapePricingAndItinerary, cruiseLine === 'celebrity' ? 'celebrity' : 'royal_caribbean') + '; true;');
+          }
+        }
+        step1CompletedCleanly = await waitForStepComplete(1, isCarnivalMode ? 90000 : 240000);
+        if (extractedOffersRef.current.length > 0) {
+          addLog(`Retry succeeded: captured ${extractedOffersRef.current.length} offer row(s) on the second attempt`, 'success');
+        } else {
+          addLog('Retry still returned no offer rows - the site may have no current offers, or the session needs to be signed in again', 'warning');
+        }
+      }
+
       const step1OfferRows = extractedOffersRef.current;
       const step1OfferCodes = Array.from(new Set(step1OfferRows.map((offer: any) => String(offer.offerCode || '').trim()).filter(Boolean)));
       const isRoyalSync = !isCarnivalMode && cruiseLine !== 'celebrity';

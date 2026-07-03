@@ -965,6 +965,20 @@ function dedupeByKey<T>(items: T[], keyFn: (item: T) => string, label: string): 
   return Array.from(map.values());
 }
 
+// SAFETY GUARDRAIL: a Sync Now run can fail midway (network blip, WebView navigation error,
+// site layout change, session timeout) and still report a handful of rows. Without this check,
+// that partial capture would be treated as "authoritative" and wipe out a much larger, previously
+// verified catalog of offers/sailings/booked cruises. Only trip this when there was a meaningful
+// amount of existing data to protect, and the new capture is a suspiciously small fraction of it.
+function isSuspiciouslyIncompleteCapture(existingManagedCount: number, incomingCount: number): boolean {
+  if (existingManagedCount < 3) {
+    return false;
+  }
+  const MIN_RETENTION_RATIO = 0.4;
+  const minimumExpected = Math.max(2, Math.ceil(existingManagedCount * MIN_RETENTION_RATIO));
+  return incomingCount < minimumExpected;
+}
+
 export function applySyncPreview(
   preview: SyncPreview,
   existingOffers: CasinoOffer[],
@@ -981,6 +995,9 @@ export function applySyncPreview(
   const allowBookedCruiseRemoval = options?.allowBookedCruiseRemoval ?? true;
   const targetOwnerProfileId = options?.targetOwnerProfileId;
   const includeUnownedRecords = options?.includeUnownedRecords ?? true;
+  const existingManagedOfferCount = normalizedExistingOffers.filter(o => isManagedOfferSource(o, syncSource, targetOwnerProfileId, includeUnownedRecords)).length;
+  const existingManagedCruiseCount = normalizedExistingCruises.filter(c => isManagedCruiseSource(c, syncSource, targetOwnerProfileId, includeUnownedRecords)).length;
+  const existingManagedBookedCount = normalizedExistingBookedCruises.filter(c => isManagedCruiseSource(c, syncSource, targetOwnerProfileId, includeUnownedRecords)).length;
 
   // STRATEGY: Synced data is the SOURCE OF TRUTH for the active sync source.
   // Items from that source NOT present in the sync are REMOVED only when we captured
@@ -989,7 +1006,13 @@ export function applySyncPreview(
 
   const collectedOfferCodes = collectedOfferCodesFromPreview(preview);
   const incomingCruiseCount = preview.cruises.new.length + preview.cruises.updates.length;
-  const hasAuthoritativeOfferCatalog = allowOfferRemoval && (
+  const incomingOfferCount = preview.offers.new.length + preview.offers.updates.length;
+  const offerCaptureLooksIncomplete = isSuspiciouslyIncompleteCapture(existingManagedOfferCount, incomingOfferCount)
+    || isSuspiciouslyIncompleteCapture(existingManagedCruiseCount, incomingCruiseCount);
+  if (allowOfferRemoval && offerCaptureLooksIncomplete) {
+    console.log(`[SyncLogic] Guardrail tripped: incoming ${syncSource} capture (${incomingOfferCount} offers / ${incomingCruiseCount} sailings) is suspiciously smaller than existing (${existingManagedOfferCount} offers / ${existingManagedCruiseCount} sailings) - preserving existing offers/sailings instead of removing any`);
+  }
+  const hasAuthoritativeOfferCatalog = allowOfferRemoval && !offerCaptureLooksIncomplete && (
     (syncSource === 'royal' && collectedOfferCodes.size >= 5 && incomingCruiseCount >= 1000) ||
     (syncSource === 'celebrity' && collectedOfferCodes.size >= 1 && incomingCruiseCount > 0) ||
     (syncSource === 'carnival' && collectedOfferCodes.size >= 1 && incomingCruiseCount > 0)
@@ -999,7 +1022,12 @@ export function applySyncPreview(
     ...preview.offers.updates.map(u => u.updated),
     ...preview.offers.new,
   ];
-  const finalOffers = hasAuthoritativeOfferCatalog
+  const finalOffers = offerCaptureLooksIncomplete
+    ? [
+        ...normalizedExistingOffers.filter(o => !updatedOfferIds.has(o.id)),
+        ...incomingOfferRecords,
+      ]
+    : hasAuthoritativeOfferCatalog
     ? [
         ...normalizedExistingOffers.filter(o => {
           const code = String(o.offerCode || '').trim().toUpperCase();
@@ -1042,7 +1070,12 @@ export function applySyncPreview(
     ...preview.cruises.updates.map(u => u.updated),
     ...preview.cruises.new,
   ];
-  const finalCruises = hasAuthoritativeOfferCatalog
+  const finalCruises = offerCaptureLooksIncomplete
+    ? [
+        ...normalizedExistingCruises.filter(c => !updatedCruiseIds.has(c.id)),
+        ...incomingCruiseRecords,
+      ]
+    : hasAuthoritativeOfferCatalog
     ? [
         ...normalizedExistingCruises.filter(c => {
           const code = String(c.offerCode || '').trim().toUpperCase();
@@ -1093,10 +1126,19 @@ export function applySyncPreview(
   ];
   const incomingCompletedCount = incomingBookedRecords.filter(isCompletedSyncBookedCruise).length;
   const incomingActiveCount = incomingBookedRecords.filter(c => !isCompletedSyncBookedCruise(c)).length;
-  const hasAuthoritativeBookedOrHistory = allowBookedCruiseRemoval && incomingBookedRecords.length > 0;
+  const bookedCaptureLooksIncomplete = isSuspiciouslyIncompleteCapture(existingManagedBookedCount, incomingBookedRecords.length);
+  if (allowBookedCruiseRemoval && incomingBookedRecords.length > 0 && bookedCaptureLooksIncomplete) {
+    console.log(`[SyncLogic] Guardrail tripped: incoming ${syncSource} booked/history capture (${incomingBookedRecords.length}) is suspiciously smaller than existing (${existingManagedBookedCount}) - preserving existing booked/completed records instead of removing any`);
+  }
+  const hasAuthoritativeBookedOrHistory = allowBookedCruiseRemoval && incomingBookedRecords.length > 0 && !bookedCaptureLooksIncomplete;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const finalBookedCruises = hasAuthoritativeBookedOrHistory
+  const finalBookedCruises = bookedCaptureLooksIncomplete
+    ? [
+        ...normalizedExistingBookedCruises.filter(c => !updatedBookedCruiseIds.has(c.id)),
+        ...incomingBookedRecords,
+      ]
+    : hasAuthoritativeBookedOrHistory
     ? [
         ...normalizedExistingBookedCruises.filter(c => {
           const isManagedSourceRecord = resolveCruiseSource(c) === syncSource;

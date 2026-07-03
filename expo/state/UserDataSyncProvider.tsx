@@ -644,13 +644,25 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       const currentOwnerScopeId = ownerScopeIdRef.current;
       const currentEmail = emailRef.current;
       const cloudOwnerScopeId = typeof cloudData?.ownerScopeId === 'string' ? cloudData.ownerScopeId : currentOwnerScopeId;
-      if (!currentOwnerScopeId || !cloudOwnerScopeId || cloudOwnerScopeId !== currentOwnerScopeId || !isOwnerScopeForEmail(cloudOwnerScopeId, currentEmail)) {
+      // Owner scope embeds a per-device installation id, so restoring the same account from a
+      // different device will always have a different ownerScopeId than what was saved. Only the
+      // email portion needs to match here - a cross-device restore for the same account must not
+      // be refused just because the device changed. Every record we write below is re-stamped with
+      // THIS device's currentOwnerScopeId, so ownership stays consistent going forward.
+      if (!currentOwnerScopeId || !cloudOwnerScopeId || !isOwnerScopeForEmail(cloudOwnerScopeId, currentEmail)) {
         console.warn('[UserDataSync] Refusing cloud restore for mismatched owner scope:', {
           currentEmail,
           currentOwnerScopeId,
           cloudOwnerScopeId,
         });
         return false;
+      }
+      if (cloudOwnerScopeId !== currentOwnerScopeId) {
+        console.log('[UserDataSync] Cross-device restore detected for the same account - re-stamping records to this device:', {
+          currentEmail,
+          currentOwnerScopeId,
+          cloudOwnerScopeId,
+        });
       }
 
       const savePromises: Promise<void>[] = [];
