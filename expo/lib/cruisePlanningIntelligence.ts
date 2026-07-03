@@ -1,7 +1,6 @@
 import type { CasinoOffer, Cruise, TravelerProfile } from '@/types/models';
 import { createDateFromString, getDaysUntil } from '@/lib/date';
 import { calculateCasinoAvailabilityForCruise } from '@/lib/casinoAvailability';
-import { getNormalizedCruiseDateRange, getTrustedCruiseItineraryDays } from '@/lib/calendar/cruiseEvents';
 
 export type ShipFamiliarityRating = 'New Ship' | 'Familiar' | 'Very Familiar' | 'Home Ship';
 
@@ -158,8 +157,7 @@ function splitPortsAndTimes(value: string | undefined): string[] {
 }
 
 export function deriveCruiseDayPlan(cruise: Cruise): CruiseDayPlan[] {
-  const trustedItinerary = getTrustedCruiseItineraryDays(cruise as any);
-  const explicitItinerary = trustedItinerary.slice().sort((left, right) => left.day - right.day) ?? [];
+  const explicitItinerary = cruise.itinerary?.slice().sort((left, right) => left.day - right.day) ?? [];
   if (explicitItinerary.length > 0) {
     const maxDay = Math.max(...explicitItinerary.map((day) => day.day), cruise.nights + 1);
     return explicitItinerary.map((day) => ({
@@ -175,11 +173,7 @@ export function deriveCruiseDayPlan(cruise: Cruise): CruiseDayPlan[] {
     ? cruise.itineraryRaw
     : splitPortsAndTimes(cruise.portsAndTimes);
   const ports = rawPorts.length > 0 ? rawPorts : (cruise.ports ?? []);
-  const normalizedRange = getNormalizedCruiseDateRange(cruise as any);
-  const normalizedNights = normalizedRange
-    ? Math.max(0, Math.round((createDateFromString(normalizedRange.returnDate).getTime() - createDateFromString(normalizedRange.sailDate).getTime()) / (1000 * 60 * 60 * 24)))
-    : undefined;
-  const totalDays = Math.max(1, ((typeof normalizedNights === 'number' && normalizedNights > 0 ? normalizedNights : cruise.nights || Math.max(ports.length - 1, 1)) + 1));
+  const totalDays = Math.max(1, (cruise.nights || Math.max(ports.length - 1, 1)) + 1);
 
   if (ports.length > 0) {
     return ports.map((port, index) => ({

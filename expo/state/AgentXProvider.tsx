@@ -58,17 +58,6 @@ import { usePPHAlerts } from './PPHAlertsProvider';
 import { useGamification } from './GamificationProvider';
 import { useCelebrity } from './CelebrityProvider';
 import type { RecognitionEntryWithCrew } from '@/types/crew-recognition';
-import { getCertificateExpirationResult } from '@/lib/certificates/expiration';
-import { calculateCasinoOpportunityScore } from '@/lib/cruise/casinoOpportunityScore';
-import { buildBestPlayTodayPlan } from '@/lib/casino/bestPlayToday';
-import { buildHostViewProfile } from '@/lib/analytics/hostView';
-import { buildCompletedCruiseCasinoValueRecords, findCompletedCruiseDataGaps } from '@/lib/cruise/completedCruiseHistory';
-import { calculateCasinoStrengthRating } from '@/lib/casino/casinoStrengthRating';
-import { buildCasinoStrengthForecast } from '@/lib/casino/casinoForecasting';
-import { buildShipCasinoHistory } from '@/lib/analytics/shipCasinoHistory';
-import { buildFutureValueWallet, getScottSignatureObcOverride, isBenefitOverrideActive } from '@/lib/value/futureValueWallet';
-import { createLedgerItem } from '@/lib/value/cruiseValueLedger';
-import { buildCasinoValueAttributionSummary } from '@/lib/analytics/casinoValueAttribution';
 import {
   buildIntelligenceScopeLabel,
   filterRecordsByIntelligence,
@@ -133,7 +122,6 @@ function buildSystemPrompt(context: {
 - Answer questions about crew recognition records, departments, roles, ships, and sail dates
 - Answer questions about loaded weather/rough-seas reports, wind, waves, rain, and advisories
 - Answer questions about financials, payments, price history, alerts, bankroll, tax/W-2G, comp items, analytics, achievements, and app settings context
-- Use Casino Intelligence engine outputs for Best Play Today, Casino Opportunity Scores, Certificate Expiration Intelligence, and Host View / player profile summaries
 - Provide careful educational guidance about offer math, certificates, loyalty, and responsible use
 - Answer Ask My Data questions from freshly loaded saved app context
 
@@ -160,13 +148,12 @@ Mode guidance:
 - EasySeas Guide: prioritize app tutorials, cruise casino basics, offer math, certificates, and responsible-use education.
 
 Key formulas:
-- Points: use the centralized pointsEarning engine. Royal reel slots default to $5 coin-in/point, Royal video poker defaults to $15 coin-in/point, table games require manual/theoretical points, and FreePlay coin-in is separate by default.
+- Points: 1 point per $5 coin-in
 - Cash Result = Winnings Brought Home - Net Effective Paid
 - Cruise Value Captured = Retail Value - Net Effective Paid
 - Total Economic Value = Retail Value + Winnings Brought Home - Net Effective Paid
 - Coin-In is gambling volume only. Never add Coin-In to Cash Result, Cruise Value Captured, Total Economic Value, ROI, or profit language.
-- App-entered cruise points are authoritative when Club Royale sync differs.
-- Casino Intelligence rules: use engine outputs for casino-play recommendations, cruise opportunity scoring, certificate expiration urgency, and host-profile summaries. Do not invent missing itinerary detail; repeat engine warnings when a score is estimated. Certificate intelligence is expiration-only; do not provide certificate move-risk, override prediction, auto-redemption, or auto-deletion advice unless that feature is explicitly built later.`;
+- App-entered cruise points are authoritative when Club Royale sync differs.`;
 }
 
 function hasNumber(value: unknown): value is number {
@@ -184,66 +171,6 @@ function getFirstCruiseNumber(cruise: Record<string, unknown>, keys: string[]): 
 function formatMoney(value: number | null): string {
   if (value === null) return 'n/a';
   return String.fromCharCode(36) + value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-
-function buildCasinoIntelligenceContextText(input: {
-  bestPlayToday?: any;
-  certificateResults?: Array<{ certificate?: any; result?: any }>;
-  opportunityResults?: Array<{ cruise?: any; result?: any; source?: string }>;
-  hostViewProfile?: any;
-}): string {
-  const bestPlay = input.bestPlayToday;
-  const certificateResults = input.certificateResults ?? [];
-  const opportunityResults = input.opportunityResults ?? [];
-  const host = input.hostViewProfile;
-
-  const urgentCertificates = certificateResults
-    .filter(({ result }) => result?.status === 'expires-today' || result?.status === 'urgent')
-    .slice(0, 8)
-    .map(({ certificate, result }) => {
-      const code = certificate?.offerCode || certificate?.code || certificate?.certificateCode || certificate?.id || 'Unknown certificate';
-      return `- ${code}: ${result?.badgeLabel || result?.status || 'unknown'} (${result?.message || 'No message'})`;
-    });
-
-  const topOpportunities = opportunityResults
-    .filter(({ result }) => typeof result?.score === 'number')
-    .sort((left, right) => (right.result?.score ?? -1) - (left.result?.score ?? -1))
-    .slice(0, 8)
-    .map(({ cruise, result, source }) => {
-      const ship = cruise?.shipName || cruise?.ship || cruise?.title || 'Unknown ship';
-      const date = cruise?.sailDate || cruise?.sailingDate || cruise?.startDate || cruise?.departureDate || 'date unknown';
-      const warnings = Array.isArray(result?.warnings) && result.warnings.length ? ` Warnings: ${result.warnings.slice(0, 2).join(' ')}` : '';
-      return `- ${ship} ${date} (${source || 'cruise'}): ${result?.score ?? 'n/a'}/100 ${result?.label || 'unknown'}; casino days ${result?.casinoOpenDayCount ?? 'n/a'}.${warnings}`;
-    });
-
-  const hostTalkingPoints = Array.isArray(host?.hostTalkingPoints) && host.hostTalkingPoints.length
-    ? host.hostTalkingPoints.slice(0, 8).map((point: string) => `- ${point}`)
-    : [];
-  const hostRisks = Array.isArray(host?.risks) && host.risks.length
-    ? host.risks.slice(0, 8).map((risk: string) => `- ${risk}`)
-    : [];
-
-  return [
-    'Best Play Today:',
-    bestPlay
-      ? `- ${bestPlay.recommendedAction || 'unknown'} on ${bestPlay.date || 'today'} aboard ${bestPlay.shipName || bestPlay.cruiseName || 'no active ship'}; day ${bestPlay.cruiseDay ?? 'n/a'} (${bestPlay.dayType || 'unknown'}), target ${bestPlay.targetPoints ?? 0} points, estimated coin-in ${formatMoney(typeof bestPlay.estimatedCoinIn === 'number' ? bestPlay.estimatedCoinIn : 0)}, bankroll cap ${formatMoney(typeof bestPlay.suggestedBankrollCap === 'number' ? bestPlay.suggestedBankrollCap : 0)}. ${bestPlay.reason || ''}`
-      : '- No Best Play Today result available.',
-    Array.isArray(bestPlay?.warnings) && bestPlay.warnings.length ? `- Warnings: ${bestPlay.warnings.join(' ')}` : '',
-    '',
-    'Certificate Expiration Intelligence:',
-    urgentCertificates.length ? urgentCertificates.join('\n') : '- No urgent certificate expirations in the provided context.',
-    '',
-    'Top Casino Opportunity Scores:',
-    topOpportunities.length ? topOpportunities.join('\n') : '- No scored cruise opportunity records available.',
-    '',
-    'Host View / Player Profile Summary:',
-    host
-      ? `- ${host.userName || 'Player'}: ${host.clubRoyaleTier || 'unknown tier'}, ${host.clubRoyalePoints ?? 0} casino points, ${host.totalCruisesTracked ?? 0} cruises tracked, ${host.totalCasinoSessions ?? 0} sessions, ${host.totalPointsEarned ?? 0} tracked points, ${host.estimatedPlayerValueLabel || 'unknown'} host value label.`
-      : '- No Host View result available.',
-    hostTalkingPoints.length ? ['Host talking points:', ...hostTalkingPoints].join('\n') : '',
-    hostRisks.length ? ['Host risks / watchouts:', ...hostRisks].join('\n') : '',
-  ].filter(Boolean).join('\n');
 }
 
 function normalizeDateKey(value: string | undefined): string {
@@ -477,7 +404,7 @@ function isWeatherQuestion(message: string): boolean {
 }
 
 function parseToolCall(message: string): { tool: string; params: unknown } | null {
-  const askDataMatch = message.match(/ask my data|search my data|find in my data|search everything|global search|natural language search|show me.*data|what .* do i have|which .* do i have|who .*recogniz|show .*crew|show .*weather|show .*forecast|show .*events?|show .*slot|show .*alert|show .*financial|show .*payment|show .*price|show .*tax|show .*w-?2g|show .*bankroll|show .*achievement|what .*weather|which .*slot|rough seas|weather reports?|price drops?|bankroll|financials?|payments?|tax|w-?2g|achievements?|app data|data sources?|what can you see|best play today|should i play today|target points|casino opportunity|best casino cruise|which cruise.*casino|certificate.*expir|expires first|expiring certificates|host view|casino host.*see|player profile summary|host message/i);
+  const askDataMatch = message.match(/ask my data|search my data|find in my data|search everything|global search|natural language search|show me.*data|what .* do i have|which .* do i have|who .*recogniz|show .*crew|show .*weather|show .*forecast|show .*events?|show .*slot|show .*alert|show .*financial|show .*payment|show .*price|show .*tax|show .*w-?2g|show .*bankroll|show .*achievement|what .*weather|which .*slot|rough seas|weather reports?|price drops?|bankroll|financials?|payments?|tax|w-?2g|achievements?|app data|data sources?|what can you see/i);
   if (askDataMatch || isWeatherQuestion(message)) {
     return { tool: 'askMyData', params: { query: message } };
   }
@@ -655,9 +582,6 @@ function buildAgentSuggestedActions(tool: string | null, userContent: string): C
       { id: 'ask-crew', label: 'Crew', prompt: 'Summarize my crew recognition records by ship and department.' },
       { id: 'ask-machines', label: 'Slots', prompt: 'Show slot machines and AP notes for my upcoming ships.' },
       { id: 'ask-financials', label: 'Financials', prompt: 'Show my financial, payment, price drop, alert, bankroll, and tax data sources.' },
-      { id: 'ask-best-play', label: 'Best Play', prompt: 'Should I play today, and what target points and bankroll cap should I use?' },
-      { id: 'ask-casino-score', label: 'Casino Scores', prompt: 'Which cruises have the best casino opportunity scores?' },
-      { id: 'ask-host-view', label: 'Host View', prompt: 'What would a casino host see about my player profile?' },
       { id: 'ask-sources', label: 'Data Sources', prompt: 'What app data sources can you see right now?' },
     ];
   }
@@ -762,96 +686,6 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
     useKnownAnnualReportFacts: isKnownCasinoProfile(authenticatedEmail),
   }), [authenticatedEmail, clubRoyalePoints, clubRoyalePointsSource, clubRoyaleSyncDiscrepancy, clubRoyaleTier, filteredBookedCruises, sessions]);
 
-  const selectedUserProfile = useMemo(() => {
-    if (selectedProfileId === 'all' || selectedProfileId === 'unassigned') return users[0] ?? null;
-    return users.find((item) => item.id === selectedProfileId) ?? users[0] ?? null;
-  }, [selectedProfileId, users]);
-
-  const casinoIntelligenceSnapshot = useMemo(() => {
-    const completedCruisesForHost = filteredBookedCruises.filter((cruise) => {
-      if (cruise.completionState === 'completed' || cruise.status === 'completed') return true;
-      if (!cruise.returnDate) return false;
-      const returnDate = new Date(cruise.returnDate);
-      return Number.isFinite(returnDate.getTime()) && returnDate < new Date();
-    });
-    const upcomingCruisesForHost = filteredBookedCruises.filter((cruise) => !completedCruisesForHost.includes(cruise));
-    const userProfileForEngines = {
-      ...(selectedUserProfile ?? {}),
-      clubRoyaleTier,
-      clubRoyalePoints,
-      bankrollCap: (settings as any)?.defaultBankrollCap ?? (settings as any)?.bankrollCap ?? 200,
-      coinInPerPoint: 5,
-    };
-    const bestPlayToday = buildBestPlayTodayPlan({
-      bookedCruises: filteredBookedCruises,
-      sessions,
-      userProfile: userProfileForEngines,
-      userSettings: settings,
-      machineRecommendations: allMachines,
-    });
-    const certificateResults = filteredCertificates.map((certificate) => ({
-      certificate,
-      result: getCertificateExpirationResult(certificate),
-    }));
-    const availableOpportunityResults = filteredCruises.slice(0, 120).map((cruise) => ({
-      cruise,
-      result: calculateCasinoOpportunityScore(cruise),
-      source: 'available',
-    }));
-    const bookedOpportunityResults = filteredBookedCruises.slice(0, 120).map((cruise) => ({
-      cruise,
-      result: calculateCasinoOpportunityScore(cruise),
-      source: 'booked',
-    }));
-    const opportunityResults = [...bookedOpportunityResults, ...availableOpportunityResults];
-    const hostViewProfile = buildHostViewProfile({
-      userProfile: userProfileForEngines,
-      bookedCruises: upcomingCruisesForHost,
-      completedCruises: completedCruisesForHost,
-      sessions,
-      certificates: filteredCertificates,
-      offers: filteredCasinoOffers,
-    });
-    const detail = buildCasinoIntelligenceContextText({
-      bestPlayToday,
-      certificateResults,
-      opportunityResults,
-      hostViewProfile,
-    });
-    const urgentCount = certificateResults.filter(({ result }) => result.status === 'expires-today' || result.status === 'urgent').length;
-    const scoredCount = opportunityResults.filter(({ result }) => result.score !== null).length;
-    return {
-      bestPlayToday,
-      certificateResults,
-      opportunityResults,
-      hostViewProfile,
-      contextBlock: {
-        id: 'casino-intelligence-engine-outputs',
-        title: 'Casino Intelligence engine outputs',
-        subtitle: `${bestPlayToday.recommendedAction} today · ${urgentCount} urgent certificate(s) · ${scoredCount} scored cruise(s) · Host View ${hostViewProfile.estimatedPlayerValueLabel}`,
-        keywords: [
-          'best play today',
-          'should i play today',
-          'target points',
-          'coin in',
-          'casino opportunity',
-          'best casino cruise',
-          'casino score',
-          'certificate expiration',
-          'expires first',
-          'expiring certificate',
-          'host view',
-          'casino host',
-          'player profile',
-          'host message',
-          'talking points',
-        ],
-        detail,
-        actionLabel: 'Review intelligence',
-      } satisfies AskMyDataContextBlock,
-    };
-  }, [allMachines, clubRoyalePoints, clubRoyaleTier, filteredBookedCruises, filteredCasinoOffers, filteredCertificates, filteredCruises, selectedUserProfile, sessions, settings]);
-
   const appWideContextBlocks = useMemo<AskMyDataContextBlock[]>(() => {
     const sessionAnalytics = getSessionAnalytics();
     const bankrollStats = bankrollState.getBankrollStats();
@@ -869,81 +703,7 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
       .map((payment) => `- Cruise ${payment.cruiseId}: ${formatMoney(payment.amount)} due ${payment.dueDate}`)
       .join('\n') || 'No upcoming payment records loaded.';
 
-    const completedCasinoRecords = buildCompletedCruiseCasinoValueRecords({
-      bookedCruises: filteredBookedCruises,
-      sessions,
-      includePastBooked: true,
-    });
-    const casinoGaps = findCompletedCruiseDataGaps(completedCasinoRecords);
-    const casinoStrength = calculateCasinoStrengthRating({
-      userProfile: { clubRoyaleTier, clubRoyalePoints },
-      bookedCruises: filteredBookedCruises,
-      sessions,
-      certificates: filteredCertificates,
-      offers: filteredCasinoOffers,
-      currentYearPoints: clubRoyalePoints,
-    });
-    const casinoForecast = buildCasinoStrengthForecast({
-      userProfile: { clubRoyaleTier, clubRoyalePoints },
-      bookedCruises: filteredBookedCruises,
-      sessions,
-      certificates: filteredCertificates,
-      offers: filteredCasinoOffers,
-      currentYearPoints: clubRoyalePoints,
-    });
-    const shipHistory = buildShipCasinoHistory(completedCasinoRecords);
-    const signatureOverride = getScottSignatureObcOverride('scott-merlis');
-    const signatureLedgerItems = filteredBookedCruises
-      .filter((cruise) => isBenefitOverrideActive(signatureOverride, cruise.sailDate || (cruise as any).startDate || new Date().toISOString().slice(0, 10)))
-      .map((cruise) => createLedgerItem({
-        cruiseId: cruise.id || `${cruise.shipName}-${cruise.sailDate}`,
-        category: 'signature-obc',
-        label: '$75 Signature OBC override',
-        amount: signatureOverride.amount,
-        source: 'club-royale',
-        appliesTo: 'onboard-account',
-        isCashEquivalent: true,
-        isRefundable: false,
-        isStackable: true,
-        status: 'expected',
-      }));
-    const futureWallet = buildFutureValueWallet({ ledgerItems: signatureLedgerItems });
-    const casinoValueAttribution = buildCasinoValueAttributionSummary({ bookedCruises: filteredBookedCruises, completedCruises: filteredBookedCruises, sessions });
-
     return [
-      casinoIntelligenceSnapshot.contextBlock,
-      {
-        id: 'casino-strength-completed-cruise-value',
-        title: 'Casino Strength, Completed Cruises, and Future Value Wallet',
-        subtitle: `${casinoStrength.internalClassification.replace(/-/g, ' ')} ${casinoStrength.strengthScore}/100 · ${completedCasinoRecords.length} completed casino/value record(s) · ${futureWallet.unassignedLedgerItems.length} expected value item(s)`,
-        keywords: ['casino strength', 'casino forecast', 'next month certificate', 'instant certificate predictor', 'future casino play ev', 'strong signature', 'weak signature', 'strong prime', 'completed cruise', 'missing points', 'missing win/loss', 'future value', 'wallet', 'fcc', 'nextcruise', 'signature obc', 'ship performance'],
-        detail: [
-          `Casino Strength Rating: ${casinoStrength.internalClassification.replace(/-/g, ' ')} (${casinoStrength.strengthScore}/100). This is an EasySeas internal estimate, not an official Royal Caribbean tier.`,
-          `Signals: certificate ${casinoStrength.certificateSignalScore}/100, points ${casinoStrength.pointsSignalScore}/100, offer value ${casinoStrength.offerValueSignalScore}/100, consistency ${casinoStrength.consistencySignalScore}/100, FreePlay ${casinoStrength.freeplaySignalScore}/100, trade-in ${casinoStrength.tradeInSignalScore}/100, cabin ${casinoStrength.cabinSignalScore}/100, trend ${casinoStrength.trend}.`,
-          `Completed casino/value records: ${completedCasinoRecords.length}. Missing points: ${casinoGaps.missingPoints.length}; missing win/loss: ${casinoGaps.missingWinLoss.length}; missing value: ${casinoGaps.missingValue.length}; duplicate conflicts: ${casinoGaps.duplicateConflicts.length}.`,
-          `Completed cruise rows include individual sessions and extrapolated sessions, but cruise-level closeout totals win for non-duplicated rollups when verified points/win-loss exist.`,
-          `Top ship history: ${shipHistory.slice(0, 5).map((ship) => `${ship.shipName}: ${ship.totalCasinoPointsEarned.toLocaleString()} pts, ${formatMoney(ship.totalCasinoWinLoss)} win/loss, strength ${ship.casinoStrengthSignal}`).join(' | ') || 'No ship history yet.'}`,
-          `Future Value Wallet: ${futureWallet.futureCruiseCredits.length} FCC(s), ${futureWallet.nextCruiseCertificates.length} NextCruise certificate(s), ${futureWallet.annualCruiseBenefits.length} annual cruise benefit(s), ${futureWallet.crownAnchorCertificates.length} Crown & Anchor certificate(s), ${futureWallet.unassignedLedgerItems.length} expected/unassigned value item(s). Scott Signature OBC override is represented as $75 expected OBC through 2026-02-28 when applicable.`,
-          `Guardrails: FCCs are payment credits, not casino comp value. OBC is counted once. VOOM/dining/spa bought with OBC are spending categories, not additional comp value unless separately comped. Estimated coin-in is not expected loss.`,
-          `Casino Forecasting: predicted next monthly certificates ${casinoForecast.predictedNextMonthCertificates.map((item) => `${item.bank}:${item.predictedOfferCodeExample}/${item.confidence}`).join(', ')}. Instant certificate current level ${casinoForecast.instantCertificatePrediction.earnedLevelCode ?? 'none'}; next ${casinoForecast.instantCertificatePrediction.nextLevelCode ?? 'none'}; points needed ${casinoForecast.instantCertificatePrediction.pointsNeeded.toLocaleString()}; slot coin-in estimate ${formatMoney(casinoForecast.instantCertificatePrediction.estimatedSlotCoinInNeeded)}; Royal VP coin-in estimate ${formatMoney(casinoForecast.instantCertificatePrediction.estimatedRoyalVideoPokerCoinInNeeded)}.`,
-          `Classification movement: ${casinoForecast.movementForecast.currentClassification.replace(/-/g, ' ')} → ${casinoForecast.movementForecast.nextUpClassification?.replace(/-/g, ' ') ?? 'top/unknown'}, signal gap ${casinoForecast.movementForecast.pointsNeededForNextSignal?.toLocaleString() ?? 'unknown'} point(s). Annual cruise value forecast: ${casinoForecast.annualCruiseValueForecast.expectedAnnualBenefit} estimated at ${formatMoney(casinoForecast.annualCruiseValueForecast.estimatedValue)}. Future casino-play directional value: certificate ${formatMoney(casinoForecast.futurePlayExpectedValue.expectedCertificateValue)}, FreePlay ${formatMoney(casinoForecast.futurePlayExpectedValue.expectedFreePlay)}, trade-in ${formatMoney(casinoForecast.futurePlayExpectedValue.expectedTradeIn)}, offer improvement ${formatMoney(casinoForecast.futurePlayExpectedValue.expectedOfferImprovementValue)}.`,
-        ].join('\n'),
-        actionLabel: 'Review casino strength and value',
-      },
-      {
-        id: 'offer-attribution-true-makeout',
-        title: 'Offer Attribution and True Make-Out',
-        subtitle: `${casinoValueAttribution.bookedCruiseAttributions.length} attributed cruise(s) · ${formatMoney(casinoValueAttribution.totals.netMakeout)} net make-out · ${formatMoney(casinoValueAttribution.totals.estimatedCoinIn)} coin-in volume`,
-        keywords: ['offer attribution', 'true makeout', 'make-out', 'instant certificate', 'marketing offer', 'annual cruise', 'points cost', 'certificate earning chain', 'what did this cruise cost', 'what did this cruise make'],
-        detail: [
-          `Offer attribution rows: ${casinoValueAttribution.bookedCruiseAttributions.slice(0, 8).map((row) => `${row.shipName} ${row.sailDate}: ${row.offerCode || 'no code'} (${row.offerType}, ${row.pointsRequired.toLocaleString()} point cost, ${row.confidence})`).join(' | ') || 'No booked cruise offer codes attached yet.'}`,
-          `Instant certificate earning chains: ${casinoValueAttribution.certificateEarningChains.slice(0, 8).map((row) => `${row.offerCode} used for ${row.bookedCruiseName}; requires ${row.pointsRequired.toLocaleString()} pts; likely earned from ${row.likelyEarningCruiseName || 'unknown'}; casino result ${formatMoney(row.casinoResultOnEarningCruise || 0)}; confidence ${row.confidence}`).join(' | ') || 'No instant certificate earning chains linked yet.'}`,
-          `True make-out totals: retail/value received ${formatMoney(casinoValueAttribution.totals.retailValueReceived)}, FreePlay ${formatMoney(casinoValueAttribution.totals.freeplayValue)}, trade-in ${formatMoney(casinoValueAttribution.totals.tradeInValue)}, OBC ${formatMoney(casinoValueAttribution.totals.obcValue)}, future value created ${formatMoney(casinoValueAttribution.totals.futureValueCreated)}, cash fare/taxes/onboard costs ${formatMoney(casinoValueAttribution.totals.farePaid + casinoValueAttribution.totals.taxesAndFeesPaid + casinoValueAttribution.totals.onboardSpend)}, casino win/loss ${formatMoney(casinoValueAttribution.totals.casinoWinLoss)}, net make-out ${formatMoney(casinoValueAttribution.totals.netMakeout)}.`,
-          `Rules: instant certificates use the YYMM A/C/D + level point ladder. Non-instant certificate codes are marketing offers by default. Annual cruises and marketing offers have zero point cost. FCCs are payment credits, not casino comp value. Coin-in is volume, not cost; actual cost is casino net loss plus fare/taxes/onboard spend.`,
-          `Warnings: ${casinoValueAttribution.warnings.slice(0, 8).join(' | ') || 'No attribution warnings.'}`,
-        ].join('\n'),
-        actionLabel: 'Review true make-out',
-      },
       {
         id: 'data-source-coverage',
         title: 'Loaded Easy Seas data sources',
@@ -1041,7 +801,7 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
         actionLabel: 'Use profile/settings context',
       },
     ];
-  }, [casinoIntelligenceSnapshot, activeScopeLabel, alertsState.activeAlerts, alertsState.alerts.length, alertsState.anomalies.length, alertsState.criticalAlerts.length, alertsState.insights.length, alertsState.lastDetectionRun, alertsState.rules, allMachines.length, authenticatedEmail, bankrollState, brandProgramLabel, celebrityState.destinations, celebrityState.ships, clubRoyalePoints, clubRoyalePointsSource, clubRoyaleTier, coreDataLoading, coreUserPoints, crewRecognitionEntries.length, deckMappings.length, filteredBookedCruises.length, filteredCalendarEvents.length, filteredCasinoOffers.length, filteredCertificates.length, filteredCruises.length, financials.summary, gamificationState, getSessionAnalytics, globalLibrary.length, hasLocalData, lastSyncDate, machineLogs.length, myAtlasMachines.length, pphAlertsState, priceHistoryState, priceTrackingState, selectedBrand, selectedProfileLabel, selectedProgram, sessions.length, settings, taxState, users, weatherReports.length]);
+  }, [activeScopeLabel, alertsState.activeAlerts, alertsState.alerts.length, alertsState.anomalies.length, alertsState.criticalAlerts.length, alertsState.insights.length, alertsState.lastDetectionRun, alertsState.rules, allMachines.length, authenticatedEmail, bankrollState, brandProgramLabel, celebrityState.destinations, celebrityState.ships, clubRoyalePoints, clubRoyalePointsSource, clubRoyaleTier, coreDataLoading, coreUserPoints, crewRecognitionEntries.length, deckMappings.length, filteredBookedCruises.length, filteredCalendarEvents.length, filteredCasinoOffers.length, filteredCertificates.length, filteredCruises.length, financials.summary, gamificationState, getSessionAnalytics, globalLibrary.length, hasLocalData, lastSyncDate, machineLogs.length, myAtlasMachines.length, pphAlertsState, priceHistoryState, priceTrackingState, selectedBrand, selectedProfileLabel, selectedProgram, sessions.length, settings, taxState, users, weatherReports.length]);
 
   const refreshWeatherReports = useCallback(async (options?: { force?: boolean }): Promise<SailingWeatherForecast[]> => {
     if (!isWeatherHydrated) return [];
@@ -1124,7 +884,7 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
       getSessionAnalytics,
       getMachineAnalytics,
     };
-  }, [filteredCruises, filteredBookedCruises, filteredCasinoOffers, clubRoyalePoints, clubRoyaleTier, allMachines, myAtlasMachines, globalLibrary, encyclopedia, deckMappings, sessions, getSessionAnalytics, getMachineAnalytics, certificates.length, machineLogs.length, filteredCalendarEvents.length, crewRecognitionEntries.length, weatherReports.length, mode, filters, selectedProfileLabel, selectedBrand, selectedProgram, activeScopeLabel, brandProgramLabel, archiveContextLabel, askMyDataOverview, casinoIntelligenceSnapshot]);
+  }, [filteredCruises, filteredBookedCruises, filteredCasinoOffers, clubRoyalePoints, clubRoyaleTier, allMachines, myAtlasMachines, globalLibrary, encyclopedia, deckMappings, sessions, getSessionAnalytics, getMachineAnalytics, certificates.length, machineLogs.length, filteredCalendarEvents.length, crewRecognitionEntries.length, weatherReports.length, mode, filters, selectedProfileLabel, selectedBrand, selectedProgram, activeScopeLabel, brandProgramLabel, archiveContextLabel, askMyDataOverview]);
 
   const executeToolCall = useCallback((tool: string, params: unknown, weatherOverride?: SailingWeatherForecast[]): string => {
     console.log('[AgentX] Executing tool:', tool, params);
@@ -1170,7 +930,7 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
       default:
         return `Unknown tool: ${tool}`;
     }
-  }, [toolContext, filteredCasinoOffers, filteredCruises, filteredBookedCruises, filteredCertificates, filteredCalendarEvents, crewRecognitionEntries, allMachines, weatherReports, appWideContextBlocks, askMyDataOverview, casinoIntelligenceSnapshot]);
+  }, [toolContext, filteredCasinoOffers, filteredCruises, filteredBookedCruises, filteredCertificates, filteredCalendarEvents, crewRecognitionEntries, allMachines, weatherReports, appWideContextBlocks, askMyDataOverview]);
 
   const sendMessage = useCallback(async (content: string) => {
     console.log('[AgentX] User message:', content, 'mode:', mode);
@@ -1295,10 +1055,7 @@ ${buildWeatherContext(latestWeatherReports)}
 App-wide Easy Seas context loaded:
 ${buildAppContextBlockText(appWideContextBlocks)}
 
-Casino Intelligence engine outputs for this request:
-${casinoIntelligenceSnapshot.contextBlock.detail}
-
-CRITICAL: The user has EXACTLY ${toolContext.userPoints.toLocaleString()} casino program points in the active Royal/Celebrity scope and is in ${toolContext.currentTier} tier. They have earned ${totalEarnedPoints.toLocaleString()} points from ${completedCruises.length} completed cruises. These numbers are from the live system. Use ONLY these values, not any cached or outdated information. Coin-In is included only as gaming volume, never as profit/value/cash result. If standalone offers are empty, booked-cruise offer/value records are still actual saved offer data and must be used for Ask My Data offer answers. Events, crew recognition, slot machines, machine logs, weather reports, financials, price history, alerts, bankroll, tax/W-2G, comp items, achievements, analytics, settings, profiles, reference data, and Casino Intelligence engine outputs are valid app data sources for the chat. Use the provided Best Play Today, Casino Opportunity, Certificate Expiration, and Host View outputs instead of inventing new calculations.
+CRITICAL: The user has EXACTLY ${toolContext.userPoints.toLocaleString()} casino program points in the active Royal/Celebrity scope and is in ${toolContext.currentTier} tier. They have earned ${totalEarnedPoints.toLocaleString()} points from ${completedCruises.length} completed cruises. These numbers are from the live system. Use ONLY these values, not any cached or outdated information. Coin-In is included only as gaming volume, never as profit/value/cash result. If standalone offers are empty, booked-cruise offer/value records are still actual saved offer data and must be used for Ask My Data offer answers. Events, crew recognition, slot machines, machine logs, weather reports, financials, price history, alerts, bankroll, tax/W-2G, comp items, achievements, analytics, settings, profiles, and reference data are valid app data sources for the chat.
 `;
 
       const systemPrompt = devAssistantRequest
@@ -1373,7 +1130,7 @@ CRITICAL: The user has EXACTLY ${toolContext.userPoints.toLocaleString()} casino
     } finally {
       setIsLoading(false);
     }
-  }, [messages, tier, isAdmin, toolContext, executeToolCall, refreshWeatherReports, weatherReports, allMachines, globalLibrary, myAtlasMachines, sessions, deckMappings, machineLogs, filteredCertificates, filteredCalendarEvents, crewRecognitionEntries, filteredCasinoOffers, filteredCruises, filteredBookedCruises, appWideContextBlocks, mode, selectedProfileLabel, selectedBrand, selectedProgram, activeScopeLabel, brandProgramLabel, archiveContextLabel, askMyDataOverview, casinoIntelligenceSnapshot]);
+  }, [messages, tier, isAdmin, toolContext, executeToolCall, refreshWeatherReports, weatherReports, allMachines, globalLibrary, myAtlasMachines, sessions, deckMappings, machineLogs, filteredCertificates, filteredCalendarEvents, crewRecognitionEntries, filteredCasinoOffers, filteredCruises, filteredBookedCruises, appWideContextBlocks, mode, selectedProfileLabel, selectedBrand, selectedProgram, activeScopeLabel, brandProgramLabel, archiveContextLabel, askMyDataOverview]);
 
   const clearMessages = useCallback(() => {
     console.log('[AgentX] Clearing messages');

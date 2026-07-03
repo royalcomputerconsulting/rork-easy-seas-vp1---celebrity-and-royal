@@ -50,8 +50,6 @@ import { dedupeBookedCruises } from '@/lib/dataIdentity';
 import { AddBookedCruiseModal } from '@/components/AddBookedCruiseModal';
 import { MarineAlertsPanel } from '@/components/MarineAlertsPanel';
 import { ResponsiveContainer } from '@/components/ResponsiveContainer';
-import { CasinoOpportunityBadge } from '@/components/cruise/CasinoOpportunityBadge';
-import { calculateCasinoOpportunityScore } from '@/lib/cruise/casinoOpportunityScore';
 
 import { getImageForDestination, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
 import { useSimpleAnalytics } from '@/state/SimpleAnalyticsProvider';
@@ -65,7 +63,7 @@ import { buildCruiseEconomicsSummary } from '@/lib/casinoCruiseEconomics';
 import { getBookedCruiseCasinoPoints } from '@/lib/casinoPointTruth';
 import { CONFIRMED_CLUB_ROYALE_2025_POINTS, isKnownCasinoProfile } from '@/lib/knownProfileFallback';
 import { applyKnownBookingCorrections, findOverlappingBookedCruises } from '@/lib/cruiseOverlapGuards';
-import { isActiveBookedCruise, isCompletedBookedCruise, isInProgressBookedCruise } from '@/lib/bookedCruiseStatus';
+import { isActiveBookedCruise, isCompletedBookedCruise } from '@/lib/bookedCruiseStatus';
 
 type FilterType = 'all' | 'upcoming' | 'completed' | 'celebrity';
 type SortType = 'next' | 'newest' | 'oldest' | 'ship' | 'nights';
@@ -223,9 +221,6 @@ export default function BookedScreen() {
       case 'next': {
         const now = new Date();
         result.sort((a, b) => {
-          const aCurrent = isInProgressBookedCruise(a);
-          const bCurrent = isInProgressBookedCruise(b);
-          if (aCurrent !== bCurrent) return aCurrent ? -1 : 1;
           const aDate = createDateFromString(a.sailDate);
           const bDate = createDateFromString(b.sailDate);
           const aUpcoming = aDate >= now;
@@ -408,13 +403,9 @@ export default function BookedScreen() {
 
   const renderCruiseCard = useCallback(({ item }: { item: BookedCruise }) => {
     const isPast = isCruiseCompleted(item);
-    const casinoOpportunity = calculateCasinoOpportunityScore(item);
     
     return (
       <ResponsiveContainer>
-        <View style={styles.phase3OpportunityWrapper}>
-          <CasinoOpportunityBadge result={casinoOpportunity} compact={true} showWarnings={true} />
-        </View>
         <CruiseCard
           cruise={item}
           onPress={() => handleCruisePress(item)}
@@ -463,9 +454,6 @@ export default function BookedScreen() {
                       </View>
                     )}
                     <View style={styles.timelineCardWrapper}>
-                      <View style={styles.phase3OpportunityWrapper}>
-                        <CasinoOpportunityBadge result={calculateCasinoOpportunityScore(cruise)} compact={true} showWarnings={true} />
-                      </View>
                       <CruiseCard
                         cruise={cruise}
                         onPress={() => handleCruisePress(cruise)}
@@ -507,9 +495,6 @@ export default function BookedScreen() {
                       </View>
                     )}
                     <View style={styles.timelineCardWrapper}>
-                      <View style={styles.phase3OpportunityWrapper}>
-                        <CasinoOpportunityBadge result={calculateCasinoOpportunityScore(cruise)} compact={true} showWarnings={true} />
-                      </View>
                       <CruiseCard
                         cruise={cruise}
                         onPress={() => handleCruisePress(cruise)}
@@ -898,9 +883,6 @@ export default function BookedScreen() {
 }
 
 const styles = StyleSheet.create({
-  phase3OpportunityWrapper: {
-    marginBottom: SPACING.xs,
-  },
   container: {
     flex: 1,
     backgroundColor: '#E0F2F1',

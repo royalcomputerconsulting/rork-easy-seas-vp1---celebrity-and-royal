@@ -1,4 +1,3 @@
-import { estimateCoinInForPoints } from '@/lib/casino/pointsEarning';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { 
   Cruise, 
@@ -100,13 +99,6 @@ function recordEmail(value: unknown): string | null {
   return normalizeBackupImportEmail(recordString(value));
 }
 
-function recordScopeEmail(value: unknown): string | null {
-  const raw = recordString(value);
-  if (!raw) return null;
-  const firstSegment = raw.split('::')[0];
-  return normalizeBackupImportEmail(firstSegment) ?? normalizeBackupImportEmail(raw);
-}
-
 function userMatchesProfileGate(user: UserProfile, gate: ResolvedDataProfileGate): boolean {
   if (!gate.hasGate) return true;
   if (gate.activeProfileId && user.id === gate.activeProfileId) return true;
@@ -132,16 +124,8 @@ function recordMatchesProfileGate(record: unknown, gate: ResolvedDataProfileGate
     recordEmail(data.ownerEmail),
     recordEmail(data.email),
     recordEmail(data.userId),
-    recordScopeEmail(data.dataOwnerScopeId),
   ].filter((value): value is string => value !== null && value !== 'guest' && value !== 'local');
   const hasOwnershipClue = ownerIds.length > 0 || ownerEmails.length > 0 || Boolean(recordString(data.dataOwnerScopeId));
-
-  // Cross-device restores generate a new local profile id on each install, so a
-  // backup exported from the same authenticated email must be accepted even when
-  // ownerProfileId differs between iPhone, web, or desktop. Keep the ID check for
-  // true same-install profile isolation, but never let a stale install-local ID
-  // reject records that clearly belong to the same account email.
-  if (gate.activeProfileEmail && ownerEmails.includes(gate.activeProfileEmail)) return true;
 
   if (gate.activeProfileId && ownerIds.length > 0) {
     return ownerIds.includes(gate.activeProfileId);
@@ -150,6 +134,8 @@ function recordMatchesProfileGate(record: unknown, gate: ResolvedDataProfileGate
   if (gate.activeProfileId && ownerIds.length === 0 && ownerProfileEmail && gate.activeProfileEmail) {
     return ownerProfileEmail === gate.activeProfileEmail;
   }
+
+  if (gate.activeProfileEmail && ownerEmails.includes(gate.activeProfileEmail)) return true;
 
   return !hasOwnershipClue && allowUnownedRecords;
 }
@@ -646,7 +632,7 @@ export async function getAllStoredData(email?: string | null, profileGate?: Data
     const totalCasinoPoints = bookedCruises.reduce((sum, cruise) => sum + getBookedCruiseCasinoPoints(cruise), 0);
     const casinoPointSummary = {
       totalCasinoPoints,
-      totalCasinoCoinIn: estimateCoinInForPoints({ targetPoints: totalCasinoPoints, brand: 'royal', gameCategory: 'reel-slot' }).coinIn ?? 0,
+      totalCasinoCoinIn: totalCasinoPoints * 5,
       cruisesWithCasinoPoints: bookedCruises.filter((cruise) => getBookedCruiseCasinoPoints(cruise) > 0).length,
     };
     const askMyDataOverview = buildAskMyDataOverview({

@@ -1,4 +1,3 @@
-import { estimateCoinInForPoints } from '@/lib/casino/pointsEarning';
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { AppState, type AppStateStatus } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -1194,7 +1193,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
               earnedPoints: newPoints,
               casinoPoints: newPoints,
               pointsEarned: newPoints,
-              coinIn: estimateCoinInForPoints({ targetPoints: newPoints, brand: 'royal', gameCategory: 'reel-slot' }).coinIn ?? 0,
+              coinIn: newPoints * 5,
               updatedAt: new Date().toISOString(),
             });
           }
@@ -1252,7 +1251,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     } else {
       scheduleSyncToBackend('setCruises');
     }
-  }, [markLocalDataAuthoritative, persistData, scheduleSyncToBackend, ownerScopeId, authenticatedEmail, currentUser, bookedCruises]);
+  }, [markLocalDataAuthoritative, persistData, scheduleSyncToBackend, ownerScopeId, authenticatedEmail, currentUser]);
 
   const addCruise = useCallback((cruise: Cruise) => {
     setCruisesState(prev => {
@@ -1304,23 +1303,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     const withFreeplayOBC = applyFreeplayOBCData(withKnownRetail);
     const enrichedCruises = enrichCruisesWithReceiptData(withFreeplayOBC);
     const lifecycleResult = updateAllCruiseLifecycles(enrichedCruises);
-    const normalizedCruisesBase = annotateOverlappingCruises(dedupeBookedCruises(stampRecordsForProfile(prepareOwnedRecords<BookedCruise>(lifecycleResult.updatedCruises.map(normalizeCruiseCasinoPerformance), ownerScopeId, authenticatedEmail, 'normalized booked cruises'), currentUser), 'normalized booked cruises'));
-    const existingBookletByIdentity = new Map<string, BookedCruise['itineraryBooklet']>();
-    const bookletIdentity = (cruise: BookedCruise): string => {
-      const reservation = String(cruise.reservationNumber || cruise.bookingId || cruise.bwoNumber || '').trim().toLowerCase();
-      if (reservation) return `booking:${reservation}`;
-      return `ship-date:${String(cruise.shipName || '').trim().toLowerCase()}|${String(cruise.sailDate || '').trim()}`;
-    };
-    bookedCruises.forEach((existingCruise) => {
-      if (existingCruise.itineraryBooklet) {
-        existingBookletByIdentity.set(bookletIdentity(existingCruise), existingCruise.itineraryBooklet);
-      }
-    });
-    const normalizedCruises = normalizedCruisesBase.map((incomingCruise) => {
-      const preservedBooklet = existingBookletByIdentity.get(bookletIdentity(incomingCruise));
-      if (!preservedBooklet || incomingCruise.itineraryBooklet) return incomingCruise;
-      return { ...incomingCruise, itineraryBooklet: preservedBooklet };
-    });
+    const normalizedCruises = annotateOverlappingCruises(dedupeBookedCruises(stampRecordsForProfile(prepareOwnedRecords<BookedCruise>(lifecycleResult.updatedCruises.map(normalizeCruiseCasinoPerformance), ownerScopeId, authenticatedEmail, 'normalized booked cruises'), currentUser), 'normalized booked cruises'));
     console.log('[CoreData] Normalized booked cruise lifecycle before persist:', {
       total: normalizedCruises.length,
       upcoming: lifecycleResult.report.upcomingCount,

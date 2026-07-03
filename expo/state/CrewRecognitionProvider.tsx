@@ -5,7 +5,6 @@ import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/state/AuthProvider';
 import { getUserScopedKey } from '@/lib/storage/storageKeys';
 import { buildOwnerScopeId, getInstallationId } from '@/lib/storage/installationId';
-import { getAllShipNames } from '@/constants/shipInfo';
 
 import type { RecognitionEntryWithCrew, Sailing, Department } from '@/types/crew-recognition';
 import { CREW_RECOGNITION_CSV } from '@/constants/crew-recognition-csv';
@@ -34,104 +33,6 @@ const DEFAULT_FILTERS: CrewRecognitionFilters = {
   startDate: '',
   endDate: '',
 };
-
-
-function normalizeCrewImportDate(raw: string): string {
-  const value = raw.trim();
-  if (!value) return '';
-  const iso = value.match(/^(20\d{2})[-/](\d{1,2})[-/](\d{1,2})$/);
-  if (iso) return `${iso[1]}-${String(iso[2]).padStart(2, '0')}-${String(iso[3]).padStart(2, '0')}`;
-  const us = value.match(/^(\d{1,2})[-/](\d{1,2})(?:[-/](\d{2,4}))?$/);
-  if (us) {
-    const nowYear = new Date().getFullYear();
-    const yearRaw = us[3];
-    const year = yearRaw ? (yearRaw.length === 2 ? 2000 + parseInt(yearRaw, 10) : parseInt(yearRaw, 10)) : nowYear;
-    return `${year}-${String(us[1]).padStart(2, '0')}-${String(us[2]).padStart(2, '0')}`;
-  }
-  const parsed = new Date(value);
-  if (!Number.isNaN(parsed.getTime())) {
-    return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`;
-  }
-  return value;
-}
-
-function inferCrewDepartment(text: string): Department {
-  const lower = text.toLowerCase();
-  if (/casino|host|slot/.test(lower)) return 'Casino' as Department;
-  if (/bar|bartender|beverage|schooner|lounge/.test(lower)) return 'Beverage' as Department;
-  if (/windjammer|waiter|waitress|dining|server|restaurant|cafe|promenade|chef/.test(lower)) return 'Dining' as Department;
-  if (/front desk|guest relation|services/.test(lower)) return 'Guest Relations' as Department;
-  if (/stateroom|housekeep|attendant|public area|cleaner|washy|sanitation/.test(lower)) return 'Housekeeping' as Department;
-  if (/loyalty|diamond|crown/.test(lower)) return 'Loyalty' as Department;
-  if (/activity|activities|cruise staff|entertainment/.test(lower)) return 'Activities' as Department;
-  if (/spa|hair|salon|barber/.test(lower)) return 'Spa' as Department;
-  if (/retail|shop/.test(lower)) return 'Retail' as Department;
-  return 'Other' as Department;
-}
-
-function parseCrewLine(rawLine: string): { fullName: string; roleTitle?: string; department: Department } | null {
-  const line = rawLine.trim().replace(/^[-•*\d.)\s]+/, '').trim();
-  if (!line) return null;
-  const split = line.split(/\s+[-–—:]\s+|[-–—:]/);
-  const fullName = (split[0] || '').trim();
-  const roleText = split.slice(1).join(' - ').trim();
-  if (!fullName || fullName.length < 2) return null;
-  if (/^(ship|sailing|date|department|crew|name)$/i.test(fullName)) return null;
-  return {
-    fullName,
-    roleTitle: roleText || undefined,
-    department: inferCrewDepartment(`${roleText} ${line}`),
-  };
-}
-
-
-const KNOWN_SHIP_NAMES = getAllShipNames().sort((a, b) => b.length - a.length);
-
-function normalizeShipNameFromText(text: string): string {
-  const lower = text.toLowerCase();
-  const exact = KNOWN_SHIP_NAMES.find(ship => lower.includes(ship.toLowerCase()));
-  if (exact) return exact;
-  const cleaned = text.replace(/\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b/g, '').replace(/\b20\d{2}[/-]\d{1,2}[/-]\d{1,2}\b/g, '').replace(/\bto\b|[-–—]/gi, ' ').replace(/\s+/g, ' ').trim();
-  return cleaned;
-}
-
-function looksLikeSailingHeader(rawLine: string): boolean {
-  const line = rawLine.trim();
-  if (!line) return false;
-  const hasShip = KNOWN_SHIP_NAMES.some(ship => line.toLowerCase().includes(ship.toLowerCase())) || /\b(of the seas|ots|cruise)\b/i.test(line);
-  const hasDate = /\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b|\b20\d{2}[/-]\d{1,2}[/-]\d{1,2}\b|\b[A-Z][a-z]+\s+\d{1,2},?\s+20\d{2}\b/i.test(line);
-  return hasShip && hasDate;
-}
-
-function parseSailingHeader(rawLine: string): { shipName: string; sailStartDate: string; sailEndDate: string } | null {
-  const line = rawLine.trim();
-  if (!looksLikeSailingHeader(line)) return null;
-  const dateMatches = Array.from(line.matchAll(/\b(20\d{2}[/-]\d{1,2}[/-]\d{1,2}|\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?|[A-Z][a-z]+\s+\d{1,2},?\s+20\d{2})\b/g)).map(m => m[1]);
-  const sailStartDate = normalizeCrewImportDate(dateMatches[0] || '');
-  let sailEndDate = dateMatches[1] ? normalizeCrewImportDate(dateMatches[1]) : sailStartDate;
-  if (sailStartDate && sailEndDate && sailEndDate < sailStartDate) {
-    const startYear = parseInt(sailStartDate.substring(0, 4), 10);
-    if (/^\d{1,2}[/-]\d{1,2}$/.test(dateMatches[1] || '')) {
-      const [, mm, dd] = (dateMatches[1] || '').match(/^(\d{1,2})[/-](\d{1,2})$/) || [];
-      if (mm && dd) sailEndDate = `${startYear + 1}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
-    }
-  }
-  let shipName = line;
-  for (const dm of dateMatches) shipName = shipName.replace(dm, ' ');
-  shipName = normalizeShipNameFromText(shipName).replace(/\s+(to|through|thru)\s*$/i, '').replace(/[,:|]+$/g, '').trim();
-  if (!shipName) return null;
-  return { shipName, sailStartDate, sailEndDate };
-}
-
-function sanitizeCrewEntries(entries: RecognitionEntryWithCrew[]): RecognitionEntryWithCrew[] {
-  return entries.filter(entry => {
-    const name = String(entry.fullName || '').trim();
-    if (!name) return false;
-    if (looksLikeSailingHeader(name)) return false;
-    if (/^\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?$/.test(name)) return false;
-    return true;
-  });
-}
 
 interface CSVRow {
   sailingId: string;
@@ -262,7 +163,7 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
 
   const [filters, setFilters] = useState<CrewRecognitionFilters>(DEFAULT_FILTERS);
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(2500); // v1001: keep all crew entries available for filters/survey/export
+  const [pageSize] = useState(50);
   const [localEntries, setLocalEntries] = useState<RecognitionEntryWithCrew[]>([]);
   const [localSailings, setLocalSailings] = useState<Sailing[]>([]);
   const [localLoaded, setLocalLoaded] = useState(false);
@@ -276,12 +177,7 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
           AsyncStorage.getItem(skSailingsRef.current),
         ]);
         if (storedEntries) {
-          const parsedEntries = sanitizeCrewEntries(JSON.parse(storedEntries));
-          setLocalEntries(parsedEntries);
-          if (parsedEntries.length !== JSON.parse(storedEntries).length) {
-            void AsyncStorage.setItem(skEntriesRef.current, JSON.stringify(parsedEntries));
-            console.log('[CrewRecognition] Cleaned sailing-header rows that were accidentally imported as crew names');
-          }
+          setLocalEntries(JSON.parse(storedEntries));
         } else {
           setLocalEntries([]);
         }
@@ -319,7 +215,7 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
             AsyncStorage.getItem(skEntriesRef.current),
             AsyncStorage.getItem(skSailingsRef.current),
           ]);
-          setLocalEntries(storedEntries ? sanitizeCrewEntries(JSON.parse(storedEntries)) : []);
+          setLocalEntries(storedEntries ? JSON.parse(storedEntries) : []);
           setLocalSailings(storedSailings ? JSON.parse(storedSailings) : []);
           console.log('[CrewRecognition] Reloaded after cloud restore:', storedEntries ? JSON.parse(storedEntries).length : 0, 'entries');
         } catch (e) {
@@ -697,112 +593,111 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
   const importFromTextLocally = useCallback(async (text: string): Promise<{ importedCount: number; skippedCount: number; shipName: string; sailDate: string }> => {
     const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
     if (lines.length < 2) {
-      throw new Error('Please provide at least 2 lines: a ship + date line, then crew names. You can paste multiple sailing sections at once.');
+      throw new Error('Please provide at least 2 lines: a ship + date line, then crew names.');
     }
 
-    type ImportSection = { shipName: string; sailStartDate: string; sailEndDate: string; crewLines: string[] };
-    const sections: ImportSection[] = [];
-    let current: ImportSection | null = null;
+    const firstLine = lines[0];
+    const datePatterns = [
+      /\b(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})\b/,
+      /\b(\d{4}[-/]\d{1,2}[-/]\d{1,2})\b/,
+      /\b([A-Z][a-z]+ \d{1,2},? \d{4})\b/,
+      /\b(\d{1,2} [A-Z][a-z]+ \d{4})\b/,
+    ];
 
-    for (const line of lines) {
-      const header = parseSailingHeader(line);
-      if (header) {
-        current = { ...header, crewLines: [] };
-        sections.push(current);
-        continue;
+    let shipName = firstLine;
+    let sailDate = '';
+    for (const pattern of datePatterns) {
+      const m = firstLine.match(pattern);
+      if (m) {
+        sailDate = m[1];
+        shipName = firstLine.replace(m[0], '').trim().replace(/[,\s]+$/, '').trim();
+        break;
       }
-      if (!current) {
-        throw new Error(`Could not find a sailing header before this crew line: "${line}". Start each pasted list with something like "Quantum of the Seas 6/19".`);
-      }
-      current.crewLines.push(line);
     }
 
-    if (sections.length === 0) {
-      throw new Error('Could not detect any ship/date sailing headers. Use a header like "Quantum of the Seas 6/19" above the crew names.');
+    if (!shipName) {
+      throw new Error('Could not extract ship name from the first line.');
     }
 
-    const now = new Date().toISOString();
-    const workingSailings = [...localSailings];
-    const existingKeys = new Set(
-      sanitizeCrewEntries(localEntries).map(e => `${(e.shipName || '').toLowerCase()}__${e.sailStartDate || ''}__${e.fullName.toLowerCase().trim()}__${(e.roleTitle || '').toLowerCase()}__${e.department.toLowerCase()}`)
+    console.log('[CrewRecognition] Importing from text. Ship:', shipName, 'Date:', sailDate);
+
+    let sailingId = '';
+    const existingSailing = localSailings.find(
+      s => s.shipName.toLowerCase() === shipName.toLowerCase() &&
+        (sailDate ? s.sailStartDate === sailDate : true)
     );
-    const newEntries: RecognitionEntryWithCrew[] = [];
+
+    if (existingSailing) {
+      sailingId = existingSailing.id;
+      console.log('[CrewRecognition] Matched existing sailing:', sailingId);
+    } else {
+      const now = new Date().toISOString();
+      const newSailing: Sailing = {
+        id: `local_sailing_text_${Date.now()}`,
+        shipName,
+        sailStartDate: sailDate,
+        sailEndDate: sailDate,
+        userId,
+        createdAt: now,
+        updatedAt: now,
+      };
+      const updatedSailings = [...localSailings, newSailing];
+      setLocalSailings(updatedSailings);
+      await AsyncStorage.setItem(skSailingsRef.current, JSON.stringify(updatedSailings));
+      sailingId = newSailing.id;
+      console.log('[CrewRecognition] Created new sailing:', sailingId);
+    }
+
+    const crewLines = lines.slice(1);
+    const existingNamesForSailing = new Set(
+      localEntries
+        .filter(e => e.sailingId === sailingId)
+        .map(e => e.fullName.toLowerCase().trim())
+    );
+
     let importedCount = 0;
     let skippedCount = 0;
-    let firstShipName = sections[0]?.shipName || '';
-    let firstSailDate = sections[0]?.sailStartDate || '';
+    const now = new Date().toISOString();
+    const newEntries: RecognitionEntryWithCrew[] = [];
 
-    for (const section of sections) {
-      if (section.crewLines.length === 0) continue;
-      let sailing = workingSailings.find(
-        s => s.shipName.toLowerCase() === section.shipName.toLowerCase() &&
-          (section.sailStartDate ? s.sailStartDate === section.sailStartDate : true)
-      );
-      if (!sailing) {
-        sailing = {
-          id: `local_sailing_text_${Date.now()}_${workingSailings.length}`,
-          shipName: section.shipName,
-          sailStartDate: section.sailStartDate,
-          sailEndDate: section.sailEndDate || section.sailStartDate,
-          userId,
-          createdAt: now,
-          updatedAt: now,
-        };
-        workingSailings.push(sailing);
+    for (const name of crewLines) {
+      if (!name.trim()) continue;
+      const normalizedName = name.trim();
+      if (existingNamesForSailing.has(normalizedName.toLowerCase())) {
+        skippedCount++;
+        console.log('[CrewRecognition] Skipping duplicate crew member:', normalizedName);
+        continue;
       }
-
-      for (const rawCrewLine of section.crewLines) {
-        if (looksLikeSailingHeader(rawCrewLine)) {
-          skippedCount++;
-          continue;
-        }
-        const parsedCrew = parseCrewLine(rawCrewLine);
-        if (!parsedCrew) {
-          skippedCount++;
-          continue;
-        }
-        const normalizedName = parsedCrew.fullName.trim();
-        const duplicateKey = `${section.shipName.toLowerCase()}__${section.sailStartDate || ''}__${normalizedName.toLowerCase()}__${(parsedCrew.roleTitle || '').toLowerCase()}__${parsedCrew.department.toLowerCase()}`;
-        if (existingKeys.has(duplicateKey)) {
-          skippedCount++;
-          console.log('[CrewRecognition] Skipping duplicate crew member for sailing:', normalizedName, section.shipName, section.sailStartDate);
-          continue;
-        }
-        const crewId = `local_crew_text_${Date.now()}_${importedCount}`;
-        newEntries.push({
-          id: `local_entry_text_${Date.now()}_${importedCount}`,
-          crewMemberId: crewId,
-          sailingId: sailing.id,
-          shipName: section.shipName,
-          sailStartDate: section.sailStartDate,
-          sailEndDate: section.sailEndDate || section.sailStartDate,
-          sailingMonth: section.sailStartDate ? section.sailStartDate.substring(0, 7) : '',
-          sailingYear: section.sailStartDate ? parseInt(section.sailStartDate.substring(0, 4), 10) || 0 : 0,
-          department: parsedCrew.department,
-          roleTitle: parsedCrew.roleTitle,
-          sourceText: rawCrewLine.trim(),
-          userId,
-          createdAt: now,
-          updatedAt: now,
-          fullName: normalizedName,
-        });
-        existingKeys.add(duplicateKey);
-        importedCount++;
-      }
+      const crewId = `local_crew_text_${Date.now()}_${importedCount}`;
+      newEntries.push({
+        id: `local_entry_text_${Date.now()}_${importedCount}`,
+        crewMemberId: crewId,
+        sailingId,
+        shipName,
+        sailStartDate: sailDate,
+        sailEndDate: sailDate,
+        sailingMonth: sailDate.substring(0, 7),
+        sailingYear: sailDate ? parseInt(sailDate.substring(0, 4), 10) || parseInt(sailDate.split(/[-/]/)[2] || '0', 10) : 0,
+        department: 'Other',
+        sourceText: 'Imported from text list',
+        userId,
+        createdAt: now,
+        updatedAt: now,
+        fullName: normalizedName,
+      });
+      existingNamesForSailing.add(normalizedName.toLowerCase());
+      importedCount++;
     }
 
-    const cleanedExistingEntries = sanitizeCrewEntries(localEntries);
-    const updatedEntries = [...newEntries, ...cleanedExistingEntries];
-    setLocalEntries(updatedEntries);
-    setLocalSailings(workingSailings);
-    setIsOfflineMode(true);
-    await Promise.all([
-      AsyncStorage.setItem(skEntriesRef.current, JSON.stringify(updatedEntries)),
-      AsyncStorage.setItem(skSailingsRef.current, JSON.stringify(workingSailings)),
-    ]);
+    if (newEntries.length > 0) {
+      const updatedEntries = [...newEntries, ...localEntries];
+      setLocalEntries(updatedEntries);
+      setIsOfflineMode(true);
+      await AsyncStorage.setItem(skEntriesRef.current, JSON.stringify(updatedEntries));
+    }
 
-    console.log('[CrewRecognition] Text import complete. Sections:', sections.length, 'Imported:', importedCount, 'Skipped:', skippedCount);
-    return { importedCount, skippedCount, shipName: sections.length === 1 ? firstShipName : `${sections.length} sailings`, sailDate: sections.length === 1 ? firstSailDate : `${sections.length} ship/date sections` };
+    console.log('[CrewRecognition] Text import complete. Imported:', importedCount, 'Skipped:', skippedCount);
+    return { importedCount, skippedCount, shipName, sailDate };
   }, [localEntries, localSailings, userId]);
 
   const syncFromCSVLocally = useCallback(async () => {

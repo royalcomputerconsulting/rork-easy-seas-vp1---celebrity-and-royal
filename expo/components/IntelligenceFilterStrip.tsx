@@ -48,7 +48,7 @@ export const IntelligenceFilterStrip = React.memo(function IntelligenceFilterStr
     const activeProfiles = users.filter((profile) => profile.active !== false);
     const primaryProfile = activeProfiles.find((profile) => profile.isOwner) ?? activeProfiles[0];
     const secondProfile = getSecondProfileForUnassignedRecords(activeProfiles);
-    const options: { id: ProfileFilterValue; label: string }[] = [
+    return [
       { id: 'all', label: 'All' },
       ...activeProfiles.map((profile) => ({
         id: profile.id,
@@ -60,14 +60,6 @@ export const IntelligenceFilterStrip = React.memo(function IntelligenceFilterStr
       })),
       ...(secondProfile ? [] : [{ id: 'unassigned' as const, label: 'Second User' }]),
     ];
-
-    const seenLabels = new Set<string>();
-    return options.filter((option) => {
-      const key = option.label.trim().toLowerCase();
-      if (seenLabels.has(key)) return false;
-      seenLabels.add(key);
-      return true;
-    });
   }, [users]);
 
   return (

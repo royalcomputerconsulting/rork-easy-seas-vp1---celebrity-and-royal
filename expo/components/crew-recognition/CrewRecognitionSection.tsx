@@ -114,7 +114,7 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
 
   const handleExportResults = useCallback(() => {
     if (entries.length === 0) return;
-    void exportToCSV(
+    exportToCSV(
       entries,
       [
         { key: 'fullName', label: 'Full Name' },
@@ -126,10 +126,7 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
         { key: 'sourceText', label: 'Source' },
       ],
       `crew-recognition-${new Date().toISOString().split('T')[0]}.csv`
-    ).catch((error) => {
-      console.error('[CrewRecognition] Export failed:', error);
-      Alert.alert('Export Failed', error instanceof Error ? error.message : 'Crew export could not be created on this device.');
-    });
+    );
   }, [entries]);
 
   const toggleShipFilter = useCallback((ship: string) => {

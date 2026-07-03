@@ -44,13 +44,14 @@ import { composeProviders } from "@/lib/composeProviders";
 import { ensureStorageHealthy } from "@/lib/storage/storageRecovery";
 import { SailingWeatherProvider } from "@/state/SailingWeatherProvider";
 import { IntelligenceFiltersProvider } from "@/state/IntelligenceFiltersProvider";
-import { recordDiagnosticEvent } from "@/lib/diagnosticLogger";
+import { initializeDiagnosticLogger, recordDiagnosticEvent } from "@/lib/diagnosticLogger";
 
 try {
   void SplashScreen.preventAutoHideAsync();
 } catch {
 }
 
+void initializeDiagnosticLogger().catch(() => {});
 recordDiagnosticEvent({ level: "info", category: "APP", event: "ROOT_LAYOUT_LOADED", message: "Root layout module loaded" });
 
 const queryClient = new QueryClient({

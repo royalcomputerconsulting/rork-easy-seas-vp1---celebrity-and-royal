@@ -58,26 +58,9 @@ export const SEA_PASS_VIEWBOX = {
   height: 1536,
 } as const;
 
-export const SEA_PASS_SHELL_PORT = 'LOS ANGELES, CALIFORNIA';
-export const SEA_PASS_PORT = 'ORLANDO (PORT CANAVERAL),...';
+export const SEA_PASS_PORT = 'LOS ANGELES, CALIFORNIA';
 
-// Editable form defaults for the current Star of the Seas pass.
-// These must remain separate from the approved screenshot shell values below.
 export const SEA_PASS_DEFAULTS: SeaPassWebPassData = {
-  time: '10:30 am',
-  date: 'Jul 5',
-  deck: '10',
-  stateroom: '10134',
-  muster: 'A4',
-  reservation: '182213',
-  ship: 'ST',
-  port: SEA_PASS_PORT,
-  terminal: '',
-};
-
-// Exact values physically baked into the approved v1017/v1019 SeaPass shell.
-// The renderer compares overlays against this object, never against the editable defaults.
-export const SEA_PASS_APPROVED_SHELL_VALUES: SeaPassWebPassData = {
   time: '10:30 am',
   date: 'Apr 07',
   deck: '10',
@@ -85,7 +68,7 @@ export const SEA_PASS_APPROVED_SHELL_VALUES: SeaPassWebPassData = {
   muster: 'A4',
   reservation: '182213',
   ship: 'QN',
-  port: SEA_PASS_SHELL_PORT,
+  port: SEA_PASS_PORT,
   terminal: '',
 };
 
@@ -103,7 +86,7 @@ export const SEA_PASS_LEGAL_LINES = [
 
 export const SEA_PASS_PREVIEW_BACKGROUND = '#EFF3F8';
 export const SEA_PASS_EXPORT_BACKGROUND = '#FFFFFF';
-export const SEA_PASS_FONT_STACK = "Helvetica Neue, Helvetica, Arial, sans-serif";
+export const SEA_PASS_FONT_STACK = "Arial, Helvetica, sans-serif";
 export const SEA_PASS_APPROVED_SCREENSHOT_SOURCE_URL = 'https://r2-pub.rork.com/attachments/vvcelze4prvyhmkje7pah.png';
 export const SEA_PASS_APPROVED_SCREENSHOT_CORS_PROXY_URL = 'https://images.weserv.nl/?url=r2-pub.rork.com/attachments/vvcelze4prvyhmkje7pah.png&output=png';
 
@@ -188,14 +171,13 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
     },
   },
   date: {
-    // Approved SeaPass shell match: the date is left-aligned under the first
-    // digit of the time, with the lighter/smaller iOS Wallet date treatment.
-    x: 792,
+    x: 958,
     y: 178,
     fill: '#FFFFFF',
-    fontSize: 58,
+    fontSize: 62,
     fontWeight: '300',
-    letterSpacing: -1.2,
+    letterSpacing: -1.6,
+    textAnchor: 'end',
     mask: {
       x: 632,
       y: 104,
@@ -211,7 +193,7 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
     x: 94,
     y: 608,
     fill: '#30333A',
-    fontSize: 44,
+    fontSize: 54,
     fontWeight: '400',
     letterSpacing: -0.8,
     mask: {
@@ -229,7 +211,7 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
     x: 250,
     y: 608,
     fill: '#30333A',
-    fontSize: 44,
+    fontSize: 54,
     fontWeight: '400',
     letterSpacing: -0.8,
     mask: {
@@ -244,10 +226,10 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
     },
   },
   muster: {
-    x: 924,
+    x: 930,
     y: 608,
     fill: '#30333A',
-    fontSize: 44,
+    fontSize: 54,
     fontWeight: '400',
     letterSpacing: -0.8,
     textAnchor: 'end',
@@ -266,7 +248,7 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
     x: 94,
     y: 755,
     fill: '#30333A',
-    fontSize: 44,
+    fontSize: 54,
     fontWeight: '400',
     letterSpacing: -0.8,
     mask: {
@@ -281,18 +263,18 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
     },
   },
   ship: {
-    x: 924,
-    y: 753,
+    x: 930,
+    y: 755,
     fill: '#30333A',
-    fontSize: 40,
+    fontSize: 54,
     fontWeight: '400',
-    letterSpacing: -0.3,
+    letterSpacing: -0.8,
     textAnchor: 'end',
     mask: {
       x: 822,
-      y: 704,
+      y: 702,
       width: 130,
-      height: 70,
+      height: 76,
       fill: '#F4F4F5',
       radius: 6,
       sampleX: 644,
@@ -301,9 +283,9 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
   },
   port: {
     x: 92,
-    y: 910,
+    y: 902,
     fill: '#30333A',
-    fontSize: 48,
+    fontSize: 52,
     fontWeight: '400',
     letterSpacing: -1,
     mask: {
@@ -336,7 +318,7 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
     x: 512,
     y: 1308,
     fill: '#30333A',
-    fontSize: 44,
+    fontSize: 48,
     fontWeight: '400',
     letterSpacing: -0.6,
     textAnchor: 'middle',
@@ -367,126 +349,8 @@ function normalizeField(value: string | null | undefined, fallback: string): str
   return trimmed && trimmed.length > 0 ? trimmed : fallback;
 }
 
-export function normalizeSeaPassShipCodeDisplayValue(value: string): string {
-  const normalized = value
-    .trim()
-    .toUpperCase()
-    .replace(/[^A-Z0-9\s]/g, ' ')
-    .replace(/\s+/g, ' ');
-
-  const compact = normalized.replace(/[^A-Z0-9]/g, '');
-
-  const knownShipCodes: Record<string, string> = {
-    ADVENTURE: 'AD', ADVENTUREOFTHESEAS: 'AD',
-    ALLURE: 'AL', ALLUREOFTHESEAS: 'AL',
-    ANTHEM: 'AN', ANTHEMOFTHESEAS: 'AN',
-    FREEDOM: 'FR', FREEDOMOFTHESEAS: 'FR',
-    GRANDEUR: 'GR', GRANDEUROFTHESEAS: 'GR',
-    HARMONY: 'HM', HARMONYOFTHESEAS: 'HM',
-    ICON: 'IC', ICONOFTHESEAS: 'IC',
-    LIBERTY: 'LB', LIBERTYOFTHESEAS: 'LB',
-    NAVIGATOR: 'NV', NAVIGATOROFTHESEAS: 'NV',
-    ODYSSEY: 'OY', ODYSSEYOFTHESEAS: 'OY',
-    OVATION: 'OV', OVATIONOFTHESEAS: 'OV',
-    QUANTUM: 'QN', QUANTUMOFTHESEAS: 'QN',
-    RADIANCE: 'RD', RADIANCEOFTHESEAS: 'RD',
-    SERENADE: 'SR', SERENADEOFTHESEAS: 'SR',
-    STAR: 'ST', STAROFTHESEAS: 'ST',
-    SYMPHONY: 'SY', SYMPHONYOFTHESEAS: 'SY',
-    UTOPIA: 'UT', UTOPIAOFTHESEAS: 'UT',
-    WONDER: 'WN', WONDEROFTHESEAS: 'WN',
-  };
-
-  if (knownShipCodes[compact]) {
-    return knownShipCodes[compact];
-  }
-
-  return compact.slice(0, 4);
-}
-
-export function normalizeSeaPassPortDisplayValue(value: string): string {
-  const normalized = value
-    .trim()
-    .toUpperCase()
-    .replace(/CANABERAL/g, 'CANAVERAL')
-    .replace(/XANAVERAL/g, 'CANAVERAL')
-    .replace(/\s+/g, ' ')
-    .replace(/\s*,\s*/g, ', ')
-    .replace(/\s*\(\s*/g, ' (')
-    .replace(/\s*\)\s*/g, ')');
-
-  const compact = normalized.replace(/[^A-Z0-9]/g, '');
-
-  if (
-    compact === 'ORLANDO' ||
-    compact === 'ORLANDOFLORIDA' ||
-    compact === 'PORTCANAVERAL' ||
-    compact === 'PORTCANAVERALFLORIDA' ||
-    compact === 'ORLANDOPORTCANAVERAL' ||
-    compact === 'ORLANDOPORTCANAVERALFLORIDA'
-  ) {
-    return SEA_PASS_PORT;
-  }
-
-  if (normalized.startsWith('ORLANDO (PORT CANAVERAL)')) {
-    return SEA_PASS_PORT;
-  }
-
-  if (compact === 'MIAMI' || compact === 'MIAMIFLORIDA') {
-    return 'MIAMI, FLORIDA';
-  }
-
-  if (compact === 'LOSANGELES' || compact === 'LOSANGELESCALIFORNIA') {
-    return SEA_PASS_SHELL_PORT;
-  }
-
-  return normalized;
-}
-
-const SEA_PASS_MONTH_ABBREVIATIONS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
-
-function getSeaPassMonthIndex(value: string): number {
-  const normalized = value.trim().toLowerCase();
-  return SEA_PASS_MONTH_ABBREVIATIONS.findIndex((month) => month.toLowerCase().startsWith(normalized.slice(0, 3)));
-}
-
-function formatSeaPassDay(value: string): string {
-  const day = Number.parseInt(value, 10);
-  if (!Number.isFinite(day) || day < 1 || day > 31) {
-    return value.slice(0, 2);
-  }
-  return String(day);
-}
-
-export function normalizeSeaPassDateDisplayValue(value: string): string {
-  const cleaned = value
-    .trim()
-    .replace(/[^A-Za-z0-9\s,./-]/g, '')
-    .replace(/\s+/g, ' ');
-
-  if (cleaned.length === 0) {
-    return cleaned;
-  }
-
-  const numericDate = cleaned.match(/^(\d{1,2})[./-](\d{1,2})(?:[./-]\d{2,4})?$/);
-  if (numericDate) {
-    const monthNumber = Number.parseInt(numericDate[1] ?? '', 10);
-    const day = numericDate[2] ?? '';
-    if (Number.isFinite(monthNumber) && monthNumber >= 1 && monthNumber <= 12) {
-      return `${SEA_PASS_MONTH_ABBREVIATIONS[monthNumber - 1]} ${formatSeaPassDay(day)}`;
-    }
-  }
-
-  const wordDate = cleaned.match(/^([A-Za-z]{3,9})\.?\s+(\d{1,2})(?:,?\s+\d{2,4})?$/);
-  if (wordDate) {
-    const monthIndex = getSeaPassMonthIndex(wordDate[1] ?? '');
-    const day = wordDate[2] ?? '';
-    if (monthIndex >= 0) {
-      return `${SEA_PASS_MONTH_ABBREVIATIONS[monthIndex]} ${formatSeaPassDay(day)}`;
-    }
-  }
-
-  return cleaned.slice(0, 12);
+function normalizePortDisplayValue(value: string): string {
+  return value.replace(/\s*,\s*/g, ', ');
 }
 
 function normalizeTerminalRuleValue(value: string): string {
@@ -512,10 +376,10 @@ function getDynamicOverlayValue(key: SeaPassOverlayKey, data: SeaPassWebPassData
 
 function getDefaultOverlayValue(key: SeaPassOverlayKey): string {
   if (key === 'barcodeCaption') {
-    return getSeaPassBarcodeCaption(SEA_PASS_APPROVED_SHELL_VALUES);
+    return getSeaPassBarcodeCaption(SEA_PASS_DEFAULTS);
   }
 
-  return getSeaPassData(SEA_PASS_APPROVED_SHELL_VALUES)[key];
+  return SEA_PASS_DEFAULTS[key];
 }
 
 function getSeaPassOverlayEraseMode(key: SeaPassOverlayKey): SeaPassOverlayEraseMode {
@@ -591,14 +455,14 @@ function getSeaPassTextEraseOffsets(key: SeaPassOverlayKey): { x: number; y: num
 
 function shouldRenderDynamicOverlay(key: SeaPassOverlayKey, value: string, data: SeaPassWebPassData): boolean {
   if (key === 'barcodeCaption') {
-    return value !== getSeaPassBarcodeCaption(SEA_PASS_APPROVED_SHELL_VALUES);
+    return value !== getSeaPassBarcodeCaption(SEA_PASS_DEFAULTS);
   }
 
   if (key === 'terminal') {
     return shouldShowSeaPassTerminal(data) && value.trim().length > 0;
   }
 
-  return value !== getDefaultOverlayValue(key);
+  return value !== SEA_PASS_DEFAULTS[key];
 }
 
 async function fetchImageAsDataUrl(url: string): Promise<string> {
@@ -751,13 +615,13 @@ function buildSeaPassOverlaySvgMarkup(
 export function getSeaPassData(input: Partial<SeaPassWebPassData>): SeaPassWebPassData {
   return {
     time: normalizeField(input.time, SEA_PASS_DEFAULTS.time),
-    date: normalizeSeaPassDateDisplayValue(normalizeField(input.date, SEA_PASS_DEFAULTS.date)),
+    date: normalizeField(input.date, SEA_PASS_DEFAULTS.date),
     deck: normalizeField(input.deck, SEA_PASS_DEFAULTS.deck),
     stateroom: normalizeField(input.stateroom, SEA_PASS_DEFAULTS.stateroom),
     muster: normalizeField(input.muster, SEA_PASS_DEFAULTS.muster),
     reservation: normalizeField(input.reservation, SEA_PASS_DEFAULTS.reservation),
-    ship: normalizeSeaPassShipCodeDisplayValue(normalizeField(input.ship, SEA_PASS_DEFAULTS.ship)),
-    port: normalizeSeaPassPortDisplayValue(normalizeField(input.port, SEA_PASS_DEFAULTS.port)),
+    ship: normalizeField(input.ship, SEA_PASS_DEFAULTS.ship),
+    port: normalizePortDisplayValue(normalizeField(input.port, SEA_PASS_DEFAULTS.port)),
     terminal: normalizeField(input.terminal, SEA_PASS_DEFAULTS.terminal),
   };
 }
@@ -784,7 +648,7 @@ export function getSeaPassDynamicOverlays(input: Partial<SeaPassWebPassData>): S
     const fontSize = key === 'port' && overlayValue.length > 26
       ? 42
       : key === 'port' && overlayValue.length > 20
-        ? 44
+        ? 46
         : definition.fontSize;
 
     accumulator.push({

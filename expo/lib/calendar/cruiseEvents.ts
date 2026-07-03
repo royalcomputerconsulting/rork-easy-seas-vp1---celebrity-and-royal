@@ -1,6 +1,5 @@
 import type { BookedCruise, CalendarEvent, ItineraryDay } from '@/types/models';
 import { createDateFromString } from '@/lib/date';
-import { getKnownCruiseItineraryDays as getCentralKnownCruiseItineraryDays, getTrustedCruiseItineraryDays as getCentralTrustedCruiseItineraryDays } from '@/lib/knownCruiseItineraries';
 
 const SHORT_EVENT_MINUTES = 30;
 const ALL_ABOARD_WINDOW_MINUTES = 45;
@@ -23,47 +22,6 @@ function normalizeDateOnly(value?: string | null): string {
   const parsed = createDateFromString(value);
   if (Number.isNaN(parsed.getTime())) return '';
   return `${parsed.getFullYear()}-${pad2(parsed.getMonth() + 1)}-${pad2(parsed.getDate())}`;
-}
-
-
-function normalizeShipItineraryKey(value?: string | null): string {
-  return (value ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
-}
-
-function isKnownStarJuly52026Sailing(cruise: Pick<BookedCruise, 'shipName' | 'sailDate' | 'itineraryName' | 'destination'>): boolean {
-  const ship = normalizeShipItineraryKey(cruise.shipName);
-  const route = normalizeShipItineraryKey(`${cruise.destination ?? ''} ${cruise.itineraryName ?? ''}`);
-  return ship.includes('star of the seas')
-    && normalizeDateOnly(cruise.sailDate) === '2026-07-05'
-    && (route.includes('eastern caribbean') || route.includes('perfect day') || route.length === 0);
-}
-
-function knownStarJuly52026Itinerary(): ItineraryDay[] {
-  return [
-    { day: 1, port: 'Port Canaveral, Florida', arrival: undefined, departure: '16:30', isSeaDay: false, notes: 'Known Star of the Seas 07-05-2026 itinerary hard-map.' },
-    { day: 2, port: 'Perfect Day at CocoCay, Bahamas', arrival: '07:00', departure: '17:00', isSeaDay: false, notes: 'Known Star of the Seas 07-05-2026 itinerary hard-map.' },
-    { day: 3, port: 'Northwest Bahamas marine zone', isSeaDay: true, notes: 'Sea-day marine zone after CocoCay.' },
-    { day: 4, port: 'Charlotte Amalie, St. Thomas', arrival: '12:30', departure: '20:00', isSeaDay: false, notes: 'Known Star of the Seas 07-05-2026 itinerary hard-map.' },
-    { day: 5, port: 'Basseterre, St. Kitts & Nevis', arrival: '08:00', departure: '17:00', isSeaDay: false, notes: 'Known Star of the Seas 07-05-2026 itinerary hard-map.' },
-    { day: 6, port: 'Western Atlantic marine zone', isSeaDay: true, notes: 'Return-route marine zone.' },
-    { day: 7, port: 'Western Atlantic marine zone', isSeaDay: true, notes: 'Return-route marine zone.' },
-    { day: 8, port: 'Port Canaveral, Florida', arrival: '06:00', departure: undefined, isSeaDay: false, notes: 'Return port.' },
-  ];
-}
-
-export function getKnownCruiseItineraryDays(cruise: BookedCruise): ItineraryDay[] | null {
-  const centralKnown = getCentralKnownCruiseItineraryDays(cruise);
-  if (centralKnown) return centralKnown;
-  if (isKnownStarJuly52026Sailing(cruise)) return knownStarJuly52026Itinerary();
-  return null;
-}
-
-export function getTrustedCruiseItineraryDays(cruise: BookedCruise): ItineraryDay[] {
-  const centralTrusted = getCentralTrustedCruiseItineraryDays(cruise);
-  if (centralTrusted.length > 0) return centralTrusted;
-  const known = getKnownCruiseItineraryDays(cruise);
-  if (known) return known;
-  return Array.isArray(cruise.itinerary) ? cruise.itinerary : [];
 }
 
 function addDaysToDateOnly(dateOnly: string, days: number): string {
@@ -158,10 +116,6 @@ function createCruiseEvent(event: CalendarEvent): CalendarEvent {
 export function getNormalizedCruiseDateRange(cruise: BookedCruise): { sailDate: string; returnDate: string } | null {
   const sailDate = normalizeDateOnly(cruise.sailDate);
   if (!sailDate) return null;
-
-  if (isKnownStarJuly52026Sailing(cruise)) {
-    return { sailDate: '2026-07-05', returnDate: '2026-07-12' };
-  }
 
   let returnDate = normalizeDateOnly(cruise.returnDate);
 
@@ -324,12 +278,8 @@ export function generateCruiseCalendarEvents(bookedCruises: BookedCruise[]): Cal
       return;
     }
 
-    const trustedItinerary = getTrustedCruiseItineraryDays(cruise);
-
-    if (!Array.isArray(trustedItinerary) || trustedItinerary.length === 0) {
-      const cruiseRange = getNormalizedCruiseDateRange(cruise);
-      const inferredNights = cruiseRange ? Math.max(0, Math.round((createDateFromString(cruiseRange.returnDate).getTime() - createDateFromString(cruiseRange.sailDate).getTime()) / (1000 * 60 * 60 * 24))) : undefined;
-      const totalDays = Math.max(1, (typeof inferredNights === 'number' && inferredNights > 0 ? inferredNights : typeof cruise.nights === 'number' && cruise.nights > 0 ? cruise.nights : 1) + 1);
+    if (!Array.isArray(cruise.itinerary) || cruise.itinerary.length === 0) {
+      const totalDays = Math.max(1, (typeof cruise.nights === 'number' && cruise.nights > 0 ? cruise.nights : 1) + 1);
       for (let day = 1; day <= totalDays; day += 1) {
         const eventDate = addDaysToDateOnly(sailDate, day - 1);
         const isFirstDay = day === 1;
@@ -348,7 +298,7 @@ export function generateCruiseCalendarEvents(bookedCruises: BookedCruise[]): Cal
       return;
     }
 
-    trustedItinerary
+    cruise.itinerary
       .slice()
       .sort((left, right) => left.day - right.day)
       .forEach((itineraryDay) => {

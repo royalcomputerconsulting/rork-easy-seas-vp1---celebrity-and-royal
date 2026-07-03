@@ -252,47 +252,6 @@ function sanitizeUserProfile(user: unknown, fallbackEmail: string | null, index:
   };
 }
 
-
-function getUserDedupeKey(user: UserProfile): string {
-  const email = normalizeEmail(user.email) ?? '';
-  const name = `${user.displayName || user.name || ''}`.trim().toLowerCase();
-  const relationship = `${user.relationshipLabel || ''}`.trim().toLowerCase();
-  if (email) return `${email}__${name || relationship || (user.isOwner ? 'owner' : 'traveler')}`;
-  return `${name || 'traveler'}__${relationship || (user.isOwner ? 'owner' : 'traveler')}`;
-}
-
-function dedupeUserProfiles(profiles: UserProfile[]): UserProfile[] {
-  const seen = new Map<string, UserProfile>();
-
-  profiles.forEach((profile) => {
-    const key = getUserDedupeKey(profile);
-    const existing = seen.get(key);
-    if (!existing) {
-      seen.set(key, profile);
-      return;
-    }
-
-    seen.set(key, {
-      ...existing,
-      ...profile,
-      id: existing.id,
-      isOwner: existing.isOwner || profile.isOwner,
-      defaultProfile: existing.defaultProfile || profile.defaultProfile,
-      active: existing.active !== false || profile.active !== false,
-      createdAt: existing.createdAt || profile.createdAt,
-      updatedAt: profile.updatedAt || existing.updatedAt,
-    });
-  });
-
-  const deduped = Array.from(seen.values());
-  const owner = deduped.find((profile) => profile.isOwner) ?? deduped[0];
-  return deduped.map((profile) => ({
-    ...profile,
-    isOwner: owner ? profile.id === owner.id : profile.isOwner,
-    defaultProfile: owner ? profile.id === owner.id || profile.defaultProfile : profile.defaultProfile,
-  }));
-}
-
 function parseStoredUsers(rawValue: string | null, fallbackEmail: string | null): UserProfile[] {
   if (!rawValue) {
     return [];
@@ -306,9 +265,9 @@ function parseStoredUsers(rawValue: string | null, fallbackEmail: string | null)
       return [];
     }
 
-    return dedupeUserProfiles(parsedValue
+    return parsedValue
       .map((user, index) => sanitizeUserProfile(user, fallbackEmail, index))
-      .filter((user): user is UserProfile => user !== null));
+      .filter((user): user is UserProfile => user !== null);
   } catch (error) {
     console.error('[UserProvider] Failed to parse stored users payload:', error);
     return [];
@@ -489,10 +448,10 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
 
       if (storedUsersRaw) {
         const parsedUsers = parseStoredUsers(storedUsersRaw, normalizedAuthenticatedEmail);
-        const normalizedUsers = dedupeUserProfiles(parsedUsers.map((user) => ({
+        const normalizedUsers = parsedUsers.map((user) => ({
           ...user,
           email: normalizeEmail(user.email) ?? normalizedAuthenticatedEmail,
-        })));
+        }));
 
         const owner = normalizedUsers.find((user) => user.isOwner) ?? normalizedUsers[0] ?? null;
         const resolvedCurrentUserId = storedCurrentUserId && normalizedUsers.some((user) => user.id === storedCurrentUserId)
@@ -501,11 +460,6 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
 
         setUsers(normalizedUsers);
         setCurrentUserId(resolvedCurrentUserId);
-
-        if (normalizedUsers.length !== parsedUsers.length) {
-          await persistUsers(normalizedUsers);
-          console.log('[UserProvider] Removed duplicate traveler profiles while loading:', { before: parsedUsers.length, after: normalizedUsers.length });
-        }
 
         if (resolvedCurrentUserId !== storedCurrentUserId) {
           await persistCurrentUser(resolvedCurrentUserId);
@@ -539,7 +493,7 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
     } finally {
       setIsLoading(false);
     }
-  }, [migrateLegacyUsersIfNeeded, normalizedAuthenticatedEmail, persistCurrentUser, persistUsers]);
+  }, [migrateLegacyUsersIfNeeded, normalizedAuthenticatedEmail, persistCurrentUser]);
 
   useEffect(() => {
     void loadUsers();
@@ -564,7 +518,7 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
       updatedAt: now,
     };
 
-    const newUsers = dedupeUserProfiles([...users, newUser]);
+    const newUsers = [...users, newUser];
     setUsers(newUsers);
     await persistUsers(newUsers);
 

@@ -38,12 +38,6 @@ interface AddSessionModalProps {
     machineType?: MachineType;
     denomination?: Denomination;
     pointsEarned?: number;
-    pointsSource?: 'manual' | 'unknown';
-    sessionSource?: 'individual';
-    gameCategory?: 'reel-slot' | 'video-poker' | 'table-game' | 'electronic-table-game' | 'other' | 'unknown';
-    cashCoinIn?: number;
-    freeplayCoinIn?: number;
-    coinIn?: number;
   }) => void;
   date: string;
   goldenTimeSlots: GoldenTimeSlot[];
@@ -186,14 +180,6 @@ export function AddSessionModal({
     return cashOutNum - buyInNum;
   }, [buyIn, cashOut]);
 
-  const inferGameCategory = (type: MachineType | null): 'reel-slot' | 'video-poker' | 'table-game' | 'electronic-table-game' | 'other' | 'unknown' => {
-    if (!type) return 'unknown';
-    if (type === 'video-poker') return 'video-poker';
-    if (['blackjack', 'roulette', 'craps', 'baccarat', 'poker'].includes(type)) return 'table-game';
-    if (type.includes('slots')) return 'reel-slot';
-    return type === 'other' ? 'other' : 'unknown';
-  };
-
   const handleSave = useCallback(() => {
     if (Platform.OS !== 'web') {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -220,12 +206,6 @@ export function AddSessionModal({
       machineType: machineType || undefined,
       denomination: denomination || undefined,
       pointsEarned: pointsNum,
-      pointsSource: pointsNum ? 'manual' : 'unknown',
-      sessionSource: 'individual',
-      gameCategory: inferGameCategory(machineType),
-      cashCoinIn: undefined,
-      freeplayCoinIn: 0,
-      coinIn: undefined,
     });
     
     setSelectedSlot(null);

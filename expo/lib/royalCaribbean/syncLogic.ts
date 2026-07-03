@@ -803,24 +803,18 @@ export function createSyncPreview(
 
   let loyaltyPreview: SyncPreview['loyalty'] = null;
   if (loyaltyData && syncSource !== 'carnival') {
-    const rawSyncedClubRoyalePoints: number = loyaltyData.clubRoyalePoints != null
+    const syncedClubRoyalePoints: number = loyaltyData.clubRoyalePoints != null
       ? (typeof loyaltyData.clubRoyalePoints === 'number' 
           ? loyaltyData.clubRoyalePoints 
           : parseInt(String(loyaltyData.clubRoyalePoints).replace(/,/g, ''), 10) || 0)
       : currentLoyalty.clubRoyalePoints;
-    const rawSyncedCrownAndAnchorPoints = loyaltyData.crownAndAnchorPoints != null
+    const syncedClubRoyaleTier = loyaltyData.clubRoyaleTier || currentLoyalty.clubRoyaleTier;
+    const syncedCrownAndAnchorLevel = loyaltyData.crownAndAnchorLevel || currentLoyalty.crownAndAnchorLevel;
+    const syncedCrownAndAnchorPoints = loyaltyData.crownAndAnchorPoints != null
       ? (typeof loyaltyData.crownAndAnchorPoints === 'number'
           ? loyaltyData.crownAndAnchorPoints
           : parseInt(String(loyaltyData.crownAndAnchorPoints).replace(/,/g, ''), 10) || 0)
       : currentLoyalty.crownAndAnchorPoints;
-
-    // Royal sends profile totals and sailing-history rows through separate endpoints.
-    // A lower scraped value is almost always a partial/stale/history total, not a
-    // command to downgrade the user's manually confirmed or live visible totals.
-    const syncedClubRoyalePoints = Math.max(currentLoyalty.clubRoyalePoints || 0, rawSyncedClubRoyalePoints || 0);
-    const syncedCrownAndAnchorPoints = Math.max(currentLoyalty.crownAndAnchorPoints || 0, rawSyncedCrownAndAnchorPoints || 0);
-    const syncedClubRoyaleTier = loyaltyData.clubRoyaleTier || currentLoyalty.clubRoyaleTier;
-    const syncedCrownAndAnchorLevel = loyaltyData.crownAndAnchorLevel || currentLoyalty.crownAndAnchorLevel;
 
     loyaltyPreview = {
       clubRoyalePoints: {

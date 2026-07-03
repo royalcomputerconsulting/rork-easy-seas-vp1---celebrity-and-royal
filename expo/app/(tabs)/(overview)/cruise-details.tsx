@@ -28,9 +28,6 @@ import {
 } from '@/lib/cruisePlanningIntelligence';
 import { applyKnownBookingCorrections, applyKnownBookingCorrectionsToCruise, findOverlappingBookedCruises } from '@/lib/cruiseOverlapGuards';
 import { BOOKED_CRUISES_DATA } from '@/mocks/bookedCruises';
-import { CruiseItineraryBooklet } from '@/components/booklet/CruiseItineraryBooklet';
-import { CasinoOpportunityBadge } from '@/components/cruise/CasinoOpportunityBadge';
-import { calculateCasinoOpportunityScore } from '@/lib/cruise/casinoOpportunityScore';
 import { COMPLETED_CRUISES_DATA } from '@/mocks/completedCruises';
 import { CRUISE_HISTORY_SUPPLEMENT_DATA } from '@/mocks/cruiseHistorySupplement';
 
@@ -64,33 +61,7 @@ function formatPortWindow(day: CasinoAvailability): string {
   return `${arrival} - ${departure}`;
 }
 
-function looksLikeItineraryLabelOnly(value: string | undefined): boolean {
-  const normalized = (value || '').toLowerCase().trim();
-  if (!normalized) return true;
-  if (/^\d+\s*(night|nt|n)\b/.test(normalized)) return true;
-  if (normalized.includes(' cruise') || normalized.endsWith('cruise')) return true;
-  if (normalized.includes('perfect day') || normalized.includes('caribbean') || normalized === 'hawaii') return true;
-  return false;
-}
 
-function uniqueKnownPortsFromUndatedSources(cruise?: Cruise | BookedCruise | null, linkedOffer?: CasinoOffer): string[] {
-  const rawPorts = [
-    ...(((cruise as any)?.ports || []) as string[]),
-    ...(((linkedOffer as any)?.ports || []) as string[]),
-    ...(((cruise as any)?.itineraryRaw || []) as string[]).filter(value => !looksLikeItineraryLabelOnly(value)),
-  ];
-  const seen = new Set<string>();
-  const result: string[] = [];
-  rawPorts.forEach(port => {
-    const clean = String(port || '').trim();
-    if (!clean) return;
-    const key = clean.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-    if (!key || seen.has(key)) return;
-    seen.add(key);
-    result.push(clean);
-  });
-  return result;
-}
 
 const DETAIL_INTELLIGENCE_RECORD_LIMIT = 160;
 const DETAIL_OFFER_RECORD_LIMIT = 60;
@@ -666,27 +637,38 @@ export default function CruiseDetailsScreen() {
       const parsed = parsePortsAndTimes(linkedOffer.portsAndTimes);
       result.push(...parsed);
     } 
-    // Check cruise.itineraryRaw only when it is actual day-by-day data, not a label like "12 Night Hawaii Cruise".
-    else if (cruise.itineraryRaw && cruise.itineraryRaw.length > 0 && !(cruise.itineraryRaw.length === 1 && looksLikeItineraryLabelOnly(cruise.itineraryRaw[0]))) {
+    // Check cruise.itineraryRaw (array of strings)
+    else if (cruise.itineraryRaw && cruise.itineraryRaw.length > 0) {
       source = 'cruise.itineraryRaw';
-      const rawDays = cruise.itineraryRaw.map((port: string, index: number) => ({
-        day: index + 1,
-        port,
-        isSeaDay: determineSeaDay(port),
-      }));
-      if (rawDays.length >= totalDays - 1 || rawDays.some(day => day.isSeaDay)) {
-        result.push(...rawDays);
-      } else {
-        source = 'undated_itinerary_raw_ports_only';
-      }
+      cruise.itineraryRaw.forEach((port: string, index: number) => {
+        result.push({
+          day: index + 1,
+          port,
+          isSeaDay: determineSeaDay(port),
+        });
+      });
     } 
-    // Do not assign a plain ports-of-call array to consecutive cruise days.
+    // Check cruise.ports (array of port names)
     else if (cruise.ports && cruise.ports.length > 0) {
-      source = 'undated_cruise_ports_only';
+      source = 'cruise.ports';
+      cruise.ports.forEach((port: string, index: number) => {
+        result.push({
+          day: index + 1,
+          port,
+          isSeaDay: determineSeaDay(port),
+        });
+      });
     } 
-    // Do not assign linked offer ports-of-call to consecutive cruise days.
+    // Check linkedOffer.ports
     else if (linkedOffer?.ports && linkedOffer.ports.length > 0) {
-      source = 'undated_linked_offer_ports_only';
+      source = 'linkedOffer.ports';
+      linkedOffer.ports.forEach((port: string, index: number) => {
+        result.push({
+          day: index + 1,
+          port,
+          isSeaDay: determineSeaDay(port),
+        });
+      });
     } 
     // Search all offers in both localData and storeOffers
     else {
@@ -715,8 +697,15 @@ export default function CruiseDetailsScreen() {
         result.push(...parsed);
         console.log('[CruiseDetails] Found itinerary in fallback offer:', fallbackOffer.offerCode);
       } else if (fallbackOffer?.ports && fallbackOffer.ports.length > 0) {
-        source = 'undated_fallback_offer_ports_only';
-        console.log('[CruiseDetails] Found undated ports in fallback offer; not assigning to consecutive days:', fallbackOffer.offerCode);
+        source = 'fallbackOffer.ports';
+        fallbackOffer.ports.forEach((port: string, index: number) => {
+          result.push({
+            day: index + 1,
+            port,
+            isSeaDay: determineSeaDay(port),
+          });
+        });
+        console.log('[CruiseDetails] Found ports in fallback offer:', fallbackOffer.offerCode);
       }
     }
     
@@ -767,10 +756,6 @@ export default function CruiseDetailsScreen() {
     if (!cruise) return null;
     return getCruiseCasinoAvailability(cruise);
   }, [cruise, getCruiseCasinoAvailability]);
-
-  const knownUndatedPorts = useMemo(() => {
-    return uniqueKnownPortsFromUndatedSources(cruise, linkedOffer);
-  }, [cruise, linkedOffer]);
 
   const currentTravelerProfile = useMemo(() => {
     if (!currentUser) return null;
@@ -1038,10 +1023,6 @@ export default function CruiseDetailsScreen() {
     handleBack();
   };
 
-  const casinoOpportunityScore = useMemo(() => {
-    return cruise ? calculateCasinoOpportunityScore(cruise) : null;
-  }, [cruise]);
-
   if (!cruise || !cruiseDetails) {
     return (
       <View style={styles.container}>
@@ -1294,20 +1275,6 @@ export default function CruiseDetailsScreen() {
             <Text style={styles.factDivider}>•</Text>
             <CompactFact icon={Dice5} value={casinoAvailability ? `${casinoAvailability.casinoOpenDays}/${casinoAvailability.totalDays} casino` : '—'} />
           </View>
-
-          {casinoOpportunityScore ? (
-            <View style={styles.phase3OpportunitySection} testID="cruise-detail-casino-opportunity">
-              <CasinoOpportunityBadge result={casinoOpportunityScore} compact={false} showWarnings={true} />
-            </View>
-          ) : null}
-
-          {isBooked && (
-            <CruiseItineraryBooklet
-              cruise={cruise as BookedCruise}
-              linkedOffer={linkedOffer}
-              onSave={(updates) => updateCruise({ ...(cruise as BookedCruise), ...updates })}
-            />
-          )}
 
           {valueSummarySection}
 
@@ -1895,10 +1862,7 @@ export default function CruiseDetailsScreen() {
               {casinoAvailability.dailyAvailability.length === 0 && (
                 <View style={styles.itineraryMissingCard}>
                   <AlertCircle size={16} color={COLORS.error} />
-                  <Text style={styles.itineraryMissingText}>
-                    Exact day-by-day itinerary is missing. Import ports and times to calculate accurate sea days, port days, casino windows, and point estimates.
-                    {knownUndatedPorts.length > 0 ? ` Known ports-of-call: ${knownUndatedPorts.join(' • ')}. These are not assigned to specific days until dated itinerary data is imported.` : ''}
-                  </Text>
+                  <Text style={styles.itineraryMissingText}>Exact day-by-day itinerary is missing. Import ports and times to calculate accurate sea days, port days, casino windows, and point estimates.</Text>
                 </View>
               )}
 
@@ -2659,9 +2623,6 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: SPACING.lg,
-  },
-  phase3OpportunitySection: {
-    marginBottom: SPACING.md,
   },
   headerSection: {
     marginBottom: SPACING.lg,

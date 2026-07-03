@@ -1,8 +1,8 @@
-import React, { useCallback, useMemo, useState } from 'react';
-import { Modal, ScrollView, TouchableOpacity, View, Text, StyleSheet } from 'react-native';
+import React, { useMemo } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, ChevronDown, ChevronRight, CloudSun, Ship, Waves, Wind, X } from 'lucide-react-native';
+import { AlertTriangle, CloudSun, Ship, Waves, Wind } from 'lucide-react-native';
 import { BORDER_RADIUS, COLORS, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import { useSailingWeather, type SailingWeatherCruiseInput, type SailingWeatherForecast } from '@/state/SailingWeatherProvider';
 
@@ -35,9 +35,6 @@ interface MarineAlertItem {
 
 interface MarineForecastItem {
   id: string;
-  fullForecast: SailingWeatherForecast;
-  cruiseInput: SailingWeatherCruiseInput;
-  targetDate: Date;
   cruiseId: string;
   shipName: string;
   dateKey: string;
@@ -77,23 +74,6 @@ function addDays(date: Date, days: number): Date {
   return nextDate;
 }
 
-function getCruiseEndDate(cruise: Pick<SailingWeatherCruiseInput, 'sailDate' | 'returnDate' | 'nights'>): Date | null {
-  const start = startOfDay(new Date(cruise.sailDate));
-  if (Number.isNaN(start.getTime())) {
-    return null;
-  }
-
-  const explicitEnd = startOfDay(new Date(cruise.returnDate));
-  if (!Number.isNaN(explicitEnd.getTime()) && explicitEnd >= start) {
-    return explicitEnd;
-  }
-
-  const inferredNights = typeof cruise.nights === 'number' && Number.isFinite(cruise.nights) && cruise.nights >= 0
-    ? cruise.nights
-    : 0;
-  return addDays(start, inferredNights);
-}
-
 function formatDateKey(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -111,9 +91,9 @@ function buildCruiseDatesInWindow(cruise: SailingWeatherCruiseInput, startDate: 
   const windowStart = startOfDay(startDate);
   const windowEnd = startOfDay(addDays(windowStart, Math.max(0, daysAhead)));
   const cruiseStart = startOfDay(new Date(cruise.sailDate));
-  const cruiseEnd = getCruiseEndDate(cruise);
+  const cruiseEnd = startOfDay(new Date(cruise.returnDate));
 
-  if (Number.isNaN(cruiseStart.getTime()) || !cruiseEnd || cruiseEnd < cruiseStart) {
+  if (Number.isNaN(cruiseStart.getTime()) || Number.isNaN(cruiseEnd.getTime()) || cruiseEnd < cruiseStart) {
     return [];
   }
 
@@ -123,8 +103,7 @@ function buildCruiseDatesInWindow(cruise: SailingWeatherCruiseInput, startDate: 
 
   const effectiveEnd = cruiseEnd < windowEnd ? cruiseEnd : windowEnd;
   const dates: Date[] = [];
-  const effectiveStart = cruiseStart > windowStart ? cruiseStart : windowStart;
-  const cursor = new Date(effectiveStart);
+  const cursor = new Date(windowStart);
   while (cursor <= effectiveEnd && dates.length <= daysAhead) {
     dates.push(new Date(cursor));
     cursor.setDate(cursor.getDate() + 1);
@@ -219,16 +198,9 @@ function getStrongestSeverity(forecast: SailingWeatherForecast): MarineAlertSeve
   }, null);
 }
 
-function buildForecastItem(
-  forecast: SailingWeatherForecast,
-  anchorDate: Date,
-  cruiseInput: SailingWeatherCruiseInput,
-  targetDate: Date,
-): MarineForecastItem {
+function buildForecastItem(forecast: SailingWeatherForecast, anchorDate: Date): MarineForecastItem {
   return {
     id: forecast.cacheKey,
-    cruiseInput,
-    targetDate,
     cruiseId: forecast.cruiseId,
     shipName: forecast.shipName,
     dateKey: forecast.dateKey,
@@ -255,24 +227,22 @@ function formatMetricValue(value: number | null, suffix: string, decimals = 0): 
   return `${value.toFixed(decimals)}${suffix}`;
 }
 
-function getSourceLabel(source: 'live' | 'cache-fresh' | 'cache-stale' | 'offline-placeholder'): string {
+function getSourceLabel(source: 'live' | 'cache-fresh' | 'cache-stale'): string {
   if (source === 'live') return 'Live';
   if (source === 'cache-stale') return 'Offline saved';
-  if (source === 'offline-placeholder') return 'Offline route';
   return 'Cached';
 }
 
 export function MarineAlertsPanel({
   cruises,
   startDate = new Date(),
-  daysAhead = 10,
+  daysAhead = 7,
   maxItems = 3,
-  title = 'Maritime Weather',
-  description = 'Weather, wind, wave, and rough-seas outlook for your sailing window.',
+  title = 'Rough seas / weather alerts',
+  description = 'Upcoming marine alerts for your sailing window.',
   testID,
 }: MarineAlertsPanelProps) {
   const { isHydrated, getForecastForCruiseDay } = useSailingWeather();
-  const [isExpanded, setIsExpanded] = useState(false);
   const normalizedStartDate = useMemo(() => startOfDay(startDate), [startDate]);
   const cruisesSignature = useMemo(
     () => cruises.map((cruise) => `${cruise.id}:${cruise.sailDate}:${cruise.returnDate}`).join('|'),
@@ -301,7 +271,7 @@ export function MarineAlertsPanel({
           return;
         }
 
-        nextForecasts.push(buildForecastItem(forecast, normalizedStartDate, cruise, new Date(`${forecast.dateKey}T12:00:00`)));
+        nextForecasts.push(buildForecastItem(forecast, normalizedStartDate));
 
         forecast.advisories.forEach((advisory) => {
           nextAlerts.push({
@@ -347,44 +317,9 @@ export function MarineAlertsPanel({
   const panelData = alertsQuery.data ?? EMPTY_PANEL_DATA;
   const alerts = panelData.alerts;
   const forecasts = panelData.forecasts;
-  const [selectedForecast, setSelectedForecast] = useState<SailingWeatherForecast | null>(null);
-  const [isDetailRefreshing, setIsDetailRefreshing] = useState(false);
-  const [detailRefreshError, setDetailRefreshError] = useState<string | null>(null);
-
-  const handleOpenForecastDetail = useCallback(async (forecast: MarineForecastItem) => {
-    setSelectedForecast(forecast.fullForecast);
-    setIsDetailRefreshing(true);
-    setDetailRefreshError(null);
-
-    try {
-      const refreshedForecast = await getForecastForCruiseDay(forecast.cruiseInput, forecast.targetDate, { force: true });
-      if (refreshedForecast) {
-        setSelectedForecast(refreshedForecast);
-      } else {
-        setDetailRefreshError('No detailed marine forecast is available for this itinerary day yet.');
-      }
-    } catch (error) {
-      setDetailRefreshError('Live refresh failed. Showing the saved/offline forecast for this card.');
-    } finally {
-      setIsDetailRefreshing(false);
-    }
-  }, [getForecastForCruiseDay]);
-
   const visibleAlerts = useMemo(() => alerts.slice(0, maxItems), [alerts, maxItems]);
   const strongestSeverity = alerts[0]?.severity ?? null;
   const panelColors = getPanelGradientColors(alerts.length > 0, strongestSeverity);
-  const collapsedStatusLabel = useMemo(() => {
-    if (alerts.length > 0) {
-      return `${alerts.length} Alert${alerts.length === 1 ? '' : 's'}`;
-    }
-    if (alertsQuery.isLoading || alertsQuery.isFetching) {
-      return 'Scanning';
-    }
-    if (forecasts.length > 0) {
-      return 'Clear';
-    }
-    return 'Tap';
-  }, [alerts.length, alertsQuery.isFetching, alertsQuery.isLoading, forecasts.length]);
 
   if (cruises.length === 0) {
     return null;
@@ -398,31 +333,19 @@ export function MarineAlertsPanel({
       style={styles.card}
       testID={testID ?? 'marine-alerts-panel'}
     >
-      <TouchableOpacity
-        style={styles.headerRow}
-        onPress={() => setIsExpanded((current) => !current)}
-        activeOpacity={0.78}
-        accessibilityRole="button"
-        accessibilityLabel={`${isExpanded ? 'Collapse' : 'Expand'} Maritime Weather`}
-        testID={`${testID ?? 'marine-alerts-panel'}-toggle`}
-      >
+      <View style={styles.headerRow}>
         <View style={styles.headerBadge}>
-          {isExpanded ? <ChevronDown size={16} color="#FFD59E" /> : <ChevronRight size={16} color="#FFD59E" />}
-          <Text style={styles.headerBadgeText}>Maritime Weather</Text>
+          <AlertTriangle size={14} color="#FFD59E" />
+          <Text style={styles.headerBadgeText}>{title}</Text>
         </View>
-        <View style={[styles.countPill, alerts.length > 0 ? styles.countPillAlert : null]}>
-          {alerts.length > 0 ? <AlertTriangle size={12} color={strongestSeverity === 'warning' ? '#FCA5A5' : '#FCD34D'} /> : null}
-          <Text style={[styles.countPillText, alerts.length > 0 ? styles.countPillTextAlert : null]}>
-            {isExpanded ? (forecasts.length > 0 ? `${forecasts.length}D • ${collapsedStatusLabel}` : collapsedStatusLabel) : collapsedStatusLabel}
-          </Text>
+        <View style={styles.countPill}>
+          <Text style={styles.countPillText}>{forecasts.length > 0 ? `${forecasts.length}D` : alerts.length}</Text>
         </View>
-      </TouchableOpacity>
+      </View>
 
-      {isExpanded ? <Text style={styles.description}>{description}</Text> : null}
+      <Text style={styles.description}>{description}</Text>
 
-      {isExpanded && title !== 'Maritime Weather' ? <Text style={styles.collapsedSubTitle}>{title}</Text> : null}
-
-      {isExpanded && alertsQuery.isLoading ? (
+      {alertsQuery.isLoading ? (
         <View style={styles.emptyState}>
           <CloudSun size={18} color="#CFEFFF" />
           <Text style={styles.emptyTitle}>Scanning the forecast window…</Text>
@@ -430,17 +353,17 @@ export function MarineAlertsPanel({
         </View>
       ) : null}
 
-      {isExpanded && !alertsQuery.isLoading && forecasts.length === 0 ? (
+      {!alertsQuery.isLoading && forecasts.length === 0 ? (
         <View style={styles.emptyState}>
           <Ship size={18} color="#CFEFFF" />
           <Text style={styles.emptyTitle}>Forecast not loaded yet</Text>
           <Text style={styles.emptySubtitle}>
-            The forecast window needs a cruise date plus a resolvable departure port or itinerary port before detailed weather can be shown.
+            The 10-day sailing window needs a resolvable departure port or itinerary before detailed weather can be shown.
           </Text>
         </View>
       ) : null}
 
-      {isExpanded && !alertsQuery.isLoading && forecasts.length > 0 && visibleAlerts.length === 0 ? (
+      {!alertsQuery.isLoading && forecasts.length > 0 && visibleAlerts.length === 0 ? (
         <View style={styles.emptyState}>
           <Ship size={18} color="#CFEFFF" />
           <Text style={styles.emptyTitle}>No rough-seas or bad-weather alerts right now</Text>
@@ -450,7 +373,7 @@ export function MarineAlertsPanel({
         </View>
       ) : null}
 
-      {isExpanded && !alertsQuery.isLoading && forecasts.length > 0 ? (
+      {!alertsQuery.isLoading && forecasts.length > 0 ? (
         <View style={styles.forecastSection}>
           <View style={styles.sectionHeaderRow}>
             <CloudSun size={14} color="#B4EBFF" />
@@ -459,7 +382,7 @@ export function MarineAlertsPanel({
           {forecasts.map((forecast) => {
             const severityMeta = forecast.strongestSeverity ? getSeverityMeta(forecast.strongestSeverity) : null;
             return (
-              <TouchableOpacity key={forecast.id} style={styles.forecastCard} testID={`marine-forecast-item-${forecast.cruiseId}-${forecast.dateKey}`} activeOpacity={0.86} onPress={() => void handleOpenForecastDetail(forecast)}>
+              <View key={forecast.id} style={styles.forecastCard} testID={`marine-forecast-item-${forecast.cruiseId}-${forecast.dateKey}`}>
                 <View style={styles.forecastTopRow}>
                   <View style={styles.forecastTitleWrap}>
                     <Text style={styles.forecastDate}>{forecast.dayLabel}</Text>
@@ -491,14 +414,13 @@ export function MarineAlertsPanel({
                     <Text style={styles.forecastMetricValue}>{formatMetricValue(forecast.precipitationChance, '%')}</Text>
                   </View>
                 </View>
-                <Text style={styles.tapHint}>Tap for full marine forecast</Text>
-              </TouchableOpacity>
+              </View>
             );
           })}
         </View>
       ) : null}
 
-      {isExpanded && !alertsQuery.isLoading && visibleAlerts.length > 0 ? (
+      {!alertsQuery.isLoading && visibleAlerts.length > 0 ? (
         <View style={styles.alertsList}>
           <View style={styles.sectionHeaderRow}>
             <AlertTriangle size={14} color="#FFD59E" />
@@ -553,86 +475,6 @@ export function MarineAlertsPanel({
           })}
         </View>
       ) : null}
-
-
-      <Modal visible={Boolean(selectedForecast)} animationType="slide" transparent onRequestClose={() => setSelectedForecast(null)}>
-        <View style={styles.detailOverlay}>
-          <View style={styles.detailSheet}>
-            <View style={styles.detailHeaderRow}>
-              <View style={styles.detailHeaderText}>
-                <Text style={styles.detailEyebrow}>Full marine forecast</Text>
-                <Text style={styles.detailTitle}>{selectedForecast?.shipName ?? 'Sailing weather'}</Text>
-                <Text style={styles.detailSubtitle}>{selectedForecast?.dateKey ?? ''} • {selectedForecast?.locationName ?? ''}</Text>
-              </View>
-              <TouchableOpacity style={styles.detailCloseButton} onPress={() => { setSelectedForecast(null); setDetailRefreshError(null); setIsDetailRefreshing(false); }} accessibilityLabel="Close marine forecast detail">
-                <X size={20} color="#EAF7FF" />
-              </TouchableOpacity>
-            </View>
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.detailScrollContent}>
-              {selectedForecast ? (
-                <>
-                  <View style={styles.detailStatusRow}>
-                    <Text style={styles.detailZone}>{selectedForecast.zoneLabel}</Text>
-                    <TouchableOpacity
-                      style={styles.detailRefreshButton}
-                      onPress={() => {
-                        const matchingForecast = forecasts.find((candidate) => candidate.fullForecast.cacheKey === selectedForecast.cacheKey || (candidate.cruiseId === selectedForecast.cruiseId && candidate.dateKey === selectedForecast.dateKey));
-                        if (matchingForecast) {
-                          void handleOpenForecastDetail(matchingForecast);
-                        }
-                      }}
-                      disabled={isDetailRefreshing}
-                    >
-                      <Text style={styles.detailRefreshText}>{isDetailRefreshing ? 'Refreshing…' : 'Refresh live'}</Text>
-                    </TouchableOpacity>
-                  </View>
-                  {isDetailRefreshing ? <Text style={styles.detailStatusText}>Fetching and saving the full marine forecast for this card…</Text> : null}
-                  {detailRefreshError ? <Text style={styles.detailErrorText}>{detailRefreshError}</Text> : null}
-                  <Text style={styles.detailSummary}>{selectedForecast.summary}</Text>
-                  <View style={styles.detailGrid}>
-                    <View style={styles.detailMetric}><Text style={styles.detailMetricLabel}>Temp</Text><Text style={styles.detailMetricValue}>{formatTempRange(selectedForecast.metrics.lowTempF, selectedForecast.metrics.highTempF)}</Text></View>
-                    <View style={styles.detailMetric}><Text style={styles.detailMetricLabel}>Wind</Text><Text style={styles.detailMetricValue}>{formatMetricValue(selectedForecast.metrics.maxWindMph, ' mph')}</Text></View>
-                    <View style={styles.detailMetric}><Text style={styles.detailMetricLabel}>Gusts</Text><Text style={styles.detailMetricValue}>{formatMetricValue(selectedForecast.metrics.maxWindGustMph, ' mph')}</Text></View>
-                    <View style={styles.detailMetric}><Text style={styles.detailMetricLabel}>Waves</Text><Text style={styles.detailMetricValue}>{formatMetricValue(selectedForecast.metrics.maxWaveHeightFt, ' ft', 1)}</Text></View>
-                    <View style={styles.detailMetric}><Text style={styles.detailMetricLabel}>Period</Text><Text style={styles.detailMetricValue}>{formatMetricValue(selectedForecast.metrics.maxWavePeriodSeconds, ' sec', 0)}</Text></View>
-                    <View style={styles.detailMetric}><Text style={styles.detailMetricLabel}>Swell</Text><Text style={styles.detailMetricValue}>{formatMetricValue(selectedForecast.metrics.maxSwellHeightFt, ' ft', 1)}</Text></View>
-                    <View style={styles.detailMetric}><Text style={styles.detailMetricLabel}>Rain</Text><Text style={styles.detailMetricValue}>{formatMetricValue(selectedForecast.metrics.precipitationChance, '%')}</Text></View>
-                    <View style={styles.detailMetric}><Text style={styles.detailMetricLabel}>Condition</Text><Text style={styles.detailMetricValue}>{selectedForecast.metrics.conditionLabel}</Text></View>
-                  </View>
-
-                  {selectedForecast.advisories.length > 0 ? (
-                    <View style={styles.detailSection}>
-                      <Text style={styles.detailSectionTitle}>Alerts and watchouts</Text>
-                      {selectedForecast.advisories.map((advisory) => (
-                        <View key={advisory.id} style={styles.detailAlertCard}>
-                          <Text style={styles.detailAlertTitle}>{advisory.title}</Text>
-                          <Text style={styles.detailAlertText}>{advisory.detail}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  ) : null}
-
-                  <View style={styles.detailSection}>
-                    <Text style={styles.detailSectionTitle}>Hourly marine breakdown</Text>
-                    {selectedForecast.hourly.slice(0, 24).map((hour) => (
-                      <View key={hour.isoTime} style={styles.hourlyRow}>
-                        <Text style={styles.hourlyTime}>{hour.isoTime.slice(11, 16)}</Text>
-                        <Text style={styles.hourlyValue}>Wind {formatMetricValue(hour.windMph, ' mph')}</Text>
-                        <Text style={styles.hourlyValue}>Gust {formatMetricValue(hour.windGustMph, ' mph')}</Text>
-                        <Text style={styles.hourlyValue}>Wave {formatMetricValue(hour.waveHeightFt, ' ft', 1)}</Text>
-                        <Text style={styles.hourlyValue}>Rain {formatMetricValue(hour.precipitationProbability, '%')}</Text>
-                      </View>
-                    ))}
-                  </View>
-
-                  <Text style={styles.detailSource}>Source: {getSourceLabel(selectedForecast.source)} • Updated {new Date(selectedForecast.updatedAt).toLocaleString()} {selectedForecast.isStale ? '• Cached/offline result' : ''}</Text>
-                </>
-              ) : null}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
     </LinearGradient>
   );
 }
@@ -678,24 +520,15 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 5,
     backgroundColor: 'rgba(255,255,255,0.12)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.12)',
     paddingHorizontal: SPACING.sm,
   },
-  countPillAlert: {
-    backgroundColor: 'rgba(120, 53, 15, 0.42)',
-    borderColor: 'rgba(252, 211, 77, 0.48)',
-  },
   countPillText: {
     color: COLORS.white,
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-  },
-  countPillTextAlert: {
-    color: '#FFE8A3',
   },
   description: {
     color: 'rgba(237, 248, 255, 0.82)',
@@ -899,133 +732,4 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
-
-  tapHint: {
-    color: '#B4EBFF',
-    fontSize: 11,
-    fontWeight: '700',
-    marginTop: 8,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-  detailOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(2, 8, 16, 0.76)',
-    justifyContent: 'flex-end',
-  },
-  detailSheet: {
-    maxHeight: '86%',
-    backgroundColor: '#071B2D',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingHorizontal: 18,
-    paddingTop: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(180,235,255,0.22)',
-  },
-  detailHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  detailHeaderText: { flex: 1 },
-  detailEyebrow: {
-    color: '#7DD3FC',
-    fontSize: 11,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 0.7,
-  },
-  detailTitle: {
-    color: '#FFFFFF',
-    fontSize: 22,
-    fontWeight: '900',
-    marginTop: 3,
-  },
-  detailSubtitle: {
-    color: '#CFEFFF',
-    fontSize: 13,
-    fontWeight: '700',
-    marginTop: 3,
-  },
-  detailCloseButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  detailScrollContent: { paddingVertical: 16, paddingBottom: 28 },
-  detailStatusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: SPACING.sm,
-    marginBottom: 6,
-  },
-  detailRefreshButton: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(180, 235, 255, 0.42)',
-    backgroundColor: 'rgba(180, 235, 255, 0.10)',
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 6,
-  },
-  detailRefreshText: {
-    color: '#EAF7FF',
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-  },
-  detailStatusText: {
-    color: '#B4EBFF',
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    marginBottom: 6,
-  },
-  detailErrorText: {
-    color: '#FCA5A5',
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    marginBottom: 6,
-  },
-  detailZone: { color: '#EAF7FF', fontSize: 14, fontWeight: '800', flex: 1 },
-  detailSummary: { color: '#CFEFFF', fontSize: 13, lineHeight: 19, marginBottom: 14 },
-  detailGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  detailMetric: {
-    width: '48%',
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 14,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
-  },
-  detailMetricLabel: { color: '#9EDCF7', fontSize: 11, fontWeight: '800', textTransform: 'uppercase' },
-  detailMetricValue: { color: '#FFFFFF', fontSize: 15, fontWeight: '900', marginTop: 3 },
-  detailSection: { marginTop: 16 },
-  detailSectionTitle: { color: '#FFFFFF', fontSize: 15, fontWeight: '900', marginBottom: 8 },
-  detailAlertCard: {
-    backgroundColor: 'rgba(255,213,158,0.12)',
-    borderRadius: 14,
-    padding: 10,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255,213,158,0.24)',
-  },
-  detailAlertTitle: { color: '#FFD59E', fontSize: 13, fontWeight: '900' },
-  detailAlertText: { color: '#FFF4DF', fontSize: 12, lineHeight: 17, marginTop: 4 },
-  hourlyRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.08)',
-    paddingVertical: 8,
-  },
-  hourlyTime: { color: '#FFFFFF', fontSize: 12, fontWeight: '900', width: 46 },
-  hourlyValue: { color: '#CFEFFF', fontSize: 12, fontWeight: '700' },
-  detailSource: { color: '#8BAFD4', fontSize: 11, fontWeight: '600', marginTop: 16, lineHeight: 16 },
-
 });

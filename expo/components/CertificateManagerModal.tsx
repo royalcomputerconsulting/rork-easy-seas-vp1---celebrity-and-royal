@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -25,8 +25,6 @@ import {
   Sparkles,
 } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
-import { CertificateExpirationBadge } from '@/components/certificates/CertificateExpirationBadge';
-import { getCertificateExpirationResult, sortCertificatesByExpirationUrgency } from '@/lib/certificates/expiration';
 
 export type CertificateType = 'fpp' | 'nextCruise' | 'obc' | 'freeplay' | 'discount';
 
@@ -320,9 +318,6 @@ export function CertificateManagerModal({
           {cert.description ? (
             <Text style={styles.certDescription} numberOfLines={1}>{cert.description}</Text>
           ) : null}
-          <View style={styles.expirationBadgeWrapper} testID="certificate-manager-expiration-badge">
-            <CertificateExpirationBadge result={getCertificateExpirationResult(cert)} compact={true} />
-          </View>
         </View>
 
         <View style={styles.certActions}>
@@ -348,7 +343,6 @@ export function CertificateManagerModal({
   const availableCount = certificates.filter(c => c.status === 'available').length;
   const usedCount = certificates.filter(c => c.status === 'used').length;
   const totalValue = certificates.filter(c => c.status === 'available').reduce((sum, c) => sum + c.value, 0);
-  const sortedCertificates = useMemo(() => sortCertificatesByExpirationUrgency(certificates), [certificates]);
 
   return (
     <Modal
@@ -497,7 +491,7 @@ export function CertificateManagerModal({
             </View>
           ) : (
             <View style={styles.certList}>
-              {sortedCertificates.map(renderCertificateItem)}
+              {certificates.map(renderCertificateItem)}
             </View>
           )}
         </ScrollView>
@@ -760,9 +754,6 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeXS,
     color: 'rgba(255,255,255,0.4)',
     marginTop: 2,
-  },
-  expirationBadgeWrapper: {
-    marginTop: SPACING.xs,
   },
   certActions: {
     flexDirection: 'row',

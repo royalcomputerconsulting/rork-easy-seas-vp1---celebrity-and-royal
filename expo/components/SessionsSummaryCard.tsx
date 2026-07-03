@@ -194,7 +194,7 @@ export const SessionsSummaryCard = React.memo(function SessionsSummaryCard({
           <View style={styles.metricInfo}>
             <Text style={[styles.metricLabel, styles.metricTotalLabel]}>Sessions Tracked</Text>
             <Text style={styles.metricSubtext}>
-              {sessions.filter(s => Number(s.winLoss || 0) > 0).length} wins • {analytics.winRate.toFixed(0)}% win rate
+              {sessions.filter(s => (s.winLoss || 0) >= 0).length} wins • {analytics.winRate.toFixed(0)}% win rate
             </Text>
           </View>
           <Text style={[styles.metricTotalValue]}>

@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { createTRPCRouter, publicProcedure } from "../create-context";
-import { buildFullDailyLuckRecord, exportDailyLuckRecordToCsvRow, exportDailyLuckRecordToIcs } from "../../../lib/dailyLuck/luckCalendarEngine";
 
 const dailyLuckProviderOrder = [
   "chineseDaily",
@@ -201,45 +200,6 @@ export const dailyLuckRouter = createTRPCRouter({
         westernSign: input.westernSign ?? null,
         chineseSign: input.chineseSign ?? null,
       });
-      const legacy = buildDailyLuckAnalysis(input);
-      const fullRecord = buildFullDailyLuckRecord({
-        date: input.date,
-        profile: {
-          id: input.displayName || input.birthDate || 'daily-luck-profile',
-          name: input.displayName,
-          birthDate: input.birthDate,
-          birthPlace: input.birthplace,
-          westernSunSign: input.westernSign,
-          chineseZodiac: input.chineseSign,
-        },
-        context: {
-          locationType: 'unknown',
-          casinoOpenExpected: undefined,
-        },
-        sources: input.skyTodayUrl ? [{
-          sourceType: 'sky_today',
-          sourceName: 'User-provided sky source',
-          url: input.skyTodayUrl,
-          retrievedAt: new Date().toISOString(),
-        }] : [],
-        mode: 'casino',
-      });
-      return {
-        ...legacy,
-        fullRecord,
-        luckScore: fullRecord.luckyScore1To9,
-        luckScore100: fullRecord.luckyScore100,
-        luckBand: fullRecord.luckBand,
-        luckyColor: fullRecord.luckyColor,
-        luckyNumber: fullRecord.luckyNumber,
-        bestLuckyWindow: fullRecord.bestLuckyWindow,
-        casinoGuidance: fullRecord.casinoGuidance,
-        travelGuidance: fullRecord.travelGuidance,
-        relationshipGuidance: fullRecord.relationshipGuidance,
-        dailyReading: fullRecord.dailyReading,
-        disclaimer: fullRecord.disclaimer,
-        csvRow: exportDailyLuckRecordToCsvRow(fullRecord),
-        icsEvent: exportDailyLuckRecordToIcs(fullRecord),
-      };
+      return buildDailyLuckAnalysis(input);
     }),
 });

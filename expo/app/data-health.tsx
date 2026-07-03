@@ -5,30 +5,13 @@ import { useRouter } from 'expo-router';
 import { Activity, AlertTriangle, CheckCircle, Database, RefreshCw, ShieldCheck } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOW } from '@/constants/theme';
 import { useCoreData } from '@/state/CoreDataProvider';
-import { useAuth } from '@/state/AuthProvider';
 import { buildDataHealthSummary } from '@/lib/easySeasAdvisor';
 
 export default function DataHealthScreen() {
   const router = useRouter();
-  const { isAdmin } = useAuth();
   const { cruises, bookedCruises, casinoOffers } = useCoreData();
   const summary = useMemo(() => buildDataHealthSummary(cruises, bookedCruises, casinoOffers), [cruises, bookedCruises, casinoOffers]);
   const issueCount = summary.duplicateAvailableRows + summary.duplicateOfferCodes + summary.possiblyMisclassifiedUpcoming;
-
-  if (!isAdmin) {
-    return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.adminGate}>
-          <ShieldCheck size={36} color={COLORS.navyDeep} />
-          <Text style={styles.adminGateTitle}>Admin Only</Text>
-          <Text style={styles.adminGateText}>Data Health contains production diagnostics and is restricted to admin users.</Text>
-          <TouchableOpacity style={styles.primaryButton} onPress={() => router.back()} testID="data-health.go-back">
-            <Text style={styles.primaryButtonText}>Go Back</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -75,7 +58,7 @@ export default function DataHealthScreen() {
             <Activity size={18} color={COLORS.navyDeep} />
             <Text style={styles.sectionTitle}>Production guardrails</Text>
           </View>
-          <RepairLine good text="Royal sync should commit the current visible Club Royale catalog when every visible offer produces verified ship/date sailing rows; the valid offer count changes month to month." />
+          <RepairLine good text="Royal sync should settle around 5 offers / 1,073 available sailings when current offer set is complete." />
           <RepairLine good text="Celebrity sync should update only Celebrity-owned Blue Chip rows and not overwrite Club Royale data." />
           <RepairLine good text="Completed cruises should never inflate active upcoming or offer-catalog counts." />
         </View>
@@ -117,9 +100,6 @@ function RepairLine({ text, good }: { text: string; good?: boolean }) {
 }
 
 const styles = StyleSheet.create({
-  adminGate: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: SPACING.xl, gap: 12 },
-  adminGateTitle: { color: COLORS.navyDeep, fontSize: 26, fontWeight: '900', textAlign: 'center' },
-  adminGateText: { color: '#64748B', fontSize: 15, lineHeight: 22, textAlign: 'center', fontWeight: '700', marginBottom: 8 },
   container: { flex: 1, backgroundColor: '#F8FAFC' },
   content: { padding: SPACING.lg, paddingBottom: 120 },
   header: { marginBottom: SPACING.md },

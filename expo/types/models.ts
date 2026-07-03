@@ -170,70 +170,8 @@ export interface ItineraryDay {
   notes?: string;
 }
 
-
-export type BookletSourceKind = 'manual' | 'gmail' | 'royal' | 'celebrity' | 'tripit' | 'uploadedDocument' | 'sync' | 'unknown';
-
-export interface CruiseItineraryBookletFieldSource {
-  source: BookletSourceKind | string;
-  label?: string;
-  confidence?: 'high' | 'medium' | 'low' | 'needsReview';
-  lastUpdated?: string;
-  userEdited?: boolean;
-}
-
-export interface CruiseItineraryBookletTravelItem {
-  id: string;
-  type: 'flight' | 'hotel' | 'transfer' | 'note';
-  title: string;
-  subtitle?: string;
-  date?: string;
-  time?: string;
-  confirmationNumber?: string;
-  details?: string;
-  source?: CruiseItineraryBookletFieldSource;
-}
-
-export interface CruiseItineraryBookletData {
-  title?: string;
-  subtitle?: string;
-  gmailMatchStatus?: string;
-  sourceStatus?: string;
-  reservationNumber?: string;
-  shipName?: string;
-  sailingDateRange?: string;
-  nights?: string;
-  itineraryName?: string;
-  stateroom?: string;
-  dining?: string;
-  guests?: string;
-  loyalty?: string;
-  offerCode?: string;
-  offerName?: string;
-  offerLevel?: string;
-  casinoLines?: string;
-  freePlay?: string;
-  onboardCredit?: string;
-  tradeInValue?: string;
-  taxesFees?: string;
-  amountPaid?: string;
-  balanceDue?: string;
-  casinoNotes?: string;
-  flightsSummary?: string;
-  hotelsSummary?: string;
-  transfersSummary?: string;
-  importantNotes?: string[];
-  travelItems?: CruiseItineraryBookletTravelItem[];
-  documentMatches?: CruiseItineraryBookletTravelItem[];
-  needsReviewFlags?: string[];
-  currentCruiseNotes?: string[];
-  accentColor?: string;
-  lastEditedAt?: string;
-  lastExportedAt?: string;
-}
-
 export interface BookedCruise extends Cruise {
   sourcePayload?: unknown;
-  itineraryBooklet?: CruiseItineraryBookletData;
   reservationNumber?: string;
   bookingId?: string;
   bwoNumber?: string;

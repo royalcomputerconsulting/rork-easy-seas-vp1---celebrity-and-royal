@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -22,7 +22,7 @@ interface SurveyListModalProps {
 }
 
 export function SurveyListModal({ visible, onClose, sailings }: SurveyListModalProps) {
-  const { userId, ownerScopeId, isOfflineMode, entries: allEntries, filters } = useCrewRecognition();
+  const { userId, ownerScopeId, isOfflineMode, entries: allEntries } = useCrewRecognition();
   const [selectedSailingId, setSelectedSailingId] = useState('');
   const [showSailingPicker, setShowSailingPicker] = useState(false);
 
@@ -36,33 +36,17 @@ export function SurveyListModal({ visible, onClose, sailings }: SurveyListModalP
   );
 
   const selectedSailing = sailings.find(s => s.id === selectedSailingId);
-  const hasActiveFilters = filters.search.trim().length > 0 || filters.shipNames.length > 0 || filters.departments.length > 0 || Boolean(filters.month || filters.year || filters.startDate || filters.endDate || filters.roleTitle);
-
-  useEffect(() => {
-    if (visible && hasActiveFilters) {
-      setSelectedSailingId('');
-      setShowSailingPicker(false);
-    }
-  }, [visible, hasActiveFilters]);
 
   const localSurveyList = useMemo<SurveyListItem[]>(() => {
-    if (!isOfflineMode && !hasActiveFilters) return [];
+    if (!isOfflineMode || !selectedSailingId || !selectedSailing) return [];
 
-    const sailingEntries = hasActiveFilters && !selectedSailingId
-      ? allEntries
-      : allEntries.filter(e => {
-          if (!selectedSailingId || !selectedSailing) return false;
-          if (e.sailingId === selectedSailingId) return true;
-          if (e.shipName === selectedSailing.shipName && e.sailStartDate === selectedSailing.sailStartDate) return true;
-          return false;
-        });
-
-    console.log('[SurveyList] Local survey source:', {
-      mode: hasActiveFilters && !selectedSailingId ? 'active-filters' : 'selected-sailing',
-      selectedSailingId,
-      found: sailingEntries.length,
-      total: allEntries.length,
+    const sailingEntries = allEntries.filter(e => {
+      if (e.sailingId === selectedSailingId) return true;
+      if (e.shipName === selectedSailing.shipName && e.sailStartDate === selectedSailing.sailStartDate) return true;
+      return false;
     });
+
+    console.log('[SurveyList] Local filter for sailing:', selectedSailingId, 'ship:', selectedSailing.shipName, 'date:', selectedSailing.sailStartDate, 'found:', sailingEntries.length, 'of', allEntries.length, 'total entries');
 
     const grouped = new Map<string, { fullName: string; department: string; roleTitle?: string; mentionCount: number }>();
     for (const entry of sailingEntries) {
@@ -81,24 +65,21 @@ export function SurveyListModal({ visible, onClose, sailings }: SurveyListModalP
     }
 
     return Array.from(grouped.values()).sort((a, b) => a.fullName.localeCompare(b.fullName));
-  }, [isOfflineMode, hasActiveFilters, selectedSailingId, selectedSailing, allEntries]);
+  }, [isOfflineMode, selectedSailingId, selectedSailing, allEntries]);
 
-  const surveyList = (isOfflineMode || hasActiveFilters) ? localSurveyList : (surveyListQuery.data || []);
-  const isLoading = !isOfflineMode && !hasActiveFilters && surveyListQuery.isLoading;
+  const surveyList = isOfflineMode ? localSurveyList : (surveyListQuery.data || []);
+  const isLoading = !isOfflineMode && surveyListQuery.isLoading;
 
   const handleExport = () => {
-    if (surveyList.length === 0) {
+    if (surveyList.length === 0 || !selectedSailing) {
       return;
     }
 
-    const filterShipName = filters.shipNames.length === 1 ? filters.shipNames[0] : filters.shipNames.length > 1 ? `${filters.shipNames.length} filtered ships` : 'Filtered crew';
-    const exportShipName = selectedSailing?.shipName || filterShipName;
-    const exportDate = selectedSailing?.sailStartDate || filters.month || filters.startDate || 'current filters';
-    const filename = `survey-${exportShipName.replace(/\s+/g, '-')}-${String(exportDate).replace(/\s+/g, '-')}.txt`;
+    const filename = `survey-${selectedSailing.shipName.replace(/\s+/g, '-')}-${selectedSailing.sailStartDate}.txt`;
 
-    void exportSurveyToText(
-      exportShipName,
-      exportDate,
+    exportSurveyToText(
+      selectedSailing.shipName,
+      selectedSailing.sailStartDate,
       surveyList,
       filename
     );
@@ -117,15 +98,8 @@ export function SurveyListModal({ visible, onClose, sailings }: SurveyListModalP
           </View>
 
           <View style={styles.content}>
-            {hasActiveFilters ? (
-              <View style={styles.filterNotice}>
-                <Text style={styles.filterNoticeTitle}>Survey list is using your current filters.</Text>
-                <Text style={styles.filterNoticeText}>Ship, department, and search filters already narrow the crew list, so no sailing picker is required.</Text>
-              </View>
-            ) : (
             <View style={styles.selector}>
               <Text style={styles.selectorLabel}>Select Sailing</Text>
-              <Text style={styles.selectorHelp}>The survey list will use the crew already assigned to this exact ship/date from your imports.</Text>
               <TouchableOpacity
                 style={styles.selectorPicker}
                 onPress={() => setShowSailingPicker(!showSailingPicker)}
@@ -161,9 +135,8 @@ export function SurveyListModal({ visible, onClose, sailings }: SurveyListModalP
                 </ScrollView>
               )}
             </View>
-            )}
 
-            {(selectedSailingId || hasActiveFilters) && (
+            {selectedSailingId && (
               <>
                 <View style={styles.actions}>
                   <Text style={styles.countText}>
@@ -260,25 +233,6 @@ const styles = StyleSheet.create({
   content: {
     padding: SPACING.lg,
   },
-  filterNotice: {
-    backgroundColor: '#EFF6FF',
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.md,
-    marginBottom: SPACING.lg,
-  },
-  filterNoticeTitle: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: '700' as const,
-    color: '#1E3A8A',
-    marginBottom: 4,
-  },
-  filterNoticeText: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#1D4ED8',
-    lineHeight: 18,
-  },
   selector: {
     marginBottom: SPACING.lg,
   },
@@ -287,12 +241,6 @@ const styles = StyleSheet.create({
     fontWeight: '600' as const,
     color: COLORS.text,
     marginBottom: SPACING.xs,
-  },
-  selectorHelp: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.textSecondary,
-    marginBottom: SPACING.sm,
-    lineHeight: 18,
   },
   selectorPicker: {
     borderWidth: 1,

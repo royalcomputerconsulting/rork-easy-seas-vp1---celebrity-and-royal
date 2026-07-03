@@ -48,13 +48,6 @@ function getOwnerKey(value: { ownerProfileId?: string; sourceEmail?: string; dat
   ].join('|');
 }
 
-function hasRealOwner(value: { ownerProfileId?: string; sourceEmail?: string; dataOwnerEmail?: string; dataOwnerScopeId?: string }): boolean {
-  return Boolean(
-    normalizeKeyPart(value.ownerProfileId ?? value.dataOwnerScopeId) ||
-    normalizeKeyPart(value.sourceEmail ?? value.dataOwnerEmail)
-  );
-}
-
 function hasOwnerOrSource(value: { ownerProfileId?: string; sourceEmail?: string; dataOwnerEmail?: string; dataOwnerScopeId?: string; cruiseSource?: Cruise['cruiseSource']; brand?: string }): boolean {
   return Boolean(
     normalizeKeyPart(value.ownerProfileId ?? value.dataOwnerScopeId) ||
@@ -300,104 +293,8 @@ export function dedupeBookedCruises(items: BookedCruise[], label = 'booked cruis
   return result;
 }
 
-
-function getOfferLooseIdentityKey(offer: CasinoOffer): string {
-  const parts = [
-    getSourceKey(offer),
-    normalizeOfferCode(offer.offerCode),
-    normalizeKeyPart(offer.shipName),
-    normalizeDateKey(offer.sailingDate),
-    normalizeKeyPart(offer.roomType),
-    normalizeKeyPart(offer.offerName ?? offer.title),
-  ];
-
-  if (parts[1] || (parts[2] && parts[3])) {
-    return `offer:${parts.join('|')}`;
-  }
-
-  const id = normalizeKeyPart(offer.id);
-  return id ? `id:${id}` : `payload:${normalizeKeyPart(JSON.stringify(offer))}`;
-}
-
-function shouldMergeOfferByLooseIdentity(existing: CasinoOffer, incoming: CasinoOffer): boolean {
-  const existingLoose = getOfferLooseIdentityKey(existing);
-  const incomingLoose = getOfferLooseIdentityKey(incoming);
-  if (!existingLoose || existingLoose !== incomingLoose) {
-    return false;
-  }
-
-  const existingOwner = getOwnerKey(existing);
-  const incomingOwner = getOwnerKey(incoming);
-  if (existingOwner === incomingOwner) {
-    return true;
-  }
-
-  const existingStatus = normalizeKeyPart((existing as { importStatus?: string; reconciliationStatus?: string }).importStatus ?? (existing as { reconciliationStatus?: string }).reconciliationStatus);
-  const incomingStatus = normalizeKeyPart((incoming as { importStatus?: string; reconciliationStatus?: string }).importStatus ?? (incoming as { reconciliationStatus?: string }).reconciliationStatus);
-  const existingNeedsReview = existingStatus === 'unassigned' || existingStatus === 'reviewneeded' || existingStatus === 'review needed';
-  const incomingNeedsReview = incomingStatus === 'unassigned' || incomingStatus === 'reviewneeded' || incomingStatus === 'review needed';
-
-  return !hasRealOwner(existing) || !hasRealOwner(incoming) || existingNeedsReview || incomingNeedsReview;
-}
-
 export function dedupeCasinoOffers(items: CasinoOffer[], label = 'casino offers'): CasinoOffer[] {
-  const result: CasinoOffer[] = [];
-  const identityToIndex = new Map<string, number>();
-  const idToIndex = new Map<string, number>();
-  const looseToIndexes = new Map<string, number[]>();
-
-  const rememberIndexes = (offer: CasinoOffer, index: number) => {
-    identityToIndex.set(getOfferIdentityKey(offer), index);
-    const id = normalizeKeyPart(offer.id);
-    if (id) {
-      idToIndex.set(id, index);
-    }
-    const loose = getOfferLooseIdentityKey(offer);
-    if (loose) {
-      const indexes = looseToIndexes.get(loose) ?? [];
-      if (!indexes.includes(index)) {
-        looseToIndexes.set(loose, [...indexes, index]);
-      }
-    }
-  };
-
-  items.forEach((item) => {
-    const identityKey = getOfferIdentityKey(item);
-    const idKey = normalizeKeyPart(item.id);
-    const looseKey = getOfferLooseIdentityKey(item);
-
-    let matchedIndex = identityToIndex.get(identityKey);
-
-    if (matchedIndex === undefined && idKey) {
-      matchedIndex = idToIndex.get(idKey);
-    }
-
-    if (matchedIndex === undefined && looseKey) {
-      const candidates = looseToIndexes.get(looseKey) ?? [];
-      matchedIndex = candidates.find((candidateIndex) => shouldMergeOfferByLooseIdentity(result[candidateIndex], item));
-    }
-
-    if (matchedIndex !== undefined) {
-      console.log('[DataIdentity] Deduped duplicate casino offer:', {
-        label,
-        identityKey,
-        idKey,
-        looseKey,
-        offerCode: item.offerCode,
-        shipName: item.shipName,
-        sailingDate: item.sailingDate,
-      });
-      result[matchedIndex] = mergeRecordPreferIncoming(result[matchedIndex] as unknown as Record<string, unknown>, item as unknown as Record<string, unknown>) as unknown as CasinoOffer;
-      rememberIndexes(result[matchedIndex], matchedIndex);
-      return;
-    }
-
-    const nextIndex = result.length;
-    result.push(item);
-    rememberIndexes(item, nextIndex);
-  });
-
-  return result;
+  return dedupeByIdentity(items, getOfferIdentityKey, label);
 }
 
 export function dedupeCalendarEvents(items: CalendarEvent[], label = 'calendar events'): CalendarEvent[] {

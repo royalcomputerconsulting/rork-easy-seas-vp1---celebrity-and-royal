@@ -20,7 +20,7 @@ interface ImportCrewTextModalProps {
   onImport: (text: string) => Promise<{ importedCount: number; skippedCount: number; shipName: string; sailDate: string }>;
 }
 
-const EXAMPLE_TEXT = `Quantum of the Seas 6/19\nShairene - public area cleaner\nYulfikar - stateroom attendant 9118\n\nAllure of the Seas 10/17/2026\nMarly - bartender\nMaria Jose - front desk`;
+const EXAMPLE_TEXT = `Radiance of the Seas 09-26-2025\nJohn Smith\nJane Doe\nBob Johnson\nMaria Garcia`;
 
 export function ImportCrewTextModal({ visible, onClose, onImport }: ImportCrewTextModalProps) {
   const [text, setText] = useState('');
@@ -110,8 +110,8 @@ export function ImportCrewTextModal({ visible, onClose, onImport }: ImportCrewTe
             <View style={styles.infoBox}>
               <Info size={14} color="#0369A1" />
               <Text style={styles.infoText}>
-                Start every section with Ship name + sailing date{'\n'}
-                Then list crew names below it. You can paste multiple ship/date sections at once.
+                Line 1: Ship name + sailing date{'\n'}
+                Lines 2+: One crew member per line
               </Text>
               <TouchableOpacity onPress={() => setShowExample(v => !v)} style={styles.exampleToggle}>
                 <Text style={styles.exampleToggleText}>{showExample ? 'Hide example' : 'See example'}</Text>
@@ -136,7 +136,7 @@ export function ImportCrewTextModal({ visible, onClose, onImport }: ImportCrewTe
               style={styles.textArea}
               value={text}
               onChangeText={setText}
-              placeholder={`Quantum of the Seas 6/19\nShairene - public area cleaner\nYulfikar - stateroom attendant 9118\n\nAllure of the Seas 10/17/2026\nMarly - bartender\n...`}
+              placeholder={`Radiance of the Seas 09-26-2025\nJohn Smith\nJane Doe\n...`}
               placeholderTextColor={COLORS.textTertiary}
               multiline
               numberOfLines={10}

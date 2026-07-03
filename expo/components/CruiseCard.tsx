@@ -290,11 +290,6 @@ export const CruiseCard = React.memo(function CruiseCard({
                   <Text style={[styles.miniTopTierBadgeText, { color: futureTopTierBadge.textColor }]}>{futureTopTierBadge.text}</Text>
                 </View>
               ) : null}
-              {isBooked ? (
-                <View style={styles.miniBookletBadge} testID="cruise-card-booklet-badge">
-                  <Text style={styles.miniBookletBadgeText}>ITINERARY BOOKLET</Text>
-                </View>
-              ) : null}
             </View>
           </View>
           <Text style={styles.miniItinerary} numberOfLines={1}>{getItineraryName()}</Text>
@@ -815,19 +810,6 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     letterSpacing: 0.5,
-  },
-  miniBookletBadge: {
-    backgroundColor: 'rgba(30, 58, 95, 0.10)',
-    borderRadius: 999,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    marginTop: 3,
-  },
-  miniBookletBadgeText: {
-    color: COLORS.navyDeep,
-    fontSize: 8,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    letterSpacing: 0.25,
   },
   miniDestination: {
     fontSize: 13,

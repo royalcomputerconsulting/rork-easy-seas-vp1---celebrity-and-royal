@@ -140,16 +140,14 @@ export const NETWORK_MONITOR_SCRIPT = `
           log(\`📦 [Fetch] Captured Voyage Enrichment data from \${url}\`, 'info');
         }
         
-        else if (url.includes('/guestAccounts/loyalty/info') || url.includes('/guestAccounts/loyalty/history') || url.includes('/api/casino/v1/loyalty-data')) {
+        else if (url.includes('/guestAccounts/loyalty/info')) {
           const data = await clonedResponse.json();
-          const visibleText = (document && document.body && document.body.textContent ? document.body.textContent : '').slice(0, 100000);
-          const enrichedData = Object.assign({}, data, { __easySeasVisibleText: visibleText });
-          window.capturedPayloads.loyalty = enrichedData;
+          window.capturedPayloads.loyalty = data;
           
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'network_capture',
             endpoint: 'loyalty',
-            data: enrichedData,
+            data: data,
             url: url
           }));
           
@@ -353,16 +351,14 @@ export const NETWORK_MONITOR_SCRIPT = `
             log(\`📦 [XHR] Captured Voyage Enrichment data from \${url}\`, 'info');
           }
           
-          else if (url.includes('/guestAccounts/loyalty/info') || url.includes('/guestAccounts/loyalty/history') || url.includes('/api/casino/v1/loyalty-data')) {
+          else if (url.includes('/guestAccounts/loyalty/info')) {
             const data = JSON.parse(this.responseText);
-            const visibleText = (document && document.body && document.body.textContent ? document.body.textContent : '').slice(0, 100000);
-            const enrichedData = Object.assign({}, data, { __easySeasVisibleText: visibleText });
-            window.capturedPayloads.loyalty = enrichedData;
+            window.capturedPayloads.loyalty = data;
             
             window.ReactNativeWebView.postMessage(JSON.stringify({
               type: 'network_capture',
               endpoint: 'loyalty',
-              data: enrichedData,
+              data: data,
               url: url
             }));
             

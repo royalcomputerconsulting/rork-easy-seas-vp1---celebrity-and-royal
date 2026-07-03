@@ -46,12 +46,6 @@ const PORT_COORDINATES: Record<string, { latitude: number; longitude: number; la
   salina: { latitude: 16.175, longitude: -95.2, label: 'Salina Cruz' },
   'salina cruz': { latitude: 16.175, longitude: -95.2, label: 'Salina Cruz' },
   nassau: { latitude: 25.078, longitude: -77.3431, label: 'Nassau' },
-  'nassau bahamas': { latitude: 25.078, longitude: -77.3431, label: 'Nassau, Bahamas' },
-  bahamas: { latitude: 25.0343, longitude: -77.3963, label: 'Northwest Bahamas' },
-  'berry islands': { latitude: 25.625, longitude: -77.825, label: 'Berry Islands / CocoCay' },
-  'northwest bahamas': { latitude: 25.55, longitude: -78.0, label: 'Northwest Bahamas marine zone' },
-  'florida straits': { latitude: 24.8, longitude: -80.2, label: 'Florida Straits marine zone' },
-  'western atlantic': { latitude: 26.0, longitude: -76.5, label: 'Western Atlantic marine zone' },
   cococay: { latitude: 25.8184, longitude: -77.9428, label: 'Perfect Day at CocoCay' },
   'coco cay': { latitude: 25.8184, longitude: -77.9428, label: 'Perfect Day at CocoCay' },
   'perfect day at cococay': { latitude: 25.8184, longitude: -77.9428, label: 'Perfect Day at CocoCay' },
@@ -63,17 +57,8 @@ const PORT_COORDINATES: Record<string, { latitude: number; longitude: number; la
   'st thomas': { latitude: 18.3419, longitude: -64.9307, label: 'St. Thomas' },
   'st. thomas': { latitude: 18.3419, longitude: -64.9307, label: 'St. Thomas' },
   'charlotte amalie': { latitude: 18.3419, longitude: -64.9307, label: 'St. Thomas' },
-  basseterre: { latitude: 17.2948, longitude: -62.7261, label: 'Basseterre, St. Kitts' },
-  'basseterre st kitts': { latitude: 17.2948, longitude: -62.7261, label: 'Basseterre, St. Kitts' },
-  'basseterre saint kitts': { latitude: 17.2948, longitude: -62.7261, label: 'Basseterre, St. Kitts' },
-  'st kitts': { latitude: 17.2948, longitude: -62.7261, label: 'Basseterre, St. Kitts' },
-  'st. kitts': { latitude: 17.2948, longitude: -62.7261, label: 'Basseterre, St. Kitts' },
-  'saint kitts': { latitude: 17.2948, longitude: -62.7261, label: 'Basseterre, St. Kitts' },
-  'saint kitts nevis': { latitude: 17.2948, longitude: -62.7261, label: 'Basseterre, St. Kitts' },
-  'st kitts nevis': { latitude: 17.2948, longitude: -62.7261, label: 'Basseterre, St. Kitts' },
   'san juan': { latitude: 18.4655, longitude: -66.1057, label: 'San Juan' },
   'puerto plata': { latitude: 19.7939, longitude: -70.6871, label: 'Puerto Plata' },
-  'eastern caribbean': { latitude: 18.0, longitude: -64.3, label: 'Eastern Caribbean marine zone' },
   'st maarten': { latitude: 18.0425, longitude: -63.0548, label: 'St. Maarten' },
   'st. maarten': { latitude: 18.0425, longitude: -63.0548, label: 'St. Maarten' },
   'philipsburg': { latitude: 18.0252, longitude: -63.0458, label: 'Philipsburg' },
@@ -97,7 +82,7 @@ const PORT_COORDINATES: Record<string, { latitude: number; longitude: number; la
 
 const SORTED_PORT_COORDINATE_KEYS = Object.keys(PORT_COORDINATES).sort((left, right) => right.length - left.length);
 
-type SailingWeatherSource = 'live' | 'cache-fresh' | 'cache-stale' | 'offline-placeholder';
+type SailingWeatherSource = 'live' | 'cache-fresh' | 'cache-stale';
 
 interface SailingWeatherPoint {
   isoTime: string;
@@ -332,31 +317,14 @@ function addDays(date: Date, days: number): Date {
   return nextDate;
 }
 
-function getCruiseEndDate(cruise: Pick<SailingWeatherCruiseInput, 'sailDate' | 'returnDate' | 'nights'>): Date | null {
-  const start = startOfDay(new Date(cruise.sailDate));
-  if (Number.isNaN(start.getTime())) {
-    return null;
-  }
-
-  const explicitEnd = startOfDay(new Date(cruise.returnDate));
-  if (!Number.isNaN(explicitEnd.getTime()) && explicitEnd >= start) {
-    return explicitEnd;
-  }
-
-  const inferredNights = typeof cruise.nights === 'number' && Number.isFinite(cruise.nights) && cruise.nights >= 0
-    ? cruise.nights
-    : 0;
-  return addDays(start, inferredNights);
-}
-
 function isSameDay(left: Date, right: Date): boolean {
   return formatDateKey(left) === formatDateKey(right);
 }
 
 function buildCruiseDateRange(cruise: SailingWeatherCruiseInput): Date[] {
   const start = startOfDay(new Date(cruise.sailDate));
-  const end = getCruiseEndDate(cruise);
-  if (Number.isNaN(start.getTime()) || !end || end < start) {
+  const end = startOfDay(new Date(cruise.returnDate));
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
     return [];
   }
 
@@ -429,123 +397,6 @@ function getDayOfCruise(cruise: SailingWeatherCruiseInput, targetDate: Date): nu
   target.setHours(0, 0, 0, 0);
   const diffMs = target.getTime() - start.getTime();
   return Math.max(1, Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1);
-}
-
-
-function getCruiseLengthDays(cruise: SailingWeatherCruiseInput): number {
-  const start = startOfDay(new Date(cruise.sailDate));
-  const end = getCruiseEndDate(cruise);
-  if (Number.isNaN(start.getTime()) || !end || end < start) {
-    return Math.max(1, (cruise.nights || 0) + 1);
-  }
-  return Math.max(1, Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1);
-}
-
-function hasUsableItinerary(itinerary?: ItineraryDay[]): boolean {
-  return Array.isArray(itinerary) && itinerary.some((item) => Boolean(item.port?.trim()) && normalizePortName(item.port) !== 'at sea');
-}
-
-function makeSyntheticItineraryDay(day: number, port: string, isSeaDay = false, notes?: string): ItineraryDay {
-  return {
-    day,
-    port,
-    isSeaDay,
-    notes,
-  };
-}
-
-function getNormalizedSailDateText(value?: string): string {
-  return (value || '').trim().toLowerCase();
-}
-
-function matchesDate(value: string | undefined, isoDate: string, usDate: string): boolean {
-  const normalized = getNormalizedSailDateText(value);
-  return normalized.includes(isoDate.toLowerCase()) || normalized.includes(usDate.toLowerCase());
-}
-
-function getKnownExactItinerary(cruise: SailingWeatherCruiseInput): ItineraryDay[] | null {
-  const routeText = [cruise.shipName, cruise.destination, cruise.itineraryName]
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase();
-
-  // Royal's public/app itinerary for Star of the Seas 07-05-2026 Eastern Caribbean & Perfect Day.
-  // This prevents the weather engine from falling back to a generic Eastern Caribbean template
-  // that incorrectly used Philipsburg for Day 5.
-  const isStarJuly2026Sailing = routeText.includes('star of the seas')
-    && matchesDate(cruise.sailDate, '2026-07-05', '07-05-2026');
-  const starJulyReturnDate = getCruiseEndDate(cruise);
-  const isStarJuly7NightWindow = starJulyReturnDate ? formatDateKey(starJulyReturnDate) === '2026-07-12' : (cruise.nights ?? 0) === 7;
-
-  if (isStarJuly2026Sailing && isStarJuly7NightWindow) {
-    return [
-      makeSyntheticItineraryDay(1, cruise.departurePort || 'Port Canaveral', false, 'Embarkation port'),
-      makeSyntheticItineraryDay(2, 'Perfect Day at CocoCay', false, 'Official itinerary port'),
-      makeSyntheticItineraryDay(3, 'Northwest Bahamas', true, 'Sea-day marine zone after CocoCay'),
-      makeSyntheticItineraryDay(4, 'Charlotte Amalie, St. Thomas', false, 'Official itinerary port'),
-      makeSyntheticItineraryDay(5, 'Basseterre, St. Kitts & Nevis', false, 'Official itinerary port'),
-      makeSyntheticItineraryDay(6, 'Western Atlantic', true, 'Return-route marine zone'),
-      makeSyntheticItineraryDay(7, 'Western Atlantic', true, 'Return-route marine zone'),
-      makeSyntheticItineraryDay(8, cruise.departurePort || 'Port Canaveral', false, 'Return port'),
-    ];
-  }
-
-  return null;
-}
-
-function inferRouteItinerary(cruise: SailingWeatherCruiseInput): ItineraryDay[] {
-  const exactItinerary = getKnownExactItinerary(cruise);
-  if (exactItinerary) {
-    return exactItinerary;
-  }
-
-  if (hasUsableItinerary(cruise.itinerary)) {
-    return cruise.itinerary ?? [];
-  }
-
-  const totalDays = getCruiseLengthDays(cruise);
-  const departurePort = cruise.departurePort || 'Port Canaveral';
-  const routeText = [cruise.shipName, cruise.destination, cruise.itineraryName]
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase();
-
-  if (totalDays <= 1) {
-    return [makeSyntheticItineraryDay(1, departurePort, false, 'Departure-port fallback')];
-  }
-
-  const days: ItineraryDay[] = [makeSyntheticItineraryDay(1, departurePort, false, 'Embarkation port')];
-  const addReturn = () => {
-    days.push(makeSyntheticItineraryDay(totalDays, departurePort, false, 'Return port'));
-  };
-
-  if (routeText.includes('eastern caribbean') && routeText.includes('perfect day')) {
-    days.push(makeSyntheticItineraryDay(2, 'Perfect Day at CocoCay', false, 'Inferred from Eastern Caribbean & Perfect Day itinerary name'));
-    if (totalDays >= 4) days.push(makeSyntheticItineraryDay(3, 'Northwest Bahamas', true, 'Inferred sea-day marine zone between Florida and the Eastern Caribbean'));
-    if (totalDays >= 5) days.push(makeSyntheticItineraryDay(4, 'Eastern Caribbean', true, 'Exact port unavailable; using broad Eastern Caribbean marine zone instead of inventing a named port'));
-    if (totalDays >= 6) days.push(makeSyntheticItineraryDay(5, 'Eastern Caribbean', true, 'Exact port unavailable; using broad Eastern Caribbean marine zone instead of inventing a named port'));
-    for (let day = 6; day < totalDays; day += 1) {
-      days.push(makeSyntheticItineraryDay(day, 'Western Atlantic', true, 'Inferred return-route marine zone'));
-    }
-    addReturn();
-    return days.filter((item, index, all) => all.findIndex((other) => other.day === item.day) === index);
-  }
-
-  if (routeText.includes('bahamas') || routeText.includes('perfect day') || routeText.includes('cococay')) {
-    if (totalDays >= 3) days.push(makeSyntheticItineraryDay(2, routeText.includes('perfect day') || routeText.includes('cococay') ? 'Perfect Day at CocoCay' : 'Northwest Bahamas', !routeText.includes('perfect day') && !routeText.includes('cococay'), 'Inferred Bahamas marine forecast target'));
-    if (totalDays >= 4) days.push(makeSyntheticItineraryDay(3, routeText.includes('nassau') ? 'Nassau, Bahamas' : 'Northwest Bahamas', !routeText.includes('nassau'), 'Inferred Bahamas cruise day'));
-    for (let day = 4; day < totalDays; day += 1) {
-      days.push(makeSyntheticItineraryDay(day, 'Florida Straits', true, 'Inferred Bahamas route sea day'));
-    }
-    addReturn();
-    return days.filter((item, index, all) => all.findIndex((other) => other.day === item.day) === index);
-  }
-
-  for (let day = 2; day < totalDays; day += 1) {
-    days.push(makeSyntheticItineraryDay(day, cruise.destination || cruise.itineraryName || departurePort, true, 'Route itinerary unavailable; using destination as marine target'));
-  }
-  addReturn();
-  return days.filter((item, index, all) => all.findIndex((other) => other.day === item.day) === index);
 }
 
 function findNearestPortDay(itinerary: ItineraryDay[] | undefined, startDay: number, direction: -1 | 1): ItineraryDay | undefined {
@@ -669,76 +520,6 @@ function buildSummary(metrics: SailingWeatherForecast['metrics'], isSeaDay: bool
   return {
     headline: `${condition} · ${tempLabel}`,
     summary: isSeaDay ? `${waveLabel} · ${gustLabel} · ${precipLabel}` : `${windLabel} · ${swellLabel} · ${precipLabel}`,
-  };
-}
-
-
-function buildOfflinePlaceholderForecast(
-  cruise: SailingWeatherCruiseInput,
-  targetDate: Date,
-  resolvedPoint: ResolvedCruiseWeatherPoint,
-  reason?: string,
-): SailingWeatherForecast {
-  const dateKey = formatDateKey(targetDate);
-  const updatedAt = new Date().toISOString();
-  const metrics: SailingWeatherForecast['metrics'] = {
-    highTempF: null,
-    lowTempF: null,
-    maxWindMph: null,
-    maxWindGustMph: null,
-    dominantWindDirectionDegrees: null,
-    maxWaveHeightFt: null,
-    maxWavePeriodSeconds: null,
-    dominantWaveDirectionDegrees: null,
-    maxSwellHeightFt: null,
-    dominantSwellDirectionDegrees: null,
-    precipitationChance: null,
-    conditionLabel: 'Offline forecast saved as route card',
-  };
-  const emptyHourly: SailingWeatherPoint[] = Array.from({ length: 24 }, (_, hour) => ({
-    isoTime: `${dateKey}T${String(hour).padStart(2, '0')}:00`,
-    label: formatHourLabel(`${dateKey}T${String(hour).padStart(2, '0')}:00`),
-    temperatureF: null,
-    windMph: null,
-    windGustMph: null,
-    windDirectionDegrees: null,
-    waveHeightFt: null,
-    waveDirectionDegrees: null,
-    wavePeriodSeconds: null,
-    swellWaveHeightFt: null,
-    swellWaveDirectionDegrees: null,
-    swellWavePeriodSeconds: null,
-    precipitationProbability: null,
-    weatherCode: null,
-  }));
-  return {
-    cacheKey: createCacheKey(cruise.id, dateKey, resolvedPoint.latitude, resolvedPoint.longitude),
-    cruiseId: cruise.id,
-    shipName: cruise.shipName,
-    dateKey,
-    locationName: resolvedPoint.label,
-    zoneLabel: resolvedPoint.zoneLabel,
-    latitude: resolvedPoint.latitude,
-    longitude: resolvedPoint.longitude,
-    timezone: 'Offline',
-    updatedAt,
-    nextRefreshAt: new Date(Date.now() + CACHE_REFRESH_MS).toISOString(),
-    source: 'offline-placeholder',
-    isStale: true,
-    isSeaDay: resolvedPoint.isSeaDay,
-    headline: 'Offline route card',
-    summary: reason || 'No internet connection or live marine forecast is unavailable. This card keeps the cruise day, route zone, and detailed forecast layout ready until service returns.',
-    advisories: [
-      {
-        id: 'offline-weather-card',
-        severity: 'info',
-        title: 'Offline weather card',
-        detail: 'Live wind, swell, precipitation, and temperature data are not available right now. The app will refresh this exact itinerary-day marine forecast when internet returns.',
-      },
-    ],
-    metrics,
-    snapshots: buildSnapshots(emptyHourly),
-    hourly: emptyHourly,
   };
 }
 
@@ -1065,24 +846,22 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
 
   const resolveCruiseWeatherPoint = useCallback(async (cruise: SailingWeatherCruiseInput, targetDate: Date): Promise<ResolvedCruiseWeatherPoint | null> => {
     const dayOfCruise = getDayOfCruise(cruise, targetDate);
-    const effectiveItinerary = inferRouteItinerary(cruise);
-    const itineraryDay = effectiveItinerary.find((item) => item.day === dayOfCruise);
-    const normalizedDayPort = normalizePortName(itineraryDay?.port ?? '');
-    const isSeaDay = Boolean(itineraryDay?.isSeaDay || normalizedDayPort === 'at sea' || normalizedDayPort.includes('at sea'));
+    const itineraryDay = cruise.itinerary?.find((item) => item.day === dayOfCruise);
+    const isSeaDay = itineraryDay?.isSeaDay ?? false;
 
     if (!isSeaDay) {
-      const portName = itineraryDay?.port || (dayOfCruise === 1 || dayOfCruise === getCruiseLengthDays(cruise) ? cruise.departurePort : undefined) || cruise.destination || cruise.itineraryName;
+      const portName = itineraryDay?.port || cruise.departurePort || cruise.destination || cruise.itineraryName;
       const coordinates = await resolvePortCoordinates(portName);
       if (!coordinates) return null;
       return {
         ...coordinates,
         isSeaDay: false,
-        zoneLabel: `Marine forecast near ${coordinates.label}${itineraryDay?.notes ? ` · ${itineraryDay.notes}` : ''}`,
+        zoneLabel: `Forecast near ${coordinates.label}`,
       };
     }
 
-    const previousPortDay = findNearestPortDay(effectiveItinerary, dayOfCruise, -1);
-    const nextPortDay = findNearestPortDay(effectiveItinerary, dayOfCruise, 1);
+    const previousPortDay = findNearestPortDay(cruise.itinerary, dayOfCruise, -1);
+    const nextPortDay = findNearestPortDay(cruise.itinerary, dayOfCruise, 1);
 
     const [previousCoordinates, nextCoordinates] = await Promise.all([
       resolvePortCoordinates(previousPortDay?.port || cruise.departurePort),
@@ -1141,7 +920,6 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
       latitude: resolvedPoint.latitude,
       longitude: resolvedPoint.longitude,
       isSeaDay: resolvedPoint.isSeaDay,
-      zoneLabel: resolvedPoint.zoneLabel,
       weatherApiHost,
       marineUrl,
     });
@@ -1321,21 +1099,7 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
           };
           return staleForecast;
         }
-        const offlinePlaceholder = buildOfflinePlaceholderForecast(
-          cruise,
-          targetDate,
-          resolvedPoint,
-          'Offline: no saved live forecast is available yet for this itinerary day. The route card remains visible and will refresh wind, swell, precipitation, and temperature details when service returns.',
-        );
-        setCache((previousCache) => {
-          const nextCache = {
-            ...previousCache,
-            [cacheKey]: offlinePlaceholder,
-          };
-          cacheRef.current = nextCache;
-          return nextCache;
-        });
-        return offlinePlaceholder;
+        return null;
       } finally {
         delete inFlightRef.current[cacheKey];
       }

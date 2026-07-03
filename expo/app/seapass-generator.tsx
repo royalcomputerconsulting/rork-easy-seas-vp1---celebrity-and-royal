@@ -19,7 +19,7 @@ import { Download, FileDown, RefreshCcw, Shield, Ship } from 'lucide-react-nativ
 import { SeaPassWebPass } from '@/components/seapass/SeaPassWebPass';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { BORDER_RADIUS, COLORS, SPACING, TYPOGRAPHY } from '@/constants/theme';
-import { SEA_PASS_APPROVED_SCREENSHOT_URL, SEA_PASS_DEFAULTS, SEA_PASS_TERMINAL_PORT, SEA_PASS_TERMINAL_VALUE, SEA_PASS_VIEWBOX, normalizeSeaPassDateDisplayValue, normalizeSeaPassPortDisplayValue, normalizeSeaPassShipCodeDisplayValue, shouldShowSeaPassTerminal, type SeaPassWebPassData } from '@/lib/seaPassWebPass';
+import { SEA_PASS_APPROVED_SCREENSHOT_URL, SEA_PASS_DEFAULTS, SEA_PASS_TERMINAL_PORT, SEA_PASS_TERMINAL_VALUE, SEA_PASS_VIEWBOX, shouldShowSeaPassTerminal, type SeaPassWebPassData } from '@/lib/seaPassWebPass';
 import { exportSeaPassPdf, exportSeaPassPng } from '@/lib/seapassExport';
 import { useAuth } from '@/state/AuthProvider';
 
@@ -29,7 +29,6 @@ interface SeaPassFieldConfig {
   placeholder: string;
   keyboardType?: TextInputProps['keyboardType'];
   autoCapitalize?: TextInputProps['autoCapitalize'];
-  maxLength?: number;
 }
 
 const FIELD_CONFIGS: SeaPassFieldConfig[] = [
@@ -39,7 +38,6 @@ const FIELD_CONFIGS: SeaPassFieldConfig[] = [
     placeholder: SEA_PASS_DEFAULTS.time,
     keyboardType: 'default',
     autoCapitalize: 'none',
-    maxLength: 10,
   },
   {
     key: 'date',
@@ -47,7 +45,6 @@ const FIELD_CONFIGS: SeaPassFieldConfig[] = [
     placeholder: SEA_PASS_DEFAULTS.date,
     keyboardType: 'default',
     autoCapitalize: 'words',
-    maxLength: 12,
   },
   {
     key: 'deck',
@@ -55,7 +52,6 @@ const FIELD_CONFIGS: SeaPassFieldConfig[] = [
     placeholder: SEA_PASS_DEFAULTS.deck,
     keyboardType: 'number-pad',
     autoCapitalize: 'none',
-    maxLength: 2,
   },
   {
     key: 'stateroom',
@@ -63,7 +59,6 @@ const FIELD_CONFIGS: SeaPassFieldConfig[] = [
     placeholder: SEA_PASS_DEFAULTS.stateroom,
     keyboardType: 'number-pad',
     autoCapitalize: 'none',
-    maxLength: 6,
   },
   {
     key: 'muster',
@@ -71,7 +66,6 @@ const FIELD_CONFIGS: SeaPassFieldConfig[] = [
     placeholder: SEA_PASS_DEFAULTS.muster,
     keyboardType: 'default',
     autoCapitalize: 'characters',
-    maxLength: 4,
   },
   {
     key: 'reservation',
@@ -79,15 +73,13 @@ const FIELD_CONFIGS: SeaPassFieldConfig[] = [
     placeholder: SEA_PASS_DEFAULTS.reservation,
     keyboardType: 'number-pad',
     autoCapitalize: 'none',
-    maxLength: 10,
   },
   {
     key: 'ship',
-    label: 'Ship / ST Code',
+    label: 'Ship Code',
     placeholder: SEA_PASS_DEFAULTS.ship,
     keyboardType: 'default',
     autoCapitalize: 'characters',
-    maxLength: 24,
   },
   {
     key: 'port',
@@ -95,7 +87,6 @@ const FIELD_CONFIGS: SeaPassFieldConfig[] = [
     placeholder: 'MIAMI, FLORIDA',
     keyboardType: 'default',
     autoCapitalize: 'characters',
-    maxLength: 54,
   },
   {
     key: 'terminal',
@@ -103,45 +94,20 @@ const FIELD_CONFIGS: SeaPassFieldConfig[] = [
     placeholder: 'A',
     keyboardType: 'default',
     autoCapitalize: 'characters',
-    maxLength: 4,
   },
 ];
 
-function stripUnsupportedSeaPassCharacters(value: string): string {
-  return value.replace(/[^A-Za-z0-9\s,./()#-]/g, '').replace(/\s{2,}/g, ' ');
-}
-
 function normalizeSeaPassFieldValue(key: keyof SeaPassWebPassData, value: string): string {
-  const cleanedValue = stripUnsupportedSeaPassCharacters(value);
-
   if (key === 'ship' || key === 'muster' || key === 'port' || key === 'terminal') {
-    return cleanedValue.toUpperCase();
+    return value.toUpperCase();
   }
 
-  return cleanedValue;
-}
-
-function finalizeSeaPassFieldValue(key: keyof SeaPassWebPassData, value: string): string {
-  const normalizedValue = normalizeSeaPassFieldValue(key, value);
-
-  if (key === 'date') {
-    return normalizeSeaPassDateDisplayValue(normalizedValue);
-  }
-
-  if (key === 'ship') {
-    return normalizeSeaPassShipCodeDisplayValue(normalizedValue);
-  }
-
-  if (key === 'port') {
-    return normalizeSeaPassPortDisplayValue(normalizedValue);
-  }
-
-  return normalizedValue.trim();
+  return value;
 }
 
 const INITIAL_SEA_PASS_FORM_DATA: SeaPassWebPassData = {
   ...SEA_PASS_DEFAULTS,
-  terminal: '',
+  terminal: SEA_PASS_TERMINAL_VALUE,
 };
 
 function SeaPassGeneratorScreen() {
@@ -151,7 +117,6 @@ function SeaPassGeneratorScreen() {
   const [formData, setFormData] = useState<SeaPassWebPassData>({ ...INITIAL_SEA_PASS_FORM_DATA });
   const [isExportingPng, setIsExportingPng] = useState<boolean>(false);
   const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
-  const [isEditing, setIsEditing] = useState<boolean>(false);
 
   const isWideLayout = width >= 1080;
   const previewWidth = useMemo(() => {
@@ -164,7 +129,6 @@ function SeaPassGeneratorScreen() {
 
   const canShowTerminal = useMemo(() => shouldShowSeaPassTerminal(formData), [formData]);
   const visibleFieldConfigs = useMemo(() => FIELD_CONFIGS.filter((field) => field.key !== 'terminal' || canShowTerminal), [canShowTerminal]);
-  const shouldRenderHiddenExportStage = Platform.OS !== 'web';
 
   useEffect(() => {
     console.log('[SeaPassGenerator] Screen mounted');
@@ -177,25 +141,6 @@ function SeaPassGeneratorScreen() {
           console.log('[SeaPassGenerator] Could not prefetch SeaPass shell (non-critical)', error instanceof Error ? error.message : String(error));
         });
     }
-  }, []);
-
-  useEffect(() => {
-    setFormData((current) => {
-      const isLegacyShellDefault = current.date === 'Apr 07' && current.ship === 'QN';
-
-      if (!isLegacyShellDefault) {
-        return current;
-      }
-
-      console.log('[SeaPassGenerator] Migrating legacy shell defaults to editable Star defaults');
-      return {
-        ...current,
-        date: SEA_PASS_DEFAULTS.date,
-        ship: SEA_PASS_DEFAULTS.ship,
-        port: SEA_PASS_DEFAULTS.port,
-        terminal: '',
-      };
-    });
   }, []);
 
   useEffect(() => {
@@ -227,39 +172,6 @@ function SeaPassGeneratorScreen() {
     });
   }, []);
 
-  const handleFieldBlur = useCallback((key: keyof SeaPassWebPassData) => {
-    setFormData((current) => {
-      const finalizedValue = finalizeSeaPassFieldValue(key, current[key]);
-
-      if (finalizedValue === current[key]) {
-        return current;
-      }
-
-      const next: SeaPassWebPassData = {
-        ...current,
-        [key]: finalizedValue,
-      };
-
-      const nextCanShowTerminal = shouldShowSeaPassTerminal(next);
-
-      if ((key === 'ship' || key === 'port') && nextCanShowTerminal && next.terminal.trim().length === 0) {
-        next.terminal = SEA_PASS_TERMINAL_VALUE;
-      }
-
-      if ((key === 'ship' || key === 'port') && !nextCanShowTerminal && next.terminal.trim().length > 0) {
-        next.terminal = '';
-      }
-
-      console.log('[SeaPassGenerator] Field finalized', { key, value: finalizedValue });
-      return next;
-    });
-  }, []);
-
-  const handleFieldSubmit = useCallback((key: keyof SeaPassWebPassData) => {
-    console.log('[SeaPassGenerator] Field submitted, finalizing live preview overlay', { key });
-    handleFieldBlur(key);
-  }, [handleFieldBlur]);
-
   const handleReset = useCallback(() => {
     console.log('[SeaPassGenerator] Resetting form to defaults');
     setFormData({ ...INITIAL_SEA_PASS_FORM_DATA });
@@ -269,19 +181,9 @@ function SeaPassGeneratorScreen() {
     try {
       console.log('[SeaPassGenerator] Starting PNG export');
       setIsExportingPng(true);
-
-      if (Platform.OS !== 'web') {
-        await new Promise<void>((resolve) => setTimeout(resolve, 850));
-      }
-
       const captureTarget = Platform.OS === 'web'
         ? previewCaptureRef.current
         : exportCaptureRef.current ?? previewCaptureRef.current;
-
-      if (Platform.OS !== 'web' && !captureTarget) {
-        throw new Error('SeaPass export view was not ready. Please try Export PNG again.');
-      }
-
       const resultMessage = await exportSeaPassPng(formData, captureTarget);
       Alert.alert('PNG Export Ready', resultMessage);
     } catch (error) {
@@ -319,26 +221,24 @@ function SeaPassGeneratorScreen() {
         }}
       />
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        {shouldRenderHiddenExportStage ? (
-          <View style={styles.hiddenExportStage} pointerEvents="none">
-            <View ref={exportCaptureRef} collapsable={false} style={styles.hiddenExportCaptureFrame} testID="seapass-generator.export-capture-target">
-              <SeaPassWebPass
-                time={formData.time}
-                date={formData.date}
-                deck={formData.deck}
-                stateroom={formData.stateroom}
-                muster={formData.muster}
-                reservation={formData.reservation}
-                ship={formData.ship}
-                port={formData.port}
-                terminal={formData.terminal}
-                width={SEA_PASS_VIEWBOX.width}
-                style={styles.hiddenExportPass}
-                testID="seapass-generator.export-pass"
-              />
-            </View>
+        <View style={styles.hiddenExportStage} pointerEvents="none">
+          <View ref={exportCaptureRef} collapsable={false} style={styles.hiddenExportCaptureFrame} testID="seapass-generator.export-capture-target">
+            <SeaPassWebPass
+              time={formData.time}
+              date={formData.date}
+              deck={formData.deck}
+              stateroom={formData.stateroom}
+              muster={formData.muster}
+              reservation={formData.reservation}
+              ship={formData.ship}
+              port={formData.port}
+              terminal={formData.terminal}
+              width={SEA_PASS_VIEWBOX.width}
+              style={styles.hiddenExportPass}
+              testID="seapass-generator.export-pass"
+            />
           </View>
-        ) : null}
+        </View>
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
@@ -352,9 +252,9 @@ function SeaPassGeneratorScreen() {
                   <Ship size={18} color="#FFFFFF" />
                 </View>
                 <View style={styles.previewHeaderTextWrap}>
-                  <Text style={styles.previewEyebrow}>v1017-Accurate Key SeaPass</Text>
-                  <Text style={styles.previewTitle}>Clean Card Preview</Text>
-                  <Text style={styles.previewSubtitle}>Uses the last accurate SeaPass shell with the baked-in Key symbol. Export captures the card only.</Text>
+                  <Text style={styles.previewEyebrow}>Locked Version 2 Web SeaPass</Text>
+                  <Text style={styles.previewTitle}>Live Preview</Text>
+                  <Text style={styles.previewSubtitle}>The web SeaPass updates instantly as you edit the admin form below.</Text>
                 </View>
               </View>
 
@@ -381,8 +281,8 @@ function SeaPassGeneratorScreen() {
             <View style={[styles.formPanel, isWideLayout && styles.formPanelWide]}>
               <View style={styles.formCard}>
                 <View style={styles.formCardHeader}>
-                  <Text style={styles.formCardTitle}>SeaPass Key Generator</Text>
-                  <Text style={styles.formCardSubtitle}>One-tap generator using the last accurate SeaPass reproduction baseline with the baked-in Key symbol preserved exactly once.</Text>
+                  <Text style={styles.formCardTitle}>SeaPass Web Generator</Text>
+                  <Text style={styles.formCardSubtitle}>Admin-only generator for the finalized Royal Caribbean web SeaPass.</Text>
                 </View>
 
                 <View style={styles.lockedInfoCard}>
@@ -390,54 +290,37 @@ function SeaPassGeneratorScreen() {
                     <Shield size={14} color="#5A319F" />
                     <Text style={styles.lockedBadgeText}>Locked Elements</Text>
                   </View>
-                  <Text style={styles.lockedInfoText}>Scott Merlis • DIAMOND PLUS • SIGNATURE • v1017/v1019 SeaPass shell preserved; the baked-in Key is not duplicated. The Ship / ST Code field is editable and updates the SeaPass code overlay on preview, PNG, and PDF exports.</Text>
+                  <Text style={styles.lockedInfoText}>Scott Merlis • DIAMOND PLUS • SIGNATURE • Port is editable • Terminal appears only for Icon sailings from {SEA_PASS_TERMINAL_PORT}.</Text>
                 </View>
 
-                <Pressable
-                  style={[styles.resetButton, styles.editToggleButton]}
-                  onPress={() => setIsEditing((current) => !current)}
-                  testID="seapass-generator.edit-toggle"
-                >
-                  <Text style={styles.resetButtonText}>{isEditing ? 'Done Editing' : 'Edit Pass Data'}</Text>
-                </Pressable>
-
-                {isEditing ? (
-                  <>
-                    <View style={styles.fieldsGrid}>
-                      {visibleFieldConfigs.map((field) => (
-                        <View key={field.key} style={styles.fieldGroup}>
-                          <Text style={styles.fieldLabel}>{field.label}</Text>
-                          <TextInput
-                            value={formData[field.key]}
-                            onChangeText={(value) => handleFieldChange(field.key, value)}
-                            placeholder={field.placeholder}
-                            placeholderTextColor="#9AA3B2"
-                            keyboardType={field.keyboardType}
-                            autoCapitalize={field.autoCapitalize}
-                            autoCorrect={false}
-                            maxLength={field.maxLength}
-                            returnKeyType="done"
-                            blurOnSubmit
-                            onSubmitEditing={() => handleFieldSubmit(field.key)}
-                            onEndEditing={() => handleFieldBlur(field.key)}
-                            style={styles.input}
-                            testID={`seapass-generator.input.${field.key}`}
-                          />
-                        </View>
-                      ))}
+                <View style={styles.fieldsGrid}>
+                  {visibleFieldConfigs.map((field) => (
+                    <View key={field.key} style={styles.fieldGroup}>
+                      <Text style={styles.fieldLabel}>{field.label}</Text>
+                      <TextInput
+                        value={formData[field.key]}
+                        onChangeText={(value) => handleFieldChange(field.key, value)}
+                        placeholder={field.placeholder}
+                        placeholderTextColor="#9AA3B2"
+                        keyboardType={field.keyboardType}
+                        autoCapitalize={field.autoCapitalize}
+                        autoCorrect={false}
+                        style={styles.input}
+                        testID={`seapass-generator.input.${field.key}`}
+                      />
                     </View>
+                  ))}
+                </View>
 
-                    <Pressable style={styles.resetButton} onPress={handleReset} testID="seapass-generator.reset">
-                      <RefreshCcw size={16} color={COLORS.navyDeep} />
-                      <Text style={styles.resetButtonText}>Reset to Defaults</Text>
-                    </Pressable>
-                  </>
-                ) : null}
+                <Pressable style={styles.resetButton} onPress={handleReset} testID="seapass-generator.reset">
+                  <RefreshCcw size={16} color={COLORS.navyDeep} />
+                  <Text style={styles.resetButtonText}>Reset to Defaults</Text>
+                </Pressable>
               </View>
 
               <View style={styles.exportCard}>
                 <Text style={styles.exportTitle}>Export</Text>
-                <Text style={styles.exportSubtitle}>Exports the clean SeaPass card only, with exactly one Key symbol — no keyboard, nav bar, or app chrome.</Text>
+                <Text style={styles.exportSubtitle}>Share a PNG image or open a PDF/print flow from this exact web pass layout.</Text>
 
                 <View style={styles.exportActions}>
                   <Pressable
@@ -703,10 +586,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-  },
-  editToggleButton: {
-    backgroundColor: '#F4ECFF',
-    borderColor: '#E7D8FF',
   },
   resetButtonText: {
     fontSize: TYPOGRAPHY.fontSizeSM,

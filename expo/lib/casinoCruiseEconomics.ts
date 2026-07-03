@@ -756,7 +756,7 @@ function buildCruiseEconomicsRow(cruise: BookedCruise): CruiseEconomicsRow {
     paidInfo.note,
     winningsInfo.note,
     pointsInfo.note,
-    coinInWasEstimated ? 'Coin-in derived by the centralized pointsEarning engine using the selected Royal/Celebrity game profile.' : null,
+    coinInWasEstimated ? 'Coin-in derived from points at $5 coin-in per point.' : null,
     hoursWereEstimated ? `Hours played estimated from points at ${DEFAULT_ESTIMATED_POINTS_PER_PLAY_HOUR} points/hour.` : null,
     !isNumber(hoursPlayed) ? 'Hours played not available for this row.' : null,
     matchedAnnualFact?.notes ?? null,

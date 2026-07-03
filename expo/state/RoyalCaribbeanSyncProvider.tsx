@@ -39,7 +39,7 @@ export const CRUISE_LINE_CONFIG = {
     upcomingUrl: 'https://www.royalcaribbean.com/myaccount/my-trips',
     holdsUrl: 'https://www.royalcaribbean.com/myaccount/my-trips',
     loyaltyClubName: 'Club Royale',
-    loyaltyPageUrl: 'https://www.royalcaribbean.com/myaccount/',
+    loyaltyPageUrl: 'https://www.royalcaribbean.com/myaccount/loyalty-programs',
   },
   celebrity: {
     name: 'Celebrity Cruises',
@@ -175,79 +175,6 @@ function isLoyaltyPayloadForCruiseLine(url: unknown, cruiseLine: CruiseLine): bo
   return true;
 }
 
-
-function hasMeaningfulSyncValue(value: unknown): boolean {
-  return value !== undefined && value !== null && !(typeof value === 'string' && value.trim().length === 0);
-}
-
-function parseSyncNumber(value: unknown): number | undefined {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (typeof value === 'string') {
-    const parsed = Number.parseInt(value.replace(/[^0-9-]/g, ''), 10);
-    return Number.isFinite(parsed) ? parsed : undefined;
-  }
-  return undefined;
-}
-
-function mergeLoyaltyStateData(existing: any, incoming: any): any {
-  const merged: any = { ...(existing ?? {}) };
-  Object.entries(incoming ?? {}).forEach(([key, value]) => {
-    if (!hasMeaningfulSyncValue(value)) return;
-
-    // Loyalty profile totals are not ordinary diff rows. Multiple Royal endpoints can arrive
-    // during a single sync: Club Royale casino tier credits, Crown & Anchor profile totals,
-    // and loyalty/history completed-sailing rows. Never let a partial or stale lower numeric
-    // payload overwrite a higher verified/manual/profile value. This is what previously let
-    // 549/16,116 suppress the visible 646/19,363 totals.
-    if (key === 'clubRoyalePoints' || key === 'crownAndAnchorPoints') {
-      const existingNumber = parseSyncNumber(merged[key]);
-      const incomingNumber = parseSyncNumber(value);
-      if (incomingNumber === undefined) return;
-      if (existingNumber !== undefined && existingNumber > 0 && incomingNumber > 0 && incomingNumber < existingNumber) {
-        return;
-      }
-      merged[key] = incomingNumber.toString();
-      return;
-    }
-
-    merged[key] = value;
-  });
-  return merged;
-}
-
-function extendedLoyaltyToStateData(data: ExtendedLoyaltyData | null | undefined, cruiseLine: CruiseLine): any {
-  if (!data) return null;
-  if (cruiseLine === 'celebrity') {
-    return {
-      celebrityBlueChipTier: data.celebrityBlueChipTier,
-      celebrityBlueChipPoints: data.celebrityBlueChipPoints?.toString(),
-      captainsClubTier: data.captainsClubTier,
-      captainsClubPoints: data.captainsClubPoints?.toString(),
-    };
-  }
-  if (cruiseLine === 'royal_caribbean') {
-    return {
-      clubRoyaleTier: data.clubRoyaleTierFromApi,
-      clubRoyalePoints: data.clubRoyalePointsFromApi?.toString(),
-      crownAndAnchorLevel: data.crownAndAnchorTier,
-      crownAndAnchorPoints: data.crownAndAnchorPointsFromApi?.toString(),
-    };
-  }
-  return null;
-}
-
-
-function hasProfileLoyaltyFields(data: ExtendedLoyaltyData | null | undefined, cruiseLine: CruiseLine): boolean {
-  if (!data) return false;
-  if (cruiseLine === 'celebrity') {
-    return data.captainsClubPoints !== undefined || !!data.captainsClubTier || data.celebrityBlueChipPoints !== undefined || !!data.celebrityBlueChipTier;
-  }
-  if (cruiseLine === 'royal_caribbean') {
-    return data.clubRoyalePointsFromApi !== undefined || !!data.clubRoyaleTierFromApi || data.crownAndAnchorPointsFromApi !== undefined || !!data.crownAndAnchorTier;
-  }
-  return false;
-}
-
 function filterExtendedLoyaltyForCruiseLine(data: ExtendedLoyaltyData | null | undefined, cruiseLine: CruiseLine): ExtendedLoyaltyData | null {
   if (!data) return null;
   if (cruiseLine === 'celebrity') {
@@ -381,22 +308,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   const staySignedInKey = useCallback(() => getUserScopedKey('stay_signed_in', authenticatedEmail), [authenticatedEmail]);
   const [state, setState] = useState<RoyalCaribbeanSyncState>(INITIAL_STATE);
   const [cruiseLine, setCruiseLine] = useState<CruiseLine>(initialCruiseLine);
-  const [extendedLoyaltyData, setExtendedLoyaltyDataState] = useState<ExtendedLoyaltyData | null>(INITIAL_EXTENDED_LOYALTY);
-  const extendedLoyaltyDataRef = useRef<ExtendedLoyaltyData | null>(INITIAL_EXTENDED_LOYALTY);
-  const setExtendedLoyaltyData = useCallback((updater: ExtendedLoyaltyData | null | ((prev: ExtendedLoyaltyData | null) => ExtendedLoyaltyData | null)) => {
-    const next = typeof updater === 'function'
-      ? (updater as (prev: ExtendedLoyaltyData | null) => ExtendedLoyaltyData | null)(extendedLoyaltyDataRef.current)
-      : updater;
-    extendedLoyaltyDataRef.current = next;
-    setExtendedLoyaltyDataState(next);
-    return next;
-  }, []);
-  const mergeAndStoreExtendedLoyaltyData = useCallback((incoming: ExtendedLoyaltyData | null | undefined) => {
-    const merged = mergeExtendedLoyaltyData(extendedLoyaltyDataRef.current, incoming);
-    extendedLoyaltyDataRef.current = merged;
-    setExtendedLoyaltyDataState(merged);
-    return merged;
-  }, []);
+  const [extendedLoyaltyData, setExtendedLoyaltyData] = useState<ExtendedLoyaltyData | null>(INITIAL_EXTENDED_LOYALTY);
   const [staySignedIn, setStaySignedIn] = useState(true);
   const { currentUser, users, updateUser: updateUserProfile } = useUser();
   const carnivalUserDataRef = useRef<{ vifpNumber: string; vifpTier: string; firstName: string; lastName: string } | null>(null);
@@ -406,7 +318,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   const hasReceivedApiLoyaltyDataRef = useRef(false);
   const lastAuthenticatedEmailRef = useRef<string | null>(authenticatedEmail);
   const stepCompleteResolvers = useRef<{ [key: number]: () => void }>({});
-  const stepFailureRef = useRef<{ [key: number]: string | undefined }>({});
   const progressCallbacks = useRef<{ onProgress?: () => void }>({});
   const processedPayloads = useRef<Set<string>>(new Set());
   const capturedSections = useRef({ offers: false, bookings: false, loyalty: false });
@@ -1034,25 +945,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         break;
       }
 
-      case 'step_failed': {
-        const failedMsg = message as any;
-        const failedStep = Number(failedMsg.step || 0);
-        const reason = String(failedMsg.reason || `Step ${failedStep} failed safe`);
-        if (failedStep) {
-          stepFailureRef.current[failedStep] = reason;
-        }
-        addLog(`🛡️ Step ${failedStep || '?'} failed safe: ${reason}`, 'warning');
-        addLog('🛡️ Existing Easy Seas data will be preserved for that section during Apply Sync', 'warning');
-        if (failedStep && stepCompleteResolvers.current[failedStep]) {
-          stepCompleteResolvers.current[failedStep]();
-          delete stepCompleteResolvers.current[failedStep];
-        }
-        if (progressCallbacks.current.onProgress) {
-          progressCallbacks.current.onProgress();
-        }
-        break;
-      }
-
       case 'step_complete': {
         const stepMsg = message as any;
         const itemCount = stepMsg.totalCount ?? stepMsg.data?.length ?? 0;
@@ -1161,61 +1053,89 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         }
         break;
 
-      case 'loyalty_data': {
-        const rawLoyalty = ((msg as any).loyalty ?? (msg as any).data) as LoyaltyApiInformation | undefined;
-        if (rawLoyalty && typeof rawLoyalty === 'object') {
-          const converted = filterExtendedLoyaltyForCruiseLine(convertLoyaltyInfoToExtended(rawLoyalty, ''), cruiseLine);
-          const hasProfileLoyalty = hasProfileLoyaltyFields(converted, cruiseLine);
-          if (hasProfileLoyalty) {
-            mergeAndStoreExtendedLoyaltyData(converted);
-            hasReceivedApiLoyaltyDataRef.current = true;
-            setState(prev => ({
-              ...prev,
-              loyaltyData: mergeLoyaltyStateData(prev.loyaltyData, extendedLoyaltyToStateData(converted, cruiseLine))
-            }));
-            capturedSections.current.loyalty = true;
-            addLog(`✅ Captured ${cruiseLine === 'celebrity' ? 'Celebrity / Blue Chip' : 'Royal Caribbean / Club Royale'} loyalty data from page/API`, 'success');
-            if (cruiseLine === 'celebrity') {
-              if (converted?.celebrityBlueChipTier || converted?.celebrityBlueChipPoints !== undefined) {
-                addLog(`   🎰 Blue Chip Club Status`, 'success');
-                addLog(`   📊 Tier: "${converted?.celebrityBlueChipTier || 'N/A'}"`, 'success');
-                addLog(`   💎 Points: ${(converted?.celebrityBlueChipPoints ?? 0).toLocaleString()}`, 'success');
-              }
-              if (converted?.captainsClubTier || converted?.captainsClubPoints !== undefined) {
-                addLog(`   ⚓ Captain's Club`, 'success');
-                addLog(`   📊 Level: "${converted?.captainsClubTier || 'N/A'}"`, 'success');
-                addLog(`   💎 Points: ${(converted?.captainsClubPoints ?? 0).toLocaleString()}`, 'success');
-              }
-            } else {
-              if (converted?.clubRoyalePointsFromApi !== undefined) {
-                addLog(`   🎰 Club Royale Status`, 'success');
-                addLog(`   📊 Tier: "${converted?.clubRoyaleTierFromApi || 'N/A'}"`, 'success');
-                addLog(`   💎 Points: ${converted?.clubRoyalePointsFromApi.toLocaleString()}`, 'success');
-              }
-              if (converted?.crownAndAnchorPointsFromApi !== undefined) {
-                addLog(`   ⚓ Crown & Anchor Society`, 'success');
-                addLog(`   📊 Level: "${converted?.crownAndAnchorTier || 'N/A'}"`, 'success');
-                addLog(`   💎 Points: ${(converted?.crownAndAnchorPointsFromApi ?? 0).toLocaleString()}`, 'success');
-              }
+      case 'loyalty_data':
+        if (msg.loyalty && typeof msg.loyalty === 'object') {
+          const loyaltyInfo = msg.loyalty as LoyaltyApiInformation;
+          const converted = filterExtendedLoyaltyForCruiseLine(convertLoyaltyInfoToExtended(loyaltyInfo, ''), cruiseLine);
+          setExtendedLoyaltyData((prev) => mergeExtendedLoyaltyData(prev, converted));
+          hasReceivedApiLoyaltyDataRef.current = true;
+          
+          setState(prev => ({
+            ...prev,
+            loyaltyData: {
+              ...(prev.loyaltyData ?? {}),
+              ...(cruiseLine === 'celebrity' ? {
+                celebrityBlueChipTier: converted?.celebrityBlueChipTier,
+                celebrityBlueChipPoints: converted?.celebrityBlueChipPoints?.toString(),
+                captainsClubTier: converted?.captainsClubTier,
+                captainsClubPoints: converted?.captainsClubPoints?.toString(),
+              } : {
+                clubRoyaleTier: converted?.clubRoyaleTierFromApi,
+                clubRoyalePoints: converted?.clubRoyalePointsFromApi?.toString(),
+                crownAndAnchorLevel: converted?.crownAndAnchorTier,
+                crownAndAnchorPoints: converted?.crownAndAnchorPointsFromApi?.toString(),
+              }),
+            }
+          }));
+          
+          capturedSections.current.loyalty = true;
+          addLog(`✅ Captured ${cruiseLine === 'celebrity' ? 'Celebrity / Blue Chip' : 'Royal Caribbean / Club Royale'} loyalty data from API`, 'success');
+          if (cruiseLine === 'celebrity') {
+            if (converted?.celebrityBlueChipTier || converted?.celebrityBlueChipPoints !== undefined) {
+              addLog(`   🎰 Blue Chip Club Status`, 'success');
+              addLog(`   📊 Tier: "${converted?.celebrityBlueChipTier || 'N/A'}"`, 'success');
+              addLog(`   💎 Points: ${(converted?.celebrityBlueChipPoints ?? 0).toLocaleString()}`, 'success');
+            }
+            if (converted?.captainsClubTier || converted?.captainsClubPoints !== undefined) {
+              addLog(`   ⚓ Captain's Club`, 'success');
+              addLog(`   📊 Level: "${converted?.captainsClubTier || 'N/A'}"`, 'success');
+              addLog(`   💎 Points: ${(converted?.captainsClubPoints ?? 0).toLocaleString()}`, 'success');
             }
           } else {
-            addLog('⚠️ Loyalty page/API fallback did not include usable profile tier/points', 'warning');
+            if (converted?.clubRoyalePointsFromApi !== undefined) {
+              addLog(`   🎰 Club Royale Status`, 'success');
+              addLog(`   📊 Tier: "${converted?.clubRoyaleTierFromApi || 'N/A'}"`, 'success');
+              addLog(`   💎 Points: ${converted?.clubRoyalePointsFromApi.toLocaleString()}`, 'success');
+            }
+            if (converted?.crownAndAnchorPointsFromApi !== undefined) {
+              addLog(`   ⚓ Crown & Anchor Society`, 'success');
+              addLog(`   📊 Level: "${converted?.crownAndAnchorTier || 'N/A'}"`, 'success');
+              addLog(`   💎 Points: ${(converted?.crownAndAnchorPointsFromApi ?? 0).toLocaleString()}`, 'success');
+            }
           }
+        } else if (!hasReceivedApiLoyaltyDataRef.current) {
+          // This is DOM fallback data
+          setState(prev => ({ ...prev, loyaltyData: msg.data ?? null }));
+          addLog('Loyalty data extracted (DOM fallback)', 'info');
+        } else {
+          addLog('Ignoring DOM loyalty data - API data already received', 'info');
         }
         break;
-      }
 
       case 'extended_loyalty_data': {
         const extData = msg.data as LoyaltyApiInformation;
         const converted = filterExtendedLoyaltyForCruiseLine(convertLoyaltyInfoToExtended(extData, msg.accountId), cruiseLine);
-        mergeAndStoreExtendedLoyaltyData(converted);
+        setExtendedLoyaltyData((prev) => mergeExtendedLoyaltyData(prev, converted));
         
         // Mark that we've received API data - this takes precedence over DOM scraping
         hasReceivedApiLoyaltyDataRef.current = true;
         
         setState(prev => ({
           ...prev,
-          loyaltyData: mergeLoyaltyStateData(prev.loyaltyData, extendedLoyaltyToStateData(converted, cruiseLine))
+          loyaltyData: {
+            ...(prev.loyaltyData ?? {}),
+            ...(cruiseLine === 'celebrity' ? {
+              celebrityBlueChipTier: converted?.celebrityBlueChipTier,
+              celebrityBlueChipPoints: converted?.celebrityBlueChipPoints?.toString(),
+              captainsClubTier: converted?.captainsClubTier,
+              captainsClubPoints: converted?.captainsClubPoints?.toString(),
+            } : {
+              clubRoyaleTier: converted?.clubRoyaleTierFromApi,
+              clubRoyalePoints: converted?.clubRoyalePointsFromApi?.toString(),
+              crownAndAnchorLevel: converted?.crownAndAnchorTier,
+              crownAndAnchorPoints: converted?.crownAndAnchorPointsFromApi?.toString(),
+            }),
+          }
         }));
         
         capturedSections.current.loyalty = true;
@@ -1627,29 +1547,20 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             });
           }
           
-          const isHistoryOnlyPayload = typeof url === 'string' && url.includes('/guestAccounts/loyalty/history');
-          const convertedLoyalty = isHistoryOnlyPayload
-            ? null
-            : filterExtendedLoyaltyForCruiseLine(convertLoyaltyInfoToExtended(loyaltyInfo, accountId), cruiseLine);
-          const hasProfileLoyalty = !isHistoryOnlyPayload && hasProfileLoyaltyFields(convertedLoyalty, cruiseLine);
-
-          if (hasProfileLoyalty) {
-            mergeAndStoreExtendedLoyaltyData(convertedLoyalty);
-            hasReceivedApiLoyaltyDataRef.current = true;
-
-            setState(prev => ({
-              ...prev,
-              loyaltyData: mergeLoyaltyStateData(prev.loyaltyData, extendedLoyaltyToStateData(convertedLoyalty, cruiseLine))
-            }));
-
-            capturedSections.current.loyalty = true;
-            addLog('✅ Captured profile loyalty data from network capture', 'success');
-          } else if (isHistoryOnlyPayload) {
-            addLog('ℹ️ Loyalty/history payload captured completed sailings only; not using it as Crown & Anchor profile totals', 'info');
-          } else {
-            addLog('⚠️ Loyalty payload did not include profile tier/points; continuing to loyalty/info / visible-card fallback', 'warning');
-          }
-          if (hasProfileLoyalty && cruiseLine === 'celebrity') {
+          const convertedLoyalty = filterExtendedLoyaltyForCruiseLine(convertLoyaltyInfoToExtended(loyaltyInfo, accountId), cruiseLine);
+          setExtendedLoyaltyData((prev) => mergeExtendedLoyaltyData(prev, convertedLoyalty));
+          hasReceivedApiLoyaltyDataRef.current = true;
+          
+          setState(prev => ({
+            ...prev,
+            loyaltyData: cruiseLine === 'celebrity'
+              ? ({ ...(prev.loyaltyData ?? {}), celebrityBlueChipTier: convertedLoyalty?.celebrityBlueChipTier, celebrityBlueChipPoints: convertedLoyalty?.celebrityBlueChipPoints?.toString(), captainsClubTier: convertedLoyalty?.captainsClubTier, captainsClubPoints: convertedLoyalty?.captainsClubPoints?.toString() } as any)
+              : ({ ...(prev.loyaltyData ?? {}), clubRoyaleTier: convertedLoyalty?.clubRoyaleTierFromApi, clubRoyalePoints: convertedLoyalty?.clubRoyalePointsFromApi?.toString(), crownAndAnchorLevel: convertedLoyalty?.crownAndAnchorTier, crownAndAnchorPoints: convertedLoyalty?.crownAndAnchorPointsFromApi?.toString() } as any)
+          }));
+          
+          capturedSections.current.loyalty = true;
+          addLog('✅ Captured loyalty data from network capture', 'success');
+          if (cruiseLine === 'celebrity') {
             if (convertedLoyalty?.celebrityBlueChipTier || convertedLoyalty?.celebrityBlueChipPoints !== undefined) {
               addLog(`   🎰 Blue Chip Club Status`, 'success');
               addLog(`   📊 Tier: "${convertedLoyalty?.celebrityBlueChipTier || 'N/A'}"`, 'success');
@@ -1660,30 +1571,24 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
               addLog(`   📊 Level: "${convertedLoyalty?.captainsClubTier || 'N/A'}"`, 'success');
               addLog(`   💎 Points: ${(convertedLoyalty?.captainsClubPoints ?? 0).toLocaleString()}`, 'success');
             }
-          } else if (hasProfileLoyalty && convertedLoyalty?.clubRoyalePointsFromApi !== undefined) {
+          } else if (convertedLoyalty?.clubRoyalePointsFromApi !== undefined) {
             addLog(`   🎰 Club Royale Status`, 'success');
             addLog(`   📊 Tier: "${convertedLoyalty?.clubRoyaleTierFromApi || 'N/A'}"`, 'success');
             addLog(`   💎 Points: ${convertedLoyalty?.clubRoyalePointsFromApi.toLocaleString()}`, 'success');
           }
-          if (hasProfileLoyalty && cruiseLine !== 'celebrity' && convertedLoyalty?.crownAndAnchorPointsFromApi !== undefined) {
+          if (cruiseLine !== 'celebrity' && convertedLoyalty?.crownAndAnchorPointsFromApi !== undefined) {
             addLog(`   ⚓ Crown & Anchor Society`, 'success');
             addLog(`   📊 Level: "${convertedLoyalty?.crownAndAnchorTier || 'N/A'}"`, 'success');
             addLog(`   💎 Points: ${(convertedLoyalty?.crownAndAnchorPointsFromApi ?? 0).toLocaleString()}`, 'success');
           }
           
-          // Auto-complete Step 3 only when actual profile totals/tier were captured.
-          // The /guestAccounts/loyalty/history endpoint is completed-sailing history only;
-          // it must never satisfy the Crown & Anchor / Club Royale profile-total step.
+          // Auto-complete Step 3 if we're in that step (loyalty step)
           setState(prev => {
             if (prev.status === 'running_step_3') {
-              if (hasProfileLoyalty) {
-                addLog(`✅ Step 3 auto-completing with profile loyalty totals from network monitor`, 'success');
-                if (stepCompleteResolvers.current[3]) {
-                  stepCompleteResolvers.current[3]();
-                  delete stepCompleteResolvers.current[3];
-                }
-              } else {
-                addLog('⏳ Step 3 still waiting: captured payload was not profile loyalty totals', 'info');
+              addLog(`✅ Step 3 auto-completing with loyalty data from network monitor`, 'success');
+              if (stepCompleteResolvers.current[3]) {
+                stepCompleteResolvers.current[3]();
+                delete stepCompleteResolvers.current[3];
               }
             }
             return prev;
@@ -1803,7 +1708,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     ingestionInFlightRef.current = true;
 
     processedPayloads.current.clear();
-    stepFailureRef.current = {};
     hasReceivedApiLoyaltyDataRef.current = false;
     capturedSections.current = { offers: false, bookings: false, loyalty: false };
     carnivalUserDataRef.current = null;
@@ -1838,7 +1742,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           if (timeoutMessage) {
             addLog(timeoutMessage, 'warning');
           }
-          resolve(!timeoutMessage && !stepFailureRef.current[step]);
+          resolve(!timeoutMessage);
         };
         
         const checkProgress = () => {
@@ -1959,27 +1863,19 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       }
       
       const step1CompletedCleanly = await waitForStepComplete(1, isCarnivalMode ? 180000 : 1200000);
-      const step1FailureReason = stepFailureRef.current[1];
       const step1OfferRows = extractedOffersRef.current;
       const step1OfferCodes = Array.from(new Set(step1OfferRows.map((offer: any) => String(offer.offerCode || '').trim()).filter(Boolean)));
       const isRoyalSync = !isCarnivalMode && cruiseLine !== 'celebrity';
-      const royalRowsWithShipDate = step1OfferRows.filter((row: any) => String(row?.offerCode || '').trim().length > 0 && String(row?.shipName || '').trim().length > 0 && String(row?.sailingDate || row?.sailDate || '').trim().length > 0);
-      const royalVerifiedVisibleCatalogCapture = isRoyalSync && step1OfferRows.length > 0 && step1OfferCodes.length > 0 && royalRowsWithShipDate.length === step1OfferRows.length;
-      const royalLargeLiveCatalogCapture = isRoyalSync && royalRowsWithShipDate.length >= 150;
-      // Royal's visible offer catalog can legitimately be only 1-2 offers with a few sailings.
-      // The old fail-safe could still set step1FailureReason even after valid checkpoint rows
-      // arrived, causing the app to discard a good current catalog. For Royal, accept the
-      // capture when every staged row has a verified offer code + ship/date pair. Reject only
-      // zero-row or structurally invalid captures.
-      const nonRoyalCompletedCapture = !isRoyalSync && step1CompletedCleanly && !step1FailureReason;
-      const royalCompletedVisibleCatalog = isRoyalSync && royalVerifiedVisibleCatalogCapture;
-      const step1IsAuthoritative = step1OfferRows.length > 0 && (royalCompletedVisibleCatalog || nonRoyalCompletedCapture);
+      const royalPartialMultiOfferCapture = isRoyalSync && step1OfferCodes.length > 0 && step1OfferCodes.length < 4;
+      const royalSmallMultiOfferCapture = isRoyalSync && ((step1OfferCodes.length >= 5 && step1OfferRows.length < 1000) || (step1OfferCodes.length === 4 && step1OfferRows.length < 900));
+      // Royal now exposes changing current catalogs: older 5/1073, 4/~1019, and current large 6/2120+ catalogs.
+      // If a long scrape times out after thousands of valid rows, do not throw the whole catalog away.
+      const royalLargeLiveCatalogCapture = isRoyalSync && step1OfferCodes.length >= 4 && step1OfferRows.length >= 900;
+      const nonRoyalCompletedCapture = !isRoyalSync && step1CompletedCleanly;
+      const step1IsAuthoritative = step1OfferRows.length > 0 && !royalPartialMultiOfferCapture && !royalSmallMultiOfferCapture && (step1CompletedCleanly || royalLargeLiveCatalogCapture || nonRoyalCompletedCapture);
       capturedSections.current.offers = step1IsAuthoritative;
       if (!step1IsAuthoritative) {
         addLog(`🛡️ Step 1 did not produce a complete authoritative ${config.loyaltyClubName} offer catalog; preserving existing offers and available sailings during Apply Sync`, 'warning');
-        if (step1FailureReason) {
-          addLog(`🛡️ Step 1 fail-safe reason: ${step1FailureReason}`, 'warning');
-        }
         if (step1OfferRows.length > 0) {
           addLog(`🛡️ Discarding partial offer capture from Apply Sync: ${step1OfferCodes.length} offer code(s), ${step1OfferRows.length} sailing row(s)`, 'warning');
         }
@@ -2008,11 +1904,9 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       if (step1IsAuthoritative) {
         addLog(`✅ STEP 1 COMPLETE: Captured ${uniqueOffers} active casino offer(s) with ${totalSailings} total sailing(s)`, 'success');
         if (isRoyalSync && !step1CompletedCleanly && royalLargeLiveCatalogCapture) {
-          addLog(`ℹ️ Accepted current Club Royale catalog (${step1OfferCodes.length} offer code(s), ${step1OfferRows.length} staged row(s)). The visible live catalog can legitimately be small.`, 'info');
+          addLog(`ℹ️ Accepted large current Club Royale catalog despite timeout guard (${step1OfferCodes.length} offer code(s), ${step1OfferRows.length} staged row(s)). Valid staged rows will be shown on Apply Selected Sync instead of being discarded.`, 'info');
         } else if (isRoyalSync && step1OfferCodes.length === 4 && step1OfferRows.length >= 900) {
           addLog(`ℹ️ Accepted current visible 4-offer Club Royale catalog (${step1OfferRows.length} rows). Existing removed/expired offer rows will not be treated as a sync failure.`, 'info');
-        } else if (isRoyalSync && royalVerifiedVisibleCatalogCapture && step1OfferCodes.length < 4) {
-          addLog(`ℹ️ Accepted current visible ${step1OfferCodes.length}-offer Club Royale catalog (${step1OfferRows.length} rows). Current visible offer count is authoritative for this sync.`, 'info');
         }
       } else {
         addLog(`🛡️ STEP 1 INCOMPLETE: captured ${step1OfferCodes.length} offer code(s) / ${step1OfferRows.length} row(s), but this was not authoritative and will not be applied`, 'warning');
@@ -2286,13 +2180,13 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
                   'https://www.celebritycruises.com/account',
                   'https://www.celebritycruises.com/blue-chip-club/offers',
                 ] : [
-                  'https://www.royalcaribbean.com/myaccount/',
-                  'https://www.royalcaribbean.com/myaccount',
                   'https://www.royalcaribbean.com/myaccount/loyalty-programs',
-                  'https://www.royalcaribbean.com/myaccount/',
+                  'https://www.royalcaribbean.com/myaccount/loyalty-programs',
+                  'https://www.royalcaribbean.com/myaccount/loyalty-programs',
+                  'https://www.royalcaribbean.com/myaccount/loyalty-programs',
+                  'https://www.royalcaribbean.com/myaccount/loyalty-programs',
                   'https://www.royalcaribbean.com/account',
                   'https://www.royalcaribbean.com/myaccount/loyalty-programs',
-                  'https://www.royalcaribbean.com/myaccount',
                 ])
               ];
 
@@ -2369,41 +2263,13 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
                 return headers;
               }
 
-              function hasProfileLoyaltyTotals(payload) {
-                try {
-                  const root = payload && (payload.payload || payload);
-                  const info = root && (root.loyaltyInformation || root);
-                  if (!info || Array.isArray(info.sailings)) return false;
-                  return !!(
-                    info.crownAndAnchorSocietyLoyaltyIndividualPoints ||
-                    info.crownAndAnchorSocietyLoyaltyTier ||
-                    info.crownAndAnchorId ||
-                    info.clubRoyaleLoyaltyIndividualPoints ||
-                    info.clubRoyaleLoyaltyTier ||
-                    info.captainsClubLoyaltyIndividualPoints ||
-                    info.captainsClubLoyaltyTier ||
-                    info.celebrityBlueChipLoyaltyIndividualPoints ||
-                    info.celebrityBlueChipLoyaltyTier ||
-                    info.crownAndAnchorPoints ||
-                    info.crownAndAnchorLevel ||
-                    info.clubRoyalePoints ||
-                    info.clubRoyaleTier
-                  );
-                } catch (e) {
-                  return false;
-                }
-              }
-
               function emitCapturedIfPresent(loyaltyUrl) {
                 const existing = window.capturedPayloads && window.capturedPayloads.loyalty ? window.capturedPayloads.loyalty : null;
-                if (existing && hasProfileLoyaltyTotals(existing)) {
-                  log('✅ Profile loyalty totals already captured by network monitor', 'success');
+                if (existing) {
+                  log('✅ Loyalty data already captured by network monitor', 'success');
                   post('network_payload', { endpoint: 'loyalty', data: existing, url: loyaltyUrl });
                   post('step_complete', { step: 3 });
                   return true;
-                }
-                if (existing) {
-                  log('ℹ️ Ignoring existing loyalty payload for Step 3 because it is not profile totals (likely loyalty/history)', 'info');
                 }
                 return false;
               }
@@ -2737,18 +2603,24 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   }, []);
 
   const setExtendedLoyalty = useCallback((data: ExtendedLoyaltyData | null) => {
-    mergeAndStoreExtendedLoyaltyData(data);
+    setExtendedLoyaltyData((prev) => mergeExtendedLoyaltyData(prev, data));
     
     if (data) {
       setState(prev => ({
         ...prev,
-        loyaltyData: mergeLoyaltyStateData(prev.loyaltyData, extendedLoyaltyToStateData(data, cruiseLine))
+        loyaltyData: {
+          ...(prev.loyaltyData ?? {}),
+          clubRoyaleTier: data.clubRoyaleTierFromApi,
+          clubRoyalePoints: data.clubRoyalePointsFromApi?.toString(),
+          crownAndAnchorLevel: data.crownAndAnchorTier,
+          crownAndAnchorPoints: data.crownAndAnchorPointsFromApi?.toString(),
+        }
       }));
     }
-  }, [cruiseLine, mergeAndStoreExtendedLoyaltyData]);
+  }, []);
 
   const syncToApp = useCallback(async (coreDataContext: any, loyaltyContext: any, providedExtendedLoyalty?: ExtendedLoyaltyData | null, targetOptions?: SyncTargetOptions) => {
-    const loyaltyToSync = filterExtendedLoyaltyForCruiseLine(providedExtendedLoyalty ?? extendedLoyaltyDataRef.current ?? extendedLoyaltyData, cruiseLine);
+    const loyaltyToSync = filterExtendedLoyaltyForCruiseLine(providedExtendedLoyalty ?? extendedLoyaltyData, cruiseLine);
     const fallbackExtendedLoyaltyFromState = state.loyaltyData
       ? convertLoyaltyInfoToExtended(state.loyaltyData as unknown as LoyaltyApiInformation)
       : null;
@@ -2874,12 +2746,10 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         addLog(`ℹ️ Sanitized ${currentExtractedBookedCruises.length - normalizedBookedCruises.length} malformed booked cruise row(s) before sync`, 'info');
       }
 
-      const loyaltyDataForPreview = mergeLoyaltyStateData(state.loyaltyData, extendedLoyaltyToStateData(effectiveExtendedLoyalty, cruiseLine));
-
       const preview = createSyncPreview(
         normalizedOffers,
         normalizedBookedCruises,
-        loyaltyDataForPreview,
+        state.loyaltyData,
         coreDataContext.casinoOffers,
         coreDataContext.cruises,
         coreDataContext.bookedCruises,

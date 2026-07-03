@@ -86,7 +86,7 @@ import {
 } from '@/lib/importMerge';
 import { RENDER_BACKEND_URL, isCloudBackupEnabled, trpc } from '@/lib/trpc';
 import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system/legacy';
+import * as FileSystem from 'expo-file-system';
 import * as XLSX from 'xlsx';
 import type { BookedCruise, CalendarEvent, CasinoOffer, Cruise, ImportReconciliationSummary } from '@/types/models';
 import { getCalendarEventsWithGeneratedCruiseEvents, getDayAgendaEventCountForYear } from '@/lib/calendar/cruiseEvents';
@@ -523,31 +523,19 @@ export default function SettingsScreen() {
       }
 
       console.log('[Settings] Running data healing pass...');
-      const { cruises: healedCruises, offers: healedOffers, report: healingReport } = healImportedData(rawCruises, rawOffers);
+      const { cruises: parsedCruises, offers: parsedOffers, report: healingReport } = healImportedData(rawCruises, rawOffers);
       console.log('[Settings] Data healing complete:', {
         cruisesHealed: healingReport.cruisesHealed,
         offersHealed: healingReport.offersHealed,
         fieldsFixed: healingReport.fieldsFixed.length,
       });
 
-      const activeImportOwnerId = currentUser?.id ?? normalizedAuthenticatedEmail;
-      const activeImportEmail = currentUser?.email ?? authenticatedEmail ?? normalizedAuthenticatedEmail;
-      const stampManualImportOwner = <T extends Record<string, any>>(record: T): T => ({
-        ...record,
-        ownerProfileId: activeImportOwnerId || record.ownerProfileId,
-        sourceEmail: activeImportEmail || record.sourceEmail,
-        importStatus: 'assigned',
-        reconciliationStatus: 'matched',
-      });
-      const parsedCruises = healedCruises.map(stampManualImportOwner);
-      const parsedOffers = healedOffers.map(stampManualImportOwner);
-
       const existingCruises = cruises.length > 0 ? cruises : (localData.cruises || []);
       const existingOffers = casinoOffers.length > 0 ? casinoOffers : (localData.offers || []);
       const importedSource = getImportedSource({ cruises: parsedCruises, offers: parsedOffers });
       const importOwnerOptions = {
-        ownerProfileId: activeImportOwnerId,
-        sourceEmail: activeImportEmail,
+        ownerProfileId: currentUser?.id ?? normalizedAuthenticatedEmail,
+        sourceEmail: authenticatedEmail ?? currentUser?.email ?? normalizedAuthenticatedEmail,
         knownProfiles: users,
       };
       const cruisesMergeResult = mergeImportedCruisesWithReconciliation(existingCruises, parsedCruises, importOwnerOptions);
@@ -1621,7 +1609,7 @@ export default function SettingsScreen() {
     try {
       setIsExportingDiagnostics(true);
       const snapshot = {
-        version: '9.11.34',
+        version: '9.10.89',
         exportedAt: new Date().toISOString(),
         counts: {
           availableCruises: cruises.length,

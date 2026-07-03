@@ -139,7 +139,7 @@ export function UserManualModal({ visible, onClose }: UserManualModalProps) {
           testID="user-manual-scroll-view"
         >
           <View style={styles.heroCard}>
-            <Text style={styles.version}>Updated June 2026 | App Version 9.11.34</Text>
+            <Text style={styles.version}>Updated April 2026 | App Version 1.0.0</Text>
             <Text style={styles.heroTitle}>Everything Easy Seas does, in one guide.</Text>
             <Text style={styles.intro}>
               Easy Seas helps cruise and casino travelers keep offers, booked cruises, loyalty tiers, certificates, calendar events, casino sessions, slot machine notes, pricing, and backups organized in one mobile app.
@@ -214,7 +214,7 @@ export function UserManualModal({ visible, onClose }: UserManualModalProps) {
 
             <Subsection title="Additional screens">
               <ButtonList items={[
-                { button: 'Offer Details', description: 'Opened from offer cards to review the full offer, eligible sailings, value breakdowns, linked cruise data, and Casino Opportunity badges for eligible sailings.' },
+                { button: 'Offer Details', description: 'Opened from offer cards to review the full offer, eligible sailings, value breakdowns, and linked cruise data.' },
                 { button: 'Day Agenda', description: 'Opened from Calendar to see cruise days, casino open/closed windows, port timing, and custom events.' },
                 { button: 'Machine Detail', description: 'Opened from Slots to review AP notes, rules, personal sessions, and machine-specific statistics.' },
                 { button: 'Pricing Summary', description: 'Opened from Settings to review cruise pricing and historical pricing data.' },
@@ -306,9 +306,8 @@ export function UserManualModal({ visible, onClose }: UserManualModalProps) {
             <Subsection title="Dashboard cards">
               <FeatureList items={[
                 { title: 'Compact loyalty header', description: 'Shows Club Royale, Crown & Anchor, Celebrity Blue Chip, Captain’s Club, or related loyalty status when available, including progress toward the next tier.' },
-                { title: 'Data overview', description: 'Shows accurate counts for Available Cruises, active booked cruises, real offer records, events, machines, and crew records.' },
-                { title: 'Casino certificates', description: 'Tracks onboard credit certificates, offer codes, expiration status, certificate urgency badges, and certificate management actions.' },
-                { title: 'Best Play Today', description: 'Shows active-sailing casino play guidance, target points, estimated coin-in, bankroll cap, and warnings when no active cruise is found.' },
+                { title: 'Data overview', description: 'Shows counts for available cruises, booked cruises, offers, events, machines, and other imported data.' },
+                { title: 'Casino certificates', description: 'Tracks onboard credit certificates, offer codes, expiration status, and certificate management actions.' },
                 { title: 'AgentX Analysis', description: 'Generates cruise/casino insights from the current app data and can be manually refreshed.' },
                 { title: 'Alerts', description: 'Highlights price drops, expiring certificates, tier opportunities, conflicts, and other detected issues.' },
                 { title: 'Machine Strategy', description: 'Shows machine recommendations and strategy context based on the user profile and machine atlas.' },
@@ -318,7 +317,7 @@ export function UserManualModal({ visible, onClose }: UserManualModalProps) {
             <Subsection title="Offer sections">
               <FieldList items={[
                 { field: 'Featured offer', description: 'Highlights the primary/featured offer, such as a monthly jackpot or named certificate offer, when imported.' },
-                { field: 'Offer cards', description: 'Group eligible sailings by offer code and show aggregate value, cabin value, taxes/fees, free play, OBC, eligible cruise count, and Casino Opportunity badges.' },
+                { field: 'Offer cards', description: 'Group eligible sailings by offer code and show aggregate value, cabin value, taxes/fees, free play, OBC, and eligible cruise count.' },
                 { field: 'Cruise cards', description: 'Show ship, itinerary, sail date, nights, cabin price, taxes, perks, offer code, and value metrics.' },
                 { field: 'Blocked/used offers', description: 'Used, booked, expired, or in-progress linked offers are filtered from active counts when appropriate.' },
                 { field: 'Certificate explorer', description: 'Helps match certificates and offers, including cases where no certificate PDF match is found.' },
@@ -356,7 +355,7 @@ export function UserManualModal({ visible, onClose }: UserManualModalProps) {
 
             <Subsection title="Planning tools">
               <FeatureList items={[
-                { title: 'Recommendation engine', description: 'Scores cruise opportunities using offers, booked dates, value data, and Casino Opportunity context when available.' },
+                { title: 'Recommendation engine', description: 'Scores cruise opportunities using offers, booked dates, and value data.' },
                 { title: 'Back-to-back finder', description: 'Builds possible cruise chains with compatible dates and offer separation rules.' },
                 { title: 'Favorite staterooms', description: 'Stores preferred staterooms and planning notes.' },
                 { title: 'Price/value calculations', description: 'Calculates cruise value, out-of-pocket costs, taxes/fees, cabin estimates, and comp value.' },
@@ -372,11 +371,11 @@ export function UserManualModal({ visible, onClose }: UserManualModalProps) {
 
             <Subsection title="Viewing booked cruises">
               <FieldList items={[
-                { field: 'List view', description: 'Standard booked cruise list with ship, destination, dates, cabin, reservation data, status, and Casino Opportunity badges.' },
+                { field: 'List view', description: 'Standard booked cruise list with ship, destination, dates, cabin, reservation data, and status.' },
                 { field: 'Timeline view', description: 'Chronological portfolio view for upcoming, in-progress, completed, and cancelled cruises.' },
                 { field: 'Points view', description: 'Focuses on loyalty points, casino points, and progression data.' },
                 { field: 'Filters', description: 'All, Upcoming, Completed, Celebrity, search, hide completed, and sort controls.' },
-                { field: 'Maritime Weather', description: 'Weather sections default closed under a Maritime Weather accordion. If alerts exist, the closed accordion shows an alert count so the user knows to open it.' },
+                { field: 'Marine alerts', description: 'Shows relevant marine/cruise alerts for upcoming cruises where available.' },
               ]} />
             </Subsection>
 
@@ -436,7 +435,7 @@ export function UserManualModal({ visible, onClose }: UserManualModalProps) {
 
             <Subsection title="Analytics tabs">
               <FeatureList items={[
-                { title: 'Intelligence', description: 'Casino metrics, casino intelligence, Host View, gamification, alerts, PPH summaries, and completed-cruise ROI portfolio.' },
+                { title: 'Intelligence', description: 'Casino metrics, casino intelligence, gamification, alerts, PPH summaries, and completed-cruise ROI portfolio.' },
                 { title: 'Charts', description: 'Tier progression, ROI projection, risk analysis, and what-if simulation context.' },
                 { title: 'Session', description: 'Session logging, live/quick session tools, session summaries, machine/session breakdowns, and historical session generation.' },
                 { title: 'Calcs', description: 'W2-G tax tracker, comp value calculator, and calculator modes for per-session or historical analysis.' },
@@ -458,12 +457,10 @@ export function UserManualModal({ visible, onClose }: UserManualModalProps) {
 
             <Subsection title="Casino calculations">
               <FieldList items={[
-                { field: 'Data source', description: 'Charts, Sessions, and Calcs show whether values are actual cruise totals, tracked sessions, derived session splits, or estimates.' },
-                { field: 'Net result', description: 'Cash result uses winnings brought home minus amount paid. Coin-in is not counted as profit or value.' },
-                { field: 'PPH', description: 'Points earned divided by session hours. Missing session hours can be estimated from cruise points using the default points-per-hour assumption.' },
-                { field: 'Derived sessions', description: 'When cruise-level win/loss and points exist but individual sessions are missing, Easy Seas can split those real totals across calculated session records.' },
+                { field: 'Net result', description: 'Coin-out minus coin-in.' },
+                { field: 'PPH', description: 'Points earned divided by session hours.' },
                 { field: 'Tier progress', description: 'Progress toward Choice/Prime/Signature/Master or matching casino tier structures when available.' },
-                { field: 'ROI', description: 'Compares cruise value captured, casino result, amount paid, and retail value using saved cruise economics rows.' },
+                { field: 'ROI', description: 'Compares cruise value captured, casino result, spending, and retail value.' },
                 { field: 'W2-G', description: 'Tracks taxable jackpot records, estimated federal/state tax, and year-to-date totals.' },
                 { field: 'Comp value', description: 'Estimates the comp value generated by casino play.' },
               ]} />
@@ -637,7 +634,7 @@ export function UserManualModal({ visible, onClose }: UserManualModalProps) {
               <ButtonList items={[
                 { button: 'Import Machines (.json)', description: 'Imports machine atlas data.' },
                 { button: 'Export Machines (.json)', description: 'Exports machine atlas data.' },
-                { button: 'SeaPass Generator', description: 'Opens the accurate SeaPass generator. Defaults are ST, Jul 5, and ORLANDO (PORT CANAVERAL),...; the approved shell supplies one baked-in Key.' },
+                { button: 'SeaPass Web Generator', description: 'Opens the Royal Caribbean web SeaPass generator.' },
                 { button: 'Download SeaPass Generator', description: 'Downloads SeaPass generator files.' },
                 { button: 'Import Offers CSV', description: 'Admin shortcut for offers import.' },
                 { button: 'Import Completed Cruises (.xlsx)', description: 'Imports completed cruise historical spreadsheet data.' },
@@ -731,19 +728,6 @@ export function UserManualModal({ visible, onClose }: UserManualModalProps) {
             </Subsection>
           </SectionWithRef>
 
-
-
-            <Subsection title="Latest SeaPass and Maritime Weather rules">
-              <BulletList items={[
-                'SeaPass defaults to ST, Jul 5, and ORLANDO (PORT CANAVERAL),... while preserving the approved shell and exactly one Key.',
-                'SeaPass overlays must compare edited values against the baked shell baseline, not against editable defaults.',
-                'PNG/PDF exports should match the live preview and capture the card only.',
-                'Maritime Weather accordions default closed, but alert badges remain visible when rough-seas watchouts exist.',
-                'Star of the Seas July 5–12, 2026 weather uses Basseterre, St. Kitts & Nevis for Day 5, not Philipsburg.',
-                'Dashboard summaries label available sailings as Available Cruises and count real booked and offer records.',
-              ]} />
-            </Subsection>
-
           <SectionWithRef id="legal" title="Legal & Disclaimer" onLayout={handleSectionLayout}>
             <Paragraph style={styles.legal}>
               <Text style={styles.legalBold}>Informational use only: </Text>
@@ -771,7 +755,7 @@ export function UserManualModal({ visible, onClose }: UserManualModalProps) {
             </Paragraph>
 
             <View style={styles.footer}>
-              <Text style={styles.footerText}>Last Updated: June 2026</Text>
+              <Text style={styles.footerText}>Last Updated: April 2026</Text>
               <Text style={styles.footerText}>© Easy Seas Ventures LLC</Text>
             </View>
           </SectionWithRef>

@@ -44,8 +44,6 @@ import { useIntelligenceFilters } from '@/state/IntelligenceFiltersProvider';
 import { filterRecordsByIntelligence } from '@/lib/intelligenceFilters';
 import { findBackToBackSets, type BackToBackSet, type CruiseOffer } from '@/lib/backToBackFinder';
 import { Link2, Calendar, Tag, Anchor } from 'lucide-react-native';
-import { CasinoOpportunityBadge } from '@/components/cruise/CasinoOpportunityBadge';
-import { calculateCasinoOpportunityScore } from '@/lib/cruise/casinoOpportunityScore';
 
 type ViewTab = 'available' | 'all' | 'foryou' | 'booked';
 type CabinFilter = 'all' | 'Interior' | 'Oceanview' | 'Balcony' | 'Suite';
@@ -339,17 +337,6 @@ export default function SchedulingScreen() {
     available: enrichedCruises.filter(c => !isDateInPast(c.sailDate) && !bookedIds.has(c.id)).length,
   }), [filteredCruises, enrichedCruises, bookedIds, bookedCruisesData]);
 
-  const totalOffersInSystemCount = useMemo(() => {
-    const offerKeys = new Set<string>();
-    allOffers.forEach((offer: CasinoOffer) => {
-      const lookupKey = String(offer.offerCode || offer.id || '').trim().toUpperCase();
-      if (lookupKey) {
-        offerKeys.add(lookupKey);
-      }
-    });
-    return offerKeys.size;
-  }, [allOffers]);
-
   const alertCount = useMemo(() => {
     return allOffers.filter((o: CasinoOffer) => {
       if (o.expiryDate) {
@@ -416,13 +403,9 @@ export default function SchedulingScreen() {
 
   const renderCruiseCard = useCallback(({ item, index: _index }: { item: Cruise; index: number }) => {
     const isBooked = bookedIds.has(item.id) || activeTab === 'booked';
-    const casinoOpportunity = calculateCasinoOpportunityScore(item);
     
     return (
       <ResponsiveContainer>
-        <View style={styles.phase3OpportunityWrapper}>
-          <CasinoOpportunityBadge result={casinoOpportunity} compact={true} showWarnings={true} />
-        </View>
         <CruiseCard
           cruise={item}
           onPress={() => handleCruisePress(item)}
@@ -613,7 +596,7 @@ export default function SchedulingScreen() {
         alertCount={alertCount}
         availableCruises={stats.available}
         bookedCruises={stats.booked}
-        activeOffers={totalOffersInSystemCount}
+        activeOffers={alertCount}
         onCruisesPress={() => setActiveTab('available')}
         onBookedPress={() => router.push('/booked' as any)}
         onOffersPress={() => setActiveTab('foryou')}
@@ -960,9 +943,6 @@ const styles = StyleSheet.create({
     marginTop: SPACING.md,
     fontSize: TYPOGRAPHY.fontSizeMD,
     color: CLEAN_THEME.text.secondary,
-  },
-  phase3OpportunityWrapper: {
-    marginBottom: SPACING.xs,
   },
   listContent: {
     padding: SPACING.md,

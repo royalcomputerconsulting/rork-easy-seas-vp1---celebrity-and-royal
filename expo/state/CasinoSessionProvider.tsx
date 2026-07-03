@@ -1,4 +1,3 @@
-import { estimateCoinInForPoints } from '@/lib/casino/pointsEarning';
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import createContextHook from "@nkzw/create-context-hook";
@@ -27,8 +26,6 @@ export interface CasinoSession {
   id: string;
   date: string;
   cruiseId?: string;
-  brand?: 'royal' | 'celebrity' | 'carnival' | 'unknown';
-  program?: 'club-royale' | 'blue-chip' | 'players-club' | 'unknown';
   machineId?: string;
   machineName?: string;
   startTime: string;
@@ -42,13 +39,6 @@ export interface CasinoSession {
   machineType?: MachineType;
   denomination?: Denomination;
   pointsEarned?: number;
-  pointsSource?: 'calculated' | 'manual' | 'imported' | 'estimated' | 'unknown';
-  sessionSource?: 'individual' | 'extrapolated' | 'imported' | 'manual' | 'unknown';
-  pointEarningProfileId?: string;
-  cashCoinIn?: number;
-  freeplayCoinIn?: number;
-  coinIn?: number;
-  gameCategory?: 'reel-slot' | 'video-poker' | 'table-game' | 'electronic-table-game' | 'other' | 'unknown';
   jackpotHit?: boolean;
   jackpotAmount?: number;
   freePlayUsed?: number;
@@ -552,7 +542,7 @@ export const [CasinoSessionProvider, useCasinoSessions] = createContextHook((): 
     const totalCashOut = sessions.reduce((sum, s) => sum + (s.cashOut || 0), 0);
     const netWinLoss = sessions.reduce((sum, s) => sum + (s.winLoss || 0), 0);
     const totalPointsEarned = sessions.reduce((sum, s) => sum + (s.pointsEarned || 0), 0);
-    const totalCoinIn = sessions.reduce((sum, session) => sum + (session.cashCoinIn ?? session.coinIn ?? estimateCoinInForPoints({ targetPoints: session.pointsEarned || 0, brand: session.brand ?? 'royal', gameCategory: session.gameCategory ?? 'reel-slot' }).coinIn ?? 0), 0);
+    const totalCoinIn = totalPointsEarned * 5;
 
     const avgSessionLength = totalSessions > 0 ? totalPlayTimeMinutes / totalSessions : 0;
     const avgBuyIn = totalSessions > 0 ? totalBuyIn / totalSessions : 0;

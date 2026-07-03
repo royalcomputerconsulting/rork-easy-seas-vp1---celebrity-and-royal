@@ -1,3 +1,5 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 export type DiagnosticLevel = 'debug' | 'info' | 'success' | 'warning' | 'error';
 export type DiagnosticCategory =
   | 'APP'
@@ -14,8 +16,6 @@ export type DiagnosticCategory =
   | 'ERROR'
   | 'WARNING'
   | 'NETWORK'
-  | 'CASINO'
-  | 'RENDER'
   | 'ADMIN';
 
 export type DiagnosticEvent = {
@@ -37,7 +37,6 @@ let originalConsoleLog: typeof console.log | null = null;
 let originalConsoleWarn: typeof console.warn | null = null;
 let originalConsoleError: typeof console.error | null = null;
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
-let globalErrorHandlerInstalled = false;
 
 function clip(value: unknown, max = 2500): unknown {
   if (value == null) return value;
@@ -52,51 +51,12 @@ function clip(value: unknown, max = 2500): unknown {
   }
 }
 
-
-function normalizeError(error: unknown): Record<string, unknown> {
-  if (error instanceof Error) {
-    return {
-      name: error.name,
-      message: error.message,
-      stack: error.stack,
-    };
-  }
-  try {
-    return { message: typeof error === 'string' ? error : JSON.stringify(error) };
-  } catch {
-    return { message: String(error) };
-  }
-}
-
-export function recordDiagnosticError(
-  category: DiagnosticCategory,
-  event: string,
-  error: unknown,
-  context?: Record<string, unknown>,
-) {
-  const normalized = normalizeError(error);
-  recordDiagnosticEvent({
-    level: 'error',
-    category,
-    event,
-    message: String(normalized.message || event),
-    data: {
-      ...context,
-      errorName: normalized.name,
-      errorMessage: normalized.message,
-      errorStack: normalized.stack,
-    },
-  });
-}
-
 function schedulePersist() {
-  // v1073: disable automatic storage writes from diagnostic events.
-  // Native crash reports showed TurboModule exception conversion crashes during
-  // Casino tab entry. Auto-persisting thousands of diagnostic/console events
-  // through native storage can trigger that native path before JS can catch it.
-  // Logs remain available in-memory for Export Diagnostics during the session;
-  // explicit clear/export actions still use native storage only when requested.
-  return;
+  if (persistTimer) return;
+  persistTimer = setTimeout(() => {
+    persistTimer = null;
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(events.slice(-MAX_EVENTS))).catch(() => {});
+  }, 1500);
 }
 
 export function recordDiagnosticEvent(input: Omit<DiagnosticEvent, 'ts'>) {
@@ -113,14 +73,42 @@ export function recordDiagnosticEvent(input: Omit<DiagnosticEvent, 'ts'>) {
 export async function initializeDiagnosticLogger() {
   if (initialized) return;
   initialized = true;
+  try {
+    const stored = await AsyncStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) events = parsed.slice(-MAX_EVENTS);
+    }
+  } catch {}
+
   recordDiagnosticEvent({
     level: 'info',
     category: 'APP',
     event: 'APP_START',
-    message: 'Easy Seas app session started in memory-only diagnostic mode',
+    message: 'Easy Seas app session started',
   });
-}
 
+  if (!originalConsoleLog) {
+    originalConsoleLog = console.log;
+    originalConsoleWarn = console.warn;
+    originalConsoleError = console.error;
+    console.log = (...args: any[]) => {
+      originalConsoleLog?.(...args);
+      const text = args.map(a => typeof a === 'string' ? a : JSON.stringify(clip(a, 800))).join(' ');
+      if (/\[RoyalCaribbeanSync\]|Sync|sync|Offer|Cruise|Settings|Overview|Booked|Performance/i.test(text)) {
+        recordDiagnosticEvent({ level: 'debug', category: text.includes('RoyalCaribbeanSync') || /sync/i.test(text) ? 'SYNC' : 'APP', event: 'CONSOLE_LOG', message: text });
+      }
+    };
+    console.warn = (...args: any[]) => {
+      originalConsoleWarn?.(...args);
+      recordDiagnosticEvent({ level: 'warning', category: 'WARNING', event: 'CONSOLE_WARN', message: args.map(a => String(clip(a, 800))).join(' ') });
+    };
+    console.error = (...args: any[]) => {
+      originalConsoleError?.(...args);
+      recordDiagnosticEvent({ level: 'error', category: 'ERROR', event: 'CONSOLE_ERROR', message: args.map(a => String(clip(a, 800))).join(' ') });
+    };
+  }
+}
 
 export function markTabSwitchStart(from: string, to: string) {
   const key = `${from}->${to}`;
@@ -147,27 +135,24 @@ export function getDiagnosticEvents() {
 
 export async function clearDiagnosticEvents() {
   events = [];
+  await AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
   recordDiagnosticEvent({ level: 'info', category: 'ADMIN', event: 'DIAGNOSTIC_LOGS_CLEARED', message: 'Diagnostic logs cleared' });
 }
 
 export async function buildDiagnosticExport(stateSnapshot?: Record<string, unknown>) {
   let storedEvents = events;
+  try {
+    const stored = await AsyncStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed) && parsed.length > storedEvents.length) storedEvents = parsed;
+    }
+  } catch {}
 
   const slowTabs = storedEvents.filter(e => e.event === 'TAB_SWITCH_END' && (e.durationMs ?? 0) > 1000);
   const errors = storedEvents.filter(e => e.level === 'error');
   const warnings = storedEvents.filter(e => e.level === 'warning');
-  const syncEvents = storedEvents.filter(e => String(e.category).startsWith('SYNC'));
-  const casinoEvents = storedEvents.filter(e => e.category === 'CASINO' || /Casino|Analytics/i.test(e.message) || /CASINO|ANALYTICS/i.test(e.event));
-  const formatEventDetail = (e: DiagnosticEvent) => {
-    const base = `${new Date(e.ts).toLocaleTimeString()} [${e.level.toUpperCase()}] ${e.event}: ${e.message}`;
-    if (!e.data) return base;
-    try {
-      return `${base}
-  data=${JSON.stringify(e.data)}`;
-    } catch {
-      return base;
-    }
-  };
+  const syncEvents = storedEvents.filter(e => e.category.startsWith('SYNC'));
   const lines = [
     'Easy Seas Diagnostic Summary',
     `Exported: ${new Date().toLocaleString()}`,
@@ -182,14 +167,11 @@ export async function buildDiagnosticExport(stateSnapshot?: Record<string, unkno
     'SYNC MILESTONES',
     ...(syncEvents.length ? syncEvents.slice(-120).map(e => `${new Date(e.ts).toLocaleTimeString()} [${e.level.toUpperCase()}] ${e.message}`) : ['None recorded']),
     '',
-    'CASINO / ANALYTICS EVENTS',
-    ...(casinoEvents.length ? casinoEvents.slice(-160).map(formatEventDetail) : ['None recorded']),
-    '',
     'WARNINGS',
     ...(warnings.length ? warnings.slice(-80).map(e => `${new Date(e.ts).toLocaleTimeString()} ${e.message}`) : ['None recorded']),
     '',
     'ERRORS',
-    ...(errors.length ? errors.slice(-80).map(formatEventDetail) : ['None recorded']),
+    ...(errors.length ? errors.slice(-80).map(e => `${new Date(e.ts).toLocaleTimeString()} ${e.message}`) : ['None recorded']),
   ];
   return {
     summaryText: lines.join('\n'),

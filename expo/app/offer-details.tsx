@@ -39,8 +39,6 @@ import { useUser, DEFAULT_PLAYING_HOURS } from '@/state/UserProvider';
 import { createDateFromString, getDaysUntil, formatDate } from '@/lib/date';
 import { useCertificates } from '@/state/CertificatesProvider';
 import { formatCurrency } from '@/lib/format';
-import { CasinoOpportunityBadge } from '@/components/cruise/CasinoOpportunityBadge';
-import { calculateCasinoOpportunityScore } from '@/lib/cruise/casinoOpportunityScore';
 import {
   buildCertificateStackingNotes,
   calculateOfferIntelligenceScore,
@@ -410,7 +408,6 @@ export default function OfferDetailsScreen() {
     const sailDate = createDateFromString(item.sailDate);
     const daysUntilSail = getDaysUntil(item.sailDate);
     const summary = getCruiseSummary(item);
-    const casinoOpportunity = calculateCasinoOpportunityScore(item);
 
     return (
       <TouchableOpacity
@@ -426,10 +423,6 @@ export default function OfferDetailsScreen() {
           end={{ x: 1, y: 1 }}
           style={StyleSheet.absoluteFill}
         />
-
-        <View style={styles.phase3OpportunityWrapper} testID="offer-detail-casino-opportunity">
-          <CasinoOpportunityBadge result={casinoOpportunity} compact={true} showWarnings={true} />
-        </View>
 
         {/* Compact Summary Row - Top - White with Navy Text */}
         <View style={styles.summaryRow}>
@@ -800,10 +793,6 @@ const THEME = {
 };
 
 const styles = StyleSheet.create({
-  phase3OpportunityWrapper: {
-    margin: SPACING.sm,
-    marginBottom: 0,
-  },
   container: {
     flex: 1,
     backgroundColor: THEME.background,

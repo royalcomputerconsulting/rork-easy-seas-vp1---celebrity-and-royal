@@ -105,31 +105,8 @@ export const STEP4_LOYALTY_SCRIPT = `
     }
   }
 
-  function hasProfileLoyaltyTotals(payload) {
-    try {
-      var root = payload && (payload.payload || payload);
-      var info = root && (root.loyaltyInformation || root);
-      if (!info || Array.isArray(info.sailings)) return false;
-      return !!(
-        info.crownAndAnchorSocietyLoyaltyIndividualPoints ||
-        info.crownAndAnchorSocietyLoyaltyTier ||
-        info.crownAndAnchorId ||
-        info.clubRoyaleLoyaltyIndividualPoints ||
-        info.clubRoyaleLoyaltyTier ||
-        info.captainsClubLoyaltyIndividualPoints ||
-        info.captainsClubLoyaltyTier ||
-        info.celebrityBlueChipLoyaltyIndividualPoints ||
-        info.celebrityBlueChipLoyaltyTier ||
-        info.crownAndAnchorPoints ||
-        info.crownAndAnchorLevel ||
-        info.clubRoyalePoints ||
-        info.clubRoyaleTier
-      );
-    } catch (e) {
-      return false;
-    }
-  }
-
+  // Removed manual API calls - network monitor captures the page's natural API calls
+  // Wait for page to load naturally and capture loyalty data from network monitor
   
   async function extractLoyaltyData() {
     try {
@@ -144,8 +121,8 @@ export const STEP4_LOYALTY_SCRIPT = `
       log('📍 Current page URL: ' + window.location.href, 'info');
       
       // FIRST: Check if we have captured loyalty payload from network monitor
-      if (window.capturedPayloads && window.capturedPayloads.loyalty && hasProfileLoyaltyTotals(window.capturedPayloads.loyalty)) {
-        log('✅ Found captured profile loyalty totals from network monitor!', 'success');
+      if (window.capturedPayloads && window.capturedPayloads.loyalty) {
+        log('✅ Found captured loyalty payload from network monitor!', 'success');
         var capturedData = window.capturedPayloads.loyalty;
         log('📦 Captured data keys: ' + Object.keys(capturedData).join(', '), 'info');
         
@@ -179,21 +156,6 @@ export const STEP4_LOYALTY_SCRIPT = `
         
         if (loyaltyInfo) {
           log('✅ Using loyalty data from captured payload', 'success');
-
-          // The Royal My Account card sometimes shows the freshest Crown & Anchor
-          // total (for example, the visible "646 Cruise Points" badge) while the
-          // loyalty/history API only contains individual sailing rows. Always scan
-          // the visible DOM and merge any higher/clearer values into the API payload
-          // before sending loyalty to the app.
-          try {
-            var visibleLoyalty = extractLoyaltyFromDOM();
-            if (visibleLoyalty && isValidLoyaltyData(visibleLoyalty)) {
-              loyaltyInfo = Object.assign({}, loyaltyInfo, visibleLoyalty);
-              log('✅ Merged visible loyalty card values into captured API loyalty payload', 'success');
-            }
-          } catch (domMergeError) {
-            log('⚠️ Visible loyalty card merge skipped: ' + domMergeError.message, 'warning');
-          }
           
           // Log loyalty data summary
           if (loyaltyInfo.crownAndAnchorSocietyLoyaltyTier) {
@@ -224,11 +186,7 @@ export const STEP4_LOYALTY_SCRIPT = `
           return;
         }
       } else {
-        if (window.capturedPayloads && window.capturedPayloads.loyalty) {
-          log('ℹ️ Captured loyalty payload exists but is not profile totals (likely /loyalty/history); ignoring it and trying My Account/API/DOM.', 'info');
-        } else {
-          log('📝 No captured loyalty payload, trying other methods...', 'info');
-        }
+        log('📝 No captured loyalty payload, trying other methods...', 'info');
       }
       
       // Try to extract from embedded page state
@@ -591,8 +549,8 @@ export const STEP4_LOYALTY_SCRIPT = `
       await wait(5000);
 
       // FIRST: Check if we have captured payloads from network monitor
-      if (window.capturedPayloads && window.capturedPayloads.loyalty && hasProfileLoyaltyTotals(window.capturedPayloads.loyalty)) {
-        log('✅ Found captured profile loyalty totals from network monitor!', 'success');
+      if (window.capturedPayloads && window.capturedPayloads.loyalty) {
+        log('✅ Found captured loyalty payload from network monitor!', 'success');
         var capturedData = window.capturedPayloads.loyalty;
         log('📦 Captured data keys: ' + Object.keys(capturedData).join(', '), 'info');
         
@@ -785,9 +743,6 @@ export const STEP4_LOYALTY_SCRIPT = `
       // Crown & Anchor points patterns - MUST be more specific to avoid matching random numbers
       // Look for "X cruise credits" or "cruise credits: X" patterns near Crown & Anchor content
       var caPointsPatterns = [
-        // Royal My Account top card: "646 Cruise Points"
-        /([\d,]+)\s*cruise\s*points/i,
-        /([\d,]+)\s*cruise\s*credits/i,
         // Very specific: near "Crown & Anchor" or "C&A"
         /(?:Crown\\s*(?:&|and)?\\s*Anchor|C&A)[^0-9]{0,100}?([\\d,]+)\\s*(?:cruise\\s*)?(?:credits|points)/i,
         /(?:cruise\\s*)?(?:credits|points)[:\\s]*([\\d,]+)(?:[^0-9]{0,50}Crown|[^0-9]{0,50}C&A)/i,
@@ -855,8 +810,6 @@ export const STEP4_LOYALTY_SCRIPT = `
       
       // Club Royale points/credits patterns - more specific
       var crPointsPatterns = [
-        /(?:your\\s+current\\s+tier\\s+credits)[^0-9]{0,80}?([\\d,]+)/i,
-        /([\\d,]+)\\s*(?:current\\s*)?tier\\s*credits/i,
         /(?:Club\\s*Royale|casino)[^0-9]{0,100}?([\\d,]+)\\s*(?:tier\\s*)?credits/i,
         /tier\\s*credits[:\\s]*([\\d,]+)/i,
         /([\\d,]+)\\s*tier\\s*credits/i

@@ -5,14 +5,12 @@ import { useRouter } from 'expo-router';
 import { AlertTriangle, Calculator, CheckCircle, Crown, Gauge, HelpCircle, Map, Ship, Sparkles, Target, Trophy } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOW } from '@/constants/theme';
 import { useCoreData } from '@/state/CoreDataProvider';
-import { useAuth } from '@/state/AuthProvider';
 import { buildCruiseDetailsParams } from '@/lib/navigation/cruiseDetails';
 import { buildOfferRecommendations, buildTripStackCandidates, buildUpgradeMath, getCasinoPaysForLabel } from '@/lib/easySeasAdvisor';
 
 export default function AdvisorScreen() {
   const router = useRouter();
   const { cruises, bookedCruises, casinoOffers } = useCoreData();
-  const { isAdmin } = useAuth();
   const recommendations = useMemo(() => buildOfferRecommendations(cruises, bookedCruises, casinoOffers), [cruises, bookedCruises, casinoOffers]);
   const tripStacks = useMemo(() => buildTripStackCandidates(cruises, bookedCruises), [cruises, bookedCruises]);
   const top = recommendations[0];
@@ -88,11 +86,9 @@ export default function AdvisorScreen() {
         </Section>
 
         <View style={styles.rowButtons}>
-          {isAdmin && (
-            <TouchableOpacity style={styles.primaryButton} onPress={() => router.push('/data-health' as any)}>
-              <Text style={styles.primaryButtonText}>Open Data Health</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity style={styles.primaryButton} onPress={() => router.push('/data-health' as any)}>
+            <Text style={styles.primaryButtonText}>Open Data Health</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.primaryButton} onPress={() => router.push('/ask-my-data' as any)}>
             <Text style={styles.primaryButtonText}>Ask My Data</Text>
           </TouchableOpacity>

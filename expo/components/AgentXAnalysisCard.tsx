@@ -1,4 +1,3 @@
-import { estimateCoinInForPoints } from '@/lib/casino/pointsEarning';
 import React, { useMemo, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ImageBackground } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -84,7 +83,7 @@ export function AgentXAnalysisCard({ onViewDetails, onRefresh }: AgentXAnalysisC
     );
 
     const avgPointsPerNight = totalNights > 0 ? Math.round(totalPoints / totalNights) : 0;
-    const estimatedCoinIn = estimateCoinInForPoints({ targetPoints: totalPoints, brand: 'royal', gameCategory: 'reel-slot' }).coinIn ?? 0;
+    const estimatedCoinIn = totalPoints * 5;
     const winRate = estimatedCoinIn > 0 ? (totalWinnings / estimatedCoinIn) * 100 : 0;
 
     let assessment = '';

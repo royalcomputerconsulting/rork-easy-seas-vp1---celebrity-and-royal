@@ -113,19 +113,12 @@ export function UserProfileCard({
   const calculatedLevel = getLevelByNights(formData.loyaltyPoints);
   const calculatedLevelInfo = CROWN_ANCHOR_LEVELS[calculatedLevel];
   const calculatedLevelProgress = getLevelProgress(currentValues.loyaltyPoints, getLevelByNights(currentValues.loyaltyPoints));
-
-  const parsedEnrichmentClubRoyalePoints = Number(enrichmentData?.clubRoyalePointsFromApi ?? 0);
-  const authoritativeClubRoyalePoints = Math.max(
-    Number.isFinite(parsedEnrichmentClubRoyalePoints) ? parsedEnrichmentClubRoyalePoints : 0,
-    Number(currentValues.clubRoyalePoints ?? 0),
-    Number(formData.clubRoyalePoints ?? 0),
-  );
+  
+  const authoritativeClubRoyalePoints = Number(enrichmentData?.clubRoyalePointsFromApi ?? currentValues.clubRoyalePoints ?? formData.clubRoyalePoints ?? 0);
   const calculatedTier = getTierByPoints(authoritativeClubRoyalePoints);
-  const displayedClubRoyaleTier = enrichmentData?.clubRoyaleTierFromApi || currentValues.clubRoyaleTier || calculatedTier;
+  const displayedClubRoyaleTier = enrichmentData?.clubRoyaleTierFromApi || calculatedTier;
   const displayedClubRoyaleTierInfo = CLUB_ROYALE_TIERS[displayedClubRoyaleTier] || CLUB_ROYALE_TIERS[calculatedTier];
-  const formClubRoyaleTier = getTierByPoints(Number(formData.clubRoyalePoints ?? 0));
-  const formDisplayClubRoyaleTier = formData.clubRoyaleTier || formClubRoyaleTier;
-  const calculatedTierInfo = CLUB_ROYALE_TIERS[formDisplayClubRoyaleTier] || CLUB_ROYALE_TIERS[formClubRoyaleTier] || CLUB_ROYALE_TIERS[calculatedTier];
+  const calculatedTierInfo = CLUB_ROYALE_TIERS[calculatedTier];
   const calculatedTierProgress = getTierProgress(authoritativeClubRoyalePoints, calculatedTier);
   const nextClubRoyaleTierInfo = calculatedTierProgress.nextTier ? CLUB_ROYALE_TIERS[calculatedTierProgress.nextTier] : undefined;
 
@@ -140,7 +133,7 @@ export function UserProfileCard({
   const handleSave = async () => {
     await onSave({
       ...formData,
-      clubRoyaleTier: enrichmentData?.clubRoyaleTierFromApi || formData.clubRoyaleTier || formDisplayClubRoyaleTier,
+      clubRoyaleTier: calculatedTier,
       crownAnchorLevel: calculatedLevel,
       celebrityBlueChipTier: calculatedCelebrityTier,
       celebrityCaptainsClubLevel: calculatedCelebrityLevel,
@@ -409,7 +402,7 @@ export function UserProfileCard({
             <View style={styles.levelHint}>
               <View style={[styles.levelHintDot, { backgroundColor: calculatedTierInfo?.color || COLORS.loyalty }]} />
               <Text style={styles.levelHintText}>
-                Tier: <Text style={[styles.levelHintLevel, { color: calculatedTierInfo?.color || COLORS.loyalty }]}>{formDisplayClubRoyaleTier}</Text>
+                Tier: <Text style={[styles.levelHintLevel, { color: calculatedTierInfo?.color || COLORS.loyalty }]}>{calculatedTier}</Text>
               </Text>
             </View>
           </View>

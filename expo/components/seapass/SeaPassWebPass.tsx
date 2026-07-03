@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useMemo, useState } from 'react';
+import React, { memo, useEffect, useState } from 'react';
 import { DimensionValue, Platform, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import {
@@ -23,17 +23,7 @@ export const SeaPassWebPass = memo(function SeaPassWebPass({
   testID,
   ...input
 }: SeaPassWebPassProps) {
-  const data = useMemo(() => getSeaPassData(input), [
-    input.time,
-    input.date,
-    input.deck,
-    input.stateroom,
-    input.muster,
-    input.reservation,
-    input.ship,
-    input.port,
-    input.terminal,
-  ]);
+  const data = getSeaPassData(input);
   const [imageHref, setImageHref] = useState<string>(SEA_PASS_APPROVED_SCREENSHOT_SOURCE_URL);
 
   useEffect(() => {
@@ -61,46 +51,12 @@ export const SeaPassWebPass = memo(function SeaPassWebPass({
     };
   }, []);
 
-  const svgMarkup = useMemo(() => buildSeaPassSvgMarkup(data, SEA_PASS_PREVIEW_BACKGROUND, imageHref), [
-    data.time,
-    data.date,
-    data.deck,
-    data.stateroom,
-    data.muster,
-    data.reservation,
-    data.ship,
-    data.port,
-    data.terminal,
-    imageHref,
-  ]);
-  const svgRenderKey = useMemo(() => [
-    data.time,
-    data.date,
-    data.deck,
-    data.stateroom,
-    data.muster,
-    data.reservation,
-    data.ship,
-    data.port,
-    data.terminal,
-    imageHref.length,
-  ].join('|'), [
-    data.time,
-    data.date,
-    data.deck,
-    data.stateroom,
-    data.muster,
-    data.reservation,
-    data.ship,
-    data.port,
-    data.terminal,
-    imageHref,
-  ]);
+  const svgMarkup = buildSeaPassSvgMarkup(data, SEA_PASS_PREVIEW_BACKGROUND, imageHref);
 
   return (
     <View style={[styles.container, style, { width }]} testID={testID ?? 'seapass.preview'}>
       <View style={styles.aspectRatioFrame}>
-        <SvgXml key={svgRenderKey} xml={svgMarkup} width="100%" height="100%" />
+        <SvgXml xml={svgMarkup} width="100%" height="100%" />
       </View>
     </View>
   );

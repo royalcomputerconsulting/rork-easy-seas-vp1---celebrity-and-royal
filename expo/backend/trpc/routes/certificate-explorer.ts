@@ -4,11 +4,7 @@ import { createTRPCRouter, publicProcedure } from '../create-context';
 
 const CERTIFICATE_PDF_BASE_URL = 'https://www.royalcaribbean.com/content/dam/royal/resources/pdf/casino/offers';
 const MONTH_CODE_REGEX = /^\d{4}$/;
-const DATE_TEXT_PATTERN_SOURCE = '\\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\\s+\\d{1,2},\\s+\\d{4}\\b';
-const DATE_TEXT_REGEX = new RegExp(DATE_TEXT_PATTERN_SOURCE, 'gi');
-function createDateTextRegex(flags = 'gi'): RegExp {
-  return new RegExp(DATE_TEXT_PATTERN_SOURCE, flags);
-}
+const DATE_TEXT_REGEX = /(?<![a-zA-Z])(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2},\s+\d{4}\b/gi;
 
 const ROYAL_SHIP_NAMES = [
   'Adventure Of The Seas',
@@ -110,8 +106,6 @@ interface PdfScanLogEntry {
   textLength: number;
   sailingsFound: number;
   errorMessage: string | null;
-  parser?: string;
-  sampleText?: string;
 }
 
 interface SailingMatch {
@@ -121,30 +115,6 @@ interface SailingMatch {
   decisionGuide: string[];
   opportunities: CertificateOpportunity[];
 }
-
-interface CertificateMonthListCertificateSummary {
-  certificateCode: string;
-  certificateType: 'A' | 'C';
-  level: string;
-  points: number | null;
-  sailingCount: number;
-  bestCabinLabel: string | null;
-  bestCabinRank: number | null;
-  maxFreePlay: number | null;
-  maxOnBoardCredit: number | null;
-  pdfUrl: string;
-  monthlyIndexUrl: string;
-}
-
-interface CertificateMonthListHighlight {
-  title: string;
-  detail: string;
-  shipName: string | null;
-  sailDate: string | null;
-  certificateCode: string | null;
-  pdfUrl: string | null;
-}
-
 
 function getDefaultMonthCode(): string {
   const now = new Date();
@@ -417,64 +387,12 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-const MONTH_NAME_TO_NUMBER: Record<string, number> = {
-  jan: 1,
-  january: 1,
-  feb: 2,
-  february: 2,
-  mar: 3,
-  march: 3,
-  apr: 4,
-  april: 4,
-  may: 5,
-  jun: 6,
-  june: 6,
-  jul: 7,
-  july: 7,
-  aug: 8,
-  august: 8,
-  sep: 9,
-  sept: 9,
-  september: 9,
-  oct: 10,
-  october: 10,
-  nov: 11,
-  november: 11,
-  dec: 12,
-  december: 12,
-};
-
 function parseDateToIso(value?: string | null): string | null {
-  const raw = String(value ?? '').replace(/\s+/g, ' ').trim();
+  const raw = String(value ?? '').trim();
   if (!raw) return null;
 
   if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
     return raw;
-  }
-
-  const numericMatch = raw.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2}|\d{4})$/);
-  if (numericMatch) {
-    const first = parseInt(numericMatch[1] ?? '', 10);
-    const second = parseInt(numericMatch[2] ?? '', 10);
-    const rawYear = parseInt(numericMatch[3] ?? '', 10);
-    const year = rawYear < 100 ? 2000 + rawYear : rawYear;
-    if (Number.isFinite(first) && Number.isFinite(second) && Number.isFinite(year) && first >= 1 && first <= 12 && second >= 1 && second <= 31) {
-      return `${String(year).padStart(4, '0')}-${String(first).padStart(2, '0')}-${String(second).padStart(2, '0')}`;
-    }
-  }
-
-  // Do not rely on Date.parse for Royal certificate text. Hermes / React Native
-  // does not consistently parse strings like "June 13, 2026", which made every
-  // downloaded PDF show textLength > 0 but zero rows. Parse month-name dates manually.
-  const monthNameMatch = raw.match(/\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t|tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{1,2}),\s*(\d{4})\b/i);
-  if (monthNameMatch) {
-    const monthKey = String(monthNameMatch[1] ?? '').toLowerCase();
-    const month = MONTH_NAME_TO_NUMBER[monthKey];
-    const day = parseInt(monthNameMatch[2] ?? '', 10);
-    const year = parseInt(monthNameMatch[3] ?? '', 10);
-    if (Number.isFinite(month) && Number.isFinite(day) && Number.isFinite(year) && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
-      return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    }
   }
 
   const parsed = new Date(raw);
@@ -612,42 +530,7 @@ function extractStructuredBenefitSnapshot(segment: string, nextCruiseBonusLabel:
   };
 }
 
-function hasShipAndDate(text: string): boolean {
-  const hasKnownShip = findShipOccurrence(text) !== null;
-  const hasDate = createDateTextRegex('i').test(text);
-  return hasKnownShip && hasDate;
-}
-
-function normalizeCertificatePdfRowText(pdfText: string): string {
-  return pdfText
-    .replace(/®/g, '')
-    .replace(/\r/g, '\n')
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, ' ')
-    .replace(/[ \t]+/g, ' ')
-    .replace(/\n[ \t]+/g, '\n')
-    .replace(/[ \t]+\n/g, '\n')
-    .trim();
-}
-
-function collectExplicitCertificateLineRows(indexEntry: IndexEntry, pdfText: string): string[] {
-  const lineText = normalizeCertificatePdfRowText(pdfText);
-  const codePattern = new RegExp(`^\\s*${escapeRegExp(indexEntry.certificateCode)}\\b`, 'i');
-  const rows = lineText
-    .split(/\n+/)
-    .map(line => line.replace(/\s+/g, ' ').trim())
-    .filter(line => codePattern.test(line) && hasShipAndDate(line));
-
-  if (rows.length > 0) {
-    console.log('[CertificateExplorer] Parsed certificate rows from PDF line text:', {
-      certificateCode: indexEntry.certificateCode,
-      rowCount: rows.length,
-    });
-  }
-
-  return rows;
-}
-
-function collectFlatCertificateCodeRows(indexEntry: IndexEntry, pdfText: string): string[] {
+function splitStructuredRowSegments(indexEntry: IndexEntry, pdfText: string): string[] {
   const normalizedText = pdfText.replace(/®/g, '').replace(/\s+/g, ' ').trim();
   const startRegex = new RegExp(`(?=${escapeRegExp(indexEntry.certificateCode)}\\b)`, 'g');
   const starts = Array.from(normalizedText.matchAll(startRegex))
@@ -658,150 +541,10 @@ function collectFlatCertificateCodeRows(indexEntry: IndexEntry, pdfText: string)
     return [];
   }
 
-  const rows = starts.map((start, index) => {
+  return starts.map((start, index) => {
     const end = starts[index + 1] ?? normalizedText.length;
     return normalizedText.slice(start, end).trim();
-  }).filter(segment => segment.length > 0 && hasShipAndDate(segment));
-
-  if (rows.length > 0) {
-    console.log('[CertificateExplorer] Parsed certificate rows from repeated offer-code text:', {
-      certificateCode: indexEntry.certificateCode,
-      rowCount: rows.length,
-    });
-  }
-
-  return rows;
-}
-
-function collectShipDateBoundaryRows(indexEntry: IndexEntry, pdfText: string): string[] {
-  const normalizedText = pdfText.replace(/®/g, '').replace(/\s+/g, ' ').trim();
-  if (!normalizedText) return [];
-
-  const shipPatterns = ROYAL_SHIP_NAMES
-    .map(shipName => escapeRegExp(shipName.replace(/®/g, '')))
-    .sort((a, b) => b.length - a.length)
-    .join('|');
-  const shipRegex = new RegExp(`\\b(?:${shipPatterns})\\b`, 'gi');
-  const starts: number[] = [];
-
-  for (const match of normalizedText.matchAll(shipRegex)) {
-    const start = match.index ?? -1;
-    if (start < 0) continue;
-    const windowText = normalizedText.slice(start, start + 350);
-    if (hasShipAndDate(windowText)) {
-      starts.push(start);
-    }
-  }
-
-  if (starts.length === 0) return [];
-
-  const uniqueStarts = Array.from(new Set(starts)).sort((a, b) => a - b);
-  const rows = uniqueStarts.map((start, index) => {
-    const end = uniqueStarts[index + 1] ?? normalizedText.length;
-    const prefixWindow = normalizedText.slice(Math.max(0, start - 30), start);
-    const codePrefixMatch = prefixWindow.match(new RegExp(`${escapeRegExp(indexEntry.certificateCode)}\\s*$`, 'i'));
-    const prefix = codePrefixMatch ? `${indexEntry.certificateCode} ` : '';
-    return `${prefix}${normalizedText.slice(start, end).trim()}`;
-  }).filter(segment => hasShipAndDate(segment));
-
-  if (rows.length > 0) {
-    console.log('[CertificateExplorer] Parsed certificate rows from ship/date boundaries:', {
-      certificateCode: indexEntry.certificateCode,
-      rowCount: rows.length,
-    });
-  }
-
-  return rows;
-}
-
-
-function collectFlatTableRowsByShipDate(indexEntry: IndexEntry, pdfText: string): string[] {
-  const normalizedText = pdfText
-    .replace(/®/g, '')
-    .replace(/\r/g, ' ')
-    .replace(/\n/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  if (!normalizedText) return [];
-
-  const shipPatterns = ROYAL_SHIP_NAMES
-    .map(shipName => escapeRegExp(shipName.replace(/®/g, '')))
-    .sort((a, b) => b.length - a.length)
-    .join('|');
-  const shipRegex = new RegExp(`\\b(?:${shipPatterns})\\b`, 'gi');
-  const anchors: Array<{ start: number; shipName: string; dateIndex: number }> = [];
-
-  for (const match of normalizedText.matchAll(shipRegex)) {
-    const start = match.index ?? -1;
-    const shipName = match[0];
-    if (start < 0 || !shipName) continue;
-
-    // A real Royal certificate row always has the sail date shortly after the ship and departure port.
-    // This does not depend on line breaks, table cell order, or the offer code repeating on each row.
-    const searchWindow = normalizedText.slice(start, start + 260);
-    const dateMatch = createDateTextRegex('i').exec(searchWindow);
-    if (!dateMatch || typeof dateMatch.index !== 'number') continue;
-
-    anchors.push({ start, shipName, dateIndex: start + dateMatch.index });
-  }
-
-  if (anchors.length === 0) return [];
-
-  const uniqueAnchors = anchors
-    .filter((anchor, index, all) => all.findIndex(item => item.start === anchor.start) === index)
-    .sort((left, right) => left.start - right.start);
-
-  const rows = uniqueAnchors.map((anchor, index) => {
-    const end = uniqueAnchors[index + 1]?.start ?? normalizedText.length;
-    const prefixWindow = normalizedText.slice(Math.max(0, anchor.start - 80), anchor.start);
-    const codeMatch = prefixWindow.match(new RegExp(`${escapeRegExp(indexEntry.certificateCode)}\\s*$`, 'i'));
-    const prefix = codeMatch ? `${indexEntry.certificateCode} ` : '';
-    return `${prefix}${normalizedText.slice(anchor.start, end).trim()}`;
-  }).filter(segment => hasShipAndDate(segment));
-
-  if (rows.length > 0) {
-    console.log('[CertificateExplorer] Parsed certificate rows from flat ship/date table scanner:', {
-      certificateCode: indexEntry.certificateCode,
-      rowCount: rows.length,
-      firstSample: rows[0]?.slice(0, 180) ?? null,
-    });
-  }
-
-  return rows;
-}
-
-function dedupeStructuredRowSegments(segments: string[]): string[] {
-  const seen = new Set<string>();
-  const rows: string[] = [];
-  segments.forEach((segment) => {
-    const key = segment.replace(/\s+/g, ' ').trim().toLowerCase();
-    if (!key || seen.has(key)) return;
-    seen.add(key);
-    rows.push(segment);
-  });
-  return rows;
-}
-
-function splitStructuredRowSegments(indexEntry: IndexEntry, pdfText: string): string[] {
-  // Royal certificate PDFs are real text-table PDFs, but different extractors return that text in
-  // different shapes: one line per sailing, one giant repeated-code string, or ship/date fragments
-  // without the offer code repeated. Try all three so the parser is not dependent on one PDF engine.
-  const lineRows = collectExplicitCertificateLineRows(indexEntry, pdfText);
-  const codeRows = collectFlatCertificateCodeRows(indexEntry, pdfText);
-  const flatTableRows = collectFlatTableRowsByShipDate(indexEntry, pdfText);
-  const shipRows = collectShipDateBoundaryRows(indexEntry, pdfText);
-  const mergedRows = dedupeStructuredRowSegments([...lineRows, ...codeRows, ...flatTableRows, ...shipRows]);
-
-  console.log('[CertificateExplorer] Candidate structured PDF row segments:', {
-    certificateCode: indexEntry.certificateCode,
-    lineRows: lineRows.length,
-    codeRows: codeRows.length,
-    flatTableRows: flatTableRows.length,
-    shipRows: shipRows.length,
-    mergedRows: mergedRows.length,
-  });
-
-  return mergedRows;
+  }).filter(Boolean);
 }
 
 function parseStructuredCertificateRow(segment: string): StructuredCertificateRow | null {
@@ -815,7 +558,7 @@ function parseStructuredCertificateRow(segment: string): StructuredCertificateRo
     return null;
   }
 
-  const dateMatch = Array.from(cleanedSegment.matchAll(createDateTextRegex('gi'))).find((match) => {
+  const dateMatch = Array.from(cleanedSegment.matchAll(DATE_TEXT_REGEX)).find((match) => {
     const index = match.index ?? -1;
     return index >= shipMatch.end;
   });
@@ -868,7 +611,7 @@ function parseStructuredCertificateRow(segment: string): StructuredCertificateRo
 
 function extractStructuredRowsFromCertificatePdf(indexEntry: IndexEntry, pdfText: string): StructuredCertificateRow[] {
   const rowSegments = splitStructuredRowSegments(indexEntry, pdfText);
-  const rows: StructuredCertificateRow[] = [];
+  const rowMap = new Map<string, StructuredCertificateRow>();
 
   rowSegments.forEach((segment) => {
     const parsedRow = parseStructuredCertificateRow(segment);
@@ -876,11 +619,13 @@ function extractStructuredRowsFromCertificatePdf(indexEntry: IndexEntry, pdfText
       return;
     }
 
-    // Keep every parsed PDF table row. Do not collapse rows that share the same ship/date,
-    // because separate certificate rows can carry different cabins, itinerary text, or bonuses.
-    rows.push(parsedRow);
+    const key = `${parsedRow.shipName}__${parsedRow.sailDate}`;
+    if (!rowMap.has(key)) {
+      rowMap.set(key, parsedRow);
+    }
   });
 
+  const rows = Array.from(rowMap.values());
   console.log('[CertificateExplorer] Structured rows extracted from certificate PDF:', {
     certificateCode: indexEntry.certificateCode,
     rowCount: rows.length,
@@ -1170,93 +915,6 @@ function extractPdfText(pdfBytes: Uint8Array): string {
     .trim();
 }
 
-
-function buildPdfTextSampleForLog(text: string, maxLength = 260): string {
-  return String(text || '')
-    .replace(/\u0000/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, maxLength);
-}
-
-function hasUsefulCertificateRowText(text: string): boolean {
-  const normalizedText = text.replace(/®/g, ' ').replace(/\s+/g, ' ').trim();
-  if (!normalizedText) return false;
-
-  const hasKnownShip = ROYAL_SHIP_NAMES.some(shipName => normalizedText.toLowerCase().includes(shipName.replace(/®/g, '').toLowerCase()));
-  const hasDate = createDateTextRegex('i').test(normalizedText);
-  return hasKnownShip && hasDate;
-}
-
-async function loadPdfJsLibrary(): Promise<any | null> {
-  try {
-    return await import('pdfjs-dist/legacy/build/pdf.mjs');
-  } catch (firstError) {
-    try {
-      // Some bundlers resolve the legacy build without the .mjs extension.
-      return await import('pdfjs-dist/legacy/build/pdf');
-    } catch (secondError) {
-      console.warn('[CertificateExplorer] Could not load PDF.js legacy build:', {
-        first: firstError instanceof Error ? firstError.message : String(firstError),
-        second: secondError instanceof Error ? secondError.message : String(secondError),
-      });
-      return null;
-    }
-  }
-}
-
-async function extractPdfTextWithPdfJs(pdfBytes: Uint8Array): Promise<string> {
-  try {
-    const pdfjsLib: any = await loadPdfJsLibrary();
-    if (!pdfjsLib) return '';
-    const loadingTask = pdfjsLib.getDocument({
-      data: new Uint8Array(pdfBytes),
-      disableWorker: true,
-      useWorkerFetch: false,
-      isEvalSupported: false,
-      disableFontFace: true,
-    });
-    const pdfDocument = await loadingTask.promise;
-    const pages: string[] = [];
-
-    for (let pageNumber = 1; pageNumber <= pdfDocument.numPages; pageNumber += 1) {
-      const page = await pdfDocument.getPage(pageNumber);
-      const textContent = await page.getTextContent({ includeMarkedContent: false });
-      const items = ((textContent.items ?? []) as Array<{ str?: string; transform?: number[]; width?: number }>)
-        .map((item) => ({
-          str: String(item.str ?? '').trim(),
-          x: Array.isArray(item.transform) && typeof item.transform[4] === 'number' ? item.transform[4] : 0,
-          y: Array.isArray(item.transform) && typeof item.transform[5] === 'number' ? item.transform[5] : 0,
-        }))
-        .filter((item) => item.str.length > 0)
-        .sort((a, b) => Math.abs(b.y - a.y) > 2 ? b.y - a.y : a.x - b.x);
-
-      const lines: string[][] = [];
-      const lineYs: number[] = [];
-      items.forEach((item) => {
-        const existingLineIndex = lineYs.findIndex((lineY) => Math.abs(lineY - item.y) <= 4);
-        if (existingLineIndex >= 0) {
-          lines[existingLineIndex].push(item.str);
-          return;
-        }
-        lineYs.push(item.y);
-        lines.push([item.str]);
-      });
-
-      pages.push(lines.map((line) => line.join(' ')).join('\n'));
-    }
-
-    await pdfDocument.destroy?.();
-    return sanitizePdfText(pages.join('\n'))
-      .replace(/[ \t]+/g, ' ')
-      .replace(/\s*\n\s*/g, '\n')
-      .trim();
-  } catch (error) {
-    console.warn('[CertificateExplorer] PDF.js text extraction failed:', error instanceof Error ? error.message : String(error));
-    return '';
-  }
-}
-
 async function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -1342,24 +1000,7 @@ async function fetchPdfText(url: string, retries = MAX_RETRIES): Promise<string>
       }
 
       console.log('[CertificateExplorer] PDF downloaded:', { url, bytes: pdfBytes.length });
-
-      // Server-side PDF.js is the authoritative parser for certificate PDFs. The older stream
-      // scanner is retained only as a fallback because it can return glyph-order or spacing issues
-      // on the Royal certificate table PDFs.
-      const pdfJsText = await extractPdfTextWithPdfJs(pdfBytes);
-      if (hasUsefulCertificateRowText(pdfJsText)) {
-        console.log('[CertificateExplorer] PDF.js parser produced readable certificate rows:', { url, textLength: pdfJsText.length });
-        return pdfJsText;
-      }
-
-      console.warn('[CertificateExplorer] PDF.js did not produce readable rows; trying manual stream fallback:', { url, pdfJsTextLength: pdfJsText.length });
-      const manualText = extractPdfText(pdfBytes);
-      if (hasUsefulCertificateRowText(manualText)) {
-        console.log('[CertificateExplorer] Manual PDF parser produced readable certificate rows:', { url, textLength: manualText.length });
-        return manualText;
-      }
-
-      return pdfJsText.length >= manualText.length ? pdfJsText : manualText;
+      return extractPdfText(pdfBytes);
     } catch (error) {
       const isAbort = error instanceof DOMException && error.name === 'AbortError';
       const isNetworkError = error instanceof TypeError && (
@@ -1395,11 +1036,13 @@ async function fetchPdfText(url: string, retries = MAX_RETRIES): Promise<string>
   return '';
 }
 
-const PRIMARY_CERTIFICATE_SUFFIXES = [
+const KNOWN_CERTIFICATE_SUFFIXES = [
   'VIP2',
   '01',
   '02',
+  '02A',
   '03',
+  '03A',
   '04',
   '05',
   '06',
@@ -1407,117 +1050,28 @@ const PRIMARY_CERTIFICATE_SUFFIXES = [
   '08',
   '09',
   '10',
-] as const;
+];
 
-const DISCOVERABLE_CERTIFICATE_SUFFIX_REGEX_SOURCE = '(VIP2|[0-9]{2}A?|[0-9]{2})';
-
-const CERTIFICATE_POINTS_BY_SUFFIX: Record<string, number> = {
-  VIP2: 40000,
-  '01': 25000,
-  '02': 15000,
-  '02A': 9000,
-  '03': 6500,
-  '03A': 4000,
-  '04': 3000,
-  '05': 2000,
-  '06': 1500,
-  '07': 1200,
-  '08': 800,
-  '09': 600,
-  '10': 400,
-};
-
-function buildPrimaryCertificateEntries(monthCode: string, certificateType: 'A' | 'C'): IndexEntry[] {
+function buildKnownIndexEntries(monthCode: string, certificateType: 'A' | 'C'): IndexEntry[] {
   const monthlyIndexUrl = buildPdfUrl(`${monthCode}${certificateType}`);
-  return PRIMARY_CERTIFICATE_SUFFIXES.map(suffix => {
+  const entries: IndexEntry[] = KNOWN_CERTIFICATE_SUFFIXES.map(suffix => {
     const certificateCode = `${monthCode}${certificateType}${suffix}`.toUpperCase();
     return {
       certificateCode,
       certificateType,
-      points: CERTIFICATE_POINTS_BY_SUFFIX[suffix] ?? null,
+      points: null,
       pdfUrl: buildPdfUrl(certificateCode),
       monthlyIndexUrl,
     };
   });
-}
 
-function extractPointsNearCode(indexText: string, certificateCode: string, fallbackPoints: number | null): number | null {
-  const normalizedText = indexText.replace(/®/g, ' ').replace(/\s+/g, ' ').trim();
-  const codeIndex = normalizedText.toUpperCase().indexOf(certificateCode.toUpperCase());
-  if (codeIndex < 0) return fallbackPoints;
-  const windowText = normalizedText.slice(codeIndex, codeIndex + 180);
-  const pointMatch = windowText.match(/([0-9][0-9,]*)\s*(?:points|pts)\b/i);
-  if (!pointMatch?.[1]) return fallbackPoints;
-  const parsedPoints = parseInt(pointMatch[1].replace(/,/g, ''), 10);
-  return Number.isFinite(parsedPoints) ? parsedPoints : fallbackPoints;
-}
-
-async function discoverCertificateEntriesForType(monthCode: string, certificateType: 'A' | 'C'): Promise<IndexEntry[]> {
-  const monthlyIndexUrl = buildPdfUrl(`${monthCode}${certificateType}`);
-  const fallbackEntries = buildPrimaryCertificateEntries(monthCode, certificateType);
-
-  try {
-    const indexText = await fetchPdfText(monthlyIndexUrl, 2);
-    const codePattern = new RegExp(`\\b${escapeRegExp(monthCode)}${certificateType}${DISCOVERABLE_CERTIFICATE_SUFFIX_REGEX_SOURCE}\\b`, 'gi');
-    const discoveredCodes = new Set<string>();
-
-    for (const match of indexText.matchAll(codePattern)) {
-      const code = String(match[0] ?? '').toUpperCase();
-      if (code.length > monthCode.length + 1) {
-        discoveredCodes.add(code);
-      }
-    }
-
-    // Always include the primary 01-10 bank. If the public monthly index exposes extra official sub-levels
-    // such as VIP2, 02A, or 03A, include those too so every visible index row is scraped.
-    fallbackEntries.forEach(entry => discoveredCodes.add(entry.certificateCode));
-
-    const entries = Array.from(discoveredCodes)
-      .sort((left, right) => getCertificateSortRank(left) - getCertificateSortRank(right) || left.localeCompare(right))
-      .map((certificateCode) => {
-        const suffix = certificateCode.slice(monthCode.length + 1).toUpperCase();
-        const fallbackPoints = CERTIFICATE_POINTS_BY_SUFFIX[suffix] ?? null;
-        return {
-          certificateCode,
-          certificateType,
-          points: extractPointsNearCode(indexText, certificateCode, fallbackPoints),
-          pdfUrl: buildPdfUrl(certificateCode),
-          monthlyIndexUrl,
-        };
-      });
-
-    console.log('[CertificateExplorer] Discovered direct public certificate entries from monthly index:', {
-      monthCode,
-      certificateType,
-      monthlyIndexUrl,
-      discoveredCount: entries.length,
-      codes: entries.map(entry => entry.certificateCode),
-    });
-
-    return entries;
-  } catch (error) {
-    console.warn('[CertificateExplorer] Could not read monthly index PDF; falling back to primary 01-10 bank:', {
-      monthCode,
-      certificateType,
-      monthlyIndexUrl,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return fallbackEntries;
-  }
-}
-
-async function discoverMonthCertificateEntries(monthCode: string, certificateTypes: Array<'A' | 'C' | 'D'>): Promise<IndexEntry[]> {
-  const entriesByType = await Promise.all(certificateTypes.map(type => discoverCertificateEntriesForType(monthCode, type)));
-  const allEntries = entriesByType.flat();
-
-  console.log('[CertificateExplorer] Certificate month bank ready for full row scrape:', {
+  console.log('[CertificateExplorer] Built known index entries:', {
     monthCode,
-    certificateTypes,
-    totalDetailPdfsToDownload: allEntries.length,
-    primaryFallbackMinimum: certificateTypes.length * PRIMARY_CERTIFICATE_SUFFIXES.length,
+    certificateType,
+    count: entries.length,
+    codes: entries.map(e => e.certificateCode),
   });
-
-  return allEntries;
+  return entries;
 }
 
 function extractPointsFromPdfText(certificateCode: string, pdfText: string): number | null {
@@ -1605,7 +1159,7 @@ function extractSailingsFromCertificatePdf(indexEntry: IndexEntry, pdfText: stri
   }
 
   const benefits = extractCertificateBenefits(normalizedText);
-  const sailings: SailingEntry[] = [];
+  const sailings = new Map<string, SailingEntry>();
 
   ROYAL_SHIP_NAMES.forEach(shipName => {
     const shipRegex = new RegExp(escapeRegExp(shipName.replace(/®/g, '')), 'gi');
@@ -1616,8 +1170,8 @@ function extractSailingsFromCertificatePdf(indexEntry: IndexEntry, pdfText: stri
         continue;
       }
 
-      const searchWindow = normalizedText.slice(matchIndex, matchIndex + 260);
-      const dateMatch = searchWindow.match(createDateTextRegex('i'))?.[0];
+      const searchWindow = normalizedText.slice(matchIndex, matchIndex + 220);
+      const dateMatch = searchWindow.match(DATE_TEXT_REGEX)?.[0];
       if (!dateMatch) {
         continue;
       }
@@ -1627,9 +1181,12 @@ function extractSailingsFromCertificatePdf(indexEntry: IndexEntry, pdfText: stri
         continue;
       }
 
-      // Keep every detected ship/date occurrence instead of deduping. The month list is meant
-      // to be a row scrape, not only a unique sailing summary.
-      sailings.push({
+      const key = `${shipName}__${sailDate}`;
+      if (sailings.has(key)) {
+        continue;
+      }
+
+      sailings.set(key, {
         certificateCode: indexEntry.certificateCode,
         certificateType: indexEntry.certificateType,
         level: indexEntry.certificateCode.slice(4),
@@ -1651,7 +1208,7 @@ function extractSailingsFromCertificatePdf(indexEntry: IndexEntry, pdfText: stri
     }
   });
 
-  const results = sailings;
+  const results = Array.from(sailings.values());
   console.log('[CertificateExplorer] Sailings extracted from certificate PDF:', {
     certificateCode: indexEntry.certificateCode,
     count: results.length,
@@ -1677,129 +1234,6 @@ async function mapWithConcurrency<T, R>(items: T[], concurrency: number, mapper:
   return results;
 }
 
-
-function getBenefitRankScore(entry: SailingEntry): number {
-  return ((entry.cabinRank ?? 0) * 1_000_000) + ((entry.freePlay ?? 0) * 100) + (entry.onBoardCredit ?? 0);
-}
-
-function getCertificateSortRank(code: string): number {
-  const suffix = code.slice(5).toUpperCase();
-  const index = PRIMARY_CERTIFICATE_SUFFIXES.indexOf(suffix as typeof PRIMARY_CERTIFICATE_SUFFIXES[number]);
-  return index >= 0 ? index : Number.MAX_SAFE_INTEGER;
-}
-
-function buildCertificateSummaries(entries: IndexEntry[], sailings: SailingEntry[]): CertificateMonthListCertificateSummary[] {
-  const grouped = new Map<string, SailingEntry[]>();
-
-  sailings.forEach((sailing) => {
-    if (!grouped.has(sailing.certificateCode)) {
-      grouped.set(sailing.certificateCode, []);
-    }
-    grouped.get(sailing.certificateCode)?.push(sailing);
-  });
-
-  return entries
-    .map((sourceEntry) => {
-      const certificateCode = sourceEntry.certificateCode;
-      const rows = grouped.get(certificateCode) ?? [];
-      const bestCabinRow = rows
-        .filter(row => row.cabinRank !== null)
-        .sort((left, right) => (right.cabinRank ?? 0) - (left.cabinRank ?? 0))[0];
-      const freePlayValues = rows.map(row => row.freePlay).filter((value): value is number => typeof value === 'number');
-      const obcValues = rows.map(row => row.onBoardCredit).filter((value): value is number => typeof value === 'number');
-
-      return {
-        certificateCode,
-        certificateType: sourceEntry.certificateType,
-        level: certificateCode.slice(5),
-        points: rows.find(row => row.points !== null)?.points ?? sourceEntry.points ?? null,
-        sailingCount: rows.length,
-        bestCabinLabel: bestCabinRow?.cabinLabel ?? null,
-        bestCabinRank: bestCabinRow?.cabinRank ?? null,
-        maxFreePlay: freePlayValues.length > 0 ? Math.max(...freePlayValues) : null,
-        maxOnBoardCredit: obcValues.length > 0 ? Math.max(...obcValues) : null,
-        pdfUrl: sourceEntry.pdfUrl,
-        monthlyIndexUrl: sourceEntry.monthlyIndexUrl,
-      };
-    })
-    .sort((left, right) => {
-      if (left.certificateType !== right.certificateType) {
-        return left.certificateType.localeCompare(right.certificateType);
-      }
-      const rankCompare = getCertificateSortRank(left.certificateCode) - getCertificateSortRank(right.certificateCode);
-      if (rankCompare !== 0) return rankCompare;
-      return left.certificateCode.localeCompare(right.certificateCode);
-    });
-}
-
-function buildMonthListHighlights(sailings: SailingEntry[]): CertificateMonthListHighlight[] {
-  const highlights: CertificateMonthListHighlight[] = [];
-  const seen = new Set<string>();
-
-  const addHighlight = (highlight: CertificateMonthListHighlight) => {
-    const key = `${highlight.title}__${highlight.shipName ?? ''}__${highlight.sailDate ?? ''}__${highlight.certificateCode ?? ''}`;
-    if (seen.has(key)) return;
-    seen.add(key);
-    highlights.push(highlight);
-  };
-
-  const bestBenefitRows = [...sailings]
-    .filter(row => (row.cabinRank ?? 0) > 0 || (row.freePlay ?? 0) > 0 || (row.onBoardCredit ?? 0) > 0)
-    .sort((left, right) => getBenefitRankScore(right) - getBenefitRankScore(left))
-    .slice(0, 5);
-
-  bestBenefitRows.forEach((row) => {
-    const benefits = row.benefitSummary.length > 0 ? row.benefitSummary.join(' + ') : 'strong visible certificate value';
-    addHighlight({
-      title: `${row.shipName} · ${row.sailDate}`,
-      detail: `${row.certificateCode} shows ${benefits}.`,
-      shipName: row.shipName,
-      sailDate: row.sailDate,
-      certificateCode: row.certificateCode,
-      pdfUrl: row.pdfUrl,
-    });
-  });
-
-  const groupedSailings = new Map<string, SailingEntry[]>();
-  sailings.forEach((row) => {
-    const key = `${row.shipName}__${row.sailDate}`;
-    if (!groupedSailings.has(key)) groupedSailings.set(key, []);
-    groupedSailings.get(key)?.push(row);
-  });
-
-  Array.from(groupedSailings.entries())
-    .map(([key, rows]) => {
-      const [shipName, sailDate] = key.split('__');
-      return { shipName, sailDate, rows, certificateCount: new Set(rows.map(row => row.certificateCode)).size };
-    })
-    .filter(item => item.certificateCount >= 2)
-    .sort((left, right) => right.certificateCount - left.certificateCount)
-    .slice(0, 5)
-    .forEach((item) => {
-      const bestRow = [...item.rows].sort((left, right) => getBenefitRankScore(right) - getBenefitRankScore(left))[0];
-      addHighlight({
-        title: `${item.shipName} · ${item.sailDate}`,
-        detail: `${item.certificateCount} certificate level(s) appear for this sailing, giving you upgrade comparison room across A/C lists.`,
-        shipName: item.shipName,
-        sailDate: item.sailDate,
-        certificateCode: bestRow?.certificateCode ?? null,
-        pdfUrl: bestRow?.pdfUrl ?? null,
-      });
-    });
-
-  return highlights.slice(0, 10);
-}
-
-function sortSailingsForMonthList(sailings: SailingEntry[]): SailingEntry[] {
-  return [...sailings].sort((left, right) => {
-    const dateCompare = left.sailDate.localeCompare(right.sailDate);
-    if (dateCompare !== 0) return dateCompare;
-    const shipCompare = left.shipName.localeCompare(right.shipName);
-    if (shipCompare !== 0) return shipCompare;
-    return left.certificateCode.localeCompare(right.certificateCode);
-  });
-}
-
 export const certificateExplorerRouter = createTRPCRouter({
   examine: publicProcedure
     .input(
@@ -1817,13 +1251,15 @@ export const certificateExplorerRouter = createTRPCRouter({
       const includeC = input.includeC ?? true;
       const requestedSailDate = parseDateToIso(input.sailDate);
       const targetShips = resolveShipTargets(input.shipQuery);
-      const certificateTypes = (['A', 'C', 'D'] as const).filter(type => type === 'A' ? includeA : type === 'C' ? includeC : true);
+      const certificateTypes = (['A', 'C'] as const).filter(type => (type === 'A' ? includeA : includeC));
 
       if (certificateTypes.length === 0) {
         throw new Error('Select at least one certificate source.');
       }
 
-      const allIndexEntries = await discoverMonthCertificateEntries(monthCode, certificateTypes);
+      const allIndexEntries = certificateTypes.flatMap(certificateType =>
+        buildKnownIndexEntries(monthCode, certificateType)
+      );
 
       console.log('[CertificateExplorer] Using known certificate codes:', {
         monthCode,
@@ -1851,8 +1287,6 @@ export const certificateExplorerRouter = createTRPCRouter({
               textLength: pdfText.length,
               sailingsFound: 0,
               errorMessage: pdfText.length === 0 ? 'PDF not found for this code (404 or unavailable)' : 'PDF text too short to contain sailings',
-              parser: 'pdfjs/manual',
-              sampleText: buildPdfTextSampleForLog(pdfText),
             });
             return [] as SailingEntry[];
           }
@@ -1869,8 +1303,6 @@ export const certificateExplorerRouter = createTRPCRouter({
             textLength: pdfText.length,
             sailingsFound: sailings.length,
             errorMessage: sailings.length === 0 ? 'Text extracted but no ship+date pairs found' : null,
-            parser: 'pdfjs-primary-with-manual-fallback',
-            sampleText: buildPdfTextSampleForLog(pdfText),
           });
           return sailings;
         } catch (error) {
@@ -1885,8 +1317,6 @@ export const certificateExplorerRouter = createTRPCRouter({
             textLength: 0,
             sailingsFound: 0,
             errorMessage: errorMsg,
-            parser: 'pdfjs/manual',
-            sampleText: '',
           });
           return [] as SailingEntry[];
         }
@@ -2003,138 +1433,6 @@ export const certificateExplorerRouter = createTRPCRouter({
         },
         pdfScanLog,
         matches,
-      };
-    }),
-
-  monthlyList: publicProcedure
-    .input(
-      z.object({
-        monthCode: z.string().regex(MONTH_CODE_REGEX).optional(),
-        includeA: z.boolean().optional(),
-        includeC: z.boolean().optional(),
-      })
-    )
-    .mutation(async ({ input }) => {
-      const monthCode = input.monthCode ?? getDefaultMonthCode();
-      const includeA = input.includeA ?? true;
-      const includeC = input.includeC ?? true;
-      const certificateTypes = (['A', 'C', 'D'] as const).filter(type => type === 'A' ? includeA : type === 'C' ? includeC : true);
-
-      if (certificateTypes.length === 0) {
-        throw new Error('Select at least one certificate source.');
-      }
-
-      const allIndexEntries = await discoverMonthCertificateEntries(monthCode, certificateTypes);
-
-      console.log('[CertificateExplorer] Monthly certificate list started:', {
-        monthCode,
-        types: certificateTypes,
-        totalEntries: allIndexEntries.length,
-      });
-
-      const pdfScanLog: PdfScanLogEntry[] = [];
-
-      const sailingResults = await mapWithConcurrency<IndexEntry, SailingEntry[]>(allIndexEntries, 2, async (entry, entryIndex) => {
-        console.log('[CertificateExplorer] Monthly list scraping certificate PDF:', {
-          certificateCode: entry.certificateCode,
-          current: entryIndex + 1,
-          total: allIndexEntries.length,
-          pdfUrl: entry.pdfUrl,
-        });
-        if (entryIndex > 0 && entryIndex % 4 === 0) {
-          await sleep(jitteredDelay(800));
-        }
-
-        try {
-          const pdfText = await fetchPdfText(entry.pdfUrl);
-
-          if (!pdfText || pdfText.length < 20) {
-            pdfScanLog.push({
-              certificateCode: entry.certificateCode,
-              status: 'empty',
-              textLength: pdfText.length,
-              sailingsFound: 0,
-              errorMessage: pdfText.length === 0 ? 'PDF not found for this code (404 or unavailable)' : 'PDF text too short to contain sailings',
-              parser: 'pdfjs/manual',
-              sampleText: buildPdfTextSampleForLog(pdfText),
-            });
-            return [] as SailingEntry[];
-          }
-
-          const detectedPoints = extractPointsFromPdfText(entry.certificateCode, pdfText);
-          if (detectedPoints !== null) {
-            entry.points = detectedPoints;
-          }
-
-          const sailings = extractSailingsFromCertificatePdf(entry, pdfText);
-          pdfScanLog.push({
-            certificateCode: entry.certificateCode,
-            status: sailings.length > 0 ? 'ok' : 'no_sailings',
-            textLength: pdfText.length,
-            sailingsFound: sailings.length,
-            errorMessage: sailings.length === 0 ? 'Text extracted but no ship+date pairs found' : null,
-            parser: 'pdfjs-primary-with-manual-fallback',
-            sampleText: buildPdfTextSampleForLog(pdfText),
-          });
-          return sailings;
-        } catch (error) {
-          const errorMsg = error instanceof Error ? error.message : String(error);
-          pdfScanLog.push({
-            certificateCode: entry.certificateCode,
-            status: 'error',
-            textLength: 0,
-            sailingsFound: 0,
-            errorMessage: errorMsg,
-            parser: 'pdfjs/manual',
-            sampleText: '',
-          });
-          return [] as SailingEntry[];
-        }
-      });
-
-      const allSailings = sortSailingsForMonthList(sailingResults.flat());
-      const uniqueSailingCount = new Set(allSailings.map(item => `${item.shipName}__${item.sailDate}`)).size;
-      const certificateSummaries = buildCertificateSummaries(allIndexEntries, allSailings);
-      const highlights = buildMonthListHighlights(allSailings);
-
-      const errorCount = pdfScanLog.filter(e => e.status === 'error').length;
-      const emptyCount = pdfScanLog.filter(e => e.status === 'empty').length;
-      const noSailingsCount = pdfScanLog.filter(e => e.status === 'no_sailings').length;
-      const okCount = pdfScanLog.filter(e => e.status === 'ok').length;
-
-      console.log('[CertificateExplorer] Monthly certificate list complete:', {
-        monthCode,
-        indexCount: allIndexEntries.length,
-        extractedSailingRows: allSailings.length,
-        uniqueSailingCount,
-        certificatesWithSailings: certificateSummaries.length,
-        okCount,
-        emptyCount,
-        errorCount,
-      });
-
-      return {
-        monthCode,
-        filters: {
-          includeA,
-          includeC,
-          certificateTypes,
-        },
-        summary: {
-          indexCount: allIndexEntries.length,
-          searchedCertificateCount: sailingResults.length,
-          extractedSailingRows: allSailings.length,
-          uniqueSailingCount,
-          certificatesWithSailings: certificateSummaries.length,
-          okCount,
-          noSailingsCount,
-          emptyCount,
-          errorCount,
-        },
-        pdfScanLog,
-        certificateSummaries,
-        highlights,
-        sailings: allSailings,
       };
     }),
 });

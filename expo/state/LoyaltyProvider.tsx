@@ -149,26 +149,6 @@ const DEFAULT_LOYALTY = {
 
 const CONFIRMED_PINNACLE_PLAN_RESERVATIONS = new Set(['871437', '3820089', '5455777', '3879193', '6173746', '4097701', 'NAV-20260724', '2656334']);
 
-function parseLoyaltyNumber(value: unknown): number {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (typeof value === 'string') {
-    const parsed = Number.parseInt(value.replace(/[^0-9-]/g, ''), 10);
-    return Number.isFinite(parsed) ? parsed : 0;
-  }
-  return 0;
-}
-
-function getCompletedCruiseCrownAnchorPoints(cruise: BookedCruise): number {
-  const explicit = parseLoyaltyNumber(
-    (cruise as any).loyaltyPoints ??
-    (cruise as any).crownAnchorPoints ??
-    (cruise as any).crownAndAnchorPoints ??
-    (cruise as any).cruisePoints
-  );
-  if (explicit > 0) return explicit;
-  return cruise.nights || 0;
-}
-
 function hasConfirmedPinnacleBaseline(cruises: BookedCruise[]): boolean {
   return cruises.some((cruise) => {
     const reservation = String(cruise.reservationNumber ?? cruise.bookingId ?? cruise.bwoNumber ?? '').trim().toUpperCase();
@@ -451,18 +431,6 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
       }
 
       const royalUpdates: Record<string, string | number> = {};
-      if (typeof mergedData.clubRoyalePointsFromApi === 'number' && Number.isFinite(mergedData.clubRoyalePointsFromApi)) {
-        royalUpdates.clubRoyalePoints = mergedData.clubRoyalePointsFromApi;
-        console.log('[LoyaltyProvider] ✓ Updated Club Royale profile points:', mergedData.clubRoyalePointsFromApi);
-      }
-      if (typeof mergedData.clubRoyaleTierFromApi === 'string' && mergedData.clubRoyaleTierFromApi.trim().length > 0) {
-        royalUpdates.clubRoyaleTier = mergedData.clubRoyaleTierFromApi.trim();
-        console.log('[LoyaltyProvider] ✓ Updated Club Royale profile tier:', mergedData.clubRoyaleTierFromApi.trim());
-      }
-      if (typeof mergedData.crownAndAnchorPointsFromApi === 'number' && Number.isFinite(mergedData.crownAndAnchorPointsFromApi)) {
-        royalUpdates.loyaltyPoints = mergedData.crownAndAnchorPointsFromApi;
-        console.log('[LoyaltyProvider] ✓ Updated Crown & Anchor profile points:', mergedData.crownAndAnchorPointsFromApi);
-      }
       if (typeof mergedData.crownAndAnchorId === 'string' && mergedData.crownAndAnchorId.trim().length > 0) {
         royalUpdates.crownAnchorNumber = mergedData.crownAndAnchorId.trim();
         console.log('[LoyaltyProvider] ✓ Updated Crown & Anchor number:', mergedData.crownAndAnchorId.trim());
@@ -518,7 +486,6 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
   const calculatedData = useMemo(() => {
     let calculatedClubRoyalePoints = 0;
     let completedNights = 0;
-    let completedCrownAnchorPointsFromRows = 0;
     let bookedNights = 0;
     let projectedBookedPoints = 0;
     const today = new Date();
@@ -584,7 +551,6 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
       
       if (isCompleted) {
         completedNights += nights;
-        completedCrownAnchorPointsFromRows += getCompletedCruiseCrownAnchorPoints(cruise);
         if (earnedPoints > 0 && nights > 0) {
           completedCruisesData.push({ nights, earnedPoints });
         }
@@ -640,7 +606,6 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
     const historicalClubRoyaleTier = getTierByPoints(historicalClubRoyalePoints) as ClubRoyaleTier;
     const liveClubRoyalePoints = extendedLoyalty?.clubRoyalePointsFromApi;
     const hasLiveClubRoyalePoints = typeof liveClubRoyalePoints === 'number' && Number.isFinite(liveClubRoyalePoints);
-    const profileClubRoyalePoints = typeof currentUser?.clubRoyalePoints === 'number' ? currentUser.clubRoyalePoints : 0;
     const daysSinceSeasonStart = Math.max(0, Math.floor((today.getTime() - lastApril1.getTime()) / (1000 * 60 * 60 * 24)));
     const shouldForceSeasonResetBalance = authoritativeCurrentYearClubRoyalePoints === 0
       && daysSinceSeasonStart <= 14
@@ -652,31 +617,27 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
     if (!activeProfileHasRoyalLoyalty) {
       effectiveClubRoyalePoints = 0;
       clubRoyalePointsSource = 'manual';
-    } else if (!shouldForceSeasonResetBalance) {
-      const candidatePoints = [
-        { source: 'app' as const, value: authoritativeCurrentYearClubRoyalePoints },
-        { source: 'api' as const, value: hasLiveClubRoyalePoints ? liveClubRoyalePoints : 0 },
-        { source: 'manual' as const, value: manualClubRoyalePoints ?? 0 },
-        { source: 'manual' as const, value: profileClubRoyalePoints ?? 0 },
-      ].filter((candidate) => Number.isFinite(candidate.value) && candidate.value >= 0);
-      const best = candidatePoints.sort((a, b) => b.value - a.value)[0];
-      effectiveClubRoyalePoints = best?.value ?? 0;
-      clubRoyalePointsSource = best && best.value > 0 ? best.source : 'historical';
+    } else if (authoritativeCurrentYearClubRoyalePoints > 0) {
+      effectiveClubRoyalePoints = authoritativeCurrentYearClubRoyalePoints;
+      clubRoyalePointsSource = 'app';
+    } else if (!shouldForceSeasonResetBalance && manualClubRoyalePoints !== null) {
+      effectiveClubRoyalePoints = manualClubRoyalePoints;
+      clubRoyalePointsSource = 'manual';
+    } else if (!shouldForceSeasonResetBalance && hasLiveClubRoyalePoints) {
+      effectiveClubRoyalePoints = liveClubRoyalePoints;
+      clubRoyalePointsSource = 'api';
     }
 
     const clubRoyaleSyncDiscrepancy = buildClubRoyaleDiscrepancy(authoritativeCurrentYearClubRoyalePoints, hasLiveClubRoyalePoints ? liveClubRoyalePoints : null);
     if (clubRoyaleSyncDiscrepancy.hasDiscrepancy) {
-      console.warn('[LoyaltyProvider] Club Royale sync discrepancy detected; using the highest verified synced/manual/app point source as authoritative:', clubRoyaleSyncDiscrepancy);
+      console.warn('[LoyaltyProvider] Club Royale sync discrepancy detected; using app-entered cruise points as authoritative:', clubRoyaleSyncDiscrepancy);
     }
 
     const currentClubRoyaleTier = getTierByPoints(effectiveClubRoyalePoints) as ClubRoyaleTier;
     const tierFromApi = extendedLoyalty?.clubRoyaleTierFromApi;
-    const tierFromProfile = typeof currentUser?.clubRoyaleTier === 'string' ? currentUser.clubRoyaleTier : undefined;
     const clubRoyaleTier = (tierFromApi && CLUB_ROYALE_TIERS[tierFromApi])
       ? tierFromApi as ClubRoyaleTier
-      : (tierFromProfile && CLUB_ROYALE_TIERS[tierFromProfile])
-        ? tierFromProfile as ClubRoyaleTier
-        : currentClubRoyaleTier;
+      : historicalClubRoyaleTier;
 
     if (shouldForceSeasonResetBalance) {
       console.log('[LoyaltyProvider] Forcing Club Royale current-season balance to reset state', {
@@ -691,17 +652,13 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
     const hasLiveCrownAnchorPoints = typeof liveCrownAnchorPoints === 'number' && Number.isFinite(liveCrownAnchorPoints);
     const profileCrownAnchorPoints = typeof currentUser?.loyaltyPoints === 'number' ? currentUser.loyaltyPoints : 0;
     const rawCrownAnchorPoints = activeProfileHasRoyalLoyalty
-      ? Math.max(0, hasLiveCrownAnchorPoints ? liveCrownAnchorPoints : 0, manualCrownAnchorPoints ?? 0, profileCrownAnchorPoints ?? 0, completedCrownAnchorPointsFromRows, completedNights)
+      ? (hasLiveCrownAnchorPoints ? liveCrownAnchorPoints : (manualCrownAnchorPoints ?? profileCrownAnchorPoints ?? completedNights))
       : 0;
     const shouldUseConfirmedPinnacleBaseline = usesKnownCasinoProfile && hasConfirmedPinnacleBaseline(bookedCruises) && rawCrownAnchorPoints < CROWN_ANCHOR_LEVELS.Pinnacle.cruiseNights;
     const effectiveCrownAnchorPoints = activeProfileHasRoyalLoyalty
-      ? (shouldUseConfirmedPinnacleBaseline ? Math.max(rawCrownAnchorPoints, USER_CONFIRMED_CROWN_ANCHOR_BASELINE) : Math.max(0, rawCrownAnchorPoints))
+      ? (shouldUseConfirmedPinnacleBaseline ? USER_CONFIRMED_CROWN_ANCHOR_BASELINE : Math.max(0, rawCrownAnchorPoints))
       : 0;
-    const apiCrownAnchorTier = extendedLoyalty?.crownAndAnchorTier || extendedLoyalty?.crownAndAnchorLevel;
-    const calculatedCrownAnchorLevel = getLevelByNights(effectiveCrownAnchorPoints) as CrownAnchorLevel;
-    const crownAnchorLevel = (apiCrownAnchorTier && (CROWN_ANCHOR_LEVELS as Record<string, unknown>)[apiCrownAnchorTier])
-      ? apiCrownAnchorTier as CrownAnchorLevel
-      : calculatedCrownAnchorLevel;
+    const crownAnchorLevel = getLevelByNights(effectiveCrownAnchorPoints) as CrownAnchorLevel;
     
     const projectedCrownAnchorPoints = effectiveCrownAnchorPoints + projectedBookedPoints;
     const projectedCrownAnchorLevel = getLevelByNights(projectedCrownAnchorPoints) as CrownAnchorLevel;
@@ -915,7 +872,6 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
       crownAnchorPoints: effectiveCrownAnchorPoints,
       crownAnchorLevel,
       completedNights,
-      completedCrownAnchorPointsFromRows,
       bookedNights,
       projectedBookedPoints,
       projectedCrownAnchorPoints,

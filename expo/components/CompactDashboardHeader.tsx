@@ -466,7 +466,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         >
           <Anchor size={14} color={COLORS.points} />
           <Text style={[styles.quickStatPillValue, progressLabelStyle]}>{availableCruises}</Text>
-          <Text style={[styles.quickStatPillLabel, progressMetaStyle]}>Available Cruises</Text>
+          <Text style={[styles.quickStatPillLabel, progressMetaStyle]}>Cruises</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 
@@ -616,7 +616,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         >
           <Anchor size={14} color={COLORS.points} />
           <Text style={[styles.quickStatPillValue, progressLabelStyle]}>{availableCruises}</Text>
-          <Text style={[styles.quickStatPillLabel, progressMetaStyle]}>Available Cruises</Text>
+          <Text style={[styles.quickStatPillLabel, progressMetaStyle]}>Cruises</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 
@@ -727,7 +727,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         >
           <Anchor size={14} color={COLORS.points} />
           <Text style={[styles.quickStatPillValue, progressLabelStyle]}>{availableCruises}</Text>
-          <Text style={[styles.quickStatPillLabel, progressMetaStyle]}>Available Cruises</Text>
+          <Text style={[styles.quickStatPillLabel, progressMetaStyle]}>Cruises</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 
@@ -858,7 +858,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         >
           <Anchor size={14} color={COLORS.points} />
           <Text style={[styles.quickStatPillValue, progressLabelStyle]}>{availableCruises}</Text>
-          <Text style={[styles.quickStatPillLabel, progressMetaStyle]}>Available Cruises</Text>
+          <Text style={[styles.quickStatPillLabel, progressMetaStyle]}>Cruises</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 

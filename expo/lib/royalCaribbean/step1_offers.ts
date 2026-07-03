@@ -1,6 +1,6 @@
 export const STEP1_OFFERS_SCRIPT = String.raw`
 (function() {
-  const ENGINE_VERSION = 'v9.9.5-offer-completeness-explicit-failsafe';
+  const ENGINE_VERSION = 'v9.8.9-fast-sync-friendly-log';
   const SYNC_BRAND = (window.__EASYSEAS_SYNC_BRAND || 'royal_caribbean');
   const BRAND_CONFIGS = {
     royal_caribbean: {
@@ -35,7 +35,6 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
     '2606C05':1038,
     '2605C03A':846,
     '2606C08':144,
-    '26VAR303':79,
     '26WCR403':55,
     '26AUG104':33,
     '26SIG0804':4,
@@ -44,29 +43,6 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
     '26JUL104':39,
     '26SUM203':25
   };
-
-  // Royal sometimes leaves an older monthly offer card visible after its sailing rows are no
-  // longer returned from the authenticated detail page. Do not let one verified-expired card
-  // poison a complete current catalog, but still reject the run if an active/current large offer
-  // such as 2606C05 failed to load.
-  const ZERO_ROW_ALLOWED_WHEN_CATALOG_COMPLETE = { '2605C03A': true };
-  function isSkippableZeroRowOffer(code){
-    const c=canonicalOfferCode(code || '');
-    return BRAND.key === 'royal_caribbean' && !!ZERO_ROW_ALLOWED_WHEN_CATALOG_COMPLETE[c];
-  }
-  function retryThresholdForOffer(offer){
-    const target=verifiedTargetForOffer(offer);
-    if (!target) return 0;
-    if (target >= 500) return Math.max(25, Math.floor(target * 0.04));
-    if (target >= 100) return 10;
-    return 1;
-  }
-  function shouldRetryOfferRows(offer, rows){
-    const target=verifiedTargetForOffer(offer);
-    if (!target) return false;
-    if (isSkippableZeroRowOffer(offer && offer.offerCode) && (!rows || rows.length === 0)) return false;
-    return (rows || []).length < retryThresholdForOffer(offer);
-  }
 
   function isPendingValue(value){ return !cleanText(value) || /^(ship pending|itinerary pending|unknown|n\/a|null|undefined)$/i.test(cleanText(value)); }
   function rowQuality(row){
@@ -202,9 +178,8 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
   }
   function failSafe(reason){
     log('❌ STEP 1 FAILED SAFE: '+reason, 'error');
-    log('🛡️ Existing Easy Seas offer database will be preserved. No partial or zero-row offer catalog is being committed.', 'warning');
+    log('🛡️ Existing Easy Seas offer database will be preserved. No partial 36/45-row scrape is being committed.', 'warning');
     try { sessionStorage.removeItem(STATE_KEY); } catch(e){}
-    post({ type:'step_failed', step:1, reason:String(reason || 'Offer sync failed safe'), preserveExisting:true });
     sendBatch([], true, 0, 0);
   }
   function loadState(){ try { const raw=sessionStorage.getItem(STATE_KEY); return raw ? JSON.parse(raw) : null; } catch(e){ return null; } }
@@ -313,23 +288,9 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
     return { offers: best, buttons: bestButtons, expected: expected };
   }
   function findOfferButton(offer, fallbackIndex){
-    const buttons=getViewButtons(); const code=canonicalOfferCode(offer && offer.offerCode || '');
-    if (!code) return null;
-    for (let i=0;i<buttons.length;i++){
-      const text=cleanText(closestCard(buttons[i]).textContent || '');
-      const href=(buttons[i].getAttribute && buttons[i].getAttribute('href')) || '';
-      if (text.toUpperCase().indexOf(code)>=0 || href.toUpperCase().indexOf(code)>=0) return buttons[i];
-    }
-    // Never fall back to "same index" or first visible View Sailings button unless the
-    // surrounding card clearly contains the requested offer code. Royal reorders cards
-    // during hydration, and a blind index fallback can scrape the wrong ship/date list.
-    const fb = Number.isFinite(Number(fallbackIndex)) ? buttons[Number(fallbackIndex)] : null;
-    if (fb) {
-      const fbText=cleanText(closestCard(fb).textContent || '');
-      const fbHref=(fb.getAttribute && fb.getAttribute('href')) || '';
-      if (fbText.toUpperCase().indexOf(code)>=0 || fbHref.toUpperCase().indexOf(code)>=0) return fb;
-    }
-    return null;
+    const buttons=getViewButtons(); const code=canonicalOfferCode(offer.offerCode);
+    for (let i=0;i<buttons.length;i++){ const text=cleanText(closestCard(buttons[i]).textContent || ''); if (text.toUpperCase().indexOf(code)>=0) return buttons[i]; }
+    return buttons[fallbackIndex] || buttons[0] || null;
   }
   function candidateRowElements(){
     const raw=Array.from(document.querySelectorAll('tr, [role="row"], li, article, section, div')).filter(function(el){
@@ -576,11 +537,6 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
     // later builds returned 404/partial data. Keep download/list parsing as a cheap page-side helper,
     // then use the proven DOM/detail scraper with checkpoint ACK handoff after each offer.
     log('🧭 WebView-first scrape for '+offer.offerCode+': using authenticated detail page DOM/download with passive network enrichment only', 'info');
-    if (verifiedTargetForOffer(offer)) {
-      const detailReady = await waitForSailingDetailPage(offer, offer.openedFromList ? 26000 : 18000);
-      if (!detailReady) log('⚠️ '+offer.offerCode+' detail page did not expose sailing controls yet; waiting extra before scrape', 'warning');
-      await wait(offer.openedFromList ? 1800 : 2600);
-    }
     const downloadRows=await clickDownloadListAndParse(offer); accepted.push.apply(accepted, downloadRows);
     const passiveRows=parseCapturedOfferPayloadsForOffer(offer); accepted.push.apply(accepted, passiveRows);
     if (target && rowsForOffer(accepted, offer).length >= target) {
@@ -631,59 +587,20 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
     log('📊 '+offer.offerCode+' detail scrape summary: valid rows '+finalRows.length+(target ? '/'+target : '')+', valid blocks '+validBlocks+', pending blocks skipped '+pendingSkipped+', page duplicates skipped '+pageDupSkipped+', duplicate blocks skipped '+duplicateBlockSkipped+', View Details clicks '+totalDetailClicks, finalRows.length?'success':'error');
     return finalRows;
   }
-  function codeHasLegacyLargeCatalogExpectation(code){
-    const c=canonicalOfferCode(code || '');
-    return c === '2606C05' || c === '2605C03A';
-  }
-  function validateShipDateCompleteness(rows, offers){
-    const finalRows=dedupeRows(rows); const codes=(offers||[]).map(function(o){ return canonicalOfferCode(o.offerCode); }).filter(Boolean);
-    const by={}; const shipDateKeys={}; codes.forEach(function(c){ by[c]=0; shipDateKeys[c]=new Set(); });
-    finalRows.forEach(function(r){
-      const c=canonicalOfferCode(r && r.offerCode || '');
-      if (!c) return;
-      by[c]=(by[c]||0)+1;
-      if (!shipDateKeys[c]) shipDateKeys[c]=new Set();
-      shipDateKeys[c].add(cleanText(r.shipName).toLowerCase()+'|'+(isoDate(r.sailingDate) || cleanText(r.sailingDate).toLowerCase()));
-    });
-    const missing=[]; const short=[]; const duplicateWarnings=[];
-    codes.forEach(function(code){
-      const count=by[code] || 0;
-      const uniqueShipDates=shipDateKeys[code] ? shipDateKeys[code].size : 0;
-      if (count === 0 && !isSkippableZeroRowOffer(code)) missing.push(code);
-      if (count > 0 && uniqueShipDates < count) duplicateWarnings.push(code+': '+uniqueShipDates+'/'+count+' unique ship-date pair(s)');
-      const target=VERIFIED_OFFER_ROW_COUNTS[code] || 0;
-      if (target && !isSkippableZeroRowOffer(code) && count > 0 && count < Math.max(1, Math.ceil(target * 0.90))) short.push(code+': '+count+'/'+target);
-      if (count > 0) log('✅ Verified '+code+': '+count+' ship/date sailing row(s)'+(target ? ' of expected '+target : '') , 'success');
-      else if (isSkippableZeroRowOffer(code)) log('ℹ️ Verified '+code+': 0 current ship/date rows, allowed as stale/expired visible card', 'warning');
-    });
-    if (duplicateWarnings.length) log('🧹 Ship/date duplicate check: '+duplicateWarnings.join('; '), 'warning');
-    if (missing.length) return 'One or more current visible offers produced 0 cruise rows: '+missing.join(', ');
-    if (short.length) return 'One or more known offer catalogs are short on ship/date rows: '+short.join(', ');
-    return '';
-  }
   function shouldReject(rows, offers){
     const finalRows=dedupeRows(rows); const codes=(offers||[]).map(function(o){ return canonicalOfferCode(o.offerCode); }).filter(Boolean); const by={}; codes.forEach(function(c){ by[c]=0; }); finalRows.forEach(function(r){ const c=canonicalOfferCode(r.offerCode); if (c) by[c]=(by[c]||0)+1; });
     const counts=Object.keys(by).map(function(c){ return by[c]; });
     Object.keys(by).forEach(function(code){ log((by[code] ? '✅' : '❌')+' Final offer count '+code+': '+by[code]+' cruise row(s)', by[code]?'success':'error'); });
     if (!codes.length) return 'No visible offer codes were found';
     if (finalRows.length === 0) return '0 accepted offer cruise rows';
-    const integrityRejection=validateShipDateCompleteness(rows, offers);
-    if (integrityRejection) return integrityRejection;
-    const zeroCodes=Object.keys(by).filter(function(code){ return by[code]===0; });
-    if (zeroCodes.length) log('ℹ️ Skipping visible Royal offer card(s) with no current sailing rows after retries: '+zeroCodes.join(', ')+'. Current catalog rows remain authoritative.', 'warning');
-    const tinyIdentical = counts.filter(function(n){ return n>0; }).length >= 4 && counts.filter(function(n){ return n>0; }).every(function(n){ return n<=12; }) && (new Set(counts.filter(function(n){ return n>0; }))).size <= 2;
+    if (counts.some(function(n){ return n===0; })) return 'One or more visible offers produced 0 cruise rows';
+    const tinyIdentical = counts.length >= 4 && counts.every(function(n){ return n>0 && n<=12; }) && (new Set(counts)).size <= 2;
     if (tinyIdentical) return 'Partial virtualized DOM sample detected: '+counts.join('/');
-    const legacyLargeExpected = BRAND.key === 'royal_caribbean' && codes.some(codeHasLegacyLargeCatalogExpectation);
-    if (legacyLargeExpected && codes.length >= 5 && finalRows.length < MIN_ROWS_FOR_KNOWN_MULTI_OFFER_SET) return 'Captured only '+finalRows.length+' rows from '+codes.length+' Royal Club Royale offers; expected roughly 1,073 for the legacy large Royal offer set';
-    // Some valid Royal pages currently expose smaller five-offer catalogs. Do not reject
-    // a complete catalog only because it has fewer than the old 1,073-row June set; the
-    // per-offer ship/date completeness gate above is the authority.
+    if (BRAND.key === 'royal_caribbean' && codes.length >= 5 && finalRows.length < MIN_ROWS_FOR_KNOWN_MULTI_OFFER_SET) return 'Captured only '+finalRows.length+' rows from '+codes.length+' Royal Club Royale offers; expected roughly 1,073 for the current Royal offer set';
+    // Some valid Royal pages currently expose four visible offers because a prior monthly offer can drop off the live page.
     // Four known offers with ~1,019 rows is a complete live capture, not a broken partial. Only reject tiny four-offer captures.
-    if (BRAND.key === 'royal_caribbean' && codes.length === 4 && finalRows.length < MIN_ROWS_FOR_VISIBLE_ROYAL_FOUR_OFFER_SET && legacyLargeExpected) return 'Captured only '+finalRows.length+' rows from '+codes.length+' Royal Club Royale offers; likely partial scrape';
-    // Royal's visible Club Royale catalog is not a fixed 4/5-offer set. It can legitimately
-    // contain only 1 or 2 current offers with a small number of sailings. The authoritative
-    // check is whether every visible offer that claims current availability produced verified
-    // ship/date rows. Do not reject a small-but-complete live catalog solely because it is small.
+    if (BRAND.key === 'royal_caribbean' && codes.length === 4 && finalRows.length < MIN_ROWS_FOR_VISIBLE_ROYAL_FOUR_OFFER_SET) return 'Captured only '+finalRows.length+' rows from '+codes.length+' Royal Club Royale offers; likely partial scrape';
+    if (BRAND.key === 'royal_caribbean' && codes.length > 0 && codes.length < 4) return 'Captured only '+codes.length+' Royal Club Royale offer code(s); likely partial discovery';
     if (BRAND.key === 'celebrity' && codes.length >= 1 && finalRows.length < 1) return 'Captured no Celebrity Blue Chip offer rows';
     return '';
   }
@@ -798,31 +715,25 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
     }
     return false;
   }
-  function returnToOfferListForClick(state, code, reason){
-    state.phase='list';
-    delete state.currentOffer;
-    state.lastListReturnAt=Date.now();
-    saveState(state);
-    log('↩️ Returning to My Offers to reopen '+code+' by pressing its View Sailings button'+(reason ? ': '+reason : ''), 'warning');
-    location.href=OFFER_LIST_URL;
-  }
   async function continueAfterOffer(state){
     if (state.index >= (state.offers||[]).length) { await finishIfComplete(state); return; }
     const next=state.offers[state.index];
     const nextCode=canonicalOfferCode(next && next.offerCode || '');
     const directUrl=savedDetailUrlForOffer(next);
-    log('➡️ Continuing to next offer '+(state.index+1)+'/'+(state.offers||[]).length+': '+nextCode+' (live View Sailings button required)', 'info');
+    log('➡️ Continuing to next saved offer '+(state.index+1)+'/'+(state.offers||[]).length+': '+nextCode, 'info');
     progress(state.index+1, (state.offers||[]).length, 'Opening '+nextCode);
 
-    // v993 reliability fix:
-    // Royal's newer Club Royale offer detail pages can render as a shell with 0 rows
-    // when opened by direct saved URL after the first offer. The first offer succeeds
-    // because it is opened by pressing the live View Sailings button from My Offers.
-    // Therefore every subsequent offer should return to the live My Offers list and
-    // press its own View Sailings button. Use the saved direct URL only as a fallback
-    // if the list/button cannot be rediscovered.
+    // v967 permanent continuation fix:
+    // Do NOT hard-return to /offers and wait for rediscovery. That is exactly where v958/v964 died.
+    // The first page discovered all real detail href/playerOfferId values. React Native now re-arms
+    // this worker on every offer detail load, so a full-page navigation is safe and resumable.
     if (directUrl) {
-      returnToOfferListForClick(state, nextCode, 'using live button continuation so every ship/date row belongs to the selected offer');
+      state.phase='detail';
+      state.currentOffer=next;
+      state.lastNavigationAt=Date.now();
+      saveState(state);
+      log('🔗 RN-orchestrated queue navigating directly to saved authenticated detail URL for '+nextCode+': '+directUrl, 'info');
+      location.href=directUrl;
       return;
     }
 
@@ -888,42 +799,22 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
     const button=findOfferButton(liveOffer, liveOffer.buttonIndex || state.index);
     const fallbackHref=(button ? offerDetailHrefFromCard(liveOffer, button) : '') || liveOffer.href || (BRAND.detailBaseUrl+encodeURIComponent(liveOffer.offerCode)+(liveOffer.playerOfferId ? '?country=USA&playerOfferId='+encodeURIComponent(liveOffer.playerOfferId) : '?country=USA'));
     if (!button && !fallbackHref){ failSafe('Could not find View Sailings button or detail URL for '+offer.offerCode); return; }
-    state.phase='detail'; state.currentOffer=Object.assign({}, liveOffer, { openedFromList: !!button }); saveState(state);
+    state.phase='detail'; state.currentOffer=liveOffer; saveState(state);
     const startUrl=location.href;
     log('👆 Browser fallback opening offer '+(state.index+1)+'/'+state.offers.length+': '+liveOffer.offerCode+' by pressing View Sailings', 'success');
     if (fallbackHref) log('🔗 Fallback offer detail href staged for '+liveOffer.offerCode+': '+fallbackHref, 'info');
     progress(state.index+1, state.offers.length, 'Opening '+liveOffer.offerCode);
     try{
-      state.openAttemptMap = state.openAttemptMap || {};
-      const liveCode=canonicalOfferCode(liveOffer.offerCode || '');
-      const openAttempts=Number(state.openAttemptMap[liveCode] || 0);
-      if (button) {
-        forceClick(button);
-        await wait(1200);
-      } else {
-        // Only use a direct detail URL when the live list truly has no button for that code.
-        // A blind direct URL is not allowed to pass completeness checks; it is a last-resort
-        // way to keep the flow from hanging, not the primary sync path.
-        log('🔗 No visible View Sailings button for '+liveOffer.offerCode+'; trying discovered detail URL as last resort', 'warning');
+      if (button) { forceClick(button); await wait(900); } else { log('🔗 No visible View Sailings button for '+liveOffer.offerCode+'; navigating directly to detail URL from discovered link', 'warning'); location.href=fallbackHref; await wait(1800); }
+      let ready=await waitForSailingDetailPage(liveOffer, 12000);
+      if (!ready && fallbackHref) {
+        log('⚠️ View Sailings click did not produce ready detail signals; navigating directly to offer detail URL', 'warning');
         location.href=fallbackHref;
-        await wait(2200);
-      }
-      let ready=await waitForSailingDetailPage(liveOffer, button ? 22000 : 32000);
-      if (!ready && button && openAttempts < 3) {
-        state.openAttemptMap[liveCode]=openAttempts+1;
-        saveState(state);
-        log('⚠️ View Sailings click for '+liveCode+' did not expose ship/date rows; retrying from My Offers instead of falling back to a shell URL.', 'warning');
-        returnToOfferListForClick(state, liveCode, 'live click did not expose sailing rows');
-        return;
-      }
-      if (!ready && !button && openAttempts < 2) {
-        state.openAttemptMap[liveCode]=openAttempts+1;
-        saveState(state);
-        returnToOfferListForClick(state, liveCode, 'last-resort detail URL did not expose sailing rows');
-        return;
+        await wait(1800);
+        ready=await waitForSailingDetailPage(liveOffer, 30000);
       }
       if (!ready) {
-        log('⚠️ Offer '+liveOffer.offerCode+' detail did not report ready after live-button retries; attempting scrape once, then integrity gate will reject incomplete ship/date data.', 'warning');
+        log('⚠️ Offer '+liveOffer.offerCode+' detail did not report ready after direct navigation; attempting scrape anyway to avoid hanging', 'warning');
       }
       const latest=loadState() || state;
       latest.phase='detail'; latest.currentOffer=liveOffer; saveState(latest);
@@ -936,20 +827,6 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
     log('📄 Scraping View Sailings detail page for '+offer.offerCode, 'success');
     await wait(1500);
     const rows=await scrapeCurrentOfferDetail(offer);
-    const code=canonicalOfferCode(offer.offerCode || '');
-    state.retryMap = state.retryMap || {};
-    const retries=Number(state.retryMap[code] || 0);
-    if (shouldRetryOfferRows(offer, rows) && retries < 3) {
-      state.retryMap[code]=retries+1;
-      const target=verifiedTargetForOffer(offer);
-      log('🔁 Offer '+code+' returned '+rows.length+(target?'/'+target:'')+' row(s); reopening the offer from My Offers before continuing so Sync Now does not stage 0 sailings.', 'warning');
-      returnToOfferListForClick(state, code, 'retry '+state.retryMap[code]+' after empty detail scrape');
-      return;
-    }
-    if (shouldRetryOfferRows(offer, rows)) {
-      const target=verifiedTargetForOffer(offer);
-      log('⚠️ Offer '+code+' still returned '+rows.length+(target?'/'+target:'')+' row(s) after live-button retries. This catalog will fail safe and preserve existing Easy Seas offers instead of applying partial data.', 'warning');
-    }
     const merged=dedupeRows([].concat(state.rows || [], rows));
     state.rows=merged; state.index=(state.index||0)+1; state.phase='list'; delete state.currentOffer; saveState(state);
     log('💾 Staged '+rows.length+' row(s) for '+offer.offerCode+'. Total staged rows: '+merged.length, rows.length?'success':'error');
@@ -962,7 +839,7 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
     rows.slice(0,25).forEach(function(r){ log('Accepted full row: '+r.offerCode+' | '+r.shipName+' | '+r.sailingDate+' | '+r.itinerary+' | '+r.departurePort, 'success'); });
     const rejection=shouldReject(rows, offers);
     if (rejection){ failSafe(rejection); return; }
-    log('✅ STEP 1 COMPLETE: Offer ship/date completeness verified; captured '+offers.length+' visible offer(s) with '+rows.length+' individual cruise row(s)', 'success');
+    log('✅ STEP 1 COMPLETE: Sync Now v967 RN-orchestrated offer queue captured '+offers.length+' visible offer(s) with '+rows.length+' individual cruise row(s)', 'success');
     clearState(); sendRows(rows, offers.length);
   }
   async function main(){

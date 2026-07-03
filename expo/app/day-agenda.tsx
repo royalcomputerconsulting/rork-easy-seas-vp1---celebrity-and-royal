@@ -5,8 +5,6 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { 
   ChevronLeft,
-  ChevronDown,
-  ChevronRight,
   Ship,
   Plane,
   User,
@@ -41,7 +39,6 @@ import {
   generateCruiseCalendarEvents,
   getDisplayCalendarEvents,
   getNormalizedCruiseDateRange,
-  getTrustedCruiseItineraryDays,
   isCruiseCalendarEventBackedByBookedCruise,
 } from '@/lib/calendar/cruiseEvents';
 
@@ -79,8 +76,6 @@ interface MergedCruiseData {
   departurePort?: string;
   nights: number;
   itinerary?: ItineraryDay[];
-  portsAndTimes?: string;
-  offerCode?: string;
   bookings: {
     reservationNumber?: string;
     cabinNumber?: string;
@@ -135,67 +130,6 @@ const MINUTES_PER_DAY = 24 * 60;
 const HOUR_ROW_HEIGHT = 76;
 const MIN_SCHEDULE_BLOCK_HEIGHT = 42;
 const DAY_HOURS = Array.from({ length: 24 }, (_, index) => index);
-
-function getDateOnlyDiffDays(startDateOnly: string, endDateOnly: string): number {
-  const start = createDateFromString(startDateOnly);
-  const end = createDateFromString(endDateOnly);
-  start.setHours(0, 0, 0, 0);
-  end.setHours(0, 0, 0, 0);
-  return Math.max(0, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
-}
-
-function parsePortsAndTimesForAgenda(portsAndTimes?: string): ItineraryDay[] {
-  if (!portsAndTimes || typeof portsAndTimes !== 'string') return [];
-  return portsAndTimes
-    .split(/\r?\n|>|›|→/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line, index) => {
-      const parts = line.split(/[;,|\t]/).map((part) => part.trim()).filter(Boolean);
-      const port = parts[0] || line;
-      const arrival = parts[1];
-      const departure = parts[2];
-      const isSeaDay = determineSeaDay(port);
-      return {
-        day: index + 1,
-        port,
-        arrival,
-        departure,
-        isSeaDay,
-        notes: 'Parsed from Ports & Times source-of-truth data.',
-      };
-    });
-}
-
-function normalizeAgendaText(value?: string | null): string {
-  return (value ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
-}
-
-function findLinkedOfferForAgenda(cruise: BookedCruise, offers: any[]): any | undefined {
-  const ship = normalizeAgendaText(cruise.shipName);
-  const sail = (cruise.sailDate || '').split('T')[0];
-  const code = normalizeAgendaText((cruise as any).offerCode);
-  return offers.find((offer) => {
-    const offerShip = normalizeAgendaText(offer.shipName);
-    const offerSail = String(offer.sailingDate || offer.sailDate || '').split('T')[0];
-    const offerCode = normalizeAgendaText(offer.offerCode);
-    const shipMatches = ship && offerShip && (ship === offerShip || offerShip.includes(ship) || ship.includes(offerShip));
-    const dateMatches = sail && offerSail && sail === offerSail;
-    const codeMatches = code && offerCode && code === offerCode;
-    return shipMatches && dateMatches && (!code || codeMatches || !offerCode);
-  });
-}
-
-function resolveAgendaItinerary(cruise: BookedCruise, linkedOffer?: any): ItineraryDay[] | undefined {
-  const trusted = getTrustedCruiseItineraryDays(cruise);
-  if (trusted.length > 0) return trusted;
-  const parsedCruisePorts = parsePortsAndTimesForAgenda((cruise as any).portsAndTimes);
-  if (parsedCruisePorts.length > 0) return parsedCruisePorts;
-  const parsedOfferPorts = parsePortsAndTimesForAgenda(linkedOffer?.portsAndTimes);
-  if (parsedOfferPorts.length > 0) return parsedOfferPorts;
-  return cruise.itinerary;
-}
-
 
 function parseScheduleTimeToMinutes(value?: string): number | null {
   const normalizedValue = value?.trim();
@@ -317,18 +251,10 @@ export default function DayAgendaScreen() {
           return null;
         }
 
-        const inferredNights = getDateOnlyDiffDays(cruiseDateRange.sailDate, cruiseDateRange.returnDate);
-        const trustedItinerary = getTrustedCruiseItineraryDays({
-          ...cruise,
-          sailDate: cruiseDateRange.sailDate,
-          returnDate: cruiseDateRange.returnDate,
-        });
         return {
           ...cruise,
           sailDate: cruiseDateRange.sailDate,
           returnDate: cruiseDateRange.returnDate,
-          nights: inferredNights || cruise.nights,
-          itinerary: trustedItinerary.length > 0 ? trustedItinerary : cruise.itinerary,
         };
       })
       .filter((cruise): cruise is BookedCruise => cruise !== null);
@@ -338,7 +264,6 @@ export default function DayAgendaScreen() {
   const { getSessionsForDate, getDailySummary, addSession, removeSession } = useCasinoSessions();
   const [showAddSessionModal, setShowAddSessionModal] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [isMaritimeWeatherExpanded, setIsMaritimeWeatherExpanded] = useState(false);
 
   const selectedDate = useMemo(() => {
     if (!date) return new Date();
@@ -401,9 +326,6 @@ export default function DayAgendaScreen() {
     normalizedBookedCruises.forEach((cruise: BookedCruise) => {
       if (!cruise.sailDate || !cruise.returnDate) return;
       if (!isDateInRange(selectedDate, cruise.sailDate, cruise.returnDate)) return;
-      const linkedOffer = findLinkedOfferForAgenda(cruise, localData.offers || []);
-      const resolvedItinerary = resolveAgendaItinerary(cruise, linkedOffer);
-      const inferredNights = getDateOnlyDiffDays(cruise.sailDate, cruise.returnDate);
       
       const key = `${cruise.shipName}-${cruise.sailDate}`;
       
@@ -416,12 +338,6 @@ export default function DayAgendaScreen() {
           guestNames: cruise.guestNames,
           guests: cruise.guests,
         });
-        if ((!existing.itinerary || existing.itinerary.length === 0) && resolvedItinerary && resolvedItinerary.length > 0) {
-          existing.itinerary = resolvedItinerary;
-        }
-        if (!existing.portsAndTimes && ((cruise as any).portsAndTimes || linkedOffer?.portsAndTimes)) {
-          existing.portsAndTimes = (cruise as any).portsAndTimes || linkedOffer?.portsAndTimes;
-        }
       } else {
         cruiseMap.set(key, {
           id: cruise.id,
@@ -431,10 +347,8 @@ export default function DayAgendaScreen() {
           destination: cruise.destination,
           itineraryName: cruise.itineraryName,
           departurePort: cruise.departurePort,
-          nights: inferredNights || cruise.nights || 0,
-          itinerary: resolvedItinerary,
-          portsAndTimes: (cruise as any).portsAndTimes || linkedOffer?.portsAndTimes,
-          offerCode: (cruise as any).offerCode,
+          nights: cruise.nights || 0,
+          itinerary: cruise.itinerary,
           bookings: [{
             reservationNumber: cruise.reservationNumber,
             cabinNumber: cruise.cabinNumber,
@@ -447,7 +361,7 @@ export default function DayAgendaScreen() {
     });
     
     return Array.from(cruiseMap.values());
-  }, [normalizedBookedCruises, selectedDate, isDateInRange, localData.offers]);
+  }, [normalizedBookedCruises, selectedDate, isDateInRange]);
 
   const getDayOfCruise = useCallback((cruise: MergedCruiseData): number => {
     const start = createDateFromString(cruise.sailDate);
@@ -460,13 +374,13 @@ export default function DayAgendaScreen() {
   }, [selectedDate]);
 
   const getItineraryForDay = useCallback((cruise: MergedCruiseData, dayNum: number): ItineraryDay | undefined => {
-    const itinerary = getTrustedCruiseItineraryDays(cruise as unknown as BookedCruise);
-    return itinerary.find(d => d.day === dayNum);
+    if (!cruise.itinerary) return undefined;
+    return cruise.itinerary.find(d => d.day === dayNum);
   }, []);
 
   const getCasinoContext = useCallback((cruise: MergedCruiseData, dayNum: number): CasinoDayContext => {
-    const itinerary = getTrustedCruiseItineraryDays(cruise as unknown as BookedCruise);
-    const totalDays = itinerary.length > 0 ? itinerary.length : cruise.nights + 1;
+    const totalDays = cruise.nights + 1;
+    const itinerary = cruise.itinerary || [];
     const currentDay = itinerary.find(d => d.day === dayNum);
     const nextDay = itinerary.find(d => d.day === dayNum + 1);
     const prevDay = itinerary.find(d => d.day === dayNum - 1);
@@ -531,7 +445,7 @@ export default function DayAgendaScreen() {
               type: 'casino',
               title: 'Casino - Main Hours',
               subtitle: casinoInfo.reason,
-              startTime: casinoInfo.openTime || '09:00',
+              startTime: '10:00',
               endTime: casinoInfo.closeTime || undefined,
               color: '#FFFFFF',
               icon: 'casino',
@@ -606,7 +520,7 @@ export default function DayAgendaScreen() {
               endTime: casinoInfo.closeTime || undefined,
               color: '#FFFFFF',
               icon: 'casino',
-              notes: `Uses port agenda and casino port rules. Until ${closeTimeDisplay}`,
+              notes: `Opens ~1.5 hrs after sail away, until ${closeTimeDisplay}`,
             });
           } else if (!casinoInfo.open) {
             events.push({
@@ -642,7 +556,7 @@ export default function DayAgendaScreen() {
               endTime: casinoInfo.closeTime || undefined,
               color: '#FFFFFF',
               icon: 'casino',
-              notes: `Uses port agenda and casino port rules. Until ${closeTimeDisplay}`,
+              notes: `Opens ~1.5 hrs after sail away, until ${closeTimeDisplay}`,
             });
           }
         } else if (dayNum === totalDays) {
@@ -1221,45 +1135,30 @@ export default function DayAgendaScreen() {
             type: 'casino',
           });
         } else if (!casinoContext.isDisembarkDay) {
+          addScheduleBlock({
+            id: `casino-carryover-${cruise.id}-${dayNum}`,
+            title: 'Casino Open',
+            subtitle: `${cruise.shipName} overnight carryover`,
+            notes: 'Open from midnight until the ship is back in port waters.',
+            startMinutes: 0,
+            endMinutes: 5 * 60,
+            color: EVENT_COLORS.casino,
+            icon: 'casino',
+            type: 'casino',
+          });
           const reopenMinutes = parseScheduleTimeToMinutes(casinoInfo.openTime);
-          const isContinuousPrivateDestination = reopenMinutes === 0 && !casinoInfo.closeTime;
-          if (isContinuousPrivateDestination) {
+          if (reopenMinutes !== null) {
             addScheduleBlock({
-              id: `casino-continuous-${cruise.id}-${dayNum}`,
-              title: 'Casino Open',
-              subtitle: itineraryDay?.port ? `${cruise.shipName} • ${itineraryDay.port}` : cruise.shipName,
+              id: `casino-reopen-${cruise.id}-${dayNum}`,
+              title: 'Casino Reopens',
+              subtitle: itineraryDay?.port ? `${itineraryDay.port} sail away` : cruise.shipName,
               notes: casinoInfo.reason,
-              startMinutes: 0,
+              startMinutes: reopenMinutes,
               endMinutes: MINUTES_PER_DAY,
               color: EVENT_COLORS.casino,
               icon: 'casino',
               type: 'casino',
             });
-          } else {
-            addScheduleBlock({
-              id: `casino-carryover-${cruise.id}-${dayNum}`,
-              title: 'Casino Open',
-              subtitle: `${cruise.shipName} overnight carryover`,
-              notes: 'Open from midnight until the ship is back in port waters.',
-              startMinutes: 0,
-              endMinutes: 5 * 60,
-              color: EVENT_COLORS.casino,
-              icon: 'casino',
-              type: 'casino',
-            });
-            if (reopenMinutes !== null) {
-              addScheduleBlock({
-                id: `casino-reopen-${cruise.id}-${dayNum}`,
-                title: 'Casino Reopens',
-                subtitle: itineraryDay?.port ? `${itineraryDay.port} sail away` : cruise.shipName,
-                notes: casinoInfo.reason,
-                startMinutes: reopenMinutes,
-                endMinutes: MINUTES_PER_DAY,
-                color: EVENT_COLORS.casino,
-                icon: 'casino',
-                type: 'casino',
-              });
-            }
           }
         }
       } else {
@@ -1700,65 +1599,48 @@ export default function DayAgendaScreen() {
             </View>
 
           <View style={styles.sectionContainer}>
-            <TouchableOpacity
-              style={styles.maritimeAccordionHeader}
-              onPress={() => setIsMaritimeWeatherExpanded((current) => !current)}
-              activeOpacity={0.78}
-              accessibilityRole="button"
-              accessibilityLabel={`${isMaritimeWeatherExpanded ? 'Collapse' : 'Expand'} Maritime Weather`}
-              testID="agenda-maritime-weather-toggle"
-            >
-              <View style={styles.maritimeAccordionTitleRow}>
-                {isMaritimeWeatherExpanded ? <ChevronDown size={18} color="#FFFFFF" /> : <ChevronRight size={18} color="#FFFFFF" />}
-                <Text style={styles.sectionTitleNoMargin}>Maritime Weather</Text>
-              </View>
-              <Text style={styles.maritimeAccordionHint}>{isMaritimeWeatherExpanded ? 'Hide' : 'Open'}</Text>
-            </TouchableOpacity>
-            {isMaritimeWeatherExpanded ? (
+            <Text style={styles.sectionTitle}>Sailing Weather</Text>
+            <Text style={styles.sectionDescription}>
+              {mergedCruiseBookings.length > 0
+                ? 'Full-day weather, wind, and sea-state snapshots with offline saving for spotty-at-sea service.'
+                : allWeatherCruises.length > 0
+                  ? 'Upcoming cruise weather is pinned here so the build always shows the latest forecast cards.'
+                  : 'Add a booked cruise to unlock weather, wind, and sea-state snapshots here.'}
+            </Text>
+            {allWeatherCruises.length > 0 ? (
               <>
-                <Text style={styles.sectionDescription}>
-                  {mergedCruiseBookings.length > 0
-                    ? 'Full-day weather, wind, and sea-state snapshots with offline saving for spotty-at-sea service.'
-                    : allWeatherCruises.length > 0
-                      ? 'Upcoming cruise weather is pinned here so the build always shows the latest forecast cards.'
-                      : 'Add a booked cruise to unlock weather, wind, and sea-state snapshots here.'}
-                </Text>
-                {allWeatherCruises.length > 0 ? (
-                  <>
-                    <MarineAlertsPanel
-                      cruises={weatherAlertCruises}
-                      startDate={selectedDate}
-                      daysAhead={weatherAlertDaysAhead}
-                      maxItems={3}
-                      title="Rough seas / weather alerts"
-                      description={mergedCruiseBookings.length > 0
-                        ? 'Heads-up for rough conditions on this selected cruise day.'
-                        : 'Heads-up for rough conditions in your sailing window.'}
-                      testID="agenda-marine-alerts-panel"
+                <MarineAlertsPanel
+                  cruises={weatherAlertCruises}
+                  startDate={selectedDate}
+                  daysAhead={weatherAlertDaysAhead}
+                  maxItems={3}
+                  title="Rough seas / weather alerts"
+                  description={mergedCruiseBookings.length > 0
+                    ? 'Heads-up for rough conditions on this selected cruise day.'
+                    : 'Heads-up for rough conditions in your sailing window.'}
+                  testID="agenda-marine-alerts-panel"
+                />
+                <View style={styles.weatherCardsStack}>
+                  {allWeatherCruises.map((cruise) => (
+                    <SailingWeatherCard
+                      key={`sailing-weather-${cruise.id}`}
+                      cruise={cruise}
+                      selectedDate={mergedCruiseBookings.some((m) => m.id === cruise.id) ? selectedDate : createDateFromString(cruise.sailDate)}
                     />
-                    <View style={styles.weatherCardsStack}>
-                      {allWeatherCruises.map((cruise) => (
-                        <SailingWeatherCard
-                          key={`sailing-weather-${cruise.id}`}
-                          cruise={cruise}
-                          selectedDate={mergedCruiseBookings.some((m) => m.id === cruise.id) ? selectedDate : createDateFromString(cruise.sailDate)}
-                        />
-                      ))}
-                    </View>
-                  </>
-                ) : (
-                  <View style={styles.emptyState} testID="agenda-weather-empty-state">
-                    <View style={styles.emptyIconContainer}>
-                      <Waves size={32} color="#8BE0FF" />
-                    </View>
-                    <Text style={styles.emptyTitle}>No sailing weather yet</Text>
-                    <Text style={styles.emptyText}>
-                      Import or add a booked cruise and the app will surface forecast cards here automatically.
-                    </Text>
-                  </View>
-                )}
+                  ))}
+                </View>
               </>
-            ) : null}
+            ) : (
+              <View style={styles.emptyState} testID="agenda-weather-empty-state">
+                <View style={styles.emptyIconContainer}>
+                  <Waves size={32} color="#8BE0FF" />
+                </View>
+                <Text style={styles.emptyTitle}>No sailing weather yet</Text>
+                <Text style={styles.emptyText}>
+                  Import or add a booked cruise and the app will surface forecast cards here automatically.
+                </Text>
+              </View>
+            )}
           </View>
 
           <View style={styles.sectionContainer}>
@@ -1960,37 +1842,6 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.76)',
     lineHeight: 20,
     marginBottom: SPACING.sm,
-  },
-  maritimeAccordionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderRadius: BORDER_RADIUS.lg,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
-    marginBottom: SPACING.sm,
-  },
-  maritimeAccordionTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-  },
-  maritimeAccordionHint: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: 'rgba(255, 255, 255, 0.78)',
-    textTransform: 'uppercase',
-    letterSpacing: 0.7,
-  },
-  sectionTitleNoMargin: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#FFFFFF',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
   },
   sectionTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,

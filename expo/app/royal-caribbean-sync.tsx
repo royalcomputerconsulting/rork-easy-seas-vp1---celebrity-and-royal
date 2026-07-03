@@ -11,7 +11,6 @@ import { useCoreData } from '@/state/CoreDataProvider';
 import { useUser, type UserProfile } from '@/state/UserProvider';
 import { WebSyncCredentialsModal } from '@/components/WebSyncCredentialsModal';
 import { WebCookieSyncModal } from '@/components/WebCookieSyncModal';
-import { CertificateMonthListModal } from '@/components/CertificateMonthListModal';
 import { LoyaltyPill } from '@/components/ui/LoyaltyPill';
 import {
   getCelebrityBlueChipTierColor,
@@ -88,8 +87,6 @@ function RoyalCaribbeanSyncScreen() {
   const [webViewVisible, setWebViewVisible] = useState(true);
   const [showCredentialsModal, setShowCredentialsModal] = useState(false);
   const [showCookieModal, setShowCookieModal] = useState(false);
-  const [showCertificateMonthListModal, setShowCertificateMonthListModal] = useState(false);
-  const [certificateMonthOffset, setCertificateMonthOffset] = useState<0 | 1>(0);
   const [webSyncError, setWebSyncError] = useState<string | null>(null);
   const [cookieSyncError, setCookieSyncError] = useState<string | null>(null);
   const [syncingPricing, setSyncingPricing] = useState(false);
@@ -421,12 +418,6 @@ function RoyalCaribbeanSyncScreen() {
     } finally {
       setIsExportingLog(false);
     }
-  };
-
-  const openCertificateMonthList = (offset: 0 | 1) => {
-    setCertificateMonthOffset(offset);
-    setShowCertificateMonthListModal(true);
-    addLog(`${offset === 0 ? 'This month' : 'Next month'} certificate list requested`, 'info');
   };
 
   const canRunIngestion = state.status === 'logged_in' || state.status === 'complete';
@@ -852,28 +843,6 @@ function RoyalCaribbeanSyncScreen() {
                   <Text style={styles.quickActionLabelCompact}>
                     {isExportingLog ? 'EXPORTING…' : 'EXPORT LOG'}
                   </Text>
-                </Pressable>
-              </View>
-
-              <View style={styles.certificateActionsRow}>
-                <Pressable
-                  style={[styles.quickActionButton, styles.certificateListButton]}
-                  onPress={() => openCertificateMonthList(0)}
-                  testID="royal-sync-this-month-certificate-list-button"
-                >
-                  <Award size={20} color="#facc15" />
-                  <Text style={styles.quickActionLabelCompact}>THIS MONTH CERTIFICATE LIST</Text>
-                  <Text style={styles.certificateListHint}>A + C PDFs</Text>
-                </Pressable>
-
-                <Pressable
-                  style={[styles.quickActionButton, styles.certificateListButtonNext]}
-                  onPress={() => openCertificateMonthList(1)}
-                  testID="royal-sync-next-month-certificate-list-button"
-                >
-                  <Award size={20} color="#c084fc" />
-                  <Text style={styles.quickActionLabelCompact}>NEXT MONTH CERTIFICATE LIST</Text>
-                  <Text style={styles.certificateListHint}>A + C PDFs</Text>
                 </Pressable>
               </View>
             </View>
@@ -1303,15 +1272,7 @@ function RoyalCaribbeanSyncScreen() {
           </View>
         )}
         
-        <CertificateMonthListModal
-        visible={showCertificateMonthListModal}
-        monthOffset={certificateMonthOffset}
-        bookedCruises={coreData.bookedCruises}
-        onLog={addLog}
-        onClose={() => setShowCertificateMonthListModal(false)}
-      />
-
-      <WebSyncCredentialsModal
+        <WebSyncCredentialsModal
           visible={showCredentialsModal}
           onClose={() => {
             setShowCredentialsModal(false);
@@ -1594,34 +1555,6 @@ const styles = StyleSheet.create({
     gap: 6,
     borderColor: '#0f3b57',
     backgroundColor: '#102133',
-  },
-  certificateActionsRow: {
-    flexDirection: 'row' as const,
-    gap: 10,
-    alignItems: 'stretch' as const,
-  },
-  certificateListButton: {
-    flex: 1,
-    minHeight: 86,
-    paddingHorizontal: 10,
-    gap: 5,
-    borderColor: '#713f12',
-    backgroundColor: '#1f2937',
-  },
-  certificateListButtonNext: {
-    flex: 1,
-    minHeight: 86,
-    paddingHorizontal: 10,
-    gap: 5,
-    borderColor: '#4c1d95',
-    backgroundColor: '#1e1b4b',
-  },
-  certificateListHint: {
-    color: '#94a3b8',
-    fontSize: 10,
-    fontWeight: '700' as const,
-    textAlign: 'center' as const,
-    letterSpacing: 0.5,
   },
   buttonDisabled: {
     opacity: 0.5

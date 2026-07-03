@@ -1,4 +1,3 @@
-import { estimateCoinInForPoints } from '@/lib/casino/pointsEarning';
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -498,14 +497,14 @@ export function CasinoIntelligenceCard({ analytics, onViewDetails, completedCrui
     const totalPointsEarned = cruisesWithData.reduce((sum, c) => sum + getBookedCruiseCasinoPoints(c), 0);
     const totalCoinIn = cruisesWithData.reduce((sum, c) => {
       const points = getBookedCruiseCasinoPoints(c);
-      return sum + (points > 0 ? (c.coinIn ?? estimateCoinInForPoints({ targetPoints: points, brand: c.brand ?? 'royal', gameCategory: c.gameCategory ?? 'reel-slot' }).coinIn ?? 0) : 0);
+      return sum + (points > 0 ? (c.coinIn ?? points * 5) : 0);
     }, 0);
     const totalHoursPlayed = cruisesWithData.reduce((sum, c) => sum + (c.hoursPlayed || (c.nights || 0) * 4), 0);
     
     const totalTheoreticalLoss = cruisesWithData.reduce((sum, c) => {
       if (c.theoreticalLoss) return sum + c.theoreticalLoss;
       const points = getBookedCruiseCasinoPoints(c);
-      const coinIn = points > 0 ? (c.coinIn ?? estimateCoinInForPoints({ targetPoints: points, brand: c.brand ?? 'royal', gameCategory: c.gameCategory ?? 'reel-slot' }).coinIn ?? 0) : 0;
+      const coinIn = points > 0 ? (c.coinIn ?? points * 5) : 0;
       return sum + (coinIn * (c.houseEdge ?? 0.08));
     }, 0);
     

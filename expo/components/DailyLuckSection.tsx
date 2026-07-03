@@ -243,28 +243,6 @@ export function DailyLuckSection({ selectedDate }: DailyLuckSectionProps) {
             <Text style={styles.heroTagValue} numberOfLines={1}>{tarotCard.name}</Text>
           </View>
         </View>
-
-        {liveQuery.data?.fullRecord ? (
-          <View style={styles.fullLuckBlock}>
-            <View style={styles.fullLuckRow}>
-              <Text style={styles.fullLuckLabel}>0–100 Score</Text>
-              <Text style={styles.fullLuckValue}>{liveQuery.data.fullRecord.luckyScore100} · {liveQuery.data.fullRecord.luckBand}</Text>
-            </View>
-            <View style={styles.fullLuckRow}>
-              <Text style={styles.fullLuckLabel}>Lucky Window</Text>
-              <Text style={styles.fullLuckValue}>{liveQuery.data.fullRecord.bestLuckyWindow}</Text>
-            </View>
-            <View style={styles.fullLuckRow}>
-              <Text style={styles.fullLuckLabel}>Lucky Number / Color</Text>
-              <Text style={styles.fullLuckValue}>{liveQuery.data.fullRecord.luckyNumber} · {liveQuery.data.fullRecord.luckyColor}</Text>
-            </View>
-            <Text style={styles.fullLuckReading}>{liveQuery.data.fullRecord.dailyReading}</Text>
-            {liveQuery.data.fullRecord.casinoGuidance ? (
-              <Text style={styles.fullLuckWarning}>{liveQuery.data.fullRecord.casinoGuidance}</Text>
-            ) : null}
-            <Text style={styles.fullLuckDisclaimer}>{liveQuery.data.fullRecord.disclaimer}</Text>
-          </View>
-        ) : null}
       </LinearGradient>
 
       {/* ─── WESTERN ZODIAC ─── */}
@@ -795,50 +773,6 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: '#FFFFFF',
-  },
-  fullLuckBlock: {
-    marginTop: SPACING.md,
-    borderRadius: 16,
-    padding: SPACING.sm,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-  },
-  fullLuckRow: {
-    flexDirection: 'row' as const,
-    justifyContent: 'space-between' as const,
-    gap: SPACING.sm,
-    paddingVertical: 4,
-  },
-  fullLuckLabel: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.58)',
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-  },
-  fullLuckValue: {
-    flex: 1,
-    textAlign: 'right' as const,
-    fontSize: 11,
-    color: '#FFFFFF',
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-  },
-  fullLuckReading: {
-    marginTop: 8,
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    lineHeight: 18,
-    color: 'rgba(255,255,255,0.84)',
-  },
-  fullLuckWarning: {
-    marginTop: 8,
-    fontSize: 11,
-    lineHeight: 16,
-    color: '#FDE68A',
-  },
-  fullLuckDisclaimer: {
-    marginTop: 8,
-    fontSize: 10,
-    lineHeight: 14,
-    color: 'rgba(255,255,255,0.56)',
   },
   zodiacCard: {
     borderRadius: 22,

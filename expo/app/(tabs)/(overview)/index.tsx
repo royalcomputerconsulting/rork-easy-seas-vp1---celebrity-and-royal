@@ -65,13 +65,6 @@ import { IntelligenceFilterStrip } from '@/components/IntelligenceFilterStrip';
 import { useIntelligenceFilters } from '@/state/IntelligenceFiltersProvider';
 import { filterRecordsByIntelligence } from '@/lib/intelligenceFilters';
 import { getBookedCruiseCasinoPoints, getBookedCruiseWinningsBroughtHome } from '@/lib/casinoPointTruth';
-import { useCasinoSessions } from '@/state/CasinoSessionProvider';
-import { BestPlayTodayCard } from '@/components/casino/BestPlayTodayCard';
-import { buildBestPlayTodayPlan } from '@/lib/casino/bestPlayToday';
-import { CertificateExpirationBadge } from '@/components/certificates/CertificateExpirationBadge';
-import { getCertificateExpirationResult, sortCertificatesByExpirationUrgency } from '@/lib/certificates/expiration';
-import { CasinoOpportunityBadge } from '@/components/cruise/CasinoOpportunityBadge';
-import { calculateCasinoOpportunityScore } from '@/lib/cruise/casinoOpportunityScore';
 
 import type { Cruise, BookedCruise, CasinoOffer } from '@/types/models';
 import { getCabinPriceFromEntity, getDoubleOccupancyRoomRetailValue, GUEST_COUNT_DEFAULT } from '@/lib/valueCalculator';
@@ -210,7 +203,7 @@ function OverviewScreenContent() {
   const { cruises, bookedCruises: allBookedCruises, casinoOffers, clubRoyaleProfile, updateCasinoOffer } = useCoreData();
   const { currentUser, users } = useUser();
   const { selectedProfileId, selectedBrand, selectedProgram } = useIntelligenceFilters();
-  const { logout, isAdmin } = useAuth();
+  const { logout } = useAuth();
   const { sendMessage, setMode: setAgentMode } = useAgentX();
   const { summary } = useAlerts();
   
@@ -229,7 +222,6 @@ function OverviewScreenContent() {
     deleteCertificate,
     getCertificatesByType,
   } = useCertificates();
-  const { sessions } = useCasinoSessions();
 
   const intelligenceFilterSnapshot = useMemo(() => ({
     selectedProfileId,
@@ -273,27 +265,6 @@ function OverviewScreenContent() {
   const activeBookedCruises = useMemo(() => {
     return bookedCruises.filter((cruise: BookedCruise) => isActiveBookedCruise(cruise));
   }, [bookedCruises]);
-
-  const bestPlayTodayPlan = useMemo(() => buildBestPlayTodayPlan({
-    bookedCruises,
-    sessions,
-    userProfile: {
-      ...clubRoyaleProfile,
-      ...currentUser,
-    },
-    userSettings: {
-      coinInPerPoint: 5,
-      bankrollCap: 200,
-      suggestedBetRange: '$2.50–$5.00',
-    },
-  }), [bookedCruises, sessions, clubRoyaleProfile, currentUser]);
-
-  const urgentCertificateResults = useMemo(() => {
-    return sortCertificatesByExpirationUrgency(certificates)
-      .map((certificate) => ({ certificate, result: getCertificateExpirationResult(certificate) }))
-      .filter(({ result }) => result.status === 'expires-today' || result.status === 'urgent' || result.status === 'expiring-soon' || result.status === 'unknown')
-      .slice(0, 3);
-  }, [certificates]);
 
   const bookedCruiseIds = useMemo(() => {
     return new Set(bookedCruises.map((b: BookedCruise) => b.id));
@@ -367,15 +338,6 @@ function OverviewScreenContent() {
 
     return activeKeys.size;
   }, [offersData, blockedOfferKeys]);
-
-  const totalOffersInSystemCount = useMemo(() => {
-    const offerKeys = new Set<string>();
-    offersData.forEach((offer: CasinoOffer) => {
-      const lookupKey = getOfferLookupKey(offer);
-      offerKeys.add(lookupKey || offer.offerCode || offer.id);
-    });
-    return offerKeys.size;
-  }, [offersData]);
 
   const groupedOffers = useMemo(() => {
     const offersMap = new Map<string, CasinoOfferCardData>();
@@ -769,7 +731,7 @@ function OverviewScreenContent() {
           alertCount={summary.totalActive}
           availableCruises={availableCruisesCount}
           bookedCruises={activeBookedCruises.length}
-          activeOffers={totalOffersInSystemCount}
+          activeOffers={realActiveOffersCount}
           onCruisesPress={handleCruisesPress}
           onBookedPress={handleBookedPress}
           onOffersPress={() => console.log('Active offers pressed')}
@@ -777,9 +739,6 @@ function OverviewScreenContent() {
 
         <IntelligenceFilterStrip contextLabel="Offers" variant="bookedCruises" />
 
-        <View style={styles.phase3CardWrapper} testID="overview-best-play-today">
-          <BestPlayTodayCard plan={bestPlayTodayPlan} />
-        </View>
 
         <TouchableOpacity
           style={styles.learnSystemCard}
@@ -810,18 +769,16 @@ function OverviewScreenContent() {
             <Text style={styles.advisorTileTitle}>Best Offer Right Now</Text>
             <Text style={styles.advisorTileText}>Rank offers by value, conflict risk, casino time, and upgrade math.</Text>
           </TouchableOpacity>
-          {isAdmin && (
-            <TouchableOpacity
-              style={styles.advisorTile}
-              onPress={() => router.push('/data-health' as any)}
-              activeOpacity={0.85}
-              testID="dashboard-data-health"
-            >
-              <DatabaseZap size={18} color={COLORS.navyDeep} />
-              <Text style={styles.advisorTileTitle}>Data Health</Text>
-              <Text style={styles.advisorTileText}>Check duplicates, brand scopes, completed cruises, and inflated counts.</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={styles.advisorTile}
+            onPress={() => router.push('/data-health' as any)}
+            activeOpacity={0.85}
+            testID="dashboard-data-health"
+          >
+            <DatabaseZap size={18} color={COLORS.navyDeep} />
+            <Text style={styles.advisorTileTitle}>Data Health</Text>
+            <Text style={styles.advisorTileText}>Check duplicates, brand scopes, completed cruises, and inflated counts.</Text>
+          </TouchableOpacity>
         </View>
 
         {offerSummary && (
@@ -979,13 +936,6 @@ function OverviewScreenContent() {
             onViewOffersPress={() => router.push('/scheduling' as any)}
             onExaminePress={() => setShowCertificateExplorerModal(true)}
           />
-          {urgentCertificateResults.length > 0 && (
-            <View style={styles.certificateBadgeStack} testID="overview-certificate-expiration-badges">
-              {urgentCertificateResults.map(({ certificate, result }) => (
-                <CertificateExpirationBadge key={certificate.id} result={result} compact={false} />
-              ))}
-            </View>
-          )}
         </CollapsibleSection>
 
         <TouchableOpacity
@@ -1097,19 +1047,8 @@ function OverviewScreenContent() {
         ? calculateOfferIntelligenceScore(item.representativeOffer, cruisesData, certificates, currentTravelerProfile)
         : undefined;
 
-      const bestCasinoOpportunity = item.cruises.length > 0
-        ? item.cruises
-            .map((cruise) => calculateCasinoOpportunityScore(cruise))
-            .sort((a, b) => (b.score ?? -1) - (a.score ?? -1))[0]
-        : null;
-
       return (
         <ResponsiveContainer>
-          {bestCasinoOpportunity ? (
-            <View style={styles.phase3MiniBadgeWrapper}>
-              <CasinoOpportunityBadge result={bestCasinoOpportunity} compact={true} showWarnings={true} />
-            </View>
-          ) : null}
           <CasinoOfferCard
           offerCode={item.offerCode}
           offerName={item.offerName}
@@ -1133,13 +1072,8 @@ function OverviewScreenContent() {
 
     const offerNameOverride = item.offerCode ? offerNameByCode.get(item.offerCode) : undefined;
 
-    const casinoOpportunity = calculateCasinoOpportunityScore(item);
-
     return (
       <ResponsiveContainer>
-        <View style={styles.phase3MiniBadgeWrapper}>
-          <CasinoOpportunityBadge result={casinoOpportunity} compact={true} showWarnings={true} />
-        </View>
         <OfferCard 
         offer={item as Cruise} 
         allCruises={cruisesData}
@@ -1300,16 +1234,6 @@ const styles = StyleSheet.create({
   },
   headerContent: {
     marginBottom: SPACING.md,
-  },
-  phase3CardWrapper: {
-    marginBottom: SPACING.md,
-  },
-  phase3MiniBadgeWrapper: {
-    marginBottom: SPACING.xs,
-  },
-  certificateBadgeStack: {
-    marginTop: SPACING.md,
-    gap: SPACING.sm,
   },
   titleLogoCard: {
     marginTop: SPACING.sm,
