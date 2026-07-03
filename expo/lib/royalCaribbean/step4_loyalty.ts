@@ -556,8 +556,13 @@ export const STEP4_LOYALTY_SCRIPT = `
         
         // Extract loyalty info from captured payload
         var loyaltyPayload = capturedData.payload || capturedData;
-        var loyaltyInfo = loyaltyPayload.loyaltyInformation || loyaltyPayload;
-        var accountId = loyaltyPayload.accountId || '';
+        // Some endpoints (e.g. /api/casino/v1/loyalty-data) wrap the real fields one level
+        // deeper as { message, data: { ...actual loyalty fields... } } instead of
+        // { payload: { loyaltyInformation: {...} } }. Unwrap that shape too, otherwise
+        // clubRoyalePoints/crownAndAnchorPoints silently stay missing.
+        var nestedDataObject = (loyaltyPayload && typeof loyaltyPayload.data === 'object' && loyaltyPayload.data && !Array.isArray(loyaltyPayload.data)) ? loyaltyPayload.data : null;
+        var loyaltyInfo = loyaltyPayload.loyaltyInformation || nestedDataObject || loyaltyPayload;
+        var accountId = loyaltyPayload.accountId || (nestedDataObject && nestedDataObject.accountId) || '';
         
         if (loyaltyInfo) {
           log('✅ Using loyalty data from captured payload', 'success');

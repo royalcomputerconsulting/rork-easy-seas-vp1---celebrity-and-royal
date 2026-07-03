@@ -1504,8 +1504,15 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           console.log('[RoyalCaribbeanSync] Loyalty data structure:', JSON.stringify(data).substring(0, 500));
           
           const loyaltyPayload = data.payload || data;
-          const loyaltyInfo = loyaltyPayload.loyaltyInformation || loyaltyPayload;
-          const accountId = loyaltyPayload.accountId || '';
+          // Some endpoints (e.g. /api/casino/v1/loyalty-data) wrap the real fields one level
+          // deeper as { message, data: { ...actual loyalty fields... } } instead of
+          // { payload: { loyaltyInformation: {...} } }. Unwrap that shape too, otherwise
+          // clubRoyalePointsFromApi/crownAndAnchorPointsFromApi silently stay undefined.
+          const nestedDataObject = loyaltyPayload && typeof loyaltyPayload.data === 'object' && loyaltyPayload.data && !Array.isArray(loyaltyPayload.data)
+            ? loyaltyPayload.data
+            : undefined;
+          const loyaltyInfo = loyaltyPayload.loyaltyInformation || nestedDataObject || loyaltyPayload;
+          const accountId = loyaltyPayload.accountId || nestedDataObject?.accountId || '';
 
           if (typeof url === 'string' && url.includes('/guestAccounts/loyalty/info')) {
             addLog('Captured loyalty from /guestAccounts/loyalty/info (correct endpoint)', 'success');
@@ -1513,7 +1520,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             addLog('Loyalty captured from: ' + String(url), 'info');
           }
           
-          addLog('Loyalty payload keys: ' + Object.keys(loyaltyPayload).join(', '), 'info');
+          addLog('Loyalty payload keys: ' + Object.keys(loyaltyInfo).join(', '), 'info');
 
           const completedFromHistory = parseCompletedSailingsPayload(data, cruiseLine);
           if (completedFromHistory.length > 0) {
