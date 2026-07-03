@@ -152,13 +152,12 @@ export const BOARDING_KEY_RING_PATH = 'M42 76C22 76 6 60 6 40C6 20 22 4 42 4C61 
 
 const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDynamicOverlayDefinition> = {
   time: {
-    x: 956,
+    x: 644,
     y: 106,
     fill: '#FFFFFF',
     fontSize: 46,
     fontWeight: '400',
     letterSpacing: -1.1,
-    textAnchor: 'end',
     mask: {
       x: 632,
       y: 36,
@@ -171,13 +170,12 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
     },
   },
   date: {
-    x: 958,
+    x: 644,
     y: 178,
     fill: '#FFFFFF',
     fontSize: 46,
     fontWeight: '400',
     letterSpacing: -1.1,
-    textAnchor: 'end',
     mask: {
       x: 632,
       y: 104,
