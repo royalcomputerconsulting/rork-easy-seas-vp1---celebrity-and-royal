@@ -87,11 +87,25 @@ function parseDateKey(dateKey: string): Date | null {
   return new Date(year, month - 1, day);
 }
 
+/**
+ * Parses a cruise date string as a LOCAL calendar date. Avoids the off-by-one
+ * day bug where `new Date("YYYY-MM-DD")` is parsed as UTC midnight and can
+ * shift to the previous day once read back in local time (any timezone west
+ * of UTC), which would misalign marine alert windows by a day.
+ */
+function parseLocalCruiseDate(value: string): Date {
+  const dateOnlyMatch = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})(?:T00:00:00(?:\.000)?Z?)?$/);
+  if (dateOnlyMatch) {
+    return new Date(Number(dateOnlyMatch[1]), Number(dateOnlyMatch[2]) - 1, Number(dateOnlyMatch[3]));
+  }
+  return new Date(value);
+}
+
 function buildCruiseDatesInWindow(cruise: SailingWeatherCruiseInput, startDate: Date, daysAhead: number): Date[] {
   const windowStart = startOfDay(startDate);
   const windowEnd = startOfDay(addDays(windowStart, Math.max(0, daysAhead)));
-  const cruiseStart = startOfDay(new Date(cruise.sailDate));
-  const cruiseEnd = startOfDay(new Date(cruise.returnDate));
+  const cruiseStart = startOfDay(parseLocalCruiseDate(cruise.sailDate));
+  const cruiseEnd = startOfDay(parseLocalCruiseDate(cruise.returnDate));
 
   if (Number.isNaN(cruiseStart.getTime()) || Number.isNaN(cruiseEnd.getTime()) || cruiseEnd < cruiseStart) {
     return [];

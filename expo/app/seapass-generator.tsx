@@ -29,6 +29,7 @@ interface SeaPassFieldConfig {
   placeholder: string;
   keyboardType?: TextInputProps['keyboardType'];
   autoCapitalize?: TextInputProps['autoCapitalize'];
+  maxLength?: number;
 }
 
 const FIELD_CONFIGS: SeaPassFieldConfig[] = [
@@ -38,6 +39,7 @@ const FIELD_CONFIGS: SeaPassFieldConfig[] = [
     placeholder: SEA_PASS_DEFAULTS.time,
     keyboardType: 'default',
     autoCapitalize: 'none',
+    maxLength: 12,
   },
   {
     key: 'date',
@@ -45,6 +47,7 @@ const FIELD_CONFIGS: SeaPassFieldConfig[] = [
     placeholder: SEA_PASS_DEFAULTS.date,
     keyboardType: 'default',
     autoCapitalize: 'words',
+    maxLength: 14,
   },
   {
     key: 'deck',
@@ -52,6 +55,7 @@ const FIELD_CONFIGS: SeaPassFieldConfig[] = [
     placeholder: SEA_PASS_DEFAULTS.deck,
     keyboardType: 'number-pad',
     autoCapitalize: 'none',
+    maxLength: 3,
   },
   {
     key: 'stateroom',
@@ -59,6 +63,7 @@ const FIELD_CONFIGS: SeaPassFieldConfig[] = [
     placeholder: SEA_PASS_DEFAULTS.stateroom,
     keyboardType: 'number-pad',
     autoCapitalize: 'none',
+    maxLength: 6,
   },
   {
     key: 'muster',
@@ -66,6 +71,7 @@ const FIELD_CONFIGS: SeaPassFieldConfig[] = [
     placeholder: SEA_PASS_DEFAULTS.muster,
     keyboardType: 'default',
     autoCapitalize: 'characters',
+    maxLength: 4,
   },
   {
     key: 'reservation',
@@ -73,6 +79,7 @@ const FIELD_CONFIGS: SeaPassFieldConfig[] = [
     placeholder: SEA_PASS_DEFAULTS.reservation,
     keyboardType: 'number-pad',
     autoCapitalize: 'none',
+    maxLength: 10,
   },
   {
     key: 'ship',
@@ -80,6 +87,7 @@ const FIELD_CONFIGS: SeaPassFieldConfig[] = [
     placeholder: SEA_PASS_DEFAULTS.ship,
     keyboardType: 'default',
     autoCapitalize: 'characters',
+    maxLength: 4,
   },
   {
     key: 'port',
@@ -87,6 +95,7 @@ const FIELD_CONFIGS: SeaPassFieldConfig[] = [
     placeholder: 'MIAMI, FLORIDA',
     keyboardType: 'default',
     autoCapitalize: 'characters',
+    maxLength: 40,
   },
   {
     key: 'terminal',
@@ -94,6 +103,7 @@ const FIELD_CONFIGS: SeaPassFieldConfig[] = [
     placeholder: 'A',
     keyboardType: 'default',
     autoCapitalize: 'characters',
+    maxLength: 2,
   },
 ];
 
@@ -305,6 +315,7 @@ function SeaPassGeneratorScreen() {
                         keyboardType={field.keyboardType}
                         autoCapitalize={field.autoCapitalize}
                         autoCorrect={false}
+                        maxLength={field.maxLength}
                         style={styles.input}
                         testID={`seapass-generator.input.${field.key}`}
                       />

@@ -311,6 +311,24 @@ function startOfDay(date: Date): Date {
   return normalized;
 }
 
+/**
+ * Parses a cruise date string as a LOCAL calendar date, avoiding the classic
+ * off-by-one-day bug where `new Date("YYYY-MM-DD")` is parsed as UTC midnight
+ * and then shifts to the previous day once converted to local time in any
+ * timezone west of UTC. This matters for marine/weather alert timing since a
+ * shifted day can point the forecast lookup at the wrong port or sea day.
+ */
+function parseLocalDate(value: string): Date {
+  const dateOnlyMatch = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})(?:T00:00:00(?:\.000)?Z?)?$/);
+  if (dateOnlyMatch) {
+    const year = Number(dateOnlyMatch[1]);
+    const month = Number(dateOnlyMatch[2]);
+    const day = Number(dateOnlyMatch[3]);
+    return new Date(year, month - 1, day);
+  }
+  return new Date(value);
+}
+
 function addDays(date: Date, days: number): Date {
   const nextDate = new Date(date);
   nextDate.setDate(nextDate.getDate() + days);
@@ -322,8 +340,8 @@ function isSameDay(left: Date, right: Date): boolean {
 }
 
 function buildCruiseDateRange(cruise: SailingWeatherCruiseInput): Date[] {
-  const start = startOfDay(new Date(cruise.sailDate));
-  const end = startOfDay(new Date(cruise.returnDate));
+  const start = startOfDay(parseLocalDate(cruise.sailDate));
+  const end = startOfDay(parseLocalDate(cruise.returnDate));
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
     return [];
   }
@@ -375,10 +393,25 @@ function toNullableNumber(value: unknown): number | null {
   return isNumber(value) ? value : null;
 }
 
-function isCacheExpired(updatedAt: string): boolean {
+/**
+ * Near-term sailing days (today/tomorrow) get a shorter cache refresh window
+ * since marine conditions can shift quickly and guests need the freshest
+ * possible read before sailaway; forecasts further out stay on the standard
+ * 6-hour refresh since model guidance that far ahead doesn't change as often.
+ */
+function getCacheRefreshMsForDateKey(dateKey: string): number {
+  const target = parseLocalDate(dateKey);
+  if (Number.isNaN(target.getTime())) return CACHE_REFRESH_MS;
+  const daysUntil = Math.floor((startOfDay(target).getTime() - startOfDay(new Date()).getTime()) / (1000 * 60 * 60 * 24));
+  if (daysUntil <= 1) return 1000 * 60 * 60 * 2;
+  if (daysUntil <= 3) return 1000 * 60 * 60 * 4;
+  return CACHE_REFRESH_MS;
+}
+
+function isCacheExpired(updatedAt: string, dateKey: string): boolean {
   const updatedTime = new Date(updatedAt).getTime();
   if (!Number.isFinite(updatedTime)) return true;
-  return Date.now() - updatedTime > CACHE_REFRESH_MS;
+  return Date.now() - updatedTime > getCacheRefreshMsForDateKey(dateKey);
 }
 
 function pruneCacheEntries(cache: Record<string, SailingWeatherForecast>): Record<string, SailingWeatherForecast> {
@@ -391,10 +424,8 @@ function pruneCacheEntries(cache: Record<string, SailingWeatherForecast>): Recor
 }
 
 function getDayOfCruise(cruise: SailingWeatherCruiseInput, targetDate: Date): number {
-  const start = new Date(cruise.sailDate);
-  start.setHours(0, 0, 0, 0);
-  const target = new Date(targetDate);
-  target.setHours(0, 0, 0, 0);
+  const start = startOfDay(parseLocalDate(cruise.sailDate));
+  const target = startOfDay(new Date(targetDate));
   const diffMs = target.getTime() - start.getTime();
   return Math.max(1, Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1);
 }
@@ -1006,7 +1037,7 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
       longitude: resolvedPoint.longitude,
       timezone: weatherJson.timezone_abbreviation ?? weatherJson.timezone ?? 'Local',
       updatedAt,
-      nextRefreshAt: new Date(Date.now() + CACHE_REFRESH_MS).toISOString(),
+      nextRefreshAt: new Date(Date.now() + getCacheRefreshMsForDateKey(dateKey)).toISOString(),
       source: 'live',
       isStale: false,
       isSeaDay: resolvedPoint.isSeaDay,
@@ -1055,7 +1086,7 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
       });
     }
 
-    if (!shouldForce && cached && !isCacheExpired(cached.updatedAt)) {
+    if (!shouldForce && cached && !isCacheExpired(cached.updatedAt, dateKey)) {
       console.log('[SailingWeather] Serving fresh cached forecast', { cacheKey, source: 'cache-fresh' });
       const freshForecast: SailingWeatherForecast = {
         ...cached,

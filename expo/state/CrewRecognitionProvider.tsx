@@ -120,6 +120,58 @@ function parseCSVToEntries(csvText: string): { entries: RecognitionEntryWithCrew
   };
 }
 
+const KNOWN_DEPARTMENT_LOOKUP: Record<string, string> = {
+  'activities': 'Activities',
+  'attractions': 'Attractions',
+  'beverage': 'Beverage',
+  'bev': 'Beverage',
+  'bar': 'Beverage',
+  'cafe': 'Cafe',
+  'casino': 'Casino',
+  'casino / beverage': 'Casino / Beverage',
+  'crown lounge': 'Crown Lounge',
+  'cruise staff': 'Cruise Staff',
+  'deck': 'Deck',
+  'diamond club': 'Diamond Club',
+  'dining': 'Dining',
+  'front desk': 'Front Desk',
+  'guest relations': 'Guest Relations',
+  'housekeeping': 'Housekeeping',
+  'leadership': 'Leadership',
+  'loyalty': 'Loyalty',
+  'nextcruise': 'NextCruise',
+  'next cruise': 'NextCruise',
+  'public areas': 'Public Areas',
+  'retail': 'Retail',
+  'sanitation': 'Sanitation',
+  'spa': 'Spa',
+  'windjammer': 'Windjammer',
+  'windjammer / cafe': 'Windjammer / Cafe',
+};
+
+/**
+ * Parses a single crew-list import line, supporting optional per-line
+ * department overrides in the form "Name - Department", "Name, Department",
+ * or "Name (Department)". Falls back to the batch default department when
+ * no recognizable department suffix is present.
+ */
+function parseCrewLine(rawLine: string): { fullName: string; department: string | null } {
+  const trimmed = rawLine.trim().replace(/^["']|["']$/g, '');
+  if (!trimmed) return { fullName: '', department: null };
+
+  const separatorMatch = trimmed.match(/^(.+?)\s*[-–—,]\s*([A-Za-z /]+)$/) || trimmed.match(/^(.+?)\s*\(([A-Za-z /]+)\)$/);
+  if (separatorMatch) {
+    const candidateName = separatorMatch[1].trim();
+    const candidateDeptKey = separatorMatch[2].trim().toLowerCase();
+    const matchedDept = KNOWN_DEPARTMENT_LOOKUP[candidateDeptKey];
+    if (matchedDept && candidateName.length > 0) {
+      return { fullName: candidateName, department: matchedDept };
+    }
+  }
+
+  return { fullName: trimmed, department: null };
+}
+
 export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook(() => {
   const auth = useAuth();
   const userId = auth.authenticatedEmail?.toLowerCase().trim() || 'guest';
@@ -590,11 +642,17 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     }
   }, []);
 
-  const importFromTextLocally = useCallback(async (text: string): Promise<{ importedCount: number; skippedCount: number; shipName: string; sailDate: string }> => {
-    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-    if (lines.length < 2) {
+  const importFromTextLocally = useCallback(async (text: string, defaultDepartment?: string): Promise<{ importedCount: number; skippedCount: number; shipName: string; sailDate: string }> => {
+    const MAX_IMPORT_LINES = 500;
+    const rawLines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    if (rawLines.length < 2) {
       throw new Error('Please provide at least 2 lines: a ship + date line, then crew names.');
     }
+    if (rawLines.length > MAX_IMPORT_LINES + 1) {
+      throw new Error(`This list has ${rawLines.length - 1} crew lines, which is over the ${MAX_IMPORT_LINES} limit per import. Please split it into smaller batches.`);
+    }
+    const lines = rawLines;
+    const batchDepartment: string = defaultDepartment?.trim() || 'Other';
 
     const firstLine = lines[0];
     const datePatterns = [
@@ -660,9 +718,11 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
     const now = new Date().toISOString();
     const newEntries: RecognitionEntryWithCrew[] = [];
 
-    for (const name of crewLines) {
-      if (!name.trim()) continue;
-      const normalizedName = name.trim();
+    for (const rawLine of crewLines) {
+      if (!rawLine.trim()) continue;
+      const { fullName: parsedName, department: parsedDepartment } = parseCrewLine(rawLine);
+      if (!parsedName) continue;
+      const normalizedName = parsedName;
       if (existingNamesForSailing.has(normalizedName.toLowerCase())) {
         skippedCount++;
         console.log('[CrewRecognition] Skipping duplicate crew member:', normalizedName);
@@ -678,7 +738,7 @@ export const [CrewRecognitionProvider, useCrewRecognition] = createContextHook((
         sailEndDate: sailDate,
         sailingMonth: sailDate.substring(0, 7),
         sailingYear: sailDate ? parseInt(sailDate.substring(0, 4), 10) || parseInt(sailDate.split(/[-/]/)[2] || '0', 10) : 0,
-        department: 'Other',
+        department: parsedDepartment || batchDepartment,
         sourceText: 'Imported from text list',
         userId,
         createdAt: now,

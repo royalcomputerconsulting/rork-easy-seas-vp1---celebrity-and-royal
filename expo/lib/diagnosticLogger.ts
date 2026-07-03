@@ -29,6 +29,10 @@ export type DiagnosticEvent = {
 };
 
 const MAX_EVENTS = 5000;
+const MAX_PERSISTED_EVENTS = 1500;
+const PERSIST_DEBOUNCE_MS = 4000;
+const RATE_LIMIT_WINDOW_MS = 1000;
+const RATE_LIMIT_MAX_EVENTS_PER_WINDOW = 40;
 const STORAGE_KEY = 'easyseas_diagnostic_events_v1';
 const tabStarts = new Map<string, number>();
 let events: DiagnosticEvent[] = [];
@@ -37,6 +41,9 @@ let originalConsoleLog: typeof console.log | null = null;
 let originalConsoleWarn: typeof console.warn | null = null;
 let originalConsoleError: typeof console.error | null = null;
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
+let rateLimitWindowStart = 0;
+let rateLimitCountInWindow = 0;
+let rateLimitDroppedInWindow = 0;
 
 function clip(value: unknown, max = 2500): unknown {
   if (value == null) return value;
@@ -55,19 +62,62 @@ function schedulePersist() {
   if (persistTimer) return;
   persistTimer = setTimeout(() => {
     persistTimer = null;
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(events.slice(-MAX_EVENTS))).catch(() => {});
-  }, 1500);
+    try {
+      // Only the most recent window is persisted to keep each write light;
+      // the full in-memory MAX_EVENTS history is still available for export
+      // during the current session.
+      const toPersist = events.slice(-MAX_PERSISTED_EVENTS);
+      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(toPersist)).catch(() => {});
+    } catch {
+      // Serialization failures must never break app logging.
+    }
+  }, PERSIST_DEBOUNCE_MS);
+}
+
+/**
+ * Simple sliding-window rate limiter so a runaway logging loop elsewhere in
+ * the app can never turn diagnostic capture itself into a performance or
+ * stability problem. Excess events within the same window are dropped, with
+ * a single summary event recorded once the window closes.
+ */
+function isRateLimited(): boolean {
+  const now = Date.now();
+  if (now - rateLimitWindowStart > RATE_LIMIT_WINDOW_MS) {
+    if (rateLimitDroppedInWindow > 0) {
+      events.push({
+        ts: new Date().toISOString(),
+        level: 'warning',
+        category: 'PERFORMANCE',
+        event: 'DIAGNOSTIC_RATE_LIMITED',
+        message: `Dropped ${rateLimitDroppedInWindow} diagnostic event(s) in the last second to protect app performance`,
+      });
+    }
+    rateLimitWindowStart = now;
+    rateLimitCountInWindow = 0;
+    rateLimitDroppedInWindow = 0;
+  }
+  rateLimitCountInWindow += 1;
+  if (rateLimitCountInWindow > RATE_LIMIT_MAX_EVENTS_PER_WINDOW) {
+    rateLimitDroppedInWindow += 1;
+    return true;
+  }
+  return false;
 }
 
 export function recordDiagnosticEvent(input: Omit<DiagnosticEvent, 'ts'>) {
-  const entry: DiagnosticEvent = {
-    ts: new Date().toISOString(),
-    ...input,
-    data: input.data ? Object.fromEntries(Object.entries(input.data).map(([k, v]) => [k, clip(v)])) : undefined,
-  };
-  events.push(entry);
-  if (events.length > MAX_EVENTS) events = events.slice(-MAX_EVENTS);
-  schedulePersist();
+  try {
+    if (isRateLimited()) return;
+    const entry: DiagnosticEvent = {
+      ts: new Date().toISOString(),
+      ...input,
+      data: input.data ? Object.fromEntries(Object.entries(input.data).map(([k, v]) => [k, clip(v)])) : undefined,
+    };
+    events.push(entry);
+    if (events.length > MAX_EVENTS) events = events.slice(-MAX_EVENTS);
+    schedulePersist();
+  } catch {
+    // Diagnostic logging must never be able to crash or destabilize the app.
+  }
 }
 
 export async function initializeDiagnosticLogger() {

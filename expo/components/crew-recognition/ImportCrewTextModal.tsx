@@ -11,21 +11,34 @@ import {
   Alert,
   Platform,
 } from 'react-native';
-import { X, FileText, Upload, Info } from 'lucide-react-native';
+import { X, FileText, Upload, Info, ChevronDown } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
 
 interface ImportCrewTextModalProps {
   visible: boolean;
   onClose: () => void;
-  onImport: (text: string) => Promise<{ importedCount: number; skippedCount: number; shipName: string; sailDate: string }>;
+  onImport: (text: string, department?: string) => Promise<{ importedCount: number; skippedCount: number; shipName: string; sailDate: string }>;
 }
 
-const EXAMPLE_TEXT = `Radiance of the Seas 09-26-2025\nJohn Smith\nJane Doe\nBob Johnson\nMaria Garcia`;
+const EXAMPLE_TEXT = `Radiance of the Seas 09-26-2025\nJohn Smith\nJane Doe - Casino\nBob Johnson, Dining\nMaria Garcia`;
+
+const DEFAULT_DEPARTMENT_OPTIONS: string[] = [
+  'Other',
+  'Casino',
+  'Dining',
+  'Guest Relations',
+  'Housekeeping',
+  'Beverage',
+  'Cruise Staff',
+  'Front Desk',
+];
 
 export function ImportCrewTextModal({ visible, onClose, onImport }: ImportCrewTextModalProps) {
   const [text, setText] = useState('');
   const [isImporting, setIsImporting] = useState(false);
   const [showExample, setShowExample] = useState(false);
+  const [showDeptPicker, setShowDeptPicker] = useState(false);
+  const [defaultDepartment, setDefaultDepartment] = useState<string>('Other');
 
   const handleImport = useCallback(async () => {
     const trimmed = text.trim();
@@ -36,7 +49,7 @@ export function ImportCrewTextModal({ visible, onClose, onImport }: ImportCrewTe
 
     setIsImporting(true);
     try {
-      const result = await onImport(trimmed);
+      const result = await onImport(trimmed, defaultDepartment);
       Alert.alert(
         'Import Complete',
         `Ship: ${result.shipName}${result.sailDate ? `\nSailing: ${result.sailDate}` : ''}\n\n✅ Imported: ${result.importedCount} crew members\n⏭ Skipped (duplicates): ${result.skippedCount}`,
@@ -47,7 +60,7 @@ export function ImportCrewTextModal({ visible, onClose, onImport }: ImportCrewTe
     } finally {
       setIsImporting(false);
     }
-  }, [text, onImport, onClose]);
+  }, [text, onImport, onClose, defaultDepartment]);
 
   const handlePickFile = useCallback(async () => {
     if (Platform.OS === 'web') {
@@ -91,6 +104,8 @@ export function ImportCrewTextModal({ visible, onClose, onImport }: ImportCrewTe
   const handleClose = useCallback(() => {
     setText('');
     setShowExample(false);
+    setShowDeptPicker(false);
+    setDefaultDepartment('Other');
     onClose();
   }, [onClose]);
 
@@ -111,11 +126,32 @@ export function ImportCrewTextModal({ visible, onClose, onImport }: ImportCrewTe
               <Info size={14} color="#0369A1" />
               <Text style={styles.infoText}>
                 Line 1: Ship name + sailing date{'\n'}
-                Lines 2+: One crew member per line
+                Lines 2+: One crew member per line. Add " - Department" after a name to set that person's department.
               </Text>
               <TouchableOpacity onPress={() => setShowExample(v => !v)} style={styles.exampleToggle}>
                 <Text style={styles.exampleToggleText}>{showExample ? 'Hide example' : 'See example'}</Text>
               </TouchableOpacity>
+            </View>
+
+            <View style={styles.deptSection}>
+              <Text style={styles.deptLabel}>Default department (used when a line doesn't specify one)</Text>
+              <TouchableOpacity style={styles.deptSelector} onPress={() => setShowDeptPicker(v => !v)} activeOpacity={0.7}>
+                <Text style={styles.deptSelectorText}>{defaultDepartment}</Text>
+                <ChevronDown size={16} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+              {showDeptPicker && (
+                <View style={styles.deptOptionsList}>
+                  {DEFAULT_DEPARTMENT_OPTIONS.map((dept) => (
+                    <TouchableOpacity
+                      key={dept}
+                      style={[styles.deptOption, dept === defaultDepartment && styles.deptOptionActive]}
+                      onPress={() => { setDefaultDepartment(dept); setShowDeptPicker(false); }}
+                    >
+                      <Text style={[styles.deptOptionText, dept === defaultDepartment && styles.deptOptionTextActive]}>{dept}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
             </View>
 
             {showExample && (
@@ -248,6 +284,56 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#0369A1',
     lineHeight: 20,
+  },
+  deptSection: {
+    marginBottom: SPACING.md,
+  },
+  deptLabel: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: COLORS.textSecondary,
+    marginBottom: 6,
+  },
+  deptSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: BORDER_RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    backgroundColor: '#fff',
+  },
+  deptSelectorText: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: '600' as const,
+    color: COLORS.text,
+  },
+  deptOptionsList: {
+    marginTop: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(3,105,161,0.2)',
+    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: '#F0F9FF',
+    overflow: 'hidden',
+  },
+  deptOption: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(3,105,161,0.1)',
+  },
+  deptOptionActive: {
+    backgroundColor: 'rgba(3,105,161,0.12)',
+  },
+  deptOptionText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: '#334155',
+    fontWeight: '500' as const,
+  },
+  deptOptionTextActive: {
+    color: '#0369A1',
+    fontWeight: '700' as const,
   },
   actions: {
     flexDirection: 'row',
