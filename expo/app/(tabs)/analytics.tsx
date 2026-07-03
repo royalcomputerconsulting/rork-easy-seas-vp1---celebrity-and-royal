@@ -47,6 +47,7 @@ import {
   AlertTriangle,
   Activity,
   ClipboardList,
+  RefreshCw,
 } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME, SHADOW } from '@/constants/theme';
 import { useSimpleAnalytics } from '@/state/SimpleAnalyticsProvider';
@@ -54,6 +55,7 @@ import { useAppState } from '@/state/AppStateProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import { useAuth } from '@/state/AuthProvider';
+import { useUserDataSync } from '@/state/UserDataSyncProvider';
 import { formatCurrency, formatCurrencyDetailed, formatNumber, formatPercentage } from '@/lib/format';
 import { calculateCruiseValue } from '@/lib/valueCalculator';
 import { createDateFromString } from '@/lib/date';
@@ -196,6 +198,7 @@ export default function AnalyticsScreen() {
   useEntitlement();
   const router = useRouter();
   const { authenticatedEmail } = useAuth();
+  const { lastSyncTime, isSyncing: isCloudSyncing, forceSyncNow } = useUserDataSync();
   const { analytics, casinoAnalytics } = useSimpleAnalytics();
   const {
     activeAlerts,
@@ -503,6 +506,36 @@ export default function AnalyticsScreen() {
     await new Promise(resolve => setTimeout(resolve, 1000));
     setRefreshing(false);
   }, [resyncAnalytics]);
+
+  const handleSyncNowPress = useCallback(() => {
+    resyncAnalytics();
+    if (authenticatedEmail) {
+      forceSyncNow().catch((error) => console.error('[Analytics] Sync Now failed:', error));
+    }
+  }, [resyncAnalytics, forceSyncNow, authenticatedEmail]);
+
+  const dataAsOfLabel = useMemo(() => {
+    if (!lastSyncTime) return 'Data as of your last local update';
+    const parsed = new Date(lastSyncTime);
+    if (Number.isNaN(parsed.getTime())) return 'Data as of your last local update';
+    return `Data as of ${parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+  }, [lastSyncTime]);
+
+  const renderScreenHeader = useCallback((title: string, subtitle: string) => (
+    <View style={styles.screenHeaderRow}>
+      <View style={styles.screenHeaderTextCol}>
+        <Text style={casinoDashboardStyles.screenTitle}>{title}</Text>
+        <Text style={casinoDashboardStyles.screenSubtitle}>{subtitle}</Text>
+      </View>
+      <View>
+        <Text style={styles.dataAsOfText} numberOfLines={1}>{dataAsOfLabel}</Text>
+        <TouchableOpacity style={styles.syncNowButton} activeOpacity={0.75} onPress={handleSyncNowPress} testID="casino-sync-now">
+          <RefreshCw size={12} color={CASINO_DASHBOARD_COLORS.royalBlue} style={isCloudSyncing ? { transform: [{ rotate: '45deg' }] } : undefined} />
+          <Text style={styles.syncNowButtonText}>{isCloudSyncing ? 'Syncing…' : 'Sync Now'}</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  ), [dataAsOfLabel, handleSyncNowPress, isCloudSyncing]);
 
   useEffect(() => {
     console.log('[Analytics] Page loaded, syncing casino analytics...');
@@ -1851,8 +1884,7 @@ export default function AnalyticsScreen() {
     <View style={styles.tabContent}>
       {cruiseValueDrill.element}
       <View style={styles.section}>
-        <Text style={casinoDashboardStyles.screenTitle}>Cruise Value</Text>
-        <Text style={casinoDashboardStyles.screenSubtitle}>Track the real value of your cruises and your true make-out.</Text>
+        {renderScreenHeader('Cruise Value', 'Track the real value of your cruises and your true make-out.')}
       </View>
 
       <View style={styles.section}>
@@ -2438,8 +2470,7 @@ export default function AnalyticsScreen() {
     <View style={styles.tabContent}>
       {actionCenterDrill.element}
       <View style={styles.section}>
-        <Text style={casinoDashboardStyles.screenTitle}>Casino Action Center</Text>
-        <Text style={casinoDashboardStyles.screenSubtitle}>Manage your upcoming cruises, offers, certificates, and daily actions.</Text>
+        {renderScreenHeader('Casino Action Center', 'Manage your upcoming cruises, offers, certificates, and daily actions.')}
       </View>
 
       <View style={styles.section}>
@@ -3191,35 +3222,49 @@ export default function AnalyticsScreen() {
     return [...shipPerformance].sort((a, b) => b.cashResult - a.cashResult)[0] ?? null;
   }, [shipPerformance]);
 
+  const formatMonthLabel = (monthKey: string): string => {
+    const [year, month] = monthKey.split('-');
+    const monthIndex = Number(month) - 1;
+    if (!year || Number.isNaN(monthIndex) || monthIndex < 0 || monthIndex > 11) return monthKey;
+    const date = new Date(Date.UTC(Number(year), monthIndex, 1));
+    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  };
+
   const historyInsightsOverview = useMemo(() => {
-    const monthTotals = new Map<string, number>();
-    const dayTotals = new Map<string, { points: number; buyIn: number }>();
+    const monthTotals = new Map<string, { points: number; cashResult: number }>();
+    const dayTotals = new Map<string, { points: number; buyIn: number; cashResult: number }>();
 
     sessions.forEach((session) => {
       if (!session.date) return;
       const monthKey = session.date.slice(0, 7);
-      monthTotals.set(monthKey, (monthTotals.get(monthKey) || 0) + (session.pointsEarned || 0));
-      const dayEntry = dayTotals.get(session.date) ?? { points: 0, buyIn: 0 };
+      const monthEntry = monthTotals.get(monthKey) ?? { points: 0, cashResult: 0 };
+      monthEntry.points += session.pointsEarned || 0;
+      monthEntry.cashResult += session.winLoss || 0;
+      monthTotals.set(monthKey, monthEntry);
+
+      const dayEntry = dayTotals.get(session.date) ?? { points: 0, buyIn: 0, cashResult: 0 };
       dayEntry.points += session.pointsEarned || 0;
       dayEntry.buyIn += session.buyIn || 0;
+      dayEntry.cashResult += session.winLoss || 0;
       dayTotals.set(session.date, dayEntry);
     });
 
-    const bestMonth = Array.from(monthTotals.entries()).sort((a, b) => b[1] - a[1])[0] ?? null;
     const dayEntries = Array.from(dayTotals.entries());
+    const monthEntries = Array.from(monthTotals.entries());
+    const bestMonth = [...monthEntries].sort((a, b) => b[1].cashResult - a[1].cashResult)[0] ?? null;
+    const bestDayByCash = [...dayEntries].sort((a, b) => b[1].cashResult - a[1].cashResult)[0] ?? null;
     const bestDayByPoints = [...dayEntries].sort((a, b) => b[1].points - a[1].points)[0] ?? null;
     const bestDayByBuyIn = [...dayEntries].sort((a, b) => b[1].buyIn - a[1].buyIn)[0] ?? null;
     const biggestJackpot = [...w2gRecords].sort((a, b) => b.amount - a.amount)[0] ?? null;
 
-    return { bestMonth, bestDayByPoints, bestDayByBuyIn, biggestJackpot, hasSessionData: sessions.length > 0 };
+    return { bestMonth, bestDayByCash, bestDayByPoints, bestDayByBuyIn, biggestJackpot, hasSessionData: sessions.length > 0 };
   }, [sessions, w2gRecords]);
 
   const renderHistoryTab = () => (
     <View style={styles.tabContent}>
       {historyInsightsDrill.element}
       <View style={styles.section}>
-        <Text style={casinoDashboardStyles.screenTitle}>History & Insights</Text>
-        <Text style={casinoDashboardStyles.screenSubtitle}>Dive into your casino history, trends, and performance insights.</Text>
+        {renderScreenHeader('History & Insights', 'Dive into your casino history, trends, and performance insights.')}
       </View>
 
       <View style={styles.section}>
@@ -3563,27 +3608,30 @@ export default function AnalyticsScreen() {
       <View style={styles.section}>
         <View style={casinoDashboardStyles.card}>
           <Text style={styles.economicsTitle}>Insights Overview</Text>
+          <Text style={casinoDashboardStyles.screenSubtitle}>Why EasySeas picked each one — tap any row for the full comparison</Text>
           {[
             {
               key: 'bestMonth',
               label: 'Best Month',
-              value: historyInsightsOverview.bestMonth ? historyInsightsOverview.bestMonth[0] : 'Needs Data',
-              detail: historyInsightsOverview.bestMonth ? `${formatNumber(historyInsightsOverview.bestMonth[1])} pts` : 'No sessions logged yet',
-              why: 'Sessions are grouped by calendar month, and the month with the highest total points earned wins.',
+              value: historyInsightsOverview.bestMonth ? formatMonthLabel(historyInsightsOverview.bestMonth[0]) : 'Needs Data',
+              detail: historyInsightsOverview.bestMonth ? formatSignedCurrencyDetailed(historyInsightsOverview.bestMonth[1].cashResult) : 'No sessions logged yet',
+              color: historyInsightsOverview.bestMonth ? casinoValueColor(historyInsightsOverview.bestMonth[1].cashResult) : undefined,
+              why: 'Sessions are grouped by calendar month, and the month with the highest total cash result (win/loss) wins.',
             },
             {
               key: 'bestDay',
               label: 'Best Day',
-              value: historyInsightsOverview.bestDayByPoints ? historyInsightsOverview.bestDayByPoints[0] : 'Needs Data',
-              detail: historyInsightsOverview.bestDayByPoints ? `${formatNumber(historyInsightsOverview.bestDayByPoints[1].points)} pts` : 'No sessions logged yet',
-              why: 'Every session is grouped by calendar day; the single day with the most total points earned wins.',
+              value: historyInsightsOverview.bestDayByCash ? historyInsightsOverview.bestDayByCash[0] : 'Needs Data',
+              detail: historyInsightsOverview.bestDayByCash ? formatSignedCurrencyDetailed(historyInsightsOverview.bestDayByCash[1].cashResult) : 'No sessions logged yet',
+              color: historyInsightsOverview.bestDayByCash ? casinoValueColor(historyInsightsOverview.bestDayByCash[1].cashResult) : undefined,
+              why: 'Every session is grouped by calendar day; the single day with the highest total cash result (win/loss) wins.',
             },
             {
               key: 'mostPoints',
               label: 'Most Points in a Day',
-              value: historyInsightsOverview.bestDayByPoints ? formatNumber(historyInsightsOverview.bestDayByPoints[1].points) : 'Needs Data',
+              value: historyInsightsOverview.bestDayByPoints ? `${formatNumber(historyInsightsOverview.bestDayByPoints[1].points)} pts` : 'Needs Data',
               detail: historyInsightsOverview.bestDayByPoints ? historyInsightsOverview.bestDayByPoints[0] : 'No sessions logged yet',
-              why: 'Same day-level grouping as "Best Day", shown as a raw points total.',
+              why: 'Every session is grouped by calendar day; the single day with the most total points earned wins — tracked separately from "Best Day" above, which ranks by cash result instead of points.',
             },
             {
               key: 'biggestJackpot',
@@ -3613,11 +3661,31 @@ export default function AnalyticsScreen() {
             >
               <Text style={styles.dataLabel} numberOfLines={1}>{row.label}</Text>
               <View style={{ alignItems: 'flex-end' }}>
-                <Text style={styles.dataValue}>{row.value}</Text>
+                <Text style={[styles.dataValue, row.color ? { color: row.color } : null]}>{row.value}</Text>
                 <Text style={styles.economicsSummaryLabel} numberOfLines={1}>{row.detail}</Text>
               </View>
             </TouchableOpacity>
           ))}
+          <TouchableOpacity
+            style={styles.viewMoreButton}
+            activeOpacity={0.7}
+            onPress={() => historyInsightsDrill.open({
+              title: 'All Insights',
+              summary: 'Every insight EasySeas currently tracks from your session, ship, and jackpot history, gathered in one place.',
+              sourceRecords: [
+                { label: 'Best Month', value: historyInsightsOverview.bestMonth ? `${formatMonthLabel(historyInsightsOverview.bestMonth[0])} — ${formatSignedCurrencyDetailed(historyInsightsOverview.bestMonth[1].cashResult)}` : 'Needs Data' },
+                { label: 'Best Day', value: historyInsightsOverview.bestDayByCash ? `${historyInsightsOverview.bestDayByCash[0]} — ${formatSignedCurrencyDetailed(historyInsightsOverview.bestDayByCash[1].cashResult)}` : 'Needs Data' },
+                { label: 'Most Points in a Day', value: historyInsightsOverview.bestDayByPoints ? `${historyInsightsOverview.bestDayByPoints[0]} — ${formatNumber(historyInsightsOverview.bestDayByPoints[1].points)} pts` : 'Needs Data' },
+                { label: 'Biggest Jackpot (W2G)', value: historyInsightsOverview.biggestJackpot ? `${historyInsightsOverview.biggestJackpot.date} — ${formatCurrencyDetailed(historyInsightsOverview.biggestJackpot.amount)}` : 'Needs Data' },
+                { label: 'Most Coin-in in a Day', value: historyInsightsOverview.bestDayByBuyIn ? `${historyInsightsOverview.bestDayByBuyIn[0]} — ${formatCurrencyDetailed(historyInsightsOverview.bestDayByBuyIn[1].buyIn)}` : 'Needs Data' },
+                { label: 'Best Ship (Points)', value: bestShipByPoints ? `${bestShipByPoints.ship} — ${formatNumber(bestShipByPoints.points)} pts` : 'Needs Data' },
+                { label: 'Best Ship (Win/Loss)', value: bestShipByWinLoss ? `${bestShipByWinLoss.ship} — ${formatSignedCurrencyDetailed(bestShipByWinLoss.cashResult)}` : 'Needs Data' },
+              ],
+            })}
+          >
+            <Text style={styles.viewMoreText}>View All Insights</Text>
+            <ChevronDown size={16} color={COLORS.navyDeep} />
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -3637,8 +3705,7 @@ export default function AnalyticsScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={casinoDashboardStyles.screenTitle}>Simulator</Text>
-        <Text style={casinoDashboardStyles.screenSubtitle}>Plan different scenarios and see the impact on your goals and value.</Text>
+        {renderScreenHeader('Simulator', 'Plan different scenarios and see the impact on your goals and value.')}
       </View>
 
       <View style={styles.section}>
@@ -4590,6 +4657,37 @@ const styles = StyleSheet.create({
   },
   section: {
     marginBottom: SPACING.lg,
+  },
+  screenHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: SPACING.sm,
+  },
+  screenHeaderTextCol: {
+    flex: 1,
+  },
+  dataAsOfText: {
+    fontSize: 11,
+    color: CASINO_DASHBOARD_COLORS.mutedText,
+    marginBottom: 6,
+    textAlign: 'right',
+  },
+  syncNowButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: CASINO_DASHBOARD_COLORS.border,
+    backgroundColor: CASINO_DASHBOARD_COLORS.card,
+  },
+  syncNowButtonText: {
+    fontSize: 11.5,
+    fontWeight: '700' as const,
+    color: CASINO_DASHBOARD_COLORS.royalBlue,
   },
   sectionHeader: {
     flexDirection: 'row',
