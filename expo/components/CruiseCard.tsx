@@ -1,0 +1,1522 @@
+import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Animated, Platform } from 'react-native';
+import * as Haptics from 'expo-haptics';
+import { Calendar, ChevronRight, Users, Ship, Heart, Sparkles, Anchor, Ticket, Gauge, AlertTriangle } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
+
+import { createDateFromString } from '@/lib/date';
+
+import { getUniqueImageForCruise, getImageForDestination, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
+import type { Cruise, BookedCruise, ItineraryDay } from '@/types/models';
+import { calculateSeaDayDensityScore } from '@/lib/cruisePlanningIntelligence';
+import { calculateCruiseValue } from '@/lib/valueCalculator';
+
+interface CruiseCardProps {
+  cruise: Cruise | BookedCruise;
+  onPress?: () => void;
+  showPricePerNight?: boolean;
+  compact?: boolean;
+  mini?: boolean;
+  variant?: 'default' | 'booked' | 'available' | 'completed';
+  showRetailValue?: boolean;
+  conflictWarning?: string;
+}
+
+function getCruiseStatus(cruise: BookedCruise): 'upcoming' | 'completed' | 'active' {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  if (cruise.sailDate && cruise.returnDate) {
+    const sailDate = createDateFromString(cruise.sailDate);
+    const returnDate = createDateFromString(cruise.returnDate);
+    sailDate.setHours(0, 0, 0, 0);
+    returnDate.setHours(23, 59, 59, 999);
+    
+    if (today > returnDate) return 'completed';
+    if (today >= sailDate && today <= returnDate) return 'active';
+  }
+  return 'upcoming';
+}
+
+type FutureTopTierBadge = {
+  text: 'PINNACLE' | 'ZENITH';
+  bg: string;
+  textColor: string;
+};
+
+const TOP_TIER_BADGE_START_DATE = new Date(2026, 6, 24);
+
+function getFutureTopTierBadge(cruise: Cruise | BookedCruise, isBooked: boolean): FutureTopTierBadge | null {
+  if (!isBooked || !cruise.sailDate) return null;
+
+  const sailDate = createDateFromString(cruise.sailDate);
+  sailDate.setHours(0, 0, 0, 0);
+
+  if (sailDate.getTime() <= TOP_TIER_BADGE_START_DATE.getTime()) return null;
+
+  const brandIdentifier = `${cruise.brand ?? ''} ${cruise.cruiseSource ?? ''} ${cruise.shipName ?? ''}`.toLowerCase();
+
+  if (brandIdentifier.includes('celebrity')) {
+    return { text: 'ZENITH', bg: '#2B2930', textColor: COLORS.white };
+  }
+
+  if (brandIdentifier.includes('royal')) {
+    return { text: 'PINNACLE', bg: COLORS.tierPinnacle, textColor: COLORS.white };
+  }
+
+  return null;
+}
+
+export const CruiseCard = React.memo(function CruiseCard({ 
+  cruise, 
+  onPress, 
+  showPricePerNight: _showPricePerNight = true, 
+  compact = false,
+  mini = false,
+  variant = 'default',
+  showRetailValue = true,
+  conflictWarning,
+}: CruiseCardProps) {
+  const isBooked = variant === 'booked' || variant === 'completed' || 'bookingId' in cruise || 'reservationNumber' in cruise;
+  const bookedCruise = cruise as BookedCruise;
+  
+  const cruiseStatus = useMemo(() => {
+    if (variant === 'completed') return 'completed';
+    if (isBooked) return getCruiseStatus(bookedCruise);
+    return 'upcoming';
+  }, [variant, isBooked, bookedCruise]);
+  
+  const shipImageUrl = useMemo(() => {
+    return getUniqueImageForCruise(
+      cruise.id,
+      cruise.destination,
+      cruise.sailDate,
+      cruise.shipName
+    );
+  }, [cruise.id, cruise.destination, cruise.sailDate, cruise.shipName]);
+  
+  const destinationImage = useMemo(() => {
+    const hash = cruise.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    return getImageForDestination(cruise.destination, hash + 1);
+  }, [cruise.id, cruise.destination]);
+
+  const [heroImageUri, setHeroImageUri] = useState<string>(shipImageUrl || DEFAULT_CRUISE_IMAGE);
+  const [compactImageUri, setCompactImageUri] = useState<string>(destinationImage || DEFAULT_CRUISE_IMAGE);
+  const [showHeroImage, setShowHeroImage] = useState<boolean>(true);
+  const [showCompactImage, setShowCompactImage] = useState<boolean>(true);
+
+  useEffect(() => {
+    setHeroImageUri(shipImageUrl || DEFAULT_CRUISE_IMAGE);
+    setShowHeroImage(true);
+  }, [shipImageUrl]);
+
+  useEffect(() => {
+    setCompactImageUri(destinationImage || DEFAULT_CRUISE_IMAGE);
+    setShowCompactImage(true);
+  }, [destinationImage]);
+
+  const retailValue = useMemo(() => {
+    if (!showRetailValue) return null;
+    return calculateCruiseValue(cruise).totalRetailValue;
+  }, [cruise, showRetailValue]);
+
+  const formatDateRange = (sailDate: string, returnDate?: string, nights?: number) => {
+    const start = createDateFromString(sailDate);
+    const startMonth = start.toLocaleDateString('en-US', { month: 'short' });
+    const startDay = start.getDate();
+    const startYear = start.getFullYear();
+    
+    if (returnDate) {
+      const end = createDateFromString(returnDate);
+      const endMonth = end.toLocaleDateString('en-US', { month: 'short' });
+      const endDay = end.getDate();
+      
+      if (startMonth === endMonth) {
+        return `${startMonth} ${startDay} - ${endDay}, ${startYear}`;
+      }
+      return `${startMonth} ${startDay} - ${endMonth} ${endDay}, ${startYear}`;
+    }
+    
+    if (nights) {
+      const end = new Date(start);
+      end.setDate(end.getDate() + nights);
+      const endMonth = end.toLocaleDateString('en-US', { month: 'short' });
+      const endDay = end.getDate();
+      
+      if (startMonth === endMonth) {
+        return `${startMonth} ${startDay} - ${endDay}, ${startYear}`;
+      }
+      return `${startMonth} ${startDay} - ${endMonth} ${endDay}, ${startYear}`;
+    }
+    
+    return `${startMonth} ${startDay}, ${startYear}`;
+  };
+
+  const getStatusBadge = () => {
+    switch (cruiseStatus) {
+      case 'completed':
+        return { text: 'COMPLETED', bg: COLORS.money };
+      case 'active':
+        return { text: 'ON BOARD', bg: COLORS.points };
+      default:
+        return isBooked 
+          ? { text: 'BOOKED', bg: COLORS.loyalty }
+          : { text: 'AVAILABLE', bg: COLORS.gold };
+    }
+  };
+
+  const getItineraryName = () => {
+    if (cruise.itineraryName) {
+      const parts = cruise.itineraryName.split(':');
+      if (parts.length > 1) {
+        return parts[1].trim();
+      }
+      
+      const isJustNumber = /^\d+$/.test(cruise.itineraryName.trim());
+      if (isJustNumber || cruise.itineraryName.length < 5) {
+        return `${cruise.nights || 0}-Night ${cruise.destination || 'Cruise'}`;
+      }
+      
+      return cruise.itineraryName;
+    }
+    return `${cruise.nights || 0}-Night ${cruise.destination || 'Cruise'}`;
+  };
+
+  const statusBadge = getStatusBadge();
+  const futureTopTierBadge = useMemo(
+    () => getFutureTopTierBadge(cruise, isBooked),
+    [cruise.sailDate, cruise.brand, cruise.cruiseSource, cruise.shipName, isBooked]
+  );
+
+  const seaDayDensity = useMemo(() => {
+    return calculateSeaDayDensityScore(cruise);
+  }, [cruise]);
+
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = useCallback(() => {
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    }
+    Animated.spring(scaleAnim, {
+      toValue: 0.97,
+      useNativeDriver: true,
+      friction: 5,
+      tension: 300,
+    }).start();
+  }, [scaleAnim]);
+
+  const handlePressOut = useCallback(() => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      friction: 4,
+    }).start();
+  }, [scaleAnim]);
+
+  const miniGradientColors = useMemo((): [string, string, string] => {
+    if (cruiseStatus === 'completed') return ['#DCFCE7', '#D1FAE5', '#ECFDF5'];
+    if (cruiseStatus === 'active') return ['#FEF9C3', '#FEF3C7', '#FFFBEB'];
+    return ['#FFF3E0', '#FFE0B2', '#FFF8E1'];
+  }, [cruiseStatus]);
+
+  const handleCompactImageError = useCallback(() => {
+    console.log('[CruiseCard] Compact image load error', { currentUri: compactImageUri });
+    if (compactImageUri !== DEFAULT_CRUISE_IMAGE) {
+      setCompactImageUri(DEFAULT_CRUISE_IMAGE);
+      return;
+    }
+    setShowCompactImage(false);
+  }, [compactImageUri]);
+
+  const handleHeroImageError = useCallback(() => {
+    console.log('[CruiseCard] Hero image load error', { currentUri: heroImageUri });
+    if (heroImageUri !== DEFAULT_CRUISE_IMAGE) {
+      setHeroImageUri(DEFAULT_CRUISE_IMAGE);
+      return;
+    }
+    setShowHeroImage(false);
+  }, [heroImageUri]);
+
+  if (mini) {
+    const miniPorts = bookedCruise.itinerary?.map((day: ItineraryDay) => day.port).filter(Boolean) || bookedCruise.ports || [];
+    const guestCount = bookedCruise.guestNames?.length || bookedCruise.guests || 2;
+    
+    return (
+      <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+      <TouchableOpacity 
+        style={styles.miniContainer}
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        activeOpacity={1}
+        testID="cruise-card-mini"
+      >
+        <LinearGradient
+          colors={miniGradientColors}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+        {showCompactImage ? (
+          <Image 
+            source={{ uri: compactImageUri }} 
+            style={styles.miniBackgroundImage}
+            resizeMode="cover"
+            onError={handleCompactImageError}
+          />
+        ) : null}
+        <View style={styles.miniImageOverlay} />
+        <View style={styles.miniContent}>
+          <View style={styles.miniTopRow}>
+            <View style={styles.miniShipRow}>
+              <Ship size={13} color={COLORS.navyDeep} />
+              <Text style={styles.miniShipName} numberOfLines={1}>{cruise.shipName}</Text>
+            </View>
+            <View style={styles.miniBadgeStack}>
+              <View style={[styles.miniStatusBadge, { backgroundColor: statusBadge.bg }]}>
+                <Text style={[
+                  styles.miniStatusBadgeText,
+                  statusBadge.bg === COLORS.goldAccent || statusBadge.bg === COLORS.aquaAccent 
+                    ? { color: COLORS.navyDeep } 
+                    : { color: COLORS.white }
+                ]}>
+                  {statusBadge.text}
+                </Text>
+              </View>
+              {futureTopTierBadge ? (
+                <View style={[styles.miniTopTierBadge, { backgroundColor: futureTopTierBadge.bg }]} testID="cruise-card-top-tier-badge">
+                  <Text style={[styles.miniTopTierBadgeText, { color: futureTopTierBadge.textColor }]}>{futureTopTierBadge.text}</Text>
+                </View>
+              ) : null}
+              {isBooked ? (
+                <View style={styles.miniBookletBadge} testID="cruise-card-booklet-badge">
+                  <Text style={styles.miniBookletBadgeText}>ITINERARY BOOKLET</Text>
+                </View>
+              ) : null}
+            </View>
+          </View>
+          <Text style={styles.miniItinerary} numberOfLines={1}>{getItineraryName()}</Text>
+          {conflictWarning ? (
+            <View style={styles.miniConflictRow} testID="cruise-card-overlap-warning">
+              <AlertTriangle size={11} color="#92400E" />
+              <Text style={styles.miniConflictText} numberOfLines={2}>{conflictWarning}</Text>
+            </View>
+          ) : null}
+          <View style={styles.miniPlanningRow} testID="cruise-card-mini-sea-day-score">
+            <Gauge size={10} color="#0F766E" />
+            <Text style={styles.miniPlanningText}>Casino Availability Score {seaDayDensity.casinoOpportunityScore}</Text>
+            <Text style={styles.miniPlanningMuted}>{seaDayDensity.seaDays} sea days • {seaDayDensity.portDays} port days</Text>
+          </View>
+          <Text style={styles.miniDestination} numberOfLines={1}>
+            {cruise.departurePort ? `From ${cruise.departurePort}` : cruise.destination}
+          </Text>
+          {miniPorts.length > 0 ? (
+            <Text style={styles.miniPorts}>
+              {miniPorts.join(' • ')}
+            </Text>
+          ) : null}
+          <View style={styles.miniBottomRow}>
+            <View style={styles.miniMetaRow}>
+              <View style={styles.miniMeta}>
+                <Calendar size={13} color={COLORS.navyDeep} />
+                <Text style={styles.miniDate}>
+                  {formatDateRange(cruise.sailDate, cruise.returnDate, cruise.nights)}
+                </Text>
+              </View>
+              <View style={styles.miniMeta}>
+                <Users size={13} color={COLORS.navyDeep} />
+                <Text style={styles.miniDate}>{guestCount}G</Text>
+              </View>
+            </View>
+            <Text style={styles.miniNights}>{cruise.nights}N</Text>
+          </View>
+          <View style={styles.miniValueRow}>
+            {showRetailValue && retailValue !== null && retailValue > 0 && (
+              <Text style={styles.miniRetailValue}>${Math.round(retailValue).toLocaleString()}</Text>
+            )}
+            {bookedCruise.cabinType ? (
+              <View style={styles.miniCabinRow}>
+                <Text style={styles.miniCabin}>{bookedCruise.cabinType}</Text>
+                {cruise.nights != null && cruise.nights > 0 ? (
+                  <Text style={styles.miniExpectedPoints}>{'• '}{cruise.nights * 2}{' pts'}</Text>
+                ) : null}
+              </View>
+            ) : null}
+            {(bookedCruise.offerCode || cruise.offerCode) ? (
+              <View style={styles.miniOfferBadge}>
+                <Sparkles size={10} color={COLORS.goldDark} />
+                <Text style={styles.miniOfferCode}>{bookedCruise.offerCode || cruise.offerCode}</Text>
+              </View>
+            ) : null}
+          </View>
+          {(isBooked || !!(bookedCruise.offerCode || cruise.offerCode)) && (
+            (bookedCruise.freePlay !== undefined || cruise.freePlay !== undefined || 
+             bookedCruise.freeOBC !== undefined || cruise.freeOBC !== undefined || 
+             bookedCruise.usedNextCruiseCertificate) && (
+              <View style={styles.miniFpObcRow}>
+                {(bookedCruise.freePlay !== undefined || cruise.freePlay !== undefined) && (
+                  <View style={styles.miniFpBadge}>
+                    <Text style={styles.miniFpLabel}>FreePlay:</Text>
+                    <Text style={styles.miniFpValue}>${(bookedCruise.freePlay ?? cruise.freePlay ?? 0).toLocaleString()}</Text>
+                  </View>
+                )}
+                {(bookedCruise.freeOBC !== undefined || cruise.freeOBC !== undefined) && (
+                  <View style={styles.miniObcBadge}>
+                    <Text style={styles.miniObcLabel}>OBC:</Text>
+                    <Text style={styles.miniObcValue}>${(bookedCruise.freeOBC ?? cruise.freeOBC ?? 0).toLocaleString()}</Text>
+                  </View>
+                )}
+                {bookedCruise.usedNextCruiseCertificate ? (
+                  <View style={styles.miniNccBadge}>
+                    <Ticket size={11} color="#7C3AED" />
+                    <Text style={styles.miniNccLabel}>NCC</Text>
+                  </View>
+                ) : null}
+              </View>
+            )
+          )}
+          {!!((cruise.interiorPrice && cruise.interiorPrice > 0) || (cruise.oceanviewPrice && cruise.oceanviewPrice > 0) || (cruise.balconyPrice && cruise.balconyPrice > 0) || (cruise.suitePrice && cruise.suitePrice > 0)) && (
+            <View style={styles.miniPricingRow}>
+              {cruise.interiorPrice != null && cruise.interiorPrice > 0 && (
+                <View style={styles.miniPricingItem}>
+                  <Text style={styles.miniPricingLabel}>Int:</Text>
+                  <Text style={styles.miniPricingValue}>${Math.round(cruise.interiorPrice).toLocaleString()}</Text>
+                </View>
+              )}
+              {cruise.oceanviewPrice != null && cruise.oceanviewPrice > 0 && (
+                <View style={styles.miniPricingItem}>
+                  <Text style={styles.miniPricingLabel}>OV:</Text>
+                  <Text style={styles.miniPricingValue}>${Math.round(cruise.oceanviewPrice).toLocaleString()}</Text>
+                </View>
+              )}
+              {cruise.balconyPrice != null && cruise.balconyPrice > 0 && (
+                <View style={styles.miniPricingItem}>
+                  <Text style={styles.miniPricingLabel}>Bal:</Text>
+                  <Text style={styles.miniPricingValue}>${Math.round(cruise.balconyPrice).toLocaleString()}</Text>
+                </View>
+              )}
+              {cruise.suitePrice != null && cruise.suitePrice > 0 && (
+                <View style={styles.miniPricingItem}>
+                  <Text style={styles.miniPricingLabel}>Suite:</Text>
+                  <Text style={styles.miniPricingValue}>${Math.round(cruise.suitePrice).toLocaleString()}</Text>
+                </View>
+              )}
+            </View>
+          )}
+          {((bookedCruise.taxes ?? cruise.taxes ?? 0) > 0) && (
+            <View style={styles.miniTaxesRow}>
+              <Text style={styles.miniTaxesLabel}>Port Taxes & Fees:</Text>
+              <Text style={styles.miniTaxesValue}>${Math.round(bookedCruise.taxes ?? cruise.taxes ?? 0).toLocaleString()}</Text>
+            </View>
+          )}
+          {/* Booking Enrichment Data from Sync */}
+          {isBooked && !!(bookedCruise.musterStation || bookedCruise.bookingStatus || bookedCruise.packageCode || bookedCruise.stateroomNumber || bookedCruise.stateroomCategoryCode) && (
+            <View style={styles.miniEnrichmentSection}>
+              {!!bookedCruise.bookingStatus && (
+                <View style={styles.miniEnrichmentRow}>
+                  <Text style={styles.miniEnrichmentLabel}>Status:</Text>
+                  <View style={[
+                    styles.miniEnrichmentBadge,
+                    { backgroundColor: bookedCruise.bookingStatus === 'BK' ? '#DCFCE7' : bookedCruise.bookingStatus === 'OF' ? '#FEF3C7' : '#E0E7FF' }
+                  ]}>
+                    <Text style={[
+                      styles.miniEnrichmentBadgeText,
+                      { color: bookedCruise.bookingStatus === 'BK' ? '#15803D' : bookedCruise.bookingStatus === 'OF' ? '#92400E' : '#4338CA' }
+                    ]}>
+                      {bookedCruise.bookingStatus === 'BK' ? 'Confirmed' : bookedCruise.bookingStatus === 'OF' ? 'Offer/Hold' : bookedCruise.bookingStatus}
+                    </Text>
+                  </View>
+                </View>
+              )}
+              {!!bookedCruise.stateroomNumber && bookedCruise.stateroomNumber !== 'GTY' && (
+                <View style={styles.miniEnrichmentRow}>
+                  <Text style={styles.miniEnrichmentLabel}>Cabin #:</Text>
+                  <Text style={styles.miniEnrichmentValue}>{bookedCruise.stateroomNumber}</Text>
+                </View>
+              )}
+              {!!bookedCruise.stateroomCategoryCode && (
+                <View style={styles.miniEnrichmentRow}>
+                  <Text style={styles.miniEnrichmentLabel}>Category:</Text>
+                  <Text style={styles.miniEnrichmentValue}>{bookedCruise.stateroomCategoryCode}</Text>
+                </View>
+              )}
+              {!!bookedCruise.stateroomType && (
+                <View style={styles.miniEnrichmentRow}>
+                  <Text style={styles.miniEnrichmentLabel}>Type:</Text>
+                  <Text style={styles.miniEnrichmentValue}>
+                    {bookedCruise.stateroomType === 'B' ? 'Balcony' : bookedCruise.stateroomType === 'O' ? 'Ocean View' : bookedCruise.stateroomType === 'I' ? 'Interior' : bookedCruise.stateroomType === 'S' ? 'Suite' : bookedCruise.stateroomType}
+                  </Text>
+                </View>
+              )}
+              {!!bookedCruise.musterStation && (
+                <View style={styles.miniEnrichmentRow}>
+                  <Text style={styles.miniEnrichmentLabel}>Muster:</Text>
+                  <Text style={styles.miniEnrichmentValue}>{bookedCruise.musterStation}</Text>
+                </View>
+              )}
+              {!!bookedCruise.packageCode && (
+                <View style={styles.miniEnrichmentRow}>
+                  <Text style={styles.miniEnrichmentLabel}>Offer Code:</Text>
+                  <Text style={styles.miniEnrichmentValue}>{bookedCruise.packageCode}</Text>
+                </View>
+              )}
+              {!!bookedCruise.passengerStatus && (
+                <View style={styles.miniEnrichmentRow}>
+                  <Text style={styles.miniEnrichmentLabel}>Pax Status:</Text>
+                  <Text style={styles.miniEnrichmentValue}>
+                    {bookedCruise.passengerStatus === 'AC' ? 'Active' : bookedCruise.passengerStatus}
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+        </View>
+        <ChevronRight size={20} color={COLORS.navyDeep} style={styles.miniChevron} />
+      </TouchableOpacity>
+      </Animated.View>
+    );
+  }
+
+  if (compact) {
+    return (
+      <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+      <TouchableOpacity 
+        style={styles.compactContainer}
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        activeOpacity={1}
+        testID="cruise-card-compact"
+      >
+        {showCompactImage ? (
+          <Image 
+            source={{ uri: compactImageUri }} 
+            style={styles.compactImage}
+            resizeMode="cover"
+            onError={handleCompactImageError}
+          />
+        ) : null}
+        <View style={styles.compactContent}>
+          <Text style={styles.compactShipName}>{cruise.shipName}</Text>
+          <Text style={styles.compactDestination} numberOfLines={1}>{cruise.destination}</Text>
+          <View style={styles.compactMeta}>
+            <Calendar size={12} color="#6B7280" />
+            <Text style={styles.compactDate}>
+              {formatDateRange(cruise.sailDate, cruise.returnDate, cruise.nights)}
+            </Text>
+          </View>
+        </View>
+        <ChevronRight size={20} color="#9CA3AF" style={styles.compactChevron} />
+      </TouchableOpacity>
+      </Animated.View>
+    );
+  }
+
+  return (
+    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+    <TouchableOpacity 
+      style={styles.container}
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      activeOpacity={1}
+      testID="cruise-card"
+    >
+      <View style={styles.imageSection}>
+        {showHeroImage ? (
+          <Image 
+            source={{ uri: heroImageUri }} 
+            style={styles.heroImage}
+            resizeMode="cover"
+            onError={handleHeroImageError}
+          />
+        ) : null}
+        
+        {cruiseStatus === 'upcoming' && !isBooked && (
+          <View style={styles.saleBadge}>
+            <Text style={styles.saleBadgeText}>Casino Offer</Text>
+          </View>
+        )}
+
+        <View style={styles.nightsBadge}>
+          <Text style={styles.nightsBadgeText}>{cruise.nights} Nights</Text>
+        </View>
+
+        <View style={styles.cruiseNameOverlay}>
+          <Text style={styles.cruiseNameText}>{getItineraryName()}</Text>
+        </View>
+      </View>
+      
+      <View style={styles.contentSection}>
+        <View style={styles.headerRow}>
+          <View style={styles.shipInfo}>
+            <Ship size={16} color={COLORS.navyDeep} />
+            <Text style={styles.shipName}>{cruise.shipName}</Text>
+            <View style={styles.inlineBadgeStack}>
+              <View style={[styles.inlineStatusBadge, { backgroundColor: statusBadge.bg }]}>
+                <Text style={[
+                  styles.inlineStatusBadgeText,
+                  statusBadge.bg === COLORS.goldAccent || statusBadge.bg === COLORS.aquaAccent 
+                    ? { color: COLORS.navyDeep } 
+                    : { color: COLORS.white }
+                ]}>
+                  {statusBadge.text}
+                </Text>
+              </View>
+              {futureTopTierBadge ? (
+                <View style={[styles.inlineTopTierBadge, { backgroundColor: futureTopTierBadge.bg }]} testID="cruise-card-top-tier-badge">
+                  <Text style={[styles.inlineTopTierBadgeText, { color: futureTopTierBadge.textColor }]}>{futureTopTierBadge.text}</Text>
+                </View>
+              ) : null}
+            </View>
+          </View>
+          <View style={styles.actionIcons}>
+            <TouchableOpacity style={styles.iconButton}>
+              <Heart size={18} color="#9CA3AF" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.routeInfo}>
+          <Text style={styles.routeLabel}>ROUNDTRIP FROM:</Text>
+          <Text style={styles.routeValue}>{cruise.departurePort || cruise.destination}</Text>
+        </View>
+
+        {conflictWarning ? (
+          <View style={styles.conflictRow} testID="cruise-card-overlap-warning">
+            <AlertTriangle size={14} color="#92400E" />
+            <Text style={styles.conflictText}>{conflictWarning}</Text>
+          </View>
+        ) : null}
+
+        {bookedCruise.itinerary && bookedCruise.itinerary.length > 0 ? (
+          <View style={styles.visitingSection}>
+            <Text style={styles.visitingLabel}>VISITING:</Text>
+            <Text style={styles.visitingPorts}>
+              {bookedCruise.itinerary.map((day: ItineraryDay) => day.port).join(' • ')}
+            </Text>
+            <TouchableOpacity>
+              <Text style={styles.viewPortsLink}>+ View Ports & Map</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
+        {bookedCruise.ports && bookedCruise.ports.length > 0 && !bookedCruise.itinerary ? (
+          <View style={styles.visitingSection}>
+            <Text style={styles.visitingLabel}>VISITING:</Text>
+            <Text style={styles.visitingPorts}>
+              {bookedCruise.ports.join(' • ')}
+            </Text>
+          </View>
+        ) : null}
+
+        <View style={styles.planningBadgeRow} testID="cruise-card-sea-day-score">
+          <View style={styles.planningBadge}>
+            <Gauge size={13} color="#0F766E" />
+            <Text style={styles.planningBadgeText}>Casino Availability Score {seaDayDensity.casinoOpportunityScore}</Text>
+          </View>
+          <Text style={styles.planningBadgeMeta}>{seaDayDensity.seaDays} sea days • {seaDayDensity.portDays} port days</Text>
+        </View>
+
+        <View style={styles.dateGuestRow}>
+          <View style={styles.dateInfo}>
+            <Calendar size={14} color="#6B7280" />
+            <Text style={styles.dateText}>
+              {formatDateRange(cruise.sailDate, cruise.returnDate, cruise.nights)}
+            </Text>
+          </View>
+          <View style={styles.guestInfo}>
+            <Users size={14} color="#6B7280" />
+            <Text style={styles.guestText}>
+              {bookedCruise.guestNames?.length || bookedCruise.guests || 2} Guests
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.divider} />
+
+        <View style={styles.priceActionRow}>
+          <View style={styles.priceSection}>
+            {showRetailValue && retailValue !== null && retailValue > 0 && (
+              <>
+                <Text style={styles.priceLabel}>RETAIL VALUE*</Text>
+                <View style={styles.priceRow}>
+                  <Text style={styles.priceDollar}>$</Text>
+                  <Text style={styles.priceValue}>{Math.round(retailValue).toLocaleString()}</Text>
+                </View>
+              </>
+            )}
+            {bookedCruise.cabinType ? (
+              <Text style={styles.cabinType}>{bookedCruise.cabinType}</Text>
+            ) : null}
+          </View>
+        </View>
+
+        <View style={styles.compactActionRow}>
+          <TouchableOpacity style={styles.compactPrimaryButton} onPress={onPress}>
+            <Text style={styles.compactPrimaryButtonText}>Details</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.compactSecondaryButton}>
+            <Text style={styles.compactSecondaryButtonText}>Itinerary</Text>
+          </TouchableOpacity>
+        </View>
+
+        {(bookedCruise.offerName || cruise.offerName || cruise.offerCode) ? (
+          <View style={styles.offerSection}>
+            <Sparkles size={14} color={COLORS.goldDark} />
+            <Text style={styles.offerText}>
+              {bookedCruise.offerName || cruise.offerName || `Offer ${cruise.offerCode}`}
+            </Text>
+            {(bookedCruise.offerCode || cruise.offerCode) ? (
+              <View style={styles.offerCodeBadge}>
+                <Anchor size={10} color={COLORS.loyalty} />
+                <Text style={styles.offerCodeText}>{bookedCruise.offerCode || cruise.offerCode}</Text>
+              </View>
+            ) : null}
+            {cruise.offerValue && cruise.offerValue > 0 ? (
+              <View style={styles.offerValueBadge}>
+                <Text style={styles.offerValueText}>${cruise.offerValue.toLocaleString()}</Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
+        {(isBooked || !!(bookedCruise.offerCode || cruise.offerCode)) && (
+          (bookedCruise.freePlay !== undefined || cruise.freePlay !== undefined || 
+           bookedCruise.freeOBC !== undefined || cruise.freeOBC !== undefined) && (
+            <View style={styles.fpObcSection}>
+              {(bookedCruise.freePlay !== undefined || cruise.freePlay !== undefined) && (
+                <View style={styles.fpContainer}>
+                  <Text style={styles.fpLabel}>FreePlay (FP$)</Text>
+                  <Text style={styles.fpValue}>${(bookedCruise.freePlay ?? cruise.freePlay ?? 0).toLocaleString()}</Text>
+                </View>
+              )}
+              {(bookedCruise.freeOBC !== undefined || cruise.freeOBC !== undefined) && (
+                <View style={styles.obcContainer}>
+                  <Text style={styles.obcLabel}>Onboard Credit (OBC)</Text>
+                  <Text style={styles.obcValue}>${(bookedCruise.freeOBC ?? cruise.freeOBC ?? 0).toLocaleString()}</Text>
+                </View>
+              )}
+            </View>
+          )
+        )}
+
+
+      </View>
+    </TouchableOpacity>
+    </Animated.View>
+  );
+}, (prevProps, nextProps) => {
+  const prevCruise = prevProps.cruise;
+  const nextCruise = nextProps.cruise;
+  return (
+    prevCruise.id === nextCruise.id &&
+    prevCruise.shipName === nextCruise.shipName &&
+    prevCruise.sailDate === nextCruise.sailDate &&
+    prevCruise.returnDate === nextCruise.returnDate &&
+    prevCruise.nights === nextCruise.nights &&
+    prevCruise.itineraryName === nextCruise.itineraryName &&
+    prevCruise.departurePort === nextCruise.departurePort &&
+    prevCruise.cabinType === nextCruise.cabinType &&
+    prevCruise.offerCode === nextCruise.offerCode &&
+    prevCruise.price === nextCruise.price &&
+    prevCruise.totalPrice === nextCruise.totalPrice &&
+    prevProps.compact === nextProps.compact &&
+    prevProps.mini === nextProps.mini &&
+    prevProps.variant === nextProps.variant &&
+    prevProps.showRetailValue === nextProps.showRetailValue &&
+    prevProps.conflictWarning === nextProps.conflictWarning &&
+    prevProps.onPress === nextProps.onPress
+  );
+});
+
+const styles = StyleSheet.create({
+  container: {
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.lg,
+    overflow: 'hidden',
+    marginBottom: SPACING.lg,
+    ...SHADOW.md,
+  },
+  miniContainer: {
+    borderRadius: BORDER_RADIUS.md,
+    overflow: 'hidden',
+    marginBottom: SPACING.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 31, 63, 0.07)',
+    ...SHADOW.sm,
+  },
+  miniBackgroundImage: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.05,
+  },
+  miniImageOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+  },
+  miniContent: {
+    flex: 1,
+    paddingVertical: SPACING.xs,
+  },
+  miniTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
+  miniShipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    flex: 1,
+  },
+  miniShipName: {
+    fontSize: 13,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: COLORS.navyDeep,
+    flex: 1,
+    marginRight: 4,
+  },
+  miniItinerary: {
+    fontSize: 15,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#000000',
+    marginBottom: 2,
+  },
+  miniBadgeStack: {
+    alignItems: 'flex-end',
+    gap: 3,
+    marginLeft: 6,
+  },
+  miniStatusBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  miniStatusBadgeText: {
+    fontSize: 10,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    letterSpacing: 0.3,
+  },
+  miniTopTierBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    minWidth: 54,
+    alignItems: 'center',
+  },
+  miniTopTierBadgeText: {
+    fontSize: 9,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    letterSpacing: 0.5,
+  },
+  miniBookletBadge: {
+    backgroundColor: 'rgba(30, 58, 95, 0.10)',
+    borderRadius: 999,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    marginTop: 3,
+  },
+  miniBookletBadgeText: {
+    color: COLORS.navyDeep,
+    fontSize: 8,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    letterSpacing: 0.25,
+  },
+  miniDestination: {
+    fontSize: 13,
+    color: COLORS.navyDeep,
+    marginBottom: 2,
+  },
+  miniConflictRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 5,
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 5,
+    marginBottom: 5,
+  },
+  miniConflictText: {
+    flex: 1,
+    fontSize: 10,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: '#78350F',
+    lineHeight: 13,
+  },
+  miniPlanningRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 5,
+    marginBottom: 3,
+  },
+  miniPlanningText: {
+    fontSize: 10,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#0F766E',
+  },
+  miniPlanningMuted: {
+    fontSize: 10,
+    color: '#0F766E',
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+  },
+  miniPorts: {
+    fontSize: 11,
+    color: '#4B5563',
+    marginBottom: 3,
+  },
+  miniBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  miniMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  miniMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  miniDate: {
+    fontSize: 12,
+    color: COLORS.navyDeep,
+  },
+  miniNights: {
+    fontSize: 12,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+    backgroundColor: '#E0F2F1',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  miniValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  miniRetailValue: {
+    fontSize: 13,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#000000',
+  },
+  miniCabinRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#E0F2F1',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 3,
+  },
+  miniCabin: {
+    fontSize: 10,
+    color: COLORS.navyDeep,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+  },
+  miniExpectedPoints: {
+    fontSize: 10,
+    color: '#059669',
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  miniOfferBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#FFFBEB',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 3,
+  },
+  miniOfferCode: {
+    fontSize: 10,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#92400E',
+  },
+  miniChevron: {
+    marginLeft: 2,
+  },
+  miniPricingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 4,
+    paddingTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  miniPricingItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#F0F9FF',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  miniPricingLabel: {
+    fontSize: 10,
+    color: '#0369A1',
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  miniPricingValue: {
+    fontSize: 10,
+    color: COLORS.navyDeep,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  miniTaxesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  miniTaxesLabel: {
+    fontSize: 10,
+    color: '#6B7280',
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+  },
+  miniTaxesValue: {
+    fontSize: 10,
+    color: COLORS.navyDeep,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  miniFpObcRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+    marginBottom: 2,
+  },
+  miniFpBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  miniFpLabel: {
+    fontSize: 10,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#15803D',
+  },
+  miniFpValue: {
+    fontSize: 10,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#15803D',
+  },
+  miniObcBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#DBEAFE',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  miniObcLabel: {
+    fontSize: 10,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#1E40AF',
+  },
+  miniObcValue: {
+    fontSize: 10,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#1E40AF',
+  },
+  miniNccBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#F3E8FF',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  miniNccLabel: {
+    fontSize: 10,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#7C3AED',
+  },
+  miniNccValue: {
+    fontSize: 10,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#7C3AED',
+  },
+  miniEnrichmentSection: {
+    marginTop: 6,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  miniEnrichmentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  miniEnrichmentLabel: {
+    fontSize: 9,
+    color: '#6B7280',
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+  },
+  miniEnrichmentValue: {
+    fontSize: 9,
+    color: COLORS.navyDeep,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+  },
+  miniEnrichmentBadge: {
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 3,
+  },
+  miniEnrichmentBadgeText: {
+    fontSize: 9,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  compactContainer: {
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.md,
+    overflow: 'hidden',
+    marginBottom: SPACING.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    ...SHADOW.sm,
+  },
+  compactImage: {
+    width: 80,
+    height: 80,
+    borderRadius: BORDER_RADIUS.md,
+    margin: SPACING.sm,
+  },
+  compactContent: {
+    flex: 1,
+    paddingVertical: SPACING.sm,
+    paddingRight: SPACING.sm,
+  },
+  compactShipName: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: COLORS.navyDeep,
+    marginBottom: 2,
+  },
+  compactDestination: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  compactMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  compactDate: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: '#6B7280',
+  },
+  compactChevron: {
+    marginRight: SPACING.sm,
+  },
+  imageSection: {
+    height: 200,
+    position: 'relative',
+  },
+  heroImage: {
+    width: '100%',
+    height: '100%',
+  },
+  saleBadge: {
+    position: 'absolute',
+    top: SPACING.md,
+    left: SPACING.md,
+    backgroundColor: COLORS.loyalty,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 6,
+    borderRadius: BORDER_RADIUS.sm,
+  },
+  saleBadgeText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.white,
+  },
+  nightsBadge: {
+    position: 'absolute',
+    bottom: SPACING.xl,
+    left: SPACING.md,
+    backgroundColor: 'rgba(0, 31, 63, 0.85)',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+    borderRadius: BORDER_RADIUS.sm,
+  },
+  nightsBadgeText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.white,
+  },
+  cruiseNameOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 31, 63, 0.75)',
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+  },
+  cruiseNameText: {
+    fontSize: TYPOGRAPHY.fontSizeXL,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.white,
+  },
+  contentSection: {
+    padding: SPACING.lg,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.sm,
+  },
+  shipInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+  },
+  shipName: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  ratingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    marginLeft: SPACING.xs,
+  },
+  ratingText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+    color: '#6B7280',
+  },
+  actionIcons: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+  },
+  iconButton: {
+    padding: 4,
+  },
+  routeInfo: {
+    marginBottom: SPACING.sm,
+  },
+  routeLabel: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#6B7280',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  routeValue: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: '#1F2937',
+  },
+  conflictRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING.xs,
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+    borderRadius: BORDER_RADIUS.sm,
+    padding: SPACING.sm,
+    marginBottom: SPACING.sm,
+  },
+  conflictText: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: '#78350F',
+    lineHeight: 17,
+  },
+  visitingSection: {
+    marginBottom: SPACING.sm,
+  },
+  visitingLabel: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#6B7280',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  visitingPorts: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: '#1F2937',
+    lineHeight: 20,
+  },
+  viewPortsLink: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.points,
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+    marginTop: 4,
+  },
+  planningBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: SPACING.sm,
+    backgroundColor: '#ECFDF5',
+    borderRadius: BORDER_RADIUS.sm,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 7,
+    marginBottom: SPACING.sm,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  planningBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    flex: 1,
+  },
+  planningBadgeText: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#0F766E',
+  },
+  planningBadgeMeta: {
+    fontSize: 11,
+    color: '#0F766E',
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+  },
+  dateGuestRow: {
+    flexDirection: 'row',
+    gap: SPACING.lg,
+    marginBottom: SPACING.md,
+  },
+  dateInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  dateText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: '#6B7280',
+  },
+  guestInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  guestText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: '#6B7280',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#E5E7EB',
+    marginBottom: SPACING.md,
+  },
+  priceActionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: SPACING.md,
+  },
+  priceSection: {
+    flex: 1,
+  },
+  priceLabel: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: '#6B7280',
+    letterSpacing: 0.3,
+    marginBottom: 2,
+  },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  priceDollar: {
+    fontSize: TYPOGRAPHY.fontSizeLG,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+    marginTop: 4,
+  },
+  priceValue: {
+    fontSize: TYPOGRAPHY.fontSizeHero,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  cabinType: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  compactActionRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    marginTop: SPACING.sm,
+  },
+  compactPrimaryButton: {
+    flex: 1,
+    backgroundColor: COLORS.textNavy,
+    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: BORDER_RADIUS.sm,
+    alignItems: 'center',
+  },
+  compactPrimaryButtonText: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.white,
+  },
+  compactSecondaryButton: {
+    flex: 1,
+    backgroundColor: COLORS.white,
+    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: BORDER_RADIUS.sm,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.navyDeep,
+  },
+  compactSecondaryButtonText: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: COLORS.navyDeep,
+  },
+  inlineBadgeStack: {
+    alignItems: 'flex-start',
+    gap: 3,
+    marginLeft: SPACING.xs,
+  },
+  inlineStatusBadge: {
+    paddingHorizontal: SPACING.xs,
+    paddingVertical: 2,
+    borderRadius: BORDER_RADIUS.xs,
+  },
+  inlineStatusBadgeText: {
+    fontSize: 9,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    letterSpacing: 0.3,
+  },
+  inlineTopTierBadge: {
+    paddingHorizontal: SPACING.xs,
+    paddingVertical: 2,
+    borderRadius: BORDER_RADIUS.xs,
+    minWidth: 58,
+    alignItems: 'center',
+  },
+  inlineTopTierBadgeText: {
+    fontSize: 8,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    letterSpacing: 0.5,
+  },
+  offerSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FFFBEB',
+    padding: SPACING.sm,
+    borderRadius: BORDER_RADIUS.md,
+    marginBottom: SPACING.sm,
+    flexWrap: 'wrap',
+  },
+  offerText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+    color: '#92400E',
+    flex: 1,
+  },
+  offerCodeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#EEF2FF',
+    paddingHorizontal: SPACING.xs,
+    paddingVertical: 2,
+    borderRadius: BORDER_RADIUS.xs,
+  },
+  offerCodeText: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.loyalty,
+  },
+  offerValueBadge: {
+    backgroundColor: '#D1FAE5',
+    paddingHorizontal: SPACING.xs,
+    paddingVertical: 2,
+    borderRadius: BORDER_RADIUS.xs,
+    marginLeft: 4,
+  },
+  offerValueText: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#059669',
+  },
+  fpObcSection: {
+    flexDirection: 'row',
+    gap: SPACING.md,
+    marginBottom: SPACING.sm,
+  },
+  fpContainer: {
+    flex: 1,
+    backgroundColor: '#DCFCE7',
+    padding: SPACING.sm,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+  },
+  fpLabel: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#15803D',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  fpValue: {
+    fontSize: TYPOGRAPHY.fontSizeLG,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#15803D',
+  },
+  obcContainer: {
+    flex: 1,
+    backgroundColor: '#DBEAFE',
+    padding: SPACING.sm,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: '#93C5FD',
+  },
+  obcLabel: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#1E40AF',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  obcValue: {
+    fontSize: TYPOGRAPHY.fontSizeLG,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#1E40AF',
+  },
+});

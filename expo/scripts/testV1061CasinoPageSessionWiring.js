@@ -1,0 +1,24 @@
+const fs = require('fs');
+const path = require('path');
+const root = path.resolve(__dirname, '..');
+const analytics = fs.readFileSync(path.join(root, 'app/(tabs)/analytics.tsx'), 'utf8');
+const sessionsSummary = fs.readFileSync(path.join(root, 'components/SessionsSummaryCard.tsx'), 'utf8');
+function assert(cond, msg) { if (!cond) { console.error(`❌ ${msg}`); process.exit(1); } }
+assert(analytics.includes('function buildAnalyticsSessionsForCasinoTabs'), 'Analytics has a single builder for casino tab sessions');
+assert(analytics.includes('cruiseIdsWithAuthoritativeTotals'), 'Authoritative cruise totals suppress duplicate raw generated sessions');
+assert(analytics.includes('hasCruiseLevelCasinoTotals'), 'Cruise-level casino totals are explicitly detected');
+assert(analytics.includes('return buildAnalyticsSessionsForCasinoTabs(casinoTabDataFlow, sessions, currentYearPoints);'), 'analyticsSessions uses the unified builder');
+assert(analytics.includes('currentSeasonCoinIn: currentYearPoints * 5'), 'Data source current-season coin-in uses points × $5');
+assert(analytics.includes('<SessionsSummaryCard') && analytics.includes('sessions={analyticsSessions}'), 'Session summary receives unified analytics sessions');
+assert(analytics.includes('<PointsPerHourCard') && analytics.includes('sessions={analyticsSessions}'), 'PPH card receives unified analytics sessions');
+assert(analytics.includes('<CasinoIntelligenceCard') && analytics.includes('analytics={sessionAnalytics}'), 'Casino Intelligence receives unified session analytics');
+assert(analytics.includes('Recent Sessions ({analyticsSessions.length} total)'), 'Recent Sessions count uses unified analytics sessions');
+assert(!analytics.includes('buyIn: Math.max(0, record.amountPaid)'), 'Derived cruise-total sessions do not treat cruise fare as casino buy-in');
+assert(sessionsSummary.includes('Number(s.winLoss || 0) > 0'), 'Session win count only counts positive win/loss as wins');
+const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+const app = JSON.parse(fs.readFileSync(path.join(root, 'app.json'), 'utf8'));
+assert(pkg.version === '9.11.54', 'package version bumped to 9.11.54');
+assert(app.expo.version === '9.11.54', 'app version bumped to 9.11.54');
+assert(app.expo.ios.buildNumber === '9.11.54', 'iOS buildNumber bumped to 9.11.54');
+assert(app.expo.android.versionCode === 91154, 'Android versionCode bumped to 91154');
+console.log('✅ v1061 casino page/session wiring checks passed');
