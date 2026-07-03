@@ -119,6 +119,7 @@ import { CASINO_DASHBOARD_COLORS, casinoDashboardStyles, casinoValueColor } from
 import { useDrillDown, type CalculationDrillDownData } from '@/components/casino-dashboard/CalculationDrillDownDrawer';
 import { CasinoDonutChart } from '@/components/casino-dashboard/CasinoDonutChart';
 import { CasinoGroupedBarChart } from '@/components/casino-dashboard/CasinoGroupedBarChart';
+import { CasinoLineChart } from '@/components/casino-dashboard/CasinoLineChart';
 import { useCertificates } from '@/state/CertificatesProvider';
 
 type AnalyticsTab = 'portfolio' | 'value' | 'action' | 'history';
@@ -635,6 +636,28 @@ export default function AnalyticsScreen() {
     });
   }, [authenticatedEmail, bookedCruises]);
 
+  const tierGoalsProgress = useMemo(() => {
+    const signatureThreshold = CLUB_ROYALE_TIERS.Signature.threshold;
+    const mastersThreshold = CLUB_ROYALE_TIERS.Masters.threshold;
+    const signaturePct = Math.min(100, Math.max(0, (currentYearPoints / signatureThreshold) * 100));
+    const mastersPct = Math.min(100, Math.max(0, (currentYearPoints / mastersThreshold) * 100));
+    const daysRemaining = Math.max(0, Math.round((clubRoyaleNextResetDate.getTime() - Date.now()) / 86400000));
+    const pointsToSignature = Math.max(0, signatureThreshold - currentYearPoints);
+    const pointsToMasters = Math.max(0, mastersThreshold - currentYearPoints);
+    const avgPtsPerDayForSignature = daysRemaining > 0 ? pointsToSignature / daysRemaining : 0;
+    const avgPtsPerDayForMasters = daysRemaining > 0 ? pointsToMasters / daysRemaining : 0;
+    const avgPointsPerCruiseReal = cruiseEconomicsSummary.rows.length > 0
+      ? cruiseEconomicsSummary.totals.totalPoints / cruiseEconomicsSummary.rows.length
+      : 0;
+    const cruisesNeededForSignature = avgPointsPerCruiseReal > 0 ? Math.ceil(pointsToSignature / avgPointsPerCruiseReal) : null;
+    const cruisesNeededForMasters = avgPointsPerCruiseReal > 0 ? Math.ceil(pointsToMasters / avgPointsPerCruiseReal) : null;
+    return {
+      signaturePct, mastersPct, signatureThreshold, mastersThreshold, daysRemaining,
+      pointsToSignature, pointsToMasters, avgPtsPerDayForSignature, avgPtsPerDayForMasters,
+      cruisesNeededForSignature, cruisesNeededForMasters,
+    };
+  }, [currentYearPoints, clubRoyaleNextResetDate, cruiseEconomicsSummary]);
+
   const cruiseEconomicsRowById = useMemo(() => {
     return new Map(cruiseEconomicsSummary.rows.map((row) => [row.cruiseId, row]));
   }, [cruiseEconomicsSummary.rows]);
@@ -711,6 +734,85 @@ export default function AnalyticsScreen() {
       { key: 'roi', label: 'ROI', value: `${simulatorProjection.projectedROI.toFixed(0)}%`, color: casinoValueColor(simulatorProjection.projectedROI), drill: () => buildDrill('ROI', `${simulatorProjection.projectedROI.toFixed(0)}%`) },
     ];
   }, [simulatorPresets, simulatorPresetKey, simulatorProjection, playerContext.averagePointsPerNight]);
+
+  const pointProgressionData = useMemo(() => {
+    const stayPreset = simulatorPresets.find((p) => p.key === 'stay') ?? simulatorPresets[1];
+    const activePreset = simulatorPresets.find((p) => p.key === simulatorPresetKey) ?? stayPreset;
+    const avgPointsPerCruise = cruiseEconomicsSummary.rows.length > 0
+      ? cruiseEconomicsSummary.totals.totalPoints / cruiseEconomicsSummary.rows.length
+      : 0;
+    const currentPathYearlyPoints = avgPointsPerCruise * simulatorProjection.realCruisesPerYear;
+    const scenarioYearlyPoints = (activePreset.monthlyCoinIn * 12) / Math.max(1, DOLLARS_PER_POINT);
+    const years = [1, 2, 3, 4, 5].map((year) => ({
+      year,
+      label: `Year ${year}`,
+      currentPath: Math.round(currentPoints + currentPathYearlyPoints * year),
+      scenario: Math.round(currentPoints + scenarioYearlyPoints * year),
+    }));
+    return { years, currentPathYearlyPoints, scenarioYearlyPoints, activePresetLabel: activePreset.label };
+  }, [simulatorPresets, simulatorPresetKey, cruiseEconomicsSummary, simulatorProjection.realCruisesPerYear, currentPoints]);
+
+  const scenarioComparisonData = useMemo(() => {
+    const realCruisesPerYear = simulatorProjection.realCruisesPerYear;
+    const realWinPct = cruiseEconomicsSummary.totals.totalCoinIn > 0
+      ? cruiseEconomicsSummary.totals.totalWinningsHome / cruiseEconomicsSummary.totals.totalCoinIn
+      : 0;
+    const project = (monthlyCoinIn: number) => {
+      const yearlyCoinIn = monthlyCoinIn * 12;
+      const projectedCoinIn = yearlyCoinIn * 5;
+      const projectedPoints = Math.round(projectedCoinIn / Math.max(1, DOLLARS_PER_POINT));
+      const projectedWinLoss = projectedCoinIn * realWinPct;
+      const yearlyPaid = cruiseEconomicsSummary.averages.paidPerCruise * realCruisesPerYear;
+      const projectedPaid = yearlyPaid * 5;
+      const projectedCompValue = cruiseEconomicsSummary.averages.netCashPerCruise * realCruisesPerYear * 5 - projectedWinLoss;
+      const projectedNetMakeOut = projectedCompValue + projectedWinLoss;
+      const projectedROI = projectedPaid > 0 ? (projectedNetMakeOut / projectedPaid) * 100 : 0;
+      return { projectedPoints, projectedCoinIn, projectedWinLoss, projectedNetMakeOut, projectedROI };
+    };
+    const stayPreset = simulatorPresets.find((p) => p.key === 'stay') ?? simulatorPresets[1];
+    const aggressivePreset = simulatorPresets.find((p) => p.key === 'aggressive') ?? simulatorPresets[2];
+    const activePreset = simulatorPresets.find((p) => p.key === simulatorPresetKey) ?? stayPreset;
+    const currentPathProj = project(stayPreset.monthlyCoinIn);
+    const scenarioAProj = project(activePreset.monthlyCoinIn);
+    const scenarioBProj = project(aggressivePreset.monthlyCoinIn);
+    const rows = [
+      {
+        metric: 'Points Earned',
+        currentPath: formatNumber(currentPathProj.projectedPoints),
+        scenarioA: formatNumber(scenarioAProj.projectedPoints),
+        scenarioB: formatNumber(scenarioBProj.projectedPoints),
+      },
+      {
+        metric: 'Coin-in',
+        currentPath: formatCurrencyDetailed(currentPathProj.projectedCoinIn),
+        scenarioA: formatCurrencyDetailed(scenarioAProj.projectedCoinIn),
+        scenarioB: formatCurrencyDetailed(scenarioBProj.projectedCoinIn),
+      },
+      {
+        metric: 'Win / Loss',
+        currentPath: formatSignedCurrencyDetailed(currentPathProj.projectedWinLoss),
+        scenarioA: formatSignedCurrencyDetailed(scenarioAProj.projectedWinLoss),
+        scenarioB: formatSignedCurrencyDetailed(scenarioBProj.projectedWinLoss),
+        color: (v: number) => casinoValueColor(v),
+        raw: [currentPathProj.projectedWinLoss, scenarioAProj.projectedWinLoss, scenarioBProj.projectedWinLoss],
+      },
+      {
+        metric: 'Net Make-Out',
+        currentPath: formatSignedCurrencyDetailed(currentPathProj.projectedNetMakeOut),
+        scenarioA: formatSignedCurrencyDetailed(scenarioAProj.projectedNetMakeOut),
+        scenarioB: formatSignedCurrencyDetailed(scenarioBProj.projectedNetMakeOut),
+        raw: [currentPathProj.projectedNetMakeOut, scenarioAProj.projectedNetMakeOut, scenarioBProj.projectedNetMakeOut],
+      },
+      {
+        metric: 'ROI',
+        currentPath: `${currentPathProj.projectedROI.toFixed(0)}%`,
+        scenarioA: `${scenarioAProj.projectedROI.toFixed(0)}%`,
+        scenarioB: `${scenarioBProj.projectedROI.toFixed(0)}%`,
+        raw: [currentPathProj.projectedROI, scenarioAProj.projectedROI, scenarioBProj.projectedROI],
+      },
+    ];
+    return { rows, scenarioALabel: `Scenario A (${activePreset.label})`, scenarioBLabel: 'Scenario B (Aggressive)' };
+  }, [simulatorPresets, simulatorPresetKey, cruiseEconomicsSummary, simulatorProjection.realCruisesPerYear, formatSignedCurrencyDetailed]);
 
   const realAnalytics = useMemo(() => {
     const scopedCruiseIds = new Set(cruiseEconomicsSummary.rows.map((row) => row.cruiseId));
@@ -1046,6 +1148,56 @@ export default function AnalyticsScreen() {
       pointsPerNight: row.pointsPerNight,
     }));
   }, [cruiseEconomicsSummary.rows]);
+
+  const chronologicalEconomicsRows = useMemo(() => {
+    return [...cruiseEconomicsSummary.rows].sort(
+      (a, b) => createDateFromString(a.sailDate).getTime() - createDateFromString(b.sailDate).getTime(),
+    );
+  }, [cruiseEconomicsSummary.rows]);
+
+  const pointsByYearData = useMemo(() => {
+    const map = new Map<string, { points: number; rows: typeof cruiseEconomicsSummary.rows }>();
+    chronologicalEconomicsRows.forEach((row) => {
+      const parsed = row.sailDate ? createDateFromString(row.sailDate) : null;
+      const year = parsed && !Number.isNaN(parsed.getTime()) ? String(parsed.getUTCFullYear()) : 'Unknown';
+      const existing = map.get(year) ?? { points: 0, rows: [] };
+      existing.points += row.points;
+      existing.rows = [...existing.rows, row];
+      map.set(year, existing);
+    });
+    return Array.from(map.entries())
+      .filter(([year]) => year !== 'Unknown')
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([year, data]) => ({ year, points: data.points, rows: data.rows }));
+  }, [chronologicalEconomicsRows]);
+
+  const winLossHistoryData = useMemo(() => {
+    return chronologicalEconomicsRows.slice(-10).map((row) => ({
+      id: row.cruiseId,
+      ship: row.ship,
+      sailDate: row.sailDate,
+      winningsHome: row.winningsHome,
+    }));
+  }, [chronologicalEconomicsRows]);
+
+  const pointsPerNightChartData = useMemo(() => {
+    return chronologicalEconomicsRows.slice(-10).map((row) => ({
+      id: row.cruiseId,
+      ship: row.ship,
+      sailDate: row.sailDate,
+      pointsPerNight: row.pointsPerNight,
+    }));
+  }, [chronologicalEconomicsRows]);
+
+  const shipPerformanceHistory = useMemo(() => {
+    return shipPerformance.map((ship) => ({
+      ...ship,
+      avgPointsPerCruise: ship.cruises > 0 ? ship.points / ship.cruises : 0,
+      avgWinLossPerCruise: ship.cruises > 0 ? ship.cashResult / ship.cruises : 0,
+      avgValuePerCruise: ship.cruises > 0 ? ship.totalEconomic / ship.cruises : 0,
+      netMakeOut: ship.totalEconomic,
+    }));
+  }, [shipPerformance]);
 
   const buildCasinoCruisesCsv = useCallback((cruises: BookedCruise[]): string => {
     console.log('[CasinoCruiseExport] Building CSV...', { cruiseCount: cruises.length });
@@ -2516,6 +2668,65 @@ export default function AnalyticsScreen() {
       )}
 
       <View style={styles.section}>
+        <View style={casinoDashboardStyles.card}>
+          <Text style={styles.economicsTitle}>Casino Goals &amp; Progress</Text>
+          <Text style={casinoDashboardStyles.screenSubtitle}>Tap a bar for points needed, pace required, and cruises remaining</Text>
+          {[
+            {
+              key: 'signature',
+              label: 'Signature Progress',
+              pct: tierGoalsProgress.signaturePct,
+              color: CASINO_DASHBOARD_COLORS.royalBlue,
+              threshold: tierGoalsProgress.signatureThreshold,
+              pointsRemaining: tierGoalsProgress.pointsToSignature,
+              avgPerDay: tierGoalsProgress.avgPtsPerDayForSignature,
+              cruisesNeeded: tierGoalsProgress.cruisesNeededForSignature,
+            },
+            {
+              key: 'masters',
+              label: 'Masters Progress',
+              pct: tierGoalsProgress.mastersPct,
+              color: CASINO_DASHBOARD_COLORS.purple,
+              threshold: tierGoalsProgress.mastersThreshold,
+              pointsRemaining: tierGoalsProgress.pointsToMasters,
+              avgPerDay: tierGoalsProgress.avgPtsPerDayForMasters,
+              cruisesNeeded: tierGoalsProgress.cruisesNeededForMasters,
+            },
+          ].map((goal) => (
+            <TouchableOpacity
+              key={goal.key}
+              activeOpacity={0.8}
+              style={{ marginTop: 14 }}
+              onPress={() => actionCenterDrill.open({
+                title: goal.label,
+                summary: `${formatNumber(currentYearPoints)} of ${formatNumber(goal.threshold)} points needed (${goal.pct.toFixed(0)}%).`,
+                formula: 'Progress % = Current-season points ÷ tier point target',
+                inputs: [
+                  { label: 'Current-season points', value: formatNumber(currentYearPoints) },
+                  { label: 'Target points', value: formatNumber(goal.threshold) },
+                  { label: 'Points remaining', value: formatNumber(Math.round(goal.pointsRemaining)) },
+                  { label: 'Days remaining in tier year', value: `${tierGoalsProgress.daysRemaining}d` },
+                  { label: 'Avg points/day needed', value: formatNumber(Math.round(goal.avgPerDay)) },
+                  { label: 'Est. cruises remaining needed', value: goal.cruisesNeeded !== null ? String(goal.cruisesNeeded) : 'Needs Data' },
+                ],
+                assumptions: ['Tier year is assumed to reset on the next Club Royale reset date shown on the Portfolio tab. Cruises-remaining estimate uses your real average points per completed cruise.'],
+                missing: goal.cruisesNeeded === null ? ['Not enough completed-cruise point history yet to estimate cruises remaining.'] : [],
+              })}
+              testID={`tier-goal-progress-${goal.key}`}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={styles.dataLabel}>{goal.label}</Text>
+                <Text style={[styles.dataValue, { color: goal.color }]}>{goal.pct.toFixed(0)}%</Text>
+              </View>
+              <View style={styles.goalProgressTrack}>
+                <View style={[styles.goalProgressFill, { width: `${goal.pct}%`, backgroundColor: goal.color }]} />
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.section}>
         <LivePPHTracker
           targetPPH={targetPPH}
           onSessionComplete={(data) => {
@@ -3126,6 +3337,136 @@ export default function AnalyticsScreen() {
         </View>
       </View>
 
+      {pointsByYearData.length > 0 && (
+        <View style={styles.section}>
+          <TouchableOpacity
+            style={casinoDashboardStyles.card}
+            activeOpacity={0.9}
+            onPress={() => historyInsightsDrill.open({
+              title: 'Historical Casino Points',
+              subtitle: 'By Calendar Year',
+              summary: 'Points earned on completed cruises, grouped by the calendar year they were sailed.',
+              sourceRecords: pointsByYearData.map((y) => ({ label: y.year, value: formatNumber(y.points) })),
+            })}
+          >
+            <Text style={styles.economicsTitle}>Historical Casino Points</Text>
+            <Text style={casinoDashboardStyles.screenSubtitle}>By Calendar Year — tap a bar or a year to see its cruises</Text>
+            <View style={{ marginTop: 12 }}>
+              <CasinoGroupedBarChart
+                groups={pointsByYearData.map((y) => ({
+                  key: y.year,
+                  label: y.year,
+                  bars: [{ key: 'points', value: y.points, color: CASINO_DASHBOARD_COLORS.royalBlue }],
+                  onPress: () => historyInsightsDrill.open({
+                    title: `${y.year} Casino Points`,
+                    summary: `${formatNumber(y.points)} points earned across ${y.rows.length} cruise(s) sailed in ${y.year}.`,
+                    sourceRecords: y.rows.map((row) => ({ label: `${row.ship} — ${row.sailDate}`, value: formatNumber(row.points) })),
+                  }),
+                }))}
+                barLabels={[{ key: 'points', label: 'Casino Points', color: CASINO_DASHBOARD_COLORS.royalBlue }]}
+              />
+            </View>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {winLossHistoryData.length > 0 && (
+        <View style={styles.section}>
+          <View style={casinoDashboardStyles.card}>
+            <Text style={styles.economicsTitle}>Win / Loss History</Text>
+            <Text style={casinoDashboardStyles.screenSubtitle}>All Time — tap a point for that cruise's numbers</Text>
+            <View style={{ marginTop: 12 }}>
+              <CasinoLineChart
+                series={[{
+                  key: 'winLoss',
+                  label: 'Win / Loss',
+                  color: CASINO_DASHBOARD_COLORS.green,
+                  points: winLossHistoryData.map((row) => ({ x: row.sailDate.slice(5), y: row.winningsHome })),
+                }]}
+                onPointPress={(index) => {
+                  const row = winLossHistoryData[index];
+                  if (!row) return;
+                  historyInsightsDrill.open({
+                    title: `${row.ship} — ${row.sailDate}`,
+                    summary: `Casino win/loss brought home on this cruise: ${formatSignedCurrencyDetailed(row.winningsHome)}.`,
+                    sourceRecords: [{ label: 'Win / Loss', value: formatSignedCurrencyDetailed(row.winningsHome) }],
+                  });
+                }}
+              />
+            </View>
+          </View>
+        </View>
+      )}
+
+      {pointsPerNightChartData.length > 0 && (
+        <View style={styles.section}>
+          <View style={casinoDashboardStyles.card}>
+            <Text style={styles.economicsTitle}>Points Per Night Trend</Text>
+            <Text style={casinoDashboardStyles.screenSubtitle}>All Time — tap a point for that sailing</Text>
+            <View style={{ marginTop: 12 }}>
+              <CasinoLineChart
+                series={[{
+                  key: 'pointsPerNight',
+                  label: 'Points / Night',
+                  color: CASINO_DASHBOARD_COLORS.purple,
+                  points: pointsPerNightChartData.map((row) => ({ x: row.sailDate.slice(5), y: row.pointsPerNight })),
+                }]}
+                onPointPress={(index) => {
+                  const row = pointsPerNightChartData[index];
+                  if (!row) return;
+                  historyInsightsDrill.open({
+                    title: `${row.ship} — ${row.sailDate}`,
+                    summary: `${row.pointsPerNight.toFixed(1)} points earned per night on this sailing.`,
+                    sourceRecords: [{ label: 'Points / Night', value: row.pointsPerNight.toFixed(1) }],
+                  });
+                }}
+              />
+            </View>
+          </View>
+        </View>
+      )}
+
+      {shipPerformanceHistory.length > 0 && (
+        <View style={styles.section}>
+          <View style={casinoDashboardStyles.card}>
+            <Text style={styles.economicsTitle}>Ship Performance History</Text>
+            <Text style={casinoDashboardStyles.screenSubtitle}>Tap a ship for its full sailing-by-sailing history</Text>
+            <View style={{ marginTop: 10 }}>
+              <View style={styles.dataRow}>
+                <Text style={[styles.dataLabel, { flex: 1.4, fontWeight: '700' as const }]} numberOfLines={1}>Ship</Text>
+                <Text style={[styles.economicsSummaryLabel, { width: 46, textAlign: 'right' }]}>Sail</Text>
+                <Text style={[styles.economicsSummaryLabel, { width: 62, textAlign: 'right' }]}>Avg Pts</Text>
+                <Text style={[styles.economicsSummaryLabel, { width: 74, textAlign: 'right' }]}>Net Out</Text>
+              </View>
+              {shipPerformanceHistory.map((ship) => (
+                <TouchableOpacity
+                  key={ship.ship}
+                  style={styles.dataRow}
+                  activeOpacity={0.75}
+                  onPress={() => historyInsightsDrill.open({
+                    title: ship.ship,
+                    subtitle: `${ship.cruises} sailing(s)`,
+                    summary: `Ship-level history aggregated from every completed cruise on ${ship.ship}.`,
+                    sourceRecords: [
+                      { label: 'Sailings', value: String(ship.cruises) },
+                      { label: 'Avg Pts / Cruise', value: formatNumber(Math.round(ship.avgPointsPerCruise)) },
+                      { label: 'Avg Win / Loss', value: formatSignedCurrencyDetailed(ship.avgWinLossPerCruise) },
+                      { label: 'Avg Value / Cruise', value: formatSignedCurrencyDetailed(ship.avgValuePerCruise) },
+                      { label: 'Net Make-Out', value: formatSignedCurrencyDetailed(ship.netMakeOut) },
+                    ],
+                  })}
+                >
+                  <Text style={[styles.dataLabel, { flex: 1.4 }]} numberOfLines={1}>{ship.ship}</Text>
+                  <Text style={[styles.dataValue, { width: 46, textAlign: 'right', fontSize: 12.5 }]}>{ship.cruises}</Text>
+                  <Text style={[styles.dataValue, { width: 62, textAlign: 'right', fontSize: 12.5 }]}>{formatNumber(Math.round(ship.avgPointsPerCruise))}</Text>
+                  <Text style={[styles.dataValue, { width: 74, textAlign: 'right', fontSize: 12.5, color: ship.netMakeOut >= 0 ? COLORS.success : COLORS.error }]}>{formatSignedCurrencyDetailed(ship.netMakeOut)}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </View>
+      )}
+
       {perCruisePointsBreakdown.length > 0 && (
         <View style={styles.section}>
           <View style={styles.cleanCard}>
@@ -3338,6 +3679,79 @@ export default function AnalyticsScreen() {
               >
                 <Text style={casinoDashboardStyles.cardLabel} numberOfLines={1}>{item.label}</Text>
                 <Text style={[casinoDashboardStyles.bigNumber, { fontSize: 18, color: item.color }]} numberOfLines={1} adjustsFontSizeToFit>{item.value}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <View style={casinoDashboardStyles.card}>
+          <Text style={styles.economicsTitle}>Point Progression</Text>
+          <Text style={casinoDashboardStyles.screenSubtitle}>Current Path vs. your selected scenario, over 5 years — tap a year for the breakdown</Text>
+          <View style={{ marginTop: 12 }}>
+            <CasinoLineChart
+              series={[
+                { key: 'currentPath', label: 'Current Path', color: CASINO_DASHBOARD_COLORS.royalBlue, points: pointProgressionData.years.map((y) => ({ x: y.label, y: y.currentPath })) },
+                { key: 'scenario', label: `Scenario (${pointProgressionData.activePresetLabel})`, color: CASINO_DASHBOARD_COLORS.teal, points: pointProgressionData.years.map((y) => ({ x: y.label, y: y.scenario })) },
+              ]}
+              referenceLines={[
+                { key: 'signature', label: 'Signature target', value: CLUB_ROYALE_TIERS.Signature.threshold, color: CASINO_DASHBOARD_COLORS.purple },
+                { key: 'masters', label: 'Masters target', value: CLUB_ROYALE_TIERS.Masters.threshold, color: CASINO_DASHBOARD_COLORS.orange },
+              ]}
+              valueFormatter={(v) => formatNumber(v)}
+              onPointPress={(index) => {
+                const y = pointProgressionData.years[index];
+                if (!y) return;
+                historyInsightsDrill.open({
+                  title: `${y.label} Projection`,
+                  summary: 'Current Path assumes your real historical pace continues unchanged. Scenario applies your selected preset\'s monthly coin-in.',
+                  formula: 'Projected Points = Starting points + (yearly point rate × years elapsed)',
+                  sourceRecords: [
+                    { label: 'Current Path', value: formatNumber(y.currentPath) },
+                    { label: `Scenario (${pointProgressionData.activePresetLabel})`, value: formatNumber(y.scenario) },
+                  ],
+                  inputs: [
+                    { label: 'Current Path yearly rate', value: `${formatNumber(Math.round(pointProgressionData.currentPathYearlyPoints))} pts/yr` },
+                    { label: 'Scenario yearly rate', value: `${formatNumber(Math.round(pointProgressionData.scenarioYearlyPoints))} pts/yr` },
+                  ],
+                });
+              }}
+            />
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <View style={casinoDashboardStyles.card}>
+          <Text style={styles.economicsTitle}>Scenario Comparison</Text>
+          <Text style={casinoDashboardStyles.screenSubtitle}>5-year projection — tap a row to see how each column was calculated</Text>
+          <View style={{ marginTop: 10 }}>
+            <View style={styles.dataRow}>
+              <Text style={[styles.dataLabel, { flex: 1.1, fontWeight: '700' as const }]} numberOfLines={1}>Metric</Text>
+              <Text style={[styles.economicsSummaryLabel, { flex: 1, textAlign: 'right' }]} numberOfLines={2}>Current Path</Text>
+              <Text style={[styles.economicsSummaryLabel, { flex: 1, textAlign: 'right' }]} numberOfLines={2}>Scenario A</Text>
+              <Text style={[styles.economicsSummaryLabel, { flex: 1, textAlign: 'right' }]} numberOfLines={2}>Scenario B</Text>
+            </View>
+            {scenarioComparisonData.rows.map((row) => (
+              <TouchableOpacity
+                key={row.metric}
+                style={styles.dataRow}
+                activeOpacity={0.75}
+                onPress={() => historyInsightsDrill.open({
+                  title: row.metric,
+                  summary: `How ${row.metric.toLowerCase()} was calculated for each scenario over a 5-year projection.`,
+                  sourceRecords: [
+                    { label: 'Current Path (Stay the Course)', value: row.currentPath },
+                    { label: scenarioComparisonData.scenarioALabel, value: row.scenarioA },
+                    { label: scenarioComparisonData.scenarioBLabel, value: row.scenarioB },
+                  ],
+                })}
+              >
+                <Text style={[styles.dataLabel, { flex: 1.1 }]} numberOfLines={1}>{row.metric}</Text>
+                <Text style={[styles.dataValue, { flex: 1, textAlign: 'right', fontSize: 12 }]} numberOfLines={1}>{row.currentPath}</Text>
+                <Text style={[styles.dataValue, { flex: 1, textAlign: 'right', fontSize: 12 }]} numberOfLines={1}>{row.scenarioA}</Text>
+                <Text style={[styles.dataValue, { flex: 1, textAlign: 'right', fontSize: 12 }]} numberOfLines={1}>{row.scenarioB}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -3997,6 +4411,17 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: SPACING.md,
     paddingBottom: 120,
+  },
+  goalProgressTrack: {
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#E2E8F0',
+    overflow: 'hidden',
+    marginTop: 8,
+  },
+  goalProgressFill: {
+    height: '100%',
+    borderRadius: 5,
   },
   quickStatsRow: {
     flexDirection: 'row',
