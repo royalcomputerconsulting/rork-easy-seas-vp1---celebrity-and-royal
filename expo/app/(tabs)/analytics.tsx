@@ -1495,7 +1495,7 @@ export default function AnalyticsScreen() {
         onPress={handleExportCruisePortfolio}
         testID="casino-portfolio-export"
       >
-        <Download size={16} color={COLORS.navyDeep} />
+        <Download size={16} color={CASINO_DASHBOARD_COLORS.textPrimary} />
         <Text style={styles.exportButtonText}>Export</Text>
       </TouchableOpacity>
     </View>
@@ -1508,10 +1508,10 @@ export default function AnalyticsScreen() {
     const earnedPoints = economicsRow?.points ?? getBookedCruiseCasinoPoints(cruise);
 
     const roiColor = cruise.roiLevel === 'high'
-      ? COLORS.success
+      ? CASINO_DASHBOARD_COLORS.green
       : cruise.roiLevel === 'medium'
-        ? COLORS.warning
-        : COLORS.error;
+        ? CASINO_DASHBOARD_COLORS.orange
+        : CASINO_DASHBOARD_COLORS.red;
 
     const effectiveValuePerDollar = economicsRow && economicsRow.paid > 0
       ? economicsRow.totalEconomic / economicsRow.paid
@@ -1590,7 +1590,7 @@ export default function AnalyticsScreen() {
         <View style={styles.portfolioCardContent}>
           <View style={styles.portfolioCardTopRow}>
             <View style={styles.portfolioCardShipRow}>
-              <Ship size={13} color={COLORS.navyDeep} />
+              <Ship size={13} color={CASINO_DASHBOARD_COLORS.textPrimary} />
               <Text style={styles.portfolioCardShipName} numberOfLines={1}>
                 {cruise.shipName || 'Unknown Ship'}
               </Text>
@@ -1612,7 +1612,7 @@ export default function AnalyticsScreen() {
 
           <View style={styles.portfolioCardMetaRow}>
             <View style={styles.portfolioCardMeta}>
-              <Calendar size={12} color={COLORS.navyDeep} />
+              <Calendar size={12} color={CASINO_DASHBOARD_COLORS.textPrimary} />
               <Text style={styles.portfolioCardMetaText}>
                 {cruise.sailDate ? formatDateRange(cruise.sailDate, cruise.returnDate, cruise.nights) : 'No date'}
               </Text>
@@ -1631,13 +1631,13 @@ export default function AnalyticsScreen() {
             </View>
             <View style={styles.portfolioMetric}>
               <Text style={styles.portfolioMetricLabel}>Cash Result</Text>
-              <Text style={[styles.portfolioMetricValue, { color: (economicsRow?.netCash ?? winnings) >= 0 ? COLORS.success : COLORS.error }]}>
+              <Text style={[styles.portfolioMetricValue, { color: (economicsRow?.netCash ?? winnings) >= 0 ? CASINO_DASHBOARD_COLORS.green : CASINO_DASHBOARD_COLORS.red }]}>
                 {(economicsRow?.netCash ?? winnings) >= 0 ? '+' : ''}{formatCurrency(economicsRow?.netCash ?? winnings)}
               </Text>
             </View>
             <View style={styles.portfolioMetric}>
               <Text style={styles.portfolioMetricLabel}>Total Economic Value</Text>
-              <Text style={[styles.portfolioMetricValue, { color: (economicsRow?.totalEconomic ?? breakdown.totalProfit) >= 0 ? COLORS.success : COLORS.error }]}>
+              <Text style={[styles.portfolioMetricValue, { color: (economicsRow?.totalEconomic ?? breakdown.totalProfit) >= 0 ? CASINO_DASHBOARD_COLORS.green : CASINO_DASHBOARD_COLORS.red }]}>
                 {formatCurrency(economicsRow?.totalEconomic ?? breakdown.totalProfit)}
               </Text>
             </View>
@@ -1648,13 +1648,13 @@ export default function AnalyticsScreen() {
               <Text style={styles.portfolioCardCabin}>{cruise.cabinType}</Text>
               {cruise.offerCode ? (
                 <View style={styles.portfolioOfferBadge}>
-                  <Zap size={10} color={COLORS.goldDark} />
+                  <Zap size={10} color={CASINO_DASHBOARD_COLORS.gold} />
                   <Text style={styles.portfolioOfferCode}>{cruise.offerCode}</Text>
                 </View>
               ) : null}
               {cruise.instantCertificateWon ? (
                 <View style={styles.portfolioCertificateBadge}>
-                  <Ticket size={10} color="#047857" />
+                  <Ticket size={10} color={CASINO_DASHBOARD_COLORS.green} />
                   <Text style={styles.portfolioCertificateText}>Cert won</Text>
                 </View>
               ) : null}
@@ -1688,7 +1688,7 @@ export default function AnalyticsScreen() {
               { label: 'Source', value: stat.label === 'Cruises' ? 'Count of completed cruises in the value ledger below.' : stat.label === 'Status Tier' ? 'Your current Club Royale tier from loyalty sync or manual entry.' : stat.label === 'Current Pts' ? 'Current-season points, resets every April 1.' : 'Lifetime historical points earned, never resets.' },
             ])}
           >
-            <stat.icon size={16} color={(stat as { color?: string }).color || COLORS.navyDeep} />
+            <stat.icon size={16} color={(stat as { color?: string }).color || CASINO_DASHBOARD_COLORS.textPrimary} />
             <Text style={styles.quickStatValue}>{stat.value}</Text>
             <Text style={styles.quickStatLabel}>{stat.label}</Text>
           </TouchableOpacity>
@@ -1707,13 +1707,13 @@ export default function AnalyticsScreen() {
       <View style={styles.section}>
         <View style={styles.cleanCard} testID="casino-current-vs-historical-card">
           <View style={styles.cleanCardHeader}>
-            <Calendar size={16} color={COLORS.navyDeep} />
+            <Calendar size={16} color={CASINO_DASHBOARD_COLORS.textPrimary} />
             <Text style={styles.cleanCardTitle}>Current vs Historical</Text>
           </View>
           <View style={styles.dataGrid}>
             <View style={styles.dataRow}>
               <Text style={styles.dataLabel}>Current Status Tier</Text>
-              <Text style={[styles.dataValue, { color: COLORS.navyDeep }]}>{clubRoyaleTier}</Text>
+              <Text style={[styles.dataValue, { color: CASINO_DASHBOARD_COLORS.textPrimary }]}>{clubRoyaleTier}</Text>
             </View>
             <View style={styles.dataRow}>
               <Text style={styles.dataLabel}>Current Season Points</Text>
@@ -1721,7 +1721,7 @@ export default function AnalyticsScreen() {
             </View>
             <View style={styles.dataRow}>
               <Text style={styles.dataLabel}>Signature Retain Gap</Text>
-              <Text style={[styles.dataValue, { color: currentSeasonMetrics.pointsNeededForSignature === 0 ? COLORS.success : COLORS.warning }]}>{formatNumber(currentSeasonMetrics.pointsNeededForSignature)} pts</Text>
+              <Text style={[styles.dataValue, { color: currentSeasonMetrics.pointsNeededForSignature === 0 ? CASINO_DASHBOARD_COLORS.green : CASINO_DASHBOARD_COLORS.orange }]}>{formatNumber(currentSeasonMetrics.pointsNeededForSignature)} pts</Text>
             </View>
             <View style={styles.dataRow}>
               <Text style={styles.dataLabel}>Current Season Coin-In</Text>
@@ -1741,11 +1741,11 @@ export default function AnalyticsScreen() {
             </View>
             <View style={styles.dataRow}>
               <Text style={styles.dataLabel}>Historical Points Earned</Text>
-              <Text style={[styles.dataValue, { color: COLORS.goldDark }]}>{formatNumber(historicalPoints)}</Text>
+              <Text style={[styles.dataValue, { color: CASINO_DASHBOARD_COLORS.gold }]}>{formatNumber(historicalPoints)}</Text>
             </View>
             <View style={styles.dataRow}>
               <Text style={styles.dataLabel}>Historical Tier Earned</Text>
-              <Text style={[styles.dataValue, { color: COLORS.success }]}>{historicalClubRoyaleTier}</Text>
+              <Text style={[styles.dataValue, { color: CASINO_DASHBOARD_COLORS.green }]}>{historicalClubRoyaleTier}</Text>
             </View>
             <View style={styles.dataRow}>
               <Text style={styles.dataLabel}>Next Reset Date</Text>
@@ -1776,7 +1776,7 @@ export default function AnalyticsScreen() {
       {shipPerformance.length > 0 && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Ship size={16} color={COLORS.navyDeep} />
+            <Ship size={16} color={CASINO_DASHBOARD_COLORS.textPrimary} />
             <Text style={styles.sectionTitle}>Ship-by-Ship Performance</Text>
           </View>
           <View style={{ gap: SPACING.sm }}>
@@ -1809,13 +1809,13 @@ export default function AnalyticsScreen() {
                   </View>
                   <View style={styles.shipMetric}>
                     <Text style={styles.shipMetricLabel}>Cash Result</Text>
-                    <Text style={[styles.shipMetricValue, { color: ship.cashResult >= 0 ? COLORS.success : COLORS.error }]}>
+                    <Text style={[styles.shipMetricValue, { color: ship.cashResult >= 0 ? CASINO_DASHBOARD_COLORS.green : CASINO_DASHBOARD_COLORS.red }]}>
                       {formatSignedCurrencyDetailed(ship.cashResult)}
                     </Text>
                   </View>
                   <View style={styles.shipMetric}>
                     <Text style={styles.shipMetricLabel}>Total Econ</Text>
-                    <Text style={[styles.shipMetricValue, { color: ship.totalEconomic >= 0 ? COLORS.success : COLORS.error }]}>
+                    <Text style={[styles.shipMetricValue, { color: ship.totalEconomic >= 0 ? CASINO_DASHBOARD_COLORS.green : CASINO_DASHBOARD_COLORS.red }]}>
                       {formatSignedCurrencyDetailed(ship.totalEconomic)}
                     </Text>
                   </View>
@@ -1837,14 +1837,14 @@ export default function AnalyticsScreen() {
           onPress={() => router.push('/data-health' as any)}
           testID="casino-data-health-indicator"
         >
-          {dataHealthIssueCount > 0 ? <AlertTriangle size={20} color="#92400E" /> : <Activity size={20} color={COLORS.success} />}
+          {dataHealthIssueCount > 0 ? <AlertTriangle size={20} color={CASINO_DASHBOARD_COLORS.orange} /> : <Activity size={20} color={CASINO_DASHBOARD_COLORS.green} />}
           <View style={styles.dataHealthTextBlock}>
             <Text style={styles.dataHealthTitle}>{dataHealthIssueCount > 0 ? `${dataHealthIssueCount} data-health signal(s) found` : 'Data health looks clean'}</Text>
             <Text style={styles.dataHealthSubtitle}>
               {dataHealthSummary.completedCruises} completed · {dataHealthSummary.activeUpcoming} upcoming · {dataHealthSummary.royalOffers + dataHealthSummary.celebrityOffers} offers tracked
             </Text>
           </View>
-          <ChevronRight size={18} color={dataHealthIssueCount > 0 ? '#92400E' : COLORS.success} />
+          <ChevronRight size={18} color={dataHealthIssueCount > 0 ? CASINO_DASHBOARD_COLORS.goldText : CASINO_DASHBOARD_COLORS.green} />
         </TouchableOpacity>
       </View>
 
@@ -1874,7 +1874,7 @@ export default function AnalyticsScreen() {
                 </Text>
                 <ChevronDown
                   size={16}
-                  color={COLORS.navyDeep}
+                  color={CASINO_DASHBOARD_COLORS.textPrimary}
                   style={{ transform: [{ rotate: showAllCruises ? '180deg' : '0deg' }] }}
                 />
               </TouchableOpacity>
@@ -1882,7 +1882,7 @@ export default function AnalyticsScreen() {
           </View>
         ) : (
           <View style={styles.emptyPortfolio}>
-            <Ship size={40} color={CLEAN_THEME.text.secondary} />
+            <Ship size={40} color={CASINO_DASHBOARD_COLORS.textSecondary} />
             <Text style={styles.emptyPortfolioText}>No cruises match this filter</Text>
           </View>
         )}
@@ -1891,7 +1891,7 @@ export default function AnalyticsScreen() {
       {realAnalytics.destinationDistribution.length > 0 && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <MapPin size={16} color={COLORS.navyDeep} />
+            <MapPin size={16} color={CASINO_DASHBOARD_COLORS.textPrimary} />
             <Text style={styles.sectionTitle}>Top Destinations</Text>
           </View>
 
@@ -2041,7 +2041,7 @@ export default function AnalyticsScreen() {
               <Text style={[casinoDashboardStyles.bigNumber, { color: tile.color }]} numberOfLines={1} adjustsFontSizeToFit>
                 {tile.value}
               </Text>
-              <Info size={12} color="#94A3B8" />
+              <Info size={12} color={CASINO_DASHBOARD_COLORS.textMuted} />
             </TouchableOpacity>
           ))}
         </View>
@@ -2147,7 +2147,7 @@ export default function AnalyticsScreen() {
           <View style={styles.economicsCard} testID="casino-cruise-economics-card">
             <View style={styles.economicsHeader}>
               <View style={styles.economicsHeaderIcon}>
-                <TrendingUp size={18} color={COLORS.navyDeep} />
+                <TrendingUp size={18} color={CASINO_DASHBOARD_COLORS.textPrimary} />
               </View>
               <View style={styles.economicsHeaderContent}>
                 <Text style={styles.economicsTitle}>Full Value Ledger</Text>
@@ -2165,17 +2165,17 @@ export default function AnalyticsScreen() {
                 <Text style={styles.economicsHeroStatLabel}>Paid</Text>
               </View>
               <View style={styles.economicsHeroStat}>
-                <Text style={[styles.economicsHeroStatValue, { color: COLORS.success }]}>{formatCurrency(cruiseEconomicsSummary.totals.totalCruiseValueCaptured)}</Text>
+                <Text style={[styles.economicsHeroStatValue, { color: CASINO_DASHBOARD_COLORS.green }]}>{formatCurrency(cruiseEconomicsSummary.totals.totalCruiseValueCaptured)}</Text>
                 <Text style={styles.economicsHeroStatLabel}>Cruise Value</Text>
               </View>
               <View style={styles.economicsHeroStat}>
-                <Text style={[styles.economicsHeroStatValue, { color: cruiseEconomicsSummary.totals.totalCashResult >= 0 ? COLORS.success : COLORS.error }]}>
+                <Text style={[styles.economicsHeroStatValue, { color: cruiseEconomicsSummary.totals.totalCashResult >= 0 ? CASINO_DASHBOARD_COLORS.green : CASINO_DASHBOARD_COLORS.red }]}>
                   {formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalCashResult)}
                 </Text>
                 <Text style={styles.economicsHeroStatLabel}>Cash Result</Text>
               </View>
               <View style={styles.economicsHeroStat}>
-                <Text style={[styles.economicsHeroStatValue, { color: cruiseEconomicsSummary.totals.totalEconomicValue >= 0 ? COLORS.success : COLORS.error }]}>
+                <Text style={[styles.economicsHeroStatValue, { color: cruiseEconomicsSummary.totals.totalEconomicValue >= 0 ? CASINO_DASHBOARD_COLORS.green : CASINO_DASHBOARD_COLORS.red }]}>
                   {formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalEconomicValue)}
                 </Text>
                 <Text style={styles.economicsHeroStatLabel}>Total Econ</Text>
@@ -2242,7 +2242,7 @@ export default function AnalyticsScreen() {
                       <Text style={[styles.economicsCell, styles.economicsMoneyCell]}>{formatCurrencyDetailed(row.paid)}</Text>
                       <Text style={[styles.economicsCell, styles.economicsMoneyCell]}>{formatCurrencyDetailed(row.discount)}</Text>
                       <Text style={[styles.economicsCell, styles.economicsPointsCell]}>{formatNumber(row.points)}</Text>
-                      <Text style={[styles.economicsCell, styles.economicsMoneyCell, { color: row.winningsHome >= 0 ? COLORS.success : COLORS.error }]}>{formatSignedCurrencyDetailed(row.winningsHome)}</Text>
+                      <Text style={[styles.economicsCell, styles.economicsMoneyCell, { color: row.winningsHome >= 0 ? CASINO_DASHBOARD_COLORS.green : CASINO_DASHBOARD_COLORS.red }]}>{formatSignedCurrencyDetailed(row.winningsHome)}</Text>
                       <Text style={[styles.economicsCell, styles.economicsMoneyCell, row.netCash >= 0 ? styles.economicsPositiveValue : styles.economicsNegativeValue]}>{formatSignedCurrencyDetailed(row.netCash)}</Text>
                       <Text style={[styles.economicsCell, styles.economicsMoneyCell, row.totalEconomic >= 0 ? styles.economicsPositiveValue : styles.economicsNegativeValue]}>{formatSignedCurrencyDetailed(row.totalEconomic)}</Text>
                       <View style={[styles.economicsStatusPill, statusStyle]}>
@@ -2260,7 +2260,7 @@ export default function AnalyticsScreen() {
                   <Text style={[styles.economicsCell, styles.economicsMoneyCell]}>{formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalPaid)}</Text>
                   <Text style={[styles.economicsCell, styles.economicsMoneyCell]}>{formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalCruiseValueCaptured)}</Text>
                   <Text style={[styles.economicsCell, styles.economicsPointsCell]}>{formatNumber(cruiseEconomicsSummary.totals.totalPoints)}</Text>
-                  <Text style={[styles.economicsCell, styles.economicsMoneyCell, { color: cruiseEconomicsSummary.totals.totalWinningsHome >= 0 ? COLORS.success : COLORS.error }]}>{formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalWinningsHome)}</Text>
+                  <Text style={[styles.economicsCell, styles.economicsMoneyCell, { color: cruiseEconomicsSummary.totals.totalWinningsHome >= 0 ? CASINO_DASHBOARD_COLORS.green : CASINO_DASHBOARD_COLORS.red }]}>{formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalWinningsHome)}</Text>
                   <Text style={[styles.economicsCell, styles.economicsMoneyCell, cruiseEconomicsSummary.totals.totalCashResult >= 0 ? styles.economicsPositiveValue : styles.economicsNegativeValue]}>{formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalCashResult)}</Text>
                   <Text style={[styles.economicsCell, styles.economicsMoneyCell, cruiseEconomicsSummary.totals.totalEconomicValue >= 0 ? styles.economicsPositiveValue : styles.economicsNegativeValue]}>{formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalEconomicValue)}</Text>
                   <View style={[styles.economicsStatusPill, cruiseEconomicsSummary.totals.hasEstimates ? styles.economicsStatusPending : styles.economicsStatusKnown]}>
@@ -2282,7 +2282,7 @@ export default function AnalyticsScreen() {
                 </Text>
                 <ChevronDown
                   size={16}
-                  color={COLORS.navyDeep}
+                  color={CASINO_DASHBOARD_COLORS.textPrimary}
                   style={{ transform: [{ rotate: showAllEconomicsRows ? '180deg' : '0deg' }] }}
                 />
               </TouchableOpacity>
@@ -2489,7 +2489,7 @@ export default function AnalyticsScreen() {
 
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <LineChart size={16} color={COLORS.navyDeep} />
+          <LineChart size={16} color={CASINO_DASHBOARD_COLORS.textPrimary} />
           <Text style={styles.sectionTitle}>Future Value Projections</Text>
         </View>
         <ROIProjectionChart
@@ -2621,7 +2621,7 @@ export default function AnalyticsScreen() {
       {upcomingCruisesList.length > 0 && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Ship size={16} color={COLORS.navyDeep} />
+            <Ship size={16} color={CASINO_DASHBOARD_COLORS.textPrimary} />
             <Text style={styles.sectionTitle}>Upcoming Cruises</Text>
           </View>
           <View style={{ gap: SPACING.sm }}>
@@ -2633,7 +2633,7 @@ export default function AnalyticsScreen() {
                 onPress={() => openCruiseDetailFromPortfolio(cruise)}
               >
                 <View style={styles.actionRowIcon}>
-                  <Ship size={16} color={COLORS.navyDeep} />
+                  <Ship size={16} color={CASINO_DASHBOARD_COLORS.textPrimary} />
                 </View>
                 <View style={styles.actionRowContent}>
                   <Text style={styles.actionRowTitle} numberOfLines={1}>{cruise.shipName || 'Unknown Ship'}</Text>
@@ -2653,7 +2653,7 @@ export default function AnalyticsScreen() {
       {expiringOffersList.length > 0 && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Clock size={16} color={COLORS.warning} />
+            <Clock size={16} color={CASINO_DASHBOARD_COLORS.orange} />
             <Text style={styles.sectionTitle}>Offers Expiring Soon</Text>
           </View>
           <View style={{ gap: SPACING.sm }}>
@@ -2669,14 +2669,14 @@ export default function AnalyticsScreen() {
                 ])}
               >
                 <View style={[styles.actionRowIcon, { backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
-                  <Clock size={16} color="#B45309" />
+                  <Clock size={16} color={CASINO_DASHBOARD_COLORS.orange} />
                 </View>
                 <View style={styles.actionRowContent}>
                   <Text style={styles.actionRowTitle} numberOfLines={1}>{offer.title}</Text>
                   <Text style={styles.actionRowSubtitle} numberOfLines={1}>{offer.offerCode || 'No code'} · Expires {offer.expiryLabel}</Text>
                 </View>
                 <View style={[styles.actionRowBadge, { backgroundColor: 'rgba(245, 158, 11, 0.18)' }]}>
-                  <Text style={[styles.actionRowBadgeText, { color: '#92400E' }]}>{offer.daysLeft}d</Text>
+                  <Text style={[styles.actionRowBadgeText, { color: CASINO_DASHBOARD_COLORS.goldText }]}>{offer.daysLeft}d</Text>
                 </View>
               </TouchableOpacity>
             ))}
@@ -2686,7 +2686,7 @@ export default function AnalyticsScreen() {
 
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <ClipboardList size={16} color={COLORS.navyDeep} />
+          <ClipboardList size={16} color={CASINO_DASHBOARD_COLORS.textPrimary} />
           <Text style={styles.sectionTitle}>Today's Checklist</Text>
         </View>
         <View style={styles.cleanCard}>
@@ -2697,7 +2697,7 @@ export default function AnalyticsScreen() {
               activeOpacity={0.7}
               onPress={() => showDetail(item.label, [{ label: 'Detail', value: item.detail }])}
             >
-              {item.done ? <CheckCircle size={18} color={COLORS.success} /> : <AlertTriangle size={18} color="#B45309" />}
+              {item.done ? <CheckCircle size={18} color={CASINO_DASHBOARD_COLORS.green} /> : <AlertTriangle size={18} color={CASINO_DASHBOARD_COLORS.orange} />}
               <View style={styles.checklistTextBlock}>
                 <Text style={[styles.checklistText, item.done && styles.checklistTextDone]}>{item.label}</Text>
                 <Text style={styles.checklistDetail} numberOfLines={2}>{item.detail}</Text>
@@ -2710,7 +2710,7 @@ export default function AnalyticsScreen() {
       {instantCertBank.length > 0 && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Ticket size={16} color="#047857" />
+            <Ticket size={16} color={CASINO_DASHBOARD_COLORS.green} />
             <Text style={styles.sectionTitle}>Instant Certificate Bank</Text>
           </View>
           <View style={{ flexDirection: 'row', gap: SPACING.sm, marginBottom: SPACING.sm }}>
@@ -2729,7 +2729,7 @@ export default function AnalyticsScreen() {
                 testID={`cert-bank-type-${group.type}`}
               >
                 <Text style={[casinoDashboardStyles.cardLabel, { textAlign: 'center' }]} numberOfLines={1}>{group.label}</Text>
-                <Text style={[casinoDashboardStyles.bigNumber, { fontSize: 22, color: '#047857', marginTop: 4 }]}>{group.count}</Text>
+                <Text style={[casinoDashboardStyles.bigNumber, { fontSize: 22, color: CASINO_DASHBOARD_COLORS.green, marginTop: 4 }]}>{group.count}</Text>
                 <Text style={styles.economicsSummaryLabel} numberOfLines={1}>{formatCurrency(group.value)}</Text>
               </TouchableOpacity>
             ))}
@@ -2742,15 +2742,15 @@ export default function AnalyticsScreen() {
                 activeOpacity={0.8}
                 onPress={() => openCruisePerformanceEditorById(cert.id)}
               >
-                <View style={[styles.actionRowIcon, { backgroundColor: '#ECFDF5' }]}>
-                  <Ticket size={16} color="#047857" />
+                <View style={[styles.actionRowIcon, { backgroundColor: 'rgba(51, 199, 126, 0.14)' }]}>
+                  <Ticket size={16} color={CASINO_DASHBOARD_COLORS.green} />
                 </View>
                 <View style={styles.actionRowContent}>
                   <Text style={styles.actionRowTitle} numberOfLines={1}>{cert.shipName} · {cert.certType} Cert · {cert.offerCode || 'No code'}</Text>
                   <Text style={styles.actionRowSubtitle} numberOfLines={1}>{cert.sailDate}{cert.notes ? ` · ${cert.notes}` : ''}</Text>
                 </View>
-                <View style={[styles.actionRowBadge, { backgroundColor: '#D1FAE5' }]}>
-                  <Text style={[styles.actionRowBadgeText, { color: '#047857' }]}>{formatCurrency(cert.value)}</Text>
+                <View style={[styles.actionRowBadge, { backgroundColor: 'rgba(51, 199, 126, 0.22)' }]}>
+                  <Text style={[styles.actionRowBadgeText, { color: CASINO_DASHBOARD_COLORS.green }]}>{formatCurrency(cert.value)}</Text>
                 </View>
               </TouchableOpacity>
             ))}
@@ -3172,7 +3172,7 @@ export default function AnalyticsScreen() {
         description: coinInIsEstimated
           ? `Coin-in derived from points at ${formatCurrency(DOLLARS_PER_POINT)}/point; missing hours use ${DEFAULT_ESTIMATED_POINTS_PER_PLAY_HOUR} PPH`
           : (isHistorical ? `Total coin-in ÷ ${divisorLabel}` : 'Total coin-in ÷ total sessions'),
-        color: COLORS.navyDeep,
+        color: CASINO_DASHBOARD_COLORS.textPrimary,
         icon: Coins,
       },
       {
@@ -3180,7 +3180,7 @@ export default function AnalyticsScreen() {
         label: isHistorical ? 'Theo (historical avg)' : 'Theo per session',
         value: formatCurrency(theoPerUnit) + (coinInIsEstimated ? ' (est.)' : ''),
         description: `Coin-in ${modeLabel} × ${(assumedHold * 100).toFixed(0)}% hold` + (coinInIsEstimated ? ' (estimated)' : ''),
-        color: COLORS.royalPurple,
+        color: CASINO_DASHBOARD_COLORS.purple,
         icon: Target,
       },
       {
@@ -3188,7 +3188,7 @@ export default function AnalyticsScreen() {
         label: isHistorical ? 'Best theo/hour block (hist.)' : 'Best theo/hour block',
         value: theoTimeBlockValue > 0 ? `${formatCurrency(theoTimeBlockValue)}/hr • ${theoPerTimeBlock}` : '—',
         description: theoTimeBlockDescription,
-        color: '#F59E0B',
+        color: CASINO_DASHBOARD_COLORS.orange,
         icon: Dices,
       },
       {
@@ -3196,7 +3196,7 @@ export default function AnalyticsScreen() {
         label: 'ADT smoothing factor',
         value: adtSmoothingFactor.toFixed(3),
         description: 'How evenly theo is spread across days',
-        color: '#8B5CF6',
+        color: CASINO_DASHBOARD_COLORS.purple,
         icon: LineChart,
       },
       {
@@ -3204,7 +3204,7 @@ export default function AnalyticsScreen() {
         label: isHistorical ? 'Total economic value / session' : 'Casino value / session',
         value: formatCurrency(valuePerUnit),
         description: `${formatCurrency(totalValueForMode)} ÷ ${totalSessions} ${isHistorical ? 'historical/derived' : ''} sessions. Coin-In is excluded from value.`,
-        color: valuePerUnit >= 0 ? COLORS.success : COLORS.error,
+        color: valuePerUnit >= 0 ? CASINO_DASHBOARD_COLORS.green : CASINO_DASHBOARD_COLORS.red,
         icon: TrendingUp,
       },
       {
@@ -3212,7 +3212,7 @@ export default function AnalyticsScreen() {
         label: 'Risk per hour',
         value: formatCurrency(riskPerHour),
         description: `${stopGap} stop-gap ÷ avg session length`,
-        color: '#EF4444',
+        color: CASINO_DASHBOARD_COLORS.red,
         icon: Zap,
       },
       {
@@ -3220,7 +3220,7 @@ export default function AnalyticsScreen() {
         label: 'Press efficiency ratio',
         value: pressEfficiencyRatio.toFixed(2) + 'x',
         description: 'Cash result during press spins ÷ press exposure',
-        color: COLORS.success,
+        color: CASINO_DASHBOARD_COLORS.green,
         icon: PieChart,
       },
       {
@@ -3228,7 +3228,7 @@ export default function AnalyticsScreen() {
         label: 'Offer safety index',
         value: offerSafetyIndex.toFixed(2),
         description: 'Consistency score vs spike risk',
-        color: '#10B981',
+        color: CASINO_DASHBOARD_COLORS.green,
         icon: Award,
       },
       {
@@ -3238,7 +3238,7 @@ export default function AnalyticsScreen() {
         description: isHistorical
           ? `Total economic value ÷ ${totalHistoricalHours.toFixed(2)} play hours. Coin-In is not included in value.`
           : (hasSessionData ? 'Session cash result + point value ÷ tracked play hours' : `Known current-season winnings ÷ ${totalHistoricalHours.toFixed(2)} estimated play hours`),
-        color: COLORS.goldDark,
+        color: CASINO_DASHBOARD_COLORS.gold,
         icon: DollarSign,
       },
       {
@@ -3248,7 +3248,7 @@ export default function AnalyticsScreen() {
         description: isHistorical
           ? `${formatNumber(historicalTotalPoints)} pts ÷ ${totalSessions} sessions`
           : 'Likelihood offers persist unchanged',
-        color: isHistorical ? '#8B5CF6' : (sustainabilityScore >= 70 ? COLORS.success : sustainabilityScore >= 40 ? '#F59E0B' : COLORS.error),
+        color: isHistorical ? CASINO_DASHBOARD_COLORS.purple : (sustainabilityScore >= 70 ? CASINO_DASHBOARD_COLORS.green : sustainabilityScore >= 40 ? CASINO_DASHBOARD_COLORS.orange : CASINO_DASHBOARD_COLORS.red),
         icon: isHistorical ? Award : BarChart3,
       },
       ...(isHistorical ? [
@@ -3257,7 +3257,7 @@ export default function AnalyticsScreen() {
           label: 'Avg Coin-In / Cruise',
           value: formatCurrency(completedCruiseCount > 0 ? cruiseEconomicsSummary.totals.totalCoinIn / completedCruiseCount : 0),
           description: `${formatCurrency(totalCoinIn)} ÷ ${completedCruiseCount} completed cruises`,
-          color: COLORS.navyDeep,
+          color: CASINO_DASHBOARD_COLORS.textPrimary,
           icon: Ship,
         },
         {
@@ -3265,7 +3265,7 @@ export default function AnalyticsScreen() {
           label: 'Avg Cash Result / Cruise',
           value: `${avgCashResultPerCruise >= 0 ? '+' : ''}${formatCurrency(avgCashResultPerCruise)}`,
           description: `${formatCurrency(totalWinLoss)} ÷ ${completedCruiseCount} completed cruises`,
-          color: avgCashResultPerCruise >= 0 ? COLORS.success : COLORS.error,
+          color: avgCashResultPerCruise >= 0 ? CASINO_DASHBOARD_COLORS.green : CASINO_DASHBOARD_COLORS.red,
           icon: TrendingUp,
         },
       ] : []),
@@ -3430,14 +3430,14 @@ export default function AnalyticsScreen() {
               { label: 'Method', value: 'Compares the most recent half of completed cruises to the earlier half by cash result (winnings minus paid).' },
             ])}
           >
-            {keepPlayingRecommendation.verdict === 'keep-playing' ? <TrendingUp size={20} color={COLORS.success} />
-              : keepPlayingRecommendation.verdict === 'reassess' ? <TrendingDown size={20} color={COLORS.error} />
-                : <Activity size={20} color="#B45309" />}
+            {keepPlayingRecommendation.verdict === 'keep-playing' ? <TrendingUp size={20} color={CASINO_DASHBOARD_COLORS.green} />
+              : keepPlayingRecommendation.verdict === 'reassess' ? <TrendingDown size={20} color={CASINO_DASHBOARD_COLORS.red} />
+                : <Activity size={20} color={CASINO_DASHBOARD_COLORS.orange} />}
             <View style={styles.keepPlayingTextBlock}>
               <Text style={styles.keepPlayingHeadline}>{keepPlayingRecommendation.headline}</Text>
               <Text style={styles.keepPlayingDetail} numberOfLines={3}>{keepPlayingRecommendation.detail}</Text>
             </View>
-            <Info size={14} color="#94A3B8" />
+            <Info size={14} color={CASINO_DASHBOARD_COLORS.textMuted} />
           </TouchableOpacity>
         </View>
       </View>
@@ -3564,7 +3564,7 @@ export default function AnalyticsScreen() {
                   <Text style={[styles.dataLabel, { flex: 1.4 }]} numberOfLines={1}>{ship.ship}</Text>
                   <Text style={[styles.dataValue, { width: 46, textAlign: 'right', fontSize: 12.5 }]}>{ship.cruises}</Text>
                   <Text style={[styles.dataValue, { width: 62, textAlign: 'right', fontSize: 12.5 }]}>{formatNumber(Math.round(ship.avgPointsPerCruise))}</Text>
-                  <Text style={[styles.dataValue, { width: 74, textAlign: 'right', fontSize: 12.5, color: ship.netMakeOut >= 0 ? COLORS.success : COLORS.error }]}>{formatSignedCurrencyDetailed(ship.netMakeOut)}</Text>
+                  <Text style={[styles.dataValue, { width: 74, textAlign: 'right', fontSize: 12.5, color: ship.netMakeOut >= 0 ? CASINO_DASHBOARD_COLORS.green : CASINO_DASHBOARD_COLORS.red }]}>{formatSignedCurrencyDetailed(ship.netMakeOut)}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -3576,16 +3576,16 @@ export default function AnalyticsScreen() {
         <View style={styles.section}>
           <View style={styles.cleanCard}>
             <View style={styles.cleanCardHeader}>
-              <Award size={16} color={COLORS.navyDeep} />
+              <Award size={16} color={CASINO_DASHBOARD_COLORS.textPrimary} />
               <Text style={styles.cleanCardTitle}>Historical Points &amp; Win/Loss Trends</Text>
             </View>
             <View style={styles.pointsBreakdownLegend}>
               <View style={styles.pointsBreakdownLegendItem}>
-                <View style={[styles.pointsBreakdownLegendDot, { backgroundColor: '#F59E0B' }]} />
+                <View style={[styles.pointsBreakdownLegendDot, { backgroundColor: CASINO_DASHBOARD_COLORS.orange }]} />
                 <Text style={styles.pointsBreakdownLegendText}>Casino Points (Club Royale / Blue Chip)</Text>
               </View>
               <View style={styles.pointsBreakdownLegendItem}>
-                <View style={[styles.pointsBreakdownLegendDot, { backgroundColor: '#3B82F6' }]} />
+                <View style={[styles.pointsBreakdownLegendDot, { backgroundColor: CASINO_DASHBOARD_COLORS.brightBlue }]} />
                 <Text style={styles.pointsBreakdownLegendText}>{"Cruise Loyalty (Crown & Anchor / Captain's Club)"}</Text>
               </View>
             </View>
@@ -3606,14 +3606,14 @@ export default function AnalyticsScreen() {
                   </View>
                   <View style={styles.pointsBreakdownValuesCol}>
                     <View style={styles.pointsBreakdownValueRow}>
-                      <View style={[styles.pointsBreakdownValueDot, { backgroundColor: '#F59E0B' }]} />
+                      <View style={[styles.pointsBreakdownValueDot, { backgroundColor: CASINO_DASHBOARD_COLORS.orange }]} />
                       <Text style={styles.pointsBreakdownValueLabel}>{entry.casinoLabel}</Text>
-                      <Text style={[styles.pointsBreakdownValue, { color: '#92400E' }]}>{formatNumber(entry.casinoPoints)}</Text>
+                      <Text style={[styles.pointsBreakdownValue, { color: CASINO_DASHBOARD_COLORS.goldText }]}>{formatNumber(entry.casinoPoints)}</Text>
                     </View>
                     <View style={styles.pointsBreakdownValueRow}>
-                      <View style={[styles.pointsBreakdownValueDot, { backgroundColor: '#3B82F6' }]} />
+                      <View style={[styles.pointsBreakdownValueDot, { backgroundColor: CASINO_DASHBOARD_COLORS.brightBlue }]} />
                       <Text style={styles.pointsBreakdownValueLabel}>{entry.loyaltyLabel}</Text>
-                      <Text style={[styles.pointsBreakdownValue, { color: '#1D4ED8' }]}>{formatNumber(entry.loyaltyPoints)}</Text>
+                      <Text style={[styles.pointsBreakdownValue, { color: CASINO_DASHBOARD_COLORS.brightBlue }]}>{formatNumber(entry.loyaltyPoints)}</Text>
                     </View>
                   </View>
                 </TouchableOpacity>
@@ -3630,7 +3630,7 @@ export default function AnalyticsScreen() {
                 </Text>
                 <ChevronDown
                   size={16}
-                  color={COLORS.navyDeep}
+                  color={CASINO_DASHBOARD_COLORS.textPrimary}
                   style={{ transform: [{ rotate: showAllCruises ? '180deg' : '0deg' }] }}
                 />
               </TouchableOpacity>
@@ -3642,7 +3642,7 @@ export default function AnalyticsScreen() {
       {pointsPerNightTrend.length > 0 && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <TrendingUp size={16} color={COLORS.navyDeep} />
+            <TrendingUp size={16} color={CASINO_DASHBOARD_COLORS.textPrimary} />
             <Text style={styles.sectionTitle}>Points-per-Night Trend</Text>
           </View>
           <View style={styles.cleanCard}>
@@ -3655,8 +3655,8 @@ export default function AnalyticsScreen() {
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                     <Text style={styles.dataValue}>{entry.pointsPerNight.toFixed(1)}/night</Text>
                     {index > 0 && (delta >= 0
-                      ? <TrendingUp size={13} color={COLORS.success} />
-                      : <TrendingDown size={13} color={COLORS.error} />)}
+                      ? <TrendingUp size={13} color={CASINO_DASHBOARD_COLORS.green} />
+                      : <TrendingDown size={13} color={CASINO_DASHBOARD_COLORS.red} />)}
                   </View>
                 </View>
               );
@@ -3744,7 +3744,7 @@ export default function AnalyticsScreen() {
             })}
           >
             <Text style={styles.viewMoreText}>View All Insights</Text>
-            <ChevronDown size={16} color={COLORS.navyDeep} />
+            <ChevronDown size={16} color={CASINO_DASHBOARD_COLORS.textPrimary} />
           </TouchableOpacity>
         </View>
       </View>
@@ -3889,7 +3889,7 @@ export default function AnalyticsScreen() {
         <View style={styles.calcsHeader}>
           <View style={styles.calcsHeaderContent}>
             <View style={[styles.calcsHeaderIcon, { backgroundColor: 'rgba(139, 92, 246, 0.15)' }]}>
-              <Calculator size={20} color={COLORS.royalPurple} />
+              <Calculator size={20} color={CASINO_DASHBOARD_COLORS.purple} />
             </View>
             <View style={styles.calcsHeaderText}>
               <Text style={styles.calcsHeaderTitle}>What-If Simulator</Text>
@@ -3907,7 +3907,7 @@ export default function AnalyticsScreen() {
               activeOpacity={0.7}
               testID="calcs-mode-per-session"
             >
-              <Dices size={13} color={calcsMode === 'per-session' ? COLORS.white : COLORS.navyDeep} />
+              <Dices size={13} color={calcsMode === 'per-session' ? COLORS.white : CASINO_DASHBOARD_COLORS.textPrimary} />
               <Text style={[
                 styles.calcsModeToggleText,
                 calcsMode === 'per-session' && styles.calcsModeToggleTextActive,
@@ -3922,7 +3922,7 @@ export default function AnalyticsScreen() {
               activeOpacity={0.7}
               testID="calcs-mode-historical"
             >
-              <Ship size={13} color={calcsMode === 'historical' ? COLORS.white : COLORS.navyDeep} />
+              <Ship size={13} color={calcsMode === 'historical' ? COLORS.white : CASINO_DASHBOARD_COLORS.textPrimary} />
               <Text style={[
                 styles.calcsModeToggleText,
                 calcsMode === 'historical' && styles.calcsModeToggleTextActive,
@@ -3985,13 +3985,13 @@ export default function AnalyticsScreen() {
       </View>
 
       <View style={styles.section}>
-        <View style={[styles.alertsBanner, { backgroundColor: 'rgba(0, 31, 63, 0.05)' }]}>
+        <View style={[styles.alertsBanner, { backgroundColor: 'rgba(255, 255, 255, 0.06)' }]}>
           <View style={styles.alertsIconContainer}>
-            <Calendar size={20} color={COLORS.navyDeep} />
+            <Calendar size={20} color={CASINO_DASHBOARD_COLORS.textPrimary} />
           </View>
           <View style={styles.alertsContent}>
-            <Text style={[styles.alertsTitle, { color: COLORS.navyDeep }]}>Calculate Past Sessions</Text>
-            <Text style={[styles.alertsDescription, { color: COLORS.navyDeep, opacity: 0.7 }]}>
+            <Text style={[styles.alertsTitle, { color: CASINO_DASHBOARD_COLORS.textPrimary }]}>Calculate Past Sessions</Text>
+            <Text style={[styles.alertsDescription, { color: CASINO_DASHBOARD_COLORS.textPrimary, opacity: 0.7 }]}>
               Generate session history from completed cruises with points earned
             </Text>
           </View>
@@ -4043,7 +4043,7 @@ export default function AnalyticsScreen() {
 
       <View style={styles.sessionStatsSection}>
         <View style={styles.sectionHeader}>
-          <Dices size={16} color={COLORS.navyDeep} />
+          <Dices size={16} color={CASINO_DASHBOARD_COLORS.textPrimary} />
           <Text style={styles.sectionTitle}>Session Summary</Text>
         </View>
 
@@ -4071,7 +4071,7 @@ export default function AnalyticsScreen() {
             <Text style={styles.sessionHistoryLabel}>Net Win/Loss</Text>
             <Text style={[
               styles.sessionHistoryValue,
-              { color: sessionAnalytics.netWinLoss >= 0 ? COLORS.success : COLORS.error }
+              { color: sessionAnalytics.netWinLoss >= 0 ? CASINO_DASHBOARD_COLORS.green : CASINO_DASHBOARD_COLORS.red }
             ]}>
               {sessionAnalytics.netWinLoss >= 0 ? '+' : ''}{formatCurrency(sessionAnalytics.netWinLoss)}
             </Text>
@@ -4081,7 +4081,7 @@ export default function AnalyticsScreen() {
             <Text style={styles.sessionHistoryLabel}>Win Rate</Text>
             <Text style={[
               styles.sessionHistoryValue,
-              { color: sessionAnalytics.winRate >= 50 ? COLORS.success : COLORS.error }
+              { color: sessionAnalytics.winRate >= 50 ? CASINO_DASHBOARD_COLORS.green : CASINO_DASHBOARD_COLORS.red }
             ]}>
               {sessionAnalytics.winRate.toFixed(1)}%
             </Text>
@@ -4092,7 +4092,7 @@ export default function AnalyticsScreen() {
       {sessions.length > 0 && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Calendar size={16} color={COLORS.navyDeep} />
+            <Calendar size={16} color={CASINO_DASHBOARD_COLORS.textPrimary} />
             <Text style={styles.sectionTitle}>Recent Sessions ({sessions.length} total)</Text>
             <Text style={styles.sortLabelText}>Sorted by Points (High to Low)</Text>
           </View>
@@ -4116,7 +4116,7 @@ export default function AnalyticsScreen() {
                   >
                     <View style={[
                       styles.recentSessionIndicator,
-                      { backgroundColor: (session.winLoss || 0) >= 0 ? '#10B981' : '#EF4444' }
+                      { backgroundColor: (session.winLoss || 0) >= 0 ? CASINO_DASHBOARD_COLORS.green : CASINO_DASHBOARD_COLORS.red }
                     ]} />
                     <View style={styles.recentSessionContent}>
                       <Text style={styles.recentSessionDate}>
@@ -4133,7 +4133,7 @@ export default function AnalyticsScreen() {
                       {session.winLoss !== undefined && (
                         <Text style={[
                           styles.recentSessionWinLoss,
-                          { color: session.winLoss >= 0 ? COLORS.success : COLORS.error }
+                          { color: session.winLoss >= 0 ? CASINO_DASHBOARD_COLORS.green : CASINO_DASHBOARD_COLORS.red }
                         ]}>
                           {session.winLoss >= 0 ? '+' : ''}{formatCurrency(session.winLoss)}
                         </Text>
@@ -4178,7 +4178,7 @@ export default function AnalyticsScreen() {
 
       <View style={styles.calcsInsightCard}>
         <View style={styles.calcsInsightHeader}>
-          <Brain size={18} color={COLORS.navyDeep} />
+          <Brain size={18} color={CASINO_DASHBOARD_COLORS.textPrimary} />
           <Text style={styles.calcsInsightTitle}>Calculation Insights</Text>
         </View>
         <Text style={styles.calcsInsightText}>
@@ -4221,7 +4221,7 @@ export default function AnalyticsScreen() {
           <View style={styles.header}>
             <View style={styles.brandingRow}>
               <View style={styles.titleContainer}>
-                <BarChart3 size={22} color={COLORS.navyDeep} />
+                <BarChart3 size={22} color={CASINO_DASHBOARD_COLORS.textPrimary} />
                 <Text style={styles.appTitle}>Analytics</Text>
               </View>
             </View>
@@ -4241,7 +4241,7 @@ export default function AnalyticsScreen() {
               onPress={() => setActiveTab('portfolio')}
               activeOpacity={0.7}
             >
-              <Award size={14} color={activeTab === 'portfolio' ? COLORS.white : CLEAN_THEME.text.secondary} />
+              <Award size={14} color={activeTab === 'portfolio' ? COLORS.white : CASINO_DASHBOARD_COLORS.textSecondary} />
               <Text style={[styles.tabButtonText, activeTab === 'portfolio' && styles.tabButtonTextActive]}>
                 Portfolio
               </Text>
@@ -4252,7 +4252,7 @@ export default function AnalyticsScreen() {
               onPress={() => setActiveTab('value')}
               activeOpacity={0.7}
             >
-              <DollarSign size={14} color={activeTab === 'value' ? COLORS.white : CLEAN_THEME.text.secondary} />
+              <DollarSign size={14} color={activeTab === 'value' ? COLORS.white : CASINO_DASHBOARD_COLORS.textSecondary} />
               <Text style={[styles.tabButtonText, activeTab === 'value' && styles.tabButtonTextActive]}>
                 Value
               </Text>
@@ -4263,7 +4263,7 @@ export default function AnalyticsScreen() {
               onPress={() => setActiveTab('action')}
               activeOpacity={0.7}
             >
-              <Zap size={14} color={activeTab === 'action' ? COLORS.white : CLEAN_THEME.text.secondary} />
+              <Zap size={14} color={activeTab === 'action' ? COLORS.white : CASINO_DASHBOARD_COLORS.textSecondary} />
               <Text style={[styles.tabButtonText, activeTab === 'action' && styles.tabButtonTextActive]}>
                 Action
               </Text>
@@ -4274,7 +4274,7 @@ export default function AnalyticsScreen() {
               onPress={() => setActiveTab('history')}
               activeOpacity={0.7}
             >
-              <LineChart size={14} color={activeTab === 'history' ? COLORS.white : CLEAN_THEME.text.secondary} />
+              <LineChart size={14} color={activeTab === 'history' ? COLORS.white : CASINO_DASHBOARD_COLORS.textSecondary} />
               <Text style={[styles.tabButtonText, activeTab === 'history' && styles.tabButtonTextActive]}>
                 History
               </Text>
@@ -4290,15 +4290,15 @@ export default function AnalyticsScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor={COLORS.navyDeep}
-              colors={[COLORS.navyDeep]}
+              tintColor={CASINO_DASHBOARD_COLORS.textPrimary}
+              colors={[CASINO_DASHBOARD_COLORS.textPrimary]}
             />
           }
         >
           <ResponsiveContainer>
             {!isScreenReady ? (
               <View style={{ paddingTop: 40, alignItems: 'center' }}>
-                <ActivityIndicator size="large" color={COLORS.navyDeep} />
+                <ActivityIndicator size="large" color={CASINO_DASHBOARD_COLORS.textPrimary} />
               </View>
             ) : (
               <>
@@ -4312,7 +4312,7 @@ export default function AnalyticsScreen() {
             {realAnalytics.totalCruises === 0 && !storeLoading && (
               <View style={styles.emptyState}>
                 <View style={styles.emptyIconContainer}>
-                  <BarChart3 size={56} color={COLORS.navyDeep} />
+                  <BarChart3 size={56} color={CASINO_DASHBOARD_COLORS.textPrimary} />
                 </View>
                 <Text style={styles.emptyTitle}>No Analytics Data Yet</Text>
                 <Text style={styles.emptyText}>
@@ -4361,7 +4361,7 @@ export default function AnalyticsScreen() {
                 activeOpacity={0.7}
                 testID="close-cruise-performance-editor"
               >
-                <X size={18} color={COLORS.navyDeep} />
+                <X size={18} color={CASINO_DASHBOARD_COLORS.textPrimary} />
               </TouchableOpacity>
             </View>
 
@@ -4379,7 +4379,7 @@ export default function AnalyticsScreen() {
                     value={performanceForm.winLoss}
                     onChangeText={(value) => setPerformanceForm((prev) => ({ ...prev, winLoss: value }))}
                     placeholder="-1200 or 4500"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor={CASINO_DASHBOARD_COLORS.textMuted}
                     keyboardType="numbers-and-punctuation"
                     testID="cruise-performance-win-loss-input"
                   />
@@ -4393,7 +4393,7 @@ export default function AnalyticsScreen() {
                     value={performanceForm.pointsEarned}
                     onChangeText={(value) => setPerformanceForm((prev) => ({ ...prev, pointsEarned: value }))}
                     placeholder="2500"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor={CASINO_DASHBOARD_COLORS.textMuted}
                     keyboardType="number-pad"
                     testID="cruise-performance-points-input"
                   />
@@ -4408,7 +4408,7 @@ export default function AnalyticsScreen() {
                 testID="cruise-performance-certificate-toggle"
               >
                 <View style={[styles.certificateToggleIcon, performanceForm.instantCertificateWon && styles.certificateToggleIconActive]}>
-                  <Ticket size={18} color={performanceForm.instantCertificateWon ? COLORS.white : '#047857'} />
+                  <Ticket size={18} color={performanceForm.instantCertificateWon ? CASINO_DASHBOARD_COLORS.white : CASINO_DASHBOARD_COLORS.green} />
                 </View>
                 <View style={styles.certificateToggleTextBlock}>
                   <Text style={styles.certificateToggleTitle}>Instant certificate / offer won</Text>
@@ -4430,7 +4430,7 @@ export default function AnalyticsScreen() {
                       value={performanceForm.instantCertificateOfferCode}
                       onChangeText={(value) => setPerformanceForm((prev) => ({ ...prev, instantCertificateOfferCode: value }))}
                       placeholder="Example: 25RCLV123"
-                      placeholderTextColor="#94A3B8"
+                      placeholderTextColor={CASINO_DASHBOARD_COLORS.textMuted}
                       autoCapitalize="characters"
                       testID="cruise-performance-certificate-code-input"
                     />
@@ -4442,7 +4442,7 @@ export default function AnalyticsScreen() {
                       value={performanceForm.instantCertificateValue}
                       onChangeText={(value) => setPerformanceForm((prev) => ({ ...prev, instantCertificateValue: value }))}
                       placeholder="750"
-                      placeholderTextColor="#94A3B8"
+                      placeholderTextColor={CASINO_DASHBOARD_COLORS.textMuted}
                       keyboardType="number-pad"
                       testID="cruise-performance-certificate-value-input"
                     />
@@ -4454,7 +4454,7 @@ export default function AnalyticsScreen() {
                       value={performanceForm.instantCertificateNotes}
                       onChangeText={(value) => setPerformanceForm((prev) => ({ ...prev, instantCertificateNotes: value }))}
                       placeholder="Free balcony, freeplay, expiry, restrictions..."
-                      placeholderTextColor="#94A3B8"
+                      placeholderTextColor={CASINO_DASHBOARD_COLORS.textMuted}
                       multiline={true}
                       textAlignVertical="top"
                       testID="cruise-performance-certificate-notes-input"
@@ -4503,7 +4503,7 @@ export default function AnalyticsScreen() {
                 ) : null}
               </View>
               <TouchableOpacity style={styles.detailModalCloseIcon} onPress={closeDetail} activeOpacity={0.7}>
-                <X size={16} color={COLORS.navyDeep} />
+                <X size={16} color={CASINO_DASHBOARD_COLORS.textPrimary} />
               </TouchableOpacity>
             </View>
             <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
@@ -4569,7 +4569,7 @@ const styles = StyleSheet.create({
   goalProgressTrack: {
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: CASINO_DASHBOARD_COLORS.border,
     overflow: 'hidden',
     marginTop: 8,
   },
@@ -4812,13 +4812,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: BORDER_RADIUS.round,
-    backgroundColor: 'rgba(0, 31, 63, 0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.14)',
   },
   exportButtonText: {
     fontSize: 12,
-    color: COLORS.navyDeep,
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   filterTab: {
@@ -4827,18 +4827,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: BORDER_RADIUS.round,
-    backgroundColor: 'rgba(0, 31, 63, 0.05)',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
     gap: 4,
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.14)',
   },
   filterTabActive: {
-    backgroundColor: COLORS.navyDeep,
-    borderColor: COLORS.navyDeep,
+    backgroundColor: CASINO_DASHBOARD_COLORS.royalBlue,
+    borderColor: CASINO_DASHBOARD_COLORS.royalBlue,
   },
   filterTabText: {
     fontSize: 12,
-    color: COLORS.navyDeep,
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   filterTabTextActive: {
@@ -4849,7 +4849,7 @@ const styles = StyleSheet.create({
     minWidth: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: 'rgba(0, 31, 63, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.09)',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 4,
@@ -4860,7 +4860,7 @@ const styles = StyleSheet.create({
   filterBadgeText: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
   },
   filterBadgeTextActive: {
     color: COLORS.white,
@@ -4871,7 +4871,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   portfolioLimitNotice: {
-    backgroundColor: 'rgba(0, 31, 63, 0.05)',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
     borderRadius: BORDER_RADIUS.sm,
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.md,
@@ -5012,7 +5012,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    backgroundColor: CLEAN_THEME.background.tertiary,
+    backgroundColor: CASINO_DASHBOARD_COLORS.cardAlt,
     borderRadius: BORDER_RADIUS.sm,
     padding: SPACING.xs,
     paddingHorizontal: SPACING.sm,
@@ -5053,7 +5053,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    backgroundColor: '#FFFBEB',
+    backgroundColor: 'rgba(240, 180, 41, 0.14)',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 3,
@@ -5061,23 +5061,23 @@ const styles = StyleSheet.create({
   portfolioOfferCode: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#92400E',
+    color: CASINO_DASHBOARD_COLORS.goldText,
   },
   portfolioCertificateBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    backgroundColor: '#ECFDF5',
+    backgroundColor: 'rgba(51, 199, 126, 0.14)',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 3,
     borderWidth: 1,
-    borderColor: '#A7F3D0',
+    borderColor: 'rgba(51, 199, 126, 0.35)',
   },
   portfolioCertificateText: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#047857',
+    color: CASINO_DASHBOARD_COLORS.green,
   },
   portfolioEditButton: {
     backgroundColor: 'rgba(240, 180, 41, 0.12)',
@@ -5206,11 +5206,11 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.lg,
   },
   sessionHistoryCard: {
-    backgroundColor: COLORS.white,
+    backgroundColor: CASINO_DASHBOARD_COLORS.card,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: CASINO_DASHBOARD_COLORS.border,
     ...SHADOW.sm,
   },
   sessionHistoryRow: {
@@ -5221,17 +5221,17 @@ const styles = StyleSheet.create({
   },
   sessionHistoryLabel: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#1E293B',
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
   sessionHistoryValue: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#1E293B',
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
   },
   sessionHistoryDivider: {
     height: 1,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: CASINO_DASHBOARD_COLORS.cardAlt,
     marginVertical: SPACING.xs,
   },
   recentSessionsScrollContainer: {
@@ -5240,26 +5240,26 @@ const styles = StyleSheet.create({
   recentSessionCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.white,
+    backgroundColor: CASINO_DASHBOARD_COLORS.card,
     borderRadius: BORDER_RADIUS.sm,
     padding: SPACING.xs,
     paddingHorizontal: SPACING.sm,
     marginBottom: SPACING.xs,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: CASINO_DASHBOARD_COLORS.border,
     ...SHADOW.sm,
   },
   sortLabelText: {
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: COLORS.navyDeep,
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
     marginLeft: 'auto',
     opacity: 0.7,
   },
   recentSessionIndicator: {
     width: 3,
     height: 32,
-    backgroundColor: '#10B981',
+    backgroundColor: CASINO_DASHBOARD_COLORS.green,
     borderRadius: 2,
     marginRight: SPACING.sm,
   },
@@ -5269,16 +5269,16 @@ const styles = StyleSheet.create({
   recentSessionDate: {
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#1E293B',
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
   },
   recentSessionTime: {
     fontSize: 10,
-    color: '#64748B',
+    color: CASINO_DASHBOARD_COLORS.textSecondary,
     marginTop: 1,
   },
   recentSessionNotes: {
     fontSize: 10,
-    color: '#64748B',
+    color: CASINO_DASHBOARD_COLORS.textSecondary,
     marginTop: 2,
     fontStyle: 'italic' as const,
   },
@@ -5295,7 +5295,7 @@ const styles = StyleSheet.create({
   recentSessionDurationText: {
     fontSize: 11,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#059669',
+    color: CASINO_DASHBOARD_COLORS.green,
   },
   recentSessionWinLoss: {
     fontSize: 11,
@@ -5308,12 +5308,12 @@ const styles = StyleSheet.create({
   },
   recentSessionPoints: {
     fontSize: 10,
-    color: '#8B5CF6',
+    color: CASINO_DASHBOARD_COLORS.purple,
     fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
   recentSessionPPH: {
     fontSize: 9,
-    color: '#F59E0B',
+    color: CASINO_DASHBOARD_COLORS.orange,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     backgroundColor: 'rgba(245, 158, 11, 0.15)',
     paddingHorizontal: 4,
@@ -5326,16 +5326,16 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
     padding: SPACING.md,
     borderRadius: BORDER_RADIUS.md,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: CASINO_DASHBOARD_COLORS.cardAlt,
     borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.14)',
     ...SHADOW.sm,
   },
   alertsIconContainer: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(0, 31, 63, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.09)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -5352,7 +5352,7 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   calculateButton: {
-    backgroundColor: COLORS.navyDeep,
+    backgroundColor: CASINO_DASHBOARD_COLORS.royalBlue,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderRadius: BORDER_RADIUS.md,
@@ -5368,20 +5368,20 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.sm,
     borderRadius: BORDER_RADIUS.md,
     borderWidth: 1,
-    borderColor: COLORS.goldDark,
+    borderColor: CASINO_DASHBOARD_COLORS.gold,
   },
   regenerateButtonText: {
-    color: COLORS.goldDark,
+    color: CASINO_DASHBOARD_COLORS.gold,
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   calcsHeader: {
-    backgroundColor: COLORS.white,
+    backgroundColor: CASINO_DASHBOARD_COLORS.card,
     borderRadius: BORDER_RADIUS.xl,
     padding: SPACING.md,
     marginBottom: SPACING.md,
     borderWidth: 2,
-    borderColor: COLORS.royalPurple,
+    borderColor: CASINO_DASHBOARD_COLORS.purple,
     ...SHADOW.md,
   },
   calcsHeaderContent: {
@@ -5402,17 +5402,17 @@ const styles = StyleSheet.create({
   calcsHeaderTitle: {
     fontSize: TYPOGRAPHY.fontSizeLG,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
   },
   calcsHeaderSubtitle: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#64748B',
+    color: CASINO_DASHBOARD_COLORS.textSecondary,
     marginTop: 2,
   },
   calcsModeToggleContainer: {
     flexDirection: 'row',
     marginTop: SPACING.md,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: CASINO_DASHBOARD_COLORS.cardAlt,
     borderRadius: BORDER_RADIUS.md,
     padding: 3,
     gap: 3,
@@ -5427,7 +5427,7 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.sm,
   },
   calcsModeToggleBtnActive: {
-    backgroundColor: COLORS.navyDeep,
+    backgroundColor: CASINO_DASHBOARD_COLORS.royalBlue,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.15,
@@ -5437,7 +5437,7 @@ const styles = StyleSheet.create({
   calcsModeToggleText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
   },
   calcsModeToggleTextActive: {
     color: COLORS.white,
@@ -5451,7 +5451,7 @@ const styles = StyleSheet.create({
   },
   calcsModeSummaryText: {
     fontSize: 11,
-    color: '#6B21A8',
+    color: CASINO_DASHBOARD_COLORS.purple,
     textAlign: 'center',
     lineHeight: 16,
   },
@@ -5459,14 +5459,14 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   calcCard: {
-    backgroundColor: COLORS.white,
+    backgroundColor: CASINO_DASHBOARD_COLORS.card,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: SPACING.sm,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: CASINO_DASHBOARD_COLORS.border,
     ...SHADOW.sm,
   },
   calcIconContainer: {
@@ -5482,7 +5482,7 @@ const styles = StyleSheet.create({
   calcLabel: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
     marginBottom: 4,
   },
   calcValue: {
@@ -5492,15 +5492,15 @@ const styles = StyleSheet.create({
   },
   calcDescription: {
     fontSize: TYPOGRAPHY.fontSizeXS,
-    color: '#64748B',
+    color: CASINO_DASHBOARD_COLORS.textSecondary,
     lineHeight: 16,
   },
   calcsInsightCard: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: CASINO_DASHBOARD_COLORS.cardAlt,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: CASINO_DASHBOARD_COLORS.border,
     marginBottom: SPACING.lg,
   },
   calcsInsightHeader: {
@@ -5512,11 +5512,11 @@ const styles = StyleSheet.create({
   calcsInsightTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
   },
   calcsInsightText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#64748B',
+    color: CASINO_DASHBOARD_COLORS.textSecondary,
     lineHeight: 20,
   },
   pointsBreakdownLegend: {
@@ -5526,7 +5526,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
     paddingBottom: SPACING.sm,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: CASINO_DASHBOARD_COLORS.cardAlt,
   },
   pointsBreakdownLegendItem: {
     flexDirection: 'row' as const,
@@ -5540,7 +5540,7 @@ const styles = StyleSheet.create({
   },
   pointsBreakdownLegendText: {
     fontSize: 11,
-    color: '#64748B',
+    color: CASINO_DASHBOARD_COLORS.textSecondary,
   },
   pointsBreakdownRow: {
     flexDirection: 'row' as const,
@@ -5548,7 +5548,7 @@ const styles = StyleSheet.create({
     alignItems: 'center' as const,
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#F8FAFC',
+    borderBottomColor: CASINO_DASHBOARD_COLORS.cardAlt,
   },
   pointsBreakdownShipCol: {
     flex: 1,
@@ -5557,11 +5557,11 @@ const styles = StyleSheet.create({
   pointsBreakdownShipName: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
   },
   pointsBreakdownDate: {
     fontSize: 11,
-    color: '#64748B',
+    color: CASINO_DASHBOARD_COLORS.textSecondary,
     marginTop: 2,
   },
   pointsBreakdownValuesCol: {
@@ -5580,7 +5580,7 @@ const styles = StyleSheet.create({
   },
   pointsBreakdownValueLabel: {
     fontSize: 10,
-    color: '#94A3B8',
+    color: CASINO_DASHBOARD_COLORS.textMuted,
     minWidth: 80,
   },
   pointsBreakdownValue: {
@@ -5590,11 +5590,11 @@ const styles = StyleSheet.create({
     textAlign: 'right' as const,
   },
   economicsCard: {
-    backgroundColor: COLORS.white,
+    backgroundColor: CASINO_DASHBOARD_COLORS.card,
     borderRadius: BORDER_RADIUS.xl,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: '#DBEAFE',
+    borderColor: CASINO_DASHBOARD_COLORS.border,
     ...SHADOW.sm,
   },
   economicsHeader: {
@@ -5617,11 +5617,11 @@ const styles = StyleSheet.create({
   economicsTitle: {
     fontSize: TYPOGRAPHY.fontSizeLG,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
   },
   economicsSubtitle: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#475569',
+    color: CASINO_DASHBOARD_COLORS.textSecondary,
     marginTop: 2,
   },
   economicsHeroStatsRow: {
@@ -5633,20 +5633,20 @@ const styles = StyleSheet.create({
   economicsHeroStat: {
     flexGrow: 1,
     flexBasis: '47%',
-    backgroundColor: '#F8FBFF',
+    backgroundColor: CASINO_DASHBOARD_COLORS.cardAlt,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.sm,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: CASINO_DASHBOARD_COLORS.border,
   },
   economicsHeroStatValue: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
   },
   economicsHeroStatLabel: {
     fontSize: 11,
-    color: '#64748B',
+    color: CASINO_DASHBOARD_COLORS.textSecondary,
     marginTop: 4,
   },
   economicsTableContent: {
@@ -5655,45 +5655,45 @@ const styles = StyleSheet.create({
   economicsTable: {
     minWidth: 1040,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: CASINO_DASHBOARD_COLORS.border,
     borderRadius: BORDER_RADIUS.md,
     overflow: 'hidden',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: CASINO_DASHBOARD_COLORS.card,
   },
   economicsTableHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#EFF6FF',
+    backgroundColor: CASINO_DASHBOARD_COLORS.cardAlt,
     borderBottomWidth: 1,
-    borderBottomColor: '#DBEAFE',
+    borderBottomColor: CASINO_DASHBOARD_COLORS.border,
   },
   economicsHeaderCell: {
     paddingHorizontal: 10,
     paddingVertical: 10,
     fontSize: 11,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
   },
   economicsTableRow: {
     flexDirection: 'row',
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: CASINO_DASHBOARD_COLORS.cardAlt,
   },
   economicsTableRowLast: {
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: CASINO_DASHBOARD_COLORS.border,
   },
   economicsTotalsRow: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: CASINO_DASHBOARD_COLORS.cardAlt,
     borderTopWidth: 1,
-    borderTopColor: '#CBD5E1',
+    borderTopColor: CASINO_DASHBOARD_COLORS.borderStrong,
     borderBottomWidth: 0,
   },
   economicsCell: {
     paddingHorizontal: 10,
     paddingVertical: 10,
     fontSize: 12,
-    color: '#0F172A',
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
   },
   economicsDateCell: {
     width: 98,
@@ -5701,7 +5701,7 @@ const styles = StyleSheet.create({
   economicsShipCell: {
     width: 190,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
   },
   economicsNightsCell: {
     width: 58,
@@ -5742,14 +5742,14 @@ const styles = StyleSheet.create({
   economicsStatusText: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
   },
   economicsPositiveValue: {
-    color: COLORS.success,
+    color: CASINO_DASHBOARD_COLORS.green,
     fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   economicsNegativeValue: {
-    color: COLORS.error,
+    color: CASINO_DASHBOARD_COLORS.red,
     fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   performanceModalOverlay: {
@@ -5762,7 +5762,7 @@ const styles = StyleSheet.create({
   },
   performanceModalCard: {
     maxHeight: '88%',
-    backgroundColor: COLORS.white,
+    backgroundColor: CASINO_DASHBOARD_COLORS.card,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingTop: 10,
@@ -5773,7 +5773,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 5,
     borderRadius: 999,
-    backgroundColor: '#CBD5E1',
+    backgroundColor: CASINO_DASHBOARD_COLORS.borderStrong,
     alignSelf: 'center',
     marginBottom: SPACING.sm,
   },
@@ -5783,7 +5783,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.lg,
     paddingBottom: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: CASINO_DASHBOARD_COLORS.border,
   },
   performanceModalTitleBlock: {
     flex: 1,
@@ -5792,7 +5792,7 @@ const styles = StyleSheet.create({
   performanceModalEyebrow: {
     fontSize: 11,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#047857',
+    color: CASINO_DASHBOARD_COLORS.green,
     textTransform: 'uppercase',
     letterSpacing: 0.7,
     marginBottom: 3,
@@ -5800,11 +5800,11 @@ const styles = StyleSheet.create({
   performanceModalTitle: {
     fontSize: TYPOGRAPHY.fontSizeLG,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
   },
   performanceModalSubtitle: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#64748B',
+    color: CASINO_DASHBOARD_COLORS.textSecondary,
     marginTop: 3,
   },
   performanceCloseButton: {
@@ -5813,7 +5813,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F1F5F9',
+    backgroundColor: CASINO_DASHBOARD_COLORS.cardAlt,
   },
   performanceModalScroll: {
     maxHeight: 470,
@@ -5831,19 +5831,19 @@ const styles = StyleSheet.create({
   performanceInputLabel: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
   },
   performanceTextInput: {
     minHeight: 48,
     borderRadius: BORDER_RADIUS.md,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#F8FAFC',
+    borderColor: CASINO_DASHBOARD_COLORS.borderStrong,
+    backgroundColor: CASINO_DASHBOARD_COLORS.cardAlt,
     paddingHorizontal: SPACING.md,
     paddingVertical: 10,
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: '#0F172A',
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
   },
   performanceNotesInput: {
     minHeight: 92,
@@ -5852,21 +5852,21 @@ const styles = StyleSheet.create({
   },
   performanceInputHint: {
     fontSize: 11,
-    color: '#64748B',
+    color: CASINO_DASHBOARD_COLORS.textSecondary,
   },
   certificateToggle: {
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: BORDER_RADIUS.lg,
     borderWidth: 1,
-    borderColor: '#D1FAE5',
-    backgroundColor: '#F8FAFC',
+    borderColor: 'rgba(51, 199, 126, 0.22)',
+    backgroundColor: CASINO_DASHBOARD_COLORS.cardAlt,
     padding: SPACING.md,
     gap: SPACING.sm,
   },
   certificateToggleActive: {
-    backgroundColor: '#ECFDF5',
-    borderColor: '#10B981',
+    backgroundColor: 'rgba(51, 199, 126, 0.14)',
+    borderColor: CASINO_DASHBOARD_COLORS.green,
   },
   certificateToggleIcon: {
     width: 40,
@@ -5874,10 +5874,10 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#D1FAE5',
+    backgroundColor: 'rgba(51, 199, 126, 0.22)',
   },
   certificateToggleIconActive: {
-    backgroundColor: '#059669',
+    backgroundColor: CASINO_DASHBOARD_COLORS.green,
   },
   certificateToggleTextBlock: {
     flex: 1,
@@ -5885,11 +5885,11 @@ const styles = StyleSheet.create({
   certificateToggleTitle: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
   },
   certificateToggleSubtitle: {
     fontSize: 11,
-    color: '#64748B',
+    color: CASINO_DASHBOARD_COLORS.textSecondary,
     marginTop: 2,
     lineHeight: 15,
   },
@@ -5897,26 +5897,26 @@ const styles = StyleSheet.create({
     minWidth: 42,
     alignItems: 'center',
     borderRadius: BORDER_RADIUS.round,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: CASINO_DASHBOARD_COLORS.border,
     paddingHorizontal: 10,
     paddingVertical: 5,
   },
   certificateTogglePillActive: {
-    backgroundColor: '#047857',
+    backgroundColor: CASINO_DASHBOARD_COLORS.green,
   },
   certificateTogglePillText: {
     fontSize: 11,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#475569',
+    color: CASINO_DASHBOARD_COLORS.textSecondary,
   },
   certificateTogglePillTextActive: {
     color: COLORS.white,
   },
   certificateDetailsCard: {
     borderRadius: BORDER_RADIUS.lg,
-    backgroundColor: '#F0FDF4',
+    backgroundColor: 'rgba(51, 199, 126, 0.08)',
     borderWidth: 1,
-    borderColor: '#BBF7D0',
+    borderColor: 'rgba(51, 199, 126, 0.3)',
     padding: SPACING.md,
     gap: SPACING.md,
   },
@@ -5926,8 +5926,8 @@ const styles = StyleSheet.create({
     padding: SPACING.lg,
     paddingTop: SPACING.md,
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-    backgroundColor: COLORS.white,
+    borderTopColor: CASINO_DASHBOARD_COLORS.border,
+    backgroundColor: CASINO_DASHBOARD_COLORS.card,
   },
   performanceCancelButton: {
     flex: 1,
@@ -5935,12 +5935,12 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.md,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F1F5F9',
+    backgroundColor: CASINO_DASHBOARD_COLORS.cardAlt,
   },
   performanceCancelText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
   },
   performanceSaveButton: {
     flex: 1.4,
@@ -5950,7 +5950,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: SPACING.xs,
-    backgroundColor: COLORS.navyDeep,
+    backgroundColor: CASINO_DASHBOARD_COLORS.royalBlue,
   },
   performanceSaveText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
@@ -5963,7 +5963,7 @@ const styles = StyleSheet.create({
   economicsSectionTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
     marginBottom: SPACING.sm,
   },
   economicsSummaryGrid: {
@@ -5974,31 +5974,31 @@ const styles = StyleSheet.create({
   economicsSummaryCard: {
     flexGrow: 1,
     flexBasis: '47%',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: CASINO_DASHBOARD_COLORS.cardAlt,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.sm,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: CASINO_DASHBOARD_COLORS.border,
   },
   economicsSummaryLabel: {
     fontSize: 11,
-    color: '#64748B',
+    color: CASINO_DASHBOARD_COLORS.textSecondary,
   },
   economicsSummaryValue: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
     marginTop: 4,
   },
   economicsSnapshotsList: {
     gap: SPACING.sm,
   },
   economicsSnapshotCard: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: CASINO_DASHBOARD_COLORS.cardAlt,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.sm,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: CASINO_DASHBOARD_COLORS.border,
   },
   economicsSnapshotHeader: {
     flexDirection: 'row',
@@ -6010,21 +6010,21 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
   },
   economicsSnapshotValue: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
   },
   economicsSnapshotShip: {
     fontSize: 11,
-    color: '#0F172A',
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
     marginTop: 6,
   },
   economicsSnapshotDetail: {
     fontSize: 11,
-    color: '#64748B',
+    color: CASINO_DASHBOARD_COLORS.textSecondary,
     marginTop: 2,
   },
   valueHeroGrid: {
@@ -6035,11 +6035,11 @@ const styles = StyleSheet.create({
   valueHeroTile: {
     flexGrow: 1,
     flexBasis: '30%',
-    backgroundColor: '#F8FBFF',
+    backgroundColor: CASINO_DASHBOARD_COLORS.cardAlt,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.sm,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: CASINO_DASHBOARD_COLORS.border,
     gap: 2,
   },
   valueHeroTileV2: {
@@ -6078,7 +6078,7 @@ const styles = StyleSheet.create({
   valueHeroLabel: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#64748B',
+    color: CASINO_DASHBOARD_COLORS.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
@@ -6169,18 +6169,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.sm,
-    backgroundColor: COLORS.white,
+    backgroundColor: CASINO_DASHBOARD_COLORS.card,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.sm,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: CASINO_DASHBOARD_COLORS.border,
     ...SHADOW.sm,
   },
   actionRowIcon: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(0, 31, 63, 0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.07)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -6191,15 +6191,15 @@ const styles = StyleSheet.create({
   actionRowTitle: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
   },
   actionRowSubtitle: {
     fontSize: 11,
-    color: '#64748B',
+    color: CASINO_DASHBOARD_COLORS.textSecondary,
     marginTop: 2,
   },
   actionRowBadge: {
-    backgroundColor: 'rgba(0, 31, 63, 0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.07)',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: BORDER_RADIUS.round,
@@ -6207,7 +6207,7 @@ const styles = StyleSheet.create({
   actionRowBadgeText: {
     fontSize: 11,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
   },
   checklistRow: {
     flexDirection: 'row',
@@ -6216,7 +6216,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
     paddingBottom: SPACING.sm,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: CASINO_DASHBOARD_COLORS.cardAlt,
   },
   checklistTextBlock: {
     flex: 1,
@@ -6224,14 +6224,14 @@ const styles = StyleSheet.create({
   checklistText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.navyDeep,
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
   },
   checklistTextDone: {
-    color: '#64748B',
+    color: CASINO_DASHBOARD_COLORS.textSecondary,
   },
   checklistDetail: {
     fontSize: 11,
-    color: '#64748B',
+    color: CASINO_DASHBOARD_COLORS.textSecondary,
     marginTop: 2,
     lineHeight: 15,
   },
@@ -6241,20 +6241,20 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   keepPlayingCardGood: {
-    backgroundColor: '#ECFDF5',
-    borderColor: '#10B981',
+    backgroundColor: 'rgba(51, 199, 126, 0.14)',
+    borderColor: CASINO_DASHBOARD_COLORS.green,
   },
   keepPlayingCardWatch: {
-    backgroundColor: '#FFFBEB',
-    borderColor: '#F59E0B',
+    backgroundColor: 'rgba(240, 180, 41, 0.14)',
+    borderColor: CASINO_DASHBOARD_COLORS.orange,
   },
   keepPlayingCardReassess: {
-    backgroundColor: '#FEF2F2',
-    borderColor: '#EF4444',
+    backgroundColor: 'rgba(240, 84, 106, 0.12)',
+    borderColor: CASINO_DASHBOARD_COLORS.red,
   },
   keepPlayingCardNeutral: {
-    backgroundColor: '#F8FAFC',
-    borderColor: '#E2E8F0',
+    backgroundColor: CASINO_DASHBOARD_COLORS.cardAlt,
+    borderColor: CASINO_DASHBOARD_COLORS.border,
   },
   keepPlayingTouchable: {
     flexDirection: 'row',
@@ -6268,11 +6268,11 @@ const styles = StyleSheet.create({
   keepPlayingHeadline: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
   },
   keepPlayingDetail: {
     fontSize: 11,
-    color: '#475569',
+    color: CASINO_DASHBOARD_COLORS.textSecondary,
     marginTop: 2,
     lineHeight: 15,
   },
@@ -6289,7 +6289,7 @@ const styles = StyleSheet.create({
   detailModalCard: {
     width: '100%',
     maxWidth: 420,
-    backgroundColor: COLORS.white,
+    backgroundColor: CASINO_DASHBOARD_COLORS.card,
     borderRadius: BORDER_RADIUS.lg,
     padding: SPACING.lg,
     ...SHADOW.md,
@@ -6303,11 +6303,11 @@ const styles = StyleSheet.create({
   detailModalTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
   },
   detailModalSubtitle: {
     fontSize: 12,
-    color: '#64748B',
+    color: CASINO_DASHBOARD_COLORS.textSecondary,
     marginTop: 4,
     lineHeight: 16,
   },
@@ -6315,31 +6315,31 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: CASINO_DASHBOARD_COLORS.cardAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
   detailModalRow: {
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: CASINO_DASHBOARD_COLORS.cardAlt,
     gap: 3,
   },
   detailModalRowLabel: {
     fontSize: 11,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#64748B',
+    color: CASINO_DASHBOARD_COLORS.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
   detailModalRowValue: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: COLORS.navyDeep,
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
     lineHeight: 19,
   },
   detailModalCloseButton: {
     marginTop: SPACING.md,
-    backgroundColor: COLORS.navyDeep,
+    backgroundColor: CASINO_DASHBOARD_COLORS.royalBlue,
     borderRadius: BORDER_RADIUS.md,
     paddingVertical: 12,
     alignItems: 'center',
