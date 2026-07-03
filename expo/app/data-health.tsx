@@ -6,12 +6,34 @@ import { Activity, AlertTriangle, CheckCircle, Database, RefreshCw, ShieldCheck 
 import { COLORS, SPACING, BORDER_RADIUS, SHADOW } from '@/constants/theme';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { buildDataHealthSummary } from '@/lib/easySeasAdvisor';
+import { useCasinoLedger } from '@/hooks/useCasinoLedger';
+import { runCasinoDataHealthCheck, type CasinoHealthIssue, type CasinoHealthSeverity } from '@/lib/casinoDataHealthCheck';
+import { buildCruiseDetailsParams } from '@/lib/navigation/cruiseDetails';
+
+const SEVERITY_COLOR: Record<CasinoHealthSeverity, string> = {
+  critical: '#DC2626',
+  warning: '#F59E0B',
+  info: '#0284C7',
+};
 
 export default function DataHealthScreen() {
   const router = useRouter();
   const { cruises, bookedCruises, casinoOffers } = useCoreData();
   const summary = useMemo(() => buildDataHealthSummary(cruises, bookedCruises, casinoOffers), [cruises, bookedCruises, casinoOffers]);
   const issueCount = summary.duplicateAvailableRows + summary.duplicateOfferCodes + summary.possiblyMisclassifiedUpcoming;
+
+  const casinoLedger = useCasinoLedger();
+  const casinoIssues = useMemo(
+    () => runCasinoDataHealthCheck(casinoLedger, bookedCruises),
+    [casinoLedger, bookedCruises],
+  );
+
+  const openCasinoIssueFix = (issue: CasinoHealthIssue) => {
+    if (!issue.cruiseId) return;
+    const cruise = bookedCruises.find((c) => c.id === issue.cruiseId);
+    if (!cruise) return;
+    router.push({ pathname: '/cruise-details' as any, params: buildCruiseDetailsParams(cruise) });
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -51,6 +73,34 @@ export default function DataHealthScreen() {
           <RepairLine good={summary.duplicateAvailableRows === 0} text={summary.duplicateAvailableRows === 0 ? 'No duplicate available-offer rows detected.' : 'Run a brand-scoped offer catalog repair before trusting available-cruise totals.'} />
           <RepairLine good={summary.possiblyMisclassifiedUpcoming === 0} text={summary.possiblyMisclassifiedUpcoming === 0 ? 'Available offers are not being counted as active bookings.' : 'Some offer catalog rows look like they may be in the booked/upcoming lane.'} />
           <RepairLine good={summary.completedCruises > 0} text={summary.completedCruises > 0 ? `${summary.completedCruises} completed cruise records are visible to the app.` : 'No completed cruise records are visible yet; sync history or import completed cruises.'} />
+        </View>
+
+        <View style={styles.sectionCard}>
+          <View style={styles.sectionHeader}>
+            <ShieldCheck size={18} color={COLORS.navyDeep} />
+            <Text style={styles.sectionTitle}>Casino ledger health ({casinoIssues.length})</Text>
+          </View>
+          {casinoIssues.length === 0 ? (
+            <RepairLine good text="No casino data-health issues detected across your booked/completed cruises." />
+          ) : (
+            casinoIssues.map((issue) => (
+              <TouchableOpacity
+                key={issue.id}
+                style={styles.casinoIssueRow}
+                activeOpacity={issue.cruiseId ? 0.75 : 1}
+                disabled={!issue.cruiseId}
+                onPress={() => openCasinoIssueFix(issue)}
+                testID={`casino-health-issue-${issue.id}`}
+              >
+                <View style={[styles.casinoIssueDot, { backgroundColor: SEVERITY_COLOR[issue.severity] }]} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.casinoIssueTitle}>{issue.title}</Text>
+                  <Text style={styles.casinoIssueDetail}>{issue.description}</Text>
+                </View>
+                {issue.fixLabel ? <Text style={styles.casinoIssueFixLabel}>{issue.fixLabel}</Text> : null}
+              </TouchableOpacity>
+            ))
+          )}
         </View>
 
         <View style={styles.sectionCard}>
@@ -121,6 +171,11 @@ const styles = StyleSheet.create({
   sectionTitle: { color: COLORS.navyDeep, fontWeight: '900', fontSize: 16 },
   repairLine: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', marginBottom: 9 },
   repairText: { flex: 1, color: '#334155', fontWeight: '700', lineHeight: 19, fontSize: 13 },
+  casinoIssueRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', paddingVertical: 9, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  casinoIssueDot: { width: 8, height: 8, borderRadius: 4, marginTop: 5 },
+  casinoIssueTitle: { color: COLORS.navyDeep, fontWeight: '900', fontSize: 13 },
+  casinoIssueDetail: { color: '#475569', fontSize: 12.5, lineHeight: 18, marginTop: 2, fontWeight: '600' },
+  casinoIssueFixLabel: { color: '#0284C7', fontWeight: '900', fontSize: 12 },
   buttons: { gap: 10 },
   primaryButton: { backgroundColor: COLORS.navyDeep, borderRadius: BORDER_RADIUS.md, padding: SPACING.md, alignItems: 'center' },
   primaryButtonText: { color: '#FFFFFF', fontWeight: '900' },

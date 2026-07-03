@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Award, DollarSign, Zap, LineChart, Settings as SettingsIcon, LayoutGrid, Anchor, Ship, ClipboardList } from 'lucide-react-native';
+import { Award, DollarSign, Zap, LineChart, Settings as SettingsIcon, LayoutGrid, Anchor, Ship, ClipboardList, BookOpen, SlidersHorizontal } from 'lucide-react-native';
 import { DARK_ROYAL_COLORS as CASINO_DASHBOARD_COLORS } from '@/constants/darkRoyalTheme';
 
 export type CasinoSidebarTab = 'portfolio' | 'value' | 'action' | 'history';
@@ -29,6 +29,8 @@ const MORE_ROUTES: { key: string; label: string; icon: typeof Anchor; href: stri
   { key: 'loyalty-data', label: 'Loyalty Data', icon: Anchor, href: '/casino/loyalty-data' },
   { key: 'ship-performance', label: 'Ship Performance', icon: Ship, href: '/casino/ship-performance' },
   { key: 'completed-sailings', label: 'Completed Sailings', icon: ClipboardList, href: '/casino/completed-sailings' },
+  { key: 'formula-reference', label: 'Formula Reference', icon: BookOpen, href: '/casino/formula-reference' },
+  { key: 'casino-settings', label: 'Casino Settings', icon: SlidersHorizontal, href: '/casino/settings' },
 ];
 
 /**

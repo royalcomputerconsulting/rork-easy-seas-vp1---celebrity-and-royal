@@ -27,6 +27,7 @@ import { HistoricalPerformanceProvider } from "@/state/HistoricalPerformanceProv
 import { PriceHistoryProvider } from "@/state/PriceHistoryProvider";
 import { PriceTrackingProvider } from "@/state/PriceTrackingProvider";
 import { CasinoSessionProvider } from "@/state/CasinoSessionProvider";
+import { CasinoSettingsProvider } from "@/state/CasinoSettingsProvider";
 import { GamificationProvider } from "@/state/GamificationProvider";
 import { PPHAlertsProvider } from "@/state/PPHAlertsProvider";
 import { BankrollProvider } from "@/state/BankrollProvider";
@@ -608,6 +609,7 @@ const DataProviders = composeProviders(
 const CasinoProviders = composeProviders(
   CasinoStrategyProvider,
   CasinoSessionProvider,
+  CasinoSettingsProvider,
   SlotMachineProvider,
   SlotMachineLibraryProvider,
   MachineConditionLogProvider,

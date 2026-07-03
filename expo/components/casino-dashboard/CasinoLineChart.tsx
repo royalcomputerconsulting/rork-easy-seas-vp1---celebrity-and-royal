@@ -13,13 +13,16 @@ export type LineSeries = {
 export type ReferenceLine = { key: string; label: string; value: number; color: string };
 
 const CHART_WIDTH = 300;
+const MIN_HIT_SIZE = 32;
 
 /**
  * Lightweight SVG line chart (no external chart library needed). Supports
  * multiple series sharing an x-axis plus optional dashed horizontal
- * reference lines (e.g. tier point targets). The x-axis labels beneath the
- * chart double as tap targets so every plotted point stays drillable,
- * matching the "every chart point must be clickable" requirement.
+ * reference lines (e.g. tier point targets). Every plotted dot on the
+ * primary series now has its own invisible ~32x32 touch target positioned
+ * directly over it (computed as a percentage of the chart area), on top of
+ * the x-axis label row underneath, so tapping the visual point itself
+ * always works too.
  */
 export function CasinoLineChart({
   series,
@@ -51,50 +54,76 @@ export function CasinoLineChart({
   };
 
   const xAxisLabels = series[0]?.points.map((p) => p.x) ?? [];
+  const primarySeries = series[0];
 
   return (
     <View>
-      <Svg width="100%" height={height} viewBox={`0 0 ${CHART_WIDTH} ${height}`} preserveAspectRatio="none">
-        {referenceLines.map((ref) => {
-          const { y } = getXY(0, ref.value);
+      <View style={{ position: 'relative' }}>
+        <Svg width="100%" height={height} viewBox={`0 0 ${CHART_WIDTH} ${height}`} preserveAspectRatio="none">
+          {referenceLines.map((ref) => {
+            const { y } = getXY(0, ref.value);
+            return (
+              <Line
+                key={ref.key}
+                x1={0}
+                y1={y}
+                x2={CHART_WIDTH}
+                y2={y}
+                stroke={ref.color}
+                strokeWidth={1}
+                strokeDasharray="4,4"
+              />
+            );
+          })}
+          {series.map((s) => (
+            <Polyline
+              key={s.key}
+              points={s.points.map((p, i) => {
+                const { x, y } = getXY(i, p.y);
+                return `${x},${y}`;
+              }).join(' ')}
+              fill="none"
+              stroke={s.color}
+              strokeWidth={2.5}
+            />
+          ))}
+          {series.map((s) => s.points.map((p, i) => {
+            const { x, y } = getXY(i, p.y);
+            return (
+              <SvgCircle
+                key={`${s.key}-${i}`}
+                cx={x}
+                cy={y}
+                r={3}
+                fill={p.y < 0 ? CASINO_DASHBOARD_COLORS.red : s.color}
+              />
+            );
+          }))}
+        </Svg>
+        {onPointPress && primarySeries?.points.map((p, i) => {
+          const { x, y } = getXY(i, p.y);
+          const leftPct = (x / CHART_WIDTH) * 100;
+          const topPct = (y / height) * 100;
           return (
-            <Line
-              key={ref.key}
-              x1={0}
-              y1={y}
-              x2={CHART_WIDTH}
-              y2={y}
-              stroke={ref.color}
-              strokeWidth={1}
-              strokeDasharray="4,4"
+            <TouchableOpacity
+              key={`hit-${i}`}
+              onPress={() => onPointPress(i)}
+              activeOpacity={0.5}
+              hitSlop={4}
+              style={[
+                styles.pointHitTarget,
+                {
+                  left: `${leftPct}%`,
+                  top: `${topPct}%`,
+                  marginLeft: -MIN_HIT_SIZE / 2,
+                  marginTop: -MIN_HIT_SIZE / 2,
+                },
+              ]}
+              testID={`line-point-hit-${i}`}
             />
           );
         })}
-        {series.map((s) => (
-          <Polyline
-            key={s.key}
-            points={s.points.map((p, i) => {
-              const { x, y } = getXY(i, p.y);
-              return `${x},${y}`;
-            }).join(' ')}
-            fill="none"
-            stroke={s.color}
-            strokeWidth={2.5}
-          />
-        ))}
-        {series.map((s) => s.points.map((p, i) => {
-          const { x, y } = getXY(i, p.y);
-          return (
-            <SvgCircle
-              key={`${s.key}-${i}`}
-              cx={x}
-              cy={y}
-              r={3}
-              fill={p.y < 0 ? CASINO_DASHBOARD_COLORS.red : s.color}
-            />
-          );
-        }))}
-      </Svg>
+      </View>
       {referenceLines.length > 0 && (
         <View style={styles.refLegendRow}>
           {referenceLines.map((ref) => (
@@ -133,6 +162,12 @@ export function CasinoLineChart({
 }
 
 const styles = StyleSheet.create({
+  pointHitTarget: {
+    position: 'absolute',
+    width: MIN_HIT_SIZE,
+    height: MIN_HIT_SIZE,
+    borderRadius: MIN_HIT_SIZE / 2,
+  },
   xAxisRow: {
     flexDirection: 'row',
     marginTop: 6,
@@ -141,6 +176,8 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     paddingVertical: 2,
+    minHeight: MIN_HIT_SIZE,
+    justifyContent: 'center',
   },
   xAxisLabel: {
     fontSize: 9.5,

@@ -15,12 +15,14 @@ const SIZE = 148;
 const STROKE = 20;
 const RADIUS = (SIZE - STROKE) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+const MIN_HIT_SIZE = 32;
 
 /**
- * Lightweight SVG donut chart with a legend. Each legend row is tappable
- * for its own drill-down (segments themselves aren't individually
- * touch-targetable on native SVG without extra libraries, so the legend
- * doubles as the tap target, matching the "clickable segment" requirement).
+ * Lightweight SVG donut chart with a legend. Each arc segment now has a
+ * real, invisible ~32x32 touch target positioned at its own arc midpoint
+ * (via trigonometry, since native SVG shapes can't take onPress hit-testing
+ * on their own), in addition to the legend row — matching the "tap the
+ * visual point/segment or the legend" requirement.
  */
 export function CasinoDonutChart({
   segments,
@@ -33,30 +35,37 @@ export function CasinoDonutChart({
 }) {
   const total = segments.reduce((sum, s) => sum + Math.max(0, s.value), 0);
   let cumulative = 0;
+  const center = SIZE / 2;
+
+  const arcs = segments.map((segment) => {
+    const fraction = total > 0 ? Math.max(0, segment.value) / total : 0;
+    const dash = fraction * CIRCUMFERENCE;
+    const offset = CIRCUMFERENCE - cumulative;
+    const startAngle = (cumulative / CIRCUMFERENCE) * 360 - 90;
+    const midAngle = startAngle + (fraction * 360) / 2;
+    cumulative += dash;
+    return { segment, fraction, dash, offset, midAngle };
+  });
 
   return (
     <View style={styles.row}>
       <View style={styles.chartWrap}>
         <Svg width={SIZE} height={SIZE}>
           <Circle
-            cx={SIZE / 2}
-            cy={SIZE / 2}
+            cx={center}
+            cy={center}
             r={RADIUS}
             stroke={CASINO_DASHBOARD_COLORS.border}
             strokeWidth={STROKE}
             fill="none"
           />
-          {total > 0 && segments.map((segment) => {
-            const fraction = Math.max(0, segment.value) / total;
-            const dash = fraction * CIRCUMFERENCE;
-            const offset = CIRCUMFERENCE - cumulative;
-            cumulative += dash;
+          {arcs.map(({ segment, fraction, dash, offset }) => {
             if (fraction <= 0) return null;
             return (
               <Circle
                 key={segment.key}
-                cx={SIZE / 2}
-                cy={SIZE / 2}
+                cx={center}
+                cy={center}
                 r={RADIUS}
                 stroke={segment.color}
                 strokeWidth={STROKE}
@@ -65,11 +74,30 @@ export function CasinoDonutChart({
                 strokeLinecap="butt"
                 fill="none"
                 rotation={-90}
-                origin={`${SIZE / 2}, ${SIZE / 2}`}
+                origin={`${center}, ${center}`}
               />
             );
           })}
         </Svg>
+        {arcs.map(({ segment, fraction, midAngle }) => {
+          if (fraction <= 0 || !segment.onPress) return null;
+          const rad = (midAngle * Math.PI) / 180;
+          const x = center + RADIUS * Math.cos(rad);
+          const y = center + RADIUS * Math.sin(rad);
+          return (
+            <TouchableOpacity
+              key={`hit-${segment.key}`}
+              onPress={segment.onPress}
+              activeOpacity={0.6}
+              hitSlop={6}
+              style={[
+                styles.arcHitTarget,
+                { left: x - MIN_HIT_SIZE / 2, top: y - MIN_HIT_SIZE / 2 },
+              ]}
+              testID={`donut-segment-hit-${segment.key}`}
+            />
+          );
+        })}
         <View style={styles.centerLabelWrap} pointerEvents="none">
           <Text style={styles.centerValue} numberOfLines={1} adjustsFontSizeToFit>{centerValue}</Text>
           <Text style={styles.centerLabel} numberOfLines={1}>{centerLabel}</Text>
@@ -83,6 +111,7 @@ export function CasinoDonutChart({
             activeOpacity={segment.onPress ? 0.7 : 1}
             onPress={segment.onPress}
             disabled={!segment.onPress}
+            testID={`donut-legend-${segment.key}`}
           >
             <View style={[styles.legendDot, { backgroundColor: segment.color }]} />
             <Text style={styles.legendLabel} numberOfLines={1}>{segment.label}</Text>
@@ -104,6 +133,12 @@ const styles = StyleSheet.create({
     height: SIZE,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  arcHitTarget: {
+    position: 'absolute',
+    width: MIN_HIT_SIZE,
+    height: MIN_HIT_SIZE,
+    borderRadius: MIN_HIT_SIZE / 2,
   },
   centerLabelWrap: {
     position: 'absolute',
@@ -129,6 +164,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    minHeight: MIN_HIT_SIZE,
+    paddingVertical: 4,
   },
   legendDot: {
     width: 9,

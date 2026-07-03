@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { AlertTriangle, ChevronRight, Pencil, X } from 'lucide-react-native';
+import { AlertTriangle, ChevronRight, Clock, Pencil, X } from 'lucide-react-native';
 import {
   SOURCE_CONFIDENCE_COLOR,
   SOURCE_CONFIDENCE_LABEL,
@@ -16,6 +16,14 @@ export type DrillDownSourceRecord = {
 };
 
 export type DrillDownInputRow = { label: string; value: string };
+
+/** A single related-action button surfaced at the bottom of a drill-down (Open Cruise, Open Offer, etc.). */
+export type DrillDownRelatedAction = {
+  label: string;
+  onPress: () => void;
+  /** Visually distinguishes secondary actions from the primary one. */
+  emphasis?: 'primary' | 'secondary';
+};
 
 export type CalculationDrillDownData = {
   title: string;
@@ -35,6 +43,10 @@ export type CalculationDrillDownData = {
   /** Optional callback + label to let the user edit the underlying records. */
   onEdit?: () => void;
   editLabel?: string;
+  /** ISO date string for when the underlying data was last refreshed/synced. */
+  lastUpdated?: string;
+  /** Extra related-action buttons (Open Cruise, Open Offer, Open Certificate, Open Session, ...). */
+  relatedActions?: DrillDownRelatedAction[];
 };
 
 /** Small colored pill explaining how confident/verified a number is. */
@@ -124,6 +136,50 @@ export function EditableSourceLink({ label, onPress }: { label: string; onPress:
   );
 }
 
+/** Small "Last updated" timestamp line shown near the top of a drill-down. */
+export function LastUpdatedRow({ lastUpdated }: { lastUpdated: string }) {
+  const formatted = useMemo(() => {
+    try {
+      const date = new Date(lastUpdated);
+      if (Number.isNaN(date.getTime())) return null;
+      return date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    } catch {
+      return null;
+    }
+  }, [lastUpdated]);
+  if (!formatted) return null;
+  return (
+    <View style={blockStyles.lastUpdatedRow}>
+      <Clock size={12} color={CASINO_DASHBOARD_COLORS.mutedText} />
+      <Text style={blockStyles.lastUpdatedText}>Last updated {formatted}</Text>
+    </View>
+  );
+}
+
+/** Row of related-action buttons (Open Cruise, Open Offer, Open Certificate, Open Session, ...). */
+export function RelatedActionsRow({ actions }: { actions: DrillDownRelatedAction[] }) {
+  if (actions.length === 0) return null;
+  return (
+    <View style={blockStyles.relatedActionsRow}>
+      {actions.map((action, index) => (
+        <TouchableOpacity
+          key={`${action.label}-${index}`}
+          style={[blockStyles.relatedActionButton, action.emphasis === 'secondary' && blockStyles.relatedActionButtonSecondary]}
+          activeOpacity={0.8}
+          onPress={action.onPress}
+        >
+          <Text
+            style={[blockStyles.relatedActionText, action.emphasis === 'secondary' && blockStyles.relatedActionTextSecondary]}
+            numberOfLines={1}
+          >
+            {action.label}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+}
+
 function SectionHeading({ children }: { children: string }) {
   return <Text style={blockStyles.sectionHeading}>{children}</Text>;
 }
@@ -151,6 +207,8 @@ export function CalculationDrillDownDrawer({
               <X size={16} color={CASINO_DASHBOARD_COLORS.deepNavy} />
             </TouchableOpacity>
           </View>
+
+          {data?.lastUpdated ? <LastUpdatedRow lastUpdated={data.lastUpdated} /> : null}
 
           <ScrollView style={{ maxHeight: 460 }} contentContainerStyle={{ paddingBottom: 8 }} showsVerticalScrollIndicator={false}>
             {data?.summary ? (
@@ -197,6 +255,13 @@ export function CalculationDrillDownDrawer({
 
             {data?.onEdit ? (
               <EditableSourceLink label={data.editLabel ?? 'Edit inputs'} onPress={data.onEdit} />
+            ) : null}
+
+            {data?.relatedActions && data.relatedActions.length > 0 ? (
+              <View style={{ marginTop: 14 }}>
+                <SectionHeading>Related</SectionHeading>
+                <RelatedActionsRow actions={data.relatedActions} />
+              </View>
             ) : null}
           </ScrollView>
 
@@ -332,6 +397,44 @@ const blockStyles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700' as const,
     color: CASINO_DASHBOARD_COLORS.royalBlue,
+  },
+  lastUpdatedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 10,
+  },
+  lastUpdatedText: {
+    fontSize: 11.5,
+    color: CASINO_DASHBOARD_COLORS.mutedText,
+    fontWeight: '600' as const,
+  },
+  relatedActionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  relatedActionButton: {
+    minHeight: 36,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 10,
+    backgroundColor: CASINO_DASHBOARD_COLORS.royalBlue,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  relatedActionButtonSecondary: {
+    backgroundColor: CASINO_DASHBOARD_COLORS.cardAlt,
+    borderWidth: 1,
+    borderColor: CASINO_DASHBOARD_COLORS.borderStrong,
+  },
+  relatedActionText: {
+    fontSize: 13,
+    fontWeight: '700' as const,
+    color: '#FFFFFF',
+  },
+  relatedActionTextSecondary: {
+    color: CASINO_DASHBOARD_COLORS.softNavy,
   },
 });
 
