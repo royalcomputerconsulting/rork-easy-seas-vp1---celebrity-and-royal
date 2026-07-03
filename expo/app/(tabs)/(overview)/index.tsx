@@ -60,7 +60,7 @@ import { createDateFromString, getDaysUntil, isDateInPast, formatDate } from '@/
 import { isActiveBookedCruise } from '@/lib/bookedCruiseStatus';
 import { MachineStrategyCard } from '@/components/MachineStrategyCard';
 import { ShipMachinesExplorer } from '@/components/ShipMachinesExplorer';
-import { CertificateExplorerModal } from '@/components/CertificateExplorerModal';
+
 import { IntelligenceFilterStrip } from '@/components/IntelligenceFilterStrip';
 import { useIntelligenceFilters } from '@/state/IntelligenceFiltersProvider';
 import { filterRecordsByIntelligence } from '@/lib/intelligenceFilters';
@@ -211,7 +211,6 @@ function OverviewScreenContent() {
   
   const [refreshing, setRefreshing] = useState(false);
   const [showCertificateModal, setShowCertificateModal] = useState(false);
-  const [showCertificateExplorerModal, setShowCertificateExplorerModal] = useState(false);
   const [showAlertsModal, setShowAlertsModal] = useState(false);
   const [decodedOffer, setDecodedOffer] = useState<DecodedOffer | null>(null);
   const [heroSignatureFailed, setHeroSignatureFailed] = useState<boolean>(false);
@@ -934,7 +933,7 @@ function OverviewScreenContent() {
             availableCruises={availableCruisesCount}
             onManagePress={() => setShowCertificateModal(true)}
             onViewOffersPress={() => router.push('/scheduling' as any)}
-            onExaminePress={() => setShowCertificateExplorerModal(true)}
+            onExaminePress={() => router.push('/certificate-lookup' as any)}
           />
         </CollapsibleSection>
 
@@ -1099,11 +1098,6 @@ function OverviewScreenContent() {
         onDeleteCertificate={deleteCertificate}
       />
 
-      <CertificateExplorerModal
-        visible={showCertificateExplorerModal}
-        onClose={() => setShowCertificateExplorerModal(false)}
-      />
-      
       <AlertsManagerModal
         visible={showAlertsModal}
         onClose={() => setShowAlertsModal(false)}

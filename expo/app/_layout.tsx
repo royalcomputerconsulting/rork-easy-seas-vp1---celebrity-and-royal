@@ -421,6 +421,12 @@ function RootLayoutNav() {
           headerShown: true,
         }} 
       />
+      <Stack.Screen 
+        name="certificate-lookup" 
+        options={{ 
+          headerShown: false,
+        }} 
+      />
     </Stack>
   );
 }
