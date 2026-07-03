@@ -1,3 +1,10 @@
+/**
+ * NOTE ON NAMING: despite living in `/mocks`, this file is NOT sample or
+ * fake data. `CRUISE_HISTORY_SUPPLEMENT_DATA` holds real historical sailings
+ * (across Royal Caribbean, Celebrity, and Virgin Voyages) that the user
+ * confirmed manually to fill in cruise history not otherwise captured by
+ * sync. It stays in this folder only for backward-compatible import paths.
+ */
 import type { BookedCruise } from '@/types/models';
 
 export const CRUISE_HISTORY_SUPPLEMENT_DATA: BookedCruise[] = [

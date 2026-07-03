@@ -12,10 +12,11 @@ import {
   Modal,
   TextInput,
   KeyboardAvoidingView,
+  useWindowDimensions,
 } from 'react-native';
 import { File as ExpoFile, Paths as ExpoPaths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   BarChart3,
@@ -71,6 +72,9 @@ import { DOLLARS_PER_POINT, type BookedCruise, type CasinoOffer } from '@/types/
 import { isRoyalCaribbeanShip } from '@/constants/shipInfo';
 import { getImageForDestination, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
 import { buildCruiseDetailsParams } from '@/lib/navigation/cruiseDetails';
+import { getCertificatePdfMatch } from '@/lib/royalCaribbean/certificatePdf';
+import { CasinoSidebar } from '@/components/casino-dashboard/CasinoSidebar';
+import { LARGE_SCREEN_BREAKPOINT } from '@/constants/layout';
 import { TierProgressionChart } from '@/components/charts/TierProgressionChart';
 import { ROIProjectionChart } from '@/components/charts/ROIProjectionChart';
 import { RiskAnalysisChart } from '@/components/charts/RiskAnalysisChart';
@@ -197,6 +201,7 @@ function formatTotalMinutes(minutes: number): string {
 export default function AnalyticsScreen() {
   useEntitlement();
   const router = useRouter();
+  const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>();
   const { authenticatedEmail } = useAuth();
   const { lastSyncTime, isSyncing: isCloudSyncing, forceSyncNow } = useUserDataSync();
   const { analytics, casinoAnalytics } = useSimpleAnalytics();
@@ -229,7 +234,18 @@ export default function AnalyticsScreen() {
     crownAnchorLevel: loyaltyCrownAnchorLevel,
   } = useLoyalty();
 
-  const [activeTab, setActiveTab] = useState<AnalyticsTab>('portfolio');
+  const [activeTab, setActiveTabState] = useState<AnalyticsTab>(() => {
+    const paramTab = (Array.isArray(tabParam) ? tabParam[0] : tabParam) as AnalyticsTab | undefined;
+    return paramTab && ['portfolio', 'value', 'action', 'history'].includes(paramTab) ? paramTab : 'portfolio';
+  });
+  const setActiveTab = useCallback((tab: AnalyticsTab) => {
+    setActiveTabState(tab);
+    if (Platform.OS === 'web') {
+      router.setParams({ tab });
+    }
+  }, [router]);
+  const { width: windowWidth } = useWindowDimensions();
+  const showSidebar = Platform.OS === 'web' && windowWidth >= LARGE_SCREEN_BREAKPOINT;
   const [roiFilter, setRoiFilter] = useState<ROIFilter>('high');
   const [refreshing, setRefreshing] = useState(false);
   const [showAllCruises, setShowAllCruises] = useState(false);
@@ -1092,15 +1108,38 @@ export default function AnalyticsScreen() {
       .filter((cruise) => cruise.instantCertificateWon)
       .sort((a, b) => createDateFromString(b.sailDate).getTime() - createDateFromString(a.sailDate).getTime())
       .slice(0, 10)
-      .map((cruise) => ({
-        id: cruise.id,
-        shipName: cruise.shipName || 'Unknown Ship',
-        sailDate: cruise.sailDate,
-        offerCode: cruise.instantCertificateOfferCode || '',
-        value: cruise.instantCertificateValue || 0,
-        notes: cruise.instantCertificateNotes || '',
-      }));
+      .map((cruise) => {
+        const pdfMatch = getCertificatePdfMatch({ offerCode: cruise.instantCertificateOfferCode, offerName: cruise.instantCertificateNotes });
+        const certType: 'A' | 'C' | 'D' = pdfMatch?.certificateType ?? ((cruise.nights ?? 0) >= 6 ? 'D' : 'A');
+        return {
+          id: cruise.id,
+          shipName: cruise.shipName || 'Unknown Ship',
+          sailDate: cruise.sailDate,
+          offerCode: cruise.instantCertificateOfferCode || '',
+          value: cruise.instantCertificateValue || 0,
+          notes: cruise.instantCertificateNotes || '',
+          certType,
+        };
+      });
   }, [bookedCruises]);
+
+  const instantCertBankByType = useMemo(() => {
+    const groups: Record<'A' | 'C' | 'D', { count: number; value: number; certs: typeof instantCertBank }> = {
+      A: { count: 0, value: 0, certs: [] },
+      C: { count: 0, value: 0, certs: [] },
+      D: { count: 0, value: 0, certs: [] },
+    };
+    instantCertBank.forEach((cert) => {
+      const bucket = groups[cert.certType];
+      bucket.count += 1;
+      bucket.value += cert.value;
+      bucket.certs.push(cert);
+    });
+    const labels: Record<'A' | 'C' | 'D', string> = { A: 'A Certificates', C: 'C Certificates', D: 'D Certificates' };
+    return (['A', 'C', 'D'] as const)
+      .map((type) => ({ type, label: labels[type], ...groups[type] }))
+      .filter((group) => group.count > 0);
+  }, [instantCertBank]);
 
   const actionChecklist = useMemo(() => {
     const missingResultsCount = cruiseEconomicsSummary.rows.filter((row) => row.calculationConfidence !== 'actual').length;
@@ -2674,6 +2713,27 @@ export default function AnalyticsScreen() {
             <Ticket size={16} color="#047857" />
             <Text style={styles.sectionTitle}>Instant Certificate Bank</Text>
           </View>
+          <View style={{ flexDirection: 'row', gap: SPACING.sm, marginBottom: SPACING.sm }}>
+            {instantCertBankByType.map((group) => (
+              <TouchableOpacity
+                key={group.type}
+                style={[casinoDashboardStyles.card, { flex: 1, paddingVertical: 14, alignItems: 'center' }]}
+                activeOpacity={0.8}
+                onPress={() => actionCenterDrill.open({
+                  title: group.label,
+                  subtitle: `${group.count} certificate(s) - ${formatCurrency(group.value)} total value`,
+                  formula: `${group.label} total value = Sum of instant-certificate values won on cruises classified as type ${group.type}`,
+                  sourceRecords: group.certs.map((c) => ({ label: `${c.shipName} — ${c.sailDate}`, value: formatCurrency(c.value), detail: c.offerCode || 'No code', confidence: 'user-entered' })),
+                  assumptions: group.type === 'D' ? ['No PDF-matched certificate code was found for these, so type was estimated from cruise length (6+ nights).'] : undefined,
+                })}
+                testID={`cert-bank-type-${group.type}`}
+              >
+                <Text style={[casinoDashboardStyles.cardLabel, { textAlign: 'center' }]} numberOfLines={1}>{group.label}</Text>
+                <Text style={[casinoDashboardStyles.bigNumber, { fontSize: 22, color: '#047857', marginTop: 4 }]}>{group.count}</Text>
+                <Text style={styles.economicsSummaryLabel} numberOfLines={1}>{formatCurrency(group.value)}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
           <View style={{ gap: SPACING.sm }}>
             {instantCertBank.map((cert) => (
               <TouchableOpacity
@@ -2686,7 +2746,7 @@ export default function AnalyticsScreen() {
                   <Ticket size={16} color="#047857" />
                 </View>
                 <View style={styles.actionRowContent}>
-                  <Text style={styles.actionRowTitle} numberOfLines={1}>{cert.shipName} · {cert.offerCode || 'No code'}</Text>
+                  <Text style={styles.actionRowTitle} numberOfLines={1}>{cert.shipName} · {cert.certType} Cert · {cert.offerCode || 'No code'}</Text>
                   <Text style={styles.actionRowSubtitle} numberOfLines={1}>{cert.sailDate}{cert.notes ? ` · ${cert.notes}` : ''}</Text>
                 </View>
                 <View style={[styles.actionRowBadge, { backgroundColor: '#D1FAE5' }]}>
@@ -4134,6 +4194,28 @@ export default function AnalyticsScreen() {
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
 
+      <View style={{ flex: 1, flexDirection: 'row' }}>
+      {showSidebar && (
+        <CasinoSidebar
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          onOverviewPress={() => router.push('/(tabs)/(overview)')}
+          onSettingsPress={() => router.push('/(tabs)/settings')}
+          clubRoyaleTier={clubRoyaleTier}
+          clubRoyalePoints={currentYearPoints}
+          tierProgressPct={tierGoalsProgress.signaturePct}
+          tierProgressLabel={`${formatNumber(tierGoalsProgress.pointsToSignature)} pts until Signature`}
+          onStatusPress={() => showDetail('Club Royale Status', [
+            { label: 'Current tier', value: clubRoyaleTier },
+            { label: 'Current-season points', value: formatNumber(currentYearPoints) },
+            { label: 'Tier year ends', value: clubRoyaleNextResetDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) },
+            { label: 'Points to Signature', value: formatNumber(tierGoalsProgress.pointsToSignature) },
+            { label: 'Avg pts/day needed', value: formatNumber(Math.round(tierGoalsProgress.avgPtsPerDayForSignature)) },
+            { label: 'Historical all-time points', value: formatNumber(historicalPoints) },
+          ], 'Tap a Casino Portfolio tier bar for the full formula and source records.')}
+        />
+      )}
+      <View style={{ flex: 1 }}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <ResponsiveContainer>
           <View style={styles.header}>
@@ -4243,6 +4325,8 @@ export default function AnalyticsScreen() {
           </ResponsiveContainer>
         </ScrollView>
       </SafeAreaView>
+      </View>
+      </View>
 
       <Modal
         visible={Boolean(selectedPerformanceCruise)}

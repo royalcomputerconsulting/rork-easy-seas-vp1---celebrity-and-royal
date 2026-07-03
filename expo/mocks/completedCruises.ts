@@ -1,3 +1,9 @@
+/**
+ * NOTE ON NAMING: despite living in `/mocks`, this file is NOT sample or
+ * fake data. `COMPLETED_CRUISES_DATA` is the user's real, manually confirmed
+ * history of completed sailings. It stays in this folder only for
+ * backward-compatible import paths used across the app.
+ */
 import type { BookedCruise } from '@/types/models';
 
 export const COMPLETED_CRUISES_DATA: BookedCruise[] = [

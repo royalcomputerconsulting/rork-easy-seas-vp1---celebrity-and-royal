@@ -1,8 +1,21 @@
+/**
+ * NOTE ON NAMING: despite living in `/mocks`, this file is NOT sample or
+ * fake data. `BOOKED_CRUISES_DATA` is a direct re-export of the user's real,
+ * manually confirmed cruise manifest (see `constants/confirmedBookedCruises`).
+ * It stays in this folder only for backward-compatible import paths used
+ * across the app; nothing here is placeholder data.
+ */
 import { USER_CONFIRMED_BOOKED_CRUISE_MANIFEST } from '@/constants/confirmedBookedCruises';
 import type { BookedCruise } from '@/types/models';
 
 export const BOOKED_CRUISES_DATA: BookedCruise[] = USER_CONFIRMED_BOOKED_CRUISE_MANIFEST;
 
+/**
+ * ESTIMATED FALLBACK ONLY: this per-cabin-type price table is a hardcoded
+ * estimate used solely when a cruise has no real invoice/live-price record
+ * for its retail value. Callers must label any value derived from this as
+ * "Estimated" in the UI rather than presenting it as an actual/verified price.
+ */
 export const getCabinValueByType = (cabinType: string): { basePrice: number; category: string } => {
   const type = cabinType.toLowerCase();
   
