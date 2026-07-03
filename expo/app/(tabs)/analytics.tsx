@@ -1763,6 +1763,15 @@ export default function AnalyticsScreen() {
               <Text style={styles.discrepancyText}>{clubRoyaleSyncDiscrepancy.message}</Text>
             </View>
           ) : null}
+          <TouchableOpacity
+            style={styles.sectionLinkRow}
+            activeOpacity={0.75}
+            onPress={() => router.push('/casino/loyalty-data' as any)}
+            testID="casino-view-loyalty-data-link"
+          >
+            <Text style={styles.sectionLinkText}>View Full Loyalty Data</Text>
+            <ChevronRight size={14} color={CASINO_DASHBOARD_COLORS.brightBlue} />
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -1828,6 +1837,15 @@ export default function AnalyticsScreen() {
               </TouchableOpacity>
             ))}
           </View>
+          <TouchableOpacity
+            style={styles.sectionLinkRow}
+            activeOpacity={0.75}
+            onPress={() => router.push('/casino/ship-performance' as any)}
+            testID="casino-view-ship-performance-link"
+          >
+            <Text style={styles.sectionLinkText}>View Full Ship Performance</Text>
+            <ChevronRight size={14} color={CASINO_DASHBOARD_COLORS.brightBlue} />
+          </TouchableOpacity>
         </View>
       )}
 
@@ -1850,8 +1868,21 @@ export default function AnalyticsScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.portfolioTitle}>Cruise Portfolio</Text>
-        <Text style={styles.portfolioHintText}>Tap any cruise row to add/edit win-loss, points earned, and instant certificate results.</Text>
+        <View style={styles.portfolioTitleRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.portfolioTitle}>Cruise Portfolio</Text>
+            <Text style={styles.portfolioHintText}>Tap any cruise row to add/edit win-loss, points earned, and instant certificate results.</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.sectionLinkRowCompact}
+            activeOpacity={0.75}
+            onPress={() => router.push('/casino/completed-sailings' as any)}
+            testID="casino-view-completed-sailings-link"
+          >
+            <Text style={styles.sectionLinkText}>Full Ledger</Text>
+            <ChevronRight size={14} color={CASINO_DASHBOARD_COLORS.brightBlue} />
+          </TouchableOpacity>
+        </View>
         {renderROIFilterTabs()}
 
         {filteredCruises.length > 0 ? (
@@ -4798,6 +4829,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: SPACING.sm,
     marginBottom: SPACING.sm,
+  },
+  sectionLinkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    marginTop: SPACING.sm,
+    paddingVertical: 8,
+  },
+  sectionLinkRowCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  sectionLinkText: {
+    fontSize: 13,
+    fontWeight: '700' as const,
+    color: CASINO_DASHBOARD_COLORS.brightBlue,
+  },
+  portfolioTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 8,
   },
   sectionTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,

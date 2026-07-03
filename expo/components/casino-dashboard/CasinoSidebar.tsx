@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
-import { Award, DollarSign, Zap, LineChart, Settings as SettingsIcon, LayoutGrid } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
+import { Award, DollarSign, Zap, LineChart, Settings as SettingsIcon, LayoutGrid, Anchor, Ship, ClipboardList } from 'lucide-react-native';
 import { DARK_ROYAL_COLORS as CASINO_DASHBOARD_COLORS } from '@/constants/darkRoyalTheme';
 
 export type CasinoSidebarTab = 'portfolio' | 'value' | 'action' | 'history';
@@ -24,6 +25,12 @@ const NAV_ITEMS: { key: CasinoSidebarTab; label: string; icon: typeof Award }[] 
   { key: 'history', label: 'History & Simulator', icon: LineChart },
 ];
 
+const MORE_ROUTES: { key: string; label: string; icon: typeof Anchor; href: string }[] = [
+  { key: 'loyalty-data', label: 'Loyalty Data', icon: Anchor, href: '/casino/loyalty-data' },
+  { key: 'ship-performance', label: 'Ship Performance', icon: Ship, href: '/casino/ship-performance' },
+  { key: 'completed-sailings', label: 'Completed Sailings', icon: ClipboardList, href: '/casino/completed-sailings' },
+];
+
 /**
  * Persistent left sidebar shown only on wide/desktop and web preview
  * screens. Phones keep the existing bottom tab navigation; this is an
@@ -40,6 +47,7 @@ export function CasinoSidebar({
   tierProgressLabel,
   onStatusPress,
 }: CasinoSidebarProps) {
+  const router = useRouter();
   return (
     <View style={styles.sidebar}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.navList}>
@@ -63,6 +71,21 @@ export function CasinoSidebar({
             </TouchableOpacity>
           );
         })}
+
+        <View style={styles.sectionDivider} />
+
+        {MORE_ROUTES.map(({ key, label, icon: Icon, href }) => (
+          <TouchableOpacity
+            key={key}
+            style={styles.navItem}
+            activeOpacity={0.75}
+            onPress={() => router.push(href as any)}
+            testID={`sidebar-nav-${key}`}
+          >
+            <Icon size={18} color={CASINO_DASHBOARD_COLORS.darkText} />
+            <Text style={styles.navLabelInactive}>{label}</Text>
+          </TouchableOpacity>
+        ))}
 
         <TouchableOpacity style={styles.navItem} activeOpacity={0.75} onPress={onSettingsPress} testID="sidebar-nav-settings">
           <SettingsIcon size={18} color={CASINO_DASHBOARD_COLORS.darkText} />
@@ -108,6 +131,12 @@ const styles = StyleSheet.create({
   },
   navItemActive: {
     backgroundColor: CASINO_DASHBOARD_COLORS.royalBlue,
+  },
+  sectionDivider: {
+    height: 1,
+    backgroundColor: CASINO_DASHBOARD_COLORS.border,
+    marginVertical: 8,
+    marginHorizontal: 4,
   },
   navLabelActive: {
     fontSize: 14,
