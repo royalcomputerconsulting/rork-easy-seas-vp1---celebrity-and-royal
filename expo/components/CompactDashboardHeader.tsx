@@ -3,6 +3,8 @@ import { Modal, ScrollView, View, Text, StyleSheet, TouchableOpacity } from 'rea
 import { LinearGradient } from 'expo-linear-gradient';
 import { Settings, Bell, Ship, Anchor, Tag, CheckCircle2, LogOut, Target, Users, X, ChevronRight } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
+import { DARK_ROYAL_COLORS } from '@/constants/darkRoyalTheme';
+import type { LoyaltyCardTheme } from '@/constants/loyaltyTheme';
 import {
   getCarnivalPlayersClubTierColor,
   getCarnivalVifpTierColor,
@@ -10,7 +12,6 @@ import {
   getCelebrityCaptainsClubLevelColor,
   getClubRoyaleTierColor,
   getCrownAnchorTierColor,
-  getPlayerCardTheme,
   getSilverseaTierColor,
 } from '@/constants/loyaltyTheme';
 import { CLUB_ROYALE_TIERS, TIER_ORDER, getTierByPoints } from '@/constants/clubRoyaleTiers';
@@ -41,6 +42,24 @@ interface CompactDashboardHeaderProps {
   hideLogo?: boolean;
   crewMemberCount?: number;
 }
+
+/**
+ * Fixed "Dark Royal" navy + gold theme for the profile header shared by the
+ * Offers, Cruises, and Casino tabs. Previously this derived its palette from
+ * the active loyalty tier/brand (getPlayerCardTheme), which made the header
+ * look inconsistent with the rest of the Casino section's Dark Royal look.
+ * Now it always uses the same navy/gold treatment regardless of brand or tier.
+ */
+const DARK_ROYAL_PLAYER_CARD_THEME: LoyaltyCardTheme = {
+  accentColor: DARK_ROYAL_COLORS.gold,
+  gradientColors: [DARK_ROYAL_COLORS.backgroundGradientTop, DARK_ROYAL_COLORS.card, DARK_ROYAL_COLORS.backgroundGradientBottom],
+  borderColor: DARK_ROYAL_COLORS.borderStrong,
+  surfaceColor: DARK_ROYAL_COLORS.cardAlt,
+  surfaceColorMuted: DARK_ROYAL_COLORS.sidebar,
+  topTextColor: DARK_ROYAL_COLORS.textPrimary,
+  secondaryTextColor: DARK_ROYAL_COLORS.textSecondary,
+  progressBarGradient: [DARK_ROYAL_COLORS.gold, DARK_ROYAL_COLORS.goldBright],
+};
 
 export const CompactDashboardHeader = React.memo(function CompactDashboardHeader({
   memberName = 'Player',
@@ -122,13 +141,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
     return `${mm}-${dd}-${yy}`;
   };
 
-  const playerCardTheme = useMemo(() => getPlayerCardTheme({
-    brand: activeBrand,
-    crownAnchorLevel,
-    celebrityLevel,
-    silverseaTier,
-    carnivalVifpTier,
-  }), [activeBrand, carnivalVifpTier, celebrityLevel, crownAnchorLevel, silverseaTier]);
+  const playerCardTheme = DARK_ROYAL_PLAYER_CARD_THEME;
   const progressCardStyle = useMemo(() => ({
     backgroundColor: playerCardTheme.surfaceColor,
     borderColor: playerCardTheme.borderColor,
@@ -1146,7 +1159,7 @@ const styles = StyleSheet.create({
     alignItems: 'center' as const,
     marginTop: 2,
     borderWidth: 1.5,
-    borderColor: COLORS.navyDeep,
+    borderColor: DARK_ROYAL_COLORS.gold,
   },
   pinnaclePText: {
     fontSize: 11,
@@ -1182,7 +1195,7 @@ const styles = StyleSheet.create({
     color: COLORS.goldDark,
   },
   pinnacleHighlightWhite: {
-    color: COLORS.navyDeep,
+    color: DARK_ROYAL_COLORS.goldText,
     fontWeight: '700' as const,
   },
   achievedBadge: {
@@ -1200,7 +1213,7 @@ const styles = StyleSheet.create({
   achievedCard: {
     borderColor: CLEAN_THEME.badge.achieved.bg,
     borderWidth: 1.5,
-    backgroundColor: 'rgba(16, 185, 129, 0.05)',
+    backgroundColor: 'rgba(16, 185, 129, 0.14)',
   },
   achievedLabelRow: {
     flexDirection: 'row',

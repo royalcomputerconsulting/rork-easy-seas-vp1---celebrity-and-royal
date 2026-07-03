@@ -117,7 +117,7 @@ import { useEntitlement } from '@/state/EntitlementProvider';
 import { useCrewRecognition } from '@/state/CrewRecognitionProvider';
 import { useUserDataSync } from '@/state/UserDataSyncProvider';
 import { useIntelligenceFilters } from '@/state/IntelligenceFiltersProvider';
-import { getSecondProfileForUnassignedRecords } from '@/lib/intelligenceFilters';
+import { getManagedSecondProfile } from '@/lib/intelligenceFilters';
 import { buildDiagnosticExport, clearDiagnosticEvents, recordDiagnosticEvent } from '@/lib/diagnosticLogger';
 import { getDoubleOccupancyRoomRetailValue } from '@/lib/valueCalculator';
 
@@ -216,7 +216,7 @@ export default function SettingsScreen() {
       ?? activeUserProfiles[0]
       ?? null;
   }, [activeUserProfiles, currentUser, normalizedAuthenticatedEmail]);
-  const linkedSecondProfile = useMemo(() => getSecondProfileForUnassignedRecords(activeUserProfiles), [activeUserProfiles]);
+  const linkedSecondProfile = useMemo(() => getManagedSecondProfile(activeUserProfiles), [activeUserProfiles]);
   const selectedSettingsProfile = useMemo(() => {
     if (selectedProfileId !== 'all' && selectedProfileId !== 'unassigned') {
       const explicitProfile = activeUserProfiles.find((profile) => profile.id === selectedProfileId);

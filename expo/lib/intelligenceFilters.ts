@@ -125,6 +125,22 @@ export function getSecondProfileForUnassignedRecords(_profiles: UserProfile[]): 
   return undefined;
 }
 
+/**
+ * Identifies the app's single managed "second traveler" profile slot, if one exists.
+ * Unlike getSecondProfileForUnassignedRecords (which must stay disabled so ownerless
+ * records never get auto-attributed to a second traveler), this is used only for UI
+ * concerns: showing/switching to the second profile in Settings, and preventing the
+ * app from creating more than one "Second User" profile. If more than one non-owner
+ * profile exists (e.g. from an old duplicate-creation bug), the earliest-created one
+ * is treated as the canonical second profile.
+ */
+export function getManagedSecondProfile(profiles: UserProfile[]): UserProfile | undefined {
+  const nonOwnerProfiles = profiles
+    .filter((profile) => profile.active !== false && !profile.isOwner && !profile.defaultProfile)
+    .sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+  return nonOwnerProfiles[0];
+}
+
 function getMatchedProfile(record: FilterableRecord, profiles: UserProfile[]): UserProfile | undefined {
   const ownerProfileId = normalize(record.ownerProfileId);
   const ownerEmail = normalizeEmail(record.ownerProfileId);

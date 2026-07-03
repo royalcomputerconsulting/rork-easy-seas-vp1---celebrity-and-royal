@@ -726,8 +726,8 @@ export default function EventsScreen() {
               <Users size={20} color="#A7F3D0" />
             </View>
             <View style={styles.passengerPermanentCopy}>
-              <Text style={styles.passengerPermanentEyebrow}>Permanent passenger calendar</Text>
-              <Text style={styles.passengerPermanentTitle}>Open full passenger drill-down</Text>
+              <Text style={styles.passengerPermanentEyebrow}>Calendar</Text>
+              <Text style={styles.passengerPermanentTitle}>Calendar Drill Down</Text>
               <Text style={styles.passengerPermanentSubtitle}>Sea days, port days, gaps, expirations, shared/solo travel</Text>
             </View>
             <ChevronRight size={20} color={COLORS.white} />
@@ -885,8 +885,8 @@ export default function EventsScreen() {
             <View style={styles.passengerViewCard} testID="permanent-passenger-calendar-view">
               <View style={styles.passengerHeaderRow}>
                 <View style={styles.passengerHeaderCopy}>
-                  <Text style={styles.passengerTitle}>Permanent Passenger View</Text>
-                  <Text style={styles.passengerSubtitle}>Life-at-sea timeline for this year</Text>
+                  <Text style={styles.passengerTitle}>Historical</Text>
+                  <Text style={styles.passengerSubtitle}>Permanent passenger view • Life-at-sea timeline for this year</Text>
                 </View>
                 <TouchableOpacity
                   style={styles.passengerDrillButton}

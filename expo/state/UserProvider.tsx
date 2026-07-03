@@ -252,6 +252,35 @@ function sanitizeUserProfile(user: unknown, fallbackEmail: string | null, index:
   };
 }
 
+/**
+ * Collapses duplicate non-owner ("second user") profiles into a single one.
+ * A past bug could repeatedly auto-create a profile named "Second User" on
+ * every Settings screen mount, leaving several duplicate profiles behind in
+ * storage. This keeps the earliest-created non-owner profile (preferring one
+ * that actually has synced loyalty data over an empty duplicate) and drops
+ * the rest so the app only ever shows one "Second User" going forward.
+ */
+function dedupeSecondProfiles(profiles: UserProfile[]): UserProfile[] {
+  const ownerProfiles = profiles.filter((profile) => profile.isOwner);
+  const nonOwnerProfiles = profiles.filter((profile) => !profile.isOwner);
+
+  if (nonOwnerProfiles.length <= 1) {
+    return profiles;
+  }
+
+  const hasSyncedData = (profile: UserProfile) => Boolean(profile.crownAnchorNumber || profile.clubRoyaleId || (profile.clubRoyalePoints ?? 0) > 0 || (profile.loyaltyPoints ?? 0) > 0);
+
+  const sorted = [...nonOwnerProfiles].sort((a, b) => {
+    const aSynced = hasSyncedData(a) ? 1 : 0;
+    const bSynced = hasSyncedData(b) ? 1 : 0;
+    if (aSynced !== bSynced) return bSynced - aSynced;
+    return (a.createdAt || '').localeCompare(b.createdAt || '');
+  });
+
+  const [keptSecondProfile] = sorted;
+  return [...ownerProfiles, ...(keptSecondProfile ? [keptSecondProfile] : [])];
+}
+
 function parseStoredUsers(rawValue: string | null, fallbackEmail: string | null): UserProfile[] {
   if (!rawValue) {
     return [];
@@ -453,12 +482,22 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
           email: normalizeEmail(user.email) ?? normalizedAuthenticatedEmail,
         }));
 
-        const owner = normalizedUsers.find((user) => user.isOwner) ?? normalizedUsers[0] ?? null;
-        const resolvedCurrentUserId = storedCurrentUserId && normalizedUsers.some((user) => user.id === storedCurrentUserId)
+        const dedupedUsers = dedupeSecondProfiles(normalizedUsers);
+        if (dedupedUsers.length !== normalizedUsers.length) {
+          console.log('[UserProvider] Collapsed duplicate "Second User" profiles into one on load:', {
+            email: normalizedAuthenticatedEmail,
+            before: normalizedUsers.length,
+            after: dedupedUsers.length,
+          });
+          await AsyncStorage.setItem(scopedKeys.USERS, JSON.stringify(dedupedUsers));
+        }
+
+        const owner = dedupedUsers.find((user) => user.isOwner) ?? dedupedUsers[0] ?? null;
+        const resolvedCurrentUserId = storedCurrentUserId && dedupedUsers.some((user) => user.id === storedCurrentUserId)
           ? storedCurrentUserId
           : owner?.id ?? null;
 
-        setUsers(normalizedUsers);
+        setUsers(dedupedUsers);
         setCurrentUserId(resolvedCurrentUserId);
 
         if (resolvedCurrentUserId !== storedCurrentUserId) {
@@ -467,7 +506,7 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
 
         console.log('[UserProvider] Loaded scoped users:', {
           email: normalizedAuthenticatedEmail,
-          count: normalizedUsers.length,
+          count: dedupedUsers.length,
           currentUserId: resolvedCurrentUserId,
         });
         return;
