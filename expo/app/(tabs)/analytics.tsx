@@ -15,7 +15,6 @@ import {
 } from 'react-native';
 import { File as ExpoFile, Paths as ExpoPaths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -116,6 +115,11 @@ import {
   normalizeCruiseCasinoPerformance,
 } from '@/lib/casinoPointTruth';
 import { buildDataHealthSummary, isActiveUpcomingCruise } from '@/lib/easySeasAdvisor';
+import { CASINO_DASHBOARD_COLORS, casinoDashboardStyles, casinoValueColor } from '@/constants/casinoDashboardTheme';
+import { useDrillDown, type CalculationDrillDownData } from '@/components/casino-dashboard/CalculationDrillDownDrawer';
+import { CasinoDonutChart } from '@/components/casino-dashboard/CasinoDonutChart';
+import { CasinoGroupedBarChart } from '@/components/casino-dashboard/CasinoGroupedBarChart';
+import { useCertificates } from '@/state/CertificatesProvider';
 
 type AnalyticsTab = 'portfolio' | 'value' | 'action' | 'history';
 type ROIFilter = 'all' | 'high' | 'medium' | 'low';
@@ -235,6 +239,7 @@ export default function AnalyticsScreen() {
   } | null>(null);
   const [targetPPH, setTargetPPH] = useState(100);
   const [calcsMode, setCalcsMode] = useState<'per-session' | 'historical'>('per-session');
+  const [simulatorPresetKey, setSimulatorPresetKey] = useState<'conservative' | 'stay' | 'aggressive' | 'highRoller'>('stay');
   const [isGeneratingSessions, setIsGeneratingSessions] = useState(false);
   const [selectedPerformanceCruise, setSelectedPerformanceCruise] = useState<BookedCruise | null>(null);
   const [performanceForm, setPerformanceForm] = useState<CruisePerformanceForm>(EMPTY_PERFORMANCE_FORM);
@@ -264,6 +269,8 @@ export default function AnalyticsScreen() {
     removeW2GRecord,
     compItems,
   } = useTax();
+  const { certificates } = useCertificates();
+  const cruiseValueDrill = useDrillDown();
 
   const showDetail = useCallback((title: string, rows: DetailModalRow[], subtitle?: string) => {
     void haptics.trigger('selection');
@@ -632,6 +639,79 @@ export default function AnalyticsScreen() {
     return new Map(cruiseEconomicsSummary.rows.map((row) => [row.cruiseId, row]));
   }, [cruiseEconomicsSummary.rows]);
 
+  const realMonthlyCoinIn = useMemo(() => {
+    const totalCoinIn = cruiseEconomicsSummary.totals.totalCoinIn;
+    const monthsActive = Math.max(1, cruiseEconomicsSummary.rows.length * (cruiseEconomicsSummary.averages.nightsPerCruise || 7) / 30);
+    return totalCoinIn > 0 ? totalCoinIn / monthsActive : playerContext.averageSpendPerCruise;
+  }, [cruiseEconomicsSummary, playerContext.averageSpendPerCruise]);
+
+  const simulatorPresets = useMemo(() => {
+    return [
+      { key: 'conservative' as const, label: 'Conservative', monthlyCoinIn: realMonthlyCoinIn * 0.6, multiplier: 0.6, assumption: 'Assumes 40% less monthly coin-in than your real historical average, with the same real win % and cruise frequency.' },
+      { key: 'stay' as const, label: 'Stay the Course', monthlyCoinIn: realMonthlyCoinIn, multiplier: 1, assumption: 'Uses your real historical average monthly coin-in, win %, points/night, and cruises/year exactly as recorded.' },
+      { key: 'aggressive' as const, label: 'Aggressive', monthlyCoinIn: realMonthlyCoinIn * 1.5, multiplier: 1.5, assumption: 'Assumes 50% more monthly coin-in than your real historical average, with the same real win % and cruise frequency.' },
+      { key: 'highRoller' as const, label: 'High Roller', monthlyCoinIn: realMonthlyCoinIn * 2.5, multiplier: 2.5, assumption: 'Assumes 150% more monthly coin-in than your real historical average — a high-end projection, not a guarantee.' },
+    ];
+  }, [realMonthlyCoinIn]);
+
+  const simulatorProjection = useMemo(() => {
+    const preset = simulatorPresets.find((p) => p.key === simulatorPresetKey) ?? simulatorPresets[1];
+    const realCruisesPerYear = cruiseEconomicsSummary.averages.nightsPerCruise > 0
+      ? (12 * 30) / Math.max(1, (cruiseEconomicsSummary.rows.length > 0 ? 365 / Math.max(1, cruiseEconomicsSummary.rows.length) : 90))
+      : 4;
+    const realWinPct = cruiseEconomicsSummary.totals.totalCoinIn > 0
+      ? cruiseEconomicsSummary.totals.totalWinningsHome / cruiseEconomicsSummary.totals.totalCoinIn
+      : 0;
+    const yearlyCoinIn = preset.monthlyCoinIn * 12;
+    const projectedCoinIn = yearlyCoinIn * 5;
+    const projectedPoints = Math.round((projectedCoinIn / Math.max(1, DOLLARS_PER_POINT)));
+    const projectedWinLoss = projectedCoinIn * realWinPct;
+    const yearlyPaid = cruiseEconomicsSummary.averages.paidPerCruise * realCruisesPerYear;
+    const projectedPaid = yearlyPaid * 5;
+    const projectedCompValue = cruiseEconomicsSummary.averages.netCashPerCruise * realCruisesPerYear * 5 - projectedWinLoss;
+    const projectedNetMakeOut = projectedCompValue + projectedWinLoss;
+    const projectedValuePerDollar = projectedPaid > 0 ? (projectedPaid + projectedNetMakeOut) / projectedPaid : 0;
+    const projectedROI = projectedPaid > 0 ? (projectedNetMakeOut / projectedPaid) * 100 : 0;
+    return {
+      projectedPoints,
+      projectedCoinIn,
+      projectedWinLoss,
+      projectedNetMakeOut,
+      projectedValuePerDollar,
+      projectedROI,
+      realCruisesPerYear,
+    };
+  }, [simulatorPresets, simulatorPresetKey, cruiseEconomicsSummary]);
+
+  const formatSignedCurrencyDetailed = useCallback((amount: number): string => {
+    return `${amount >= 0 ? '+' : '-'}${formatCurrencyDetailed(Math.abs(amount))}`;
+  }, []);
+
+  const simulatorResultTiles = useMemo(() => {
+    const activePreset = simulatorPresets.find((p) => p.key === simulatorPresetKey) ?? simulatorPresets[1];
+    const buildDrill = (label: string, value: string): CalculationDrillDownData => ({
+      title: label,
+      subtitle: '5-year projection',
+      summary: `Projected using the "${activePreset.label}" monthly coin-in assumption, your real historical points-per-night, and your real average cruises/year.`,
+      formula: 'Projection = Real per-cruise averages × projected cruises over 5 years, using your real historical win rate',
+      inputs: [
+        { label: 'Avg points / night (real)', value: playerContext.averagePointsPerNight.toFixed(1) },
+        { label: 'Avg cruises / year (real)', value: simulatorProjection.realCruisesPerYear.toFixed(1) },
+        { label: 'Monthly coin-in assumption', value: formatCurrencyDetailed(activePreset.monthlyCoinIn) },
+        { label: 'Result', value },
+      ],
+      assumptions: [activePreset.assumption],
+    });
+    return [
+      { key: 'points', label: 'Points Earned', value: formatNumber(simulatorProjection.projectedPoints), color: CASINO_DASHBOARD_COLORS.orange, drill: () => buildDrill('Points Earned', formatNumber(simulatorProjection.projectedPoints)) },
+      { key: 'coinIn', label: 'Coin-in', value: formatCurrencyDetailed(simulatorProjection.projectedCoinIn), color: CASINO_DASHBOARD_COLORS.royalBlue, drill: () => buildDrill('Coin-in', formatCurrencyDetailed(simulatorProjection.projectedCoinIn)) },
+      { key: 'winLoss', label: 'Win / Loss', value: formatSignedCurrencyDetailed(simulatorProjection.projectedWinLoss), color: casinoValueColor(simulatorProjection.projectedWinLoss), drill: () => buildDrill('Win / Loss', formatSignedCurrencyDetailed(simulatorProjection.projectedWinLoss)) },
+      { key: 'netMakeOut', label: 'Net Make-Out', value: formatSignedCurrencyDetailed(simulatorProjection.projectedNetMakeOut), color: casinoValueColor(simulatorProjection.projectedNetMakeOut), drill: () => buildDrill('Net Make-Out', formatSignedCurrencyDetailed(simulatorProjection.projectedNetMakeOut)) },
+      { key: 'valuePerDollar', label: 'Value Per $1', value: `${simulatorProjection.projectedValuePerDollar.toFixed(2)}x`, color: CASINO_DASHBOARD_COLORS.teal, drill: () => buildDrill('Value Per $1', `${simulatorProjection.projectedValuePerDollar.toFixed(2)}x`) },
+      { key: 'roi', label: 'ROI', value: `${simulatorProjection.projectedROI.toFixed(0)}%`, color: casinoValueColor(simulatorProjection.projectedROI), drill: () => buildDrill('ROI', `${simulatorProjection.projectedROI.toFixed(0)}%`) },
+    ];
+  }, [simulatorPresets, simulatorPresetKey, simulatorProjection, playerContext.averagePointsPerNight]);
+
   const realAnalytics = useMemo(() => {
     const scopedCruiseIds = new Set(cruiseEconomicsSummary.rows.map((row) => row.cruiseId));
     const destinationCounts: Record<string, number> = {};
@@ -704,9 +784,50 @@ export default function AnalyticsScreen() {
       : cruiseEconomicsSummary.rows.slice(0, 8);
   }, [cruiseEconomicsSummary.rows, showAllEconomicsRows]);
 
-  const formatSignedCurrencyDetailed = useCallback((amount: number): string => {
-    return `${amount >= 0 ? '+' : '-'}${formatCurrencyDetailed(Math.abs(amount))}`;
-  }, []);
+  const valueByYear = useMemo(() => {
+    const byYear = new Map<string, { year: string; retail: number; paid: number; rows: CruiseEconomicsRow[] }>();
+    cruiseEconomicsSummary.rows.forEach((row) => {
+      const year = row.sailDate && /^\d{4}/.test(row.sailDate) ? row.sailDate.slice(0, 4) : 'Unknown';
+      const bucket = byYear.get(year) ?? { year, retail: 0, paid: 0, rows: [] };
+      bucket.retail += row.retail;
+      bucket.paid += row.paid;
+      bucket.rows.push(row);
+      byYear.set(year, bucket);
+    });
+    return Array.from(byYear.values()).sort((a, b) => a.year.localeCompare(b.year));
+  }, [cruiseEconomicsSummary.rows]);
+
+  const futureValueWallet = useMemo(() => {
+    const availableCerts = certificates.filter((c) => c.status === 'available');
+    const activeOffers = (casinoOffers || []).filter((offer) => {
+      if (!offer.expiryDate) return true;
+      const expiry = createDateFromString(offer.expiryDate);
+      return expiry >= new Date();
+    });
+    return {
+      certificateCount: availableCerts.length,
+      certificateValue: availableCerts.reduce((sum, c) => sum + (c.value || 0), 0),
+      activeOfferCount: activeOffers.length,
+      itemCount: availableCerts.length + activeOffers.length,
+    };
+  }, [certificates, casinoOffers]);
+
+  const futureValueCreated = useMemo(() => {
+    const wonCertsFromCruises = bookedCruises.filter((c) => c.instantCertificateWon);
+    const wonValueFromCruises = wonCertsFromCruises.reduce((sum, c) => sum + (c.instantCertificateValue || 0), 0);
+    return {
+      total: wonValueFromCruises + futureValueWallet.certificateValue,
+      wonCount: wonCertsFromCruises.length,
+      walletValue: futureValueWallet.certificateValue,
+    };
+  }, [bookedCruises, futureValueWallet.certificateValue]);
+
+  const w2gTotals = useMemo(() => {
+    return {
+      totalAmount: w2gRecords.reduce((sum, r) => sum + (r.amount || 0), 0),
+      count: w2gRecords.length,
+    };
+  }, [w2gRecords]);
 
   const stats = useMemo(() => {
     return [
@@ -875,6 +996,14 @@ export default function AnalyticsScreen() {
       },
     ];
   }, [cruiseEconomicsSummary.rows, upcomingCruisesList, expiringOffersList, dataHealthIssueCount]);
+
+  const freePlaySummary = useMemo(() => {
+    const cruisesWithFreePlay = bookedCruises.filter((c) => (c.freePlay || 0) > 0);
+    const total = cruisesWithFreePlay.reduce((sum, c) => sum + (c.freePlay || 0), 0);
+    return { total, cruiseCount: cruisesWithFreePlay.length, cruises: cruisesWithFreePlay };
+  }, [bookedCruises]);
+
+  const actionCenterDrill = useDrillDown();
 
   const keepPlayingRecommendation = useMemo(() => {
     const rows = cruiseEconomicsSummary.rows;
@@ -1167,7 +1296,7 @@ export default function AnalyticsScreen() {
       ? '∞'
       : `${effectiveValuePerDollar.toFixed(2)}`;
 
-    const imageHash = cruise.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const imageHash = String(cruise.id ?? '').split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
     const cruiseImage = getImageForDestination(cruise.destination || '', imageHash + 1);
 
     const formatDateRange = (sailDate: string, returnDate?: string, nights?: number) => {
@@ -1203,7 +1332,7 @@ export default function AnalyticsScreen() {
     };
 
     const getItineraryName = () => {
-      if (cruise.itineraryName) {
+      if (cruise.itineraryName && typeof cruise.itineraryName === 'string') {
         const parts = cruise.itineraryName.split(':');
         if (parts.length > 1) {
           return parts[1].trim();
@@ -1568,96 +1697,219 @@ export default function AnalyticsScreen() {
 
   const renderValueTab = () => (
     <View style={styles.tabContent}>
+      {cruiseValueDrill.element}
       <View style={styles.section}>
-        <View style={styles.cleanCard}>
-          <View style={styles.cleanCardHeader}>
-            <Receipt size={16} color={COLORS.navyDeep} />
-            <Text style={styles.cleanCardTitle}>Cruise Value</Text>
-          </View>
-          <View style={styles.valueHeroGrid}>
+        <Text style={casinoDashboardStyles.screenTitle}>Cruise Value</Text>
+        <Text style={casinoDashboardStyles.screenSubtitle}>Track the real value of your cruises and your true make-out.</Text>
+      </View>
+
+      <View style={styles.section}>
+        <View style={styles.valueHeroGrid}>
+          {[
+            {
+              key: 'retail',
+              label: 'Total Retail Value',
+              value: formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalRetailValue),
+              color: CASINO_DASHBOARD_COLORS.royalBlue,
+              drill: (): CalculationDrillDownData => ({
+                title: 'Total Retail Value',
+                subtitle: 'What these cruises would have cost at published brochure rates',
+                summary: 'The full published cabin price for every completed cruise counted in your value ledger, before any casino comp, offer, or discount is applied.',
+                formula: 'Total Retail Value = Sum of each completed cruise\'s retail cabin price',
+                inputs: [
+                  { label: 'Cruises counted', value: String(cruiseEconomicsSummary.totals.cruises) },
+                  { label: 'Total nights', value: String(cruiseEconomicsSummary.totals.totalNights) },
+                ],
+                sourceRecords: cruiseEconomicsSummary.rows.slice(0, 6).map((row) => ({
+                  label: `${row.ship} — ${row.sailDate}`,
+                  value: formatCurrencyDetailed(row.retail),
+                  confidence: row.calculationConfidence === 'actual' ? 'verified-invoice' : row.calculationConfidence === 'mixed' ? 'imported-csv' : 'estimated-default',
+                })),
+                assumptions: cruiseEconomicsSummary.totals.hasEstimates ? ['Cabin category and passenger count use the values captured for each cruise; where a live retail price wasn\'t available, EasySeas estimates from comparable sailings.'] : [],
+                missing: cruiseEconomicsSummary.rows.length === 0 ? ['No completed cruises with retail pricing yet.'] : [],
+              }),
+            },
+            {
+              key: 'comp',
+              label: 'Total Comp Value',
+              value: formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalCruiseValueCaptured),
+              color: CASINO_DASHBOARD_COLORS.purple,
+              drill: (): CalculationDrillDownData => ({
+                title: 'Total Comp Value',
+                subtitle: 'The value the casino comped you off retail price',
+                summary: 'The gap between what each cruise would have cost at retail and what you actually paid — the discount your casino offer/certificate covered.',
+                formula: 'Comp Value = Retail Value − Cash Paid (summed per cruise)',
+                sourceRecords: cruiseEconomicsSummary.rows.slice(0, 6).map((row) => ({
+                  label: `${row.ship} — ${row.sailDate}`,
+                  value: formatCurrencyDetailed(row.discount),
+                  detail: `Retail ${formatCurrencyDetailed(row.retail)} minus paid ${formatCurrencyDetailed(row.paid)}`,
+                  confidence: row.calculationConfidence === 'actual' ? 'verified-invoice' : 'calculated',
+                })),
+                assumptions: ['Comp value reflects the offer/certificate on file for each cruise (cabin comp, trade-in, or annual cruise benefit).'],
+              }),
+            },
+            {
+              key: 'cash',
+              label: 'Total Cash Paid',
+              value: formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalPaid),
+              color: CASINO_DASHBOARD_COLORS.brightBlue,
+              drill: (): CalculationDrillDownData => ({
+                title: 'Total Cash Paid',
+                subtitle: 'Taxes, fees, and out-of-pocket costs across your cruises',
+                summary: 'The net amount you paid out of pocket for these cruises — taxes & fees, deposits, upgrades, and add-ons — excluding casino wagering volume, which is tracked separately.',
+                formula: 'Cash Paid = Taxes & Fees + Deposits + Upgrades + Add-ons (summed per cruise)',
+                sourceRecords: cruiseEconomicsSummary.rows.slice(0, 6).map((row) => ({
+                  label: `${row.ship} — ${row.sailDate}`,
+                  value: formatCurrencyDetailed(row.paid),
+                  confidence: row.calculationConfidence === 'actual' ? 'verified-invoice' : 'estimated-default',
+                })),
+                missing: cruiseEconomicsSummary.totals.hasEstimates ? ['Some cruises are missing an itemized invoice, so taxes/fees use an estimated baseline for that sailing.'] : [],
+              }),
+            },
+            {
+              key: 'netMakeOut',
+              label: 'Total Net Make-Out',
+              value: formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalCashResult),
+              color: casinoValueColor(cruiseEconomicsSummary.totals.totalCashResult),
+              drill: (): CalculationDrillDownData => ({
+                title: 'Total Net Make-Out',
+                subtitle: 'Your true cash result across every completed cruise',
+                summary: 'What you actually came out ahead (or behind) once casino winnings, comps, and cash paid are all netted together.',
+                formula: 'Net Make-Out = Comp Value + FreePlay + OBC + FCC Used + Cruise Planner Value + VOOM Value + Specialty Dining Value + Spa Value + Casino Win/Loss − Cash Paid − Taxes & Fees − Gratuities − Out-of-Pocket Add-ons',
+                inputs: [
+                  { label: 'Winnings brought home', value: formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalWinningsHome) },
+                  { label: 'Total cash paid', value: formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalPaid) },
+                ],
+                sourceRecords: cruiseEconomicsSummary.rows.slice(0, 6).map((row) => ({
+                  label: `${row.ship} — ${row.sailDate}`,
+                  value: formatSignedCurrencyDetailed(row.netCash),
+                  detail: `Winnings ${formatCurrencyDetailed(row.winningsHome)} minus paid ${formatCurrencyDetailed(row.paid)}`,
+                  confidence: row.calculationConfidence === 'actual' ? 'verified-invoice' : 'calculated',
+                })),
+              }),
+            },
+            {
+              key: 'toteValue',
+              label: 'Tote Per $1 Paid',
+              value: `${realAnalytics.valuePerDollar.toFixed(2)}x`,
+              color: CASINO_DASHBOARD_COLORS.teal,
+              drill: (): CalculationDrillDownData => ({
+                title: 'Tote Per $1 Paid',
+                subtitle: 'How much total value you receive per dollar you actually pay',
+                summary: `You receive ${formatCurrencyDetailed(realAnalytics.valuePerDollar)} in value for every $1 paid.`,
+                formula: 'Tote Per $1 Paid = Total Real Value Received ÷ Total Cash Paid',
+                inputs: [
+                  { label: 'Total real value received', value: formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalEconomicValue) },
+                  { label: 'Total cash paid', value: formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalPaid) },
+                  { label: 'Cash ROI', value: `${cruiseEconomicsSummary.roiStyle.cashROI.toFixed(2)}x` },
+                ],
+                assumptions: ['Cruises with $0 cash paid are excluded from this ratio\'s denominator but their value is still counted in totals shown elsewhere.'],
+              }),
+            },
+          ].map((tile) => (
             <TouchableOpacity
-              style={styles.valueHeroTile}
-              activeOpacity={0.75}
-              onPress={() => showDetail('Total Retail Value', [
-                { label: 'Formula', value: 'Sum of each completed cruise\'s retail cabin value' },
-                { label: 'Total', value: formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalRetailValue) },
-                { label: 'Cruises counted', value: String(cruiseEconomicsSummary.totals.cruises) },
-                { label: 'Data quality', value: cruiseEconomicsSummary.totals.hasEstimates ? 'Includes some estimated rows' : 'All actual entered values' },
-              ])}
+              key={tile.key}
+              style={[casinoDashboardStyles.card, styles.valueHeroTileV2]}
+              activeOpacity={0.8}
+              onPress={() => cruiseValueDrill.open(tile.drill())}
+              testID={`cruise-value-kpi-${tile.key}`}
             >
-              <Text style={styles.valueHeroLabel}>Retail Value</Text>
-              <Text style={[styles.valueHeroValue, { color: COLORS.navyDeep }]} numberOfLines={1} adjustsFontSizeToFit>
-                {formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalRetailValue)}
+              <Text style={casinoDashboardStyles.cardLabel} numberOfLines={1}>{tile.label}</Text>
+              <Text style={[casinoDashboardStyles.bigNumber, { color: tile.color }]} numberOfLines={1} adjustsFontSizeToFit>
+                {tile.value}
               </Text>
               <Info size={12} color="#94A3B8" />
             </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.valueHeroTile}
-              activeOpacity={0.75}
-              onPress={() => showDetail('Total Cruise Value Captured', [
-                { label: 'Formula', value: 'Retail value minus the amount you actually paid, added up per cruise' },
-                { label: 'Total', value: formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalCruiseValueCaptured) },
-                { label: 'Also known as', value: 'Comp value / discount captured from casino offers' },
-              ])}
-            >
-              <Text style={styles.valueHeroLabel}>Comp Value</Text>
-              <Text style={[styles.valueHeroValue, { color: COLORS.success }]} numberOfLines={1} adjustsFontSizeToFit>
-                {formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalCruiseValueCaptured)}
-              </Text>
-              <Info size={12} color="#94A3B8" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.valueHeroTile}
-              activeOpacity={0.75}
-              onPress={() => showDetail('Total Cash Paid', [
-                { label: 'Formula', value: 'Sum of the net effective amount paid out of pocket for each completed cruise' },
-                { label: 'Total', value: formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalPaid) },
-                { label: 'Excludes', value: 'Coin-in / wagering volume, which is tracked separately' },
-              ])}
-            >
-              <Text style={styles.valueHeroLabel}>Cash Paid</Text>
-              <Text style={[styles.valueHeroValue, { color: COLORS.navyDeep }]} numberOfLines={1} adjustsFontSizeToFit>
-                {formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalPaid)}
-              </Text>
-              <Info size={12} color="#94A3B8" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.valueHeroTile}
-              activeOpacity={0.75}
-              onPress={() => showDetail('Total Net Make-Out (Cash Result)', [
-                { label: 'Formula', value: 'Winnings brought home minus the amount paid, per cruise' },
-                { label: 'Total', value: formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalCashResult) },
-                { label: 'Winnings home', value: formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalWinningsHome) },
-              ])}
-            >
-              <Text style={styles.valueHeroLabel}>Net Make-Out</Text>
-              <Text style={[styles.valueHeroValue, { color: cruiseEconomicsSummary.totals.totalCashResult >= 0 ? COLORS.success : COLORS.error }]} numberOfLines={1} adjustsFontSizeToFit>
-                {formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalCashResult)}
-              </Text>
-              <Info size={12} color="#94A3B8" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.valueHeroTile}
-              activeOpacity={0.75}
-              onPress={() => showDetail('Value Earned Per Dollar Spent', [
-                { label: 'Formula', value: 'Total economic value (retail + winnings - paid) divided by total cash paid' },
-                { label: 'Value', value: `${realAnalytics.valuePerDollar.toFixed(2)}x` },
-                { label: 'Cash ROI', value: `${cruiseEconomicsSummary.roiStyle.cashROI.toFixed(2)}x` },
-              ])}
-            >
-              <Text style={styles.valueHeroLabel}>Value / $ Spent</Text>
-              <Text style={[styles.valueHeroValue, { color: COLORS.goldDark }]} numberOfLines={1} adjustsFontSizeToFit>
-                {realAnalytics.valuePerDollar.toFixed(2)}x
-              </Text>
-              <Info size={12} color="#94A3B8" />
-            </TouchableOpacity>
-          </View>
-          <View style={styles.avgStatsRow}>
-            <Text style={styles.avgStatText}>
-              {cruiseEconomicsSummary.totals.hasEstimates ? 'Some numbers above include estimated rows where actual data was missing.' : 'All numbers above come from actual entered cruise results.'} Tap any tile to see exactly how it was calculated.
-            </Text>
+          ))}
+        </View>
+        <View style={styles.avgStatsRow}>
+          <Text style={styles.avgStatText}>
+            {cruiseEconomicsSummary.totals.hasEstimates ? 'Some numbers above include estimated rows where actual data was missing.' : 'All numbers above come from actual entered cruise results.'} Tap any card to see exactly how it was calculated.
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <View style={casinoDashboardStyles.card}>
+          <Text style={styles.economicsTitle}>Value Breakdown (All Time)</Text>
+          <View style={{ marginTop: 12 }}>
+            <CasinoDonutChart
+              centerLabel="Total Value"
+              centerValue={formatCurrency(
+                cruiseEconomicsSummary.totals.totalRetailValue +
+                cruiseEconomicsSummary.totals.totalCruiseValueCaptured +
+                Math.max(0, cruiseEconomicsSummary.totals.totalWinningsHome)
+              )}
+              segments={[
+                { key: 'retail', label: 'Retail Value', value: cruiseEconomicsSummary.totals.totalRetailValue, color: CASINO_DASHBOARD_COLORS.royalBlue, onPress: () => cruiseValueDrill.open({ title: 'Retail Value Segment', summary: 'The portion of total value made up of published brochure prices.', sourceRecords: cruiseEconomicsSummary.rows.slice(0, 8).map((row) => ({ label: `${row.ship} — ${row.sailDate}`, value: formatCurrencyDetailed(row.retail) })) }) },
+                { key: 'comp', label: 'Comp Value', value: cruiseEconomicsSummary.totals.totalCruiseValueCaptured, color: CASINO_DASHBOARD_COLORS.purple, onPress: () => cruiseValueDrill.open({ title: 'Comp Value Segment', summary: 'Value comped off retail by your casino offers/certificates.', sourceRecords: cruiseEconomicsSummary.rows.slice(0, 8).map((row) => ({ label: `${row.ship} — ${row.sailDate}`, value: formatCurrencyDetailed(row.discount) })) }) },
+                { key: 'cash', label: 'Cash Paid', value: cruiseEconomicsSummary.totals.totalPaid, color: CASINO_DASHBOARD_COLORS.green, onPress: () => cruiseValueDrill.open({ title: 'Cash Paid Segment', summary: 'Actual out-of-pocket cash paid across these cruises.', sourceRecords: cruiseEconomicsSummary.rows.slice(0, 8).map((row) => ({ label: `${row.ship} — ${row.sailDate}`, value: formatCurrencyDetailed(row.paid) })) }) },
+                { key: 'winloss', label: 'Win / Loss', value: Math.max(0, cruiseEconomicsSummary.totals.totalWinningsHome), color: CASINO_DASHBOARD_COLORS.teal, onPress: () => cruiseValueDrill.open({ title: 'Win / Loss Segment', summary: 'Casino winnings brought home across these cruises.', sourceRecords: cruiseEconomicsSummary.rows.slice(0, 8).map((row) => ({ label: `${row.ship} — ${row.sailDate}`, value: formatSignedCurrencyDetailed(row.winningsHome) })) }) },
+              ]}
+            />
           </View>
         </View>
+      </View>
+
+      {valueByYear.length > 0 && (
+        <View style={styles.section}>
+          <View style={casinoDashboardStyles.card}>
+            <Text style={styles.economicsTitle}>Value vs. Cash Paid</Text>
+            <Text style={casinoDashboardStyles.screenSubtitle}>All Time — tap a year to see its cruises</Text>
+            <View style={{ marginTop: 8 }}>
+              <CasinoGroupedBarChart
+                barLabels={[
+                  { key: 'value', label: 'Value Received', color: CASINO_DASHBOARD_COLORS.royalBlue },
+                  { key: 'cash', label: 'Cash Paid', color: CASINO_DASHBOARD_COLORS.green },
+                ]}
+                groups={valueByYear.map((bucket) => ({
+                  key: bucket.year,
+                  label: bucket.year,
+                  bars: [
+                    { key: 'value', value: bucket.retail, color: CASINO_DASHBOARD_COLORS.royalBlue },
+                    { key: 'cash', value: bucket.paid, color: CASINO_DASHBOARD_COLORS.green },
+                  ],
+                  onPress: () => cruiseValueDrill.open({
+                    title: `${bucket.year} Cruises`,
+                    summary: `${bucket.rows.length} cruise(s) sailed in ${bucket.year}.`,
+                    sourceRecords: bucket.rows.map((row) => ({ label: `${row.ship} — ${row.sailDate}`, value: `${formatCurrencyDetailed(row.retail)} value / ${formatCurrencyDetailed(row.paid)} paid` })),
+                  }),
+                }))}
+              />
+            </View>
+          </View>
+        </View>
+      )}
+
+      <View style={styles.section}>
+        <TouchableOpacity
+          style={casinoDashboardStyles.card}
+          activeOpacity={0.85}
+          onPress={() => cruiseValueDrill.open({
+            title: 'ROI / Value Per Dollar',
+            subtitle: 'Return on Investment',
+            summary: `You receive ${formatCurrencyDetailed(realAnalytics.valuePerDollar)} in value for every $1 paid.`,
+            formula: 'ROI = (Total Value Received − Total Cash Paid) ÷ Total Cash Paid',
+            inputs: [
+              { label: 'Total value used', value: formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalEconomicValue) },
+              { label: 'Total cash paid used', value: formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalPaid) },
+            ],
+            sourceRecords: [...cruiseEconomicsSummary.rows]
+              .sort((a, b) => (b.paid > 0 ? b.totalEconomic / b.paid : 0) - (a.paid > 0 ? a.totalEconomic / a.paid : 0))
+              .slice(0, 6)
+              .map((row) => ({ label: `${row.ship} — ${row.sailDate}`, value: row.paid > 0 ? `${(row.totalEconomic / row.paid).toFixed(2)}x` : '—' })),
+          })}
+        >
+          <Text style={styles.economicsTitle}>ROI / Value Per Dollar</Text>
+          <Text style={casinoDashboardStyles.screenSubtitle}>All Time</Text>
+          <Text style={[casinoDashboardStyles.bigNumber, { fontSize: 34, color: CASINO_DASHBOARD_COLORS.green, textAlign: 'center', marginTop: 10 }]}>
+            {realAnalytics.valuePerDollar.toFixed(2)}x
+          </Text>
+          <Text style={[casinoDashboardStyles.screenSubtitle, { textAlign: 'center' }]}>Return on Investment</Text>
+          <Text style={[styles.avgStatText, { textAlign: 'center', marginTop: 8 }]}>
+            You receive {formatCurrencyDetailed(realAnalytics.valuePerDollar)} in value for every $1 paid
+          </Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.section}>
@@ -1908,6 +2160,111 @@ export default function AnalyticsScreen() {
       )}
 
       <View style={styles.section}>
+        <View style={styles.valueHeroGrid}>
+          {[
+            {
+              key: 'futureValueCreated',
+              label: 'Future Value Created',
+              value: formatCurrencyDetailed(futureValueCreated.total),
+              color: CASINO_DASHBOARD_COLORS.green,
+              drill: (): CalculationDrillDownData => ({
+                title: 'Future Value Created',
+                subtitle: 'New certificates and offer value earned for future cruises',
+                summary: 'Instant certificates won on completed cruises, plus the value of certificates currently sitting in your wallet.',
+                formula: 'Future Value Created = Instant Certificates Won on Cruises + Available Certificate Wallet Value',
+                sourceRecords: [
+                  { label: 'Instant certificates won on cruises', value: `${futureValueCreated.wonCount} certificate(s)` },
+                  { label: 'Available certificate wallet value', value: formatCurrencyDetailed(futureValueCreated.walletValue) },
+                ],
+                missing: futureValueCreated.total === 0 ? ['No instant certificates or wallet certificates recorded yet.'] : [],
+              }),
+            },
+            {
+              key: 'futureValueWallet',
+              label: 'Future Value Wallet',
+              value: String(futureValueWallet.itemCount),
+              subLabel: 'Certificates, FCCs & Offers',
+              color: CASINO_DASHBOARD_COLORS.purple,
+              drill: (): CalculationDrillDownData => ({
+                title: 'Future Value Wallet',
+                subtitle: 'Certificates, FCCs & offers you can still use',
+                summary: `${futureValueWallet.certificateCount} available certificate(s) worth ${formatCurrencyDetailed(futureValueWallet.certificateValue)}, plus ${futureValueWallet.activeOfferCount} active casino offer(s).`,
+                formula: 'Future Value Wallet = Available Certificates + Active Casino Offers',
+                sourceRecords: [
+                  { label: 'Available certificates', value: String(futureValueWallet.certificateCount), confidence: 'user-entered' },
+                  { label: 'Certificate value', value: formatCurrencyDetailed(futureValueWallet.certificateValue), confidence: 'calculated' },
+                  { label: 'Active casino offers', value: String(futureValueWallet.activeOfferCount), confidence: 'imported-csv' },
+                ],
+              }),
+            },
+            {
+              key: 'w2g',
+              label: 'W2G / Taxable Jackpots',
+              value: formatCurrencyDetailed(w2gTotals.totalAmount),
+              subLabel: 'Total Taxable Amount',
+              color: CASINO_DASHBOARD_COLORS.orange,
+              drill: (): CalculationDrillDownData => ({
+                title: 'W2G / Taxable Jackpots',
+                subtitle: 'Total taxable jackpot amount recorded',
+                summary: `${w2gTotals.count} W2G-reportable jackpot(s) totaling ${formatCurrencyDetailed(w2gTotals.totalAmount)}.`,
+                formula: 'Total Taxable Amount = Sum of every recorded W2G jackpot amount',
+                sourceRecords: w2gRecords.slice(0, 6).map((record) => ({ label: `${record.description || 'Jackpot'} — ${record.date}`, value: formatCurrencyDetailed(record.amount), confidence: 'user-entered' })),
+                missing: w2gTotals.count === 0 ? ['No W2G records entered yet.'] : [],
+              }),
+            },
+            {
+              key: 'avgNetMakeOut',
+              label: 'Avg. Net Make-Out / Cruise',
+              value: formatSignedCurrencyDetailed(cruiseEconomicsSummary.averages.netCashPerCruise),
+              subLabel: 'All Time',
+              color: casinoValueColor(cruiseEconomicsSummary.averages.netCashPerCruise),
+              drill: (): CalculationDrillDownData => ({
+                title: 'Avg. Net Make-Out / Cruise',
+                subtitle: 'Average cash result per completed cruise',
+                summary: 'Total net make-out divided evenly across every completed cruise counted.',
+                formula: 'Avg. Net Make-Out / Cruise = Total Net Make-Out ÷ Number of Completed Cruises',
+                inputs: [
+                  { label: 'Total net make-out', value: formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalCashResult) },
+                  { label: 'Completed cruises', value: String(cruiseEconomicsSummary.totals.cruises) },
+                ],
+              }),
+            },
+            {
+              key: 'breakEven',
+              label: 'Break-Even Value / Cruise',
+              value: formatCurrencyDetailed(cruiseEconomicsSummary.averages.paidPerCruise),
+              subLabel: 'All Time',
+              color: CASINO_DASHBOARD_COLORS.deepNavy,
+              drill: (): CalculationDrillDownData => ({
+                title: 'Break-Even Value / Cruise',
+                subtitle: 'Average cash you need back to break even on a cruise',
+                summary: 'The average amount you pay out of pocket per cruise — the minimum in comps/winnings you\'d need to come out even.',
+                formula: 'Break-Even Value / Cruise = Total Cash Paid ÷ Number of Completed Cruises',
+                inputs: [
+                  { label: 'Total cash paid', value: formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalPaid) },
+                  { label: 'Completed cruises', value: String(cruiseEconomicsSummary.totals.cruises) },
+                ],
+              }),
+            },
+          ].map((tile) => (
+            <TouchableOpacity
+              key={tile.key}
+              style={[casinoDashboardStyles.card, styles.valueHeroTileV2]}
+              activeOpacity={0.8}
+              onPress={() => cruiseValueDrill.open(tile.drill())}
+              testID={`cruise-value-summary-${tile.key}`}
+            >
+              <Text style={casinoDashboardStyles.cardLabel} numberOfLines={1}>{tile.label}</Text>
+              <Text style={[casinoDashboardStyles.bigNumber, { fontSize: 20, color: tile.color }]} numberOfLines={1} adjustsFontSizeToFit>
+                {tile.value}
+              </Text>
+              {tile.subLabel ? <Text style={styles.economicsSummaryLabel} numberOfLines={1}>{tile.subLabel}</Text> : null}
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <LineChart size={16} color={COLORS.navyDeep} />
           <Text style={styles.sectionTitle}>Future Value Projections</Text>
@@ -1927,6 +2284,118 @@ export default function AnalyticsScreen() {
 
   const renderActionTab = () => (
     <View style={styles.tabContent}>
+      {actionCenterDrill.element}
+      <View style={styles.section}>
+        <Text style={casinoDashboardStyles.screenTitle}>Casino Action Center</Text>
+        <Text style={casinoDashboardStyles.screenSubtitle}>Manage your upcoming cruises, offers, certificates, and daily actions.</Text>
+      </View>
+
+      <View style={styles.section}>
+        <View style={styles.valueHeroGrid}>
+          {[
+            {
+              key: 'upcoming',
+              label: 'Upcoming Cruises',
+              value: String(upcomingCruisesList.length),
+              subLabel: upcomingCruisesList[0] ? `Next: ${upcomingCruisesList[0].cruise.sailDate}` : 'None booked',
+              color: CASINO_DASHBOARD_COLORS.royalBlue,
+              drill: (): CalculationDrillDownData => ({
+                title: 'Upcoming Cruises',
+                summary: `${upcomingCruisesList.length} upcoming cruise(s) currently booked.`,
+                sourceRecords: upcomingCruisesList.map(({ cruise, daysUntil }) => ({ label: `${cruise.shipName || 'Unknown Ship'} — ${cruise.sailDate}`, value: `${daysUntil}d out`, confidence: 'imported-csv' })),
+                missing: upcomingCruisesList.length === 0 ? ['No upcoming cruises booked yet.'] : [],
+              }),
+            },
+            {
+              key: 'expiringOffers',
+              label: 'Offers Expiring Soon',
+              value: String(expiringOffersList.length),
+              subLabel: 'Within 45 Days',
+              color: CASINO_DASHBOARD_COLORS.purple,
+              drill: (): CalculationDrillDownData => ({
+                title: 'Offers Expiring Soon',
+                summary: `${expiringOffersList.length} casino offer(s) expiring within 45 days.`,
+                sourceRecords: expiringOffersList.map((offer) => ({ label: offer.title, value: `${offer.daysLeft}d left`, detail: offer.offerCode, confidence: 'imported-csv' })),
+                missing: expiringOffersList.length === 0 ? ['No offers expiring within 45 days.'] : [],
+              }),
+            },
+            {
+              key: 'instantCerts',
+              label: 'Instant Certificates',
+              value: String(instantCertBank.length),
+              subLabel: 'Available to Use',
+              color: CASINO_DASHBOARD_COLORS.orange,
+              drill: (): CalculationDrillDownData => ({
+                title: 'Instant Certificates',
+                summary: `${instantCertBank.length} instant certificate(s) won from completed cruises.`,
+                sourceRecords: instantCertBank.map((cert) => ({ label: `${cert.shipName} — ${cert.sailDate}`, value: formatCurrency(cert.value), detail: cert.offerCode, confidence: 'user-entered' })),
+              }),
+            },
+            {
+              key: 'freePlay',
+              label: 'FreePlay Available',
+              value: formatCurrencyDetailed(freePlaySummary.total),
+              subLabel: `Across ${freePlaySummary.cruiseCount} Cruises`,
+              color: CASINO_DASHBOARD_COLORS.brightBlue,
+              drill: (): CalculationDrillDownData => ({
+                title: 'FreePlay Available',
+                summary: `${formatCurrencyDetailed(freePlaySummary.total)} in FreePlay across ${freePlaySummary.cruiseCount} cruise(s).`,
+                formula: 'FreePlay Available = Sum of FreePlay amounts recorded on each cruise/offer',
+                sourceRecords: freePlaySummary.cruises.map((c) => ({ label: `${c.shipName || 'Unknown Ship'} — ${c.sailDate}`, value: formatCurrencyDetailed(c.freePlay || 0), confidence: 'imported-csv' })),
+                missing: freePlaySummary.total === 0 ? ['No FreePlay recorded on any cruise or offer yet.'] : [],
+              }),
+            },
+            {
+              key: 'tasksDue',
+              label: 'Tasks Due',
+              value: String(actionChecklist.filter((item) => !item.done).length),
+              subLabel: 'Action Items',
+              color: CASINO_DASHBOARD_COLORS.green,
+              drill: (): CalculationDrillDownData => ({
+                title: 'Tasks Due',
+                summary: `${actionChecklist.filter((item) => !item.done).length} of ${actionChecklist.length} checklist item(s) still need attention.`,
+                sourceRecords: actionChecklist.map((item) => ({ label: item.label, value: item.done ? 'Done' : 'Due', detail: item.detail })),
+              }),
+            },
+          ].map((tile) => (
+            <TouchableOpacity
+              key={tile.key}
+              style={[casinoDashboardStyles.card, styles.valueHeroTileV2]}
+              activeOpacity={0.8}
+              onPress={() => actionCenterDrill.open(tile.drill())}
+              testID={`action-center-kpi-${tile.key}`}
+            >
+              <Text style={casinoDashboardStyles.cardLabel} numberOfLines={1}>{tile.label}</Text>
+              <Text style={[casinoDashboardStyles.bigNumber, { fontSize: 22, color: tile.color }]} numberOfLines={1} adjustsFontSizeToFit>
+                {tile.value}
+              </Text>
+              <Text style={styles.economicsSummaryLabel} numberOfLines={1}>{tile.subLabel}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
+      {freePlaySummary.total > 0 && (
+        <View style={styles.section}>
+          <TouchableOpacity
+            style={casinoDashboardStyles.card}
+            activeOpacity={0.85}
+            onPress={() => actionCenterDrill.open({
+              title: 'FreePlay & Benefits',
+              subtitle: `Available FreePlay across ${freePlaySummary.cruiseCount} cruises`,
+              formula: 'FreePlay Available = Sum of FreePlay amounts recorded on each cruise/offer',
+              sourceRecords: freePlaySummary.cruises.map((c) => ({ label: `${c.shipName || 'Unknown Ship'} — ${c.sailDate}`, value: formatCurrencyDetailed(c.freePlay || 0), detail: c.offerCode, confidence: 'imported-csv' })),
+            })}
+          >
+            <Text style={styles.economicsTitle}>FreePlay & Benefits</Text>
+            <Text style={[casinoDashboardStyles.bigNumber, { fontSize: 28, color: CASINO_DASHBOARD_COLORS.brightBlue, marginTop: 8 }]}>
+              {formatCurrencyDetailed(freePlaySummary.total)}
+            </Text>
+            <Text style={casinoDashboardStyles.screenSubtitle}>Available FreePlay across {freePlaySummary.cruiseCount} cruises</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {upcomingCruisesList.length > 0 && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -2501,8 +2970,132 @@ export default function AnalyticsScreen() {
     ];
   }, [calcsMode, cruiseEconomicsSummary, sessions, sessionAnalytics, historicalCruiseData, currentSeasonMetrics]);
 
+  const historyInsightsDrill = useDrillDown();
+
+  const bestShipByPoints = useMemo(() => {
+    return [...shipPerformance].sort((a, b) => b.points - a.points)[0] ?? null;
+  }, [shipPerformance]);
+
+  const bestShipByWinLoss = useMemo(() => {
+    return [...shipPerformance].sort((a, b) => b.cashResult - a.cashResult)[0] ?? null;
+  }, [shipPerformance]);
+
+  const historyInsightsOverview = useMemo(() => {
+    const monthTotals = new Map<string, number>();
+    const dayTotals = new Map<string, { points: number; buyIn: number }>();
+
+    sessions.forEach((session) => {
+      if (!session.date) return;
+      const monthKey = session.date.slice(0, 7);
+      monthTotals.set(monthKey, (monthTotals.get(monthKey) || 0) + (session.pointsEarned || 0));
+      const dayEntry = dayTotals.get(session.date) ?? { points: 0, buyIn: 0 };
+      dayEntry.points += session.pointsEarned || 0;
+      dayEntry.buyIn += session.buyIn || 0;
+      dayTotals.set(session.date, dayEntry);
+    });
+
+    const bestMonth = Array.from(monthTotals.entries()).sort((a, b) => b[1] - a[1])[0] ?? null;
+    const dayEntries = Array.from(dayTotals.entries());
+    const bestDayByPoints = [...dayEntries].sort((a, b) => b[1].points - a[1].points)[0] ?? null;
+    const bestDayByBuyIn = [...dayEntries].sort((a, b) => b[1].buyIn - a[1].buyIn)[0] ?? null;
+    const biggestJackpot = [...w2gRecords].sort((a, b) => b.amount - a.amount)[0] ?? null;
+
+    return { bestMonth, bestDayByPoints, bestDayByBuyIn, biggestJackpot, hasSessionData: sessions.length > 0 };
+  }, [sessions, w2gRecords]);
+
   const renderHistoryTab = () => (
     <View style={styles.tabContent}>
+      {historyInsightsDrill.element}
+      <View style={styles.section}>
+        <Text style={casinoDashboardStyles.screenTitle}>History & Insights</Text>
+        <Text style={casinoDashboardStyles.screenSubtitle}>Dive into your casino history, trends, and performance insights.</Text>
+      </View>
+
+      <View style={styles.section}>
+        <View style={styles.valueHeroGrid}>
+          {[
+            {
+              key: 'historicalPoints',
+              label: 'Historical Casino Points',
+              value: formatNumber(historicalPoints),
+              subLabel: 'All Time',
+              color: CASINO_DASHBOARD_COLORS.orange,
+              drill: (): CalculationDrillDownData => ({
+                title: 'Historical Casino Points',
+                summary: `${formatNumber(historicalPoints)} total Club Royale points earned across your casino history.`,
+                formula: 'Historical Casino Points = Sum of points earned on every completed cruise',
+                sourceRecords: cruiseEconomicsSummary.rows.slice(0, 6).map((row) => ({ label: `${row.ship} — ${row.sailDate}`, value: formatNumber(row.points), confidence: row.calculationConfidence === 'actual' ? 'verified-invoice' : 'estimated-default' })),
+              }),
+            },
+            {
+              key: 'completedCruises',
+              label: 'Completed Cruises',
+              value: String(cruiseEconomicsSummary.totals.cruises),
+              subLabel: 'All Time',
+              color: CASINO_DASHBOARD_COLORS.royalBlue,
+              drill: (): CalculationDrillDownData => ({
+                title: 'Completed Cruises',
+                summary: `${cruiseEconomicsSummary.totals.cruises} completed cruise(s) with casino results on file.`,
+                sourceRecords: cruiseEconomicsSummary.rows.map((row) => ({ label: `${row.ship} — ${row.sailDate}`, value: `${row.nights}N` })),
+              }),
+            },
+            {
+              key: 'totalWinLoss',
+              label: 'Total Win / Loss',
+              value: formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalWinningsHome),
+              subLabel: 'All Time',
+              color: casinoValueColor(cruiseEconomicsSummary.totals.totalWinningsHome),
+              drill: (): CalculationDrillDownData => ({
+                title: 'Total Win / Loss',
+                summary: 'Casino winnings brought home, summed across every completed cruise.',
+                formula: 'Total Win / Loss = Sum of winnings brought home per cruise',
+                sourceRecords: cruiseEconomicsSummary.rows.slice(0, 6).map((row) => ({ label: `${row.ship} — ${row.sailDate}`, value: formatSignedCurrencyDetailed(row.winningsHome) })),
+              }),
+            },
+            {
+              key: 'bestShipPoints',
+              label: 'Best Ship (Points)',
+              value: bestShipByPoints ? bestShipByPoints.ship : '—',
+              subLabel: bestShipByPoints ? `${formatNumber(bestShipByPoints.points)} pts` : 'Needs Data',
+              color: CASINO_DASHBOARD_COLORS.teal,
+              drill: (): CalculationDrillDownData => ({
+                title: 'Best Ship (Points)',
+                summary: bestShipByPoints ? `${bestShipByPoints.ship} leads with ${formatNumber(bestShipByPoints.points)} total points across ${bestShipByPoints.cruises} cruise(s).` : 'No ship data yet.',
+                sourceRecords: shipPerformance.map((ship) => ({ label: ship.ship, value: formatNumber(ship.points) })),
+                missing: !bestShipByPoints ? ['No completed cruises with points recorded yet.'] : [],
+              }),
+            },
+            {
+              key: 'bestShipWinLoss',
+              label: 'Best Ship (Win/Loss)',
+              value: bestShipByWinLoss ? bestShipByWinLoss.ship : '—',
+              subLabel: bestShipByWinLoss ? formatSignedCurrencyDetailed(bestShipByWinLoss.cashResult) : 'Needs Data',
+              color: CASINO_DASHBOARD_COLORS.green,
+              drill: (): CalculationDrillDownData => ({
+                title: 'Best Ship (Win/Loss)',
+                summary: bestShipByWinLoss ? `${bestShipByWinLoss.ship} has your best cash result at ${formatSignedCurrencyDetailed(bestShipByWinLoss.cashResult)}.` : 'No ship data yet.',
+                sourceRecords: shipPerformance.map((ship) => ({ label: ship.ship, value: formatSignedCurrencyDetailed(ship.cashResult) })),
+                missing: !bestShipByWinLoss ? ['No completed cruises with cash results recorded yet.'] : [],
+              }),
+            },
+          ].map((tile) => (
+            <TouchableOpacity
+              key={tile.key}
+              style={[casinoDashboardStyles.card, styles.valueHeroTileV2]}
+              activeOpacity={0.8}
+              onPress={() => historyInsightsDrill.open(tile.drill())}
+              testID={`history-insights-kpi-${tile.key}`}
+            >
+              <Text style={casinoDashboardStyles.cardLabel} numberOfLines={1}>{tile.label}</Text>
+              <Text style={[casinoDashboardStyles.bigNumber, { fontSize: 18, color: tile.color }]} numberOfLines={1} adjustsFontSizeToFit>
+                {tile.value}
+              </Text>
+              <Text style={styles.economicsSummaryLabel} numberOfLines={1}>{tile.subLabel}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
       <View style={styles.section}>
         <View style={[
           styles.keepPlayingCard,
@@ -2627,6 +3220,67 @@ export default function AnalyticsScreen() {
       )}
 
       <View style={styles.section}>
+        <View style={casinoDashboardStyles.card}>
+          <Text style={styles.economicsTitle}>Insights Overview</Text>
+          {[
+            {
+              key: 'bestMonth',
+              label: 'Best Month',
+              value: historyInsightsOverview.bestMonth ? historyInsightsOverview.bestMonth[0] : 'Needs Data',
+              detail: historyInsightsOverview.bestMonth ? `${formatNumber(historyInsightsOverview.bestMonth[1])} pts` : 'No sessions logged yet',
+              why: 'Sessions are grouped by calendar month, and the month with the highest total points earned wins.',
+            },
+            {
+              key: 'bestDay',
+              label: 'Best Day',
+              value: historyInsightsOverview.bestDayByPoints ? historyInsightsOverview.bestDayByPoints[0] : 'Needs Data',
+              detail: historyInsightsOverview.bestDayByPoints ? `${formatNumber(historyInsightsOverview.bestDayByPoints[1].points)} pts` : 'No sessions logged yet',
+              why: 'Every session is grouped by calendar day; the single day with the most total points earned wins.',
+            },
+            {
+              key: 'mostPoints',
+              label: 'Most Points in a Day',
+              value: historyInsightsOverview.bestDayByPoints ? formatNumber(historyInsightsOverview.bestDayByPoints[1].points) : 'Needs Data',
+              detail: historyInsightsOverview.bestDayByPoints ? historyInsightsOverview.bestDayByPoints[0] : 'No sessions logged yet',
+              why: 'Same day-level grouping as "Best Day", shown as a raw points total.',
+            },
+            {
+              key: 'biggestJackpot',
+              label: 'Biggest Jackpot (W2G)',
+              value: historyInsightsOverview.biggestJackpot ? formatCurrencyDetailed(historyInsightsOverview.biggestJackpot.amount) : 'Needs Data',
+              detail: historyInsightsOverview.biggestJackpot ? historyInsightsOverview.biggestJackpot.date : 'No W2G records entered yet',
+              why: 'Compares the amount field on every W2G record you\'ve entered; the largest single jackpot wins.',
+            },
+            {
+              key: 'mostBuyIn',
+              label: 'Most Coin-in in a Day',
+              value: historyInsightsOverview.bestDayByBuyIn ? formatCurrencyDetailed(historyInsightsOverview.bestDayByBuyIn[1].buyIn) : 'Needs Data',
+              detail: historyInsightsOverview.bestDayByBuyIn ? historyInsightsOverview.bestDayByBuyIn[0] : 'No session buy-in recorded yet',
+              why: 'Coin-in is estimated from the buy-in total you logged per session on that day; EasySeas doesn\'t track machine-metered coin-in directly.',
+            },
+          ].map((row) => (
+            <TouchableOpacity
+              key={row.key}
+              style={styles.dataRow}
+              activeOpacity={0.75}
+              onPress={() => historyInsightsDrill.open({
+                title: row.label,
+                summary: row.why,
+                inputs: [{ label: row.label, value: row.value }, { label: 'Context', value: row.detail }],
+                missing: row.value === 'Needs Data' ? ['Not enough logged session or W2G data yet to determine this.'] : [],
+              })}
+            >
+              <Text style={styles.dataLabel} numberOfLines={1}>{row.label}</Text>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={styles.dataValue}>{row.value}</Text>
+                <Text style={styles.economicsSummaryLabel} numberOfLines={1}>{row.detail}</Text>
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.section}>
         <CasinoIntelligenceCard
           analytics={sessionAnalytics}
           completedCruises={bookedCruises.filter(c => {
@@ -2639,6 +3293,55 @@ export default function AnalyticsScreen() {
           })}
           cruiseEconomicsSummary={cruiseEconomicsSummary}
         />
+      </View>
+
+      <View style={styles.section}>
+        <Text style={casinoDashboardStyles.screenTitle}>Simulator</Text>
+        <Text style={casinoDashboardStyles.screenSubtitle}>Plan different scenarios and see the impact on your goals and value.</Text>
+      </View>
+
+      <View style={styles.section}>
+        <View style={casinoDashboardStyles.card}>
+          <Text style={styles.economicsTitle}>Quick Presets</Text>
+          <Text style={casinoDashboardStyles.screenSubtitle}>Seeded from your own real historical averages, not made-up numbers.</Text>
+          <View style={[styles.valueHeroGrid, { marginTop: 12 }]}>
+            {simulatorPresets.map((preset) => {
+              const isActive = simulatorPresetKey === preset.key;
+              return (
+                <TouchableOpacity
+                  key={preset.key}
+                  style={[styles.simulatorPresetPill, isActive && styles.simulatorPresetPillActive]}
+                  activeOpacity={0.8}
+                  onPress={() => setSimulatorPresetKey(preset.key)}
+                  testID={`simulator-preset-${preset.key}`}
+                >
+                  <Text style={[styles.simulatorPresetLabel, isActive && styles.simulatorPresetLabelActive]}>{preset.label}</Text>
+                  <Text style={[styles.simulatorPresetValue, isActive && styles.simulatorPresetLabelActive]}>{formatCurrencyDetailed(preset.monthlyCoinIn)}/mo</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <View style={casinoDashboardStyles.card}>
+          <Text style={styles.economicsTitle}>Results Summary (5 Year Projection)</Text>
+          <View style={[styles.valueHeroGrid, { marginTop: 12 }]}>
+            {simulatorResultTiles.map((item) => (
+              <TouchableOpacity
+                key={item.key}
+                style={[casinoDashboardStyles.card, styles.valueHeroTileV2]}
+                activeOpacity={0.8}
+                onPress={() => historyInsightsDrill.open(item.drill())}
+                testID={`simulator-result-${item.key}`}
+              >
+                <Text style={casinoDashboardStyles.cardLabel} numberOfLines={1}>{item.label}</Text>
+                <Text style={[casinoDashboardStyles.bigNumber, { fontSize: 18, color: item.color }]} numberOfLines={1} adjustsFontSizeToFit>{item.value}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
       </View>
 
       <View style={styles.section}>
@@ -2947,10 +3650,7 @@ export default function AnalyticsScreen() {
   );
 
   return (
-    <LinearGradient
-      colors={['#E3F2FD', '#90CAF9']}
-      style={styles.container}
-    >
+    <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
 
       <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -3282,13 +3982,14 @@ export default function AnalyticsScreen() {
           onDismissAlert={dismissPPHAlert}
         />
       )}
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: CASINO_DASHBOARD_COLORS.background,
   },
   safeArea: {
     flex: 1,
@@ -4732,6 +5433,39 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2E8F0',
     gap: 2,
+  },
+  valueHeroTileV2: {
+    flexGrow: 1,
+    flexBasis: '45%',
+    gap: 4,
+  },
+  simulatorPresetPill: {
+    flexGrow: 1,
+    flexBasis: '45%',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: CASINO_DASHBOARD_COLORS.border,
+    backgroundColor: CASINO_DASHBOARD_COLORS.background,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    gap: 2,
+  },
+  simulatorPresetPillActive: {
+    borderColor: CASINO_DASHBOARD_COLORS.royalBlue,
+    backgroundColor: 'rgba(0, 82, 204, 0.08)',
+  },
+  simulatorPresetLabel: {
+    fontSize: 12.5,
+    fontWeight: '700' as const,
+    color: CASINO_DASHBOARD_COLORS.darkText,
+  },
+  simulatorPresetLabelActive: {
+    color: CASINO_DASHBOARD_COLORS.royalBlue,
+  },
+  simulatorPresetValue: {
+    fontSize: 11,
+    color: CASINO_DASHBOARD_COLORS.mutedText,
+    fontWeight: '600' as const,
   },
   valueHeroLabel: {
     fontSize: 10,

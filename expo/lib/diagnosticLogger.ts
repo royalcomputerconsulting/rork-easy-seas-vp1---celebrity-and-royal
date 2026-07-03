@@ -104,8 +104,59 @@ function isRateLimited(): boolean {
   return false;
 }
 
+/**
+ * Lazily starts diagnostics (console capture + loading any previously
+ * persisted events) the first time an event is actually recorded, instead of
+ * unconditionally at app/root-layout module load. This keeps startup free of
+ * any diagnostics-related risk while still capturing everything once the app
+ * is genuinely running.
+ */
+function ensureLazyInit() {
+  if (initialized) return;
+  initialized = true;
+  try {
+    if (!originalConsoleLog) {
+      originalConsoleLog = console.log;
+      originalConsoleWarn = console.warn;
+      originalConsoleError = console.error;
+      console.log = (...args: any[]) => {
+        originalConsoleLog?.(...args);
+        try {
+          const text = args.map(a => typeof a === 'string' ? a : JSON.stringify(clip(a, 800))).join(' ');
+          if (/\[RoyalCaribbeanSync\]|Sync|sync|Offer|Cruise|Settings|Overview|Booked|Performance/i.test(text)) {
+            recordDiagnosticEvent({ level: 'debug', category: text.includes('RoyalCaribbeanSync') || /sync/i.test(text) ? 'SYNC' : 'APP', event: 'CONSOLE_LOG', message: text });
+          }
+        } catch {}
+      };
+      console.warn = (...args: any[]) => {
+        originalConsoleWarn?.(...args);
+        try {
+          recordDiagnosticEvent({ level: 'warning', category: 'WARNING', event: 'CONSOLE_WARN', message: args.map(a => String(clip(a, 800))).join(' ') });
+        } catch {}
+      };
+      console.error = (...args: any[]) => {
+        originalConsoleError?.(...args);
+        try {
+          recordDiagnosticEvent({ level: 'error', category: 'ERROR', event: 'CONSOLE_ERROR', message: args.map(a => String(clip(a, 800))).join(' ') });
+        } catch {}
+      };
+    }
+
+    AsyncStorage.getItem(STORAGE_KEY).then((stored) => {
+      try {
+        if (!stored) return;
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) events = [...parsed.slice(-MAX_EVENTS), ...events].slice(-MAX_EVENTS);
+      } catch {}
+    }).catch(() => {});
+  } catch {
+    // Diagnostics must never be able to destabilize app startup.
+  }
+}
+
 export function recordDiagnosticEvent(input: Omit<DiagnosticEvent, 'ts'>) {
   try {
+    ensureLazyInit();
     if (isRateLimited()) return;
     const entry: DiagnosticEvent = {
       ts: new Date().toISOString(),
