@@ -16,6 +16,7 @@ import { getCalendarEventsWithGeneratedCruiseEvents, getNormalizedCruiseDateRang
 import { getBookedCruiseCasinoPoints } from '@/lib/casinoPointTruth';
 import { ResponsiveContainer } from '@/components/ResponsiveContainer';
 import { useCertificates } from '@/state/CertificatesProvider';
+import type { Certificate } from '@/components/CertificateManagerModal';
 import { IntelligenceFilterStrip } from '@/components/IntelligenceFilterStrip';
 import { useIntelligenceFilters } from '@/state/IntelligenceFiltersProvider';
 import { useUser } from '@/state/UserProvider';
@@ -84,7 +85,7 @@ export default function EventsScreen() {
   }, [bookedCruises, intelligenceFilterSnapshot, users]);
 
   const filteredCertificates = useMemo(() => {
-    return filterRecordsByIntelligence(certificates, intelligenceFilterSnapshot, users);
+    return filterRecordsByIntelligence(certificates as unknown as Array<Certificate & { ownerProfileId?: string; sourceEmail?: string; brand?: string; casinoProgram?: any }>, intelligenceFilterSnapshot, users);
   }, [certificates, intelligenceFilterSnapshot, users]);
 
   const filteredOffers = useMemo(() => {

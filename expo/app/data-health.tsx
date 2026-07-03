@@ -106,7 +106,7 @@ const styles = StyleSheet.create({
   eyebrow: { color: COLORS.gold, fontSize: 12, fontWeight: '900', letterSpacing: 1.1 },
   title: { color: COLORS.navyDeep, fontSize: 28, fontWeight: '900', marginTop: 4 },
   subtitle: { color: '#64748B', fontSize: 14, lineHeight: 20, marginTop: 6 },
-  statusCard: { flexDirection: 'row', gap: 12, alignItems: 'center', borderRadius: BORDER_RADIUS.xl, padding: SPACING.lg, marginBottom: SPACING.md, ...SHADOW.small },
+  statusCard: { flexDirection: 'row', gap: 12, alignItems: 'center', borderRadius: BORDER_RADIUS.xl, padding: SPACING.lg, marginBottom: SPACING.md, ...SHADOW.sm },
   warningCard: { backgroundColor: '#FEF3C7', borderWidth: 1, borderColor: '#F59E0B' },
   goodCard: { backgroundColor: '#ECFDF5', borderWidth: 1, borderColor: '#10B981' },
   statusCopy: { flex: 1 },

@@ -479,7 +479,7 @@ export function buildCountryVisits(cruises: BookedCruise[], filter: CruiseCountr
       const date = getPortDate(cruise, index, itineraryDay);
       const visitDate = safeDateFromString(date) ?? safeDateFromString(cruise.sailDate) ?? safeDateFromString(cruise.returnDate);
       const year = visitDate?.getFullYear() ?? NaN;
-      if (!country || !Number.isFinite(year)) {
+      if (!country || !visitDate || !Number.isFinite(year)) {
         skippedUnmappedPorts += 1;
         return;
       }

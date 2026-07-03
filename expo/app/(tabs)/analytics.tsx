@@ -18,18 +18,20 @@ import * as Sharing from 'expo-sharing';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { 
-  BarChart3, 
-  TrendingUp, 
-  Ship, 
-  DollarSign, 
-  Award, 
-  MapPin, 
+import {
+  BarChart3,
+  TrendingUp,
+  TrendingDown,
+  Ship,
+  DollarSign,
+  Award,
+  MapPin,
   Zap,
   PieChart,
   Coins,
   Target,
   ChevronDown,
+  ChevronRight,
   Brain,
   LineChart,
   Receipt,
@@ -40,6 +42,12 @@ import {
   Save,
   X,
   Ticket,
+  Info,
+  Clock,
+  CheckCircle,
+  AlertTriangle,
+  Activity,
+  ClipboardList,
 } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME, SHADOW } from '@/constants/theme';
 import { useSimpleAnalytics } from '@/state/SimpleAnalyticsProvider';
@@ -51,22 +59,22 @@ import { formatCurrency, formatCurrencyDetailed, formatNumber, formatPercentage 
 import { calculateCruiseValue } from '@/lib/valueCalculator';
 import { createDateFromString } from '@/lib/date';
 import { TierBadgeGroup } from '@/components/ui/TierBadge';
-import { 
-  CLUB_ROYALE_TIERS, 
+import {
+  CLUB_ROYALE_TIERS,
   getTierProgress
 } from '@/constants/clubRoyaleTiers';
-import { 
+import {
   getLevelProgress
 } from '@/constants/crownAnchor';
-import { DOLLARS_PER_POINT, type BookedCruise } from '@/types/models';
+import { DOLLARS_PER_POINT, type BookedCruise, type CasinoOffer } from '@/types/models';
 import { isRoyalCaribbeanShip } from '@/constants/shipInfo';
 import { getImageForDestination, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
 import { buildCruiseDetailsParams } from '@/lib/navigation/cruiseDetails';
 import { TierProgressionChart } from '@/components/charts/TierProgressionChart';
 import { ROIProjectionChart } from '@/components/charts/ROIProjectionChart';
 import { RiskAnalysisChart } from '@/components/charts/RiskAnalysisChart';
-import { 
-  PlayerContext, 
+import {
+  PlayerContext,
   runSimulation
 } from '@/lib/whatIfSimulator';
 import { useAlerts } from '@/state/AlertsProvider';
@@ -107,8 +115,9 @@ import {
   getBookedCruiseCasinoPoints,
   normalizeCruiseCasinoPerformance,
 } from '@/lib/casinoPointTruth';
+import { buildDataHealthSummary, isActiveUpcomingCruise } from '@/lib/easySeasAdvisor';
 
-type AnalyticsTab = 'intelligence' | 'charts' | 'session' | 'calcs';
+type AnalyticsTab = 'portfolio' | 'value' | 'action' | 'history';
 type ROIFilter = 'all' | 'high' | 'medium' | 'low';
 
 type CruisePerformanceForm = {
@@ -119,6 +128,14 @@ type CruisePerformanceForm = {
   instantCertificateValue: string;
   instantCertificateNotes: string;
 };
+
+type DetailModalRow = { label: string; value: string };
+
+type DetailModalState = {
+  title: string;
+  subtitle?: string;
+  rows: DetailModalRow[];
+} | null;
 
 const EMPTY_PERFORMANCE_FORM: CruisePerformanceForm = {
   winLoss: '',
@@ -149,8 +166,8 @@ function calculateCruiseROI(cruise: BookedCruise): { roi: number; valuePerDollar
 
   const breakdown = calculateCruiseValue(cruise);
   return {
-    roi: breakdown.trueOutOfPocket > 0 
-      ? (breakdown.totalProfit / breakdown.trueOutOfPocket) * 100 
+    roi: breakdown.trueOutOfPocket > 0
+      ? (breakdown.totalProfit / breakdown.trueOutOfPocket) * 100
       : (breakdown.totalProfit > 0 ? 1000 : 0),
     valuePerDollar: breakdown.valuePerDollar === Infinity ? 9999 : breakdown.valuePerDollar
   };
@@ -162,16 +179,24 @@ function getCruiseROILevel(roi: number): 'high' | 'medium' | 'low' {
   return 'low';
 }
 
+function formatTotalMinutes(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  if (hours === 0) return `${mins}m`;
+  if (mins === 0) return `${hours}h`;
+  return `${hours}h ${mins}m`;
+}
+
 export default function AnalyticsScreen() {
   useEntitlement();
   const router = useRouter();
   const { authenticatedEmail } = useAuth();
   const { analytics, casinoAnalytics } = useSimpleAnalytics();
-  const { 
-    activeAlerts, 
-    insights, 
-    dismissAlert, 
-    snoozeAlert, 
+  const {
+    activeAlerts,
+    insights,
+    dismissAlert,
+    snoozeAlert,
     clearAllAlerts,
     runDetection,
   } = useAlerts();
@@ -181,6 +206,8 @@ export default function AnalyticsScreen() {
     isLoading: storeLoading,
     updateBookedCruise,
     addBookedCruise,
+    cruises: availableCruises,
+    casinoOffers,
   } = useCoreData();
   const {
     clubRoyalePoints: loyaltyClubRoyalePoints,
@@ -193,8 +220,8 @@ export default function AnalyticsScreen() {
     crownAnchorPoints: loyaltyCrownAnchorPoints,
     crownAnchorLevel: loyaltyCrownAnchorLevel,
   } = useLoyalty();
-  
-  const [activeTab, setActiveTab] = useState<AnalyticsTab>('intelligence');
+
+  const [activeTab, setActiveTab] = useState<AnalyticsTab>('portfolio');
   const [roiFilter, setRoiFilter] = useState<ROIFilter>('high');
   const [refreshing, setRefreshing] = useState(false);
   const [showAllCruises, setShowAllCruises] = useState(false);
@@ -211,7 +238,8 @@ export default function AnalyticsScreen() {
   const [isGeneratingSessions, setIsGeneratingSessions] = useState(false);
   const [selectedPerformanceCruise, setSelectedPerformanceCruise] = useState<BookedCruise | null>(null);
   const [performanceForm, setPerformanceForm] = useState<CruisePerformanceForm>(EMPTY_PERFORMANCE_FORM);
-  
+  const [detailModal, setDetailModal] = useState<DetailModalState>(null);
+
   const {
     sessions,
     addSession,
@@ -236,6 +264,13 @@ export default function AnalyticsScreen() {
     removeW2GRecord,
     compItems,
   } = useTax();
+
+  const showDetail = useCallback((title: string, rows: DetailModalRow[], subtitle?: string) => {
+    void haptics.trigger('selection');
+    setDetailModal({ title, subtitle, rows });
+  }, [haptics]);
+
+  const closeDetail = useCallback(() => setDetailModal(null), []);
 
   const sessionAnalytics = useMemo(() => {
     return getSessionAnalytics();
@@ -265,8 +300,6 @@ export default function AnalyticsScreen() {
     return [];
   }, [authenticatedEmail, localData.booked, storedBookedCruises]);
 
-
-
   const currentSeasonMetrics = useMemo(() => buildCurrentSeasonCasinoMetrics(bookedCruises), [bookedCruises]);
   const currentPoints = Math.max(loyaltyClubRoyalePoints, currentSeasonMetrics.points);
   const currentYearPoints = Math.max(clubRoyaleCurrentYearPoints, currentSeasonMetrics.points);
@@ -283,7 +316,6 @@ export default function AnalyticsScreen() {
   const resetDateLabel = clubRoyaleNextResetDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 
   const cruisesWithROI = useMemo(() => {
-    if (activeTab !== 'intelligence') return [] as (BookedCruise & { calculatedROI: number; valuePerDollar: number; roiLevel: 'high' | 'medium' | 'low' })[];
     const today = new Date();
     return bookedCruises
       .filter(cruise => {
@@ -291,7 +323,7 @@ export default function AnalyticsScreen() {
         const returnDate = cruise.returnDate ? createDateFromString(cruise.returnDate) : null;
         const isCompleted = returnDate ? returnDate < today : cruise.completionState === 'completed';
         if (!isCompleted) return false;
-        
+
         const points = getBookedCruiseCasinoPoints(cruise);
         const breakdown = calculateCruiseValue(cruise);
         return points > 0 || breakdown.taxesFees > 0 || breakdown.totalRetailValue > 0;
@@ -308,7 +340,7 @@ export default function AnalyticsScreen() {
       .sort((a, b) => {
         return b.valuePerDollar - a.valuePerDollar;
       });
-  }, [activeTab, bookedCruises]);
+  }, [bookedCruises]);
 
   const filteredCruises = useMemo(() => {
     if (roiFilter === 'all') return cruisesWithROI;
@@ -329,22 +361,11 @@ export default function AnalyticsScreen() {
   }, [cruisesWithROI]);
 
   const playerContext: PlayerContext = useMemo(() => {
-    if (activeTab !== 'charts') {
-      return {
-        currentPoints: 0,
-        currentNights: 0,
-        currentTier: 'Choice',
-        currentLevel: 'Gold',
-        averagePointsPerNight: 0,
-        averageNightsPerMonth: 0,
-        averageSpendPerCruise: 0,
-      };
-    }
     const avgPointsPerNight = bookedCruises.length > 0
-      ? bookedCruises.reduce((sum, c) => sum + getBookedCruiseCasinoPoints(c), 0) / 
+      ? bookedCruises.reduce((sum, c) => sum + getBookedCruiseCasinoPoints(c), 0) /
         Math.max(1, bookedCruises.reduce((sum, c) => sum + (c.nights || 0), 0))
       : 150;
-    
+
     const avgSpend = bookedCruises.length > 0
       ? bookedCruises.reduce((sum, c) => sum + (c.totalPrice || c.price || 0), 0) / bookedCruises.length
       : 2000;
@@ -358,7 +379,7 @@ export default function AnalyticsScreen() {
       averageNightsPerMonth: 7,
       averageSpendPerCruise: avgSpend || 2000,
     };
-  }, [activeTab, currentPoints, totalNights, clubRoyaleTier, crownAnchorLevel, bookedCruises]);
+  }, [currentPoints, totalNights, clubRoyaleTier, crownAnchorLevel, bookedCruises]);
 
   const baselineSimulation = useMemo(() => {
     return runSimulation(playerContext, bookedCruises, { type: 'custom', customPoints: 0, customNights: 0 });
@@ -395,7 +416,6 @@ export default function AnalyticsScreen() {
     ];
   }, []);
 
-
   const handleAddSession = useCallback(async (sessionData: {
     startTime: string;
     endTime: string;
@@ -421,19 +441,19 @@ export default function AnalyticsScreen() {
       denomination: sessionData.denomination,
       pointsEarned: sessionData.pointsEarned,
     });
-    
+
     await updateStreakFromSession(todayDateString);
-    
+
     await updateWeeklyGoalProgress('sessions', 1);
     await updateWeeklyGoalProgress('time', sessionData.durationMinutes);
     if (sessionData.pointsEarned) {
       await updateWeeklyGoalProgress('points', sessionData.pointsEarned);
     }
-    
+
     const newTotalSessions = sessions.length + 1;
     const totalPoints = sessions.reduce((sum, s) => sum + (s.pointsEarned || 0), 0) + (sessionData.pointsEarned || 0);
     const jackpotCount = sessions.filter(s => s.jackpotHit).length;
-    
+
     const unlockedAchievements = await checkAndUnlockAchievements({
       totalSessions: newTotalSessions,
       totalPoints,
@@ -443,7 +463,7 @@ export default function AnalyticsScreen() {
       sessionTime: sessionData.startTime,
       currentStreak: streak.currentDailyStreak + 1,
     });
-    
+
     if (unlockedAchievements.length > 0) {
       void haptics.success();
       setCelebrationData({
@@ -453,11 +473,10 @@ export default function AnalyticsScreen() {
       });
       setShowCelebration(true);
     }
-    
+
     setShowAddSessionModal(false);
     console.log('[Analytics] Session added with gamification:', sessionData);
   }, [addSession, todayDateString, updateStreakFromSession, updateWeeklyGoalProgress, checkAndUnlockAchievements, sessions, streak.currentDailyStreak, haptics]);
-
 
   getTierProgress(currentPoints, clubRoyaleTier);
   getLevelProgress(totalNights, crownAnchorLevel);
@@ -512,7 +531,7 @@ export default function AnalyticsScreen() {
       instantCertificateValue: typeof cruise.instantCertificateValue === 'number' && Number.isFinite(cruise.instantCertificateValue) ? String(cruise.instantCertificateValue) : '',
       instantCertificateNotes: cruise.instantCertificateNotes ?? '',
     });
-    void haptics.selection();
+    void haptics.trigger('selection');
   }, [haptics]);
 
   const openCruisePerformanceEditorById = useCallback((cruiseId: string) => {
@@ -690,7 +709,6 @@ export default function AnalyticsScreen() {
   }, []);
 
   const stats = useMemo(() => {
-    if (activeTab !== 'intelligence') return [] as { label: string; value: string; icon: any; color?: string }[];
     return [
       { label: 'Cruises', value: cruiseEconomicsSummary.totals.cruises.toString(), icon: Ship },
       { label: 'Status Tier', value: clubRoyaleTier, icon: Award },
@@ -705,10 +723,9 @@ export default function AnalyticsScreen() {
         icon: DollarSign,
       },
     ];
-  }, [activeTab, clubRoyaleTier, cruiseEconomicsSummary, currentYearPoints, historicalPoints]);
+  }, [clubRoyaleTier, cruiseEconomicsSummary, currentYearPoints, historicalPoints]);
 
   const perCruisePointsBreakdown = useMemo(() => {
-    if (activeTab !== 'intelligence') return [] as { id: string; shipName: string; sailDate: string; nights: number; cruiseSource: string; casinoPoints: number; loyaltyPoints: number; casinoLabel: string; loyaltyLabel: string }[];
     const today = new Date();
     return bookedCruises
       .filter(cruise => {
@@ -744,7 +761,162 @@ export default function AnalyticsScreen() {
         };
       })
       .sort((a, b) => createDateFromString(b.sailDate).getTime() - createDateFromString(a.sailDate).getTime());
-  }, [activeTab, bookedCruises]);
+  }, [bookedCruises]);
+
+  const shipPerformance = useMemo(() => {
+    const map = new Map<string, { ship: string; cruises: number; nights: number; paid: number; retail: number; cashResult: number; totalEconomic: number; points: number }>();
+    cruiseEconomicsSummary.rows.forEach((row) => {
+      const key = row.ship || 'Unknown Ship';
+      const existing = map.get(key) ?? { ship: key, cruises: 0, nights: 0, paid: 0, retail: 0, cashResult: 0, totalEconomic: 0, points: 0 };
+      existing.cruises += 1;
+      existing.nights += row.nights;
+      existing.paid += row.paid;
+      existing.retail += row.retail;
+      existing.cashResult += row.netCash;
+      existing.totalEconomic += row.totalEconomic;
+      existing.points += row.points;
+      map.set(key, existing);
+    });
+    return Array.from(map.values())
+      .map((entry) => ({
+        ...entry,
+        valuePerDollar: entry.paid > 0 ? entry.totalEconomic / entry.paid : 0,
+      }))
+      .sort((a, b) => b.totalEconomic - a.totalEconomic)
+      .slice(0, 8);
+  }, [cruiseEconomicsSummary.rows]);
+
+  const dataHealthSummary = useMemo(
+    () => buildDataHealthSummary(availableCruises ?? [], bookedCruises, casinoOffers ?? []),
+    [availableCruises, bookedCruises, casinoOffers],
+  );
+  const dataHealthIssueCount = dataHealthSummary.duplicateAvailableRows + dataHealthSummary.duplicateOfferCodes + dataHealthSummary.possiblyMisclassifiedUpcoming;
+
+  const upcomingCruisesList = useMemo(() => {
+    const today = new Date();
+    return bookedCruises
+      .filter((cruise) => isActiveUpcomingCruise(cruise))
+      .sort((a, b) => createDateFromString(a.sailDate).getTime() - createDateFromString(b.sailDate).getTime())
+      .slice(0, 8)
+      .map((cruise) => {
+        const sail = createDateFromString(cruise.sailDate);
+        const daysUntil = Math.max(0, Math.round((sail.getTime() - today.getTime()) / 86400000));
+        return { cruise, daysUntil };
+      });
+  }, [bookedCruises]);
+
+  const expiringOffersList = useMemo(() => {
+    const now = Date.now();
+    const horizon = now + 45 * 86400000;
+    return (casinoOffers ?? [])
+      .map((offer: CasinoOffer) => {
+        const expiryRaw = offer.offerExpiryDate || offer.expiryDate || offer.expires || offer.validUntil;
+        const expiryDate = expiryRaw ? createDateFromString(expiryRaw) : null;
+        return { offer, expiryDate };
+      })
+      .filter((entry): entry is { offer: CasinoOffer; expiryDate: Date } => {
+        if (!entry.expiryDate || Number.isNaN(entry.expiryDate.getTime())) return false;
+        if (entry.offer.status === 'expired' || entry.offer.status === 'used') return false;
+        const time = entry.expiryDate.getTime();
+        return time >= now - 86400000 && time <= horizon;
+      })
+      .sort((a, b) => a.expiryDate.getTime() - b.expiryDate.getTime())
+      .slice(0, 6)
+      .map(({ offer, expiryDate }) => ({
+        id: offer.id,
+        title: offer.offerName || offer.title || offer.offerCode || 'Casino offer',
+        offerCode: offer.offerCode || '',
+        daysLeft: Math.max(0, Math.round((expiryDate.getTime() - now) / 86400000)),
+        expiryLabel: expiryDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }),
+      }));
+  }, [casinoOffers]);
+
+  const instantCertBank = useMemo(() => {
+    return bookedCruises
+      .filter((cruise) => cruise.instantCertificateWon)
+      .sort((a, b) => createDateFromString(b.sailDate).getTime() - createDateFromString(a.sailDate).getTime())
+      .slice(0, 10)
+      .map((cruise) => ({
+        id: cruise.id,
+        shipName: cruise.shipName || 'Unknown Ship',
+        sailDate: cruise.sailDate,
+        offerCode: cruise.instantCertificateOfferCode || '',
+        value: cruise.instantCertificateValue || 0,
+        notes: cruise.instantCertificateNotes || '',
+      }));
+  }, [bookedCruises]);
+
+  const actionChecklist = useMemo(() => {
+    const missingResultsCount = cruiseEconomicsSummary.rows.filter((row) => row.calculationConfidence !== 'actual').length;
+    return [
+      {
+        id: 'log-results',
+        label: missingResultsCount > 0 ? `Log actual win/loss + points for ${missingResultsCount} cruise(s)` : 'All completed cruises have logged results',
+        done: missingResultsCount === 0,
+        detail: 'Tap any row in the value ledger or a portfolio card to enter real numbers instead of estimates.',
+      },
+      {
+        id: 'upcoming',
+        label: upcomingCruisesList.length > 0 ? `${upcomingCruisesList.length} upcoming cruise(s) on the books` : 'No upcoming cruises booked',
+        done: upcomingCruisesList.length === 0,
+        detail: 'Review upcoming sailings below and confirm casino offer codes are attached.',
+      },
+      {
+        id: 'expiring',
+        label: expiringOffersList.length > 0 ? `${expiringOffersList.length} offer(s) expiring within 45 days` : 'No offers expiring soon',
+        done: expiringOffersList.length === 0,
+        detail: 'Book or extend the offers below before they expire.',
+      },
+      {
+        id: 'data-health',
+        label: dataHealthIssueCount > 0 ? `${dataHealthIssueCount} data-health signal(s) to review` : 'Data health looks clean',
+        done: dataHealthIssueCount === 0,
+        detail: 'Open Data Health to review duplicate rows or misclassified cruises.',
+      },
+    ];
+  }, [cruiseEconomicsSummary.rows, upcomingCruisesList, expiringOffersList, dataHealthIssueCount]);
+
+  const keepPlayingRecommendation = useMemo(() => {
+    const rows = cruiseEconomicsSummary.rows;
+    if (rows.length < 2) {
+      return {
+        verdict: 'not-enough-data' as const,
+        headline: 'Not enough completed cruises yet',
+        detail: 'Log results from at least 2 completed cruises to get a keep-playing recommendation.',
+        recentAvg: 0,
+        earlierAvg: 0,
+      };
+    }
+    const half = Math.floor(rows.length / 2);
+    const earlier = rows.slice(0, half);
+    const recent = rows.slice(half);
+    const avg = (list: typeof rows) => list.length > 0 ? list.reduce((sum, r) => sum + (r.netCash ?? 0), 0) / list.length : 0;
+    const earlierAvg = avg(earlier);
+    const recentAvg = avg(recent);
+    const trendDelta = recentAvg - earlierAvg;
+    const recentCashPositive = recentAvg >= 0;
+    const verdict: 'keep-playing' | 'watch-closely' | 'reassess' = recentCashPositive && trendDelta >= 0
+      ? 'keep-playing'
+      : recentCashPositive || trendDelta > -200
+        ? 'watch-closely'
+        : 'reassess';
+    const headline = verdict === 'keep-playing'
+      ? 'Keep playing at current pace'
+      : verdict === 'watch-closely'
+        ? 'Watch closely before your next trip'
+        : 'Reassess offers before booking again';
+    const detail = `Recent ${recent.length} cruise(s) averaged ${formatSignedCurrencyDetailed(recentAvg)} cash result vs ${formatSignedCurrencyDetailed(earlierAvg)} for the earlier ${earlier.length}. ${cruiseEconomicsSummary.totals.hasEstimates ? 'Some rows use estimated values.' : 'All rows use actual entered results.'}`;
+    return { verdict, headline, detail, recentAvg, earlierAvg };
+  }, [cruiseEconomicsSummary.rows, cruiseEconomicsSummary.totals.hasEstimates, formatSignedCurrencyDetailed]);
+
+  const pointsPerNightTrend = useMemo(() => {
+    return cruiseEconomicsSummary.rows.slice(-8).map((row) => ({
+      id: row.cruiseId,
+      ship: row.ship,
+      sailDate: row.sailDate,
+      pointsPerNight: row.pointsPerNight,
+    }));
+  }, [cruiseEconomicsSummary.rows]);
 
   const buildCasinoCruisesCsv = useCallback((cruises: BookedCruise[]): string => {
     console.log('[CasinoCruiseExport] Building CSV...', { cruiseCount: cruises.length });
@@ -981,11 +1153,11 @@ export default function AnalyticsScreen() {
     const economicsRow = cruiseEconomicsRowById.get(cruise.id);
     const winnings = economicsRow?.winningsHome ?? cruise.winnings ?? 0;
     const earnedPoints = economicsRow?.points ?? getBookedCruiseCasinoPoints(cruise);
-    
-    const roiColor = cruise.roiLevel === 'high' 
-      ? COLORS.success 
-      : cruise.roiLevel === 'medium' 
-        ? COLORS.warning 
+
+    const roiColor = cruise.roiLevel === 'high'
+      ? COLORS.success
+      : cruise.roiLevel === 'medium'
+        ? COLORS.warning
         : COLORS.error;
 
     const effectiveValuePerDollar = economicsRow && economicsRow.paid > 0
@@ -1003,30 +1175,30 @@ export default function AnalyticsScreen() {
       const startMonth = start.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' });
       const startDay = start.getDate();
       const startYear = start.getFullYear();
-      
+
       if (returnDate) {
         const end = createDateFromString(returnDate);
         const endMonth = end.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' });
         const endDay = end.getDate();
-        
+
         if (startMonth === endMonth) {
           return `${startMonth} ${startDay} - ${endDay}, ${startYear}`;
         }
         return `${startMonth} ${startDay} - ${endMonth} ${endDay}, ${startYear}`;
       }
-      
+
       if (nights) {
         const end = new Date(start);
         end.setDate(end.getDate() + nights);
         const endMonth = end.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' });
         const endDay = end.getDate();
-        
+
         if (startMonth === endMonth) {
           return `${startMonth} ${startDay} - ${endDay}, ${startYear}`;
         }
         return `${startMonth} ${startDay} - ${endMonth} ${endDay}, ${startYear}`;
       }
-      
+
       return `${startMonth} ${startDay}, ${startYear}`;
     };
 
@@ -1049,8 +1221,8 @@ export default function AnalyticsScreen() {
         activeOpacity={0.85}
       >
         <View style={styles.portfolioImageContainer}>
-          <Image 
-            source={{ uri: cruiseImage }} 
+          <Image
+            source={{ uri: cruiseImage }}
             style={styles.portfolioCardImage}
             resizeMode="cover"
             defaultSource={{ uri: DEFAULT_CRUISE_IMAGE }}
@@ -1076,15 +1248,15 @@ export default function AnalyticsScreen() {
               </Text>
             </View>
           </View>
-          
+
           <Text style={styles.portfolioCardItinerary} numberOfLines={1}>
             {getItineraryName()}
           </Text>
-          
+
           <Text style={styles.portfolioCardDestination} numberOfLines={1}>
             {cruise.departurePort ? `From ${cruise.departurePort}` : cruise.destination}
           </Text>
-          
+
           <View style={styles.portfolioCardMetaRow}>
             <View style={styles.portfolioCardMeta}>
               <Calendar size={12} color={COLORS.navyDeep} />
@@ -1094,7 +1266,7 @@ export default function AnalyticsScreen() {
             </View>
             <Text style={styles.portfolioCardNights}>{cruise.nights || 0}N</Text>
           </View>
-          
+
           <View style={styles.portfolioCardMetrics}>
             <View style={styles.portfolioMetric}>
               <Text style={styles.portfolioMetricLabel}>Retail</Text>
@@ -1117,7 +1289,7 @@ export default function AnalyticsScreen() {
               </Text>
             </View>
           </View>
-          
+
           {cruise.cabinType ? (
             <View style={styles.portfolioCardFooter}>
               <Text style={styles.portfolioCardCabin}>{cruise.cabinType}</Text>
@@ -1150,15 +1322,23 @@ export default function AnalyticsScreen() {
     );
   };
 
-  const renderIntelligenceTab = () => (
+  const renderPortfolioTab = () => (
     <View style={styles.tabContent}>
       <View style={styles.quickStatsRow}>
         {stats.map((stat, index) => (
-          <View key={index} style={styles.quickStatItem}>
-            <stat.icon size={16} color={stat.color || COLORS.navyDeep} />
-            <Text style={[styles.quickStatValue, stat.color && { color: stat.color }]}>{stat.value}</Text>
+          <TouchableOpacity
+            key={index}
+            style={styles.quickStatItem}
+            activeOpacity={0.7}
+            onPress={() => showDetail(stat.label, [
+              { label: 'Value', value: stat.value },
+              { label: 'Source', value: stat.label === 'Cruises' ? 'Count of completed cruises in the value ledger below.' : stat.label === 'Status Tier' ? 'Your current Club Royale tier from loyalty sync or manual entry.' : stat.label === 'Current Pts' ? 'Current-season points, resets every April 1.' : 'Lifetime historical points earned, never resets.' },
+            ])}
+          >
+            <stat.icon size={16} color={(stat as { color?: string }).color || COLORS.navyDeep} />
+            <Text style={styles.quickStatValue}>{stat.value}</Text>
             <Text style={styles.quickStatLabel}>{stat.label}</Text>
-          </View>
+          </TouchableOpacity>
         ))}
       </View>
 
@@ -1233,44 +1413,258 @@ export default function AnalyticsScreen() {
       </View>
 
       <View style={styles.section}>
+        <TierProgressionChart
+          playerContext={playerContext}
+          bookedCruises={bookedCruises}
+          monthsAhead={24}
+        />
+      </View>
+
+      {shipPerformance.length > 0 && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ship size={16} color={COLORS.navyDeep} />
+            <Text style={styles.sectionTitle}>Ship-by-Ship Performance</Text>
+          </View>
+          <View style={{ gap: SPACING.sm }}>
+            {shipPerformance.map((ship) => (
+              <TouchableOpacity
+                key={ship.ship}
+                style={styles.shipCard}
+                activeOpacity={0.8}
+                onPress={() => showDetail(`${ship.ship} performance`, [
+                  { label: 'Completed cruises', value: String(ship.cruises) },
+                  { label: 'Total nights', value: String(ship.nights) },
+                  { label: 'Retail value', value: formatCurrencyDetailed(ship.retail) },
+                  { label: 'Amount paid', value: formatCurrencyDetailed(ship.paid) },
+                  { label: 'Cash result', value: formatSignedCurrencyDetailed(ship.cashResult) },
+                  { label: 'Total economic value', value: formatSignedCurrencyDetailed(ship.totalEconomic) },
+                  { label: 'Points earned', value: formatNumber(ship.points) },
+                  { label: 'Value per dollar', value: `${ship.valuePerDollar.toFixed(2)}x` },
+                ], 'Tap any ship on this list to see the full breakdown.')}
+              >
+                <View style={styles.shipCardTop}>
+                  <Text style={styles.shipCardName} numberOfLines={1}>{ship.ship}</Text>
+                  <View style={styles.shipCardBadge}>
+                    <Text style={styles.shipCardBadgeText}>{ship.cruises} {ship.cruises === 1 ? 'cruise' : 'cruises'}</Text>
+                  </View>
+                </View>
+                <View style={styles.shipMetricsRow}>
+                  <View style={styles.shipMetric}>
+                    <Text style={styles.shipMetricLabel}>Paid</Text>
+                    <Text style={styles.shipMetricValue}>{formatCurrency(ship.paid)}</Text>
+                  </View>
+                  <View style={styles.shipMetric}>
+                    <Text style={styles.shipMetricLabel}>Cash Result</Text>
+                    <Text style={[styles.shipMetricValue, { color: ship.cashResult >= 0 ? COLORS.success : COLORS.error }]}>
+                      {formatSignedCurrencyDetailed(ship.cashResult)}
+                    </Text>
+                  </View>
+                  <View style={styles.shipMetric}>
+                    <Text style={styles.shipMetricLabel}>Total Econ</Text>
+                    <Text style={[styles.shipMetricValue, { color: ship.totalEconomic >= 0 ? COLORS.success : COLORS.error }]}>
+                      {formatSignedCurrencyDetailed(ship.totalEconomic)}
+                    </Text>
+                  </View>
+                  <View style={styles.shipMetric}>
+                    <Text style={styles.shipMetricLabel}>Value/$</Text>
+                    <Text style={styles.shipMetricValue}>{ship.valuePerDollar.toFixed(2)}x</Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      )}
+
+      <View style={styles.section}>
+        <TouchableOpacity
+          style={[styles.dataHealthCard, dataHealthIssueCount > 0 ? styles.dataHealthCardWarning : styles.dataHealthCardGood]}
+          activeOpacity={0.8}
+          onPress={() => router.push('/data-health' as any)}
+          testID="casino-data-health-indicator"
+        >
+          {dataHealthIssueCount > 0 ? <AlertTriangle size={20} color="#92400E" /> : <Activity size={20} color={COLORS.success} />}
+          <View style={styles.dataHealthTextBlock}>
+            <Text style={styles.dataHealthTitle}>{dataHealthIssueCount > 0 ? `${dataHealthIssueCount} data-health signal(s) found` : 'Data health looks clean'}</Text>
+            <Text style={styles.dataHealthSubtitle}>
+              {dataHealthSummary.completedCruises} completed · {dataHealthSummary.activeUpcoming} upcoming · {dataHealthSummary.royalOffers + dataHealthSummary.celebrityOffers} offers tracked
+            </Text>
+          </View>
+          <ChevronRight size={18} color={dataHealthIssueCount > 0 ? '#92400E' : COLORS.success} />
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.portfolioTitle}>Cruise Portfolio</Text>
+        <Text style={styles.portfolioHintText}>Tap any cruise row to add/edit win-loss, points earned, and instant certificate results.</Text>
+        {renderROIFilterTabs()}
+
+        {filteredCruises.length > 0 ? (
+          <View style={styles.portfolioList}>
+            {(showAllCruises ? filteredCruises.slice(0, 25) : filteredCruises.slice(0, 5)).map(renderPortfolioCard)}
+            {showAllCruises && filteredCruises.length > 25 && (
+              <View style={styles.portfolioLimitNotice}>
+                <Text style={styles.portfolioLimitText}>
+                  Showing top 25 of {filteredCruises.length} cruises (sorted by value)
+                </Text>
+              </View>
+            )}
+            {filteredCruises.length > 5 && (
+              <TouchableOpacity
+                style={styles.viewMoreButton}
+                activeOpacity={0.7}
+                onPress={() => setShowAllCruises(!showAllCruises)}
+              >
+                <Text style={styles.viewMoreText}>
+                  {showAllCruises ? 'Show fewer cruises' : `View ${Math.min(filteredCruises.length - 5, 20)} more cruises`}
+                </Text>
+                <ChevronDown
+                  size={16}
+                  color={COLORS.navyDeep}
+                  style={{ transform: [{ rotate: showAllCruises ? '180deg' : '0deg' }] }}
+                />
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : (
+          <View style={styles.emptyPortfolio}>
+            <Ship size={40} color={CLEAN_THEME.text.secondary} />
+            <Text style={styles.emptyPortfolioText}>No cruises match this filter</Text>
+          </View>
+        )}
+      </View>
+
+      {realAnalytics.destinationDistribution.length > 0 && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <MapPin size={16} color={COLORS.navyDeep} />
+            <Text style={styles.sectionTitle}>Top Destinations</Text>
+          </View>
+
+          <View style={styles.destinationsCard}>
+            {realAnalytics.destinationDistribution.slice(0, 5).map((item, index) => (
+              <View key={index} style={[styles.destinationRow, index === realAnalytics.destinationDistribution.slice(0, 5).length - 1 && { marginBottom: 0 }]}>
+                <View style={[styles.destinationRank, index === 0 && styles.destinationRankTop]}>
+                  <Text style={[styles.rankNumber, index === 0 && styles.rankNumberTop]}>{index + 1}</Text>
+                </View>
+                <View style={styles.destinationContent}>
+                  <View style={styles.destinationHeader}>
+                    <Text style={styles.destinationLabel}>{item.destination}</Text>
+                    <View style={styles.destinationBadge}>
+                      <Text style={styles.destinationValue}>
+                        {item.count} {item.count === 1 ? 'cruise' : 'cruises'}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
+    </View>
+  );
+
+  const renderValueTab = () => (
+    <View style={styles.tabContent}>
+      <View style={styles.section}>
         <View style={styles.cleanCard}>
           <View style={styles.cleanCardHeader}>
             <Receipt size={16} color={COLORS.navyDeep} />
-            <Text style={styles.cleanCardTitle}>Financial Overview</Text>
+            <Text style={styles.cleanCardTitle}>Cruise Value</Text>
           </View>
-          <View style={styles.dataGrid}>
-            <View style={styles.dataRow}>
-              <Text style={styles.dataLabel}>Retail Value</Text>
-              <Text style={[styles.dataValue, { color: COLORS.success }]}>{formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalRetail)}</Text>
-            </View>
-            <View style={styles.dataRow}>
-              <Text style={styles.dataLabel}>Amount Paid</Text>
-              <Text style={styles.dataValue}>{formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalPaid)}</Text>
-            </View>
-            <View style={styles.dataRow}>
-              <Text style={styles.dataLabel}>Cruise Value Captured</Text>
-              <Text style={[styles.dataValue, { color: COLORS.success }]}>{formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalCruiseValueCaptured)}</Text>
-            </View>
-            <View style={styles.dataRow}>
-              <Text style={styles.dataLabel}>Winnings Brought Home</Text>
-              <Text style={[styles.dataValue, { color: cruiseEconomicsSummary.totals.totalWinningsHome >= 0 ? COLORS.success : COLORS.error }]}>
-                {formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalWinningsHome)}
+          <View style={styles.valueHeroGrid}>
+            <TouchableOpacity
+              style={styles.valueHeroTile}
+              activeOpacity={0.75}
+              onPress={() => showDetail('Total Retail Value', [
+                { label: 'Formula', value: 'Sum of each completed cruise\'s retail cabin value' },
+                { label: 'Total', value: formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalRetailValue) },
+                { label: 'Cruises counted', value: String(cruiseEconomicsSummary.totals.cruises) },
+                { label: 'Data quality', value: cruiseEconomicsSummary.totals.hasEstimates ? 'Includes some estimated rows' : 'All actual entered values' },
+              ])}
+            >
+              <Text style={styles.valueHeroLabel}>Retail Value</Text>
+              <Text style={[styles.valueHeroValue, { color: COLORS.navyDeep }]} numberOfLines={1} adjustsFontSizeToFit>
+                {formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalRetailValue)}
               </Text>
-            </View>
-            <View style={styles.dataRow}>
-              <Text style={styles.dataLabel}>Cash Result</Text>
-              <Text style={[styles.dataValue, { color: cruiseEconomicsSummary.totals.totalCashResult >= 0 ? COLORS.success : COLORS.error }]}>
+              <Info size={12} color="#94A3B8" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.valueHeroTile}
+              activeOpacity={0.75}
+              onPress={() => showDetail('Total Cruise Value Captured', [
+                { label: 'Formula', value: 'Retail value minus the amount you actually paid, added up per cruise' },
+                { label: 'Total', value: formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalCruiseValueCaptured) },
+                { label: 'Also known as', value: 'Comp value / discount captured from casino offers' },
+              ])}
+            >
+              <Text style={styles.valueHeroLabel}>Comp Value</Text>
+              <Text style={[styles.valueHeroValue, { color: COLORS.success }]} numberOfLines={1} adjustsFontSizeToFit>
+                {formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalCruiseValueCaptured)}
+              </Text>
+              <Info size={12} color="#94A3B8" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.valueHeroTile}
+              activeOpacity={0.75}
+              onPress={() => showDetail('Total Cash Paid', [
+                { label: 'Formula', value: 'Sum of the net effective amount paid out of pocket for each completed cruise' },
+                { label: 'Total', value: formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalPaid) },
+                { label: 'Excludes', value: 'Coin-in / wagering volume, which is tracked separately' },
+              ])}
+            >
+              <Text style={styles.valueHeroLabel}>Cash Paid</Text>
+              <Text style={[styles.valueHeroValue, { color: COLORS.navyDeep }]} numberOfLines={1} adjustsFontSizeToFit>
+                {formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalPaid)}
+              </Text>
+              <Info size={12} color="#94A3B8" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.valueHeroTile}
+              activeOpacity={0.75}
+              onPress={() => showDetail('Total Net Make-Out (Cash Result)', [
+                { label: 'Formula', value: 'Winnings brought home minus the amount paid, per cruise' },
+                { label: 'Total', value: formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalCashResult) },
+                { label: 'Winnings home', value: formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalWinningsHome) },
+              ])}
+            >
+              <Text style={styles.valueHeroLabel}>Net Make-Out</Text>
+              <Text style={[styles.valueHeroValue, { color: cruiseEconomicsSummary.totals.totalCashResult >= 0 ? COLORS.success : COLORS.error }]} numberOfLines={1} adjustsFontSizeToFit>
                 {formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalCashResult)}
               </Text>
-            </View>
-            <View style={[styles.dataRow, styles.dataRowTotal]}>
-              <Text style={styles.dataTotalLabel}>Total Economic Value</Text>
-              <Text style={[styles.dataTotalValue, { color: cruiseEconomicsSummary.totals.totalEconomicValue >= 0 ? COLORS.success : COLORS.error }]}>
-                {formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalEconomicValue)}
+              <Info size={12} color="#94A3B8" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.valueHeroTile}
+              activeOpacity={0.75}
+              onPress={() => showDetail('Value Earned Per Dollar Spent', [
+                { label: 'Formula', value: 'Total economic value (retail + winnings - paid) divided by total cash paid' },
+                { label: 'Value', value: `${realAnalytics.valuePerDollar.toFixed(2)}x` },
+                { label: 'Cash ROI', value: `${cruiseEconomicsSummary.roiStyle.cashROI.toFixed(2)}x` },
+              ])}
+            >
+              <Text style={styles.valueHeroLabel}>Value / $ Spent</Text>
+              <Text style={[styles.valueHeroValue, { color: COLORS.goldDark }]} numberOfLines={1} adjustsFontSizeToFit>
+                {realAnalytics.valuePerDollar.toFixed(2)}x
               </Text>
-            </View>
+              <Info size={12} color="#94A3B8" />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.avgStatsRow}>
+            <Text style={styles.avgStatText}>
+              {cruiseEconomicsSummary.totals.hasEstimates ? 'Some numbers above include estimated rows where actual data was missing.' : 'All numbers above come from actual entered cruise results.'} Tap any tile to see exactly how it was calculated.
+            </Text>
           </View>
         </View>
+      </View>
+
+      <View style={styles.section}>
+        <CasinoMetricsCard
+          summary={cruiseEconomicsSummary}
+          alwaysExpanded={true}
+        />
       </View>
 
       {cruiseEconomicsSummary.rows.length > 0 && (
@@ -1281,7 +1675,7 @@ export default function AnalyticsScreen() {
                 <TrendingUp size={18} color={COLORS.navyDeep} />
               </View>
               <View style={styles.economicsHeaderContent}>
-                <Text style={styles.economicsTitle}>Cruise Economics</Text>
+                <Text style={styles.economicsTitle}>Full Value Ledger</Text>
                 <Text style={styles.economicsSubtitle}>Completed Royal Caribbean annual report with retail, paid, cruise value, winnings, cash result, and total economic value</Text>
               </View>
             </View>
@@ -1353,6 +1747,17 @@ export default function AnalyticsScreen() {
                       style={[styles.economicsTableRow, isLastVisibleRow && styles.economicsTableRowLast]}
                       activeOpacity={0.75}
                       onPress={() => openCruisePerformanceEditorById(row.cruiseId)}
+                      onLongPress={() => showDetail(`${row.ship} — ${row.sailDate}`, [
+                        { label: 'Retail', value: formatCurrencyDetailed(row.retail) },
+                        { label: 'Paid', value: formatCurrencyDetailed(row.paid) },
+                        { label: 'Cruise value', value: formatCurrencyDetailed(row.discount) },
+                        { label: 'Points', value: formatNumber(row.points) },
+                        { label: 'Winnings', value: formatSignedCurrencyDetailed(row.winningsHome) },
+                        { label: 'Cash result', value: formatSignedCurrencyDetailed(row.netCash) },
+                        { label: 'Total economic value', value: formatSignedCurrencyDetailed(row.totalEconomic) },
+                        { label: 'Confidence', value: confidenceLabel },
+                        ...(row.notes ? [{ label: 'Notes', value: row.notes }] : []),
+                      ], 'Tap the row to edit, or long-press to see the calculation notes.')}
                       testID={`casino-economics-row-${row.cruiseId}`}
                     >
                       <Text style={[styles.economicsCell, styles.economicsDateCell]}>{row.sailDate}</Text>
@@ -1503,364 +1908,156 @@ export default function AnalyticsScreen() {
       )}
 
       <View style={styles.section}>
-        <View style={styles.cleanCard}>
-          <View style={styles.cleanCardHeader}>
-            <PieChart size={16} color={COLORS.goldDark} />
-            <Text style={styles.cleanCardTitle}>Historical Annual Casino Summary</Text>
-          </View>
-          <View style={styles.annualSummaryHero}>
-            <Text style={styles.annualSummaryHeroLabel}>Cash Result</Text>
-            <Text
-              style={[
-                styles.annualSummaryHeroValue,
-                { color: cruiseEconomicsSummary.totals.totalCashResult >= 0 ? COLORS.success : COLORS.error },
-              ]}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-            >
-              {formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalCashResult)}
-            </Text>
-            <Text style={styles.annualSummaryHeroSubtext}>
-              {formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalWinningsHome)} winnings home minus {formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalPaid)} paid
-            </Text>
-          </View>
-
-          <View style={styles.annualSummaryGrid}>
-            {[
-              { label: 'Retail Value', value: formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalRetailValue), color: COLORS.navyDeep },
-              { label: 'Cruise Value Captured', value: formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalCruiseValueCaptured), color: COLORS.success },
-              { label: 'Total Economic Value', value: formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalEconomicValue), color: COLORS.success },
-              { label: 'Total Points', value: formatNumber(cruiseEconomicsSummary.totals.totalPoints), color: COLORS.navyDeep },
-            ].map((metric) => (
-              <View key={metric.label} style={styles.annualSummaryMetric}>
-                <Text style={styles.annualSummaryMetricLabel}>{metric.label}</Text>
-                <Text style={[styles.annualSummaryMetricValue, { color: metric.color }]} numberOfLines={1} adjustsFontSizeToFit>
-                  {metric.value}
-                </Text>
-              </View>
-            ))}
-          </View>
-          {cruiseEconomicsSummary.totals.cruises > 0 && (
-            <View style={styles.annualSummaryDetails}>
-              <View style={styles.annualSummaryDetailRow}>
-                <Text style={styles.annualSummaryDetailLabel}>Per cruise average</Text>
-                <Text style={styles.annualSummaryDetailValue}>
-                  {formatCurrencyDetailed(cruiseEconomicsSummary.averages.paidPerCruise)} paid • {formatCurrencyDetailed(cruiseEconomicsSummary.averages.winningsPerCruise)} won • {formatSignedCurrencyDetailed(cruiseEconomicsSummary.averages.netCashPerCruise)} cash
-                </Text>
-              </View>
-              <Text style={styles.annualSummaryFootnote}>
-                Historical totals stay fixed after the April 1 reset. Only the current-season point balance resets.
-              </Text>
-            </View>
-          )}
+        <View style={styles.sectionHeader}>
+          <LineChart size={16} color={COLORS.navyDeep} />
+          <Text style={styles.sectionTitle}>Future Value Projections</Text>
         </View>
-      </View>
-
-      <View style={styles.section}>
-        <CasinoMetricsCard
-          summary={cruiseEconomicsSummary}
-          alwaysExpanded={true}
-        />
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.portfolioTitle}>Cruise Portfolio</Text>
-        <Text style={styles.portfolioHintText}>Tap any cruise row to add/edit win-loss, points earned, and instant certificate results.</Text>
-        {renderROIFilterTabs()}
-        
-        {filteredCruises.length > 0 ? (
-          <View style={styles.portfolioList}>
-            {(showAllCruises ? filteredCruises.slice(0, 25) : filteredCruises.slice(0, 5)).map(renderPortfolioCard)}
-            {showAllCruises && filteredCruises.length > 25 && (
-              <View style={styles.portfolioLimitNotice}>
-                <Text style={styles.portfolioLimitText}>
-                  Showing top 25 of {filteredCruises.length} cruises (sorted by value)
-                </Text>
-              </View>
-            )}
-            {filteredCruises.length > 5 && (
-              <TouchableOpacity 
-                style={styles.viewMoreButton} 
-                activeOpacity={0.7}
-                onPress={() => setShowAllCruises(!showAllCruises)}
-              >
-                <Text style={styles.viewMoreText}>
-                  {showAllCruises ? 'Show fewer cruises' : `View ${Math.min(filteredCruises.length - 5, 20)} more cruises`}
-                </Text>
-                <ChevronDown 
-                  size={16} 
-                  color={COLORS.navyDeep} 
-                  style={{ transform: [{ rotate: showAllCruises ? '180deg' : '0deg' }] }}
-                />
-              </TouchableOpacity>
-            )}
-          </View>
-        ) : (
-          <View style={styles.emptyPortfolio}>
-            <Ship size={40} color={CLEAN_THEME.text.secondary} />
-            <Text style={styles.emptyPortfolioText}>No cruises match this filter</Text>
-          </View>
-        )}
-      </View>
-
-      {realAnalytics.destinationDistribution.length > 0 && (
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <MapPin size={16} color={COLORS.navyDeep} />
-            <Text style={styles.sectionTitle}>Top Destinations</Text>
-          </View>
-          
-          <View style={styles.destinationsCard}>
-            {realAnalytics.destinationDistribution.slice(0, 5).map((item, index) => (
-              <View key={index} style={[styles.destinationRow, index === realAnalytics.destinationDistribution.slice(0, 5).length - 1 && { marginBottom: 0 }]}>
-                <View style={[styles.destinationRank, index === 0 && styles.destinationRankTop]}>
-                  <Text style={[styles.rankNumber, index === 0 && styles.rankNumberTop]}>{index + 1}</Text>
-                </View>
-                <View style={styles.destinationContent}>
-                  <View style={styles.destinationHeader}>
-                    <Text style={styles.destinationLabel}>{item.destination}</Text>
-                    <View style={styles.destinationBadge}>
-                      <Text style={styles.destinationValue}>
-                        {item.count} {item.count === 1 ? 'cruise' : 'cruises'}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              </View>
-            ))}
-          </View>
-        </View>
-      )}
-
-      {perCruisePointsBreakdown.length > 0 && (
-        <View style={styles.section}>
-          <View style={styles.cleanCard}>
-            <View style={styles.cleanCardHeader}>
-              <Award size={16} color={COLORS.navyDeep} />
-              <Text style={styles.cleanCardTitle}>Historical Points Breakdown by Cruise</Text>
-            </View>
-            <View style={styles.pointsBreakdownLegend}>
-              <View style={styles.pointsBreakdownLegendItem}>
-                <View style={[styles.pointsBreakdownLegendDot, { backgroundColor: '#F59E0B' }]} />
-                <Text style={styles.pointsBreakdownLegendText}>Casino Points (Club Royale / Blue Chip)</Text>
-              </View>
-              <View style={styles.pointsBreakdownLegendItem}>
-                <View style={[styles.pointsBreakdownLegendDot, { backgroundColor: '#3B82F6' }]} />
-                <Text style={styles.pointsBreakdownLegendText}>{"Cruise Loyalty (Crown & Anchor / Captain's Club)"}</Text>
-              </View>
-            </View>
-            {perCruisePointsBreakdown.slice(0, showAllCruises ? 50 : 10).map((entry) => {
-              const sailDate = createDateFromString(entry.sailDate);
-              const dateStr = sailDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
-              const _sourceColor = entry.cruiseSource === 'royal' ? COLORS.navyDeep : entry.cruiseSource === 'celebrity' ? '#1E3A5F' : '#0D47A1';
-              return (
-                <TouchableOpacity
-                  key={entry.id}
-                  style={styles.pointsBreakdownRow}
-                  activeOpacity={0.75}
-                  onPress={() => openCruisePerformanceEditorById(entry.id)}
-                  testID={`points-breakdown-row-${entry.id}`}
-                >
-                  <View style={styles.pointsBreakdownShipCol}>
-                    <Text style={styles.pointsBreakdownShipName} numberOfLines={1}>{entry.shipName}</Text>
-                    <Text style={styles.pointsBreakdownDate}>{dateStr} · {entry.nights}N · Tap to edit casino results</Text>
-                  </View>
-                  <View style={styles.pointsBreakdownValuesCol}>
-                    <View style={styles.pointsBreakdownValueRow}>
-                      <View style={[styles.pointsBreakdownValueDot, { backgroundColor: '#F59E0B' }]} />
-                      <Text style={styles.pointsBreakdownValueLabel}>{entry.casinoLabel}</Text>
-                      <Text style={[styles.pointsBreakdownValue, { color: '#92400E' }]}>{formatNumber(entry.casinoPoints)}</Text>
-                    </View>
-                    <View style={styles.pointsBreakdownValueRow}>
-                      <View style={[styles.pointsBreakdownValueDot, { backgroundColor: '#3B82F6' }]} />
-                      <Text style={styles.pointsBreakdownValueLabel}>{entry.loyaltyLabel}</Text>
-                      <Text style={[styles.pointsBreakdownValue, { color: '#1D4ED8' }]}>{formatNumber(entry.loyaltyPoints)}</Text>
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-            {perCruisePointsBreakdown.length > 10 && (
-              <TouchableOpacity
-                style={styles.viewMoreButton}
-                activeOpacity={0.7}
-                onPress={() => setShowAllCruises(!showAllCruises)}
-              >
-                <Text style={styles.viewMoreText}>
-                  {showAllCruises ? 'Show fewer' : `View all ${perCruisePointsBreakdown.length} cruises`}
-                </Text>
-                <ChevronDown
-                  size={16}
-                  color={COLORS.navyDeep}
-                  style={{ transform: [{ rotate: showAllCruises ? '180deg' : '0deg' }] }}
-                />
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-      )}
-
-      <View style={styles.section}>
-        <AlertsCard
-          alerts={activeAlerts}
-          insights={insights}
-          onDismiss={dismissAlert}
-          onSnooze={snoozeAlert}
-          onClearAll={clearAllAlerts}
-          maxAlerts={5}
-          showInsights={true}
-          title="Pattern Recognition & Alerts"
-        />
-      </View>
-
-      <View style={styles.section}>
-        <W2GTracker
-          records={w2gRecords}
-          onAddRecord={addW2GRecord}
-          onRemoveRecord={removeW2GRecord}
-        />
-      </View>
-
-      <View style={styles.section}>
-        <CompValueCalculator
-          initialItems={compItems}
-          onCompValueChange={(totalValue) => {
-            console.log('[Analytics] Comp value changed:', totalValue);
-          }}
+        <ROIProjectionChart
+          roiProjection={baselineSimulation.roiProjection}
+          comparisonROI={baselineSimulation.roiProjection.projectedROI}
+          totalSpent={realAnalytics.totalOutOfPocket}
+          totalRetailValue={realAnalytics.totalRetailValue}
+          totalCruiseValueCaptured={realAnalytics.totalCruiseValueCaptured}
+          totalCashResult={realAnalytics.completedCashResult}
+          totalEconomicValue={realAnalytics.completedEconomicValue}
         />
       </View>
     </View>
   );
 
-  const handleLiveSessionComplete = useCallback((data: {
-    durationMinutes: number;
-    pointsEarned: number;
-    pph: number;
-  }) => {
-    void handleAddSession({
-      startTime: new Date(Date.now() - data.durationMinutes * 60 * 1000).toTimeString().slice(0, 5),
-      endTime: new Date().toTimeString().slice(0, 5),
-      durationMinutes: data.durationMinutes,
-      pointsEarned: data.pointsEarned,
-      notes: `Live tracked session - ${data.pph.toFixed(0)} pts/hr`,
-    });
-  }, [handleAddSession]);
-
-  const handleGenerateHistoricalSessions = useCallback(async (forceRegenerate: boolean = false) => {
-    setIsGeneratingSessions(true);
-    try {
-      const today = new Date();
-      const annualEconomicsRows = cruiseEconomicsSummary.rows;
-      const annualEconomicsIds = new Set(annualEconomicsRows.map((row) => row.cruiseId));
-      const completedCruises = bookedCruises.filter(cruise => {
-        const returnDate = cruise.returnDate ? createDateFromString(cruise.returnDate) : null;
-        const isCompleted = returnDate ? returnDate < today : cruise.completionState === 'completed';
-        const cruisePoints = getBookedCruiseCasinoPoints(cruise);
-        const hasPointsData = cruisePoints > 0 || annualEconomicsIds.has(cruise.id);
-        
-        if (isCompleted && hasPointsData) {
-          console.log('[Analytics] Found completed cruise with points:', {
-            id: cruise.id,
-            shipName: cruise.shipName,
-            sailDate: cruise.sailDate,
-            earnedPoints: cruisePoints,
-            winningsBroughtHome: cruise.winningsBroughtHome ?? cruise.winnings,
-            cashResult: cruise.cashResult,
-          });
-        }
-        
-        return isCompleted && hasPointsData;
-      });
-
-      console.log('[Analytics] ========== SESSION GENERATION REPORT ==========');
-      console.log('[Analytics] Total booked cruises:', bookedCruises.length);
-      console.log('[Analytics] Completed cruises with points:', completedCruises.length);
-      console.log('[Analytics] Current total sessions:', sessions.length);
-      console.log('[Analytics] Cruises list:', completedCruises.map(c => `${c.shipName} (${c.sailDate}) - ${getBookedCruiseCasinoPoints(c)} pts`));
-      
-      const sessionsPerCruise = completedCruises.map(cruise => {
-        const existingSessions = sessions.filter(s => s.cruiseId === cruise.id);
-        return {
-          cruise: `${cruise.shipName} (${cruise.sailDate})`,
-          existingSessions: existingSessions.length,
-          willGenerate: existingSessions.length === 0,
-        };
-      });
-      
-      console.log('[Analytics] Sessions breakdown:', sessionsPerCruise);
-      console.log('[Analytics] ===============================================');
-      
-      const count = await generateHistoricalSessions(completedCruises, 400, forceRegenerate);
-      
-      console.log('[Analytics] Generated', count, 'new sessions');
-      console.log('[Analytics] Total sessions after generation:', sessions.length + count);
-      
-      if (count > 0) {
-        void haptics.success();
-        setCelebrationData({
-          title: forceRegenerate ? 'Sessions Regenerated!' : 'Historical Sessions Generated!',
-          subtitle: `Created ${count} session records from ${completedCruises.length} cruises`,
-          type: 'milestone',
-        });
-        setShowCelebration(true);
-      } else {
-        console.log('[Analytics] No new sessions generated. All', completedCruises.length, 'cruises already have sessions.');
-      }
-    } catch (error) {
-      console.error('[Analytics] Failed to generate historical sessions:', error);
-    } finally {
-      setIsGeneratingSessions(false);
-    }
-  }, [bookedCruises, cruiseEconomicsSummary.rows, generateHistoricalSessions, haptics, sessions]);
-
-  const renderSessionTab = () => (
+  const renderActionTab = () => (
     <View style={styles.tabContent}>
-      <View style={styles.section}>
-        <SessionsSummaryCard
-          analytics={sessionAnalytics}
-          sessions={sessions}
-          targetPPH={targetPPH}
-        />
-      </View>
-
-      <View style={styles.section}>
-        <View style={[styles.alertsBanner, { backgroundColor: 'rgba(0, 31, 63, 0.05)' }]}>
-          <View style={styles.alertsIconContainer}>
-            <Calendar size={20} color={COLORS.navyDeep} />
+      {upcomingCruisesList.length > 0 && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ship size={16} color={COLORS.navyDeep} />
+            <Text style={styles.sectionTitle}>Upcoming Cruises</Text>
           </View>
-          <View style={styles.alertsContent}>
-            <Text style={[styles.alertsTitle, { color: COLORS.navyDeep }]}>Calculate Past Sessions</Text>
-            <Text style={[styles.alertsDescription, { color: COLORS.navyDeep, opacity: 0.7 }]}>
-              Generate session history from completed cruises with points earned
-            </Text>
-          </View>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <TouchableOpacity
-              onPress={() => handleGenerateHistoricalSessions(true)}
-              style={[styles.regenerateButton, isGeneratingSessions && { opacity: 0.6 }]}
-              disabled={isGeneratingSessions}
-            >
-              <Text style={styles.regenerateButtonText}>
-                {isGeneratingSessions ? '...' : 'Regenerate'}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => handleGenerateHistoricalSessions(false)}
-              style={[styles.calculateButton, isGeneratingSessions && { opacity: 0.6 }]}
-              disabled={isGeneratingSessions}
-            >
-              <Text style={styles.calculateButtonText}>
-                {isGeneratingSessions ? 'Calculating...' : 'Calculate'}
-              </Text>
-            </TouchableOpacity>
+          <View style={{ gap: SPACING.sm }}>
+            {upcomingCruisesList.map(({ cruise, daysUntil }) => (
+              <TouchableOpacity
+                key={cruise.id}
+                style={styles.actionRow}
+                activeOpacity={0.8}
+                onPress={() => openCruiseDetailFromPortfolio(cruise)}
+              >
+                <View style={styles.actionRowIcon}>
+                  <Ship size={16} color={COLORS.navyDeep} />
+                </View>
+                <View style={styles.actionRowContent}>
+                  <Text style={styles.actionRowTitle} numberOfLines={1}>{cruise.shipName || 'Unknown Ship'}</Text>
+                  <Text style={styles.actionRowSubtitle} numberOfLines={1}>
+                    {cruise.sailDate} · {cruise.nights || 0}N · {cruise.offerCode || 'No offer code'}
+                  </Text>
+                </View>
+                <View style={styles.actionRowBadge}>
+                  <Text style={styles.actionRowBadgeText}>{daysUntil === 0 ? 'Today' : `${daysUntil}d`}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
           </View>
         </View>
+      )}
+
+      {expiringOffersList.length > 0 && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Clock size={16} color={COLORS.warning} />
+            <Text style={styles.sectionTitle}>Offers Expiring Soon</Text>
+          </View>
+          <View style={{ gap: SPACING.sm }}>
+            {expiringOffersList.map((offer) => (
+              <TouchableOpacity
+                key={offer.id}
+                style={styles.actionRow}
+                activeOpacity={0.8}
+                onPress={() => showDetail(offer.title, [
+                  { label: 'Offer code', value: offer.offerCode || '—' },
+                  { label: 'Expires', value: offer.expiryLabel },
+                  { label: 'Days left', value: String(offer.daysLeft) },
+                ])}
+              >
+                <View style={[styles.actionRowIcon, { backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
+                  <Clock size={16} color="#B45309" />
+                </View>
+                <View style={styles.actionRowContent}>
+                  <Text style={styles.actionRowTitle} numberOfLines={1}>{offer.title}</Text>
+                  <Text style={styles.actionRowSubtitle} numberOfLines={1}>{offer.offerCode || 'No code'} · Expires {offer.expiryLabel}</Text>
+                </View>
+                <View style={[styles.actionRowBadge, { backgroundColor: 'rgba(245, 158, 11, 0.18)' }]}>
+                  <Text style={[styles.actionRowBadgeText, { color: '#92400E' }]}>{offer.daysLeft}d</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      )}
+
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <ClipboardList size={16} color={COLORS.navyDeep} />
+          <Text style={styles.sectionTitle}>Today's Checklist</Text>
+        </View>
+        <View style={styles.cleanCard}>
+          {actionChecklist.map((item, index) => (
+            <TouchableOpacity
+              key={item.id}
+              style={[styles.checklistRow, index === actionChecklist.length - 1 && { marginBottom: 0, borderBottomWidth: 0 }]}
+              activeOpacity={0.7}
+              onPress={() => showDetail(item.label, [{ label: 'Detail', value: item.detail }])}
+            >
+              {item.done ? <CheckCircle size={18} color={COLORS.success} /> : <AlertTriangle size={18} color="#B45309" />}
+              <View style={styles.checklistTextBlock}>
+                <Text style={[styles.checklistText, item.done && styles.checklistTextDone]}>{item.label}</Text>
+                <Text style={styles.checklistDetail} numberOfLines={2}>{item.detail}</Text>
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
+
+      {instantCertBank.length > 0 && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ticket size={16} color="#047857" />
+            <Text style={styles.sectionTitle}>Instant Certificate Bank</Text>
+          </View>
+          <View style={{ gap: SPACING.sm }}>
+            {instantCertBank.map((cert) => (
+              <TouchableOpacity
+                key={cert.id}
+                style={styles.actionRow}
+                activeOpacity={0.8}
+                onPress={() => openCruisePerformanceEditorById(cert.id)}
+              >
+                <View style={[styles.actionRowIcon, { backgroundColor: '#ECFDF5' }]}>
+                  <Ticket size={16} color="#047857" />
+                </View>
+                <View style={styles.actionRowContent}>
+                  <Text style={styles.actionRowTitle} numberOfLines={1}>{cert.shipName} · {cert.offerCode || 'No code'}</Text>
+                  <Text style={styles.actionRowSubtitle} numberOfLines={1}>{cert.sailDate}{cert.notes ? ` · ${cert.notes}` : ''}</Text>
+                </View>
+                <View style={[styles.actionRowBadge, { backgroundColor: '#D1FAE5' }]}>
+                  <Text style={[styles.actionRowBadgeText, { color: '#047857' }]}>{formatCurrency(cert.value)}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      )}
 
       <View style={styles.section}>
         <LivePPHTracker
           targetPPH={targetPPH}
-          onSessionComplete={handleLiveSessionComplete}
+          onSessionComplete={(data) => {
+            void handleAddSession({
+              startTime: new Date(Date.now() - data.durationMinutes * 60 * 1000).toTimeString().slice(0, 5),
+              endTime: new Date().toTimeString().slice(0, 5),
+              durationMinutes: data.durationMinutes,
+              pointsEarned: data.pointsEarned,
+              notes: `Live tracked session - ${data.pph.toFixed(0)} pts/hr`,
+            });
+          }}
           historicalAvgPPH={sessionAnalytics.pointsPerHour}
         />
       </View>
@@ -1872,25 +2069,6 @@ export default function AnalyticsScreen() {
           targetPPH={targetPPH}
           onTargetChange={setTargetPPH}
         />
-      </View>
-
-      <View style={styles.section}>
-        <PointsPerHourCard 
-          analytics={sessionAnalytics} 
-          sessions={sessions}
-        />
-      </View>
-
-      <View style={styles.section}>
-        <PPHHistoryChart sessions={sessions} maxDataPoints={10} />
-      </View>
-
-      <View style={styles.section}>
-        <PPHSessionComparison sessions={sessions} />
-      </View>
-
-      <View style={styles.section}>
-        <PPHLeaderboard sessions={sessions} maxEntries={5} />
       </View>
 
       <View style={styles.section}>
@@ -1909,163 +2087,97 @@ export default function AnalyticsScreen() {
       </View>
 
       <View style={styles.section}>
-        <GamificationCard compact={false} showAchievements={false} />
-      </View>
-
-      <View style={styles.section}>
-        <CasinoIntelligenceCard 
-          analytics={sessionAnalytics} 
-          completedCruises={bookedCruises.filter(c => {
-            if (c.completionState === 'completed' || c.status === 'completed') return true;
-            if (c.returnDate) {
-              const returnDate = new Date(c.returnDate);
-              return returnDate < new Date();
-            }
-            return false;
-          })}
-          cruiseEconomicsSummary={cruiseEconomicsSummary}
+        <AlertsCard
+          alerts={activeAlerts}
+          insights={insights}
+          onDismiss={dismissAlert}
+          onSnooze={snoozeAlert}
+          onClearAll={clearAllAlerts}
+          maxAlerts={5}
+          showInsights={true}
+          title="Pattern Recognition & Alerts"
         />
       </View>
 
-      <View style={styles.sessionStatsSection}>
-        <View style={styles.sectionHeader}>
-          <Dices size={16} color={COLORS.navyDeep} />
-          <Text style={styles.sectionTitle}>Session Summary</Text>
-        </View>
-        
-        <View style={styles.sessionHistoryCard}>
-          <View style={styles.sessionHistoryRow}>
-            <Text style={styles.sessionHistoryLabel}>Total Sessions</Text>
-            <Text style={styles.sessionHistoryValue}>{sessions.length}</Text>
-          </View>
-          <View style={styles.sessionHistoryDivider} />
-          <View style={styles.sessionHistoryRow}>
-            <Text style={styles.sessionHistoryLabel}>Total Time Played</Text>
-            <Text style={styles.sessionHistoryValue}>
-              {formatTotalMinutes(sessionAnalytics.totalPlayTimeMinutes)}
-            </Text>
-          </View>
-          <View style={styles.sessionHistoryDivider} />
-          <View style={styles.sessionHistoryRow}>
-            <Text style={styles.sessionHistoryLabel}>Total Buy-In</Text>
-            <Text style={styles.sessionHistoryValue}>
-              {formatCurrency(sessionAnalytics.totalBuyIn)}
-            </Text>
-          </View>
-          <View style={styles.sessionHistoryDivider} />
-          <View style={styles.sessionHistoryRow}>
-            <Text style={styles.sessionHistoryLabel}>Net Win/Loss</Text>
-            <Text style={[
-              styles.sessionHistoryValue,
-              { color: sessionAnalytics.netWinLoss >= 0 ? COLORS.success : COLORS.error }
-            ]}>
-              {sessionAnalytics.netWinLoss >= 0 ? '+' : ''}{formatCurrency(sessionAnalytics.netWinLoss)}
-            </Text>
-          </View>
-          <View style={styles.sessionHistoryDivider} />
-          <View style={styles.sessionHistoryRow}>
-            <Text style={styles.sessionHistoryLabel}>Win Rate</Text>
-            <Text style={[
-              styles.sessionHistoryValue,
-              { color: sessionAnalytics.winRate >= 50 ? COLORS.success : COLORS.error }
-            ]}>
-              {sessionAnalytics.winRate.toFixed(1)}%
-            </Text>
-          </View>
-        </View>
+      <View style={styles.section}>
+        <CompValueCalculator
+          initialItems={compItems}
+          onCompValueChange={(totalValue) => {
+            console.log('[Analytics] Comp value changed:', totalValue);
+          }}
+        />
       </View>
-
-      {sessions.length > 0 && (
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Calendar size={16} color={COLORS.navyDeep} />
-            <Text style={styles.sectionTitle}>Recent Sessions ({sessions.length} total)</Text>
-            <Text style={styles.sortLabelText}>Sorted by Points (High to Low)</Text>
-          </View>
-          
-          <View style={styles.recentSessionsScrollContainer}>
-            {sessions
-              .sort((a, b) => (b.pointsEarned || 0) - (a.pointsEarned || 0))
-              .map((session) => {
-                const sessionPPH = session.pointsEarned && session.durationMinutes > 0 
-                  ? ((session.pointsEarned || 0) / session.durationMinutes) * 60 
-                  : 0;
-                
-                return (
-                  <TouchableOpacity
-                    key={session.id}
-                    style={styles.recentSessionCard}
-                    activeOpacity={0.7}
-                    onPress={() => {
-                      console.log('[Analytics] Session pressed:', session.id);
-                    }}
-                  >
-                    <View style={[
-                      styles.recentSessionIndicator,
-                      { backgroundColor: (session.winLoss || 0) >= 0 ? '#10B981' : '#EF4444' }
-                    ]} />
-                    <View style={styles.recentSessionContent}>
-                      <Text style={styles.recentSessionDate}>
-                        {new Date(session.date).toLocaleDateString('en-US', {
-                          timeZone: 'UTC', 
-                          month: 'short', 
-                          day: 'numeric',
-                          year: 'numeric'
-                        })}
-                      </Text>
-                      <Text style={styles.recentSessionTime}>
-                        {session.startTime} - {session.endTime}
-                      </Text>
-                      {session.winLoss !== undefined && (
-                        <Text style={[
-                          styles.recentSessionWinLoss,
-                          { color: session.winLoss >= 0 ? COLORS.success : COLORS.error }
-                        ]}>
-                          {session.winLoss >= 0 ? '+' : ''}{formatCurrency(session.winLoss)}
-                        </Text>
-                      )}
-                      {session.notes ? (
-                        <Text style={styles.recentSessionNotes} numberOfLines={2}>{session.notes}</Text>
-                      ) : null}
-                    </View>
-                    <View style={styles.recentSessionStats}>
-                      <View style={styles.recentSessionDuration}>
-                        <Text style={styles.recentSessionDurationText}>
-                          {formatTotalMinutes(session.durationMinutes)}
-                        </Text>
-                      </View>
-                      {session.pointsEarned !== undefined && session.pointsEarned > 0 && (
-                        <View style={styles.recentSessionPointsContainer}>
-                          <Text style={styles.recentSessionPoints}>
-                            {formatNumber(session.pointsEarned)} pts
-                          </Text>
-                          {sessionPPH > 0 && (
-                            <Text style={styles.recentSessionPPH}>
-                              {sessionPPH.toFixed(0)} pts/hr
-                            </Text>
-                          )}
-                        </View>
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-          </View>
-        </View>
-      )}
     </View>
   );
 
-  const formatTotalMinutes = (minutes: number): string => {
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    if (hours === 0) return `${mins}m`;
-    if (mins === 0) return `${hours}h`;
-    return `${hours}h ${mins}m`;
-  };
+  const handleGenerateHistoricalSessions = useCallback(async (forceRegenerate: boolean = false) => {
+    setIsGeneratingSessions(true);
+    try {
+      const today = new Date();
+      const annualEconomicsRows = cruiseEconomicsSummary.rows;
+      const annualEconomicsIds = new Set(annualEconomicsRows.map((row) => row.cruiseId));
+      const completedCruises = bookedCruises.filter(cruise => {
+        const returnDate = cruise.returnDate ? createDateFromString(cruise.returnDate) : null;
+        const isCompleted = returnDate ? returnDate < today : cruise.completionState === 'completed';
+        const cruisePoints = getBookedCruiseCasinoPoints(cruise);
+        const hasPointsData = cruisePoints > 0 || annualEconomicsIds.has(cruise.id);
+
+        if (isCompleted && hasPointsData) {
+          console.log('[Analytics] Found completed cruise with points:', {
+            id: cruise.id,
+            shipName: cruise.shipName,
+            sailDate: cruise.sailDate,
+            earnedPoints: cruisePoints,
+            winningsBroughtHome: cruise.winningsBroughtHome ?? cruise.winnings,
+            cashResult: cruise.cashResult,
+          });
+        }
+
+        return isCompleted && hasPointsData;
+      });
+
+      console.log('[Analytics] ========== SESSION GENERATION REPORT ==========');
+      console.log('[Analytics] Total booked cruises:', bookedCruises.length);
+      console.log('[Analytics] Completed cruises with points:', completedCruises.length);
+      console.log('[Analytics] Current total sessions:', sessions.length);
+      console.log('[Analytics] Cruises list:', completedCruises.map(c => `${c.shipName} (${c.sailDate}) - ${getBookedCruiseCasinoPoints(c)} pts`));
+
+      const sessionsPerCruise = completedCruises.map(cruise => {
+        const existingSessions = sessions.filter(s => s.cruiseId === cruise.id);
+        return {
+          cruise: `${cruise.shipName} (${cruise.sailDate})`,
+          existingSessions: existingSessions.length,
+          willGenerate: existingSessions.length === 0,
+        };
+      });
+
+      console.log('[Analytics] Sessions breakdown:', sessionsPerCruise);
+      console.log('[Analytics] ===============================================');
+
+      const count = await generateHistoricalSessions(completedCruises, 400, forceRegenerate);
+
+      console.log('[Analytics] Generated', count, 'new sessions');
+      console.log('[Analytics] Total sessions after generation:', sessions.length + count);
+
+      if (count > 0) {
+        void haptics.success();
+        setCelebrationData({
+          title: forceRegenerate ? 'Sessions Regenerated!' : 'Historical Sessions Generated!',
+          subtitle: `Created ${count} session records from ${completedCruises.length} cruises`,
+          type: 'milestone',
+        });
+        setShowCelebration(true);
+      } else {
+        console.log('[Analytics] No new sessions generated. All', completedCruises.length, 'cruises already have sessions.');
+      }
+    } catch (error) {
+      console.error('[Analytics] Failed to generate historical sessions:', error);
+    } finally {
+      setIsGeneratingSessions(false);
+    }
+  }, [bookedCruises, cruiseEconomicsSummary.rows, generateHistoricalSessions, haptics, sessions]);
 
   const historicalCruiseData = useMemo(() => {
-    if (activeTab !== 'calcs') return { totalCruises: 0, totalPoints: 0, totalSessions: 0, totalNights: 0, totalCoinIn: 0, totalWinLoss: 0, totalRetailValue: 0, totalTaxesFees: 0, totalEconomicValue: 0, cruises: [] as { id: string; shipName: string; sailDate: string; points: number; sessionCount: number; nights: number }[] };
     const cruiseData = cruiseEconomicsSummary.rows.map((row) => {
       const cruiseSessions = sessions.filter(s => s.cruiseId === row.cruiseId);
       return {
@@ -2092,11 +2204,9 @@ export default function AnalyticsScreen() {
       totalEconomicValue: cruiseEconomicsSummary.totals.totalEconomicValue,
       cruises: cruiseData,
     };
-  }, [activeTab, cruiseEconomicsSummary, sessions]);
+  }, [cruiseEconomicsSummary, sessions]);
 
   const highValueCalculations = useMemo(() => {
-    if (activeTab !== 'calcs') return [] as { id: number; label: string; value: string; description: string; color: string; icon: any }[];
-
     const isHistorical = calcsMode === 'historical';
     const assumedHold = 0.08;
     const pointDollarValue = 0.01;
@@ -2389,10 +2499,148 @@ export default function AnalyticsScreen() {
         },
       ] : []),
     ];
-  }, [activeTab, calcsMode, cruiseEconomicsSummary, sessions, sessionAnalytics, historicalCruiseData, currentSeasonMetrics]);
+  }, [calcsMode, cruiseEconomicsSummary, sessions, sessionAnalytics, historicalCruiseData, currentSeasonMetrics]);
 
-  const renderCalcsTab = () => (
+  const renderHistoryTab = () => (
     <View style={styles.tabContent}>
+      <View style={styles.section}>
+        <View style={[
+          styles.keepPlayingCard,
+          keepPlayingRecommendation.verdict === 'keep-playing' ? styles.keepPlayingCardGood
+            : keepPlayingRecommendation.verdict === 'watch-closely' ? styles.keepPlayingCardWatch
+              : keepPlayingRecommendation.verdict === 'reassess' ? styles.keepPlayingCardReassess
+                : styles.keepPlayingCardNeutral,
+        ]}>
+          <TouchableOpacity
+            style={styles.keepPlayingTouchable}
+            activeOpacity={0.8}
+            onPress={() => showDetail('Keep-playing recommendation', [
+              { label: 'Verdict', value: keepPlayingRecommendation.headline },
+              { label: 'Recent avg cash result', value: formatSignedCurrencyDetailed(keepPlayingRecommendation.recentAvg) },
+              { label: 'Earlier avg cash result', value: formatSignedCurrencyDetailed(keepPlayingRecommendation.earlierAvg) },
+              { label: 'Method', value: 'Compares the most recent half of completed cruises to the earlier half by cash result (winnings minus paid).' },
+            ])}
+          >
+            {keepPlayingRecommendation.verdict === 'keep-playing' ? <TrendingUp size={20} color={COLORS.success} />
+              : keepPlayingRecommendation.verdict === 'reassess' ? <TrendingDown size={20} color={COLORS.error} />
+                : <Activity size={20} color="#B45309" />}
+            <View style={styles.keepPlayingTextBlock}>
+              <Text style={styles.keepPlayingHeadline}>{keepPlayingRecommendation.headline}</Text>
+              <Text style={styles.keepPlayingDetail} numberOfLines={3}>{keepPlayingRecommendation.detail}</Text>
+            </View>
+            <Info size={14} color="#94A3B8" />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {perCruisePointsBreakdown.length > 0 && (
+        <View style={styles.section}>
+          <View style={styles.cleanCard}>
+            <View style={styles.cleanCardHeader}>
+              <Award size={16} color={COLORS.navyDeep} />
+              <Text style={styles.cleanCardTitle}>Historical Points &amp; Win/Loss Trends</Text>
+            </View>
+            <View style={styles.pointsBreakdownLegend}>
+              <View style={styles.pointsBreakdownLegendItem}>
+                <View style={[styles.pointsBreakdownLegendDot, { backgroundColor: '#F59E0B' }]} />
+                <Text style={styles.pointsBreakdownLegendText}>Casino Points (Club Royale / Blue Chip)</Text>
+              </View>
+              <View style={styles.pointsBreakdownLegendItem}>
+                <View style={[styles.pointsBreakdownLegendDot, { backgroundColor: '#3B82F6' }]} />
+                <Text style={styles.pointsBreakdownLegendText}>{"Cruise Loyalty (Crown & Anchor / Captain's Club)"}</Text>
+              </View>
+            </View>
+            {perCruisePointsBreakdown.slice(0, showAllCruises ? 50 : 10).map((entry) => {
+              const sailDate = createDateFromString(entry.sailDate);
+              const dateStr = sailDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+              return (
+                <TouchableOpacity
+                  key={entry.id}
+                  style={styles.pointsBreakdownRow}
+                  activeOpacity={0.75}
+                  onPress={() => openCruisePerformanceEditorById(entry.id)}
+                  testID={`points-breakdown-row-${entry.id}`}
+                >
+                  <View style={styles.pointsBreakdownShipCol}>
+                    <Text style={styles.pointsBreakdownShipName} numberOfLines={1}>{entry.shipName}</Text>
+                    <Text style={styles.pointsBreakdownDate}>{dateStr} · {entry.nights}N · Tap to edit casino results</Text>
+                  </View>
+                  <View style={styles.pointsBreakdownValuesCol}>
+                    <View style={styles.pointsBreakdownValueRow}>
+                      <View style={[styles.pointsBreakdownValueDot, { backgroundColor: '#F59E0B' }]} />
+                      <Text style={styles.pointsBreakdownValueLabel}>{entry.casinoLabel}</Text>
+                      <Text style={[styles.pointsBreakdownValue, { color: '#92400E' }]}>{formatNumber(entry.casinoPoints)}</Text>
+                    </View>
+                    <View style={styles.pointsBreakdownValueRow}>
+                      <View style={[styles.pointsBreakdownValueDot, { backgroundColor: '#3B82F6' }]} />
+                      <Text style={styles.pointsBreakdownValueLabel}>{entry.loyaltyLabel}</Text>
+                      <Text style={[styles.pointsBreakdownValue, { color: '#1D4ED8' }]}>{formatNumber(entry.loyaltyPoints)}</Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+            {perCruisePointsBreakdown.length > 10 && (
+              <TouchableOpacity
+                style={styles.viewMoreButton}
+                activeOpacity={0.7}
+                onPress={() => setShowAllCruises(!showAllCruises)}
+              >
+                <Text style={styles.viewMoreText}>
+                  {showAllCruises ? 'Show fewer' : `View all ${perCruisePointsBreakdown.length} cruises`}
+                </Text>
+                <ChevronDown
+                  size={16}
+                  color={COLORS.navyDeep}
+                  style={{ transform: [{ rotate: showAllCruises ? '180deg' : '0deg' }] }}
+                />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      )}
+
+      {pointsPerNightTrend.length > 0 && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <TrendingUp size={16} color={COLORS.navyDeep} />
+            <Text style={styles.sectionTitle}>Points-per-Night Trend</Text>
+          </View>
+          <View style={styles.cleanCard}>
+            {pointsPerNightTrend.map((entry, index) => {
+              const previous = pointsPerNightTrend[index - 1];
+              const delta = previous ? entry.pointsPerNight - previous.pointsPerNight : 0;
+              return (
+                <View key={entry.id} style={[styles.dataRow, index === pointsPerNightTrend.length - 1 && { paddingBottom: 0 }]}>
+                  <Text style={styles.dataLabel} numberOfLines={1}>{entry.ship} · {entry.sailDate}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Text style={styles.dataValue}>{entry.pointsPerNight.toFixed(1)}/night</Text>
+                    {index > 0 && (delta >= 0
+                      ? <TrendingUp size={13} color={COLORS.success} />
+                      : <TrendingDown size={13} color={COLORS.error} />)}
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      )}
+
+      <View style={styles.section}>
+        <CasinoIntelligenceCard
+          analytics={sessionAnalytics}
+          completedCruises={bookedCruises.filter(c => {
+            if (c.completionState === 'completed' || c.status === 'completed') return true;
+            if (c.returnDate) {
+              const returnDate = new Date(c.returnDate);
+              return returnDate < new Date();
+            }
+            return false;
+          })}
+          cruiseEconomicsSummary={cruiseEconomicsSummary}
+        />
+      </View>
+
       <View style={styles.section}>
         <View style={styles.calcsHeader}>
           <View style={styles.calcsHeaderContent}>
@@ -2400,7 +2648,7 @@ export default function AnalyticsScreen() {
               <Calculator size={20} color={COLORS.royalPurple} />
             </View>
             <View style={styles.calcsHeaderText}>
-              <Text style={styles.calcsHeaderTitle}>Casino Calculation Lab</Text>
+              <Text style={styles.calcsHeaderTitle}>What-If Simulator</Text>
               <Text style={styles.calcsHeaderSubtitle}>Coin-In stays gaming-only; value uses cash + cruise economics</Text>
             </View>
           </View>
@@ -2449,7 +2697,15 @@ export default function AnalyticsScreen() {
 
         <View style={styles.calcsGrid}>
           {highValueCalculations.map((calc) => (
-            <View key={calc.id} style={styles.calcCard}>
+            <TouchableOpacity
+              key={calc.id}
+              style={styles.calcCard}
+              activeOpacity={0.8}
+              onPress={() => showDetail(calc.label, [
+                { label: 'Value', value: calc.value },
+                { label: 'How it\'s calculated', value: calc.description },
+              ])}
+            >
               <View style={[styles.calcIconContainer, { backgroundColor: `${calc.color}15` }]}>
                 <calc.icon size={20} color={calc.color} />
               </View>
@@ -2458,47 +2714,9 @@ export default function AnalyticsScreen() {
                 <Text style={[styles.calcValue, { color: calc.color }]}>{calc.value}</Text>
                 <Text style={styles.calcDescription}>{calc.description}</Text>
               </View>
-            </View>
+            </TouchableOpacity>
           ))}
         </View>
-      </View>
-
-      <View style={styles.section}>
-        <View style={styles.calcsInsightCard}>
-          <View style={styles.calcsInsightHeader}>
-            <Brain size={18} color={COLORS.navyDeep} />
-            <Text style={styles.calcsInsightTitle}>Calculation Insights</Text>
-          </View>
-          <Text style={styles.calcsInsightText}>
-            These calculations provide deeper understanding of your casino play patterns and efficiency. 
-            High sustainability scores (70+) indicate stable offer patterns, while ADT smoothing factors 
-            below 0.3 suggest consistent play distribution.
-          </Text>
-        </View>
-      </View>
-    </View>
-  );
-
-  const renderChartsTab = () => (
-    <View style={styles.tabContent}>
-      <View style={styles.section}>
-        <TierProgressionChart
-          playerContext={playerContext}
-          bookedCruises={bookedCruises}
-          monthsAhead={24}
-        />
-      </View>
-
-      <View style={styles.section}>
-        <ROIProjectionChart
-          roiProjection={baselineSimulation.roiProjection}
-          comparisonROI={baselineSimulation.roiProjection.projectedROI}
-          totalSpent={realAnalytics.totalOutOfPocket}
-          totalRetailValue={realAnalytics.totalRetailValue}
-          totalCruiseValueCaptured={realAnalytics.totalCruiseValueCaptured}
-          totalCashResult={realAnalytics.completedCashResult}
-          totalEconomicValue={realAnalytics.completedEconomicValue}
-        />
       </View>
 
       <View style={styles.section}>
@@ -2513,6 +2731,218 @@ export default function AnalyticsScreen() {
           pointsEarned={historicalPoints}
         />
       </View>
+
+      <View style={styles.section}>
+        <SessionsSummaryCard
+          analytics={sessionAnalytics}
+          sessions={sessions}
+          targetPPH={targetPPH}
+        />
+      </View>
+
+      <View style={styles.section}>
+        <View style={[styles.alertsBanner, { backgroundColor: 'rgba(0, 31, 63, 0.05)' }]}>
+          <View style={styles.alertsIconContainer}>
+            <Calendar size={20} color={COLORS.navyDeep} />
+          </View>
+          <View style={styles.alertsContent}>
+            <Text style={[styles.alertsTitle, { color: COLORS.navyDeep }]}>Calculate Past Sessions</Text>
+            <Text style={[styles.alertsDescription, { color: COLORS.navyDeep, opacity: 0.7 }]}>
+              Generate session history from completed cruises with points earned
+            </Text>
+          </View>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity
+              onPress={() => handleGenerateHistoricalSessions(true)}
+              style={[styles.regenerateButton, isGeneratingSessions && { opacity: 0.6 }]}
+              disabled={isGeneratingSessions}
+            >
+              <Text style={styles.regenerateButtonText}>
+                {isGeneratingSessions ? '...' : 'Regenerate'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => handleGenerateHistoricalSessions(false)}
+              style={[styles.calculateButton, isGeneratingSessions && { opacity: 0.6 }]}
+              disabled={isGeneratingSessions}
+            >
+              <Text style={styles.calculateButtonText}>
+                {isGeneratingSessions ? 'Calculating...' : 'Calculate'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <PointsPerHourCard
+          analytics={sessionAnalytics}
+          sessions={sessions}
+        />
+      </View>
+
+      <View style={styles.section}>
+        <PPHHistoryChart sessions={sessions} maxDataPoints={10} />
+      </View>
+
+      <View style={styles.section}>
+        <PPHSessionComparison sessions={sessions} />
+      </View>
+
+      <View style={styles.section}>
+        <PPHLeaderboard sessions={sessions} maxEntries={5} />
+      </View>
+
+      <View style={styles.section}>
+        <GamificationCard compact={false} showAchievements={false} />
+      </View>
+
+      <View style={styles.sessionStatsSection}>
+        <View style={styles.sectionHeader}>
+          <Dices size={16} color={COLORS.navyDeep} />
+          <Text style={styles.sectionTitle}>Session Summary</Text>
+        </View>
+
+        <View style={styles.sessionHistoryCard}>
+          <View style={styles.sessionHistoryRow}>
+            <Text style={styles.sessionHistoryLabel}>Total Sessions</Text>
+            <Text style={styles.sessionHistoryValue}>{sessions.length}</Text>
+          </View>
+          <View style={styles.sessionHistoryDivider} />
+          <View style={styles.sessionHistoryRow}>
+            <Text style={styles.sessionHistoryLabel}>Total Time Played</Text>
+            <Text style={styles.sessionHistoryValue}>
+              {formatTotalMinutes(sessionAnalytics.totalPlayTimeMinutes)}
+            </Text>
+          </View>
+          <View style={styles.sessionHistoryDivider} />
+          <View style={styles.sessionHistoryRow}>
+            <Text style={styles.sessionHistoryLabel}>Total Buy-In</Text>
+            <Text style={styles.sessionHistoryValue}>
+              {formatCurrency(sessionAnalytics.totalBuyIn)}
+            </Text>
+          </View>
+          <View style={styles.sessionHistoryDivider} />
+          <View style={styles.sessionHistoryRow}>
+            <Text style={styles.sessionHistoryLabel}>Net Win/Loss</Text>
+            <Text style={[
+              styles.sessionHistoryValue,
+              { color: sessionAnalytics.netWinLoss >= 0 ? COLORS.success : COLORS.error }
+            ]}>
+              {sessionAnalytics.netWinLoss >= 0 ? '+' : ''}{formatCurrency(sessionAnalytics.netWinLoss)}
+            </Text>
+          </View>
+          <View style={styles.sessionHistoryDivider} />
+          <View style={styles.sessionHistoryRow}>
+            <Text style={styles.sessionHistoryLabel}>Win Rate</Text>
+            <Text style={[
+              styles.sessionHistoryValue,
+              { color: sessionAnalytics.winRate >= 50 ? COLORS.success : COLORS.error }
+            ]}>
+              {sessionAnalytics.winRate.toFixed(1)}%
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      {sessions.length > 0 && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Calendar size={16} color={COLORS.navyDeep} />
+            <Text style={styles.sectionTitle}>Recent Sessions ({sessions.length} total)</Text>
+            <Text style={styles.sortLabelText}>Sorted by Points (High to Low)</Text>
+          </View>
+
+          <View style={styles.recentSessionsScrollContainer}>
+            {sessions
+              .sort((a, b) => (b.pointsEarned || 0) - (a.pointsEarned || 0))
+              .map((session) => {
+                const sessionPPH = session.pointsEarned && session.durationMinutes > 0
+                  ? ((session.pointsEarned || 0) / session.durationMinutes) * 60
+                  : 0;
+
+                return (
+                  <TouchableOpacity
+                    key={session.id}
+                    style={styles.recentSessionCard}
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      console.log('[Analytics] Session pressed:', session.id);
+                    }}
+                  >
+                    <View style={[
+                      styles.recentSessionIndicator,
+                      { backgroundColor: (session.winLoss || 0) >= 0 ? '#10B981' : '#EF4444' }
+                    ]} />
+                    <View style={styles.recentSessionContent}>
+                      <Text style={styles.recentSessionDate}>
+                        {new Date(session.date).toLocaleDateString('en-US', {
+                          timeZone: 'UTC',
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric'
+                        })}
+                      </Text>
+                      <Text style={styles.recentSessionTime}>
+                        {session.startTime} - {session.endTime}
+                      </Text>
+                      {session.winLoss !== undefined && (
+                        <Text style={[
+                          styles.recentSessionWinLoss,
+                          { color: session.winLoss >= 0 ? COLORS.success : COLORS.error }
+                        ]}>
+                          {session.winLoss >= 0 ? '+' : ''}{formatCurrency(session.winLoss)}
+                        </Text>
+                      )}
+                      {session.notes ? (
+                        <Text style={styles.recentSessionNotes} numberOfLines={2}>{session.notes}</Text>
+                      ) : null}
+                    </View>
+                    <View style={styles.recentSessionStats}>
+                      <View style={styles.recentSessionDuration}>
+                        <Text style={styles.recentSessionDurationText}>
+                          {formatTotalMinutes(session.durationMinutes)}
+                        </Text>
+                      </View>
+                      {session.pointsEarned !== undefined && session.pointsEarned > 0 && (
+                        <View style={styles.recentSessionPointsContainer}>
+                          <Text style={styles.recentSessionPoints}>
+                            {formatNumber(session.pointsEarned)} pts
+                          </Text>
+                          {sessionPPH > 0 && (
+                            <Text style={styles.recentSessionPPH}>
+                              {sessionPPH.toFixed(0)} pts/hr
+                            </Text>
+                          )}
+                        </View>
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+          </View>
+        </View>
+      )}
+
+      <View style={styles.section}>
+        <W2GTracker
+          records={w2gRecords}
+          onAddRecord={addW2GRecord}
+          onRemoveRecord={removeW2GRecord}
+        />
+      </View>
+
+      <View style={styles.calcsInsightCard}>
+        <View style={styles.calcsInsightHeader}>
+          <Brain size={18} color={COLORS.navyDeep} />
+          <Text style={styles.calcsInsightTitle}>Calculation Insights</Text>
+        </View>
+        <Text style={styles.calcsInsightText}>
+          These calculations provide deeper understanding of your casino play patterns and efficiency.
+          High sustainability scores (70+) indicate stable offer patterns, while ADT smoothing factors
+          below 0.3 suggest consistent play distribution.
+        </Text>
+      </View>
     </View>
   );
 
@@ -2522,7 +2952,7 @@ export default function AnalyticsScreen() {
       style={styles.container}
     >
       <Stack.Screen options={{ headerShown: false }} />
-      
+
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <ResponsiveContainer>
           <View style={styles.header}>
@@ -2532,9 +2962,9 @@ export default function AnalyticsScreen() {
                 <Text style={styles.appTitle}>Analytics</Text>
               </View>
             </View>
-            
+
             <View style={styles.tierBadges}>
-              <TierBadgeGroup 
+              <TierBadgeGroup
                 clubRoyaleTier={clubRoyaleTier}
                 crownAnchorLevel={crownAnchorLevel}
                 size="small"
@@ -2543,53 +2973,53 @@ export default function AnalyticsScreen() {
           </View>
 
           <View style={styles.tabsContainer}>
-          <TouchableOpacity
-            style={[styles.tabButton, activeTab === 'intelligence' && styles.tabButtonActive]}
-            onPress={() => setActiveTab('intelligence')}
-            activeOpacity={0.7}
-          >
-            <Brain size={14} color={activeTab === 'intelligence' ? COLORS.white : CLEAN_THEME.text.secondary} />
-            <Text style={[styles.tabButtonText, activeTab === 'intelligence' && styles.tabButtonTextActive]}>
-              Intelligence
-            </Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={[styles.tabButton, activeTab === 'charts' && styles.tabButtonActive]}
-            onPress={() => setActiveTab('charts')}
-            activeOpacity={0.7}
-          >
-            <LineChart size={14} color={activeTab === 'charts' ? COLORS.white : CLEAN_THEME.text.secondary} />
-            <Text style={[styles.tabButtonText, activeTab === 'charts' && styles.tabButtonTextActive]}>
-              Charts
-            </Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={[styles.tabButton, activeTab === 'session' && styles.tabButtonActive]}
-            onPress={() => setActiveTab('session')}
-            activeOpacity={0.7}
-          >
-            <Dices size={14} color={activeTab === 'session' ? COLORS.white : CLEAN_THEME.text.secondary} />
-            <Text style={[styles.tabButtonText, activeTab === 'session' && styles.tabButtonTextActive]}>
-              Session
-            </Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={[styles.tabButton, activeTab === 'calcs' && styles.tabButtonActive]}
-            onPress={() => setActiveTab('calcs')}
-            activeOpacity={0.7}
-          >
-            <Calculator size={14} color={activeTab === 'calcs' ? COLORS.white : CLEAN_THEME.text.secondary} />
-            <Text style={[styles.tabButtonText, activeTab === 'calcs' && styles.tabButtonTextActive]}>
-              Calcs
-            </Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tabButton, activeTab === 'portfolio' && styles.tabButtonActive]}
+              onPress={() => setActiveTab('portfolio')}
+              activeOpacity={0.7}
+            >
+              <Award size={14} color={activeTab === 'portfolio' ? COLORS.white : CLEAN_THEME.text.secondary} />
+              <Text style={[styles.tabButtonText, activeTab === 'portfolio' && styles.tabButtonTextActive]}>
+                Portfolio
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.tabButton, activeTab === 'value' && styles.tabButtonActive]}
+              onPress={() => setActiveTab('value')}
+              activeOpacity={0.7}
+            >
+              <DollarSign size={14} color={activeTab === 'value' ? COLORS.white : CLEAN_THEME.text.secondary} />
+              <Text style={[styles.tabButtonText, activeTab === 'value' && styles.tabButtonTextActive]}>
+                Value
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.tabButton, activeTab === 'action' && styles.tabButtonActive]}
+              onPress={() => setActiveTab('action')}
+              activeOpacity={0.7}
+            >
+              <Zap size={14} color={activeTab === 'action' ? COLORS.white : CLEAN_THEME.text.secondary} />
+              <Text style={[styles.tabButtonText, activeTab === 'action' && styles.tabButtonTextActive]}>
+                Action
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.tabButton, activeTab === 'history' && styles.tabButtonActive]}
+              onPress={() => setActiveTab('history')}
+              activeOpacity={0.7}
+            >
+              <LineChart size={14} color={activeTab === 'history' ? COLORS.white : CLEAN_THEME.text.secondary} />
+              <Text style={[styles.tabButtonText, activeTab === 'history' && styles.tabButtonTextActive]}>
+                History
+              </Text>
+            </TouchableOpacity>
           </View>
         </ResponsiveContainer>
 
-        <ScrollView 
+        <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
           removeClippedSubviews={true}
@@ -2609,10 +3039,10 @@ export default function AnalyticsScreen() {
               </View>
             ) : (
               <>
-                {activeTab === 'intelligence' && renderIntelligenceTab()}
-                {activeTab === 'charts' && renderChartsTab()}
-                {activeTab === 'session' && renderSessionTab()}
-                {activeTab === 'calcs' && renderCalcsTab()}
+                {activeTab === 'portfolio' && renderPortfolioTab()}
+                {activeTab === 'value' && renderValueTab()}
+                {activeTab === 'action' && renderActionTab()}
+                {activeTab === 'history' && renderHistoryTab()}
               </>
             )}
 
@@ -2791,6 +3221,41 @@ export default function AnalyticsScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
+      <Modal
+        visible={Boolean(detailModal)}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={closeDetail}
+      >
+        <View style={styles.detailModalOverlay}>
+          <TouchableOpacity style={styles.detailModalBackdrop} activeOpacity={1} onPress={closeDetail} />
+          <View style={styles.detailModalCard}>
+            <View style={styles.detailModalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.detailModalTitle} numberOfLines={2}>{detailModal?.title}</Text>
+                {detailModal?.subtitle ? (
+                  <Text style={styles.detailModalSubtitle}>{detailModal.subtitle}</Text>
+                ) : null}
+              </View>
+              <TouchableOpacity style={styles.detailModalCloseIcon} onPress={closeDetail} activeOpacity={0.7}>
+                <X size={16} color={COLORS.navyDeep} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
+              {detailModal?.rows.map((row, index) => (
+                <View key={`${row.label}-${index}`} style={[styles.detailModalRow, index === (detailModal?.rows.length ?? 0) - 1 && { borderBottomWidth: 0 }]}>
+                  <Text style={styles.detailModalRowLabel}>{row.label}</Text>
+                  <Text style={styles.detailModalRowValue}>{row.value}</Text>
+                </View>
+              ))}
+            </ScrollView>
+            <TouchableOpacity style={styles.detailModalCloseButton} activeOpacity={0.85} onPress={closeDetail}>
+              <Text style={styles.detailModalCloseButtonText}>Got it</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       <AddSessionModal
         visible={showAddSessionModal}
         onClose={() => setShowAddSessionModal(false)}
@@ -2812,9 +3277,9 @@ export default function AnalyticsScreen() {
       )}
 
       {pphAlerts.length > 0 && (
-        <PPHAlertContainer 
-          alerts={pphAlerts} 
-          onDismissAlert={dismissPPHAlert} 
+        <PPHAlertContainer
+          alerts={pphAlerts}
+          onDismissAlert={dismissPPHAlert}
         />
       )}
     </LinearGradient>
@@ -2905,142 +3370,6 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
     color: COLORS.navyDeep,
-  },
-  dataRowTotal: {
-    marginTop: SPACING.xs,
-    paddingTop: SPACING.sm,
-    borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-  },
-  dataTotalLabel: {
-    flex: 1,
-    minWidth: 0,
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    lineHeight: 20,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
-  },
-  dataTotalValue: {
-    flexShrink: 1,
-    maxWidth: '52%',
-    textAlign: 'right',
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    lineHeight: 20,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-  },
-  compactMetricsGrid: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-  },
-  compactMetric: {
-    flex: 1,
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderRadius: BORDER_RADIUS.sm,
-    padding: SPACING.sm,
-  },
-  compactMetricValue: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
-  },
-  compactMetricLabel: {
-    fontSize: 10,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  annualSummaryHero: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: BORDER_RADIUS.md,
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.md,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    alignItems: 'center',
-  },
-  annualSummaryHeroLabel: {
-    fontSize: 11,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#64748B',
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
-    marginBottom: 4,
-  },
-  annualSummaryHeroValue: {
-    fontSize: 28,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-  },
-  annualSummaryHeroSubtext: {
-    marginTop: 6,
-    fontSize: 11,
-    lineHeight: 16,
-    color: '#64748B',
-    textAlign: 'center',
-  },
-  annualSummaryGrid: {
-    gap: SPACING.sm,
-    marginTop: SPACING.sm,
-  },
-  annualSummaryMetric: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: SPACING.sm,
-    backgroundColor: '#FFFFFF',
-    borderRadius: BORDER_RADIUS.sm,
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  annualSummaryMetricLabel: {
-    flex: 1,
-    minWidth: 0,
-    fontSize: 11,
-    lineHeight: 16,
-    color: '#64748B',
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-  },
-  annualSummaryMetricValue: {
-    flexShrink: 1,
-    maxWidth: '50%',
-    textAlign: 'right',
-    fontSize: 16,
-    lineHeight: 20,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
-  },
-  annualSummaryDetails: {
-    marginTop: SPACING.sm,
-    paddingTop: SPACING.sm,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    gap: SPACING.xs,
-  },
-  annualSummaryDetailRow: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: BORDER_RADIUS.sm,
-    padding: SPACING.sm,
-  },
-  annualSummaryDetailLabel: {
-    fontSize: 10,
-    color: '#64748B',
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    marginBottom: 3,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-  annualSummaryDetailValue: {
-    fontSize: 11,
-    lineHeight: 16,
-    color: COLORS.navyDeep,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-  },
-  annualSummaryFootnote: {
-    fontSize: 11,
-    lineHeight: 16,
-    color: '#64748B',
-    textAlign: 'center',
   },
   avgStatsRow: {
     marginTop: SPACING.sm,
@@ -3133,47 +3462,6 @@ const styles = StyleSheet.create({
   tabContent: {
     flex: 1,
   },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: SPACING.sm,
-    marginBottom: SPACING.md,
-  },
-  statCard: {
-    width: '48.5%',
-    minWidth: 160,
-    backgroundColor: COLORS.white,
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.md,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    ...SHADOW.sm,
-  },
-  statCardGradient: {
-    padding: SPACING.md,
-    alignItems: 'center',
-  },
-  statIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: SPACING.xs,
-  },
-  statValue: {
-    fontSize: TYPOGRAPHY.fontSizeLG,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
-    marginBottom: 2,
-  },
-  statLabel: {
-    fontSize: 11,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
-    color: '#64748B',
-    textAlign: 'center',
-  },
   section: {
     marginBottom: SPACING.lg,
   },
@@ -3187,173 +3475,6 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
     color: '#000000',
-  },
-  statusCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: BORDER_RADIUS.xl,
-    padding: SPACING.md,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    ...SHADOW.md,
-  },
-  statusCardGradient: {
-    padding: SPACING.md,
-  },
-  progressSection: {
-    marginBottom: SPACING.md,
-  },
-  progressRow: {
-    marginBottom: SPACING.xs,
-  },
-  progressInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  progressLabel: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#1E293B',
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-  },
-  progressValue: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    color: COLORS.navyDeep,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-  },
-  progressDivider: {
-    height: 1,
-    backgroundColor: '#F1F5F9',
-    marginVertical: SPACING.md,
-  },
-  statusStatsRow: {
-    flexDirection: 'row',
-    marginTop: SPACING.sm,
-    backgroundColor: '#F8FAFC',
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.md,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-  },
-  statusStat: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  statusStatDivider: {
-    width: 1,
-    backgroundColor: '#E2E8F0',
-    marginHorizontal: SPACING.md,
-  },
-  statusStatValue: {
-    fontSize: TYPOGRAPHY.fontSizeLG,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
-  },
-  statusStatLabel: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  casinoPerformanceContainer: {
-    backgroundColor: COLORS.white,
-    borderRadius: BORDER_RADIUS.xl,
-    overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: COLORS.goldDark,
-    ...SHADOW.md,
-  },
-  casinoPerformanceHeader: {
-    backgroundColor: '#FFFBEB',
-    padding: SPACING.md,
-    borderBottomWidth: 2,
-    borderBottomColor: COLORS.goldDark,
-  },
-  casinoPerformanceHeaderContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-  },
-  casinoPerformanceHeaderIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  casinoPerformanceTitle: {
-    fontSize: TYPOGRAPHY.fontSizeLG,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#92400E',
-  },
-  casinoPerformanceSubtitle: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#92400E',
-    opacity: 0.8,
-  },
-  casinoPerformanceContent: {
-    padding: SPACING.md,
-  },
-  metricsRow: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-    marginBottom: SPACING.md,
-  },
-  metricCard: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.md,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  metricIconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: SPACING.xs,
-  },
-  metricValue: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#1E293B',
-    marginTop: SPACING.xs,
-  },
-  metricLabel: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 2,
-    textAlign: 'center',
-  },
-  avgMetricsRow: {
-    flexDirection: 'row',
-    backgroundColor: COLORS.white,
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.md,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  avgMetric: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  avgMetricLabel: {
-    fontSize: 11,
-    color: '#64748B',
-    marginBottom: 4,
-    textAlign: 'center',
-  },
-  avgMetricValue: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#1E293B',
-  },
-  avgMetricDivider: {
-    width: 1,
-    backgroundColor: '#E2E8F0',
-    marginHorizontal: SPACING.md,
   },
   portfolioTitle: {
     fontSize: TYPOGRAPHY.fontSizeMD,
@@ -3694,9 +3815,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...SHADOW.md,
   },
-  destinationsCardGradient: {
-    padding: SPACING.md,
-  },
   destinationRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -3775,98 +3893,6 @@ const styles = StyleSheet.create({
   bottomSpacer: {
     height: 120,
   },
-  financialCardContainer: {
-    backgroundColor: COLORS.white,
-    borderRadius: BORDER_RADIUS.xl,
-    overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: COLORS.navyDeep,
-    ...SHADOW.md,
-  },
-  financialCardHeader: {
-    backgroundColor: '#F8FAFC',
-    padding: SPACING.md,
-    borderBottomWidth: 2,
-    borderBottomColor: COLORS.navyDeep,
-  },
-  financialHeaderContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-  },
-  financialHeaderIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  financialCardTitle: {
-    fontSize: TYPOGRAPHY.fontSizeLG,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
-  },
-  financialCardSubtitle: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#64748B',
-  },
-  financialContent: {
-    padding: SPACING.md,
-  },
-  financialRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: SPACING.sm,
-  },
-  financialIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: SPACING.sm,
-  },
-  financialInfo: {
-    flex: 1,
-  },
-  financialLabel: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#1E293B',
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-  },
-  financialSubtext: {
-    fontSize: 10,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  financialValue: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
-  },
-  financialDivider: {
-    height: 1,
-    backgroundColor: '#F1F5F9',
-    marginVertical: SPACING.xs,
-  },
-  financialTotalRow: {
-    backgroundColor: '#F8FAFC',
-    marginHorizontal: -SPACING.md,
-    marginBottom: -SPACING.md,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.md,
-    borderTopWidth: 2,
-    borderTopColor: COLORS.navyDeep,
-  },
-  financialTotalLabel: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: COLORS.navyDeep,
-  },
-  financialTotalValue: {
-    fontSize: TYPOGRAPHY.fontSizeLG,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-  },
   sessionStatsSection: {
     marginBottom: SPACING.lg,
   },
@@ -3898,9 +3924,6 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: '#F1F5F9',
     marginVertical: SPACING.xs,
-  },
-  recentSessionsContainer: {
-    gap: SPACING.sm,
   },
   recentSessionsScrollContainer: {
     maxHeight: 400,
@@ -4169,6 +4192,7 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    marginBottom: SPACING.lg,
   },
   calcsInsightHeader: {
     flexDirection: 'row',
@@ -4693,5 +4717,294 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#64748B',
     marginTop: 2,
+  },
+  valueHeroGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+  },
+  valueHeroTile: {
+    flexGrow: 1,
+    flexBasis: '30%',
+    backgroundColor: '#F8FBFF',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 2,
+  },
+  valueHeroLabel: {
+    fontSize: 10,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  valueHeroValue: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  shipCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...SHADOW.sm,
+  },
+  shipCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.sm,
+  },
+  shipCardName: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: COLORS.navyDeep,
+    marginRight: SPACING.sm,
+  },
+  shipCardBadge: {
+    backgroundColor: 'rgba(0, 31, 63, 0.06)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: BORDER_RADIUS.round,
+  },
+  shipCardBadgeText: {
+    fontSize: 11,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  shipMetricsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+  },
+  shipMetric: {
+    minWidth: 70,
+  },
+  shipMetricLabel: {
+    fontSize: 10,
+    color: '#94A3B8',
+  },
+  shipMetricValue: {
+    fontSize: 13,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+    marginTop: 1,
+  },
+  dataHealthCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    padding: SPACING.md,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+  },
+  dataHealthCardGood: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#10B981',
+  },
+  dataHealthCardWarning: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#F59E0B',
+  },
+  dataHealthTextBlock: {
+    flex: 1,
+  },
+  dataHealthTitle: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  dataHealthSubtitle: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...SHADOW.sm,
+  },
+  actionRowIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0, 31, 63, 0.06)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  actionRowContent: {
+    flex: 1,
+    minWidth: 0,
+  },
+  actionRowTitle: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: COLORS.navyDeep,
+  },
+  actionRowSubtitle: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  actionRowBadge: {
+    backgroundColor: 'rgba(0, 31, 63, 0.06)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: BORDER_RADIUS.round,
+  },
+  actionRowBadgeText: {
+    fontSize: 11,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  checklistRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING.sm,
+    marginBottom: SPACING.sm,
+    paddingBottom: SPACING.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  checklistTextBlock: {
+    flex: 1,
+  },
+  checklistText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: COLORS.navyDeep,
+  },
+  checklistTextDone: {
+    color: '#64748B',
+  },
+  checklistDetail: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  keepPlayingCard: {
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  keepPlayingCardGood: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#10B981',
+  },
+  keepPlayingCardWatch: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#F59E0B',
+  },
+  keepPlayingCardReassess: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#EF4444',
+  },
+  keepPlayingCardNeutral: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
+  },
+  keepPlayingTouchable: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    padding: SPACING.md,
+  },
+  keepPlayingTextBlock: {
+    flex: 1,
+  },
+  keepPlayingHeadline: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  keepPlayingDetail: {
+    fontSize: 11,
+    color: '#475569',
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  detailModalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: SPACING.lg,
+  },
+  detailModalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(15, 23, 42, 0.5)',
+  },
+  detailModalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.lg,
+    ...SHADOW.md,
+  },
+  detailModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
+  detailModalTitle: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  detailModalSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 4,
+    lineHeight: 16,
+  },
+  detailModalCloseIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  detailModalRow: {
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    gap: 3,
+  },
+  detailModalRowLabel: {
+    fontSize: 11,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  detailModalRowValue: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.navyDeep,
+    lineHeight: 19,
+  },
+  detailModalCloseButton: {
+    marginTop: SPACING.md,
+    backgroundColor: COLORS.navyDeep,
+    borderRadius: BORDER_RADIUS.md,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  detailModalCloseButtonText: {
+    color: COLORS.white,
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
   },
 });

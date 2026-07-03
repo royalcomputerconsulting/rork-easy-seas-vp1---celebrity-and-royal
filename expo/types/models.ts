@@ -123,6 +123,7 @@ export interface Cruise extends SharedOwnershipFields {
   offerName?: string;
   offerExpiry?: string;
   offerCategory?: string;
+  offerSource?: 'royal' | 'celebrity' | 'carnival';
   freeOBC?: number;
   freeGratuities?: boolean;
   freeDrinkPackage?: boolean;

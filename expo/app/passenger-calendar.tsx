@@ -11,6 +11,7 @@ import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/
 import { useAppState } from '@/state/AppStateProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { useCertificates } from '@/state/CertificatesProvider';
+import type { Certificate } from '@/components/CertificateManagerModal';
 import { useIntelligenceFilters } from '@/state/IntelligenceFiltersProvider';
 import { useUser } from '@/state/UserProvider';
 import { createDateFromString } from '@/lib/date';
@@ -229,7 +230,7 @@ export default function PassengerCalendarScreen() {
   }, [filterSnapshot, localData.calendar, localData.tripit, users]);
 
   const filteredOffers = useMemo(() => filterRecordsByIntelligence((localData.offers || []) as CasinoOffer[], filterSnapshot, users), [filterSnapshot, localData.offers, users]);
-  const filteredCertificates = useMemo(() => filterRecordsByIntelligence(certificates, filterSnapshot, users), [certificates, filterSnapshot, users]);
+  const filteredCertificates = useMemo(() => filterRecordsByIntelligence(certificates as unknown as Array<Certificate & { ownerProfileId?: string; sourceEmail?: string; brand?: string; casinoProgram?: any }>, filterSnapshot, users), [certificates, filterSnapshot, users]);
 
   const passengerItems = useMemo(() => buildPassengerDayItems({
     bookedCruises: normalizedBookedCruises,

@@ -126,7 +126,7 @@ const styles = StyleSheet.create({
   eyebrow: { fontSize: 12, fontWeight: '800', color: COLORS.gold, letterSpacing: 1.2, marginBottom: 4 },
   title: { fontSize: 28, fontWeight: '900', color: COLORS.navyDeep },
   subtitle: { fontSize: 14, lineHeight: 20, color: '#64748B', marginTop: 6 },
-  heroCard: { flexDirection: 'row', gap: 12, backgroundColor: COLORS.navyDeep, borderRadius: BORDER_RADIUS.xl, padding: SPACING.lg, marginBottom: SPACING.md, ...SHADOW.medium },
+  heroCard: { flexDirection: 'row', gap: 12, backgroundColor: COLORS.navyDeep, borderRadius: BORDER_RADIUS.xl, padding: SPACING.lg, marginBottom: SPACING.md, ...SHADOW.md },
   heroIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
   heroCopy: { flex: 1 },
   heroTitle: { color: '#FFFFFF', fontSize: 17, fontWeight: '900' },

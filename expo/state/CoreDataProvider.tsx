@@ -135,7 +135,7 @@ function normalizeAvailableCruiseCatalogRow(cruise: Cruise): Cruise {
   delete normalized.dayByDayItineraryJson;
   delete normalized.itineraryRaw;
   if (Array.isArray(normalized.itinerary) && normalized.itinerary.length > 20) delete normalized.itinerary;
-  return normalized as Cruise;
+  return normalized as unknown as Cruise;
 }
 
 function normalizeAvailableCruiseCatalogRows(rows: Cruise[]): Cruise[] {

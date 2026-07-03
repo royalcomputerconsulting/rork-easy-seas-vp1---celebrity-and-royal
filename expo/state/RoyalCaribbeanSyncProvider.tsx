@@ -280,7 +280,7 @@ function parseCompletedSailingsPayload(data: any, cruiseLine: CruiseLine): Booke
       cabinNumberOrGTY: firstString(sailing?.cabinNumber, sailing?.stateroomNumber, sailing?.roomNumber),
       bookingId: bookingId || `${brand.toLowerCase().replace(/\s+/g, '-')}-completed-${shipName}-${sailDate || index}`,
       numberOfGuests: firstString(sailing?.numberOfGuests, sailing?.guests) || '1',
-      numberOfNights: nights || '',
+      numberOfNights: nights ? Number.parseInt(nights, 10) || undefined : undefined,
       daysToGo: '0',
       status: 'Completed',
       holdExpiration: '',
@@ -694,6 +694,46 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     });
   }, [authenticatedEmail, cruiseLine]);
 
+  const flushDisplayLogs = useCallback(() => {
+    logFlushScheduledRef.current = false;
+    if (!providerMountedRef.current) {
+      return;
+    }
+    setState(prev => {
+      const newLogs = rcLogger.getDisplayLogs();
+      const previousLastLog = prev.logs[prev.logs.length - 1];
+      const nextLastLog = newLogs[newLogs.length - 1];
+      const logsChanged =
+        prev.logs.length !== newLogs.length ||
+        previousLastLog?.timestamp !== nextLastLog?.timestamp ||
+        previousLastLog?.message !== nextLastLog?.message ||
+        previousLastLog?.type !== nextLastLog?.type;
+      if (!logsChanged) {
+        return prev;
+      }
+      return {
+        ...prev,
+        logs: newLogs
+      };
+    });
+  }, []);
+
+  const addLog = useCallback((message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
+    rcLogger.log(message, type);
+    if (logFlushScheduledRef.current) {
+      return;
+    }
+    logFlushScheduledRef.current = true;
+    Promise.resolve()
+      .then(() => {
+        flushDisplayLogs();
+      })
+      .catch((error: unknown) => {
+        logFlushScheduledRef.current = false;
+        console.error('[RoyalCaribbeanSync] Failed to flush logs:', error);
+      });
+  }, [flushDisplayLogs]);
+
   const onPageLoaded = useCallback((eventOrUrl?: unknown) => {
     const loadedUrl = typeof eventOrUrl === 'string'
       ? eventOrUrl
@@ -737,46 +777,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     pageLoadResolver.current = null;
     pendingNavigationTargetRef.current = null;
   }, [matchesNavigationTarget, state.status, state.scrapePricingAndItinerary, cruiseLine, addLog]);
-
-  const flushDisplayLogs = useCallback(() => {
-    logFlushScheduledRef.current = false;
-    if (!providerMountedRef.current) {
-      return;
-    }
-    setState(prev => {
-      const newLogs = rcLogger.getDisplayLogs();
-      const previousLastLog = prev.logs[prev.logs.length - 1];
-      const nextLastLog = newLogs[newLogs.length - 1];
-      const logsChanged =
-        prev.logs.length !== newLogs.length ||
-        previousLastLog?.timestamp !== nextLastLog?.timestamp ||
-        previousLastLog?.message !== nextLastLog?.message ||
-        previousLastLog?.type !== nextLastLog?.type;
-      if (!logsChanged) {
-        return prev;
-      }
-      return {
-        ...prev,
-        logs: newLogs
-      };
-    });
-  }, []);
-
-  const addLog = useCallback((message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
-    rcLogger.log(message, type);
-    if (logFlushScheduledRef.current) {
-      return;
-    }
-    logFlushScheduledRef.current = true;
-    Promise.resolve()
-      .then(() => {
-        flushDisplayLogs();
-      })
-      .catch((error: unknown) => {
-        logFlushScheduledRef.current = false;
-        console.error('[RoyalCaribbeanSync] Failed to flush logs:', error);
-      });
-  }, [flushDisplayLogs]);
 
   const toggleStaySignedIn = useCallback(async (enabled: boolean) => {
     try {

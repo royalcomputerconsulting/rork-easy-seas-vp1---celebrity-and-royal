@@ -94,7 +94,8 @@ function getCalendarLooseKey(event: CalendarEvent): string {
 }
 
 function hasReviewStatus(record: AnyImportRecord): boolean {
-  return record.importStatus === 'reviewNeeded' || record.importStatus === 'unassigned' || record.reconciliationStatus === 'reviewNeeded' || record.archiveStatus === 'reviewNeeded' || record.status === 'reviewNeeded';
+  const status = (record as { status?: string }).status;
+  return record.importStatus === 'reviewNeeded' || record.importStatus === 'unassigned' || record.reconciliationStatus === 'reviewNeeded' || record.archiveStatus === 'reviewNeeded' || status === 'reviewNeeded';
 }
 
 function describeFieldDiffs<T extends Record<string, unknown>>(existing: T | undefined, incoming: T, fields: readonly string[]): SmartImportFieldDiff[] {

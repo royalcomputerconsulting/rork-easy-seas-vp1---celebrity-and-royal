@@ -40,7 +40,7 @@ import {
 } from '@/lib/offerIntelligence';
 import { formatCurrency } from '@/lib/format';
 import { getDaysUntil } from '@/lib/date';
-import type { CasinoOffer, TravelerProfile } from '@/types/models';
+import type { CasinoOffer, CasinoProgram, ImportReviewStatus, TravelerProfile } from '@/types/models';
 import type { Certificate } from '@/components/CertificateManagerModal';
 
 type CertificateReviewBucketId = 'cert7' | 'cert14' | 'cert30' | 'certExpired' | 'certReview';
@@ -63,11 +63,11 @@ const QUEUE_VIEWS: { id: QueueView; label: string }[] = [
 type CertificateReviewItem = Certificate & {
   ownerProfileId?: string;
   sourceEmail?: string;
-  casinoProgram?: string;
+  casinoProgram?: CasinoProgram;
   offerCode?: string;
   cabinEntitlement?: string;
-  importStatus?: string;
-  reconciliationStatus?: string;
+  importStatus?: ImportReviewStatus;
+  reconciliationStatus?: ImportReviewStatus;
 };
 
 interface CertificateReviewBucket {

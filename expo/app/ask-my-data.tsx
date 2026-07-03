@@ -32,6 +32,7 @@ const SOURCE_STYLES: Record<AskMyDataSource, { label: string; color: string; ico
   crew: { label: 'Crew', color: '#BE123C', icon: Users },
   machines: { label: 'Slots', color: '#4338CA', icon: Gamepad2 },
   weather: { label: 'Weather', color: '#0284C7', icon: CloudSun },
+  system: { label: 'System', color: '#475569', icon: Wand2 },
 };
 
 function buildScopeLabel(profileId: string, users: ReturnType<typeof useUser>['users'], brand: string, program: string): string {

@@ -1988,7 +1988,7 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
     borderWidth: 1,
     borderColor: COLORS.borderLight,
-    ...SHADOW.small,
+    ...SHADOW.sm,
   },
   advisorTileTitle: {
     color: COLORS.navyDeep,
