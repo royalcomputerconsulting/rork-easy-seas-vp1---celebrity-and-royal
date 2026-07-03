@@ -706,7 +706,8 @@ export const STEP4_LOYALTY_SCRIPT = `
         crownAndAnchorLevel: '',
         crownAndAnchorPoints: '',
         clubRoyaleTier: '',
-        clubRoyalePoints: ''
+        clubRoyalePoints: '',
+        clubRoyaleNumber: ''
       };
       
       log('📄 Scanning page for loyalty data...', 'info');
@@ -748,6 +749,9 @@ export const STEP4_LOYALTY_SCRIPT = `
       // Crown & Anchor points patterns - MUST be more specific to avoid matching random numbers
       // Look for "X cruise credits" or "cruise credits: X" patterns near Crown & Anchor content
       var caPointsPatterns = [
+        // My Account homepage widget: "DIAMOND PLUS / 660 / Cruise Points / More details" -
+        // number directly followed by the "Cruise Points" label, no connecting keyword needed.
+        /([\\d,]+)\\s*Cruise\\s*Points\\b/i,
         // Very specific: near "Crown & Anchor" or "C&A"
         /(?:Crown\\s*(?:&|and)?\\s*Anchor|C&A)[^0-9]{0,100}?([\\d,]+)\\s*(?:cruise\\s*)?(?:credits|points)/i,
         /(?:cruise\\s*)?(?:credits|points)[:\\s]*([\\d,]+)(?:[^0-9]{0,50}Crown|[^0-9]{0,50}C&A)/i,
@@ -815,9 +819,15 @@ export const STEP4_LOYALTY_SCRIPT = `
       
       // Club Royale points/credits patterns - more specific
       var crPointsPatterns = [
+        // Club Royale offers page hero widget: "YOUR CURRENT TIER CREDITS (icon) 19,363" - the
+        // label sits well before the number, with an icon/whitespace/newline gap between them.
+        // This MUST be tried before the generic "number tier credits" pattern below, otherwise a
+        // different number further down the same page (e.g. "5,637 Tier Credits to keep
+        // Signature!", the amount needed for the NEXT tier) gets matched instead.
+        /current\\s+tier\\s+credits[^\\d]{0,80}?([\\d,]+)/i,
         /(?:Club\\s*Royale|casino)[^0-9]{0,100}?([\\d,]+)\\s*(?:tier\\s*)?credits/i,
         /tier\\s*credits[:\\s]*([\\d,]+)/i,
-        /([\\d,]+)\\s*tier\\s*credits/i
+        /([\\d,]+)\\s*tier\\s*credits(?!\\s*to\\s*keep)/i
       ];
       
       for (var l = 0; l < crPointsPatterns.length; l++) {
@@ -833,8 +843,15 @@ export const STEP4_LOYALTY_SCRIPT = `
         }
       }
       
+      // Club Royale membership number: "CLUB ROYALE # / 305812247"
+      var crNumberMatch = pageText.match(/Club\\s*Royale\\s*#[^\\d]{0,20}(\\d{4,12})/i);
+      if (crNumberMatch && crNumberMatch[1]) {
+        result.clubRoyaleNumber = crNumberMatch[1];
+        log('📄 Found Club Royale #: ' + crNumberMatch[1], 'success');
+      }
+      
       var hasData = result.crownAndAnchorLevel || result.crownAndAnchorPoints || 
-                    result.clubRoyaleTier || result.clubRoyalePoints;
+                    result.clubRoyaleTier || result.clubRoyalePoints || result.clubRoyaleNumber;
       
       if (hasData) {
         log('📄 DOM extraction summary:', 'info');
@@ -864,4 +881,79 @@ export const STEP4_LOYALTY_SCRIPT = `
 
 export function injectLoyaltyExtraction() {
   return STEP4_LOYALTY_SCRIPT;
+}
+
+export const LOYALTY_WIDGET_SCRAPE_SCRIPT = `
+(function() {
+  function log(message, type) {
+    try {
+      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'log', message: message, logType: type || 'info' }));
+    } catch (e) {}
+  }
+
+  var VALID_CA_TIERS = ['gold', 'platinum', 'emerald', 'diamond', 'diamond plus', 'pinnacle', 'pinnacle club'];
+  var VALID_CR_TIERS = ['choice', 'classic', 'prime', 'premier', 'signature', 'masters'];
+
+  function scrape() {
+    try {
+      var pageText = document.body ? (document.body.textContent || '') : '';
+      if (!pageText) return;
+
+      var result = { crownAndAnchorLevel: '', crownAndAnchorPoints: '', clubRoyaleTier: '', clubRoyalePoints: '', clubRoyaleNumber: '' };
+
+      if (/Pinnacle\\s+Club/i.test(pageText)) {
+        result.crownAndAnchorLevel = 'Pinnacle Club';
+      } else if (/Diamond\\s+Plus/i.test(pageText)) {
+        result.crownAndAnchorLevel = 'Diamond Plus';
+      } else {
+        var caTierMatch = pageText.match(/\\b(Pinnacle|Emerald|Diamond|Platinum|Gold)\\s+member\\b/i) || pageText.match(/(Pinnacle|Emerald|Diamond|Platinum|Gold)\\s*(?:Member|Status|Tier|Level)/i);
+        if (caTierMatch && caTierMatch[1] && VALID_CA_TIERS.indexOf(caTierMatch[1].toLowerCase()) !== -1) {
+          result.crownAndAnchorLevel = caTierMatch[1];
+        }
+      }
+
+      var caWidgetMatch = pageText.match(/([\\d,]+)\\s*Cruise\\s*Points\\b/i);
+      if (caWidgetMatch && caWidgetMatch[1]) {
+        var caNum = parseInt(caWidgetMatch[1].replace(/,/g, ''), 10);
+        if (caNum >= 50 && caNum <= 10000000) {
+          result.crownAndAnchorPoints = caNum.toString();
+        }
+      }
+
+      var crTierMatch = pageText.match(/Current\\s+Club\\s+Tier[^A-Za-z]{0,20}(Masters|Signature|Premier|Prime|Classic|Choice)/i) || pageText.match(/(Masters|Signature|Premier|Prime|Classic|Choice)\\s*(?:Member|Status|Tier)/i);
+      if (crTierMatch && crTierMatch[1] && VALID_CR_TIERS.indexOf(crTierMatch[1].toLowerCase()) !== -1) {
+        result.clubRoyaleTier = crTierMatch[1];
+      }
+
+      var crWidgetMatch = pageText.match(/current\\s+tier\\s+credits[^\\d]{0,80}?([\\d,]+)/i);
+      if (crWidgetMatch && crWidgetMatch[1]) {
+        var crNum = parseInt(crWidgetMatch[1].replace(/,/g, ''), 10);
+        if (crNum >= 100 && crNum <= 10000000) {
+          result.clubRoyalePoints = crNum.toString();
+        }
+      }
+
+      var crNumberMatch = pageText.match(/Club\\s*Royale\\s*#[^\\d]{0,20}(\\d{4,12})/i);
+      if (crNumberMatch && crNumberMatch[1]) {
+        result.clubRoyaleNumber = crNumberMatch[1];
+      }
+
+      var hasData = result.crownAndAnchorLevel || result.crownAndAnchorPoints || result.clubRoyaleTier || result.clubRoyalePoints || result.clubRoyaleNumber;
+      if (hasData) {
+        log('Widget scrape: CA ' + (result.crownAndAnchorLevel || '-') + '/' + (result.crownAndAnchorPoints || '-') + ' | CR ' + (result.clubRoyaleTier || '-') + '/' + (result.clubRoyalePoints || '-'), 'success');
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'loyalty_data', data: result }));
+      }
+    } catch (e) {
+      log('Widget scrape failed: ' + (e && e.message), 'warning');
+    }
+  }
+
+  setTimeout(scrape, 2000);
+  setTimeout(scrape, 5000);
+  setTimeout(scrape, 9000);
+})();
+`;
+
+export function injectLoyaltyWidgetScrape() {
+  return LOYALTY_WIDGET_SCRAPE_SCRIPT;
 }

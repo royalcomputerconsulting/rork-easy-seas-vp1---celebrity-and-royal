@@ -21,6 +21,7 @@ import { convertLoyaltyInfoToExtended, mergeExtendedLoyaltyData } from '@/lib/ro
 import { rcLogger } from '@/lib/royalCaribbean/logger';
 import { generateOffersCSV, generateBookedCruisesCSV } from '@/lib/royalCaribbean/csvGenerator';
 import { injectOffersExtraction } from '@/lib/royalCaribbean/step1_offers';
+import { injectLoyaltyWidgetScrape } from '@/lib/royalCaribbean/step4_loyalty';
 import { injectCarnivalOffersExtraction, injectCarnivalBookingsScrape, injectCarnivalCruiseSearchScrape, injectCarnivalTgoExtract } from '@/lib/carnival/carnivalOffersExtraction';
 import { createSyncPreview, calculateSyncCounts, applySyncPreview } from '@/lib/royalCaribbean/syncLogic';
 import { parseCasinoOffersPayload } from '@/lib/royalCaribbean/offerPayloadParser';
@@ -1866,6 +1867,10 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           webViewRef.current.injectJavaScript(injectCarnivalOffersExtraction() + '; true;');
         } else {
           webViewRef.current.injectJavaScript(injectOffersExtraction(state.scrapePricingAndItinerary, cruiseLine === 'celebrity' ? 'celebrity' : 'royal_caribbean') + '; true;');
+          // The offers page hero also shows the Club Royale "Current Club Tier" / "Current Tier
+          // Credits" widget - scrape it directly from the DOM as a fallback in case the tier data
+          // never rides along on a network response the passive monitor recognizes.
+          webViewRef.current.injectJavaScript(injectLoyaltyWidgetScrape() + '; true;');
         }
       }
       
@@ -2120,6 +2125,13 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             
             if (isCarnivalMode) {
               await delay(3000);
+            }
+            
+            if (!isCarnivalMode && page.section === 'loyalty' && webViewRef.current) {
+              // Account home and loyalty-programs pages render the Crown & Anchor "Cruise Points"
+              // and Club Royale tier-credit widgets directly in the DOM - scrape them as a
+              // fallback alongside the passive network monitor.
+              webViewRef.current.injectJavaScript(injectLoyaltyWidgetScrape() + '; true;');
             }
             
             if (isCarnivalMode && webViewRef.current) {
