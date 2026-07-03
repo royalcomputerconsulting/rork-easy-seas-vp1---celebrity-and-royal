@@ -174,9 +174,9 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
     x: 958,
     y: 178,
     fill: '#FFFFFF',
-    fontSize: 62,
-    fontWeight: '300',
-    letterSpacing: -1.6,
+    fontSize: 46,
+    fontWeight: '400',
+    letterSpacing: -1.1,
     textAnchor: 'end',
     mask: {
       x: 632,

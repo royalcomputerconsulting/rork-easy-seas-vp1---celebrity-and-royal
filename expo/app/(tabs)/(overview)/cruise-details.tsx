@@ -1909,66 +1909,66 @@ export default function CruiseDetailsScreen() {
                 <View style={styles.cabinPricesGrid}>
                   <View style={[
                     styles.cabinPriceCell,
-                    cruise.cabinType && cruise.cabinType.toLowerCase().includes('interior') && styles.cabinPriceCellActive,
+                    cruise?.cabinType?.toLowerCase().includes('interior') && styles.cabinPriceCellActive,
                   ]}>
                     <Text style={styles.cabinPriceCellLabel}>Interior</Text>
-                    <Text style={styles.cabinPriceCellValue}>{formatCurrency(estimatedPrices.interior)}</Text>
+                    <Text style={styles.cabinPriceCellValue}>{formatCurrency(estimatedPrices?.interior ?? 0)}</Text>
                   </View>
                   <View style={[
                     styles.cabinPriceCell,
-                    cruise.cabinType && cruise.cabinType.toLowerCase().includes('ocean') && styles.cabinPriceCellActive,
+                    cruise?.cabinType?.toLowerCase().includes('ocean') && styles.cabinPriceCellActive,
                   ]}>
                     <Text style={styles.cabinPriceCellLabel}>Oceanview</Text>
-                    <Text style={styles.cabinPriceCellValue}>{formatCurrency(estimatedPrices.oceanview)}</Text>
+                    <Text style={styles.cabinPriceCellValue}>{formatCurrency(estimatedPrices?.oceanview ?? 0)}</Text>
                   </View>
                   <View style={[
                     styles.cabinPriceCell,
-                    cruise.cabinType && (cruise.cabinType.toLowerCase().includes('balcony') || cruise.cabinType.toLowerCase() === 'balcony gty') && styles.cabinPriceCellActive,
+                    (cruise?.cabinType?.toLowerCase().includes('balcony') || cruise?.cabinType?.toLowerCase() === 'balcony gty') && styles.cabinPriceCellActive,
                   ]}>
                     <Text style={styles.cabinPriceCellLabel}>Balcony</Text>
-                    <Text style={styles.cabinPriceCellValue}>{formatCurrency(estimatedPrices.balcony)}</Text>
+                    <Text style={styles.cabinPriceCellValue}>{formatCurrency(estimatedPrices?.balcony ?? 0)}</Text>
                   </View>
                   <View style={[
                     styles.cabinPriceCell,
-                    cruise.cabinType && cruise.cabinType.toLowerCase().includes('suite') && styles.cabinPriceCellActive,
+                    cruise?.cabinType?.toLowerCase().includes('suite') && styles.cabinPriceCellActive,
                   ]}>
                     <Text style={styles.cabinPriceCellLabel}>Suite</Text>
-                    <Text style={styles.cabinPriceCellValue}>{formatCurrency(estimatedPrices.suite)}</Text>
+                    <Text style={styles.cabinPriceCellValue}>{formatCurrency(estimatedPrices?.suite ?? 0)}</Text>
                   </View>
-                  {estimatedPrices.source === 'estimated' && (
+                  {estimatedPrices?.source === 'estimated' && (
                     <Text style={styles.cabinPriceCellLabel}>Estimated prices based on cabin type</Text>
                   )}
                 </View>
               )}
 
-              {(cruise.taxes ?? 0) > 0 && (
+              {(cruise?.taxes ?? 0) > 0 && (
                 <View style={styles.valueTaxesRow}>
                   <Text style={styles.valueCompactLabel}>Port Taxes & Fees</Text>
-                  <Text style={styles.valueCompactValue}>{formatCurrency(cruise.taxes ?? 0)}</Text>
+                  <Text style={styles.valueCompactValue}>{formatCurrency(cruise?.taxes ?? 0)}</Text>
                 </View>
               )}
 
               <View style={styles.valueCompactGrid}>
                 <View style={styles.valueCompactRow}>
                   <Text style={styles.valueCompactLabel}>Retail Value</Text>
-                  <Text style={styles.valueCompactValue}>{formatCurrency(valueBreakdown.totalRetailValue)}</Text>
+                  <Text style={styles.valueCompactValue}>{formatCurrency(valueBreakdown?.totalRetailValue ?? 0)}</Text>
                 </View>
-                {valueBreakdown.freePlayValue > 0 && (
+                {(valueBreakdown?.freePlayValue ?? 0) > 0 && (
                   <View style={styles.valueCompactRow}>
                     <Text style={styles.valueCompactLabel}>FreePlay</Text>
-                    <Text style={[styles.valueCompactValue, { color: COLORS.success }]}>+{formatCurrency(valueBreakdown.freePlayValue)}</Text>
+                    <Text style={[styles.valueCompactValue, { color: COLORS.success }]}>+{formatCurrency(valueBreakdown?.freePlayValue ?? 0)}</Text>
                   </View>
                 )}
-                {valueBreakdown.obcValue > 0 && (
+                {(valueBreakdown?.obcValue ?? 0) > 0 && (
                   <View style={styles.valueCompactRow}>
                     <Text style={styles.valueCompactLabel}>OBC</Text>
-                    <Text style={[styles.valueCompactValue, { color: COLORS.success }]}>+{formatCurrency(valueBreakdown.obcValue)}</Text>
+                    <Text style={[styles.valueCompactValue, { color: COLORS.success }]}>+{formatCurrency(valueBreakdown?.obcValue ?? 0)}</Text>
                   </View>
                 )}
-                {valueBreakdown.tradeInValue > 0 && (
+                {(valueBreakdown?.tradeInValue ?? 0) > 0 && (
                   <View style={styles.valueCompactRow}>
                     <Text style={styles.valueCompactLabel}>Trade-In</Text>
-                    <Text style={[styles.valueCompactValue, { color: COLORS.success }]}>+{formatCurrency(valueBreakdown.tradeInValue)}</Text>
+                    <Text style={[styles.valueCompactValue, { color: COLORS.success }]}>+{formatCurrency(valueBreakdown?.tradeInValue ?? 0)}</Text>
                   </View>
                 )}
                 <TouchableOpacity
@@ -1980,14 +1980,14 @@ export default function CruiseDetailsScreen() {
                     <Text style={styles.valueCompactLabel}>Paid (Taxes/Fees)</Text>
                     <Edit3 size={10} color={COLORS.textSecondary} />
                   </View>
-                  <Text style={styles.valueCompactValue}>{formatCurrency(valueBreakdown.amountPaid)}</Text>
+                  <Text style={styles.valueCompactValue}>{formatCurrency(valueBreakdown?.amountPaid ?? 0)}</Text>
                 </TouchableOpacity>
               </View>
               
               <View style={styles.valueNetRow}>
                 <Text style={styles.valueNetLabel}>Net Value</Text>
-                <Text style={[styles.valueNetAmount, { color: valueBreakdown.netValue >= 0 ? COLORS.success : COLORS.error }]}>
-                  {valueBreakdown.netValue >= 0 ? '+' : ''}{formatCurrency(valueBreakdown.netValue)}
+                <Text style={[styles.valueNetAmount, { color: (valueBreakdown?.netValue ?? 0) >= 0 ? COLORS.success : COLORS.error }]}>
+                  {(valueBreakdown?.netValue ?? 0) >= 0 ? '+' : ''}{formatCurrency(valueBreakdown?.netValue ?? 0)}
                 </Text>
               </View>
               
@@ -1995,13 +1995,13 @@ export default function CruiseDetailsScreen() {
                 <View 
                   style={[
                     styles.coverageFill, 
-                    { width: `${Math.min(100, valueBreakdown.coverageFraction * 100)}%` }
+                    { width: `${Math.min(100, (valueBreakdown?.coverageFraction ?? 0) * 100)}%` }
                   ]} 
                 />
               </View>
               <Text style={styles.coverageText}>
-                {(valueBreakdown.coverageFraction * 100).toFixed(0)}% Coverage
-                {valueBreakdown.isFullyComped && ' • Fully Comped!'}
+                {((valueBreakdown?.coverageFraction ?? 0) * 100).toFixed(0)}% Coverage
+                {valueBreakdown?.isFullyComped && ' • Fully Comped!'}
               </Text>
             </View>
           )}
