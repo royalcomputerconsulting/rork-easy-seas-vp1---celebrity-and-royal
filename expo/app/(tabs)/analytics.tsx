@@ -50,6 +50,7 @@ import {
   ClipboardList,
   RefreshCw,
   Search,
+  Pencil,
 } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME, SHADOW } from '@/constants/theme';
 import { useSimpleAnalytics } from '@/state/SimpleAnalyticsProvider';
@@ -2473,30 +2474,110 @@ export default function AnalyticsScreen() {
             </View>
 
             <View style={styles.economicsHeroStatsRow}>
-              <View style={styles.economicsHeroStat}>
+              <TouchableOpacity
+                style={styles.economicsHeroStat}
+                activeOpacity={0.75}
+                onPress={() => cruiseValueDrill.open({
+                  title: 'Cruises Counted',
+                  subtitle: 'Every completed cruise in this ledger',
+                  summary: `${cruiseEconomicsSummary.totals.cruises} completed cruise(s) totaling ${cruiseEconomicsSummary.totals.totalNights} night(s) are counted in every total shown on this screen.`,
+                  sourceRecords: cruiseEconomicsSummary.rows.slice(0, 8).map((row) => ({ label: `${row.ship} — ${row.sailDate}`, value: `${row.nights} night(s)` })),
+                })}
+                testID="cruise-value-hero-cruises"
+              >
                 <Text style={styles.economicsHeroStatValue}>{cruiseEconomicsSummary.totals.cruises}</Text>
                 <Text style={styles.economicsHeroStatLabel}>Cruises</Text>
-              </View>
-              <View style={styles.economicsHeroStat}>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.economicsHeroStat}
+                activeOpacity={0.75}
+                onPress={() => cruiseValueDrill.open({
+                  title: 'Total Cash Paid',
+                  subtitle: 'Taxes, fees, and out-of-pocket costs across your cruises',
+                  formula: 'Cash Paid = Taxes & Fees + Deposits + Upgrades + Add-ons (summed per cruise)',
+                  sourceRecords: cruiseEconomicsSummary.rows.slice(0, 6).map((row) => ({
+                    label: `${row.ship} — ${row.sailDate}`,
+                    value: formatCurrencyDetailed(row.paid),
+                    confidence: row.calculationConfidence === 'actual' ? 'verified-invoice' : 'estimated-default',
+                  })),
+                })}
+                testID="cruise-value-hero-paid"
+              >
                 <Text style={styles.economicsHeroStatValue}>{formatCurrency(cruiseEconomicsSummary.totals.totalPaid)}</Text>
                 <Text style={styles.economicsHeroStatLabel}>Paid</Text>
-              </View>
-              <View style={styles.economicsHeroStat}>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.economicsHeroStat}
+                activeOpacity={0.75}
+                onPress={() => cruiseValueDrill.open({
+                  title: 'Cruise Value Captured',
+                  subtitle: 'The value the casino comped you off retail price',
+                  formula: 'Cruise Value Captured = Retail Value − Cash Paid (summed per cruise)',
+                  sourceRecords: cruiseEconomicsSummary.rows.slice(0, 6).map((row) => ({
+                    label: `${row.ship} — ${row.sailDate}`,
+                    value: formatCurrencyDetailed(row.discount),
+                    detail: `Retail ${formatCurrencyDetailed(row.retail)} minus paid ${formatCurrencyDetailed(row.paid)}`,
+                    confidence: row.calculationConfidence === 'actual' ? 'verified-invoice' : 'calculated',
+                  })),
+                })}
+                testID="cruise-value-hero-cruisevalue"
+              >
                 <Text style={[styles.economicsHeroStatValue, { color: CASINO_DASHBOARD_COLORS.green }]}>{formatCurrency(cruiseEconomicsSummary.totals.totalCruiseValueCaptured)}</Text>
                 <Text style={styles.economicsHeroStatLabel}>Cruise Value</Text>
-              </View>
-              <View style={styles.economicsHeroStat}>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.economicsHeroStat}
+                activeOpacity={0.75}
+                onPress={() => cruiseValueDrill.open({
+                  title: 'Cash Result & Casino Win/Loss',
+                  subtitle: 'Your true cash result, including casino win/loss',
+                  summary: 'What you actually came out ahead (or behind) once casino winnings, comps, and cash paid are all netted together.',
+                  formula: 'Cash Result = Comp Value + FreePlay + OBC + Casino Win/Loss − Cash Paid − Fees',
+                  inputs: [
+                    { label: 'Casino Win/Loss (winnings brought home)', value: formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalWinningsHome) },
+                    { label: 'Total cash paid', value: formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalPaid) },
+                  ],
+                  sourceRecords: cruiseEconomicsSummary.rows.slice(0, 6).map((row) => ({
+                    label: `${row.ship} — ${row.sailDate}`,
+                    value: formatSignedCurrencyDetailed(row.netCash),
+                    detail: `Casino win/loss ${formatSignedCurrencyDetailed(row.winningsHome)} minus paid ${formatCurrencyDetailed(row.paid)}`,
+                    confidence: row.calculationConfidence === 'actual' ? 'verified-invoice' : 'calculated',
+                  })),
+                })}
+                testID="cruise-value-hero-cashresult"
+              >
                 <Text style={[styles.economicsHeroStatValue, { color: cruiseEconomicsSummary.totals.totalCashResult >= 0 ? CASINO_DASHBOARD_COLORS.green : CASINO_DASHBOARD_COLORS.red }]}>
                   {formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalCashResult)}
                 </Text>
                 <Text style={styles.economicsHeroStatLabel}>Cash Result</Text>
-              </View>
-              <View style={styles.economicsHeroStat}>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.economicsHeroStat}
+                activeOpacity={0.75}
+                onPress={() => cruiseValueDrill.open({
+                  title: 'Total Economic Value',
+                  subtitle: 'Retail value plus casino win/loss, minus cash paid',
+                  summary: 'The full real-world value you received across every completed cruise — retail cabin value and casino winnings combined, net of what you actually paid.',
+                  formula: 'Total Economic Value = Total Retail Value + Total Casino Win/Loss − Total Cash Paid',
+                  inputs: [
+                    { label: 'Total retail value', value: formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalRetailValue) },
+                    { label: 'Total casino win/loss', value: formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalWinningsHome) },
+                    { label: 'Total cash paid', value: formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalPaid) },
+                  ],
+                  sourceRecords: cruiseEconomicsSummary.rows.slice(0, 6).map((row) => ({
+                    label: `${row.ship} — ${row.sailDate}`,
+                    value: formatSignedCurrencyDetailed(row.totalEconomic),
+                    confidence: row.calculationConfidence === 'actual' ? 'verified-invoice' : 'calculated',
+                  })),
+                  missing: cruiseEconomicsSummary.totals.hasEstimates ? ['Some cruises use estimated retail or cash-paid figures where actual invoices were missing.'] : [],
+                })}
+                testID="cruise-value-hero-totalecon"
+              >
                 <Text style={[styles.economicsHeroStatValue, { color: cruiseEconomicsSummary.totals.totalEconomicValue >= 0 ? CASINO_DASHBOARD_COLORS.green : CASINO_DASHBOARD_COLORS.red }]}>
                   {formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalEconomicValue)}
                 </Text>
                 <Text style={styles.economicsHeroStatLabel}>Total Econ</Text>
-              </View>
+              </TouchableOpacity>
             </View>
 
             <ScrollView
@@ -2518,6 +2599,7 @@ export default function AnalyticsScreen() {
                   <Text style={[styles.economicsHeaderCell, styles.economicsMoneyCell]}>Cash Result</Text>
                   <Text style={[styles.economicsHeaderCell, styles.economicsMoneyCell]}>Total Econ</Text>
                   <Text style={[styles.economicsHeaderCell, styles.economicsStatusCell]}>Confidence</Text>
+                  <Text style={[styles.economicsHeaderCell, styles.economicsEditCell]}>Edit</Text>
                 </View>
 
                 {visibleEconomicsRows.map((row, index) => {
@@ -2538,18 +2620,26 @@ export default function AnalyticsScreen() {
                       key={row.cruiseId}
                       style={[styles.economicsTableRow, isLastVisibleRow && styles.economicsTableRowLast]}
                       activeOpacity={0.75}
-                      onPress={() => openCruisePerformanceEditorById(row.cruiseId)}
-                      onLongPress={() => showDetail(`${row.ship} — ${row.sailDate}`, [
-                        { label: 'Retail', value: formatCurrencyDetailed(row.retail) },
-                        { label: 'Paid', value: formatCurrencyDetailed(row.paid) },
-                        { label: 'Cruise value', value: formatCurrencyDetailed(row.discount) },
-                        { label: 'Points', value: formatNumber(row.points) },
-                        { label: 'Winnings', value: formatSignedCurrencyDetailed(row.winningsHome) },
-                        { label: 'Cash result', value: formatSignedCurrencyDetailed(row.netCash) },
-                        { label: 'Total economic value', value: formatSignedCurrencyDetailed(row.totalEconomic) },
-                        { label: 'Confidence', value: confidenceLabel },
-                        ...(row.notes ? [{ label: 'Notes', value: row.notes }] : []),
-                      ], 'Tap the row to edit, or long-press to see the calculation notes.')}
+                      onPress={() => cruiseValueDrill.open({
+                        title: `${row.ship} — ${row.sailDate}`,
+                        subtitle: `${row.nights} night(s) • ${confidenceLabel} data`,
+                        summary: 'How this cruise retail value, cash paid, cruise value captured, casino win/loss, and total economic value were calculated.',
+                        formula: 'Total Economic Value = Retail Value + Casino Win/Loss − Cash Paid',
+                        inputs: [
+                          { label: 'Retail value', value: formatCurrencyDetailed(row.retail) },
+                          { label: 'Cash paid', value: formatCurrencyDetailed(row.paid) },
+                          { label: 'Cruise value captured (Retail − Paid)', value: formatCurrencyDetailed(row.discount) },
+                          { label: 'Casino points', value: formatNumber(row.points) },
+                          { label: 'Casino win/loss', value: formatSignedCurrencyDetailed(row.winningsHome) },
+                          { label: 'Cash result', value: formatSignedCurrencyDetailed(row.netCash) },
+                        ],
+                        sourceRecords: [
+                          { label: 'Total economic value', value: formatSignedCurrencyDetailed(row.totalEconomic), confidence: row.calculationConfidence === 'actual' ? 'verified-invoice' : row.calculationConfidence === 'mixed' ? 'imported-csv' : 'estimated-default' },
+                          ...(row.notes ? [{ label: 'Notes', value: row.notes }] : []),
+                        ],
+                        onEdit: () => openCruisePerformanceEditorById(row.cruiseId),
+                        editLabel: 'Edit Casino Record',
+                      })}
                       testID={`casino-economics-row-${row.cruiseId}`}
                     >
                       <Text style={[styles.economicsCell, styles.economicsDateCell]}>{row.sailDate}</Text>
@@ -2564,6 +2654,16 @@ export default function AnalyticsScreen() {
                       <Text style={[styles.economicsCell, styles.economicsMoneyCell, row.totalEconomic >= 0 ? styles.economicsPositiveValue : styles.economicsNegativeValue]}>{formatSignedCurrencyDetailed(row.totalEconomic)}</Text>
                       <View style={[styles.economicsStatusPill, statusStyle]}>
                         <Text style={styles.economicsStatusText}>{confidenceLabel}</Text>
+                      </View>
+                      <View style={styles.economicsEditCell}>
+                        <TouchableOpacity
+                          style={styles.economicsRowEditButton}
+                          activeOpacity={0.7}
+                          onPress={() => openCruisePerformanceEditorById(row.cruiseId)}
+                          testID={`casino-economics-edit-${row.cruiseId}`}
+                        >
+                          <Pencil size={14} color={CASINO_DASHBOARD_COLORS.royalBlue} />
+                        </TouchableOpacity>
                       </View>
                     </TouchableOpacity>
                   );
@@ -2583,6 +2683,7 @@ export default function AnalyticsScreen() {
                   <View style={[styles.economicsStatusPill, cruiseEconomicsSummary.totals.hasEstimates ? styles.economicsStatusPending : styles.economicsStatusKnown]}>
                     <Text style={styles.economicsStatusText}>{cruiseEconomicsSummary.totals.hasEstimates ? 'Partial' : 'Actual'}</Text>
                   </View>
+                  <View style={styles.economicsEditCell} />
                 </View>
               </View>
             </ScrollView>
@@ -2615,18 +2716,32 @@ export default function AnalyticsScreen() {
               <Text style={styles.economicsSectionTitle}>Annual averages</Text>
               <View style={styles.economicsSummaryGrid}>
                 {[
-                  { label: 'Avg nights / cruise', value: cruiseEconomicsSummary.averages.nightsPerCruise.toFixed(2) },
-                  { label: 'Avg retail / cruise', value: formatCurrencyDetailed(cruiseEconomicsSummary.averages.retailPerCruise) },
-                  { label: 'Avg paid / cruise', value: formatCurrencyDetailed(cruiseEconomicsSummary.averages.paidPerCruise) },
-                  { label: 'Avg winnings / cruise', value: formatCurrencyDetailed(cruiseEconomicsSummary.averages.winningsPerCruise) },
-                  { label: 'Avg cash result / cruise', value: formatSignedCurrencyDetailed(cruiseEconomicsSummary.averages.netCashPerCruise) },
-                  { label: 'Avg total econ / cruise', value: formatSignedCurrencyDetailed(cruiseEconomicsSummary.averages.totalEconomicValuePerCruise) },
-                  { label: 'Avg points / night', value: cruiseEconomicsSummary.averages.pointsPerNight.toFixed(2) },
+                  { label: 'Avg nights / cruise', value: cruiseEconomicsSummary.averages.nightsPerCruise.toFixed(2), formula: 'Avg Nights / Cruise = Total Nights ÷ Completed Cruises', numeratorLabel: 'Total nights', numeratorValue: String(cruiseEconomicsSummary.totals.totalNights) },
+                  { label: 'Avg retail / cruise', value: formatCurrencyDetailed(cruiseEconomicsSummary.averages.retailPerCruise), formula: 'Avg Retail / Cruise = Total Retail Value ÷ Completed Cruises', numeratorLabel: 'Total retail value', numeratorValue: formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalRetailValue) },
+                  { label: 'Avg paid / cruise', value: formatCurrencyDetailed(cruiseEconomicsSummary.averages.paidPerCruise), formula: 'Avg Paid / Cruise = Total Cash Paid ÷ Completed Cruises', numeratorLabel: 'Total cash paid', numeratorValue: formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalPaid) },
+                  { label: 'Avg winnings / cruise', value: formatCurrencyDetailed(cruiseEconomicsSummary.averages.winningsPerCruise), formula: 'Avg Winnings / Cruise = Total Casino Win/Loss Brought Home ÷ Completed Cruises', numeratorLabel: 'Total casino win/loss brought home', numeratorValue: formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalWinningsHome) },
+                  { label: 'Avg cash result / cruise', value: formatSignedCurrencyDetailed(cruiseEconomicsSummary.averages.netCashPerCruise), formula: 'Avg Cash Result / Cruise = Total Net Make-Out ÷ Completed Cruises', numeratorLabel: 'Total net make-out', numeratorValue: formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalCashResult) },
+                  { label: 'Avg total econ / cruise', value: formatSignedCurrencyDetailed(cruiseEconomicsSummary.averages.totalEconomicValuePerCruise), formula: 'Avg Total Econ / Cruise = Total Economic Value ÷ Completed Cruises', numeratorLabel: 'Total economic value', numeratorValue: formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalEconomicValue) },
+                  { label: 'Avg points / night', value: cruiseEconomicsSummary.averages.pointsPerNight.toFixed(2), formula: 'Avg Points / Night = Total Casino Points ÷ Total Nights', numeratorLabel: 'Total casino points', numeratorValue: formatNumber(cruiseEconomicsSummary.totals.totalPoints) },
                 ].map((item) => (
-                  <View key={item.label} style={styles.economicsSummaryCard}>
+                  <TouchableOpacity
+                    key={item.label}
+                    style={styles.economicsSummaryCard}
+                    activeOpacity={0.75}
+                    onPress={() => cruiseValueDrill.open({
+                      title: item.label,
+                      subtitle: 'Annual average across every completed cruise',
+                      formula: item.formula,
+                      inputs: [
+                        { label: item.numeratorLabel, value: item.numeratorValue },
+                        { label: 'Completed cruises', value: String(cruiseEconomicsSummary.totals.cruises) },
+                      ],
+                    })}
+                    testID={`cruise-value-avg-${item.label}`}
+                  >
                     <Text style={styles.economicsSummaryLabel}>{item.label}</Text>
                     <Text style={styles.economicsSummaryValue}>{item.value}</Text>
-                  </View>
+                  </TouchableOpacity>
                 ))}
               </View>
             </View>
@@ -2635,16 +2750,31 @@ export default function AnalyticsScreen() {
               <Text style={styles.economicsSectionTitle}>Annual KPI summary</Text>
               <View style={styles.economicsSummaryGrid}>
                 {[
-                  { label: 'Cash ROI', value: `${cruiseEconomicsSummary.roiStyle.cashROI.toFixed(2)}x` },
-                  { label: 'Cruise value multiple', value: `${cruiseEconomicsSummary.roiStyle.cruiseValueMultiple.toFixed(2)}x` },
-                  { label: 'Comp coverage rate', value: formatPercentage(cruiseEconomicsSummary.roiStyle.compCoverageRate * 100, 2) },
-                  { label: 'Winnings multiple', value: `${cruiseEconomicsSummary.roiStyle.winningsMultiple.toFixed(2)}x` },
-                  { label: 'Value per hour', value: cruiseEconomicsSummary.roiStyle.valuePerHour > 0 ? formatCurrencyDetailed(cruiseEconomicsSummary.roiStyle.valuePerHour) : '—' },
+                  { label: 'Cash ROI', value: `${cruiseEconomicsSummary.roiStyle.cashROI.toFixed(2)}x`, formula: 'Cash ROI = Total Net Make-Out ÷ Total Cash Paid', numeratorLabel: 'Total net make-out', numeratorValue: formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalCashResult) },
+                  { label: 'Cruise value multiple', value: `${cruiseEconomicsSummary.roiStyle.cruiseValueMultiple.toFixed(2)}x`, formula: 'Cruise Value Multiple = Total Cruise Value Captured ÷ Total Cash Paid', numeratorLabel: 'Total cruise value captured', numeratorValue: formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalCruiseValueCaptured) },
+                  { label: 'Comp coverage rate', value: formatPercentage(cruiseEconomicsSummary.roiStyle.compCoverageRate * 100, 2), formula: 'Comp Coverage Rate = Total Cruise Value Captured ÷ Total Retail Value', numeratorLabel: 'Total cruise value captured', numeratorValue: formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalCruiseValueCaptured) },
+                  { label: 'Winnings multiple', value: `${cruiseEconomicsSummary.roiStyle.winningsMultiple.toFixed(2)}x`, formula: 'Winnings Multiple = Total Casino Win/Loss Brought Home ÷ Total Cash Paid', numeratorLabel: 'Total casino win/loss brought home', numeratorValue: formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalWinningsHome) },
+                  { label: 'Value per hour', value: cruiseEconomicsSummary.roiStyle.valuePerHour > 0 ? formatCurrencyDetailed(cruiseEconomicsSummary.roiStyle.valuePerHour) : '—', formula: 'Value Per Hour = Total Economic Value ÷ Estimated Casino Hours Played', numeratorLabel: 'Total economic value', numeratorValue: formatSignedCurrencyDetailed(cruiseEconomicsSummary.totals.totalEconomicValue) },
                 ].map((item) => (
-                  <View key={item.label} style={styles.economicsSummaryCard}>
+                  <TouchableOpacity
+                    key={item.label}
+                    style={styles.economicsSummaryCard}
+                    activeOpacity={0.75}
+                    onPress={() => cruiseValueDrill.open({
+                      title: item.label,
+                      subtitle: 'Annual KPI across every completed cruise',
+                      formula: item.formula,
+                      inputs: [
+                        { label: item.numeratorLabel, value: item.numeratorValue },
+                        { label: 'Total cash paid', value: formatCurrencyDetailed(cruiseEconomicsSummary.totals.totalPaid) },
+                      ],
+                      assumptions: item.label === 'Value per hour' && cruiseEconomicsSummary.roiStyle.valuePerHour <= 0 ? ['Not enough logged casino hours yet to calculate a value-per-hour figure.'] : [],
+                    })}
+                    testID={`cruise-value-kpi-annual-${item.label}`}
+                  >
                     <Text style={styles.economicsSummaryLabel}>{item.label}</Text>
                     <Text style={styles.economicsSummaryValue}>{item.value}</Text>
-                  </View>
+                  </TouchableOpacity>
                 ))}
               </View>
             </View>
@@ -2658,40 +2788,67 @@ export default function AnalyticsScreen() {
                     row: cruiseEconomicsSummary.snapshots.bestCashCruise,
                     value: cruiseEconomicsSummary.snapshots.bestCashCruise ? formatSignedCurrencyDetailed(cruiseEconomicsSummary.snapshots.bestCashCruise.netCash) : '—',
                     detail: cruiseEconomicsSummary.snapshots.bestCashCruise ? `Paid ${formatCurrencyDetailed(cruiseEconomicsSummary.snapshots.bestCashCruise.paid)} • Winnings ${formatCurrencyDetailed(cruiseEconomicsSummary.snapshots.bestCashCruise.winningsHome)}` : 'No data',
+                    formula: 'Best Cash Cruise = Highest Cash Result (Casino Win/Loss − Cash Paid) among completed cruises',
                   },
                   {
                     label: 'Biggest cruise-value capture',
                     row: cruiseEconomicsSummary.snapshots.biggestCompValueCruise,
                     value: cruiseEconomicsSummary.snapshots.biggestCompValueCruise ? formatCurrencyDetailed(cruiseEconomicsSummary.snapshots.biggestCompValueCruise.discount) : '—',
                     detail: cruiseEconomicsSummary.snapshots.biggestCompValueCruise ? `Retail ${formatCurrencyDetailed(cruiseEconomicsSummary.snapshots.biggestCompValueCruise.retail)} • Paid ${formatCurrencyDetailed(cruiseEconomicsSummary.snapshots.biggestCompValueCruise.paid)}` : 'No data',
+                    formula: 'Biggest Cruise-Value Capture = Highest (Retail Value − Cash Paid) among completed cruises',
                   },
                   {
                     label: 'Best points cruise',
                     row: cruiseEconomicsSummary.snapshots.bestPointsCruise,
                     value: cruiseEconomicsSummary.snapshots.bestPointsCruise ? formatNumber(cruiseEconomicsSummary.snapshots.bestPointsCruise.points) : '—',
                     detail: cruiseEconomicsSummary.snapshots.bestPointsCruise ? `${cruiseEconomicsSummary.snapshots.bestPointsCruise.nights} nights` : 'No data',
+                    formula: 'Best Points Cruise = Highest casino points earned on a single completed cruise',
                   },
                   {
                     label: 'Best points-per-night',
                     row: cruiseEconomicsSummary.snapshots.bestPointsPerNightCruise,
                     value: cruiseEconomicsSummary.snapshots.bestPointsPerNightCruise ? cruiseEconomicsSummary.snapshots.bestPointsPerNightCruise.pointsPerNight.toFixed(2) : '—',
                     detail: cruiseEconomicsSummary.snapshots.bestPointsPerNightCruise ? `${formatNumber(cruiseEconomicsSummary.snapshots.bestPointsPerNightCruise.points)} pts across ${cruiseEconomicsSummary.snapshots.bestPointsPerNightCruise.nights} nights` : 'No data',
+                    formula: 'Best Points-Per-Night = Highest (Points ÷ Nights) among completed cruises',
                   },
                   {
                     label: 'Weakest points cruise',
                     row: cruiseEconomicsSummary.snapshots.weakestPointsCruise,
                     value: cruiseEconomicsSummary.snapshots.weakestPointsCruise ? formatNumber(cruiseEconomicsSummary.snapshots.weakestPointsCruise.points) : '—',
                     detail: cruiseEconomicsSummary.snapshots.weakestPointsCruise ? `${cruiseEconomicsSummary.snapshots.weakestPointsCruise.nights} nights` : 'No data',
+                    formula: 'Weakest Points Cruise = Lowest casino points earned on a single completed cruise',
                   },
                 ].map((item) => (
-                  <View key={item.label} style={styles.economicsSnapshotCard}>
+                  <TouchableOpacity
+                    key={item.label}
+                    style={styles.economicsSnapshotCard}
+                    activeOpacity={0.75}
+                    onPress={() => cruiseValueDrill.open({
+                      title: item.label,
+                      subtitle: item.row ? `${item.row.ship} — ${item.row.sailDate}` : 'No cruise matched yet',
+                      formula: item.formula,
+                      summary: item.row ? `This cruise ranked at the top (or bottom) of this category out of ${cruiseEconomicsSummary.rows.length} completed cruise(s) counted.` : 'No completed cruise has enough data for this category yet.',
+                      sourceRecords: item.row ? [
+                        { label: 'Retail', value: formatCurrencyDetailed(item.row.retail) },
+                        { label: 'Paid', value: formatCurrencyDetailed(item.row.paid) },
+                        { label: 'Cruise value captured', value: formatCurrencyDetailed(item.row.discount) },
+                        { label: 'Casino points', value: formatNumber(item.row.points) },
+                        { label: 'Casino win/loss', value: formatSignedCurrencyDetailed(item.row.winningsHome) },
+                        { label: 'Cash result', value: formatSignedCurrencyDetailed(item.row.netCash) },
+                      ] : [],
+                      missing: item.row ? [] : ['No cruise matched this category yet.'],
+                      onEdit: item.row ? () => openCruisePerformanceEditorById(item.row!.cruiseId) : undefined,
+                      editLabel: item.row ? 'Edit Casino Record' : undefined,
+                    })}
+                    testID={`cruise-value-snapshot-${item.label}`}
+                  >
                     <View style={styles.economicsSnapshotHeader}>
                       <Text style={styles.economicsSnapshotLabel}>{item.label}</Text>
                       <Text style={styles.economicsSnapshotValue}>{item.value}</Text>
                     </View>
                     <Text style={styles.economicsSnapshotShip}>{item.row ? `${item.row.ship} • ${item.row.sailDate}` : 'No cruise matched yet'}</Text>
                     <Text style={styles.economicsSnapshotDetail}>{item.detail}</Text>
-                  </View>
+                  </TouchableOpacity>
                 ))}
               </View>
             </View>
@@ -2817,6 +2974,50 @@ export default function AnalyticsScreen() {
           totalCruiseValueCaptured={realAnalytics.totalCruiseValueCaptured}
           totalCashResult={realAnalytics.completedCashResult}
           totalEconomicValue={realAnalytics.completedEconomicValue}
+          onPressPaid={() => cruiseValueDrill.open({
+            title: 'Total Cash Paid',
+            subtitle: 'All-time out-of-pocket cash paid',
+            formula: 'Cash Paid = Taxes & Fees + Deposits + Upgrades + Add-ons (summed per cruise)',
+            inputs: [{ label: 'Total cash paid', value: formatCurrencyDetailed(realAnalytics.totalOutOfPocket) }],
+          })}
+          onPressCruiseValue={() => cruiseValueDrill.open({
+            title: 'Cruise Value Captured',
+            subtitle: 'The value the casino comped you off retail price',
+            formula: 'Cruise Value Captured = Retail Value − Cash Paid (summed per cruise)',
+            inputs: [
+              { label: 'Total retail value', value: formatCurrencyDetailed(realAnalytics.totalRetailValue) },
+              { label: 'Total cash paid', value: formatCurrencyDetailed(realAnalytics.totalOutOfPocket) },
+            ],
+          })}
+          onPressEconomicValue={() => cruiseValueDrill.open({
+            title: 'Total Economic Value',
+            subtitle: 'Retail value plus casino win/loss, minus cash paid',
+            formula: 'Total Economic Value = Total Retail Value + Total Casino Win/Loss − Total Cash Paid',
+            inputs: [
+              { label: 'Total retail value', value: formatCurrencyDetailed(realAnalytics.totalRetailValue) },
+              { label: 'Total cash paid', value: formatCurrencyDetailed(realAnalytics.totalOutOfPocket) },
+              { label: 'Total economic value', value: formatSignedCurrencyDetailed(realAnalytics.completedEconomicValue) },
+            ],
+          })}
+          onPressRetailValue={() => cruiseValueDrill.open({
+            title: 'Total Retail Value',
+            subtitle: 'What these cruises would have cost at published brochure rates',
+            inputs: [{ label: 'Total retail value', value: formatCurrencyDetailed(realAnalytics.totalRetailValue) }],
+          })}
+          onPressWinningsHome={() => cruiseValueDrill.open({
+            title: 'Casino Win/Loss (Winnings Home)',
+            subtitle: 'Casino winnings brought home, separate from cruise value',
+            formula: 'Winnings Home = Total Economic Value − Total Cruise Value Captured',
+            inputs: [
+              { label: 'Total economic value', value: formatSignedCurrencyDetailed(realAnalytics.completedEconomicValue) },
+              { label: 'Total cruise value captured', value: formatCurrencyDetailed(realAnalytics.totalCruiseValueCaptured) },
+            ],
+          })}
+          onPressCashResult={() => cruiseValueDrill.open({
+            title: 'Cash Result',
+            subtitle: 'Casino win/loss net of cash paid',
+            inputs: [{ label: 'Total cash result', value: formatSignedCurrencyDetailed(realAnalytics.completedCashResult) }],
+          })}
         />
       </View>
     </View>
@@ -6240,6 +6441,21 @@ const styles = StyleSheet.create({
   },
   economicsStatusCell: {
     width: 110,
+  },
+  economicsEditCell: {
+    width: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  economicsRowEditButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: CASINO_DASHBOARD_COLORS.cardAlt,
+    borderWidth: 1,
+    borderColor: CASINO_DASHBOARD_COLORS.borderStrong,
   },
   economicsStatusPill: {
     width: 98,
