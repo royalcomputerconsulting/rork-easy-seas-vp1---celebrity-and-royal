@@ -691,6 +691,10 @@ function OverviewScreenContent() {
     router.push('/events' as any);
   }, [router]);
 
+  const handleAskEasySeasPress = useCallback(() => {
+    router.push('/ask-my-data' as any);
+  }, [router]);
+
   const handleAddCrewmemberPress = useCallback(() => {
     console.log('[Overview] Add Crewmember pressed');
     router.push('/events' as any);
@@ -1135,9 +1139,7 @@ function OverviewScreenContent() {
       
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <QuickActionsFAB
-          onBrowseCruises={handleCruisesPress}
-          onImportData={handleSettingsPress}
-          onViewCalendar={handleCalendarPress}
+          onAskEasySeas={handleAskEasySeasPress}
           onAddCrewmember={handleAddCrewmemberPress}
           onAddSession={handleAddSessionPress}
         />
