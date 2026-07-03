@@ -49,6 +49,7 @@ import {
   Activity,
   ClipboardList,
   RefreshCw,
+  Search,
 } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME, SHADOW } from '@/constants/theme';
 import { useSimpleAnalytics } from '@/state/SimpleAnalyticsProvider';
@@ -2595,6 +2596,24 @@ export default function AnalyticsScreen() {
             </TouchableOpacity>
           ))}
         </View>
+      </View>
+
+      <View style={styles.section}>
+        <TouchableOpacity
+          style={[casinoDashboardStyles.card, styles.certLookupCta]}
+          activeOpacity={0.85}
+          onPress={() => router.push('/certificate-lookup' as any)}
+          testID="action-center-certificate-lookup-cta"
+        >
+          <View style={[styles.actionRowIcon, { backgroundColor: 'rgba(212, 175, 55, 0.16)' }]}>
+            <Search size={18} color={CASINO_DASHBOARD_COLORS.gold ?? CASINO_DASHBOARD_COLORS.orange} />
+          </View>
+          <View style={styles.actionRowContent}>
+            <Text style={styles.economicsTitle}>Find This Month's & Next Month's Certificates</Text>
+            <Text style={casinoDashboardStyles.screenSubtitle}>Pulls the official Royal Caribbean certificate PDFs and matches them against your booked cruises</Text>
+          </View>
+          <ChevronRight size={18} color={CASINO_DASHBOARD_COLORS.textSecondary} />
+        </TouchableOpacity>
       </View>
 
       {freePlaySummary.total > 0 && (
@@ -6175,6 +6194,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: CASINO_DASHBOARD_COLORS.border,
     ...SHADOW.sm,
+  },
+  certLookupCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
   },
   actionRowIcon: {
     width: 36,
