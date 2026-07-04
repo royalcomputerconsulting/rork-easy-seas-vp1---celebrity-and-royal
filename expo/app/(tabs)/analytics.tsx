@@ -3984,6 +3984,7 @@ export default function AnalyticsScreen() {
   }, [calcsMode, cruiseEconomicsSummary, sessions, sessionAnalytics, historicalCruiseData, currentSeasonMetrics]);
 
   const historyInsightsDrill = useDrillDown();
+  const w2gDrill = useDrillDown();
 
   const bestShipByPoints = useMemo(() => {
     return [...shipPerformance].sort((a, b) => b.points - a.points)[0] ?? null;
@@ -4360,8 +4361,27 @@ export default function AnalyticsScreen() {
             {pointsPerNightTrend.map((entry, index) => {
               const previous = pointsPerNightTrend[index - 1];
               const delta = previous ? entry.pointsPerNight - previous.pointsPerNight : 0;
+              const nightsForEntry = bookedCruises.find((c) => c.id === entry.id)?.nights ?? null;
               return (
-                <View key={entry.id} style={[styles.dataRow, index === pointsPerNightTrend.length - 1 && { paddingBottom: 0 }]}>
+                <TouchableOpacity
+                  key={entry.id}
+                  style={[styles.dataRow, index === pointsPerNightTrend.length - 1 && { paddingBottom: 0 }]}
+                  activeOpacity={0.75}
+                  onPress={() => historyInsightsDrill.open({
+                    title: `${entry.ship} — Points per Night`,
+                    subtitle: entry.sailDate,
+                    summary: 'Points per night = casino points earned on this cruise ÷ nights sailed. A separate points-per-casino-open-day figure is shown when itinerary/casino-hours data exists for this sailing.',
+                    formula: 'Points per Night = Casino Points ÷ Nights',
+                    inputs: [
+                      { label: 'Nights', value: nightsForEntry != null ? String(nightsForEntry) : 'Unknown' },
+                      { label: 'Points per Night', value: `${entry.pointsPerNight.toFixed(1)}/night` },
+                      { label: 'Change vs. previous sailing', value: previous ? `${delta >= 0 ? '+' : ''}${delta.toFixed(1)}/night` : 'First sailing in trend' },
+                    ],
+                    missing: nightsForEntry == null ? ['Nights for this cruise could not be resolved from your records — value may be approximate.'] : [],
+                    relatedActions: [{ label: 'Open Cruise', onPress: () => { historyInsightsDrill.close(); openCruiseDetailFromPortfolio(bookedCruises.find((c) => c.id === entry.id) as BookedCruise); } }],
+                  })}
+                  testID={`points-per-night-row-${entry.id}`}
+                >
                   <Text style={styles.dataLabel} numberOfLines={1}>{entry.ship} · {entry.sailDate}</Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                     <Text style={styles.dataValue}>{entry.pointsPerNight.toFixed(1)}/night</Text>
@@ -4369,7 +4389,7 @@ export default function AnalyticsScreen() {
                       ? <TrendingUp size={13} color={CASINO_DASHBOARD_COLORS.green} />
                       : <TrendingDown size={13} color={CASINO_DASHBOARD_COLORS.red} />)}
                   </View>
-                </View>
+                </TouchableOpacity>
               );
             })}
           </View>
@@ -4884,7 +4904,34 @@ export default function AnalyticsScreen() {
           records={w2gRecords}
           onAddRecord={addW2GRecord}
           onRemoveRecord={removeW2GRecord}
+          onRecordPress={(record) => {
+            const linkedCruise = record.cruiseId ? bookedCruises.find((c) => c.id === record.cruiseId) : undefined;
+            w2gDrill.open({
+              title: 'W-2G Record',
+              subtitle: `${record.date} · ${record.description}`,
+              summary: 'Every W-2G is a taxable jackpot the IRS requires the casino to report (slot wins $1,200+, keno $1,500+, poker $5,000+). The net amount is what actually landed in your pocket after withholding.',
+              formula: 'Net Received = Jackpot Amount - Federal Tax Withheld',
+              inputs: [
+                { label: 'Taxable Jackpot Amount', value: formatCurrencyDetailed(record.amount) },
+                { label: 'Federal Tax Withheld', value: formatCurrencyDetailed(record.withheld) },
+                { label: 'Net Received', value: formatCurrencyDetailed(record.amount - record.withheld) },
+              ],
+              sourceRecords: [
+                { label: 'Linked Cruise', value: record.cruiseName || linkedCruise?.shipName || 'Not linked to a cruise', confidence: linkedCruise ? 'verified-invoice' : 'needs-review' },
+                { label: 'Included in Win/Loss?', value: 'No — W2Gs are tracked separately from your logged casino win/loss to avoid double-counting the same cash twice.' },
+                { label: 'Included in Total Economic Value?', value: 'No — W-2G jackpots are already reflected in your recorded cash win/loss, so they are not added again here.' },
+              ],
+              missing: !record.cruiseId ? ['This W-2G is not linked to a specific cruise — link it for cruise-level reporting.'] : [],
+              onEdit: linkedCruise ? () => { w2gDrill.close(); openCruiseDetailFromPortfolio(linkedCruise); } : undefined,
+              editLabel: 'Open Linked Cruise',
+              relatedActions: [
+                ...(linkedCruise ? [{ label: 'Open Cruise', onPress: () => { w2gDrill.close(); openCruiseDetailFromPortfolio(linkedCruise); } }] : []),
+                { label: 'Delete Record', emphasis: 'secondary' as const, onPress: () => { w2gDrill.close(); removeW2GRecord(record.id); } },
+              ],
+            });
+          }}
         />
+        {w2gDrill.element}
       </View>
 
       <View style={styles.calcsInsightCard}>

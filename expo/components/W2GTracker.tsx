@@ -35,9 +35,11 @@ interface W2GTrackerProps {
   records: W2GRecord[];
   onAddRecord: (record: Omit<W2GRecord, 'id' | 'createdAt'>) => void;
   onRemoveRecord: (id: string) => void;
+  /** Stage 9.5: tapping a record opens the universal calculation drill-down instead of just removing it. */
+  onRecordPress?: (record: W2GRecord) => void;
 }
 
-export function W2GTracker({ records, onAddRecord, onRemoveRecord }: W2GTrackerProps) {
+export function W2GTracker({ records, onAddRecord, onRemoveRecord, onRecordPress }: W2GTrackerProps) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [newDate, setNewDate] = useState(new Date().toISOString().split('T')[0]);
   const [newAmount, setNewAmount] = useState('');
@@ -115,7 +117,13 @@ export function W2GTracker({ records, onAddRecord, onRemoveRecord }: W2GTrackerP
             {records
               .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
               .map((record) => (
-                <View key={record.id} style={styles.recordCard}>
+                <TouchableOpacity
+                  key={record.id}
+                  style={styles.recordCard}
+                  activeOpacity={onRecordPress ? 0.75 : 1}
+                  onPress={onRecordPress ? () => onRecordPress(record) : undefined}
+                  testID={`w2g-record-${record.id}`}
+                >
                   <View style={styles.recordHeader}>
                     <View style={styles.recordDateContainer}>
                       <Calendar size={14} color={COLORS.navyDeep} />
@@ -154,7 +162,7 @@ export function W2GTracker({ records, onAddRecord, onRemoveRecord }: W2GTrackerP
                       </>
                     )}
                   </View>
-                </View>
+                </TouchableOpacity>
               ))}
           </ScrollView>
         )}

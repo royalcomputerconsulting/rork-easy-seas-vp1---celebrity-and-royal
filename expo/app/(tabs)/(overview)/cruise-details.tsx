@@ -16,6 +16,9 @@ import { useUser, DEFAULT_PLAYING_HOURS } from '@/state/UserProvider';
 
 import { getCasinoStatusBadge, calculatePersonalizedPlayEstimate, PersonalizedPlayEstimate, PlayingHoursConfig, type CasinoAvailability } from '@/lib/casinoAvailability';
 import { getBookedCruiseCasinoPoints } from '@/lib/casinoPointTruth';
+import { useCasinoLedger } from '@/hooks/useCasinoLedger';
+import { useDrillDown, SourceConfidenceBadge } from '@/components/casino-dashboard/CalculationDrillDownDrawer';
+import { toSourceConfidence } from '@/lib/casinoLedger/confidence';
 import { getEstimatedCabinPrices } from '@/lib/valueCalculator';
 import { getUniqueImageForCruise, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
 import { buildCruiseDetailsParams } from '@/lib/navigation/cruiseDetails';
@@ -366,6 +369,10 @@ export default function CruiseDetailsScreen() {
     return () => clearTimeout(timer);
   }, [id, routeShipName, routeSailDate, routeBookingId, routeOfferCode]);
 
+
+  const casinoLedger = useCasinoLedger();
+  const ledgerDrill = useDrillDown();
+  const [showAttachOfferModal, setShowAttachOfferModal] = useState<boolean>(false);
 
   const updateCruise = (updatedCruise: any) => {
     console.log('[CruiseDetails] Updating cruise:', updatedCruise);
@@ -1889,6 +1896,163 @@ export default function CruiseDetailsScreen() {
               </View>
             </View>
           )}
+
+          {(() => {
+            const ledgerEntry = casinoLedger.entries.find((e) => e.cruiseId === cruise.id);
+            const bc = cruise as BookedCruise;
+            const actualPoints = bc.earnedPoints ?? bc.casinoPoints ?? null;
+            const expectedPoints = personalizedPlayEstimate?.estimatedPoints ?? null;
+            const unusedOffers: CasinoOffer[] = [...(storeOffers || []), ...(localData.offers || [])].filter((o) =>
+              o.status !== 'used' && o.status !== 'archived' && o.status !== 'expired'
+              && (!o.shipName || o.shipName.toLowerCase() === (cruise.shipName ?? '').toLowerCase()),
+            );
+
+            return (
+              <View style={styles.casinoSectionCompact} testID="cruise-detail-casino-ledger-panel">
+                <View style={styles.sectionHeaderCompact}>
+                  <Dice5 size={16} color={COLORS.beigeWarm} />
+                  <Text style={styles.sectionTitleCompact}>Casino Ledger</Text>
+                </View>
+
+                <View style={styles.casinoStatsRow}>
+                  <TouchableOpacity
+                    style={styles.casinoStatBox}
+                    activeOpacity={0.75}
+                    onPress={() => ledgerDrill.open({
+                      title: 'Casino Points',
+                      subtitle: `${cruise.shipName} · ${formatDate(cruise.sailDate, 'short')}`,
+                      summary: 'Casino points earned on this sailing, from logged sessions when available, otherwise from the cruise record.',
+                      inputs: [
+                        { label: 'Points', value: ledgerEntry ? ledgerEntry.points.value.toLocaleString() : 'No data' },
+                        { label: 'Source', value: ledgerEntry?.points.source ?? 'Not found in ledger' },
+                      ],
+                      sourceRecords: ledgerEntry ? [{ label: 'Confidence', value: ledgerEntry.points.confidence, confidence: toSourceConfidence(ledgerEntry.points.confidence) }] : [],
+                    })}
+                  >
+                    <Text style={styles.casinoStatBoxLabel}>Points</Text>
+                    <Text style={styles.casinoStatBoxValue}>{ledgerEntry ? ledgerEntry.points.value.toLocaleString() : '—'}</Text>
+                    {ledgerEntry ? <SourceConfidenceBadge confidence={toSourceConfidence(ledgerEntry.points.confidence)} /> : null}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.casinoStatBox}
+                    activeOpacity={0.75}
+                    onPress={() => ledgerDrill.open({
+                      title: 'Coin-In',
+                      subtitle: `${cruise.shipName} · ${formatDate(cruise.sailDate, 'short')}`,
+                      summary: 'Coin-in is total wagering volume, estimated from Royal Caribbean\'s slot rule of $5 wagered per casino point earned. It is NOT your cost or loss.',
+                      formula: 'Coin-In = Casino Points × $5',
+                      inputs: [{ label: 'Coin-In', value: ledgerEntry ? `$${ledgerEntry.coinIn.value.toLocaleString()}` : 'No data' }],
+                    })}
+                  >
+                    <Text style={styles.casinoStatBoxLabel}>Coin-In</Text>
+                    <Text style={styles.casinoStatBoxValue}>{ledgerEntry ? `$${Math.round(ledgerEntry.coinIn.value).toLocaleString()}` : '—'}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.casinoStatBox}
+                    activeOpacity={0.75}
+                    onPress={() => ledgerDrill.open({
+                      title: 'Win / Loss',
+                      subtitle: `${cruise.shipName} · ${formatDate(cruise.sailDate, 'short')}`,
+                      summary: 'Your recorded cash result for this cruise\'s casino play.',
+                      inputs: [{ label: 'Win/Loss', value: ledgerEntry ? `$${ledgerEntry.winLoss.value.toLocaleString()}` : 'No data' }],
+                      sourceRecords: ledgerEntry ? [{ label: 'Confidence', value: ledgerEntry.winLoss.confidence, confidence: toSourceConfidence(ledgerEntry.winLoss.confidence) }] : [],
+                    })}
+                  >
+                    <Text style={styles.casinoStatBoxLabel}>Win/Loss</Text>
+                    <Text style={[styles.casinoStatBoxValue, ledgerEntry && ledgerEntry.winLoss.value < 0 ? { color: COLORS.error } : null]}>
+                      {ledgerEntry ? `${ledgerEntry.winLoss.value >= 0 ? '+' : ''}$${Math.round(ledgerEntry.winLoss.value).toLocaleString()}` : '—'}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.casinoStatBox}
+                    activeOpacity={0.75}
+                    onPress={() => ledgerDrill.open({
+                      title: 'Total Economic Value',
+                      subtitle: `${cruise.shipName} · ${formatDate(cruise.sailDate, 'short')}`,
+                      summary: 'Cruise value captured (retail minus what you paid) plus your cash result plus any FreePlay/OBC/certificate value that is not already counted elsewhere.',
+                      inputs: [{ label: 'Total Economic Value', value: ledgerEntry ? `$${ledgerEntry.totalEconomicValue.value.toLocaleString()}` : 'No data' }],
+                      missing: ledgerEntry?.freePlay.includedInTotal === false ? [`FreePlay excluded: ${ledgerEntry.freePlay.reason}`] : [],
+                    })}
+                  >
+                    <Text style={styles.casinoStatBoxLabel}>Total Value</Text>
+                    <Text style={styles.casinoStatBoxValue}>{ledgerEntry ? `$${Math.round(ledgerEntry.totalEconomicValue.value).toLocaleString()}` : '—'}</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <TouchableOpacity
+                  style={styles.itineraryMissingCard}
+                  activeOpacity={0.8}
+                  onPress={() => ledgerDrill.open({
+                    title: 'Expected vs. Actual',
+                    subtitle: `${cruise.shipName} · ${formatDate(cruise.sailDate, 'short')}`,
+                    summary: 'Expected points project what you\'d likely earn based on your playing-hours settings and this itinerary\'s casino-open days. Actual is what was recorded on the cruise (or from logged sessions).',
+                    inputs: [
+                      { label: 'Expected Points', value: expectedPoints != null ? expectedPoints.toLocaleString() : 'Not available' },
+                      { label: 'Actual Points', value: actualPoints != null ? actualPoints.toLocaleString() : 'Not recorded yet' },
+                      { label: 'Variance', value: (expectedPoints != null && actualPoints != null) ? `${actualPoints - expectedPoints >= 0 ? '+' : ''}${(actualPoints - expectedPoints).toLocaleString()} pts` : 'N/A' },
+                      { label: 'Expected Casino Hours', value: casinoAvailability ? `~${casinoAvailability.estimatedCasinoHours}h` : 'Not available' },
+                    ],
+                    missing: actualPoints == null ? ['Actual points have not been recorded for this cruise yet — edit casino stats to add them.'] : [],
+                  })}
+                >
+                  <Target size={16} color={COLORS.beigeWarm} />
+                  <Text style={styles.itineraryMissingText}>
+                    Expected {expectedPoints != null ? Math.round(expectedPoints).toLocaleString() : '—'} pts vs. Actual {actualPoints != null ? actualPoints.toLocaleString() : 'not recorded'} — tap for the full comparison
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.casinoEditButton}
+                  activeOpacity={0.8}
+                  onPress={() => setShowAttachOfferModal(true)}
+                  testID="cruise-detail-attach-offer-button"
+                >
+                  <Gift size={14} color={COLORS.beigeWarm} />
+                  <Text style={{ color: COLORS.beigeWarm, fontWeight: '700' as const, fontSize: 13, marginLeft: 6 }}>
+                    {cruise.offerCode ? `Offer: ${cruise.offerCode} — Change` : 'Attach Offer'}
+                  </Text>
+                </TouchableOpacity>
+
+                <Modal visible={showAttachOfferModal} transparent animationType="slide" onRequestClose={() => setShowAttachOfferModal(false)}>
+                  <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
+                    <View style={{ backgroundColor: COLORS.navyDeep, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: SPACING.lg, maxHeight: '75%' }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.md }}>
+                        <Text style={{ color: COLORS.white, fontSize: 17, fontWeight: '700' as const }}>Attach an Offer</Text>
+                        <TouchableOpacity onPress={() => setShowAttachOfferModal(false)}><X size={22} color={COLORS.white} /></TouchableOpacity>
+                      </View>
+                      <ScrollView>
+                        {unusedOffers.length === 0 ? (
+                          <Text style={{ color: COLORS.beigeWarm, fontSize: 13 }}>No available (unused, non-expired) offers found{cruise.shipName ? ` for ${cruise.shipName}` : ''}.</Text>
+                        ) : unusedOffers.map((offer) => (
+                          <TouchableOpacity
+                            key={offer.id}
+                            style={{ backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: SPACING.md, marginBottom: SPACING.sm }}
+                            activeOpacity={0.8}
+                            onPress={() => {
+                              updateCruise({
+                                ...cruise,
+                                offerCode: offer.offerCode ?? cruise.offerCode,
+                                freePlay: cruise.freePlay || offer.freePlay || offer.freeplayAmount || 0,
+                                freeOBC: cruise.freeOBC || offer.OBC || offer.obcAmount || 0,
+                                tradeInValue: cruise.tradeInValue || offer.tradeInValue || 0,
+                              });
+                              setShowAttachOfferModal(false);
+                            }}
+                            testID={`attach-offer-option-${offer.id}`}
+                          >
+                            <Text style={{ color: COLORS.white, fontWeight: '700' as const, fontSize: 14 }}>{offer.offerCode || offer.title}</Text>
+                            <Text style={{ color: COLORS.beigeWarm, fontSize: 12, marginTop: 2 }}>
+                              {offer.title}{offer.freePlay || offer.freeplayAmount ? ` · FreePlay $${offer.freePlay || offer.freeplayAmount}` : ''}{offer.OBC || offer.obcAmount ? ` · OBC $${offer.OBC || offer.obcAmount}` : ''}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  </View>
+                </Modal>
+              </View>
+            );
+          })()}
 
           <ShipMachinesPanel shipName={cruise.shipName ?? ''} />
 

@@ -26,6 +26,7 @@ import {
   FileText,
   Layers,
   Calculator,
+  AlertCircle,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
@@ -44,6 +45,7 @@ import {
   calculateOfferIntelligenceScore,
   decodeOffer,
 } from '@/lib/offerIntelligence';
+import { useDrillDown } from '@/components/casino-dashboard/CalculationDrillDownDrawer';
 import type { Cruise, BookedCruise, CasinoOffer } from '@/types/models';
 
 type SortOption = 'soonest' | 'highest-value' | 'lowest-price' | 'longest' | 'shortest';
@@ -57,6 +59,7 @@ export default function OfferDetailsScreen() {
   const { certificates } = useCertificates();
   const [sortBy, setSortBy] = useState<SortOption>('soonest');
   const [showDecodedOffer, setShowDecodedOffer] = useState<boolean>(false);
+  const drill = useDrillDown();
 
   const playingHoursConfig = useMemo(() => {
     const userPlayingHours = currentUser?.playingHours || DEFAULT_PLAYING_HOURS;
@@ -333,6 +336,44 @@ export default function OfferDetailsScreen() {
   const daysUntilExpiry = offerInfo.expiryDate ? getDaysUntil(offerInfo.expiryDate) : null;
   const isExpiringSoon = daysUntilExpiry !== null && daysUntilExpiry > 0 && daysUntilExpiry <= 7;
 
+  const conflictRisk = useMemo(() => {
+    const { offer, cruises } = offerData;
+    const overlappingBooked = cruises.filter((c) => bookedCruiseIds.has(c.id)).length;
+    const isExpired = daysUntilExpiry !== null && daysUntilExpiry < 0;
+    const isUsed = offer?.status === 'used';
+    const notes: string[] = [];
+    let level: 'low' | 'medium' | 'high' = 'low';
+
+    if (isExpired) {
+      notes.push('This offer has already expired based on its expiry date.');
+      level = 'high';
+    }
+    if (isUsed) {
+      notes.push('This offer is already marked as used.');
+      level = 'high';
+    }
+    if (overlappingBooked > 0 && overlappingBooked === cruises.length && !isExpired && !isUsed) {
+      notes.push('Every matching sailing for this offer is already booked — low conflict risk.');
+    } else if (overlappingBooked > 0) {
+      notes.push(`${overlappingBooked} of ${cruises.length} matching sailing(s) are already booked on another offer/reservation.`);
+      if (level === 'low') level = 'medium';
+    }
+    if (isExpiringSoon) {
+      notes.push(`Expires in ${daysUntilExpiry} day(s) — use it soon or it will lapse.`);
+      if (level === 'low') level = 'medium';
+    }
+    if (notes.length === 0) {
+      notes.push('No known conflicts — this offer looks usable as-is.');
+    }
+
+    return {
+      level,
+      overlappingBooked,
+      notes,
+      summary: 'Conflict Risk flags offers that may not be realistically usable: already expired, already marked used, expiring very soon, or where matching sailings overlap with cruises you\'ve already booked elsewhere.',
+    };
+  }, [offerData, bookedCruiseIds, daysUntilExpiry, isExpiringSoon]);
+
   const handleCruisePress = useCallback((cruiseId: string) => {
     console.log('[OfferDetails] Cruise pressed:', cruiseId);
     const cruise = offerData.cruises.find((item: any) => item.id === cruiseId) as any;
@@ -426,18 +467,58 @@ export default function OfferDetailsScreen() {
 
         {/* Compact Summary Row - Top - White with Navy Text */}
         <View style={styles.summaryRow}>
-          <View style={styles.summaryStatBox}>
+          <TouchableOpacity
+            style={styles.summaryStatBox}
+            activeOpacity={0.75}
+            testID={`offer-casino-days-drill-${item.id}`}
+            onPress={(e) => {
+              e.stopPropagation();
+              drill.open({
+                title: 'Casino Days',
+                subtitle: `${item.shipName} · ${item.nights} nights`,
+                summary: 'Casino Days counts every day this cruise\'s casino is expected to be open based on the itinerary — sea days count fully, port days are excluded (or partial for late-night departures), and overnight port stops are excluded entirely per maritime law.',
+                formula: 'Casino Days = Sea Days + Partial-Credit Late-Departure Port Days',
+                inputs: [
+                  { label: 'Casino Days', value: `${summary.casinoDays} of ${summary.totalDays}` },
+                  { label: 'Sea Days', value: String(summary.seaDays) },
+                  { label: 'Total Nights', value: String(item.nights) },
+                ],
+                sourceRecords: [{ label: 'Source', value: 'Itinerary-based assumption', confidence: 'estimated-default' }],
+              });
+            }}
+          >
             <Dice5 size={16} color={summary.statusBadge.color} />
             <Text style={[styles.summaryStatValue, { color: summary.statusBadge.color }]}>
               {summary.casinoDays}
             </Text>
             <Text style={styles.summaryStatLabel}>Casino Days</Text>
-          </View>
-          <View style={styles.summaryStatBox}>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.summaryStatBox}
+            activeOpacity={0.75}
+            testID={`offer-expected-points-drill-${item.id}`}
+            onPress={(e) => {
+              e.stopPropagation();
+              drill.open({
+                title: 'Expected Points',
+                subtitle: `${item.shipName} · ${item.nights} nights`,
+                summary: 'Expected points project what you\'d likely earn on this sailing using your own playing-hours settings and casino-open days from the itinerary, times your historical points-per-hour rate.',
+                formula: 'Expected Points = Casino Days × Golden Hours per Day × Historical Points per Hour',
+                inputs: [
+                  { label: 'Casino Days', value: String(summary.casinoDays) },
+                  { label: 'Golden Hours', value: `${summary.goldenHours}h` },
+                  { label: 'Estimated Points', value: `${Math.round(summary.estimatedPoints).toLocaleString()} pts` },
+                  { label: 'Coin-In Equivalent', value: `$${Math.round(summary.estimatedPoints * 5).toLocaleString()}` },
+                ],
+                assumptions: ['Conservative/Base/Aggressive scenarios use your default points-per-hour from Casino Settings unless you\'ve logged enough real sessions to override it.'],
+                sourceRecords: [{ label: 'Source', value: 'Projected from your playing-hours settings + itinerary', confidence: 'estimated-default' }],
+              });
+            }}
+          >
             <Star size={16} color={COLORS.goldDark} />
             <Text style={styles.summaryStatValue}>~{(summary.estimatedPoints / 1000).toFixed(1)}k</Text>
             <Text style={styles.summaryStatLabel}>Est. Points</Text>
-          </View>
+          </TouchableOpacity>
           <View style={styles.summaryStatBox}>
             <Clock size={16} color={COLORS.goldDark} />
             <Text style={styles.summaryStatValue}>{summary.goldenHours}h</Text>
@@ -580,13 +661,33 @@ export default function OfferDetailsScreen() {
             <View style={styles.offerNameRow}>
               <Text style={styles.featuredOfferName} numberOfLines={2}>{offerInfo.offerName}</Text>
               {offerInfo.totalValue > 0 && (
-                <View style={styles.totalValueBadge}>
+                <TouchableOpacity
+                  style={styles.totalValueBadge}
+                  activeOpacity={0.8}
+                  testID="offer-value-drill-trigger"
+                  onPress={() => drill.open({
+                    title: 'Offer Value',
+                    subtitle: offerInfo.offerName,
+                    summary: 'The total value of this offer is the retail room price (interior/oceanview/balcony/suite as available) plus taxes and fees, averaged across every cruise this offer applies to, plus any FreePlay, OBC, or trade-in value attached to the offer itself.',
+                    formula: 'Offer Value = Room Retail Price + Taxes/Fees + FreePlay + OBC + Trade-In Value',
+                    inputs: [
+                      { label: 'Room Type', value: offerInfo.roomType || 'Not specified' },
+                      { label: 'Retail Price Range', value: offerInfo.minRetailValue && offerInfo.maxRetailValue ? `$${Math.round(offerInfo.minRetailValue).toLocaleString()} – $${Math.round(offerInfo.maxRetailValue).toLocaleString()}` : 'Not available' },
+                      { label: 'Taxes/Fees', value: offerInfo.taxesFees ? `$${offerInfo.taxesFees.toLocaleString()}` : '$0' },
+                      { label: 'FreePlay', value: `$${(offerInfo.freePlay ?? 0).toLocaleString()}` },
+                      { label: 'Onboard Credit', value: `$${(offerInfo.obc ?? 0).toLocaleString()}` },
+                      { label: 'Trade-In Value', value: `$${(offerInfo.tradeInValue ?? 0).toLocaleString()}` },
+                    ],
+                    sourceRecords: [{ label: 'Matching Cruises Used', value: `${offerData.cruises.length} sailing(s)`, confidence: offerData.cruises.length > 0 ? 'verified-invoice' : 'needs-review' }],
+                    missing: offerData.cruises.length === 0 ? ['No matching cruises found for this offer code — value is based on the offer record alone.'] : [],
+                  })}
+                >
                   <DollarSign size={18} color="#166534" />
                   <View>
                     <Text style={styles.totalValueLabel}>Total Value</Text>
                     <Text style={styles.totalValueAmount}>${Math.round(offerInfo.totalValue).toLocaleString()}</Text>
                   </View>
-                </View>
+                </TouchableOpacity>
               )}
             </View>
             <View style={styles.offerCodeBadge}>
@@ -598,16 +699,49 @@ export default function OfferDetailsScreen() {
           {((offerInfo.freePlay ?? 0) > 0 || (offerInfo.obc ?? 0) > 0) && (
             <View style={styles.fpObcRow}>
               {(offerInfo.freePlay ?? 0) > 0 && (
-                <View style={styles.fpBadgeOffer}>
+                <TouchableOpacity
+                  style={styles.fpBadgeOffer}
+                  activeOpacity={0.8}
+                  testID="offer-freeplay-drill-trigger"
+                  onPress={() => drill.open({
+                    title: 'FreePlay',
+                    subtitle: offerInfo.offerCode,
+                    summary: 'FreePlay is casino credit loaded onto your SeaPass card that can only be wagered, not withdrawn directly — winnings from it are yours to keep or cash out.',
+                    inputs: [
+                      { label: 'FreePlay Amount', value: `$${(offerInfo.freePlay ?? 0).toLocaleString()}` },
+                      { label: 'Source Offer Code', value: offerInfo.offerCode },
+                      { label: 'Used?', value: offerData.offer?.status === 'used' ? 'Yes — marked used' : 'Not yet marked used' },
+                    ],
+                    sourceRecords: [
+                      { label: 'Included in Win/Loss?', value: 'No — FreePlay wagers/results are tracked in your casino sessions, not added again here to avoid double-counting.' },
+                      { label: 'Included in Total Value?', value: 'Yes, unless the Comp Value Calculator or a cruise edit already counted it — check the Duplicate-Counting note on that cruise\'s value breakdown.' },
+                    ],
+                  })}
+                >
                   <Text style={styles.fpLabelOffer}>FreePlay</Text>
                   <Text style={styles.fpValueOffer}>${(offerInfo.freePlay ?? 0).toLocaleString()}</Text>
-                </View>
+                </TouchableOpacity>
               )}
               {(offerInfo.obc ?? 0) > 0 && (
-                <View style={styles.obcBadgeOffer}>
+                <TouchableOpacity
+                  style={styles.obcBadgeOffer}
+                  activeOpacity={0.8}
+                  testID="offer-obc-drill-trigger"
+                  onPress={() => drill.open({
+                    title: 'Onboard Credit & Trade-In',
+                    subtitle: offerInfo.offerCode,
+                    summary: 'Onboard Credit (OBC) reduces what you spend onboard for drinks, dining, shore excursions, and more. Trade-In value is what this offer is worth if exchanged for a different sailing instead of used as-is.',
+                    inputs: [
+                      { label: 'Onboard Credit', value: `$${(offerInfo.obc ?? 0).toLocaleString()}` },
+                      { label: 'Trade-In Value', value: `$${(offerInfo.tradeInValue ?? 0).toLocaleString()}` },
+                      { label: 'Expires', value: offerInfo.expiryDate ? formatDate(offerInfo.expiryDate, 'short') : 'No expiry on file' },
+                    ],
+                    missing: !offerInfo.tradeInValue ? ['No trade-in value on file for this offer.'] : [],
+                  })}
+                >
                   <Text style={styles.obcLabelOffer}>Onboard Credit</Text>
                   <Text style={styles.obcValueOffer}>${(offerInfo.obc ?? 0).toLocaleString()}</Text>
-                </View>
+                </TouchableOpacity>
               )}
             </View>
           )}
@@ -632,6 +766,32 @@ export default function OfferDetailsScreen() {
                 <Text style={styles.statValue}>{offerData.cruises.length}</Text>
               </View>
             </View>
+            <TouchableOpacity
+              style={[styles.statItem, styles.statItemHighlight, conflictRisk.level !== 'low' && { backgroundColor: 'rgba(217, 119, 6, 0.12)' }]}
+              activeOpacity={0.75}
+              testID="offer-conflict-risk-drill-trigger"
+              onPress={() => drill.open({
+                title: 'Conflict Risk',
+                subtitle: offerInfo.offerCode,
+                summary: conflictRisk.summary,
+                inputs: [
+                  { label: 'Risk Level', value: conflictRisk.level === 'low' ? 'Low' : conflictRisk.level === 'medium' ? 'Medium' : 'High' },
+                  { label: 'Overlapping Booked Cruises', value: String(conflictRisk.overlappingBooked) },
+                  { label: 'Offer Status', value: offerData.offer?.status ?? 'available' },
+                  { label: 'Expired?', value: daysUntilExpiry !== null && daysUntilExpiry < 0 ? 'Yes — expired' : 'No' },
+                ],
+                sourceRecords: conflictRisk.notes.map((note) => ({ label: 'Note', value: note })),
+                missing: conflictRisk.overlappingBooked === 0 && offerData.cruises.length === 0 ? ['No matching sailings found for this offer code yet — conflict risk cannot be fully assessed.'] : [],
+              })}
+            >
+              <AlertCircle size={16} color={conflictRisk.level === 'low' ? COLORS.navyDeep : COLORS.warning} />
+              <View style={styles.statTextGroup}>
+                <Text style={styles.statLabel}>Conflict Risk</Text>
+                <Text style={[styles.statValue, conflictRisk.level !== 'low' && styles.statValueWarning]}>
+                  {conflictRisk.level === 'low' ? 'Low' : conflictRisk.level === 'medium' ? 'Medium' : 'High'}
+                </Text>
+              </View>
+            </TouchableOpacity>
           </View>
 
           {offerIntelligence ? (

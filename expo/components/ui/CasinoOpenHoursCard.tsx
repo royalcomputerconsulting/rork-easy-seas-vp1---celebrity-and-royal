@@ -10,7 +10,8 @@ import {
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
-import { Clock, Save, Edit2, Ship, Anchor, ChevronDown, ChevronUp, X, Sparkles, ArrowLeftRight } from 'lucide-react-native';
+import { Clock, Save, Edit2, Ship, Anchor, ChevronDown, ChevronUp, X, Sparkles, ArrowLeftRight, Info } from 'lucide-react-native';
+import { useDrillDown } from '@/components/casino-dashboard/CalculationDrillDownDrawer';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { formatTime12Hour } from '@/lib/format';
@@ -99,6 +100,7 @@ function formatSailingLabel(cruise: BookedCruise): string {
 
 export function CasinoOpenHoursCard({ cruise, allUpcomingCruises, onHoursUpdated, onHoursDataLoaded }: CasinoOpenHoursCardProps) {
   const { authenticatedEmail } = useAuth();
+  const dayDrill = useDrillDown();
   const [selectedCruise, setSelectedCruise] = useState<BookedCruise | null>(cruise);
   const [hoursData, setHoursData] = useState<CasinoOpenHoursData | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -433,6 +435,34 @@ export function CasinoOpenHoursCard({ cruise, allUpcomingCruises, onHoursUpdated
                       </Text>
                     </View>
                   </View>
+                  <TouchableOpacity
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      dayDrill.open({
+                        title: `Day ${day.day} — ${formatShortDate(day.date)}`,
+                        subtitle: day.isSeaDay ? 'At Sea' : shortenPort(day.port),
+                        summary: day.hasOverride
+                          ? 'You confirmed the actual casino hours for this day, overriding the itinerary-based best guess.'
+                          : 'This is EasySeas\' best guess for casino hours based on your itinerary (arrival/departure times and whether it\'s a sea day, port day, or overnight port stop). Tap the day row itself to confirm the actual hours once you know them.',
+                        formula: 'Sea days: casino open most of the day. Port days: casino closed while docked, opens near sail-away. Overnight ports: casino stays closed per Royal Caribbean maritime law.',
+                        inputs: [
+                          { label: 'Day Type', value: day.isSeaDay ? 'Sea Day' : 'Port Day' },
+                          { label: 'Best-Guess Hours', value: day.bestGuessOpen ? day.bestGuessHours : 'Closed' },
+                          { label: 'Actual (Confirmed)', value: day.hasOverride ? `${day.actualOpenTime || '?'} – ${day.actualCloseTime || '?'}` : 'Not confirmed yet' },
+                        ],
+                        sourceRecords: [
+                          { label: 'Source', value: day.hasOverride ? 'User-confirmed actual hours' : 'Itinerary-based assumption', confidence: day.hasOverride ? 'user-entered' : 'estimated-default' },
+                          { label: 'Counts Toward Casino-Open-Day Calculations?', value: day.bestGuessOpen || day.hasOverride ? 'Yes' : 'No — excluded as a closed day' },
+                        ],
+                        missing: !day.hasOverride ? ['Actual open/close times have not been confirmed for this day — tap the row to set them.'] : [],
+                        relatedActions: [{ label: 'Confirm Actual Hours', onPress: () => { dayDrill.close(); handleEditDay(index); } }],
+                      });
+                    }}
+                    testID={`casino-hours-day-info-${day.day}`}
+                  >
+                    <Info size={13} color="#9CA3AF" />
+                  </TouchableOpacity>
                   <Edit2 size={13} color={day.hasOverride ? '#059669' : '#9CA3AF'} />
                 </View>
 

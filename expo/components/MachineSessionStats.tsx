@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { TrendingUp, TrendingDown, Activity } from 'lucide-react-native';
 import { COLORS } from '@/constants/theme';
 import type { CasinoSession } from '@/state/CasinoSessionProvider';
+import { useDrillDown } from '@/components/casino-dashboard/CalculationDrillDownDrawer';
 
 interface MachineSessionStatsProps {
   sessions: CasinoSession[];
@@ -10,6 +11,7 @@ interface MachineSessionStatsProps {
 }
 
 export function MachineSessionStats({ sessions, totalMachines = 0 }: MachineSessionStatsProps) {
+  const drill = useDrillDown();
   const machineSessionsOnly = sessions.filter(s => s.machineId);
   
   const totalRecords = machineSessionsOnly.length;
@@ -31,9 +33,40 @@ export function MachineSessionStats({ sessions, totalMachines = 0 }: MachineSess
   const winRate = totalRecords > 0 ? (winningSessions / totalRecords) * 100 : 0;
   
   const totalPointsEarned = machineSessionsOnly.reduce((sum, s) => sum + (s.pointsEarned || 0), 0);
-  
+
+  const perMachine = new Map<string, { name: string; sessions: number; winLoss: number; points: number }>();
+  machineSessionsOnly.forEach((s) => {
+    const key = s.machineId as string;
+    const entry = perMachine.get(key) ?? { name: s.machineName || 'Unknown Machine', sessions: 0, winLoss: 0, points: 0 };
+    entry.sessions += 1;
+    entry.winLoss += s.winLoss || 0;
+    entry.points += s.pointsEarned || 0;
+    perMachine.set(key, entry);
+  });
+  const topMachinesByPlay = Array.from(perMachine.values()).sort((a, b) => b.sessions - a.sessions).slice(0, 8);
+
+  const openMachineAnalyticsDrill = () => drill.open({
+    title: 'Machine Session Overview',
+    summary: 'A rollup of every logged session tied to a specific slot machine (from the Slots tab, Live PPH, or Cruise Detail). Machines with no linked sessions are not included here.',
+    formula: 'Win Rate = Winning Sessions ÷ Sessions With a Recorded Result. Avg W/L = Total W/L ÷ Total Records.',
+    inputs: [
+      { label: 'Total Records', value: String(totalRecords) },
+      { label: 'Machines Tracked', value: String(perMachine.size) },
+      { label: 'Total Points', value: totalPointsEarned.toLocaleString() },
+      { label: 'Total W/L', value: `$${totalWinLoss.toFixed(2)}` },
+      { label: 'Win Rate', value: `${winRate.toFixed(1)}%` },
+    ],
+    sourceRecords: topMachinesByPlay.map((m) => ({
+      label: m.name,
+      value: `${m.sessions} session${m.sessions === 1 ? '' : 's'}`,
+      detail: `${m.points.toLocaleString()} pts · $${m.winLoss.toFixed(2)} W/L`,
+      confidence: 'verified-invoice' as const,
+    })),
+    missing: totalRecords === 0 ? ['No machine-linked sessions logged yet — log sessions from the Slots tab or Live PPH Tracker to build machine-level analytics.'] : [],
+  });
+
   return (
-    <View style={styles.container}>
+    <TouchableOpacity style={styles.container} activeOpacity={0.85} onPress={openMachineAnalyticsDrill} testID="machine-session-overview-drill">
       <View style={styles.header}>
         <Activity size={20} color={COLORS.navyDeep} />
         <Text style={styles.title}>Machine Session Overview</Text>
@@ -104,7 +137,7 @@ export function MachineSessionStats({ sessions, totalMachines = 0 }: MachineSess
           <Text style={styles.statSubtext}>Club Royale pts</Text>
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
