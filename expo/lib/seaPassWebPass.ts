@@ -207,9 +207,12 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
     x: 94,
     y: 608,
     fill: '#30333A',
-    fontSize: 54,
+    // v_seapass_port_size_match: matched to the PORT field's font size (52)
+    // and letter-spacing (-1) so every edited field renders at the same
+    // size as the untouched PORT field instead of looking oversized next to it.
+    fontSize: 52,
     fontWeight: '400',
-    letterSpacing: -0.8,
+    letterSpacing: -1,
     mask: {
       x: 78,
       y: 558,
@@ -225,9 +228,9 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
     x: 250,
     y: 608,
     fill: '#30333A',
-    fontSize: 54,
+    fontSize: 52,
     fontWeight: '400',
-    letterSpacing: -0.8,
+    letterSpacing: -1,
     mask: {
       x: 232,
       y: 558,
@@ -243,9 +246,9 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
     x: 930,
     y: 608,
     fill: '#30333A',
-    fontSize: 54,
+    fontSize: 52,
     fontWeight: '400',
-    letterSpacing: -0.8,
+    letterSpacing: -1,
     textAnchor: 'end',
     mask: {
       x: 822,
@@ -262,9 +265,9 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
     x: 94,
     y: 755,
     fill: '#30333A',
-    fontSize: 54,
+    fontSize: 52,
     fontWeight: '400',
-    letterSpacing: -0.8,
+    letterSpacing: -1,
     mask: {
       x: 78,
       y: 702,
@@ -280,9 +283,9 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
     x: 930,
     y: 755,
     fill: '#30333A',
-    fontSize: 54,
+    fontSize: 52,
     fontWeight: '400',
-    letterSpacing: -0.8,
+    letterSpacing: -1,
     textAnchor: 'end',
     mask: {
       x: 822,
