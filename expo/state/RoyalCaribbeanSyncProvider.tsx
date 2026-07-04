@@ -1983,13 +1983,21 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       const step1OfferRows = extractedOffersRef.current;
       const step1OfferCodes = Array.from(new Set(step1OfferRows.map((offer: any) => String(offer.offerCode || '').trim()).filter(Boolean)));
       const isRoyalSync = !isCarnivalMode && cruiseLine !== 'celebrity';
-      const royalPartialMultiOfferCapture = isRoyalSync && step1OfferCodes.length > 0 && step1OfferCodes.length < 4;
-      const royalSmallMultiOfferCapture = isRoyalSync && ((step1OfferCodes.length >= 5 && step1OfferRows.length < 1000) || (step1OfferCodes.length === 4 && step1OfferRows.length < 900));
+      // IMPORTANT: a real Royal Caribbean account can legitimately have as few as 1 active offer at
+      // any given time (offers rotate/expire constantly) - the offer catalog naturally shrinks over
+      // time. A prior version of this guard rejected any capture with fewer than 4 distinct offer
+      // codes as "partial," which silently discarded perfectly valid, cleanly-completed captures
+      // (e.g. 3 offer codes / 406 real sailing rows) and produced "Ready to review: 0 offer(s), 0
+      // sailing(s)" even though the scraper had captured everything correctly. Offer-code COUNT must
+      // never by itself decide authoritativeness - only whether the scrape actually finished cleanly
+      // (step1CompletedCleanly) does. The row-count checks below are ONLY used as an extra guard
+      // against Royal's known large catalogs (thousands of rows) that can hit the timeout mid-scrape.
+      const royalSmallMultiOfferCapture = isRoyalSync && !step1CompletedCleanly && ((step1OfferCodes.length >= 5 && step1OfferRows.length < 1000) || (step1OfferCodes.length === 4 && step1OfferRows.length < 900));
       // Royal now exposes changing current catalogs: older 5/1073, 4/~1019, and current large 6/2120+ catalogs.
       // If a long scrape times out after thousands of valid rows, do not throw the whole catalog away.
       const royalLargeLiveCatalogCapture = isRoyalSync && step1OfferCodes.length >= 4 && step1OfferRows.length >= 900;
       const nonRoyalCompletedCapture = !isRoyalSync && step1CompletedCleanly;
-      const step1IsAuthoritative = step1OfferRows.length > 0 && !royalPartialMultiOfferCapture && !royalSmallMultiOfferCapture && (step1CompletedCleanly || royalLargeLiveCatalogCapture || nonRoyalCompletedCapture);
+      const step1IsAuthoritative = step1OfferRows.length > 0 && !royalSmallMultiOfferCapture && (step1CompletedCleanly || royalLargeLiveCatalogCapture || nonRoyalCompletedCapture);
       capturedSections.current.offers = step1IsAuthoritative;
       if (!step1IsAuthoritative) {
         addLog(`🛡️ Step 1 did not produce a complete authoritative ${config.loyaltyClubName} offer catalog; preserving existing offers and available sailings during Apply Sync`, 'warning');
@@ -1998,6 +2006,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         }
         extractedOffersRef.current = [];
         setState(prev => ({ ...prev, extractedOffers: [] }));
+      } else {
+        addLog(`✅ Royal offer rows are staged for Apply Sync: ${step1OfferCodes.length} offer code(s), ${step1OfferRows.length} sailing row(s)`, 'success');
       }
       
       const summaryRows = step1IsAuthoritative ? extractedOffersRef.current : [];
@@ -2022,8 +2032,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         addLog(`✅ STEP 1 COMPLETE: Captured ${uniqueOffers} active casino offer(s) with ${totalSailings} total sailing(s)`, 'success');
         if (isRoyalSync && !step1CompletedCleanly && royalLargeLiveCatalogCapture) {
           addLog(`ℹ️ Accepted large current Club Royale catalog despite timeout guard (${step1OfferCodes.length} offer code(s), ${step1OfferRows.length} staged row(s)). Valid staged rows will be shown on Apply Selected Sync instead of being discarded.`, 'info');
-        } else if (isRoyalSync && step1OfferCodes.length === 4 && step1OfferRows.length >= 900) {
-          addLog(`ℹ️ Accepted current visible 4-offer Club Royale catalog (${step1OfferRows.length} rows). Existing removed/expired offer rows will not be treated as a sync failure.`, 'info');
+        } else if (isRoyalSync && step1OfferCodes.length < 4) {
+          addLog(`ℹ️ Accepted current ${step1OfferCodes.length}-offer Club Royale catalog (${step1OfferRows.length} rows). Fewer than 4 active offers is normal as offers rotate/expire and is not treated as a sync failure.`, 'info');
         }
       } else {
         addLog(`🛡️ STEP 1 INCOMPLETE: captured ${step1OfferCodes.length} offer code(s) / ${step1OfferRows.length} row(s), but this was not authoritative and will not be applied`, 'warning');
