@@ -329,7 +329,10 @@ export function MarineAlertsPanel({
     gcTime: 1000 * 60 * 60 * 6,
     retry: 1,
     refetchOnMount: 'always',
-    refetchInterval: 1000 * 60 * 30,
+    refetchOnReconnect: 'always',
+    // Poll frequently enough to catch each daily 9am/2pm/7pm refresh checkpoint
+    // shortly after it passes while this panel is visible.
+    refetchInterval: 1000 * 60 * 20,
   });
 
   const panelData = alertsQuery.data ?? EMPTY_PANEL_DATA;

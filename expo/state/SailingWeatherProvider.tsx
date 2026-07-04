@@ -8,6 +8,13 @@ import { useAuth } from './AuthProvider';
 const BASE_STORAGE_KEY = '@easy_seas_sailing_weather_cache_v1';
 const CACHE_REFRESH_MS = 1000 * 60 * 60 * 6;
 const CACHE_RETENTION_MS = 1000 * 60 * 60 * 24 * 10;
+/**
+ * Guarantees the forecast refreshes at least 3x/day at these local hours
+ * (9am, 2pm, 7pm), on top of whatever the standard distance-based interval
+ * allows. Once one of these checkpoints has passed, any cached forecast
+ * fetched before it is treated as expired so the next read pulls live data.
+ */
+const DAILY_REFRESH_CHECKPOINT_HOURS = [9, 14, 19];
 const FORECAST_PREFETCH_HORIZON_DAYS = 15;
 const FORECAST_PREFETCH_START_SOON_DAYS = 3;
 const FORECAST_PREFETCH_WINDOW_DAYS = 2;
@@ -413,10 +420,45 @@ function getCacheRefreshMsForDateKey(dateKey: string): number {
   return CACHE_REFRESH_MS;
 }
 
+/**
+ * Returns the most recent daily refresh checkpoint (9am/2pm/7pm local) that
+ * has already occurred as of `reference`. If none of today's checkpoints
+ * have passed yet, falls back to the last checkpoint from the previous day
+ * so there is always a well-defined "last required refresh" boundary.
+ */
+function getMostRecentRefreshCheckpoint(reference: Date): Date {
+  const sortedHours = [...DAILY_REFRESH_CHECKPOINT_HOURS].sort((a, b) => a - b);
+  const todaysCheckpoints = sortedHours.map((hour) => {
+    const checkpoint = new Date(reference);
+    checkpoint.setHours(hour, 0, 0, 0);
+    return checkpoint;
+  });
+
+  for (let index = todaysCheckpoints.length - 1; index >= 0; index -= 1) {
+    const checkpoint = todaysCheckpoints[index];
+    if (checkpoint.getTime() <= reference.getTime()) {
+      return checkpoint;
+    }
+  }
+
+  const lastHourYesterday = sortedHours[sortedHours.length - 1];
+  const fallback = new Date(reference);
+  fallback.setDate(fallback.getDate() - 1);
+  fallback.setHours(lastHourYesterday, 0, 0, 0);
+  return fallback;
+}
+
 function isCacheExpired(updatedAt: string, dateKey: string): boolean {
   const updatedTime = new Date(updatedAt).getTime();
   if (!Number.isFinite(updatedTime)) return true;
-  return Date.now() - updatedTime > getCacheRefreshMsForDateKey(dateKey);
+
+  const now = Date.now();
+  if (now - updatedTime > getCacheRefreshMsForDateKey(dateKey)) {
+    return true;
+  }
+
+  const mostRecentCheckpoint = getMostRecentRefreshCheckpoint(new Date(now)).getTime();
+  return updatedTime < mostRecentCheckpoint;
 }
 
 function pruneCacheEntries(cache: Record<string, SailingWeatherForecast>): Record<string, SailingWeatherForecast> {

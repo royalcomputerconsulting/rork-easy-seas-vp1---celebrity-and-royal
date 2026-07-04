@@ -115,7 +115,10 @@ export function SailingWeatherCard({ cruise, selectedDate }: SailingWeatherCardP
     gcTime: 1000 * 60 * 60 * 12,
     retry: 1,
     refetchOnMount: 'always',
-    refetchInterval: 1000 * 60 * 60 * 6,
+    refetchOnReconnect: 'always',
+    // Poll frequently enough to catch each daily 9am/2pm/7pm refresh checkpoint
+    // shortly after it passes while this card is visible.
+    refetchInterval: 1000 * 60 * 20,
   });
 
   const forecast = weatherQuery.data ?? null;
