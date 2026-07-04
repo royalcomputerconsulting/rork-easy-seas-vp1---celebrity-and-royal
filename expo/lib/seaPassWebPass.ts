@@ -86,7 +86,9 @@ export const SEA_PASS_LEGAL_LINES = [
 
 export const SEA_PASS_PREVIEW_BACKGROUND = '#EFF3F8';
 export const SEA_PASS_EXPORT_BACKGROUND = '#FFFFFF';
-export const SEA_PASS_FONT_STACK = "Arial, Helvetica, sans-serif";
+// v_seapass_font_unify: Helvetica Neue is the closest native match to the
+// approved shell's own typeface; Arial is kept only as a distant fallback.
+export const SEA_PASS_FONT_STACK = "Helvetica Neue, Helvetica, Arial, sans-serif";
 export const SEA_PASS_APPROVED_SCREENSHOT_SOURCE_URL = 'https://r2-pub.rork.com/attachments/vvcelze4prvyhmkje7pah.png';
 export const SEA_PASS_APPROVED_SCREENSHOT_CORS_PROXY_URL = 'https://images.weserv.nl/?url=r2-pub.rork.com/attachments/vvcelze4prvyhmkje7pah.png&output=png';
 
@@ -452,15 +454,21 @@ function getSeaPassTextEraseOffsets(key: SeaPassOverlayKey): { x: number; y: num
 }
 
 function shouldRenderDynamicOverlay(key: SeaPassOverlayKey, value: string, data: SeaPassWebPassData): boolean {
-  if (key === 'barcodeCaption') {
-    return value !== getSeaPassBarcodeCaption(SEA_PASS_DEFAULTS);
-  }
-
   if (key === 'terminal') {
     return shouldShowSeaPassTerminal(data) && value.trim().length > 0;
   }
 
-  return value !== SEA_PASS_DEFAULTS[key];
+  // v_seapass_font_unify: this used to only draw the overlay when a field's
+  // value differed from the hardcoded SEA_PASS_DEFAULTS. That meant any field
+  // left at its default (e.g. reservation #, port) kept showing the ORIGINAL
+  // baked-in text from the approved shell image (its true design font), while
+  // any edited field (stateroom, muster, ship, etc.) got redrawn with this
+  // module's overlay font -- producing a visible font/weight mismatch between
+  // edited and untouched fields on the very same card. Always rendering every
+  // field through the identical overlay path guarantees every value on the
+  // card uses the exact same font, regardless of whether it was changed from
+  // the default.
+  return true;
 }
 
 async function fetchImageAsDataUrl(url: string): Promise<string> {
