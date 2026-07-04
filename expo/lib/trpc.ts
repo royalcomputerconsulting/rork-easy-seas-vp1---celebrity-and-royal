@@ -114,7 +114,7 @@ const ERROR_LOG_THROTTLE = 30_000;
 const fetchWithRetry = async (
   url: string,
   options: RequestInit | undefined,
-  maxRetries = 1
+  maxRetries = 2
 ): Promise<Response> => {
   let lastError: Error | null = null;
 
@@ -153,6 +153,17 @@ const fetchWithRetry = async (
           : Math.min(1000 * Math.pow(2, attempt), 30000);
 
         if (attempt < maxRetries) {
+          await sleep(waitTime);
+          continue;
+        }
+      }
+
+      // 502/503/504 are almost always a transient "server at capacity" or
+      // "still deploying" blip on the hosted backend, not a real client error.
+      // Retry with backoff instead of surfacing a scary failure immediately.
+      if (response.status === 502 || response.status === 503 || response.status === 504) {
+        if (attempt < maxRetries) {
+          const waitTime = Math.min(1200 * Math.pow(2, attempt), 8000);
           await sleep(waitTime);
           continue;
         }

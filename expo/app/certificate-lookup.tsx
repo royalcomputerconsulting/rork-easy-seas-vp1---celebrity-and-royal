@@ -138,8 +138,12 @@ export default function CertificateLookupScreen() {
         includeC,
       });
     } catch (error) {
-      const msg = error instanceof Error ? error.message : 'Unknown error';
-      Alert.alert('Certificate search failed', msg);
+      const rawMsg = error instanceof Error ? error.message : 'Unknown error';
+      const isNetworkBlip = /Failed to fetch|Network request failed|abort/i.test(rawMsg);
+      const friendlyMsg = isNetworkBlip
+        ? 'The certificate server is temporarily busy or unreachable. Please wait a few seconds and try again.'
+        : rawMsg;
+      Alert.alert('Certificate search failed', friendlyMsg);
     }
   }, [examineMutation, includeA, includeC, shipQuery]);
 
