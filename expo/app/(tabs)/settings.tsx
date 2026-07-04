@@ -105,6 +105,7 @@ import {
 
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import { UserProfileCard } from '@/components/ui/UserProfileCard';
+import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
 
 import { useSlotMachineLibrary } from '@/state/SlotMachineLibraryProvider';
 import { useCasinoSessions } from '@/state/CasinoSessionProvider';
@@ -2352,8 +2353,22 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
             </View>
           </View>
 
-          <View style={[styles.sectionCard, { marginBottom: SPACING.md }]}>
-            {renderSectionHeader(<Ship size={18} color={COLORS.white} />, 'Quick Actions', 'Sync, import & backup shortcuts')}
+          <UserProfileCard
+            key={`profile-${profileDisplayUser?.id ?? normalizedAuthenticatedEmail ?? 'guest'}`}
+            currentValues={currentProfileValues}
+            enrichmentData={enrichmentData}
+            onSave={handleSaveProfile}
+            isSaving={isSaving}
+            primaryProfileLabel="User"
+            secondaryProfileLabel="Second User"
+            activeProfileSlot={activeProfileSlot}
+            onProfileSlotPress={handleProfileSlotPress}
+            showProfileSwitch={true}
+            profileId={profileDisplayUser?.id ?? null}
+          />
+
+          <View style={[styles.sectionCard, { marginTop: SPACING.md, marginBottom: SPACING.md }]}>
+            {renderSectionHeader(<Ship size={18} color={COLORS.white} />, 'Quick Actions', 'One-tap sync & pricing shortcuts')}
             <View style={styles.quickActionsBody}>
             <TouchableOpacity 
               style={styles.quickActionFullWidth} 
@@ -2390,90 +2405,17 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
               <Text style={styles.quickActionLabelInline}>Pricing Summary & History</Text>
               <ChevronRight size={16} color={CLEAN_THEME.text.secondary} />
             </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.quickActionFullWidth} 
-              onPress={handleImportOffersCSV}
-              activeOpacity={0.7}
-              disabled={isImporting}
-            >
-              <View style={[styles.quickActionIconSmall, { backgroundColor: 'rgba(33, 150, 243, 0.1)' }]}>
-                {isImporting ? (
-                  <ActivityIndicator size="small" color={COLORS.info} />
-                ) : (
-                  <FileDown size={16} color={COLORS.info} />
-                )}
-              </View>
-              <Text style={styles.quickActionLabelInline}>Load Import Offers.CSV</Text>
-              <ChevronRight size={16} color={CLEAN_THEME.text.secondary} />
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.quickActionFullWidth} 
-              onPress={() => router.push('/import-review' as any)}
-              activeOpacity={0.7}
-              testID="settings-open-import-review"
-            >
-              <View style={[styles.quickActionIconSmall, { backgroundColor: 'rgba(15, 118, 110, 0.1)' }]}> 
-                <MailQuestion size={16} color="#0F766E" />
-              </View>
-              <Text style={styles.quickActionLabelInline}>Review Import Assignments</Text>
-              {importAssignmentReviewCount > 0 ? (
-                <Text style={styles.countBadge}>{importAssignmentReviewCount}</Text>
-              ) : (
-                <ChevronRight size={16} color={CLEAN_THEME.text.secondary} />
-              )}
-            </TouchableOpacity>
-            <View style={styles.quickActionsRow}>
-              <TouchableOpacity 
-                style={styles.quickActionHalf} 
-                onPress={handleExportAllData}
-                activeOpacity={0.7}
-                disabled={isExportingAll}
-              >
-                <View style={[styles.quickActionIconSmall, { backgroundColor: 'rgba(76, 175, 80, 0.1)' }]}>
-                  {isExportingAll ? (
-                    <ActivityIndicator size="small" color={COLORS.success} />
-                  ) : (
-                    <Save size={16} color={COLORS.success} />
-                  )}
-                </View>
-                <Text style={styles.quickActionLabelInline}>Save All</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={styles.quickActionHalf} 
-                onPress={handleImportAllData}
-                activeOpacity={0.7}
-                disabled={isImportingAll}
-              >
-                <View style={[styles.quickActionIconSmall, { backgroundColor: 'rgba(33, 150, 243, 0.1)' }]}>
-                  {isImportingAll ? (
-                    <ActivityIndicator size="small" color={COLORS.info} />
-                  ) : (
-                    <FolderInput size={16} color={COLORS.info} />
-                  )}
-                </View>
-                <Text style={styles.quickActionLabelInline}>Load Backup</Text>
-              </TouchableOpacity>
-            </View>
             </View>
           </View>
 
-          <UserProfileCard
-            key={`profile-${profileDisplayUser?.id ?? normalizedAuthenticatedEmail ?? 'guest'}`}
-            currentValues={currentProfileValues}
-            enrichmentData={enrichmentData}
-            onSave={handleSaveProfile}
-            isSaving={isSaving}
-            primaryProfileLabel="User"
-            secondaryProfileLabel="Second User"
-            activeProfileSlot={activeProfileSlot}
-            onProfileSlotPress={handleProfileSlotPress}
-            showProfileSwitch={true}
-            profileId={profileDisplayUser?.id ?? null}
-          />
-
+          <CollapsibleSection
+            title="Data Management"
+            subtitle="Import, export, backup & calendar feed"
+            icon={<Database size={18} color="#FFFFFF" />}
+            defaultExpanded={false}
+          >
           <View style={styles.section}>
             <View style={styles.sectionCard}>
-              {renderSectionHeader(<Database size={18} color={COLORS.white} />, 'Data Management', 'Import, export & backup your data')}
               <View style={[styles.dataSubsection, styles.importBanner]}>
                 <Text style={styles.subsectionLabel}>IMPORT</Text>
                 <Text style={styles.subsectionHelper}>Bring in new CSV manifests, booked logs, or calendar drops.</Text>
@@ -2527,7 +2469,90 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
                 ),
                 () => router.push('/import-review' as any)
               )}
-<View style={styles.dataDivider} />
+
+              <View style={styles.dataDivider} />
+
+              <View style={[styles.dataSubsection, styles.fullBackupBanner]}>
+                <Text style={styles.subsectionLabel}>EXPORT</Text>
+                <Text style={styles.subsectionHelper}>Export your cruises, bookings, and events as CSV or ICS files.</Text>
+              </View>
+              {renderSettingRow(
+                <Upload size={18} color={COLORS.navyDeep} />,
+                'Offers CSV',
+                isExporting ? (
+                  <ActivityIndicator size="small" color={COLORS.navyDeep} />
+                ) : (
+                  <Text style={styles.countBadge}>
+                    {dataStats.sailings} sailings
+                  </Text>
+                ),
+                handleExportOffersCSV
+              )}
+              {renderSettingRow(
+                <Ship size={18} color={COLORS.navyDeep} />,
+                'Booked Cruises CSV',
+                isExporting ? (
+                  <ActivityIndicator size="small" color={COLORS.navyDeep} />
+                ) : (
+                  <Text style={styles.countBadge}>
+                    {dataStats.booked} booked
+                  </Text>
+                ),
+                handleExportBookedCSV
+              )}
+              {renderSettingRow(
+                <Download size={18} color={COLORS.navyDeep} />,
+                'Calendar (.ics)',
+                isExporting ? (
+                  <ActivityIndicator size="small" color={COLORS.navyDeep} />
+                ) : (
+                  <Text style={styles.countBadge}>
+                    {dataStats.events} events
+                  </Text>
+                ),
+                handleExportCalendarICS
+              )}
+
+              <View style={styles.dataDivider} />
+
+              <View style={[styles.dataSubsection, styles.calendarFeedBanner]}>
+                <Text style={styles.subsectionLabel}>FULL BACKUP</Text>
+                <Text style={styles.subsectionHelper}>Export everything or restore your entire vault in one flow.</Text>
+              </View>
+              {renderSettingRow(
+                <FolderArchive size={18} color={COLORS.success} />,
+                'Export All App Data',
+                isExportingAll ? (
+                  <ActivityIndicator size="small" color={COLORS.navyDeep} />
+                ) : (
+                  <Text style={styles.countBadge}>
+                    Complete
+                  </Text>
+                ),
+                handleExportAllData
+              )}
+              {renderSettingRow(
+                <FolderInput size={18} color={COLORS.info} />,
+                'Restore from Backup',
+                isImportingAll ? (
+                  <ActivityIndicator size="small" color={COLORS.navyDeep} />
+                ) : undefined,
+                handleImportAllData
+              )}
+              {renderSettingRow(
+                <Save size={18} color="#9C27B0" />,
+                'Save as Mock Data',
+                isSavingMockData ? (
+                  <ActivityIndicator size="small" color="#9C27B0" />
+                ) : (
+                  <Text style={styles.countBadge}>
+                    .ts files
+                  </Text>
+                ),
+                handleSaveMockData
+              )}
+
+              <View style={styles.dataDivider} />
 
               <View style={[styles.dataSubsection, styles.calendarFeedBanner]}>
                 <Text style={styles.subsectionLabel}>CALENDAR FEED</Text>
@@ -2613,83 +2638,9 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
 
               <View style={styles.dataDivider} />
               
-              <View style={[styles.dataSubsection, styles.fullBackupBanner]}>
-                <Text style={styles.subsectionLabel}>FULL BACKUP</Text>
-                <Text style={styles.subsectionHelper}>Export slices or recover your entire vault in one flow.</Text>
-              </View>
-              {renderSettingRow(
-                <Upload size={18} color={COLORS.navyDeep} />,
-                'Offers CSV',
-                isExporting ? (
-                  <ActivityIndicator size="small" color={COLORS.navyDeep} />
-                ) : (
-                  <Text style={styles.countBadge}>
-                    {dataStats.sailings} sailings
-                  </Text>
-                ),
-                handleExportOffersCSV
-              )}
-              {renderSettingRow(
-                <Ship size={18} color={COLORS.navyDeep} />,
-                'Booked Cruises CSV',
-                isExporting ? (
-                  <ActivityIndicator size="small" color={COLORS.navyDeep} />
-                ) : (
-                  <Text style={styles.countBadge}>
-                    {dataStats.booked} booked
-                  </Text>
-                ),
-                handleExportBookedCSV
-              )}
-              {renderSettingRow(
-                <Download size={18} color={COLORS.navyDeep} />,
-                'Calendar (.ics)',
-                isExporting ? (
-                  <ActivityIndicator size="small" color={COLORS.navyDeep} />
-                ) : (
-                  <Text style={styles.countBadge}>
-                    {dataStats.events} events
-                  </Text>
-                ),
-                handleExportCalendarICS
-              )}
-{renderSettingRow(
-                <FolderArchive size={18} color={COLORS.success} />,
-                'Export All App Data',
-                isExportingAll ? (
-                  <ActivityIndicator size="small" color={COLORS.navyDeep} />
-                ) : (
-                  <Text style={styles.countBadge}>
-                    Complete
-                  </Text>
-                ),
-                handleExportAllData
-              )}
-              {renderSettingRow(
-                <FolderInput size={18} color={COLORS.info} />,
-                'Restore from Backup',
-                isImportingAll ? (
-                  <ActivityIndicator size="small" color={COLORS.navyDeep} />
-                ) : undefined,
-                handleImportAllData
-              )}
-              {renderSettingRow(
-                <Save size={18} color="#9C27B0" />,
-                'Save as Mock Data',
-                isSavingMockData ? (
-                  <ActivityIndicator size="small" color="#9C27B0" />
-                ) : (
-                  <Text style={styles.countBadge}>
-                    .ts files
-                  </Text>
-                ),
-                handleSaveMockData
-              )}
-              
-              <View style={styles.dataDivider} />
-              
               <View style={styles.dataSubsection}>
-                <Text style={styles.subsectionLabel}>BROWSER EXTENSION</Text>
+                <Text style={styles.subsectionLabel}>DOWNLOADS</Text>
+                <Text style={styles.subsectionHelper}>Companion tools for scraping and importing your data.</Text>
               </View>
               {renderSettingRow(
                 <Download size={18} color="#5a2ea6" />,
@@ -2700,16 +2651,6 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
                   <Text style={styles.countBadge}>v1.0.0</Text>
                 ),
                 handleDownloadExtension
-              )}
-              {isAdmin && renderSettingRow(
-                <Ship size={18} color="#0070C9" />,
-                'Download SeaPass Generator',
-                isDownloadingSeaPass ? (
-                  <ActivityIndicator size="small" color="#0070C9" />
-                ) : (
-                  <Text style={styles.countBadge}>v1.0.0</Text>
-                ),
-                handleDownloadSeaPassGenerator
               )}
               {renderSettingRow(
                 <FileSpreadsheet size={18} color={COLORS.success} />,
@@ -2730,12 +2671,15 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
               The Chrome extension automatically syncs offers, bookings, and loyalty data from Royal Caribbean and Celebrity cruise websites.
             </Text>
           </View>
+          </CollapsibleSection>
 
-
-
-          <View style={styles.section}>
-            <View style={styles.sectionCard}>
-              {renderSectionHeader(<HelpCircle size={18} color={COLORS.white} />, 'Support', 'Help & resources')}
+          <CollapsibleSection
+            title="Support & Learning"
+            subtitle="Help Center, user manual & system guide"
+            icon={<HelpCircle size={18} color="#FFFFFF" />}
+            defaultExpanded={false}
+          >
+          <View style={styles.sectionCard}>
               {renderSettingRow(
                 <HelpCircle size={18} color={COLORS.navyDeep} />,
                 'Help Center',
@@ -2798,30 +2742,16 @@ STEP 4: Optional Calendar Import
                 <ChevronRight size={14} color={CLEAN_THEME.text.secondary} />,
                 () => router.push('/learn-system' as any)
               )}
-              {renderSettingRow(
-                <BookOpen size={18} color={COLORS.navyDeep} />,
-                "Check out Scott Astin's Other Books",
-                <ExternalLink size={14} color={CLEAN_THEME.text.secondary} />,
-                () => handleOpenLink('https://www.amazon.com/stores/Scott-Astin/author/B0GCQ1S8MH')
-              )}
-              {renderSettingRow(
-                <BookOpen size={18} color={COLORS.navyDeep} />,
-                'Purchase "Smooth Sailing (In Rough Waters)" on Amazon',
-                <ExternalLink size={14} color={CLEAN_THEME.text.secondary} />,
-                () => handleOpenLink('https://www.amazon.com/Smooth-Sailing-Rough-Waters-Consistently/dp/B0G4NMSM31/ref=sr_1_1?crid=BWS5ZWAQCC46&dib=eyJ2IjoiMSJ9.pTShQ0uJgtzeHg_EAFai2a6YTAan0h_35hcv7ZH0QKfGjHj071QN20LucGBJIEps.F_tIgnCOSc3EqGF6wUtOWK_hXH-5Ti3Miy6KYQ_JaLY&dib_tag=se&keywords=smooth+sailing+in+rough+waters&qid=1766758613&s=books&sprefix=smooth+sailing+in+rough+water%2Cstripbooks%2C189&sr=1-1')
-              )}
-              {renderSettingRow(
-                <Star size={18} color={COLORS.navyDeep} />,
-                'Rate App',
-                <ExternalLink size={14} color={CLEAN_THEME.text.secondary} />,
-                () => handleOpenLink('https://apps.apple.com/us/app/easy-seas/id6758175890?ppid=9a051237-cab0-4164-9459-4c55a1976721')
-              )}
-            </View>
           </View>
+          </CollapsibleSection>
 
-          <View style={styles.section}>
-            <View style={styles.sectionCard}>
-              {renderSectionHeader(<Crown size={18} color={COLORS.white} />, 'Subscriptions & Purchases', 'Manage your plan')}
+          <CollapsibleSection
+            title="Subscription & Legal"
+            subtitle="Plan status, purchases, privacy & terms"
+            icon={<Crown size={18} color="#FFFFFF" />}
+            defaultExpanded={false}
+          >
+          <View style={styles.sectionCard}>
               <TouchableOpacity
                 style={styles.subscriptionPromoCard}
                 onPress={() => router.push('/paywall-monthly' as any)}
@@ -2900,22 +2830,16 @@ STEP 4: Optional Calendar Import
             <Text style={styles.subscriptionHint}>
               Manage your subscription status, redeem App Store offer codes, restore previous purchases, and review legal terms. Whitelisted accounts show as Free Use of App and do not need a paid subscription.
             </Text>
-          </View>
+          </CollapsibleSection>
 
           {isAdmin && (
-            <View style={styles.section}>
+            <CollapsibleSection
+              title="Admin"
+              subtitle="Whitelist, machines, SeaPass & data tools"
+              icon={<Shield size={18} color="#FFFFFF" />}
+              defaultExpanded={false}
+            >
               <View style={styles.sectionCard}>
-                {renderSectionHeader(<Shield size={18} color={COLORS.white} />, 'Admin', 'Email whitelist & data tools')}
-                <View style={styles.adminHeader}>
-                  <Text style={styles.adminHeaderText}>Manage user access</Text>
-                  <Text style={styles.adminHeaderSubtext}>
-                    Add any user email here to grant Free Use of App access. Only scott.merlis1@gmail.com and s@a.com are admins and cannot be removed.
-                  </Text>
-                </View>
-                
-
-                <View style={styles.dataDivider} />
-
                 <View style={[styles.dataSubsection, { backgroundColor: 'rgba(2, 132, 199, 0.08)' }]}>
                   <Text style={styles.subsectionLabel}>ADMIN FUNCTIONS</Text>
                   <Text style={styles.subsectionHelper}>Internal QA/diagnostic tools, admin-only.</Text>
@@ -2941,6 +2865,12 @@ STEP 4: Optional Calendar Import
                   handleClearDiagnosticLogs
                 )}
 
+                <View style={styles.dataDivider} />
+
+                <View style={[styles.dataSubsection, { backgroundColor: 'rgba(3, 105, 161, 0.08)' }]}>
+                  <Text style={styles.subsectionLabel}>FREE USE WHITELIST</Text>
+                  <Text style={styles.subsectionHelper}>Add any user email here to grant Free Use of App access. Only scott.merlis1@gmail.com and s@a.com are admins and cannot be removed.</Text>
+                </View>
                 <View style={styles.addEmailContainer}>
                   <TextInput
                     style={styles.addEmailInput}
@@ -2960,8 +2890,47 @@ STEP 4: Optional Calendar Import
                     <Text style={styles.addEmailButtonText}>Add</Text>
                   </TouchableOpacity>
                 </View>
+                {isLoadingWhitelist ? (
+                  <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="small" color={COLORS.navyDeep} />
+                  </View>
+                ) : (
+                  <View style={styles.whitelistContainer}>
+                    <Text style={styles.whitelistCount}>
+                      {whitelist.length} Free Use of App {whitelist.length === 1 ? 'email' : 'emails'}
+                    </Text>
+                    {whitelist.map((email) => (
+                      <View key={email} style={styles.whitelistItem}>
+                        <View style={styles.whitelistItemLeft}>
+                          <View style={styles.whitelistItemIcon}>
+                            <CheckCircle size={16} color={COLORS.success} />
+                          </View>
+                          <Text style={styles.whitelistItemEmail}>{email}</Text>
+                          {isAdminAccountEmail(email) ? (
+                            <View style={styles.adminBadge}>
+                              <Text style={styles.adminBadgeText}>ADMIN</Text>
+                            </View>
+                          ) : (
+                            <View style={styles.freeUseBadge}>
+                              <Text style={styles.freeUseBadgeText}>FREE USE</Text>
+                            </View>
+                          )}
+                        </View>
+                        {!isAdminAccountEmail(email) && (
+                          <TouchableOpacity
+                            onPress={() => handleRemoveFromWhitelist(email)}
+                            style={styles.removeButton}
+                            activeOpacity={0.7}
+                          >
+                            <Trash2 size={16} color={COLORS.error} />
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    ))}
+                  </View>
+                )}
 
-<View style={styles.dataDivider} />
+                <View style={styles.dataDivider} />
                 
                 <View style={[styles.dataSubsection, { backgroundColor: 'rgba(255, 87, 34, 0.1)' }]}>
                   <Text style={styles.subsectionLabel}>MACHINES DATA</Text>
@@ -3005,6 +2974,16 @@ STEP 4: Optional Calendar Import
                   undefined,
                   () => router.push('/seapass-generator' as any)
                 )}
+                {renderSettingRow(
+                  <Download size={18} color="#4F2A95" />,
+                  'Download SeaPass Generator',
+                  isDownloadingSeaPass ? (
+                    <ActivityIndicator size="small" color="#4F2A95" />
+                  ) : (
+                    <Text style={styles.countBadge}>v1.0.0</Text>
+                  ),
+                  handleDownloadSeaPassGenerator
+                )}
 
                 <View style={styles.dataDivider} />
 
@@ -3045,64 +3024,9 @@ STEP 4: Optional Calendar Import
                   handleClearData,
                   true
                 )}
-
-                <View style={styles.dataDivider} />
-
-                {isLoadingWhitelist ? (
-                  <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="small" color={COLORS.navyDeep} />
-                  </View>
-                ) : (
-                  <View style={styles.whitelistContainer}>
-                    <Text style={styles.whitelistCount}>
-                      {whitelist.length} Free Use of App {whitelist.length === 1 ? 'email' : 'emails'}
-                    </Text>
-                    {whitelist.map((email) => (
-                      <View key={email} style={styles.whitelistItem}>
-                        <View style={styles.whitelistItemLeft}>
-                          <View style={styles.whitelistItemIcon}>
-                            <CheckCircle size={16} color={COLORS.success} />
-                          </View>
-                          <Text style={styles.whitelistItemEmail}>{email}</Text>
-                          {isAdminAccountEmail(email) ? (
-                            <View style={styles.adminBadge}>
-                              <Text style={styles.adminBadgeText}>ADMIN</Text>
-                            </View>
-                          ) : (
-                            <View style={styles.freeUseBadge}>
-                              <Text style={styles.freeUseBadgeText}>FREE USE</Text>
-                            </View>
-                          )}
-                        </View>
-                        {!isAdminAccountEmail(email) && (
-                          <TouchableOpacity
-                            onPress={() => handleRemoveFromWhitelist(email)}
-                            style={styles.removeButton}
-                            activeOpacity={0.7}
-                          >
-                            <Trash2 size={16} color={COLORS.error} />
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                    ))}
-                  </View>
-                )}
               </View>
-            </View>
+            </CollapsibleSection>
           )}
-
-          <View style={styles.section}>
-            <View style={[styles.sectionCard, styles.dangerCard]}>
-              {renderSectionHeader(<Trash2 size={18} color={COLORS.white} />, 'Danger Zone', 'Irreversible actions', ['#DC2626', '#B91C1C'])}
-              {renderSettingRow(
-                <Trash2 size={18} color={COLORS.error} />,
-                'Clear All Data',
-                undefined,
-                handleClearData,
-                true
-              )}
-            </View>
-          </View>
 
 <View style={styles.section}>
             <View style={styles.aboutPromoSection}>
@@ -3130,6 +3054,25 @@ STEP 4: Optional Calendar Import
                   </TouchableOpacity>
                 </View>
               </View>
+              <View style={styles.dataDivider} />
+              {renderSettingRow(
+                <Star size={18} color={COLORS.navyDeep} />,
+                'Rate App',
+                <ExternalLink size={14} color={CLEAN_THEME.text.secondary} />,
+                () => handleOpenLink('https://apps.apple.com/us/app/easy-seas/id6758175890?ppid=9a051237-cab0-4164-9459-4c55a1976721')
+              )}
+              {renderSettingRow(
+                <BookOpen size={18} color={COLORS.navyDeep} />,
+                "Check out Scott Astin's Other Books",
+                <ExternalLink size={14} color={CLEAN_THEME.text.secondary} />,
+                () => handleOpenLink('https://www.amazon.com/stores/Scott-Astin/author/B0GCQ1S8MH')
+              )}
+              {renderSettingRow(
+                <BookOpen size={18} color={COLORS.navyDeep} />,
+                'Purchase "Smooth Sailing (In Rough Waters)" on Amazon',
+                <ExternalLink size={14} color={CLEAN_THEME.text.secondary} />,
+                () => handleOpenLink('https://www.amazon.com/Smooth-Sailing-Rough-Waters-Consistently/dp/B0G4NMSM31/ref=sr_1_1?crid=BWS5ZWAQCC46&dib=eyJ2IjoiMSJ9.pTShQ0uJgtzeHg_EAFai2a6YTAan0h_35hcv7ZH0QKfGjHj071QN20LucGBJIEps.F_tIgnCOSc3EqGF6wUtOWK_hXH-5Ti3Miy6KYQ_JaLY&dib_tag=se&keywords=smooth+sailing+in+rough+waters&qid=1766758613&s=books&sprefix=smooth+sailing+in+rough+water%2Cstripbooks%2C189&sr=1-1')
+              )}
             </View>
           </View>
 
