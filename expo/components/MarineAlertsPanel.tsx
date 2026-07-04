@@ -1,10 +1,12 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, CloudSun, Ship, Waves, Wind } from 'lucide-react-native';
+import { AlertTriangle, ChevronRight, CloudSun, Ship, Waves, Wind } from 'lucide-react-native';
 import { BORDER_RADIUS, COLORS, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import { useSailingWeather, type SailingWeatherCruiseInput, type SailingWeatherForecast } from '@/state/SailingWeatherProvider';
+import { buildMarineForecastDetailParams } from '@/lib/navigation/marineForecastDetail';
 
 interface MarineAlertsPanelProps {
   cruises: SailingWeatherCruiseInput[];
@@ -256,7 +258,9 @@ export function MarineAlertsPanel({
   description = 'Upcoming marine alerts for your sailing window.',
   testID,
 }: MarineAlertsPanelProps) {
+  const router = useRouter();
   const { isHydrated, getForecastForCruiseDay } = useSailingWeather();
+  const cruiseById = useMemo(() => new Map(cruises.map((cruise) => [cruise.id, cruise])), [cruises]);
   const normalizedStartDate = useMemo(() => startOfDay(startDate), [startDate]);
   const cruisesSignature = useMemo(
     () => cruises.map((cruise) => `${cruise.id}:${cruise.sailDate}:${cruise.returnDate}`).join('|'),
@@ -395,8 +399,22 @@ export function MarineAlertsPanel({
           </View>
           {forecasts.map((forecast) => {
             const severityMeta = forecast.strongestSeverity ? getSeverityMeta(forecast.strongestSeverity) : null;
+            const sourceCruise = cruiseById.get(forecast.cruiseId);
             return (
-              <View key={forecast.id} style={styles.forecastCard} testID={`marine-forecast-item-${forecast.cruiseId}-${forecast.dateKey}`}>
+              <TouchableOpacity
+                key={forecast.id}
+                activeOpacity={0.85}
+                disabled={!sourceCruise}
+                onPress={() => {
+                  if (!sourceCruise) return;
+                  router.push({
+                    pathname: '/marine-forecast-detail',
+                    params: buildMarineForecastDetailParams(sourceCruise, forecast.dateKey),
+                  });
+                }}
+                style={styles.forecastCard}
+                testID={`marine-forecast-item-${forecast.cruiseId}-${forecast.dateKey}`}
+              >
                 <View style={styles.forecastTopRow}>
                   <View style={styles.forecastTitleWrap}>
                     <Text style={styles.forecastDate}>{forecast.dayLabel}</Text>
@@ -428,7 +446,13 @@ export function MarineAlertsPanel({
                     <Text style={styles.forecastMetricValue}>{formatMetricValue(forecast.precipitationChance, '%')}</Text>
                   </View>
                 </View>
-              </View>
+                {sourceCruise ? (
+                  <View style={styles.forecastTapHintRow}>
+                    <Text style={styles.forecastTapHintText}>Full marine forecast</Text>
+                    <ChevronRight size={13} color="rgba(216, 243, 255, 0.7)" />
+                  </View>
+                ) : null}
+              </TouchableOpacity>
             );
           })}
         </View>
@@ -662,6 +686,18 @@ const styles = StyleSheet.create({
     color: '#E8F6FF',
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  forecastTapHintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  forecastTapHintText: {
+    color: 'rgba(216, 243, 255, 0.7)',
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   alertsList: {
     gap: SPACING.sm,

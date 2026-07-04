@@ -1,10 +1,12 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, CloudSun, MapPin, Waves, Wind } from 'lucide-react-native';
+import { AlertTriangle, ChevronRight, CloudSun, MapPin, Waves, Wind } from 'lucide-react-native';
 import { BORDER_RADIUS, COLORS, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import { useSailingWeather, type SailingWeatherCruiseInput, type SailingWeatherForecast } from '@/state/SailingWeatherProvider';
+import { buildMarineForecastDetailParams } from '@/lib/navigation/marineForecastDetail';
 
 interface SailingWeatherCardProps {
   cruise: SailingWeatherCruiseInput;
@@ -94,8 +96,16 @@ function getAdvisoryMeta(severity: 'info' | 'watch' | 'warning'): { accent: stri
 }
 
 export function SailingWeatherCard({ cruise, selectedDate }: SailingWeatherCardProps) {
+  const router = useRouter();
   const { isHydrated, getForecastForCruiseDay } = useSailingWeather();
   const dateKey = useMemo(() => formatDateKey(selectedDate), [selectedDate]);
+
+  const openDetail = () => {
+    router.push({
+      pathname: '/marine-forecast-detail',
+      params: buildMarineForecastDetailParams(cruise, dateKey),
+    });
+  };
 
   const weatherQuery = useQuery({
     queryKey: ['sailing-weather', cruise.id, dateKey],
@@ -166,6 +176,7 @@ export function SailingWeatherCard({ cruise, selectedDate }: SailingWeatherCardP
   }
 
   return (
+    <TouchableOpacity activeOpacity={0.85} onPress={openDetail} testID={`sailing-weather-card-touchable-${cruise.id}`}>
     <LinearGradient
       colors={['rgba(9, 24, 52, 0.98)', 'rgba(14, 54, 103, 0.95)', 'rgba(6, 111, 147, 0.92)']}
       start={{ x: 0, y: 0 }}
@@ -320,7 +331,12 @@ export function SailingWeatherCard({ cruise, selectedDate }: SailingWeatherCardP
       <Text style={styles.offlineHint}>
         Saved locally for this sailing day, so you can still read the forecast when service gets patchy offshore.
       </Text>
+      <View style={styles.tapHintRow}>
+        <Text style={styles.tapHintText}>Tap for the full marine forecast</Text>
+        <ChevronRight size={14} color="rgba(231, 248, 255, 0.66)" />
+      </View>
     </LinearGradient>
+    </TouchableOpacity>
   );
 }
 
@@ -576,6 +592,18 @@ const styles = StyleSheet.create({
   offlineHint: {
     fontSize: TYPOGRAPHY.fontSizeXS,
     lineHeight: 18,
+    color: 'rgba(231, 248, 255, 0.66)',
+  },
+  tapHintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  tapHintText: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
     color: 'rgba(231, 248, 255, 0.66)',
   },
   statusPill: {
