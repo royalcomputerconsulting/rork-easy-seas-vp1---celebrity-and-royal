@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useUser } from '@/state/UserProvider';
 import createContextHook from '@nkzw/create-context-hook';
 import type { CasinoProgram, TravelBrand } from '@/types/models';
@@ -23,13 +23,20 @@ export const [IntelligenceFiltersProvider, useIntelligenceFilters] = createConte
   const [selectedProfileId, setSelectedProfileIdState] = useState<ProfileFilterValue>(currentUserId || 'all');
   const [selectedBrand, setSelectedBrandState] = useState<BrandFilterValue>('all');
   const [selectedProgram, setSelectedProgramState] = useState<ProgramFilterValue>('all');
+  // Tracks the previous currentUserId so the effect below can tell the difference
+  // between "the active account was actually switched" (should re-scope the filter)
+  // and "the user just tapped User/Second User in the filter row" (must NOT be
+  // fought back to the active account, or the toggle would never work).
+  const previousCurrentUserIdRef = useRef<string | null>(currentUserId ?? null);
 
   useEffect(() => {
-    if (currentUserId && selectedProfileId !== currentUserId) {
-      console.log('[IntelligenceFilters] Active app profile changed; scoping filters to profile:', currentUserId);
+    const accountActuallyChanged = previousCurrentUserIdRef.current !== (currentUserId ?? null);
+    previousCurrentUserIdRef.current = currentUserId ?? null;
+    if (accountActuallyChanged && currentUserId) {
+      console.log('[IntelligenceFilters] Active app account changed; scoping filters to profile:', currentUserId);
       setSelectedProfileIdState(currentUserId);
     }
-  }, [currentUserId, selectedProfileId]);
+  }, [currentUserId]);
 
   const setSelectedProfileId = useCallback((profileId: ProfileFilterValue) => {
     console.log('[IntelligenceFilters] Profile filter changed:', profileId);
