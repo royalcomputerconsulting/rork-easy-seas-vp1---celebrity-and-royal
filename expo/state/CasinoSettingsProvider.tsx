@@ -32,7 +32,7 @@ export const DEFAULT_CASINO_SETTINGS: CasinoSettings = {
   defaultStopLoss: 300,
   signatureObcAmount: 75,
   signatureObcStartDate: '2025-01-01',
-  signatureObcEndDate: '2026-12-31',
+  signatureObcEndDate: '2026-02-28',
   countFreePlayInValue: true,
   projectionScenario: 'base',
 };

@@ -43,6 +43,34 @@ export interface CasinoSession {
   jackpotAmount?: number;
   freePlayUsed?: number;
   compsReceived?: number;
+  /** v1076-safe extension fields: old sessions keep loading because every field is optional. */
+  brand?: 'royal' | 'celebrity' | 'unknown';
+  program?: 'club-royale' | 'blue-chip' | 'unknown';
+  sailingDate?: string;
+  casinoDay?: number;
+  sessionDate?: string;
+  gameCategory?:
+    | 'reel-slot'
+    | 'video-poker'
+    | 'table-game'
+    | 'electronic-table-game'
+    | 'other'
+    | 'unknown';
+  freeplayIn?: number;
+  promoChipsIn?: number;
+  cashCoinIn?: number;
+  freeplayCoinIn?: number;
+  coinIn?: number;
+  coinOut?: number;
+  jackpots?: number;
+  handPays?: number;
+  taxesWithheld?: number;
+  pointsSource?: 'calculated' | 'manual' | 'imported' | 'estimated' | 'unknown';
+  pointEarningProfileId?: string;
+  rtp?: number;
+  volatility?: 'low' | 'medium' | 'high' | 'unknown';
+  estimatedTheo?: number;
+  estimatedExpectedLoss?: number;
 }
 
 export interface DailySessionSummary {

@@ -16,7 +16,6 @@ import {
 } from 'react-native';
 import { File as ExpoFile, Paths as ExpoPaths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -448,7 +447,7 @@ export default function AnalyticsScreen() {
 
   const todayDateString = useMemo(() => {
     const today = new Date();
-    return today.toISOString().split('T')[0];
+    return today.toISOString().slice(0, 10);
   }, []);
 
   const goldenTimeSlots = useMemo(() => {
@@ -1615,7 +1614,7 @@ export default function AnalyticsScreen() {
       ? '∞'
       : `${effectiveValuePerDollar.toFixed(2)}`;
 
-    const imageHash = String(cruise.id ?? '').split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const imageHash = Array.from(String(cruise.id ?? '')).reduce((acc, char) => acc + char.charCodeAt(0), 0);
     const cruiseImage = getImageForDestination(cruise.destination || '', imageHash + 1);
 
     const formatDateRange = (sailDate: string, returnDate?: string, nights?: number) => {
@@ -1652,9 +1651,9 @@ export default function AnalyticsScreen() {
 
     const getItineraryName = () => {
       if (cruise.itineraryName && typeof cruise.itineraryName === 'string') {
-        const parts = cruise.itineraryName.split(':');
-        if (parts.length > 1) {
-          return parts[1].trim();
+        const colonIndex = cruise.itineraryName.indexOf(':');
+        if (colonIndex >= 0) {
+          return cruise.itineraryName.slice(colonIndex + 1).trim();
         }
         return cruise.itineraryName;
       }
@@ -1688,12 +1687,7 @@ export default function AnalyticsScreen() {
         })}
         activeOpacity={0.85}
       >
-        <LinearGradient
-          colors={['#DDF1FF', '#BFE2FA', '#9FCEF2']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.portfolioCard}
-        >
+        <View style={styles.portfolioCard}>
         <View style={styles.portfolioImageContainer}>
           <Image
             source={{ uri: cruiseImage }}
@@ -1792,7 +1786,7 @@ export default function AnalyticsScreen() {
             </View>
           ) : null}
         </View>
-        </LinearGradient>
+        </View>
       </TouchableOpacity>
     );
   };
@@ -4003,7 +3997,9 @@ export default function AnalyticsScreen() {
   }, [shipPerformance]);
 
   const formatMonthLabel = (monthKey: string): string => {
-    const [year, month] = monthKey.split('-');
+    const dashIndex = monthKey.indexOf('-');
+    const year = dashIndex >= 0 ? monthKey.slice(0, dashIndex) : monthKey;
+    const month = dashIndex >= 0 ? monthKey.slice(dashIndex + 1) : '';
     const monthIndex = Number(month) - 1;
     if (!year || Number.isNaN(monthIndex) || monthIndex < 0 || monthIndex > 11) return monthKey;
     const date = new Date(Date.UTC(Number(year), monthIndex, 1));

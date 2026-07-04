@@ -46,16 +46,13 @@ import { composeProviders } from "@/lib/composeProviders";
 import { ensureStorageHealthy } from "@/lib/storage/storageRecovery";
 import { SailingWeatherProvider } from "@/state/SailingWeatherProvider";
 import { IntelligenceFiltersProvider } from "@/state/IntelligenceFiltersProvider";
-import { recordDiagnosticEvent } from "@/lib/diagnosticLogger";
 
 try {
   void SplashScreen.preventAutoHideAsync();
 } catch {
 }
 
-// Diagnostics intentionally do NOT auto-initialize here. recordDiagnosticEvent
-// lazily starts console capture + storage on its own first real call, so the
-// root layout module never takes on any diagnostics-related startup risk.
+// Diagnostics intentionally do NOT auto-initialize here.
 
 const queryClient = new QueryClient({
   defaultOptions: {

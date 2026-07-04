@@ -47,12 +47,19 @@ function buildExtendedLoyaltyData(
     'crownAnchorTier',
     'crownAndAnchorLevel',
     'crownAnchorLevel',
+    'caTier',
   ]));
   const crownAndAnchorPointsRaw = toNumber(getValue(loyalty, [
     'crownAndAnchorSocietyLoyaltyIndividualPoints',
     'crownAndAnchorPoints',
     'crownAnchorPoints',
     'crownAndAnchorSocietyPoints',
+    'cruisePoints',
+    'cruiseCredits',
+    'loyaltyPoints',
+    'currentCruisePoints',
+    'currentCruiseCredits',
+    'pointsBalance',
   ]));
   const crownAndAnchorRelationshipPointsRaw = toNumber(getValue(loyalty, [
     'crownAndAnchorSocietyLoyaltyRelationshipPoints',
@@ -72,12 +79,25 @@ function buildExtendedLoyaltyData(
     'clubRoyaleLoyaltyTier',
     'clubRoyaleTier',
     'clubRoyalTier',
+    'currentClubTier',
+    'currentTier',
+    'casinoTier',
+    'clubTier',
+    'tier',
   ]));
   const clubRoyalePointsRaw = toNumber(getValue(loyalty, [
     'clubRoyaleLoyaltyIndividualPoints',
     'clubRoyalePoints',
     'clubRoyalPoints',
     'clubRoyaleCurrentPoints',
+    'currentTierCredits',
+    'tierCredits',
+    'tierCreditBalance',
+    'currentTierCreditBalance',
+    'currentYearTierCredits',
+    'currentYearPoints',
+    'casinoPoints',
+    'casinoTierCredits',
   ]));
   const clubRoyaleRelationshipPointsRaw = toNumber(getValue(loyalty, [
     'clubRoyaleLoyaltyRelationshipPoints',

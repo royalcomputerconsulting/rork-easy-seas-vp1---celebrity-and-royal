@@ -1,5 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
 export type DiagnosticLevel = 'debug' | 'info' | 'success' | 'warning' | 'error';
 export type DiagnosticCategory =
   | 'APP'
@@ -29,18 +27,10 @@ export type DiagnosticEvent = {
 };
 
 const MAX_EVENTS = 5000;
-const MAX_PERSISTED_EVENTS = 1500;
-const PERSIST_DEBOUNCE_MS = 4000;
 const RATE_LIMIT_WINDOW_MS = 1000;
 const RATE_LIMIT_MAX_EVENTS_PER_WINDOW = 40;
-const STORAGE_KEY = 'easyseas_diagnostic_events_v1';
 const tabStarts = new Map<string, number>();
 let events: DiagnosticEvent[] = [];
-let initialized = false;
-let originalConsoleLog: typeof console.log | null = null;
-let originalConsoleWarn: typeof console.warn | null = null;
-let originalConsoleError: typeof console.error | null = null;
-let persistTimer: ReturnType<typeof setTimeout> | null = null;
 let rateLimitWindowStart = 0;
 let rateLimitCountInWindow = 0;
 let rateLimitDroppedInWindow = 0;
@@ -59,27 +49,11 @@ function clip(value: unknown, max = 2500): unknown {
 }
 
 function schedulePersist() {
-  if (persistTimer) return;
-  persistTimer = setTimeout(() => {
-    persistTimer = null;
-    try {
-      // Only the most recent window is persisted to keep each write light;
-      // the full in-memory MAX_EVENTS history is still available for export
-      // during the current session.
-      const toPersist = events.slice(-MAX_PERSISTED_EVENTS);
-      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(toPersist)).catch(() => {});
-    } catch {
-      // Serialization failures must never break app logging.
-    }
-  }, PERSIST_DEBOUNCE_MS);
+  // v1076 native-safe diagnostics: no automatic AsyncStorage writes.
+  // Diagnostics remain memory-only until the user explicitly exports/clears them.
+  return;
 }
 
-/**
- * Simple sliding-window rate limiter so a runaway logging loop elsewhere in
- * the app can never turn diagnostic capture itself into a performance or
- * stability problem. Excess events within the same window are dropped, with
- * a single summary event recorded once the window closes.
- */
 function isRateLimited(): boolean {
   const now = Date.now();
   if (now - rateLimitWindowStart > RATE_LIMIT_WINDOW_MS) {
@@ -104,59 +78,8 @@ function isRateLimited(): boolean {
   return false;
 }
 
-/**
- * Lazily starts diagnostics (console capture + loading any previously
- * persisted events) the first time an event is actually recorded, instead of
- * unconditionally at app/root-layout module load. This keeps startup free of
- * any diagnostics-related risk while still capturing everything once the app
- * is genuinely running.
- */
-function ensureLazyInit() {
-  if (initialized) return;
-  initialized = true;
-  try {
-    if (!originalConsoleLog) {
-      originalConsoleLog = console.log;
-      originalConsoleWarn = console.warn;
-      originalConsoleError = console.error;
-      console.log = (...args: any[]) => {
-        originalConsoleLog?.(...args);
-        try {
-          const text = args.map(a => typeof a === 'string' ? a : JSON.stringify(clip(a, 800))).join(' ');
-          if (/\[RoyalCaribbeanSync\]|Sync|sync|Offer|Cruise|Settings|Overview|Booked|Performance/i.test(text)) {
-            recordDiagnosticEvent({ level: 'debug', category: text.includes('RoyalCaribbeanSync') || /sync/i.test(text) ? 'SYNC' : 'APP', event: 'CONSOLE_LOG', message: text });
-          }
-        } catch {}
-      };
-      console.warn = (...args: any[]) => {
-        originalConsoleWarn?.(...args);
-        try {
-          recordDiagnosticEvent({ level: 'warning', category: 'WARNING', event: 'CONSOLE_WARN', message: args.map(a => String(clip(a, 800))).join(' ') });
-        } catch {}
-      };
-      console.error = (...args: any[]) => {
-        originalConsoleError?.(...args);
-        try {
-          recordDiagnosticEvent({ level: 'error', category: 'ERROR', event: 'CONSOLE_ERROR', message: args.map(a => String(clip(a, 800))).join(' ') });
-        } catch {}
-      };
-    }
-
-    AsyncStorage.getItem(STORAGE_KEY).then((stored) => {
-      try {
-        if (!stored) return;
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) events = [...parsed.slice(-MAX_EVENTS), ...events].slice(-MAX_EVENTS);
-      } catch {}
-    }).catch(() => {});
-  } catch {
-    // Diagnostics must never be able to destabilize app startup.
-  }
-}
-
 export function recordDiagnosticEvent(input: Omit<DiagnosticEvent, 'ts'>) {
   try {
-    ensureLazyInit();
     if (isRateLimited()) return;
     const entry: DiagnosticEvent = {
       ts: new Date().toISOString(),
@@ -172,43 +95,12 @@ export function recordDiagnosticEvent(input: Omit<DiagnosticEvent, 'ts'>) {
 }
 
 export async function initializeDiagnosticLogger() {
-  if (initialized) return;
-  initialized = true;
-  try {
-    const stored = await AsyncStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      if (Array.isArray(parsed)) events = parsed.slice(-MAX_EVENTS);
-    }
-  } catch {}
-
   recordDiagnosticEvent({
     level: 'info',
     category: 'APP',
     event: 'APP_START',
     message: 'Easy Seas app session started',
   });
-
-  if (!originalConsoleLog) {
-    originalConsoleLog = console.log;
-    originalConsoleWarn = console.warn;
-    originalConsoleError = console.error;
-    console.log = (...args: any[]) => {
-      originalConsoleLog?.(...args);
-      const text = args.map(a => typeof a === 'string' ? a : JSON.stringify(clip(a, 800))).join(' ');
-      if (/\[RoyalCaribbeanSync\]|Sync|sync|Offer|Cruise|Settings|Overview|Booked|Performance/i.test(text)) {
-        recordDiagnosticEvent({ level: 'debug', category: text.includes('RoyalCaribbeanSync') || /sync/i.test(text) ? 'SYNC' : 'APP', event: 'CONSOLE_LOG', message: text });
-      }
-    };
-    console.warn = (...args: any[]) => {
-      originalConsoleWarn?.(...args);
-      recordDiagnosticEvent({ level: 'warning', category: 'WARNING', event: 'CONSOLE_WARN', message: args.map(a => String(clip(a, 800))).join(' ') });
-    };
-    console.error = (...args: any[]) => {
-      originalConsoleError?.(...args);
-      recordDiagnosticEvent({ level: 'error', category: 'ERROR', event: 'CONSOLE_ERROR', message: args.map(a => String(clip(a, 800))).join(' ') });
-    };
-  }
 }
 
 export function markTabSwitchStart(from: string, to: string) {
@@ -236,20 +128,11 @@ export function getDiagnosticEvents() {
 
 export async function clearDiagnosticEvents() {
   events = [];
-  await AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
   recordDiagnosticEvent({ level: 'info', category: 'ADMIN', event: 'DIAGNOSTIC_LOGS_CLEARED', message: 'Diagnostic logs cleared' });
 }
 
 export async function buildDiagnosticExport(stateSnapshot?: Record<string, unknown>) {
-  let storedEvents = events;
-  try {
-    const stored = await AsyncStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      if (Array.isArray(parsed) && parsed.length > storedEvents.length) storedEvents = parsed;
-    }
-  } catch {}
-
+  const storedEvents = events;
   const slowTabs = storedEvents.filter(e => e.event === 'TAB_SWITCH_END' && (e.durationMs ?? 0) > 1000);
   const errors = storedEvents.filter(e => e.level === 'error');
   const warnings = storedEvents.filter(e => e.level === 'warning');
@@ -258,25 +141,16 @@ export async function buildDiagnosticExport(stateSnapshot?: Record<string, unkno
     'Easy Seas Diagnostic Summary',
     `Exported: ${new Date().toLocaleString()}`,
     `Events: ${storedEvents.length}`,
+    `Errors: ${errors.length}`,
+    `Warnings: ${warnings.length}`,
+    `Slow tab switches: ${slowTabs.length}`,
+    `Sync events: ${syncEvents.length}`,
     '',
-    'STATE SNAPSHOT',
-    JSON.stringify(stateSnapshot || {}, null, 2),
-    '',
-    'SLOW TAB / SCREEN EVENTS',
-    ...(slowTabs.length ? slowTabs.slice(-60).map(e => `${new Date(e.ts).toLocaleTimeString()} ${e.message}`) : ['None recorded']),
-    '',
-    'SYNC MILESTONES',
-    ...(syncEvents.length ? syncEvents.slice(-120).map(e => `${new Date(e.ts).toLocaleTimeString()} [${e.level.toUpperCase()}] ${e.message}`) : ['None recorded']),
-    '',
-    'WARNINGS',
-    ...(warnings.length ? warnings.slice(-80).map(e => `${new Date(e.ts).toLocaleTimeString()} ${e.message}`) : ['None recorded']),
-    '',
-    'ERRORS',
-    ...(errors.length ? errors.slice(-80).map(e => `${new Date(e.ts).toLocaleTimeString()} ${e.message}`) : ['None recorded']),
+    'Recent Events:',
+    ...storedEvents.slice(-250).map(e => `${e.ts} [${e.level}] ${e.category}/${e.event}: ${e.message}${e.durationMs != null ? ` (${e.durationMs}ms)` : ''}`),
   ];
-  return {
-    summaryText: lines.join('\n'),
-    rawJsonl: storedEvents.map(e => JSON.stringify(e)).join('\n'),
-    stateSnapshot: JSON.stringify(stateSnapshot || {}, null, 2),
-  };
+  if (stateSnapshot) {
+    lines.push('', 'State Snapshot:', JSON.stringify(clip(stateSnapshot, 10000), null, 2));
+  }
+  return lines.join('\n');
 }

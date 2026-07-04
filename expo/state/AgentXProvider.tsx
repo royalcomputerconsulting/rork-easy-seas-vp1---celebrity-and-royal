@@ -7,6 +7,7 @@ import type { ChatMessage } from '@/components/AgentXChat';
 import type { AgentXMode, BookedCruise, CalendarEvent, Cruise, SlotMachine, PriceDropAlert, PriceHistoryRecord, Alert, CompItem, W2GRecord } from '@/types/models';
 import { askMyDataSearch, formatAskMyDataResponse, type AskMyDataContextBlock } from '@/lib/askMyData';
 import { buildAskMyDataOverview } from '@/lib/askMyDataOverview';
+import { buildCasinoValueAgentXContext } from '@/lib/agentXCasinoValueContext';
 import { isKnownCasinoProfile } from '@/lib/knownProfileFallback';
 import { getBookedCruiseCasinoPoints } from '@/lib/casinoPointTruth';
 import { calculateOfferIntelligenceScore } from '@/lib/offerIntelligence';
@@ -785,6 +786,7 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
         ].join('\n'),
         actionLabel: 'Use goals context',
       },
+      ...buildCasinoValueAgentXContext({ bookedCruises: filteredBookedCruises as unknown as Array<Record<string, unknown>>, userId: authenticatedEmail ?? 'scott' }),
       {
         id: 'settings-reference-data',
         title: 'Settings, profile, and reference data',
@@ -801,7 +803,7 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
         actionLabel: 'Use profile/settings context',
       },
     ];
-  }, [activeScopeLabel, alertsState.activeAlerts, alertsState.alerts.length, alertsState.anomalies.length, alertsState.criticalAlerts.length, alertsState.insights.length, alertsState.lastDetectionRun, alertsState.rules, allMachines.length, authenticatedEmail, bankrollState, brandProgramLabel, celebrityState.destinations, celebrityState.ships, clubRoyalePoints, clubRoyalePointsSource, clubRoyaleTier, coreDataLoading, coreUserPoints, crewRecognitionEntries.length, deckMappings.length, filteredBookedCruises.length, filteredCalendarEvents.length, filteredCasinoOffers.length, filteredCertificates.length, filteredCruises.length, financials.summary, gamificationState, getSessionAnalytics, globalLibrary.length, hasLocalData, lastSyncDate, machineLogs.length, myAtlasMachines.length, pphAlertsState, priceHistoryState, priceTrackingState, selectedBrand, selectedProfileLabel, selectedProgram, sessions.length, settings, taxState, users, weatherReports.length]);
+  }, [activeScopeLabel, alertsState.activeAlerts, alertsState.alerts.length, alertsState.anomalies.length, alertsState.criticalAlerts.length, alertsState.insights.length, alertsState.lastDetectionRun, alertsState.rules, allMachines.length, authenticatedEmail, bankrollState, brandProgramLabel, celebrityState.destinations, celebrityState.ships, clubRoyalePoints, clubRoyalePointsSource, clubRoyaleTier, coreDataLoading, coreUserPoints, crewRecognitionEntries.length, deckMappings.length, filteredBookedCruises, filteredCalendarEvents.length, filteredCasinoOffers.length, filteredCertificates.length, filteredCruises.length, financials.summary, gamificationState, getSessionAnalytics, globalLibrary.length, hasLocalData, lastSyncDate, machineLogs.length, myAtlasMachines.length, pphAlertsState, priceHistoryState, priceTrackingState, selectedBrand, selectedProfileLabel, selectedProgram, sessions.length, settings, taxState, users, weatherReports.length]);
 
   const refreshWeatherReports = useCallback(async (options?: { force?: boolean }): Promise<SailingWeatherForecast[]> => {
     if (!isWeatherHydrated) return [];

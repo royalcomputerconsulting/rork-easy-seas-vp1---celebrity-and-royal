@@ -1261,3 +1261,159 @@ export interface AddGameWizardData {
   userNotes?: string;
   images?: SlotMachineImage[];
 }
+
+export type CruiseFutureValueStatus = 'available' | 'unassigned' | 'assigned' | 'applied' | 'used' | 'expired' | 'cancelled' | 'selected' | 'booked' | 'sailed' | 'not-yet-earned' | 'unknown';
+
+export interface NextCruiseCertificate {
+  id: string;
+  bookingType: 'book-now' | 'book-later' | 'unknown';
+  certificateNumber?: string;
+  createdOnShip?: string;
+  createdDuringCruiseId?: string;
+  createdDate: string;
+  selectionDeadline?: string;
+  depositPaid: number;
+  depositPerPerson?: number;
+  selectedCruiseId?: string;
+  selectedShipName?: string;
+  selectedSailDate?: string;
+  offerType: 'obc' | 'instant-savings' | 'unknown';
+  estimatedValue: number;
+  confirmedValue?: number;
+  status: 'unassigned' | 'assigned' | 'applied' | 'expired' | 'cancelled' | 'unknown';
+  notes?: string;
+}
+
+export interface FutureCruiseCredit {
+  id: string;
+  fccNumber?: string;
+  guestName?: string;
+  originalReservationNumber?: string;
+  originalCruiseId?: string;
+  issueDate?: string;
+  expirationDate?: string;
+  amountOriginal: number;
+  amountRemaining: number;
+  currency: 'USD';
+  appliedCruiseIds: string[];
+  status: 'available' | 'partially-used' | 'used' | 'expired' | 'unknown';
+  source: 'manual' | 'email' | 'invoice' | 'unknown';
+  notes?: string;
+}
+
+export interface UserBenefitOverride {
+  id: string;
+  userId: string;
+  benefitType: 'signature-obc' | 'masters-obc' | 'internet' | 'other';
+  amount: number;
+  validFrom?: string;
+  validThrough?: string;
+  appliesTo: 'all-qualifying-cruises' | 'specific-cruises';
+  source: 'manual-user-confirmed' | 'invoice' | 'email' | 'unknown';
+  notes?: string;
+}
+
+export interface AnnualCruiseBenefit {
+  id: string;
+  program: 'club-royale';
+  tier: 'prime' | 'signature' | 'masters';
+  benefitYear: string;
+  cabinEntitlement: 'interior' | 'balcony' | 'grand-suite';
+  maxNights: number;
+  doubleOccupancy: boolean;
+  taxesAndFeesDue: boolean;
+  bookByDate?: string;
+  sailByDate?: string;
+  selectedCruiseId?: string;
+  estimatedRetailValue?: number;
+  confirmedRetailValue?: number;
+  taxesFees?: number;
+  cashPaid?: number;
+  status: 'available' | 'selected' | 'booked' | 'sailed' | 'expired' | 'unknown';
+  notes?: string;
+}
+
+export interface CrownAnchorCruiseCertificate {
+  id: string;
+  program: 'crown-anchor';
+  triggerPoints: number;
+  certificateType:
+    | 'pinnacle-700-balcony'
+    | 'pinnacle-1050-balcony'
+    | 'pinnacle-1400-junior-suite'
+    | 'pinnacle-350-increment-junior-suite'
+    | 'unknown';
+  cabinValueBasis: '7-night-balcony' | 'junior-suite' | 'unknown';
+  earnedDate?: string;
+  expirationDate?: string;
+  selectedCruiseId?: string;
+  estimatedValue?: number;
+  confirmedValue?: number;
+  status: 'not-yet-earned' | 'earned' | 'selected' | 'booked' | 'sailed' | 'expired' | 'unknown';
+  notes?: string;
+}
+
+export interface InternetValueItem {
+  id: string;
+  cruiseId: string;
+  packageName: 'voom' | 'unknown';
+  devices: number;
+  days: number;
+  retailPricePerDevicePerDay: number;
+  confirmedTotalPrice?: number;
+  calculatedValue: number;
+  coveredBy: 'signature' | 'masters' | 'pinnacle' | 'casino-offer' | 'obc' | 'manual' | 'none' | 'unknown';
+  status: 'estimated' | 'confirmed' | 'applied' | 'used' | 'unknown';
+  source: 'default-voom-rate' | 'manual' | 'invoice' | 'cruise-planner' | 'unknown';
+  notes?: string;
+}
+
+export interface SpecialtyDiningValueItem {
+  id: string;
+  cruiseId: string;
+  diningType:
+    | 'single-restaurant'
+    | 'chops'
+    | 'izumi'
+    | 'giovannis'
+    | 'jamies'
+    | 'wonderland'
+    | 'hooked'
+    | '150-central-park'
+    | 'chef-table'
+    | 'three-night-package'
+    | 'unlimited-dining-package'
+    | 'unknown';
+  guests: number;
+  mealsIncluded?: number;
+  retailPricePerGuest?: number;
+  confirmedTotalPrice?: number;
+  coveredBy: 'casino-offer' | 'obc' | 'nextcruise-obc' | 'travel-agent-obc' | 'manual' | 'none' | 'unknown';
+  valueAmount: number;
+  status: 'estimated' | 'confirmed' | 'applied' | 'used' | 'unknown';
+  source: 'manual' | 'invoice' | 'cruise-planner' | 'offer-parser' | 'folio' | 'unknown';
+  notes?: string;
+}
+
+export interface SpaValueItem {
+  id: string;
+  cruiseId: string;
+  serviceType:
+    | 'massage'
+    | 'facial'
+    | 'body-treatment'
+    | 'thermal-suite'
+    | 'salon'
+    | 'fitness-class'
+    | 'personal-training'
+    | 'unknown';
+  guests: number;
+  serviceCount: number;
+  retailPricePerService?: number;
+  confirmedTotalPrice?: number;
+  coveredBy: 'casino-offer' | 'obc' | 'nextcruise-obc' | 'travel-agent-obc' | 'manual' | 'none' | 'unknown';
+  valueAmount: number;
+  status: 'estimated' | 'confirmed' | 'applied' | 'used' | 'unknown';
+  source: 'manual' | 'invoice' | 'cruise-planner' | 'folio' | 'unknown';
+  notes?: string;
+}

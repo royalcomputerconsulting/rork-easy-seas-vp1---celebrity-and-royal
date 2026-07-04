@@ -176,6 +176,36 @@ function isLoyaltyPayloadForCruiseLine(url: unknown, cruiseLine: CruiseLine): bo
   return true;
 }
 
+function hasMeaningfulExtendedLoyaltyData(data: ExtendedLoyaltyData | null | undefined, cruiseLine: CruiseLine): boolean {
+  if (!data) return false;
+  if (cruiseLine === 'celebrity') {
+    return Boolean(
+      data.captainsClubTier ||
+      data.captainsClubPoints !== undefined ||
+      data.celebrityBlueChipTier ||
+      data.celebrityBlueChipPoints !== undefined ||
+      data.venetianSocietyTier
+    );
+  }
+  if (cruiseLine === 'royal_caribbean') {
+    return Boolean(
+      data.crownAndAnchorTier ||
+      data.crownAndAnchorLevel ||
+      data.crownAndAnchorPointsFromApi !== undefined ||
+      data.clubRoyaleTierFromApi ||
+      data.clubRoyaleTier ||
+      data.clubRoyalePointsFromApi !== undefined
+    );
+  }
+  return true;
+}
+
+function isHistoryOnlyLoyaltyPayload(data: unknown): boolean {
+  const value = data as any;
+  const payload = value?.payload ?? value;
+  return Boolean(Array.isArray(payload?.sailings) && !payload?.loyaltyInformation && !payload?.data);
+}
+
 function filterExtendedLoyaltyForCruiseLine(data: ExtendedLoyaltyData | null | undefined, cruiseLine: CruiseLine): ExtendedLoyaltyData | null {
   if (!data) return null;
   if (cruiseLine === 'celebrity') {
@@ -1058,6 +1088,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         if (msg.loyalty && typeof msg.loyalty === 'object') {
           const loyaltyInfo = msg.loyalty as LoyaltyApiInformation;
           const converted = filterExtendedLoyaltyForCruiseLine(convertLoyaltyInfoToExtended(loyaltyInfo, ''), cruiseLine);
+          const hasMeaningfulLoyalty = hasMeaningfulExtendedLoyaltyData(converted, cruiseLine);
+          if (!hasMeaningfulLoyalty) {
+            addLog('⚠️ Ignored API loyalty message because it did not contain tier or point values; waiting for a real loyalty payload or DOM fallback', 'warning');
+            break;
+          }
           setExtendedLoyaltyData((prev) => mergeExtendedLoyaltyData(prev, converted));
           hasReceivedApiLoyaltyDataRef.current = true;
           
@@ -1116,6 +1151,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       case 'extended_loyalty_data': {
         const extData = msg.data as LoyaltyApiInformation;
         const converted = filterExtendedLoyaltyForCruiseLine(convertLoyaltyInfoToExtended(extData, msg.accountId), cruiseLine);
+        const hasMeaningfulLoyalty = hasMeaningfulExtendedLoyaltyData(converted, cruiseLine);
+        if (!hasMeaningfulLoyalty) {
+          addLog('⚠️ Ignored extended loyalty payload because it did not contain tier or point values; waiting for a better API payload or DOM fallback', 'warning');
+          break;
+        }
         setExtendedLoyaltyData((prev) => mergeExtendedLoyaltyData(prev, converted));
         
         // Mark that we've received API data - this takes precedence over DOM scraping
@@ -1556,6 +1596,16 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           }
           
           const convertedLoyalty = filterExtendedLoyaltyForCruiseLine(convertLoyaltyInfoToExtended(loyaltyInfo, accountId), cruiseLine);
+          const hasMeaningfulLoyalty = hasMeaningfulExtendedLoyaltyData(convertedLoyalty, cruiseLine);
+          if (!hasMeaningfulLoyalty) {
+            const historyOnly = isHistoryOnlyLoyaltyPayload(data);
+            addLog(historyOnly
+              ? 'ℹ️ Loyalty/history payload contained completed sailings but no Crown & Anchor / Club Royale tier-point values; keeping loyalty capture open'
+              : '⚠️ Loyalty payload did not include usable tier or point fields; keeping loyalty capture open',
+              historyOnly ? 'info' : 'warning'
+            );
+            break;
+          }
           setExtendedLoyaltyData((prev) => mergeExtendedLoyaltyData(prev, convertedLoyalty));
           hasReceivedApiLoyaltyDataRef.current = true;
           
@@ -2303,13 +2353,31 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
                 return headers;
               }
 
+              function capturedPayloadHasTierOrPoints(existing) {
+                try {
+                  const payload = existing && (existing.payload || existing);
+                  const nested = payload && payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data) ? payload.data : null;
+                  const info = (payload && payload.loyaltyInformation) || nested || payload;
+                  if (!info || typeof info !== 'object') return false;
+                  return Boolean(
+                    info.crownAndAnchorSocietyLoyaltyTier || info.crownAndAnchorTier || info.crownAndAnchorLevel ||
+                    info.crownAndAnchorSocietyLoyaltyIndividualPoints || info.crownAndAnchorPoints || info.cruisePoints ||
+                    info.clubRoyaleLoyaltyTier || info.clubRoyaleTier || info.currentClubTier || info.currentTier ||
+                    info.clubRoyaleLoyaltyIndividualPoints || info.clubRoyalePoints || info.currentTierCredits || info.tierCredits
+                  );
+                } catch (e) { return false; }
+              }
+
               function emitCapturedIfPresent(loyaltyUrl) {
                 const existing = window.capturedPayloads && window.capturedPayloads.loyalty ? window.capturedPayloads.loyalty : null;
-                if (existing) {
+                if (existing && capturedPayloadHasTierOrPoints(existing)) {
                   log('✅ Loyalty data already captured by network monitor', 'success');
                   post('network_payload', { endpoint: 'loyalty', data: existing, url: loyaltyUrl });
                   post('step_complete', { step: 3 });
                   return true;
+                }
+                if (existing) {
+                  log('ℹ️ Existing captured loyalty payload has no tier/point values yet; continuing to fetch loyalty/info', 'info');
                 }
                 return false;
               }
