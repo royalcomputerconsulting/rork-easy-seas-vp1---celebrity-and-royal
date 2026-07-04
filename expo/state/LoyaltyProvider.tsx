@@ -139,6 +139,12 @@ interface LoyaltyState {
 }
 
 
+// Last-resort placeholder ONLY for when there is truly zero real/manual Crown & Anchor data
+// recorded yet (see the `rawCrownAnchorPoints === 0` gate below). This must never override or
+// floor a real per-cruise total or a manual entry the user has actually saved in Settings --
+// that exact bug (a hardcoded number permanently winning over a lower real/manual value) has
+// already been found and fixed for Club Royale season/lifetime totals; this is the same class
+// of bug for Crown & Anchor loyalty points.
 const USER_CONFIRMED_CROWN_ANCHOR_BASELINE = 590;
 
 const DEFAULT_LOYALTY = {
@@ -615,8 +621,21 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
     let effectiveClubRoyalePoints = authoritativeCurrentYearClubRoyalePoints;
     let clubRoyalePointsSource: 'api' | 'manual' | 'historical' | 'app' = authoritativeCurrentYearClubRoyalePoints > 0 ? 'app' : 'historical';
 
+    // An explicit manual entry (typed into Settings and saved, or written automatically by a
+    // successful Crown & Anchor / Club Royale sync) is a direct, deliberate statement of the
+    // current true balance. It always wins over the app's own per-cruise computed total, which
+    // can under-count if a session or cruise hasn't been entered into the app yet. A manual value
+    // of exactly 0 is treated as "never explicitly set" (the untouched default) so brand-new
+    // profiles with real cruise data still show their computed total instead of a hardcoded zero.
+    // Any mismatch between the manual/synced total and the per-cruise computed total is still
+    // surfaced via the sync-discrepancy banner below, so nothing is silently hidden either way.
+    const hasExplicitManualClubRoyaleEntry = typeof manualClubRoyalePoints === 'number' && manualClubRoyalePoints > 0;
+
     if (!activeProfileHasRoyalLoyalty) {
       effectiveClubRoyalePoints = 0;
+      clubRoyalePointsSource = 'manual';
+    } else if (!shouldForceSeasonResetBalance && hasExplicitManualClubRoyaleEntry) {
+      effectiveClubRoyalePoints = manualClubRoyalePoints as number;
       clubRoyalePointsSource = 'manual';
     } else if (authoritativeCurrentYearClubRoyalePoints > 0) {
       effectiveClubRoyalePoints = authoritativeCurrentYearClubRoyalePoints;
@@ -655,7 +674,10 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
     const rawCrownAnchorPoints = activeProfileHasRoyalLoyalty
       ? (hasLiveCrownAnchorPoints ? liveCrownAnchorPoints : (manualCrownAnchorPoints ?? profileCrownAnchorPoints ?? completedNights))
       : 0;
-    const shouldUseConfirmedPinnacleBaseline = usesKnownCasinoProfile && hasConfirmedPinnacleBaseline(bookedCruises) && rawCrownAnchorPoints < CROWN_ANCHOR_LEVELS.Pinnacle.cruiseNights;
+    // Only fall back to the hardcoded baseline when there is truly zero real/manual Crown & Anchor
+    // data recorded (rawCrownAnchorPoints === 0) -- never when the user has an actual manually-entered
+    // or synced value, even if that real value happens to be lower than the old baseline number.
+    const shouldUseConfirmedPinnacleBaseline = usesKnownCasinoProfile && hasConfirmedPinnacleBaseline(bookedCruises) && rawCrownAnchorPoints === 0;
     const effectiveCrownAnchorPoints = activeProfileHasRoyalLoyalty
       ? (shouldUseConfirmedPinnacleBaseline ? USER_CONFIRMED_CROWN_ANCHOR_BASELINE : Math.max(0, rawCrownAnchorPoints))
       : 0;

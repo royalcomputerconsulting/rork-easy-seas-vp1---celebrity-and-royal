@@ -296,6 +296,66 @@ function dedupeSecondProfiles(profiles: UserProfile[]): UserProfile[] {
   return [...ownerProfiles, ...(keptSecondProfile ? [keptSecondProfile] : [])];
 }
 
+/**
+ * Guarantees every profile in the list has a globally-unique id, even if corrupted data from
+ * before the collision-proof id generator (see `generateUniqueUserId`) left two profiles sharing
+ * the exact same id in storage. A shared id between two different profile objects (e.g. the real
+ * owner and a blank auto-created "Second User" stub) causes React lists that key off `profile.id`
+ * to throw "two children with the same key" and, worse, makes `users.find(u => u.id === x)` return
+ * whichever of the two happens to appear first -- which can silently resolve `currentUser` to the
+ * wrong (blank/stale) profile and make every screen that reads loyalty/profile data look unsynced.
+ * When a collision is found, the more "authoritative" profile (owner, has real loyalty data, etc.)
+ * keeps the original id and the other one is assigned a brand-new unique id.
+ */
+function ensureUniqueProfileIds(profiles: UserProfile[]): UserProfile[] {
+  const scoreOf = (candidate: UserProfile): number => {
+    let value = 0;
+    if (candidate.isOwner) value += 100;
+    if (candidate.defaultProfile) value += 50;
+    if ((candidate.crownAnchorNumber ?? '').trim().length > 0) value += 10;
+    if ((candidate.clubRoyaleId ?? '').trim().length > 0) value += 10;
+    if ((candidate.clubRoyalePoints ?? 0) > 0) value += 5;
+    if ((candidate.loyaltyPoints ?? 0) > 0) value += 5;
+    if ((candidate.name ?? '').trim().length > 0 && candidate.name !== 'Second User') value += 2;
+    return value;
+  };
+
+  const byId = new Map<string, UserProfile>();
+  let repaired = false;
+
+  for (const profile of profiles) {
+    const existing = byId.get(profile.id);
+    if (!existing) {
+      byId.set(profile.id, profile);
+      continue;
+    }
+
+    repaired = true;
+    const keepExisting = scoreOf(existing) >= scoreOf(profile);
+    const keep = keepExisting ? existing : profile;
+    const rename = keepExisting ? profile : existing;
+    const newId = generateUniqueUserId(rename.isOwner ? 'user_owner' : 'user_second');
+
+    console.warn('[UserProvider] Repairing duplicate profile id collision so no two profiles ever share an id:', {
+      collidingId: profile.id,
+      keptProfileName: keep.name,
+      keptProfileIsOwner: keep.isOwner === true,
+      renamedProfileOldId: rename.id,
+      renamedProfileNewId: newId,
+      renamedProfileName: rename.name,
+    });
+
+    byId.set(keep.id, keep);
+    byId.set(newId, { ...rename, id: newId });
+  }
+
+  if (!repaired) {
+    return profiles;
+  }
+
+  return Array.from(byId.values());
+}
+
 function parseStoredUsers(rawValue: string | null, fallbackEmail: string | null): UserProfile[] {
   if (!rawValue) {
     return [];
@@ -309,9 +369,11 @@ function parseStoredUsers(rawValue: string | null, fallbackEmail: string | null)
       return [];
     }
 
-    return parsedValue
+    const sanitizedUsers = parsedValue
       .map((user, index) => sanitizeUserProfile(user, fallbackEmail, index))
       .filter((user): user is UserProfile => user !== null);
+
+    return ensureUniqueProfileIds(sanitizedUsers);
   } catch (error) {
     console.error('[UserProvider] Failed to parse stored users payload:', error);
     return [];
@@ -335,16 +397,50 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
 
     const resolvedEmail = normalizeEmail(resolvedUser.email);
     if (resolvedEmail !== normalizedAuthenticatedEmail) {
-      console.log('[UserProvider] Suppressing stale user during account transition:', {
+      // Only actually hide the profile if there is a DIFFERENT profile in storage that genuinely
+      // belongs to the authenticated account -- that's the real "just switched accounts, still
+      // loading the other account's data" case this guard exists for. If no such profile exists,
+      // this is just email drift on the same single profile (e.g. it was created before the
+      // authenticated email settled), so keep showing it instead of blacking out every screen
+      // that depends on the current profile (loyalty header, portfolio, etc. all read this).
+      const matchingProfileForAuthenticatedEmail = users.find((user) => user.id !== resolvedUser.id && normalizeEmail(user.email) === normalizedAuthenticatedEmail);
+      if (matchingProfileForAuthenticatedEmail) {
+        console.log('[UserProvider] Suppressing stale user during account transition:', {
+          authenticatedEmail: normalizedAuthenticatedEmail,
+          resolvedEmail,
+          userId: resolvedUser.id,
+        });
+        return null;
+      }
+
+      console.log('[UserProvider] Profile email differs from authenticated email but no alternate profile exists -- showing it anyway instead of blacking out the app:', {
         authenticatedEmail: normalizedAuthenticatedEmail,
         resolvedEmail,
         userId: resolvedUser.id,
       });
-      return null;
     }
 
     return resolvedUser;
   }, [currentUserId, normalizedAuthenticatedEmail, users]);
+
+  useEffect(() => {
+    if (!currentUser || !normalizedAuthenticatedEmail) {
+      return;
+    }
+
+    const resolvedEmail = normalizeEmail(currentUser.email);
+    if (resolvedEmail === normalizedAuthenticatedEmail) {
+      return;
+    }
+
+    // Self-heal the drifted email so future renders don't keep re-detecting the same mismatch.
+    console.log('[UserProvider] Self-healing profile email drift to match authenticated email:', {
+      profileId: currentUser.id,
+      oldEmail: currentUser.email,
+      newEmail: normalizedAuthenticatedEmail,
+    });
+    void updateUser(currentUser.id, { email: normalizedAuthenticatedEmail });
+  }, [currentUser, normalizedAuthenticatedEmail]);
 
   useEffect(() => {
     if (lastAuthenticatedEmailRef.current === normalizedAuthenticatedEmail) {

@@ -204,6 +204,13 @@ export default function SettingsScreen() {
   const { forceSyncNow: forceProfileSyncNow } = useUserDataSync();
   const { selectedProfileId, setSelectedProfileId } = useIntelligenceFilters();
   const linkedProfileEnsuredRef = useRef(false);
+  // Which profile the Edit Profile card in Settings is showing/editing. This is intentionally a
+  // dedicated, local piece of state -- it used to reuse the shared cross-tab `selectedProfileId`
+  // intelligence filter, which meant toggling "User" / "Second User" here also silently changed
+  // the data-filtering scope on the Offers/Cruises/Casino tabs, and the toggle itself was
+  // unreliable because it depended on that shared filter settling into the right value. Keeping
+  // it local guarantees the toggle always switches immediately and never leaks into other tabs.
+  const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
 
   const normalizedAuthenticatedEmail = useMemo(() => normalizeAccountEmail(authenticatedEmail), [authenticatedEmail]);
   const activeUserProfiles = useMemo(() => users.filter((profile) => profile.active !== false), [users]);
@@ -218,19 +225,15 @@ export default function SettingsScreen() {
   }, [activeUserProfiles, currentUser, normalizedAuthenticatedEmail]);
   const linkedSecondProfile = useMemo(() => getManagedSecondProfile(activeUserProfiles), [activeUserProfiles]);
   const selectedSettingsProfile = useMemo(() => {
-    if (selectedProfileId !== 'all' && selectedProfileId !== 'unassigned') {
-      const explicitProfile = activeUserProfiles.find((profile) => profile.id === selectedProfileId);
+    if (editingProfileId) {
+      const explicitProfile = activeUserProfiles.find((profile) => profile.id === editingProfileId);
       if (explicitProfile) {
         return explicitProfile;
       }
     }
 
-    if (selectedProfileId === 'unassigned' && linkedSecondProfile) {
-      return linkedSecondProfile;
-    }
-
     return primaryProfileUser;
-  }, [activeUserProfiles, linkedSecondProfile, primaryProfileUser, selectedProfileId]);
+  }, [activeUserProfiles, editingProfileId, primaryProfileUser]);
   const normalizedSelectedProfileEmail = useMemo(() => normalizeAccountEmail(selectedSettingsProfile?.email), [selectedSettingsProfile?.email]);
   const profileDisplayUser = useMemo(() => {
     if (!selectedSettingsProfile) {
@@ -319,14 +322,12 @@ export default function SettingsScreen() {
 
   const handleProfileSlotPress = useCallback((slot: 'primary' | 'secondary') => {
     if (slot === 'secondary') {
-      setSelectedProfileId(linkedSecondProfile?.id ?? 'unassigned');
+      setEditingProfileId(linkedSecondProfile?.id ?? null);
       return;
     }
 
-    if (primaryProfileUser) {
-      setSelectedProfileId(primaryProfileUser.id);
-    }
-  }, [linkedSecondProfile?.id, primaryProfileUser, setSelectedProfileId]);
+    setEditingProfileId(primaryProfileUser?.id ?? null);
+  }, [linkedSecondProfile?.id, primaryProfileUser?.id]);
 
   const handleAddToWhitelist = async () => {
     if (!newWhitelistEmail.trim() || !newWhitelistEmail.includes('@')) {
