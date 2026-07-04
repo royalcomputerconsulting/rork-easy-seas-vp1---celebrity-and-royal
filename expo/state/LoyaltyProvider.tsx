@@ -648,7 +648,12 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
       clubRoyalePointsSource = 'api';
     }
 
-    const clubRoyaleSyncDiscrepancy = buildClubRoyaleDiscrepancy(authoritativeCurrentYearClubRoyalePoints, hasLiveClubRoyalePoints ? liveClubRoyalePoints : null);
+    // The discrepancy banner must compare against the SAME number Settings and every other
+    // screen actually display (effectiveClubRoyalePoints, which already applies the manual-entry
+    // priority above) -- not the raw per-cruise computed total. Comparing against the raw computed
+    // total made the banner show a stale/wrong "app" figure that didn't match what you'd just set
+    // in Settings, even though the rest of the app was already showing the corrected number.
+    const clubRoyaleSyncDiscrepancy = buildClubRoyaleDiscrepancy(effectiveClubRoyalePoints, hasLiveClubRoyalePoints ? liveClubRoyalePoints : null);
     if (clubRoyaleSyncDiscrepancy.hasDiscrepancy) {
       console.warn('[LoyaltyProvider] Club Royale sync discrepancy detected; using app-entered cruise points as authoritative:', clubRoyaleSyncDiscrepancy);
     }

@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { File as ExpoFile, Paths as ExpoPaths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -125,6 +126,12 @@ import {
 } from '@/lib/casinoPointTruth';
 import { buildDataHealthSummary, isActiveUpcomingCruise } from '@/lib/easySeasAdvisor';
 import { DARK_ROYAL_COLORS as CASINO_DASHBOARD_COLORS, darkRoyalDashboardStyles as casinoDashboardStyles, darkRoyalValueColor as casinoValueColor } from '@/constants/darkRoyalTheme';
+
+// The Cruise Portfolio cards use a light blue gradient background (see `portfolioCard`
+// style below), so their text needs dark, readable colors distinct from the rest of the
+// Dark Royal theme's light-on-dark palette used everywhere else on this screen.
+const PORTFOLIO_CARD_TEXT_DARK = '#0F2A4A';
+const PORTFOLIO_CARD_TEXT_MUTED = '#3E5A7A';
 import { useDrillDown, type CalculationDrillDownData } from '@/components/casino-dashboard/CalculationDrillDownDrawer';
 import type { SourceConfidence } from '@/constants/casinoDashboardTheme';
 import { CasinoDonutChart } from '@/components/casino-dashboard/CasinoDonutChart';
@@ -234,7 +241,7 @@ export default function AnalyticsScreen() {
   useEntitlement();
   const router = useRouter();
   const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>();
-  const { authenticatedEmail } = useAuth();
+  const { authenticatedEmail, isAdmin } = useAuth();
   const { lastSyncTime, isSyncing: isCloudSyncing, forceSyncNow } = useUserDataSync();
   const { analytics, casinoAnalytics } = useSimpleAnalytics();
   const {
@@ -1687,7 +1694,7 @@ export default function AnalyticsScreen() {
         })}
         activeOpacity={0.85}
       >
-        <View style={styles.portfolioCard}>
+        <LinearGradient colors={['#EAF6FF', '#CFE9FA']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.portfolioCard}>
         <View style={styles.portfolioImageContainer}>
           <Image
             source={{ uri: cruiseImage }}
@@ -1786,7 +1793,7 @@ export default function AnalyticsScreen() {
             </View>
           ) : null}
         </View>
-        </View>
+        </LinearGradient>
       </TouchableOpacity>
     );
   };
@@ -2172,23 +2179,25 @@ export default function AnalyticsScreen() {
         </View>
       )}
 
-      <View style={styles.section}>
-        <TouchableOpacity
-          style={[styles.dataHealthCard, dataHealthIssueCount > 0 ? styles.dataHealthCardWarning : styles.dataHealthCardGood]}
-          activeOpacity={0.8}
-          onPress={() => router.push('/data-health' as any)}
-          testID="casino-data-health-indicator"
-        >
-          {dataHealthIssueCount > 0 ? <AlertTriangle size={20} color={CASINO_DASHBOARD_COLORS.orange} /> : <Activity size={20} color={CASINO_DASHBOARD_COLORS.green} />}
-          <View style={styles.dataHealthTextBlock}>
-            <Text style={styles.dataHealthTitle}>{dataHealthIssueCount > 0 ? `${dataHealthIssueCount} data-health signal(s) found` : 'Data health looks clean'}</Text>
-            <Text style={styles.dataHealthSubtitle}>
-              {dataHealthSummary.completedCruises} completed · {dataHealthSummary.activeUpcoming} upcoming · {dataHealthSummary.royalOffers + dataHealthSummary.celebrityOffers} offers tracked
-            </Text>
-          </View>
-          <ChevronRight size={18} color={dataHealthIssueCount > 0 ? CASINO_DASHBOARD_COLORS.goldText : CASINO_DASHBOARD_COLORS.green} />
-        </TouchableOpacity>
-      </View>
+      {isAdmin && (
+        <View style={styles.section}>
+          <TouchableOpacity
+            style={[styles.dataHealthCard, dataHealthIssueCount > 0 ? styles.dataHealthCardWarning : styles.dataHealthCardGood]}
+            activeOpacity={0.8}
+            onPress={() => router.push('/data-health' as any)}
+            testID="casino-data-health-indicator"
+          >
+            {dataHealthIssueCount > 0 ? <AlertTriangle size={20} color={CASINO_DASHBOARD_COLORS.orange} /> : <Activity size={20} color={CASINO_DASHBOARD_COLORS.green} />}
+            <View style={styles.dataHealthTextBlock}>
+              <Text style={styles.dataHealthTitle}>{dataHealthIssueCount > 0 ? `${dataHealthIssueCount} data-health signal(s) found` : 'Data health looks clean'}</Text>
+              <Text style={styles.dataHealthSubtitle}>
+                {dataHealthSummary.completedCruises} completed · {dataHealthSummary.activeUpcoming} upcoming · {dataHealthSummary.royalOffers + dataHealthSummary.celebrityOffers} offers tracked
+              </Text>
+            </View>
+            <ChevronRight size={18} color={dataHealthIssueCount > 0 ? CASINO_DASHBOARD_COLORS.goldText : CASINO_DASHBOARD_COLORS.green} />
+          </TouchableOpacity>
+        </View>
+      )}
 
       <View style={styles.section}>
         <View style={styles.portfolioTitleRow}>
@@ -5932,7 +5941,7 @@ const styles = StyleSheet.create({
   portfolioCardShipName: {
     fontSize: 13,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: CASINO_DASHBOARD_COLORS.textPrimary,
+    color: PORTFOLIO_CARD_TEXT_DARK,
     flex: 1,
     marginRight: 4,
   },
@@ -5948,12 +5957,12 @@ const styles = StyleSheet.create({
   portfolioCardItinerary: {
     fontSize: 14,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: CASINO_DASHBOARD_COLORS.textPrimary,
+    color: PORTFOLIO_CARD_TEXT_DARK,
     marginBottom: 2,
   },
   portfolioCardDestination: {
     fontSize: 12,
-    color: CASINO_DASHBOARD_COLORS.textSecondary,
+    color: PORTFOLIO_CARD_TEXT_MUTED,
     marginBottom: 4,
   },
   portfolioCardMetaRow: {
@@ -5969,13 +5978,13 @@ const styles = StyleSheet.create({
   },
   portfolioCardMetaText: {
     fontSize: 11,
-    color: CASINO_DASHBOARD_COLORS.textSecondary,
+    color: PORTFOLIO_CARD_TEXT_MUTED,
   },
   portfolioCardNights: {
     fontSize: 11,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: CASINO_DASHBOARD_COLORS.skyBlue,
-    backgroundColor: 'rgba(79, 141, 255, 0.14)',
+    color: '#0B5FA8',
+    backgroundColor: 'rgba(11, 95, 168, 0.14)',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
@@ -5984,7 +5993,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    backgroundColor: CASINO_DASHBOARD_COLORS.cardAlt,
+    backgroundColor: 'rgba(255, 255, 255, 0.55)',
     borderRadius: BORDER_RADIUS.sm,
     padding: SPACING.xs,
     paddingHorizontal: SPACING.sm,
@@ -5997,13 +6006,13 @@ const styles = StyleSheet.create({
   },
   portfolioMetricLabel: {
     fontSize: 9,
-    color: CASINO_DASHBOARD_COLORS.textSecondary,
+    color: PORTFOLIO_CARD_TEXT_MUTED,
     marginBottom: 1,
   },
   portfolioMetricValue: {
     fontSize: 11,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: CASINO_DASHBOARD_COLORS.textPrimary,
+    color: PORTFOLIO_CARD_TEXT_DARK,
     flexShrink: 1,
   },
   portfolioCardFooter: {
@@ -6015,8 +6024,8 @@ const styles = StyleSheet.create({
   },
   portfolioCardCabin: {
     fontSize: 10,
-    color: CASINO_DASHBOARD_COLORS.skyBlue,
-    backgroundColor: 'rgba(79, 141, 255, 0.14)',
+    color: '#0B5FA8',
+    backgroundColor: 'rgba(11, 95, 168, 0.14)',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 3,

@@ -173,7 +173,7 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
   },
   date: {
     x: 644,
-    y: 178,
+    y: 159,
     fill: '#FFFFFF',
     fontSize: 46,
     fontWeight: '400',
@@ -184,13 +184,19 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
       // That 16px overlap meant the date's background repaint ran back over
       // the very bottom edge of the freshly-drawn time text, visually
       // "biting into" the bottom of "10:30 am". Starting the date mask right
-      // at the time mask's bottom (with a small buffer) removes the overlap
-      // entirely while still fully covering the date glyph's ascender/descender
-      // bounds.
+      // at the time mask's bottom removes the overlap entirely while still
+      // fully covering the date glyph's ascender/descender bounds.
+      //
+      // v_seapass_line_spacing_tighten: the date text baseline was then moved
+      // up from y=178 to y=159 to close the overly loose gap between the two
+      // lines (previously ~72px baseline-to-baseline, noticeably more than a
+      // normal single-line gap). y=159 is the tightest position that keeps the
+      // date glyph's ascender from rising above the time mask's bottom edge
+      // (y=120), so the two lines now sit close together without touching.
       x: 632,
-      y: 124,
+      y: 120,
       width: 336,
-      height: 108,
+      height: 112,
       fill: '#6B459A',
       radius: 0,
       sampleX: 414,

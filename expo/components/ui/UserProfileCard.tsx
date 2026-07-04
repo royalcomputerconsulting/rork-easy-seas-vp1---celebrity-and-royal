@@ -114,9 +114,14 @@ export function UserProfileCard({
   const calculatedLevelInfo = CROWN_ANCHOR_LEVELS[calculatedLevel];
   const calculatedLevelProgress = getLevelProgress(currentValues.loyaltyPoints, getLevelByNights(currentValues.loyaltyPoints));
   
-  const authoritativeClubRoyalePoints = Number(enrichmentData?.clubRoyalePointsFromApi ?? currentValues.clubRoyalePoints ?? formData.clubRoyalePoints ?? 0);
+  // currentValues.clubRoyalePoints is already the fully-resolved, authoritative number
+  // (LoyaltyProvider prioritizes a manual Settings entry over a possibly-stale synced
+  // value). Preferring `enrichmentData?.clubRoyalePointsFromApi` here instead undid that
+  // priority and made this card silently fall back to an old synced total even after you
+  // corrected it in Settings -- so currentValues must win first.
+  const authoritativeClubRoyalePoints = Number(currentValues.clubRoyalePoints || enrichmentData?.clubRoyalePointsFromApi || formData.clubRoyalePoints || 0);
   const calculatedTier = getTierByPoints(authoritativeClubRoyalePoints);
-  const displayedClubRoyaleTier = enrichmentData?.clubRoyaleTierFromApi || calculatedTier;
+  const displayedClubRoyaleTier = currentValues.clubRoyaleTier || enrichmentData?.clubRoyaleTierFromApi || calculatedTier;
   const displayedClubRoyaleTierInfo = CLUB_ROYALE_TIERS[displayedClubRoyaleTier] || CLUB_ROYALE_TIERS[calculatedTier];
   const calculatedTierInfo = CLUB_ROYALE_TIERS[calculatedTier];
   const calculatedTierProgress = getTierProgress(authoritativeClubRoyalePoints, calculatedTier);

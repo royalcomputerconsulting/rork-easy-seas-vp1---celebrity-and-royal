@@ -13,6 +13,7 @@ import { CLUB_ROYALE_TIERS } from '@/constants/clubRoyaleTiers';
 import { useAppState } from '@/state/AppStateProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { buildDataHealthSummary } from '@/lib/easySeasAdvisor';
+import { useAuth } from '@/state/AuthProvider';
 
 interface DisplayTask {
   id: string;
@@ -34,6 +35,7 @@ export default function ChecklistScreen() {
   const { clubRoyaleTier, clubRoyaleCurrentYearPoints } = useLoyalty();
   const { localData } = useAppState();
   const { casinoOffers } = useCoreData();
+  const { isAdmin } = useAuth();
   const dataHealthSummary = useMemo(
     () => buildDataHealthSummary(localData.cruises ?? [], bookedCruises, casinoOffers ?? []),
     [localData.cruises, bookedCruises, casinoOffers],
@@ -77,13 +79,14 @@ export default function ChecklistScreen() {
         done: upcomingCount === 0,
         isCustom: false,
       },
-      {
+      // Data Health is an internal QA tool -- only show it as a checklist task to admins.
+      ...(isAdmin ? [{
         id: 'data-health',
         label: dataHealthIssueCount > 0 ? `${dataHealthIssueCount} data-health signal(s) to review` : 'Data health looks clean',
         detail: 'Open Data Health to review duplicate rows or misclassified cruises.',
         done: dataHealthIssueCount === 0,
         isCustom: false,
-      },
+      }] : []),
     ];
     return base
       .map((task) => {
@@ -96,7 +99,7 @@ export default function ChecklistScreen() {
         if (override?.snoozedUntil && new Date(override.snoozedUntil).getTime() > Date.now()) return false;
         return true;
       });
-  }, [cruiseEconomicsSummary.rows, bookedCruises, dataHealthIssueCount, checklistOverrides]);
+  }, [cruiseEconomicsSummary.rows, bookedCruises, dataHealthIssueCount, checklistOverrides, isAdmin]);
 
   const customDisplayTasks = useMemo((): DisplayTask[] => {
     return customTasks
