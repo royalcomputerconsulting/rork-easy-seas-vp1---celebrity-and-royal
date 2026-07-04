@@ -1803,6 +1803,7 @@ export default function AnalyticsScreen() {
 
   const renderPortfolioTab = () => (
     <View style={styles.tabContent}>
+      {portfolioDrill.element}
       <View style={styles.quickStatsRow}>
         {stats.map((stat, index) => (
           <TouchableOpacity
