@@ -87,6 +87,20 @@ export function useCasinoLedger(): CasinoLedger {
         cashPaid.confidence,
       ]);
 
+      const buyIn = ledgerValue(cruise?.buyIn ?? null, 'user-entered', 'Cruise ledger details — Buy-in');
+      const cashOut = ledgerValue(cruise?.cashOut ?? null, 'user-entered', 'Cruise ledger details — Cash-out');
+      const freePlayUsed = ledgerValue(cruise?.freePlayUsed ?? null, 'user-entered', 'Cruise ledger details — FreePlay used');
+      const freePlayWon = ledgerValue(cruise?.freePlayWon ?? null, 'user-entered', 'Cruise ledger details — FreePlay won');
+      const w2gJackpotAmount = ledgerValue(cruise?.w2gJackpotAmount ?? null, 'user-entered', 'Cruise ledger details — W2G jackpot amount');
+      const voomValue = ledgerValue(cruise?.voomValue ?? null, 'user-entered', 'Cruise ledger details — VOOM value');
+      const diningValue = ledgerValue(cruise?.diningValue ?? null, 'user-entered', 'Cruise ledger details — Specialty dining value');
+      const spaValue = ledgerValue(cruise?.spaValue ?? null, 'user-entered', 'Cruise ledger details — Spa value');
+      const beverageValue = ledgerValue(cruise?.beverageValue ?? null, 'user-entered', 'Cruise ledger details — Beverage package value');
+
+      const cruiseSessions = sessions.filter((s) => s.cruiseId === row.cruiseId);
+      const sessionIds = cruiseSessions.map((s) => s.id);
+      const machineIds = Array.from(new Set(cruiseSessions.map((s) => s.machineId).filter((id): id is string => Boolean(id))));
+
       return {
         cruiseId: row.cruiseId,
         shipName: row.ship,
@@ -101,6 +115,17 @@ export function useCasinoLedger(): CasinoLedger {
         cashPaid,
         cruiseValueCaptured,
         totalEconomicValue,
+        buyIn,
+        cashOut,
+        freePlayUsed,
+        freePlayWon,
+        w2gJackpotAmount,
+        voomValue,
+        diningValue,
+        spaValue,
+        beverageValue,
+        sessionIds,
+        machineIds,
         sessionCount,
         hasSessionData,
         overallConfidence,
@@ -119,6 +144,17 @@ export function useCasinoLedger(): CasinoLedger {
         acc.totalCashPaid += entry.cashPaid.value;
         acc.totalCruiseValueCaptured += entry.cruiseValueCaptured.value;
         acc.totalEconomicValue += entry.totalEconomicValue.value;
+        acc.totalBuyIn += entry.buyIn.value;
+        acc.totalCashOut += entry.cashOut.value;
+        acc.totalFreePlayUsed += entry.freePlayUsed.value;
+        acc.totalFreePlayWon += entry.freePlayWon.value;
+        acc.totalW2GJackpotAmount += entry.w2gJackpotAmount.value;
+        acc.totalVoomValue += entry.voomValue.value;
+        acc.totalDiningValue += entry.diningValue.value;
+        acc.totalSpaValue += entry.spaValue.value;
+        acc.totalBeverageValue += entry.beverageValue.value;
+        acc.totalSessionsLogged += entry.sessionIds.length;
+        entry.machineIds.forEach((id) => acc.machineIdSet.add(id));
         if (entry.winLoss.confidence === 'missing') acc.cruisesWithMissingWinLoss += 1;
         if (entry.points.confidence === 'missing') acc.cruisesWithMissingPoints += 1;
         return acc;
@@ -134,15 +170,29 @@ export function useCasinoLedger(): CasinoLedger {
         totalCashPaid: 0,
         totalCruiseValueCaptured: 0,
         totalEconomicValue: 0,
+        totalBuyIn: 0,
+        totalCashOut: 0,
+        totalFreePlayUsed: 0,
+        totalFreePlayWon: 0,
+        totalW2GJackpotAmount: 0,
+        totalVoomValue: 0,
+        totalDiningValue: 0,
+        totalSpaValue: 0,
+        totalBeverageValue: 0,
+        totalSessionsLogged: 0,
+        machineIdSet: new Set<string>(),
         cruisesWithMissingWinLoss: 0,
         cruisesWithMissingPoints: 0,
       },
     );
 
+    const { machineIdSet, ...restTotals } = totals;
+
     return {
       entries,
       totals: {
-        ...totals,
+        ...restTotals,
+        uniqueMachinesPlayed: machineIdSet.size,
         cruiseCount: entries.length,
         overallConfidence: combineConfidence(entries.map((e) => e.overallConfidence)),
       },

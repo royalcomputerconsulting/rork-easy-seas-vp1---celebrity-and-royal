@@ -5,7 +5,7 @@ import { DARK_ROYAL_COLORS as CASINO_DASHBOARD_COLORS } from '@/constants/darkRo
 export type BarGroup = {
   key: string;
   label: string;
-  bars: { key: string; value: number; color: string }[];
+  bars: { key: string; value: number; color: string; onPress?: () => void }[];
   onPress?: () => void;
 };
 
@@ -38,16 +38,33 @@ export function CasinoGroupedBarChart({
           >
             <View style={styles.barsRow}>
               {group.bars.map((bar) => (
-                <View
-                  key={bar.key}
-                  style={[
-                    styles.bar,
-                    {
-                      height: Math.max(3, (Math.abs(bar.value) / maxValue) * CHART_HEIGHT),
-                      backgroundColor: bar.color,
-                    },
-                  ]}
-                />
+                bar.onPress ? (
+                  <TouchableOpacity
+                    key={bar.key}
+                    activeOpacity={0.6}
+                    onPress={bar.onPress}
+                    hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
+                    style={[
+                      styles.bar,
+                      {
+                        height: Math.max(3, (Math.abs(bar.value) / maxValue) * CHART_HEIGHT),
+                        backgroundColor: bar.color,
+                      },
+                    ]}
+                    testID={`chart-bar-${group.key}-${bar.key}`}
+                  />
+                ) : (
+                  <View
+                    key={bar.key}
+                    style={[
+                      styles.bar,
+                      {
+                        height: Math.max(3, (Math.abs(bar.value) / maxValue) * CHART_HEIGHT),
+                        backgroundColor: bar.color,
+                      },
+                    ]}
+                  />
+                )
               ))}
             </View>
             <Text style={styles.groupLabel} numberOfLines={1}>{group.label}</Text>

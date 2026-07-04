@@ -2456,8 +2456,26 @@ export default function AnalyticsScreen() {
                   key: bucket.year,
                   label: bucket.year,
                   bars: [
-                    { key: 'value', value: bucket.retail, color: CASINO_DASHBOARD_COLORS.royalBlue },
-                    { key: 'cash', value: bucket.paid, color: CASINO_DASHBOARD_COLORS.green },
+                    {
+                      key: 'value',
+                      value: bucket.retail,
+                      color: CASINO_DASHBOARD_COLORS.royalBlue,
+                      onPress: () => cruiseValueDrill.open({
+                        title: `${bucket.year} Value Received`,
+                        summary: `Total retail value received across ${bucket.rows.length} cruise(s) sailed in ${bucket.year}: ${formatCurrencyDetailed(bucket.retail)}.`,
+                        sourceRecords: bucket.rows.map((row) => ({ label: `${row.ship} — ${row.sailDate}`, value: formatCurrencyDetailed(row.retail) })),
+                      }),
+                    },
+                    {
+                      key: 'cash',
+                      value: bucket.paid,
+                      color: CASINO_DASHBOARD_COLORS.green,
+                      onPress: () => cruiseValueDrill.open({
+                        title: `${bucket.year} Cash Paid`,
+                        summary: `Total cash paid out of pocket across ${bucket.rows.length} cruise(s) sailed in ${bucket.year}: ${formatCurrencyDetailed(bucket.paid)}.`,
+                        sourceRecords: bucket.rows.map((row) => ({ label: `${row.ship} — ${row.sailDate}`, value: formatCurrencyDetailed(row.paid) })),
+                      }),
+                    },
                   ],
                   onPress: () => cruiseValueDrill.open({
                     title: `${bucket.year} Cruises`,
@@ -3379,7 +3397,28 @@ export default function AnalyticsScreen() {
                 key={cert.id}
                 style={styles.actionRow}
                 activeOpacity={0.8}
-                onPress={() => openCruisePerformanceEditorById(cert.id)}
+                onPress={() => {
+                  const certMissing: string[] = [];
+                  if (!cert.offerCode) certMissing.push('No offer code was matched for this certificate.');
+                  if (!cert.value) certMissing.push('No estimated value was recorded for this certificate.');
+                  actionCenterDrill.open({
+                    title: `${cert.certType} Certificate`,
+                    subtitle: `${cert.shipName} \u2014 ${cert.sailDate}`,
+                    summary: `Instant certificate won on this cruise, classified as type ${cert.certType} certificate.`,
+                    inputs: [
+                      { label: 'Certificate Type', value: `${cert.certType} Certificate` },
+                      { label: 'Offer Code', value: cert.offerCode || 'Not recorded' },
+                      { label: 'Estimated Value', value: formatCurrency(cert.value) },
+                      { label: 'Earned On Cruise', value: `${cert.shipName} \u2014 ${cert.sailDate}` },
+                      { label: 'Notes', value: cert.notes || 'None' },
+                    ],
+                    missing: certMissing,
+                    relatedActions: [
+                      { label: 'Edit Casino Record', onPress: () => { actionCenterDrill.close(); openCruisePerformanceEditorById(cert.id); } },
+                      { label: 'Open Certificate Wallet', emphasis: 'secondary' as const, onPress: () => { actionCenterDrill.close(); router.push('/casino/certificate-wallet' as any); } },
+                    ],
+                  });
+                }}
               >
                 <View style={[styles.actionRowIcon, { backgroundColor: 'rgba(51, 199, 126, 0.14)' }]}>
                   <Ticket size={16} color={CASINO_DASHBOARD_COLORS.green} />
@@ -3999,6 +4038,7 @@ export default function AnalyticsScreen() {
 
   const historyInsightsDrill = useDrillDown();
   const w2gDrill = useDrillDown();
+  const sessionDetailDrill = useDrillDown();
 
   const bestShipByPoints = useMemo(() => {
     return [...shipPerformance].sort((a, b) => b.points - a.points)[0] ?? null;
@@ -4186,16 +4226,19 @@ export default function AnalyticsScreen() {
             <Text style={casinoDashboardStyles.screenSubtitle}>By Calendar Year — tap a bar or a year to see its cruises</Text>
             <View style={{ marginTop: 12 }}>
               <CasinoGroupedBarChart
-                groups={pointsByYearData.map((y) => ({
-                  key: y.year,
-                  label: y.year,
-                  bars: [{ key: 'points', value: y.points, color: CASINO_DASHBOARD_COLORS.royalBlue }],
-                  onPress: () => historyInsightsDrill.open({
+                groups={pointsByYearData.map((y) => {
+                  const openYearPointsDrill = () => historyInsightsDrill.open({
                     title: `${y.year} Casino Points`,
                     summary: `${formatNumber(y.points)} points earned across ${y.rows.length} cruise(s) sailed in ${y.year}.`,
                     sourceRecords: y.rows.map((row) => ({ label: `${row.ship} — ${row.sailDate}`, value: formatNumber(row.points) })),
-                  }),
-                }))}
+                  });
+                  return {
+                    key: y.year,
+                    label: y.year,
+                    bars: [{ key: 'points', value: y.points, color: CASINO_DASHBOARD_COLORS.royalBlue, onPress: openYearPointsDrill }],
+                    onPress: openYearPointsDrill,
+                  };
+                })}
                 barLabels={[{ key: 'points', label: 'Casino Points', color: CASINO_DASHBOARD_COLORS.royalBlue }]}
               />
             </View>
@@ -4858,7 +4901,47 @@ export default function AnalyticsScreen() {
                     style={styles.recentSessionCard}
                     activeOpacity={0.7}
                     onPress={() => {
-                      console.log('[Analytics] Session pressed:', session.id);
+                      const linkedCruise = session.cruiseId ? bookedCruises.find((c) => c.id === session.cruiseId) : undefined;
+                      const isGeneratedSession = Boolean(session.notes?.includes('Auto-calculated')) || session.pointsSource === 'calculated' || session.pointsSource === 'estimated';
+                      const sessionMissing: string[] = [];
+                      if (session.pointsEarned === undefined) sessionMissing.push('Points earned was not recorded for this session.');
+                      if (session.buyIn === undefined) sessionMissing.push('Buy-in was not recorded for this session.');
+                      if (session.cashOut === undefined) sessionMissing.push('Cash-out was not recorded for this session.');
+                      if (session.winLoss === undefined) sessionMissing.push('Net win/loss was not recorded for this session.');
+                      if (!session.jackpotHit) sessionMissing.push('No jackpot / W-2G was recorded for this session.');
+                      if (!session.cruiseId) sessionMissing.push('This session is not linked to a booked cruise.');
+                      if (!session.machineName && !session.machineId) sessionMissing.push('Machine/game was not recorded for this session.');
+                      sessionDetailDrill.open({
+                        title: 'Casino Session',
+                        subtitle: `${new Date(session.date).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric' })} \u00b7 ${session.startTime} - ${session.endTime}`,
+                        summary: isGeneratedSession
+                          ? 'This session was auto-generated from your cruise itinerary as a best-guess estimate, not logged live at the machine.'
+                          : 'Logged from your own recorded play for this session.',
+                        formula: 'Points Per Hour = Points Earned \u00f7 (Duration in minutes \u00f7 60)',
+                        inputs: [
+                          { label: 'Duration', value: formatTotalMinutes(session.durationMinutes) },
+                          { label: 'Points Earned', value: session.pointsEarned !== undefined ? formatNumber(session.pointsEarned) : 'Not recorded' },
+                          { label: 'Points Per Hour', value: sessionPPH > 0 ? `${sessionPPH.toFixed(0)} pts/hr` : 'Needs Data' },
+                          { label: 'Coin-In', value: session.coinIn !== undefined ? formatCurrency(session.coinIn) : 'Not recorded' },
+                          { label: 'Buy-In', value: session.buyIn !== undefined ? formatCurrency(session.buyIn) : 'Not recorded' },
+                          { label: 'Cash-Out', value: session.cashOut !== undefined ? formatCurrency(session.cashOut) : 'Not recorded' },
+                          { label: 'Net Win/Loss', value: session.winLoss !== undefined ? `${session.winLoss >= 0 ? '+' : ''}${formatCurrency(session.winLoss)}` : 'Not recorded' },
+                          { label: 'FreePlay Used', value: session.freePlayUsed ? formatCurrency(session.freePlayUsed) : 'None recorded' },
+                          { label: 'Jackpot / W-2G Amount', value: session.jackpotHit ? formatCurrency(session.jackpotAmount ?? 0) : 'No jackpot recorded' },
+                        ],
+                        sourceRecords: [
+                          { label: 'Linked Cruise', value: linkedCruise ? `${linkedCruise.shipName} \u2014 ${linkedCruise.sailDate}` : 'Not linked to a cruise', confidence: linkedCruise ? 'verified-invoice' : 'needs-review' },
+                          { label: 'Machine / Game', value: session.machineName || session.machineId || 'Not recorded' },
+                          { label: 'Actual vs. Generated', value: isGeneratedSession ? 'Generated estimate (from your itinerary)' : 'Actual logged session', confidence: isGeneratedSession ? 'estimated-default' : 'user-entered' },
+                        ],
+                        missing: sessionMissing,
+                        onEdit: linkedCruise ? () => { sessionDetailDrill.close(); openCruiseDetailFromPortfolio(linkedCruise); } : undefined,
+                        editLabel: 'Open Linked Cruise',
+                        relatedActions: [
+                          ...(linkedCruise ? [{ label: 'Open Cruise', onPress: () => { sessionDetailDrill.close(); openCruiseDetailFromPortfolio(linkedCruise); } }] : []),
+                          { label: 'Formula Reference', emphasis: 'secondary' as const, onPress: () => { sessionDetailDrill.close(); router.push('/casino/formula-reference' as any); } },
+                        ],
+                      });
                     }}
                   >
                     <View style={[
@@ -4912,6 +4995,7 @@ export default function AnalyticsScreen() {
                 );
               })}
           </View>
+          {sessionDetailDrill.element}
         </View>
       )}
 

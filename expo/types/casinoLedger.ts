@@ -61,6 +61,28 @@ export interface CasinoLedgerCruiseEntry {
   cashPaid: CasinoLedgerValue;
   cruiseValueCaptured: CasinoLedgerValue;
   totalEconomicValue: CasinoLedgerValue;
+  /** Buy-in recorded for this cruise's casino play. */
+  buyIn: CasinoLedgerValue;
+  /** Cash-out recorded for this cruise's casino play. */
+  cashOut: CasinoLedgerValue;
+  /** FreePlay actually used at the machines (distinct from the `freePlay` benefit-inclusion field, which tracks double-counting). */
+  freePlayUsed: CasinoLedgerValue;
+  /** FreePlay won/awarded on this cruise. */
+  freePlayWon: CasinoLedgerValue;
+  /** Taxable W2G jackpot amount recorded for this cruise. */
+  w2gJackpotAmount: CasinoLedgerValue;
+  /** VOOM/internet package value recorded for this cruise. */
+  voomValue: CasinoLedgerValue;
+  /** Specialty dining value recorded for this cruise. */
+  diningValue: CasinoLedgerValue;
+  /** Spa value recorded for this cruise. */
+  spaValue: CasinoLedgerValue;
+  /** Beverage package value recorded for this cruise. */
+  beverageValue: CasinoLedgerValue;
+  /** IDs of every logged casino session tied to this cruise. */
+  sessionIds: string[];
+  /** IDs of every distinct machine played across this cruise's logged sessions. */
+  machineIds: string[];
   sessionCount: number;
   hasSessionData: boolean;
   /** Roll-up of the entry's own confidences: 'mixed' if fields disagree. */
@@ -79,6 +101,28 @@ export interface CasinoLedgerTotals {
   totalCashPaid: number;
   totalCruiseValueCaptured: number;
   totalEconomicValue: number;
+  /** Sum of every cruise's recorded buy-in. */
+  totalBuyIn: number;
+  /** Sum of every cruise's recorded cash-out. */
+  totalCashOut: number;
+  /** Sum of every cruise's recorded FreePlay used. */
+  totalFreePlayUsed: number;
+  /** Sum of every cruise's recorded FreePlay won. */
+  totalFreePlayWon: number;
+  /** Sum of every cruise's recorded taxable W2G jackpot amount. */
+  totalW2GJackpotAmount: number;
+  /** Sum of every cruise's recorded VOOM/internet value. */
+  totalVoomValue: number;
+  /** Sum of every cruise's recorded specialty dining value. */
+  totalDiningValue: number;
+  /** Sum of every cruise's recorded spa value. */
+  totalSpaValue: number;
+  /** Sum of every cruise's recorded beverage package value. */
+  totalBeverageValue: number;
+  /** Total number of logged casino sessions across every cruise in the ledger. */
+  totalSessionsLogged: number;
+  /** Count of distinct machine IDs played across every logged session. */
+  uniqueMachinesPlayed: number;
   cruiseCount: number;
   cruisesWithMissingWinLoss: number;
   cruisesWithMissingPoints: number;
