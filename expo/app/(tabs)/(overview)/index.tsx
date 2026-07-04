@@ -949,7 +949,7 @@ function OverviewScreenContent() {
             totalCertificates={certificateSummary.reduce((sum, c) => sum + c.value, 0)}
             availableCruises={availableCruisesCount}
             onManagePress={() => setShowCertificateModal(true)}
-            onViewOffersPress={() => router.push('/scheduling' as any)}
+            onViewOffersPress={() => router.push('/certificate-lookup' as any)}
             onExaminePress={() => router.push('/certificate-lookup' as any)}
           />
         </CollapsibleSection>
