@@ -593,7 +593,13 @@ export const STEP1_OFFERS_SCRIPT = String.raw`
     Object.keys(by).forEach(function(code){ log((by[code] ? '✅' : '❌')+' Final offer count '+code+': '+by[code]+' cruise row(s)', by[code]?'success':'error'); });
     if (!codes.length) return 'No visible offer codes were found';
     if (finalRows.length === 0) return '0 accepted offer cruise rows';
-    if (counts.some(function(n){ return n===0; })) return 'One or more visible offers produced 0 cruise rows';
+    // v1231: a single offer among several coming back with 0 rows (already redeemed, sold out,
+    // or a non-list offer type) must NOT throw away good, real data captured for the other offers
+    // that scraped cleanly. Only fail-safe on a 0-row result when there is exactly one visible offer
+    // total (no other successful offer to corroborate it actually was a broken scrape).
+    const emptyCodes = Object.keys(by).filter(function(c){ return !by[c]; });
+    if (emptyCodes.length && codes.length === 1) return 'One or more visible offers produced 0 cruise rows';
+    if (emptyCodes.length) { emptyCodes.forEach(function(c){ log('⚠️ Offer '+c+' produced 0 cruise rows (no sailings currently listed, or already redeemed); keeping the '+(codes.length-emptyCodes.length)+' other successfully-captured offer(s) instead of discarding everything', 'warning'); }); }
     const tinyIdentical = counts.length >= 4 && counts.every(function(n){ return n>0 && n<=12; }) && (new Set(counts)).size <= 2;
     if (tinyIdentical) return 'Partial virtualized DOM sample detected: '+counts.join('/');
     if (BRAND.key === 'royal_caribbean' && codes.length >= 5 && finalRows.length < MIN_ROWS_FOR_KNOWN_MULTI_OFFER_SET) return 'Captured only '+finalRows.length+' rows from '+codes.length+' Royal Club Royale offers; expected roughly 1,073 for the current Royal offer set';
