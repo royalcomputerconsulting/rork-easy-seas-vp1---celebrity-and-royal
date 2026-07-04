@@ -165,6 +165,9 @@ export function TierProgressionChart({
                   Math.pow(point.x - prevPoint.x, 2) + Math.pow(point.y - prevPoint.y, 2)
                 );
                 const angle = Math.atan2(point.y - prevPoint.y, point.x - prevPoint.x) * (180 / Math.PI);
+                const segmentThickness = 3;
+                const centerX = (point.x + prevPoint.x) / 2;
+                const centerY = (point.y + prevPoint.y) / 2;
 
                 return (
                   <View
@@ -173,8 +176,8 @@ export function TierProgressionChart({
                       styles.lineSegment,
                       {
                         width,
-                        left: prevPoint.x,
-                        top: prevPoint.y,
+                        left: centerX - width / 2,
+                        top: centerY - segmentThickness / 2,
                         transform: [{ rotate: `${angle}deg` }],
                       },
                     ]}
@@ -437,7 +440,6 @@ const styles = StyleSheet.create({
     height: 3,
     backgroundColor: '#15B8D6',
     borderRadius: 999,
-    transformOrigin: 'left center',
   },
   currentPointMarkerHit: {
     position: 'absolute',
