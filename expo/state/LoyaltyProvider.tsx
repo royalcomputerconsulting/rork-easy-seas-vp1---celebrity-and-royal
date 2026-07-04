@@ -27,7 +27,6 @@ import { filterRecordsForProfile, isPrimaryProfile, profileHasRoyalIdentity } fr
 import { CONFIRMED_CLUB_ROYALE_2025_POINTS, isKnownCasinoProfile } from "@/lib/knownProfileFallback";
 import {
   buildClubRoyaleDiscrepancy,
-  CONFIRMED_CLUB_ROYALE_2026_POINTS,
   getBookedCruiseCasinoPoints,
   normalizeCruiseCasinoPerformance,
   type ClubRoyaleDiscrepancy,
@@ -597,12 +596,14 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
     const activeProfileIsPrimary = isPrimaryProfile(currentUser);
     const activeProfileHasRoyalLoyalty = activeProfileIsPrimary || profileHasRoyalIdentity(currentUser);
     const usesKnownCasinoProfile = activeProfileIsPrimary && isKnownCasinoProfile(authenticatedEmail);
-    const historicalClubRoyalePoints = usesKnownCasinoProfile
-      ? CONFIRMED_CLUB_ROYALE_2025_POINTS
-      : calculatedClubRoyalePoints;
-    const authoritativeCurrentYearClubRoyalePoints = usesKnownCasinoProfile
-      ? Math.max(currentYearClubRoyalePoints, CONFIRMED_CLUB_ROYALE_2026_POINTS)
-      : currentYearClubRoyalePoints;
+    // Real, currently-recorded cruise data (including any value you've manually corrected, on a cruise
+    // or via the manual Club Royale points entry) is always authoritative. The hardcoded "confirmed season
+    // snapshot" constants below must never override or floor a real/lower value -- they're a last-resort
+    // fallback ONLY for when there is truly zero real data recorded yet, never a floor above it.
+    const historicalClubRoyalePoints = calculatedClubRoyalePoints > 0
+      ? calculatedClubRoyalePoints
+      : (usesKnownCasinoProfile ? CONFIRMED_CLUB_ROYALE_2025_POINTS : 0);
+    const authoritativeCurrentYearClubRoyalePoints = currentYearClubRoyalePoints;
     const historicalClubRoyaleTier = getTierByPoints(historicalClubRoyalePoints) as ClubRoyaleTier;
     const liveClubRoyalePoints = extendedLoyalty?.clubRoyalePointsFromApi;
     const hasLiveClubRoyalePoints = typeof liveClubRoyalePoints === 'number' && Number.isFinite(liveClubRoyalePoints);
