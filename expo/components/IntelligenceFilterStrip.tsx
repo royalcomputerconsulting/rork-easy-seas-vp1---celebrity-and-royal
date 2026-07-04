@@ -1,9 +1,10 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SlidersHorizontal } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { useIntelligenceFilters, type BrandFilterValue, type ProfileFilterValue } from '@/state/IntelligenceFiltersProvider';
 import { useUser } from '@/state/UserProvider';
+import { useAuth } from '@/state/AuthProvider';
 import { getBrandLabel, getManagedSecondProfile } from '@/lib/intelligenceFilters';
 
 interface IntelligenceFilterStripProps {
@@ -12,7 +13,10 @@ interface IntelligenceFilterStripProps {
   variant?: 'default' | 'bookedCruises';
 }
 
-const BRAND_OPTIONS: BrandFilterValue[] = ['all', 'royal', 'celebrity', 'silversea'];
+const PUBLIC_BRAND_OPTIONS: BrandFilterValue[] = ['all', 'royal', 'celebrity', 'silversea'];
+// Carnival is admin-only -- it's appended to the visible chip row only for
+// admin accounts (see the isAdmin-aware brandOptions below), so regular users
+// never see a Carnival chip or are able to scope this filter to Carnival.
 
 function getBrandChipLabel(brand: BrandFilterValue): string {
   return brand === 'all' ? 'All' : getBrandLabel(brand);
@@ -34,6 +38,7 @@ export const IntelligenceFilterStrip = React.memo(function IntelligenceFilterStr
 }: IntelligenceFilterStripProps) {
   const isBookedCruisesVariant = variant === 'bookedCruises';
   const { users } = useUser();
+  const { isAdmin } = useAuth();
   const {
     selectedProfileId,
     selectedBrand,
@@ -42,6 +47,19 @@ export const IntelligenceFilterStrip = React.memo(function IntelligenceFilterStr
     clearIntelligenceFilters,
     activeFilterCount,
   } = useIntelligenceFilters();
+
+  const brandOptions = useMemo((): BrandFilterValue[] => (
+    isAdmin ? [...PUBLIC_BRAND_OPTIONS, 'carnival'] : PUBLIC_BRAND_OPTIONS
+  ), [isAdmin]);
+
+  // Safety net: if a non-admin account is somehow left scoped to Carnival
+  // (e.g. an admin picked it, then the same device logs in as a non-admin),
+  // snap it back to "All" so a non-admin can never stay filtered to Carnival.
+  useEffect(() => {
+    if (!isAdmin && selectedBrand === 'carnival') {
+      setSelectedBrand('all');
+    }
+  }, [isAdmin, selectedBrand, setSelectedBrand]);
 
   const profileOptions = useMemo((): { id: ProfileFilterValue; label: string }[] => {
     const activeProfiles = users.filter((profile) => profile.active !== false);
@@ -98,7 +116,7 @@ export const IntelligenceFilterStrip = React.memo(function IntelligenceFilterStr
       </View>
 
       <View style={styles.radioRow}>
-        {BRAND_OPTIONS.map((brand) => {
+        {brandOptions.map((brand) => {
           const active = selectedBrand === brand;
           return (
             <TouchableOpacity
