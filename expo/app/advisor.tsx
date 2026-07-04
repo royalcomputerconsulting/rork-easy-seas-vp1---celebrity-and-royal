@@ -86,9 +86,6 @@ export default function AdvisorScreen() {
         </Section>
 
         <View style={styles.rowButtons}>
-          <TouchableOpacity style={styles.primaryButton} onPress={() => router.push('/data-health' as any)}>
-            <Text style={styles.primaryButtonText}>Open Data Health</Text>
-          </TouchableOpacity>
           <TouchableOpacity style={styles.primaryButton} onPress={() => router.push('/ask-my-data' as any)}>
             <Text style={styles.primaryButtonText}>Ask My Data</Text>
           </TouchableOpacity>

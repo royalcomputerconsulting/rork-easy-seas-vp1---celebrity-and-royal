@@ -2068,7 +2068,6 @@ export default function AnalyticsScreen() {
                 missing: ['Records missing an imported confirmation are shown in the Cruise Portfolio list below — check each for a Sync Now refresh.'],
                 relatedActions: [
                   { label: 'Open Loyalty Data', onPress: () => { portfolioDrill.close(); router.push('/casino/loyalty-data' as any); } },
-                  { label: 'Data Health', emphasis: 'secondary', onPress: () => { portfolioDrill.close(); router.push('/data-health' as any); } },
                 ],
               })}
             >
@@ -2178,26 +2177,6 @@ export default function AnalyticsScreen() {
           >
             <Text style={styles.sectionLinkText}>View Full Ship Performance</Text>
             <ChevronRight size={14} color={CASINO_DASHBOARD_COLORS.brightBlue} />
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {isAdmin && (
-        <View style={styles.section}>
-          <TouchableOpacity
-            style={[styles.dataHealthCard, dataHealthIssueCount > 0 ? styles.dataHealthCardWarning : styles.dataHealthCardGood]}
-            activeOpacity={0.8}
-            onPress={() => router.push('/data-health' as any)}
-            testID="casino-data-health-indicator"
-          >
-            {dataHealthIssueCount > 0 ? <AlertTriangle size={20} color={CASINO_DASHBOARD_COLORS.orange} /> : <Activity size={20} color={CASINO_DASHBOARD_COLORS.green} />}
-            <View style={styles.dataHealthTextBlock}>
-              <Text style={styles.dataHealthTitle}>{dataHealthIssueCount > 0 ? `${dataHealthIssueCount} data-health signal(s) found` : 'Data health looks clean'}</Text>
-              <Text style={styles.dataHealthSubtitle}>
-                {dataHealthSummary.completedCruises} completed · {dataHealthSummary.activeUpcoming} upcoming · {dataHealthSummary.royalOffers + dataHealthSummary.celebrityOffers} offers tracked
-              </Text>
-            </View>
-            <ChevronRight size={18} color={dataHealthIssueCount > 0 ? CASINO_DASHBOARD_COLORS.goldText : CASINO_DASHBOARD_COLORS.green} />
           </TouchableOpacity>
         </View>
       )}

@@ -47,6 +47,7 @@ import {
   Rss,
   MailQuestion,
   X,
+  Activity,
 } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME, SHADOW } from '@/constants/theme';
@@ -2912,6 +2913,18 @@ STEP 4: Optional Calendar Import
                 </View>
                 
 
+                <View style={styles.dataDivider} />
+
+                <View style={[styles.dataSubsection, { backgroundColor: 'rgba(2, 132, 199, 0.08)' }]}>
+                  <Text style={styles.subsectionLabel}>ADMIN FUNCTIONS</Text>
+                  <Text style={styles.subsectionHelper}>Internal QA/diagnostic tools, admin-only.</Text>
+                </View>
+                {renderSettingRow(
+                  <Activity size={18} color={COLORS.navyDeep} />,
+                  'Data Health',
+                  <Text style={styles.countBadge}>Admin</Text>,
+                  () => router.push('/data-health' as any)
+                )}
                 <View style={styles.dataDivider} />
                 {renderSettingRow(
                   <FileDown size={18} color={COLORS.navyDeep} />,

@@ -79,14 +79,7 @@ export default function ChecklistScreen() {
         done: upcomingCount === 0,
         isCustom: false,
       },
-      // Data Health is an internal QA tool -- only show it as a checklist task to admins.
-      ...(isAdmin ? [{
-        id: 'data-health',
-        label: dataHealthIssueCount > 0 ? `${dataHealthIssueCount} data-health signal(s) to review` : 'Data health looks clean',
-        detail: 'Open Data Health to review duplicate rows or misclassified cruises.',
-        done: dataHealthIssueCount === 0,
-        isCustom: false,
-      }] : []),
+      // Data Health moved to Settings > Admin Functions (admin-only), so it's no longer a Casino checklist task.
     ];
     return base
       .map((task) => {
@@ -99,7 +92,7 @@ export default function ChecklistScreen() {
         if (override?.snoozedUntil && new Date(override.snoozedUntil).getTime() > Date.now()) return false;
         return true;
       });
-  }, [cruiseEconomicsSummary.rows, bookedCruises, dataHealthIssueCount, checklistOverrides, isAdmin]);
+  }, [cruiseEconomicsSummary.rows, bookedCruises, checklistOverrides]);
 
   const customDisplayTasks = useMemo((): DisplayTask[] => {
     return customTasks

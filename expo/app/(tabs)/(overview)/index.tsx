@@ -763,7 +763,7 @@ function OverviewScreenContent() {
 
         <View style={styles.advisorGrid} testID="dashboard-advisor-grid">
           <TouchableOpacity
-            style={[styles.advisorTile, !isAdmin && styles.advisorTileFull]}
+            style={[styles.advisorTile, styles.advisorTileFull]}
             onPress={() => router.push('/advisor' as any)}
             activeOpacity={0.85}
             testID="dashboard-casino-cruise-advisor"
@@ -772,18 +772,6 @@ function OverviewScreenContent() {
             <Text style={styles.advisorTileTitle}>Best Offer Right Now</Text>
             <Text style={styles.advisorTileText}>Rank offers by value, conflict risk, casino time, and upgrade math.</Text>
           </TouchableOpacity>
-          {isAdmin && (
-            <TouchableOpacity
-              style={styles.advisorTile}
-              onPress={() => router.push('/data-health' as any)}
-              activeOpacity={0.85}
-              testID="dashboard-data-health"
-            >
-              <DatabaseZap size={18} color={COLORS.navyDeep} />
-              <Text style={styles.advisorTileTitle}>Data Health</Text>
-              <Text style={styles.advisorTileText}>Check duplicates, brand scopes, completed cruises, and inflated counts.</Text>
-            </TouchableOpacity>
-          )}
         </View>
 
         {offerSummary && (

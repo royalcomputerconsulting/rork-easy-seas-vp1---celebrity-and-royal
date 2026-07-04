@@ -1,14 +1,15 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Activity, AlertTriangle, CheckCircle, Database, RefreshCw, ShieldCheck } from 'lucide-react-native';
+import { Activity, AlertTriangle, CheckCircle, Database, Lock, RefreshCw, ShieldCheck } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOW } from '@/constants/theme';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { buildDataHealthSummary } from '@/lib/easySeasAdvisor';
 import { useCasinoLedger } from '@/hooks/useCasinoLedger';
 import { runCasinoDataHealthCheck, type CasinoHealthIssue, type CasinoHealthSeverity } from '@/lib/casinoDataHealthCheck';
 import { buildCruiseDetailsParams } from '@/lib/navigation/cruiseDetails';
+import { useAuth } from '@/state/AuthProvider';
 
 const SEVERITY_COLOR: Record<CasinoHealthSeverity, string> = {
   critical: '#DC2626',
@@ -18,6 +19,7 @@ const SEVERITY_COLOR: Record<CasinoHealthSeverity, string> = {
 
 export default function DataHealthScreen() {
   const router = useRouter();
+  const { isAdmin } = useAuth();
   const { cruises, bookedCruises, casinoOffers } = useCoreData();
   const summary = useMemo(() => buildDataHealthSummary(cruises, bookedCruises, casinoOffers), [cruises, bookedCruises, casinoOffers]);
   const issueCount = summary.duplicateAvailableRows + summary.duplicateOfferCodes + summary.possiblyMisclassifiedUpcoming;
@@ -34,6 +36,24 @@ export default function DataHealthScreen() {
     if (!cruise) return;
     router.push({ pathname: '/cruise-details' as any, params: buildCruiseDetailsParams(cruise) });
   };
+
+  useEffect(() => {
+    if (!isAdmin) {
+      router.replace('/settings' as any);
+    }
+  }, [isAdmin, router]);
+
+  if (!isAdmin) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.deniedWrap}>
+          <Lock size={28} color={COLORS.gold} />
+          <Text style={styles.deniedTitle}>Admin Only</Text>
+          <Text style={styles.deniedText}>Data Health is an internal admin tool. Redirecting you back to Settings.</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -181,4 +201,7 @@ const styles = StyleSheet.create({
   primaryButtonText: { color: '#FFFFFF', fontWeight: '900' },
   secondaryButton: { backgroundColor: '#E0F2FE', borderRadius: BORDER_RADIUS.md, padding: SPACING.md, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 },
   secondaryButtonText: { color: COLORS.navyDeep, fontWeight: '900' },
+  deniedWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: SPACING.xl, gap: 10 },
+  deniedTitle: { color: COLORS.navyDeep, fontSize: 20, fontWeight: '900', marginTop: 4 },
+  deniedText: { color: '#64748B', fontSize: 14, lineHeight: 20, textAlign: 'center' },
 });
