@@ -7,14 +7,15 @@ import { isCloudBackupEnabledByEnv } from "@/lib/localFirstMode";
 
 export const trpc = createTRPCReact<AppRouter>();
 
-const DEFAULT_RENDER_URL = "https://easy-seas-backend-v2.onrender.com";
-
 function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, '');
 }
 
+// The project's backend (expo/backend/hono.ts) is automatically hosted by Rork
+// at EXPO_PUBLIC_RORK_API_BASE_URL - no external deployment (e.g. Render) is needed
+// or should be relied upon, since Rork manages deploying this code directly.
 export const RENDER_BACKEND_URL = trimTrailingSlash(
-  process.env.EXPO_PUBLIC_RENDER_BACKEND_URL?.trim() || DEFAULT_RENDER_URL
+  process.env.EXPO_PUBLIC_RORK_API_BASE_URL?.trim() || ""
 );
 
 export const isCloudBackupEnabled = (): boolean => isCloudBackupEnabledByEnv();
@@ -37,6 +38,11 @@ const checkBackendHealth = async (): Promise<boolean> => {
   }
 
   const baseUrl = getBackendUrl();
+  if (!baseUrl) {
+    _backendReachable = false;
+    _lastHealthCheck = Date.now();
+    return false;
+  }
 
   const now = Date.now();
   if (_backendReachable !== null && now - _lastHealthCheck < HEALTH_CHECK_INTERVAL) {
@@ -49,7 +55,7 @@ const checkBackendHealth = async (): Promise<boolean> => {
     try {
       const controller = new AbortController();
       const tid = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT);
-      const res = await fetch(`${baseUrl}/`, {
+      const res = await fetch(`${baseUrl}/api/`, {
         method: "GET",
         signal: controller.signal,
         headers: { Accept: "application/json" },
@@ -186,12 +192,12 @@ const fetchWithRetry = async (
 export const getTrpcClient = () => {
   if (!_trpcClient) {
     const backendUrl = getBackendUrl();
-    console.log("[tRPC] Initializing client - Render backend:", backendUrl);
+    console.log("[tRPC] Initializing client - Rork-hosted backend:", backendUrl || "(unset)");
 
     _trpcClient = trpc.createClient({
       links: [
         httpLink({
-          url: `${backendUrl}/trpc`,
+          url: `${backendUrl}/api/trpc`,
           transformer: superjson,
           fetch: async (url, options) => {
             try {
