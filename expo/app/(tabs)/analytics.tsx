@@ -1133,18 +1133,21 @@ export default function AnalyticsScreen() {
   );
   const dataHealthIssueCount = dataHealthSummary.duplicateAvailableRows + dataHealthSummary.duplicateOfferCodes + dataHealthSummary.possiblyMisclassifiedUpcoming;
 
-  const upcomingCruisesList = useMemo(() => {
+  const upcomingCruisesAll = useMemo(() => {
     const today = new Date();
     return bookedCruises
       .filter((cruise) => isActiveUpcomingCruise(cruise))
       .sort((a, b) => createDateFromString(a.sailDate).getTime() - createDateFromString(b.sailDate).getTime())
-      .slice(0, 8)
       .map((cruise) => {
         const sail = createDateFromString(cruise.sailDate);
         const daysUntil = Math.max(0, Math.round((sail.getTime() - today.getTime()) / 86400000));
         return { cruise, daysUntil };
       });
   }, [bookedCruises]);
+
+  // Display-only cap so the Action Center list stays short; the real count (used for
+  // the KPI tile and drill-down) always comes from upcomingCruisesAll, never this slice.
+  const upcomingCruisesList = useMemo(() => upcomingCruisesAll.slice(0, 8), [upcomingCruisesAll]);
 
   const expiringOffersList = useMemo(() => {
     const now = Date.now();
@@ -1221,8 +1224,8 @@ export default function AnalyticsScreen() {
       },
       {
         id: 'upcoming',
-        label: upcomingCruisesList.length > 0 ? `${upcomingCruisesList.length} upcoming cruise(s) on the books` : 'No upcoming cruises booked',
-        done: upcomingCruisesList.length === 0,
+        label: upcomingCruisesAll.length > 0 ? `${upcomingCruisesAll.length} upcoming cruise(s) on the books` : 'No upcoming cruises booked',
+        done: upcomingCruisesAll.length === 0,
         detail: 'Review upcoming sailings below and confirm casino offer codes are attached.',
       },
       {
@@ -1238,7 +1241,7 @@ export default function AnalyticsScreen() {
         detail: 'Open Data Health to review duplicate rows or misclassified cruises.',
       },
     ];
-  }, [cruiseEconomicsSummary.rows, upcomingCruisesList, expiringOffersList, dataHealthIssueCount]);
+  }, [cruiseEconomicsSummary.rows, upcomingCruisesAll, expiringOffersList, dataHealthIssueCount]);
 
   const freePlaySummary = useMemo(() => {
     const cruisesWithFreePlay = bookedCruises.filter((c) => (c.freePlay || 0) > 0);
@@ -3082,15 +3085,15 @@ export default function AnalyticsScreen() {
             {
               key: 'upcoming',
               label: 'Upcoming Cruises',
-              value: String(upcomingCruisesList.length),
-              subLabel: upcomingCruisesList[0] ? `Next: ${upcomingCruisesList[0].cruise.sailDate}` : 'None booked',
+              value: String(upcomingCruisesAll.length),
+              subLabel: upcomingCruisesAll[0] ? `Next: ${upcomingCruisesAll[0].cruise.sailDate}` : 'None booked',
               color: CASINO_DASHBOARD_COLORS.royalBlue,
               drill: (): CalculationDrillDownData => ({
                 title: 'Upcoming Cruises',
-                summary: `${upcomingCruisesList.length} upcoming cruise(s) currently booked.`,
-                sourceRecords: upcomingCruisesList.map(({ cruise, daysUntil }) => ({ label: `${cruise.shipName || 'Unknown Ship'} — ${cruise.sailDate}`, value: `${daysUntil}d out`, confidence: 'imported-csv' })),
-                missing: upcomingCruisesList.length === 0 ? ['No upcoming cruises booked yet.'] : [],
-                relatedActions: upcomingCruisesList.length > 0 ? [{ label: 'Open Nearest Cruise', onPress: () => { actionCenterDrill.close(); openCruiseDetailFromPortfolio(upcomingCruisesList[0].cruise); } }] : undefined,
+                summary: `${upcomingCruisesAll.length} upcoming cruise(s) currently booked.`,
+                sourceRecords: upcomingCruisesAll.map(({ cruise, daysUntil }) => ({ label: `${cruise.shipName || 'Unknown Ship'} — ${cruise.sailDate}`, value: `${daysUntil}d out`, confidence: 'imported-csv' })),
+                missing: upcomingCruisesAll.length === 0 ? ['No upcoming cruises booked yet.'] : [],
+                relatedActions: upcomingCruisesAll.length > 0 ? [{ label: 'Open Nearest Cruise', onPress: () => { actionCenterDrill.close(); openCruiseDetailFromPortfolio(upcomingCruisesAll[0].cruise); } }] : undefined,
               }),
             },
             {
@@ -3213,7 +3216,7 @@ export default function AnalyticsScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Ship size={16} color={CASINO_DASHBOARD_COLORS.textPrimary} />
-            <Text style={styles.sectionTitle}>Upcoming Cruises</Text>
+            <Text style={styles.sectionTitle}>Upcoming Cruises{upcomingCruisesAll.length > upcomingCruisesList.length ? ` (${upcomingCruisesList.length} of ${upcomingCruisesAll.length})` : ''}</Text>
           </View>
           <View style={{ gap: SPACING.sm }}>
             {upcomingCruisesList.map(({ cruise, daysUntil }) => (
