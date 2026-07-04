@@ -78,6 +78,7 @@ export const ALL_STORAGE_KEYS = {
   CASINO_OPEN_HOURS: 'easyseas_casino_open_hours',
   COMP_ITEMS: '@easyseas/compItems',
   W2G_RECORDS: '@easyseas/w2gRecords',
+  MILESTONE_TIER_STATE: 'easyseas_milestone_tier_state',
 } as const;
 
 export const GLOBAL_KEYS = new Set<string>([

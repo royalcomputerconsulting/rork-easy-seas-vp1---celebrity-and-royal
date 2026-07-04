@@ -68,6 +68,9 @@ import { getBookedCruiseCasinoPoints, getBookedCruiseWinningsBroughtHome } from 
 
 import type { Cruise, BookedCruise, CasinoOffer } from '@/types/models';
 import { getCabinPriceFromEntity, getDoubleOccupancyRoomRetailValue, GUEST_COUNT_DEFAULT } from '@/lib/valueCalculator';
+import { useMilestones } from '@/state/MilestoneProvider';
+import { getProgramLabel } from '@/lib/milestones/loyaltyMilestones';
+import { PartyPopper } from 'lucide-react-native';
 
 const OFFERS_TITLE_LOGO_URL = 'https://r2-pub.rork.com/attachments/4hm4mwycibyktcoe3b7eo.png';
 import { formatCurrency } from '@/lib/format';
@@ -204,6 +207,8 @@ function OverviewScreenContent() {
   const { currentUser, users } = useUser();
   const { selectedProfileId, selectedBrand, selectedProgram } = useIntelligenceFilters();
   const { logout, isAdmin } = useAuth();
+  const { getActiveBanner } = useMilestones();
+  const celebrationBanner = getActiveBanner(currentUser?.id);
   const { sendMessage, setMode: setAgentMode } = useAgentX();
   const { summary } = useAlerts();
   
@@ -715,15 +720,33 @@ function OverviewScreenContent() {
   const renderHeader = () => (
     <ResponsiveContainer>
       <View style={styles.headerContent}>
-        <View style={styles.titleLogoCard} testID="offers-brand-logo-card">
-          <Image
-            source={require('../../../assets/images/easyseas-scott-astin-logo.jpeg')}
-            style={styles.titleLogoImage}
-            resizeMode="cover"
-            accessibilityLabel="Easy Seas Scott Astin nautical lifestyle brand logo"
-            testID="offers-title-logo-card-image"
-          />
-        </View>
+        {celebrationBanner ? (
+          <LinearGradient
+            colors={['#7C2D12', '#B45309', '#F59E0B']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[styles.titleLogoCard, styles.celebrationLogoCard]}
+            testID="offers-brand-logo-card"
+          >
+            <View style={styles.celebrationBurstRing} />
+            <View style={styles.celebrationBurstRingOuter} />
+            <PartyPopper size={48} color="#FFFFFF" />
+            <Text style={styles.celebrationLogoTitle}>New Tier Unlocked!</Text>
+            <Text style={styles.celebrationLogoSubtitle}>
+              {getProgramLabel(celebrationBanner.program)}: {celebrationBanner.tier}
+            </Text>
+          </LinearGradient>
+        ) : (
+          <View style={styles.titleLogoCard} testID="offers-brand-logo-card">
+            <Image
+              source={require('../../../assets/images/easyseas-scott-astin-logo.jpeg')}
+              style={styles.titleLogoImage}
+              resizeMode="cover"
+              accessibilityLabel="Easy Seas Scott Astin nautical lifestyle brand logo"
+              testID="offers-title-logo-card-image"
+            />
+          </View>
+        )}
 
         <CompactDashboardHeader
           hideLogo={true}
@@ -1237,6 +1260,41 @@ const styles = StyleSheet.create({
   titleLogoImage: {
     width: '100%',
     height: '100%',
+  },
+  celebrationLogoCard: {
+    borderColor: '#FCD34D',
+    gap: 6,
+    position: 'relative',
+  },
+  celebrationBurstRing: {
+    position: 'absolute',
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.35)',
+  },
+  celebrationBurstRingOuter: {
+    position: 'absolute',
+    width: 240,
+    height: 240,
+    borderRadius: 120,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.18)',
+  },
+  celebrationLogoTitle: {
+    fontSize: TYPOGRAPHY.fontSizeLG,
+    fontWeight: '800' as const,
+    color: '#FFFFFF',
+    marginTop: SPACING.sm,
+    textShadowColor: 'rgba(0,0,0,0.25)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  celebrationLogoSubtitle: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: '600' as const,
+    color: 'rgba(255,255,255,0.92)',
   },
   footerContent: {
     marginTop: SPACING.md,

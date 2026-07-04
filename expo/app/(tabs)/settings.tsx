@@ -2468,6 +2468,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
             activeProfileSlot={activeProfileSlot}
             onProfileSlotPress={handleProfileSlotPress}
             showProfileSwitch={true}
+            profileId={profileDisplayUser?.id ?? null}
           />
 
           <View style={styles.section}>

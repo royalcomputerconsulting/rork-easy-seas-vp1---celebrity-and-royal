@@ -46,6 +46,9 @@ import { composeProviders } from "@/lib/composeProviders";
 import { ensureStorageHealthy } from "@/lib/storage/storageRecovery";
 import { SailingWeatherProvider } from "@/state/SailingWeatherProvider";
 import { IntelligenceFiltersProvider } from "@/state/IntelligenceFiltersProvider";
+import { MilestoneProvider, useMilestones } from "@/state/MilestoneProvider";
+import { TierUpCelebration } from "@/components/ui/CelebrationOverlay";
+import { getProgramLabel } from "@/lib/milestones/loyaltyMilestones";
 
 try {
   void SplashScreen.preventAutoHideAsync();
@@ -431,6 +434,23 @@ function RootLayoutNav() {
   );
 }
 
+function MilestoneCelebrationHost() {
+  const { pendingCelebration, dismissCelebration } = useMilestones();
+
+  if (!pendingCelebration) {
+    return null;
+  }
+
+  return (
+    <TierUpCelebration
+      visible={!!pendingCelebration}
+      onDismiss={dismissCelebration}
+      newTier={`${getProgramLabel(pendingCelebration.program)}: ${pendingCelebration.tier}`}
+      previousTier={pendingCelebration.previousTier ?? undefined}
+    />
+  );
+}
+
 function AppContent() {
   const [showSplash, setShowSplash] = useState(true);
   const [isClearing, setIsClearing] = useState(false);
@@ -454,7 +474,12 @@ function AppContent() {
     };
   }, []);
 
-  return <AppContentInner showSplash={showSplash} setShowSplash={setShowSplash} isClearing={isClearing} setIsClearing={setIsClearing} />;
+  return (
+    <>
+      <AppContentInner showSplash={showSplash} setShowSplash={setShowSplash} isClearing={isClearing} setIsClearing={setIsClearing} />
+      <MilestoneCelebrationHost />
+    </>
+  );
 }
 
 function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing }: { 
@@ -602,6 +627,7 @@ const DataProviders = composeProviders(
   SimpleAnalyticsProvider,
   DeckPlanProvider,
   CelebrityProvider,
+  MilestoneProvider,
 );
 
 const CasinoProviders = composeProviders(

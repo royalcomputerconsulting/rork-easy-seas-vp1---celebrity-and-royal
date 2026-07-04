@@ -304,6 +304,7 @@ export interface FullAppDataBundle {
     userPoints: number | null;
   };
   extendedLoyaltyData?: Record<string, unknown> | null;
+  milestoneState?: Record<string, unknown> | null;
   userProfile: {
     name: string;
     email?: string;
@@ -379,6 +380,7 @@ export async function getAllStoredData(email?: string | null, profileGate?: Data
       ? getUserScopedKey(ALL_STORAGE_KEYS.USERS, email.toLowerCase().trim())
       : ALL_STORAGE_KEYS.USERS;
     const extendedLoyaltyKey = sk(ALL_STORAGE_KEYS.EXTENDED_LOYALTY_DATA);
+    const milestoneStateKey = sk(ALL_STORAGE_KEYS.MILESTONE_TIER_STATE);
 
     const [
       cruisesData,
@@ -406,6 +408,7 @@ export async function getAllStoredData(email?: string | null, profileGate?: Data
       deckPlanLocationsData,
       compItemsData,
       w2gRecordsData,
+      milestoneStateRaw,
     ] = await Promise.all([
       quotaSafeGetItem(sk(ALL_STORAGE_KEYS.CRUISES)),
       quotaSafeGetItem(sk(ALL_STORAGE_KEYS.BOOKED_CRUISES)),
@@ -432,6 +435,7 @@ export async function getAllStoredData(email?: string | null, profileGate?: Data
       AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.DECK_PLAN_LOCATIONS)),
       AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.COMP_ITEMS)),
       AsyncStorage.getItem(sk(ALL_STORAGE_KEYS.W2G_RECORDS)),
+      quotaSafeGetItem(milestoneStateKey),
     ]);
 
     const usersData = scopedUsersData;
@@ -590,6 +594,15 @@ export async function getAllStoredData(email?: string | null, profileGate?: Data
       console.error('[DataBundle] Error parsing extended loyalty data:', e);
     }
 
+    let milestoneState: Record<string, unknown> | null = null;
+    try {
+      if (milestoneStateRaw) {
+        milestoneState = JSON.parse(milestoneStateRaw) as Record<string, unknown>;
+      }
+    } catch (e) {
+      console.error('[DataBundle] Error parsing milestone state:', e);
+    }
+
     cruises = dedupeCruises(filterRecordsForProfileGate(cruises, 'export cruises', resolvedGate, true), 'export cruises');
     bookedCruises = normalizeCruisesWithCasinoEconomics(
       dedupeBookedCruises(filterRecordsForProfileGate(bookedCruises, 'export booked cruises', resolvedGate, true), 'export booked cruises').map(normalizeCruiseCasinoPerformance),
@@ -666,6 +679,7 @@ export async function getAllStoredData(email?: string | null, profileGate?: Data
         userPoints: userPoints ? parseInt(userPoints, 10) : null,
       },
       extendedLoyaltyData,
+      milestoneState,
       userProfile,
       users,
       playingHours,
@@ -928,6 +942,18 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
     }
   } catch (error) {
     errors.push(`Failed to import loyalty data: ${error}`);
+  }
+
+  try {
+    if (bundle.milestoneState && typeof bundle.milestoneState === 'object') {
+      await quotaSafeSetJsonItem(
+        sk(ALL_STORAGE_KEYS.MILESTONE_TIER_STATE),
+        bundle.milestoneState
+      );
+      console.log('[DataBundle] Imported milestone tier state');
+    }
+  } catch (error) {
+    errors.push(`Failed to import milestone tier state: ${error}`);
   }
 
   try {

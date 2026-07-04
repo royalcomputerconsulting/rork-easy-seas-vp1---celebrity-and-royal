@@ -10,6 +10,8 @@ import { getCelebrityBlueChipTierByLevel, CELEBRITY_BLUE_CHIP_TIERS } from '@/co
 import { BrandToggle, BrandType } from './BrandToggle';
 import { LoyaltyPill } from '@/components/ui/LoyaltyPill';
 import { useEntitlement } from '@/state/EntitlementProvider';
+import { useMilestones } from '@/state/MilestoneProvider';
+import { PartyPopper } from 'lucide-react-native';
 
 interface UserProfileData {
   name: string;
@@ -85,6 +87,8 @@ interface UserProfileCardProps {
   activeProfileSlot?: 'primary' | 'secondary';
   onProfileSlotPress?: (slot: 'primary' | 'secondary') => void;
   showProfileSwitch?: boolean;
+  /** The profile id currently being displayed/edited, used to look up tier badges and celebration banners. */
+  profileId?: string | null;
 }
 
 export function UserProfileCard({
@@ -97,8 +101,12 @@ export function UserProfileCard({
   activeProfileSlot = 'primary',
   onProfileSlotPress,
   showProfileSwitch = false,
+  profileId = null,
 }: UserProfileCardProps) {
   const entitlement = useEntitlement();
+  const { getActiveBanner, getProfileBadges } = useMilestones();
+  const celebrationBanner = getActiveBanner(profileId);
+  const tierBadges = getProfileBadges(profileId);
   const [formData, setFormData] = useState<UserProfileData>(currentValues);
   const [activeBrand, setActiveBrand] = useState<BrandType>(
     (currentValues.preferredBrand as BrandType) || 'royal'
@@ -618,6 +626,19 @@ export function UserProfileCard({
 
   return (
     <View style={styles.container}>
+      {celebrationBanner ? (
+        <LinearGradient
+          colors={['#F59E0B', '#EA580C']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.celebrationBanner}
+        >
+          <PartyPopper size={16} color={COLORS.white} />
+          <Text style={styles.celebrationBannerText} numberOfLines={1}>
+            New tier: {celebrationBanner.tier} · reached {formatDate(celebrationBanner.achievedAt)}
+          </Text>
+        </LinearGradient>
+      ) : null}
       <LinearGradient
         colors={getBrandGradient()}
         style={styles.header}
@@ -635,6 +656,19 @@ export function UserProfileCard({
         </View>
         {renderEnrichmentBadge(hasSyncedData)}
       </LinearGradient>
+
+      {tierBadges.length > 0 ? (
+        <View style={styles.tierBadgeRow}>
+          {tierBadges.map((badge) => (
+            <View key={badge.program} style={[styles.tierBadgeChip, { backgroundColor: `${badge.color}1A`, borderColor: `${badge.color}55` }]}>
+              <View style={[styles.tierBadgeDot, { backgroundColor: badge.color }]} />
+              <Text style={[styles.tierBadgeText, { color: badge.color }]} numberOfLines={1}>
+                {badge.label}: {badge.tier}
+              </Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
 
       {showProfileSwitch ? (
         <View style={styles.profileSwitchContainer}>
@@ -773,6 +807,44 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(3, 105, 161, 0.2)',
     ...SHADOW.sm,
+  },
+  celebrationBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    paddingVertical: 6,
+    paddingHorizontal: SPACING.sm,
+  },
+  celebrationBannerText: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.white,
+  },
+  tierBadgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    paddingHorizontal: SPACING.sm,
+    paddingTop: SPACING.sm,
+  },
+  tierBadgeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: BORDER_RADIUS.xs,
+    borderWidth: 1,
+  },
+  tierBadgeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  tierBadgeText: {
+    fontSize: 10,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   header: {
     padding: SPACING.sm,
