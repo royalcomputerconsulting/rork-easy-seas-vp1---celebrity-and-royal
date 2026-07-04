@@ -748,7 +748,7 @@ export default function EventsScreen() {
                   styles.viewToggleText,
                   viewMode === mode && styles.viewToggleTextActive,
                 ]}>
-                  {mode === 'events' ? 'Events' : mode === 'week' ? 'Week' : mode === 'month' ? 'Month' : mode === '90days' ? '90 Days' : 'Passenger'}
+                  {mode === 'events' ? 'Events' : mode === 'week' ? 'Week' : mode === 'month' ? 'Month' : mode === '90days' ? '90 Days' : 'History'}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -770,7 +770,6 @@ export default function EventsScreen() {
                 activeOpacity={0.7}
               >
                 <Text style={styles.monthYearText}>{formatMonthYear(currentDate)}</Text>
-                <Text style={styles.eventCountText}>{totalEventsThisMonth} events • Tap to go to today</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -809,13 +808,6 @@ export default function EventsScreen() {
               </View>
               <ChevronRight size={20} color={COLORS.navyDeep} />
             </TouchableOpacity>
-          )}
-
-          {totalEventsThisMonth > 10 && viewMode === 'month' && (
-            <View style={styles.alertBadge}>
-              <AlertTriangle size={14} color={COLORS.white} />
-              <Text style={styles.alertBadgeText}>{totalEventsThisMonth}</Text>
-            </View>
           )}
 
           {viewMode === 'month' && (
@@ -886,7 +878,7 @@ export default function EventsScreen() {
               <View style={styles.passengerHeaderRow}>
                 <View style={styles.passengerHeaderCopy}>
                   <Text style={styles.passengerTitle}>Historical</Text>
-                  <Text style={styles.passengerSubtitle}>Permanent passenger view • Life-at-sea timeline for this year</Text>
+                  <Text style={styles.passengerSubtitle}>Life at sea timeline for this year</Text>
                 </View>
                 <TouchableOpacity
                   style={styles.passengerDrillButton}
