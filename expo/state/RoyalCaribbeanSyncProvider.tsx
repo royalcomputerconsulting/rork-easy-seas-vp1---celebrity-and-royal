@@ -234,6 +234,28 @@ function hasMeaningfulExtendedLoyaltyData(data: ExtendedLoyaltyData | null | und
   return true;
 }
 
+// v1231: A Royal Caribbean account has TWO independent loyalty numbers that live on two
+// different pages: Club Royale casino tier credits (shown on the Offers page hero widget,
+// e.g. "19,363") and Crown & Anchor cruise points (shown on the My Account homepage widget,
+// e.g. "660"). The sync used to mark the whole `loyalty` section "captured" the instant EITHER
+// one arrived - which happens as early as Step 1 (offers page) when only Club Royale is found -
+// so Step 2's retry loop would think loyalty was fully done and skip visiting the account-home
+// page entirely, permanently losing the Crown & Anchor number. This checks whether we actually
+// have BOTH real Royal Caribbean numbers yet (not just one) before letting the sync stop looking.
+function hasBothRoyalLoyaltyNumbers(fields: { clubRoyale: boolean; crownAnchor: boolean }): boolean {
+  return fields.clubRoyale && fields.crownAnchor;
+}
+
+function mergeCapturedLoyaltyFields(
+  current: { clubRoyale: boolean; crownAnchor: boolean },
+  data: ExtendedLoyaltyData | null | undefined
+): { clubRoyale: boolean; crownAnchor: boolean } {
+  return {
+    clubRoyale: current.clubRoyale || Boolean(data?.clubRoyaleTierFromApi || data?.clubRoyaleTier || data?.clubRoyalePointsFromApi !== undefined),
+    crownAnchor: current.crownAnchor || Boolean(data?.crownAndAnchorTier || data?.crownAndAnchorLevel || data?.crownAndAnchorPointsFromApi !== undefined),
+  };
+}
+
 function isHistoryOnlyLoyaltyPayload(data: unknown): boolean {
   const value = data as any;
   const payload = value?.payload ?? value;
@@ -386,6 +408,9 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   const progressCallbacks = useRef<{ onProgress?: () => void }>({});
   const processedPayloads = useRef<Set<string>>(new Set());
   const capturedSections = useRef({ offers: false, bookings: false, loyalty: false });
+  // v1231: tracks Club Royale vs Crown & Anchor separately so the sync can tell "got one of
+  // the two Royal Caribbean loyalty numbers" apart from "got both" - see hasBothRoyalLoyaltyNumbers.
+  const capturedLoyaltyFields = useRef({ clubRoyale: false, crownAnchor: false });
   const pageLoadResolver = useRef<((loadedUrl?: string) => void) | null>(null);
   const offerSailingsResolver = useRef<((sailings: OfferRow[]) => void) | null>(null);
   const carnivalPageCheckResolver = useRef<((onOffers: boolean) => void) | null>(null);
@@ -729,6 +754,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     lastAuthenticatedEmailRef.current = authenticatedEmail;
     processedPayloads.current.clear();
     capturedSections.current = { offers: false, bookings: false, loyalty: false };
+    capturedLoyaltyFields.current = { clubRoyale: false, crownAnchor: false };
     hasReceivedApiLoyaltyDataRef.current = false;
     carnivalUserDataRef.current = null;
     rcLogger.clear();
@@ -1148,7 +1174,15 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             }
           }));
           
-          capturedSections.current.loyalty = true;
+          if (cruiseLine === 'royal_caribbean') {
+            capturedLoyaltyFields.current = mergeCapturedLoyaltyFields(capturedLoyaltyFields.current, converted);
+            capturedSections.current.loyalty = hasBothRoyalLoyaltyNumbers(capturedLoyaltyFields.current);
+            if (!capturedSections.current.loyalty) {
+              addLog(`ℹ️ Got ${capturedLoyaltyFields.current.clubRoyale ? 'Club Royale' : 'Crown & Anchor'} only so far - still looking for the other Royal Caribbean loyalty number`, 'info');
+            }
+          } else {
+            capturedSections.current.loyalty = true;
+          }
           addLog(`✅ Captured ${cruiseLine === 'celebrity' ? 'Celebrity / Blue Chip' : 'Royal Caribbean / Club Royale'} loyalty data from API`, 'success');
           if (cruiseLine === 'celebrity') {
             if (converted?.celebrityBlueChipTier || converted?.celebrityBlueChipPoints !== undefined) {
@@ -1213,7 +1247,15 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           }
         }));
         
-        capturedSections.current.loyalty = true;
+        if (cruiseLine === 'royal_caribbean') {
+          capturedLoyaltyFields.current = mergeCapturedLoyaltyFields(capturedLoyaltyFields.current, converted);
+          capturedSections.current.loyalty = hasBothRoyalLoyaltyNumbers(capturedLoyaltyFields.current);
+          if (!capturedSections.current.loyalty) {
+            addLog(`ℹ️ Got ${capturedLoyaltyFields.current.clubRoyale ? 'Club Royale' : 'Crown & Anchor'} only so far - still looking for the other Royal Caribbean loyalty number`, 'info');
+          }
+        } else {
+          capturedSections.current.loyalty = true;
+        }
         addLog(`✅ Captured ${cruiseLine === 'celebrity' ? 'Celebrity / Blue Chip' : 'Royal Caribbean / Club Royale'} loyalty data from API (authoritative source)`, 'success');
         if (cruiseLine !== 'celebrity' && converted?.clubRoyalePointsFromApi !== undefined) {
           addLog(`   🎰 Club Royale Status`, 'success');
@@ -1650,7 +1692,15 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
               : ({ ...(prev.loyaltyData ?? {}), clubRoyaleTier: convertedLoyalty?.clubRoyaleTierFromApi, clubRoyalePoints: convertedLoyalty?.clubRoyalePointsFromApi?.toString(), crownAndAnchorLevel: convertedLoyalty?.crownAndAnchorTier, crownAndAnchorPoints: convertedLoyalty?.crownAndAnchorPointsFromApi?.toString() } as any)
           }));
           
-          capturedSections.current.loyalty = true;
+          if (cruiseLine === 'royal_caribbean') {
+            capturedLoyaltyFields.current = mergeCapturedLoyaltyFields(capturedLoyaltyFields.current, convertedLoyalty);
+            capturedSections.current.loyalty = hasBothRoyalLoyaltyNumbers(capturedLoyaltyFields.current);
+            if (!capturedSections.current.loyalty) {
+              addLog(`ℹ️ Got ${capturedLoyaltyFields.current.clubRoyale ? 'Club Royale' : 'Crown & Anchor'} only so far - still looking for the other Royal Caribbean loyalty number`, 'info');
+            }
+          } else {
+            capturedSections.current.loyalty = true;
+          }
           addLog('✅ Captured loyalty data from network capture', 'success');
           if (cruiseLine === 'celebrity') {
             if (convertedLoyalty?.celebrityBlueChipTier || convertedLoyalty?.celebrityBlueChipPoints !== undefined) {
@@ -1802,6 +1852,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     processedPayloads.current.clear();
     hasReceivedApiLoyaltyDataRef.current = false;
     capturedSections.current = { offers: false, bookings: false, loyalty: false };
+    capturedLoyaltyFields.current = { clubRoyale: false, crownAnchor: false };
     carnivalUserDataRef.current = null;
     extractedOffersRef.current = [];
 
