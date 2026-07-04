@@ -271,7 +271,7 @@ export function TierProgressionChart({
               {isSignatureRetainMode ? (
                 <>
                   <Text style={{ color: CLUB_ROYALE_TIERS.Signature.color, fontWeight: '700' as const }}>Signature</Text>{' '}
-                  is active. Target 25,000 points to keep Signature ({signatureRetainProgress.toFixed(0)}% complete); {formatNumber(signatureRetainGap)} more needed, then Masters becomes the next chase.
+                  is active. Target {formatNumber(CLUB_ROYALE_SIGNATURE_RETAIN_POINTS)} points to keep Signature ({signatureRetainProgress.toFixed(0)}% complete); {formatNumber(signatureRetainGap)} more needed, then Masters becomes the next chase.
                 </>
               ) : (
                 <>

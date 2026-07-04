@@ -112,6 +112,21 @@ const DEFAULT_OWNER = {
   silverseaVenetianPoints: 0,
 };
 
+let uniqueIdCounter = 0;
+
+/**
+ * Generates a collision-proof id. `Date.now()` alone can produce the exact same value if two
+ * profiles are created within the same millisecond (e.g. an auto-created "Second User" profile
+ * racing with an import-review profile creation), which previously caused duplicate React keys
+ * and silently-merged profiles. Adding a monotonically increasing counter plus a random suffix
+ * guarantees every generated id is unique even when created back-to-back synchronously.
+ */
+function generateUniqueUserId(prefix: string): string {
+  uniqueIdCounter += 1;
+  const randomSuffix = Math.random().toString(36).slice(2, 8);
+  return `${prefix}_${Date.now()}_${uniqueIdCounter}_${randomSuffix}`;
+}
+
 function normalizeEmail(email: string | null | undefined): string | null {
   if (!email) {
     return null;
@@ -132,7 +147,7 @@ function createOwnerProfile(email: string | null): UserProfile {
   const now = new Date().toISOString();
 
   return {
-    id: `user_${Date.now()}`,
+    id: generateUniqueUserId('user'),
     name: DEFAULT_OWNER.name,
     displayName: DEFAULT_OWNER.name,
     relationshipLabel: 'Self',
@@ -212,7 +227,7 @@ function sanitizeUserProfile(user: unknown, fallbackEmail: string | null, index:
   const normalizedEmail = normalizeEmail(userRecord.email) ?? fallbackEmail ?? DEFAULT_OWNER.email;
 
   return {
-    id: typeof userRecord.id === 'string' && userRecord.id.trim().length > 0 ? userRecord.id : `user_${Date.now()}_${index}`,
+    id: typeof userRecord.id === 'string' && userRecord.id.trim().length > 0 ? userRecord.id : generateUniqueUserId(`user_${index}`),
     name: typeof userRecord.name === 'string' && userRecord.name.trim().length > 0 ? userRecord.name : DEFAULT_OWNER.name,
     displayName: typeof userRecord.displayName === 'string' && userRecord.displayName.trim().length > 0 ? userRecord.displayName : (typeof userRecord.name === 'string' && userRecord.name.trim().length > 0 ? userRecord.name : DEFAULT_OWNER.name),
     relationshipLabel: typeof userRecord.relationshipLabel === 'string' ? userRecord.relationshipLabel : (userRecord.isOwner === true ? 'Self' : ''),
@@ -543,8 +558,20 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
     const normalizedEmail = normalizeEmail(user.email) ?? normalizedAuthenticatedEmail ?? DEFAULT_OWNER.email;
 
     const isFirstUser = users.length === 0;
+
+    // Each account can only ever have ONE non-owner "second traveler" slot. If a caller (e.g. the
+    // Settings screen's auto-create effect) races and asks to create another one while one already
+    // exists, return the existing profile instead of creating a duplicate "Second User" entry.
+    if (!isFirstUser && !user.id) {
+      const existingNonOwner = users.find((candidate) => candidate.active !== false && !candidate.isOwner && !candidate.defaultProfile);
+      if (existingNonOwner) {
+        console.log('[UserProvider] Reusing existing second-traveler profile instead of creating a duplicate:', existingNonOwner.id);
+        return existingNonOwner;
+      }
+    }
+
     const newUser: UserProfile = {
-      id: user.id || `user_${Date.now()}`,
+      id: user.id || generateUniqueUserId('user'),
       name: user.name,
       displayName: user.name,
       relationshipLabel: isFirstUser ? 'Self' : '',

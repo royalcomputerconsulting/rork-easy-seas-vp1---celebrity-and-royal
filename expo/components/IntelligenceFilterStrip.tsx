@@ -5,7 +5,7 @@ import { Building2, SlidersHorizontal, Trophy, UserRound } from 'lucide-react-na
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
 import { useIntelligenceFilters, type BrandFilterValue, type ProfileFilterValue, type ProgramFilterValue } from '@/state/IntelligenceFiltersProvider';
 import { useUser } from '@/state/UserProvider';
-import { getBrandLabel, getProfileDisplayName, getProgramLabel, getSecondProfileForUnassignedRecords } from '@/lib/intelligenceFilters';
+import { getBrandLabel, getManagedSecondProfile, getProfileDisplayName, getProgramLabel, getSecondProfileForUnassignedRecords } from '@/lib/intelligenceFilters';
 
 interface IntelligenceFilterStripProps {
   contextLabel: string;
@@ -48,13 +48,23 @@ export const IntelligenceFilterStrip = React.memo(function IntelligenceFilterStr
     const activeProfiles = users.filter((profile) => profile.active !== false);
     const primaryProfile = activeProfiles.find((profile) => profile.isOwner) ?? activeProfiles[0];
     const secondProfile = getSecondProfileForUnassignedRecords(activeProfiles);
+    // Each account can only ever have ONE second-traveler slot. If duplicate non-owner profiles
+    // still exist in storage (from an old bug), only show the single canonical one here so the
+    // filter chips never render more than one "Second User" entry.
+    const canonicalSecondProfile = getManagedSecondProfile(activeProfiles);
+    const visibleProfiles = activeProfiles.filter((profile) => (
+      profile.id === primaryProfile?.id
+      || profile.isOwner
+      || profile.defaultProfile
+      || profile.id === canonicalSecondProfile?.id
+    ));
     return [
       { id: 'all', label: 'All' },
-      ...activeProfiles.map((profile) => ({
+      ...visibleProfiles.map((profile) => ({
         id: profile.id,
         label: profile.id === primaryProfile?.id
           ? 'User'
-          : profile.id === secondProfile?.id
+          : profile.id === secondProfile?.id || profile.id === canonicalSecondProfile?.id
           ? 'Second User'
           : getProfileDisplayName(profile),
       })),

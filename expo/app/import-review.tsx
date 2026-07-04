@@ -9,7 +9,7 @@ import { useCoreData } from '@/state/CoreDataProvider';
 import { useUser, type UserProfile } from '@/state/UserProvider';
 import { IntelligenceFilterStrip } from '@/components/IntelligenceFilterStrip';
 import { useIntelligenceFilters } from '@/state/IntelligenceFiltersProvider';
-import { recordMatchesIntelligenceFilters } from '@/lib/intelligenceFilters';
+import { getManagedSecondProfile, recordMatchesIntelligenceFilters } from '@/lib/intelligenceFilters';
 import {
   buildImportAssignmentPatch,
   buildKeepUnassignedPatch,
@@ -56,7 +56,13 @@ export default function ImportReviewScreen() {
   const reviewItems = useMemo(() => allReviewItems.filter((item) => recordMatchesIntelligenceFilters(item.record, intelligenceFilterSnapshot, users)), [allReviewItems, intelligenceFilterSnapshot, users]);
 
   const reviewGroups = useMemo(() => groupImportAssignmentReviewItems(reviewItems), [reviewItems]);
-  const activeProfiles = useMemo(() => users.filter((profile) => profile.active !== false), [users]);
+  // Only ever show one canonical "second traveler" profile in the assignment chips, even if
+  // duplicate non-owner profiles still exist in storage from an old bug.
+  const activeProfiles = useMemo(() => {
+    const allActive = users.filter((profile) => profile.active !== false);
+    const canonicalSecondProfile = getManagedSecondProfile(allActive);
+    return allActive.filter((profile) => profile.isOwner || profile.defaultProfile || profile.id === canonicalSecondProfile?.id);
+  }, [users]);
 
   const applyPatchToItem = useCallback((item: ImportAssignmentReviewItem, patch: Partial<CasinoOffer & Cruise & BookedCruise & CalendarEvent>) => {
     console.log('[ImportReview] Applying assignment patch:', { entity: item.entity, id: item.id, patch });

@@ -149,6 +149,14 @@ export function getKnownCurrentClubRoyaleFact(cruise: Pick<BookedCruise, 'shipNa
 }
 
 export function getBookedCruiseCasinoPoints(cruise: BookedCruise): number {
+  // A real, explicitly-recorded points value on the cruise itself is always authoritative --
+  // it must never be silently overridden by an older hardcoded season snapshot below, or the
+  // app would keep showing stale/frozen totals after the user updates their actual results.
+  const explicitPoints = firstFiniteNumber(cruise.pointsEarned, cruise.earnedPoints, cruise.casinoPoints);
+  if (explicitPoints !== null && explicitPoints > 0) {
+    return Math.round(explicitPoints);
+  }
+
   const knownFact = getKnownCurrentClubRoyaleFact(cruise);
   if (knownFact) {
     return knownFact.pointsEarned;
@@ -156,11 +164,6 @@ export function getBookedCruiseCasinoPoints(cruise: BookedCruise): number {
 
   if (!isClubRoyaleCasinoCruise(cruise)) {
     return 0;
-  }
-
-  const explicitPoints = firstFiniteNumber(cruise.pointsEarned, cruise.earnedPoints, cruise.casinoPoints);
-  if (explicitPoints !== null) {
-    return Math.round(explicitPoints);
   }
 
   const coinIn = firstFiniteNumber(cruise.coinIn);
@@ -172,6 +175,13 @@ export function getBookedCruiseCasinoPoints(cruise: BookedCruise): number {
 }
 
 export function getBookedCruiseWinningsBroughtHome(cruise: BookedCruise): number {
+  // Same rule as points above: an explicit recorded win/loss on the cruise is authoritative
+  // over the hardcoded season-snapshot fallback (including 0 or negative -- those are real data too).
+  const explicitWinnings = firstFiniteNumber(cruise.winningsBroughtHome, cruise.winnings, cruise.totalWinnings, cruise.netResult);
+  if (explicitWinnings !== null) {
+    return explicitWinnings;
+  }
+
   const knownFact = getKnownCurrentClubRoyaleFact(cruise);
   if (knownFact) {
     return knownFact.winningsBroughtHome;
@@ -181,17 +191,17 @@ export function getBookedCruiseWinningsBroughtHome(cruise: BookedCruise): number
     return 0;
   }
 
-  const explicitWinnings = firstFiniteNumber(cruise.winningsBroughtHome, cruise.winnings, cruise.totalWinnings, cruise.netResult);
-  if (explicitWinnings !== null) {
-    return explicitWinnings;
-  }
-
   return 0;
 }
 
 export function normalizeCruiseCasinoPerformance(cruise: BookedCruise): BookedCruise {
   const knownFact = getKnownCurrentClubRoyaleFact(cruise);
-  if (!knownFact) {
+  // If the cruise already has its own explicitly-recorded points, that's real user data and it
+  // must win over the hardcoded season-snapshot fact below (which otherwise freezes the cruise at
+  // an old, lower total forever, even after the user records more accurate/updated results).
+  const explicitPointsCheck = firstFiniteNumber(cruise.pointsEarned, cruise.earnedPoints, cruise.casinoPoints);
+  const hasExplicitPoints = explicitPointsCheck !== null && explicitPointsCheck > 0;
+  if (!knownFact || hasExplicitPoints) {
     if (!isClubRoyaleCasinoCruise(cruise)) {
       return cruise;
     }

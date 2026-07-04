@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { File as ExpoFile, Paths as ExpoPaths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -1663,7 +1664,7 @@ export default function AnalyticsScreen() {
     return (
       <TouchableOpacity
         key={cruise.id}
-        style={styles.portfolioCard}
+        style={styles.portfolioCardTouchable}
         onPress={() => portfolioDrill.open({
           title: `${cruise.shipName || 'Cruise'} — Casino Performance`,
           subtitle: cruise.sailDate ? formatDateRange(cruise.sailDate, cruise.returnDate, cruise.nights) : undefined,
@@ -1687,6 +1688,12 @@ export default function AnalyticsScreen() {
         })}
         activeOpacity={0.85}
       >
+        <LinearGradient
+          colors={['#DDF1FF', '#BFE2FA', '#9FCEF2']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.portfolioCard}
+        >
         <View style={styles.portfolioImageContainer}>
           <Image
             source={{ uri: cruiseImage }}
@@ -1785,6 +1792,7 @@ export default function AnalyticsScreen() {
             </View>
           ) : null}
         </View>
+        </LinearGradient>
       </TouchableOpacity>
     );
   };
@@ -5852,12 +5860,8 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
     lineHeight: 16,
   },
-  portfolioCard: {
-    backgroundColor: CASINO_DASHBOARD_COLORS.card,
+  portfolioCardTouchable: {
     borderRadius: BORDER_RADIUS.md,
-    overflow: 'hidden',
-    flexDirection: 'row',
-    alignItems: 'stretch',
     width: '100%',
     maxWidth: '100%',
     alignSelf: 'stretch',
@@ -5866,6 +5870,15 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 3,
     elevation: 2,
+  },
+  portfolioCard: {
+    borderRadius: BORDER_RADIUS.md,
+    overflow: 'hidden',
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    width: '100%',
+    maxWidth: '100%',
+    alignSelf: 'stretch',
   },
   portfolioImageContainer: {
     position: 'relative',
