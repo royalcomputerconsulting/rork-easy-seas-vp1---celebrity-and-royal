@@ -671,8 +671,19 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
     const liveCrownAnchorPoints = extendedLoyalty?.crownAndAnchorPointsFromApi;
     const hasLiveCrownAnchorPoints = typeof liveCrownAnchorPoints === 'number' && Number.isFinite(liveCrownAnchorPoints);
     const profileCrownAnchorPoints = typeof currentUser?.loyaltyPoints === 'number' ? currentUser.loyaltyPoints : 0;
+    // An explicit manual entry (typed into Settings and saved, or written automatically by a
+    // successful Crown & Anchor sync) is a direct, deliberate statement of the current true
+    // balance -- exactly like the Club Royale manual-entry rule above. It must always win over a
+    // possibly-stale `crownAndAnchorPointsFromApi` value left over from an earlier sync attempt;
+    // otherwise a real edit in Settings (e.g. correcting to 660) can never show or calculate
+    // correctly because a stale synced number (e.g. 632) keeps silently overriding it. A manual
+    // value of exactly 0 is treated as "never explicitly set" so a brand-new profile still falls
+    // through to live/profile/computed data instead of being stuck at zero.
+    const hasExplicitManualCrownAnchorEntry = typeof manualCrownAnchorPoints === 'number' && manualCrownAnchorPoints > 0;
     const rawCrownAnchorPoints = activeProfileHasRoyalLoyalty
-      ? (hasLiveCrownAnchorPoints ? liveCrownAnchorPoints : (manualCrownAnchorPoints ?? profileCrownAnchorPoints ?? completedNights))
+      ? (hasExplicitManualCrownAnchorEntry
+          ? (manualCrownAnchorPoints as number)
+          : (hasLiveCrownAnchorPoints ? liveCrownAnchorPoints : (profileCrownAnchorPoints || completedNights)))
       : 0;
     // Only fall back to the hardcoded baseline when there is truly zero real/manual Crown & Anchor
     // data recorded (rawCrownAnchorPoints === 0) -- never when the user has an actual manually-entered
