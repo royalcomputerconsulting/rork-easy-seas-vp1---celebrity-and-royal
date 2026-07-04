@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -30,6 +30,7 @@ import { openCertificatePdf } from '@/lib/royalCaribbean/certificatePdf';
 import { trpc } from '@/lib/trpc';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { useCertificates } from '@/state/CertificatesProvider';
+import { useCasinoBenefits } from '@/state/CasinoBenefitsProvider';
 
 type MonthTarget = 'thisMonth' | 'nextMonth';
 
@@ -83,6 +84,7 @@ export default function CertificateLookupScreen() {
   const router = useRouter();
   const { bookedCruises, cruises } = useCoreData();
   const { certificates: ownedCertificates } = useCertificates();
+  const { recordCertificateSearch } = useCasinoBenefits();
 
   const [activeMonth, setActiveMonth] = useState<MonthTarget | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -157,6 +159,22 @@ export default function CertificateLookupScreen() {
     const normalizedQuery = normalizeText(searchQuery);
     return matches.filter((match) => normalizeText(match.shipName).includes(normalizedQuery));
   }, [result, searchQuery]);
+
+  useEffect(() => {
+    if (!result || !activeMonth) return;
+    const allMatches = (result.matches ?? []) as SailingMatch[];
+    const matchedBookedCount = allMatches.filter((match) => isBooked(match.shipName, match.sailDate)).length;
+    recordCertificateSearch({
+      date: new Date().toISOString(),
+      month: activeMonth,
+      monthLabel: getMonthLabel(activeMonth),
+      certsFound: result.summary?.matchedCertificateCount ?? allMatches.length,
+      matchedCount: matchedBookedCount,
+      unmatchedCount: Math.max(0, allMatches.length - matchedBookedCount),
+      expiringSoonCount: expiringOwnedCertificates.length,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result, activeMonth]);
 
   const handleOpenPdf = useCallback((url: string) => {
     void openCertificatePdf(url);

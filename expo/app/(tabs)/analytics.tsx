@@ -51,6 +51,7 @@ import {
   RefreshCw,
   Search,
   Pencil,
+  EyeOff,
 } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME, SHADOW } from '@/constants/theme';
 import { useSimpleAnalytics } from '@/state/SimpleAnalyticsProvider';
@@ -130,6 +131,8 @@ import { CasinoDonutChart } from '@/components/casino-dashboard/CasinoDonutChart
 import { CasinoGroupedBarChart } from '@/components/casino-dashboard/CasinoGroupedBarChart';
 import { CasinoLineChart } from '@/components/casino-dashboard/CasinoLineChart';
 import { useCertificates } from '@/state/CertificatesProvider';
+import { useCasinoBenefits } from '@/state/CasinoBenefitsProvider';
+import { useCasinoSettings } from '@/state/CasinoSettingsProvider';
 
 type AnalyticsTab = 'portfolio' | 'value' | 'action' | 'history';
 type ROIFilter = 'all' | 'high' | 'medium' | 'low';
@@ -1237,6 +1240,38 @@ export default function AnalyticsScreen() {
   }, [bookedCruises]);
 
   const actionCenterDrill = useDrillDown();
+  const {
+    checklistOverrides,
+    customTasks,
+    setChecklistDone,
+    snoozeChecklistTask,
+    hideChecklistTask,
+    lastCertificateSearch,
+  } = useCasinoBenefits();
+  const { settings: casinoSettings } = useCasinoSettings();
+
+  const displayChecklist = useMemo(() => {
+    const autoTasks = actionChecklist.map((task) => ({
+      id: task.id,
+      label: task.label,
+      detail: task.detail,
+      done: checklistOverrides[task.id]?.done ?? task.done,
+      isCustom: false as const,
+    }));
+    const customDisplay = customTasks.map((task) => ({
+      id: task.id,
+      label: task.label,
+      detail: task.detail,
+      done: checklistOverrides[task.id]?.done ?? task.done,
+      isCustom: true as const,
+    }));
+    return [...autoTasks, ...customDisplay].filter((task) => {
+      const override = checklistOverrides[task.id];
+      if (override?.hidden) return false;
+      if (override?.snoozedUntil && new Date(override.snoozedUntil).getTime() > Date.now()) return false;
+      return true;
+    });
+  }, [actionChecklist, customTasks, checklistOverrides]);
 
   const keepPlayingRecommendation = useMemo(() => {
     const rows = cruiseEconomicsSummary.rows;
@@ -3044,6 +3079,7 @@ export default function AnalyticsScreen() {
                 summary: `${upcomingCruisesList.length} upcoming cruise(s) currently booked.`,
                 sourceRecords: upcomingCruisesList.map(({ cruise, daysUntil }) => ({ label: `${cruise.shipName || 'Unknown Ship'} — ${cruise.sailDate}`, value: `${daysUntil}d out`, confidence: 'imported-csv' })),
                 missing: upcomingCruisesList.length === 0 ? ['No upcoming cruises booked yet.'] : [],
+                relatedActions: upcomingCruisesList.length > 0 ? [{ label: 'Open Nearest Cruise', onPress: () => { actionCenterDrill.close(); openCruiseDetailFromPortfolio(upcomingCruisesList[0].cruise); } }] : undefined,
               }),
             },
             {
@@ -3057,6 +3093,7 @@ export default function AnalyticsScreen() {
                 summary: `${expiringOffersList.length} casino offer(s) expiring within 45 days.`,
                 sourceRecords: expiringOffersList.map((offer) => ({ label: offer.title, value: `${offer.daysLeft}d left`, detail: offer.offerCode, confidence: 'imported-csv' })),
                 missing: expiringOffersList.length === 0 ? ['No offers expiring within 45 days.'] : [],
+                relatedActions: expiringOffersList.length > 0 ? [{ label: 'Open Nearest Offer', onPress: () => { actionCenterDrill.close(); router.push(`/offer-details?offerCode=${encodeURIComponent(expiringOffersList[0].offerCode)}` as any); } }] : undefined,
               }),
             },
             {
@@ -3069,6 +3106,7 @@ export default function AnalyticsScreen() {
                 title: 'Instant Certificates',
                 summary: `${instantCertBank.length} instant certificate(s) won from completed cruises.`,
                 sourceRecords: instantCertBank.map((cert) => ({ label: `${cert.shipName} — ${cert.sailDate}`, value: formatCurrency(cert.value), detail: cert.offerCode, confidence: 'user-entered' })),
+                relatedActions: [{ label: 'Open Certificate Wallet', onPress: () => { actionCenterDrill.close(); router.push('/casino/certificate-wallet' as any); } }],
               }),
             },
             {
@@ -3083,6 +3121,7 @@ export default function AnalyticsScreen() {
                 formula: 'FreePlay Available = Sum of FreePlay amounts recorded on each cruise/offer',
                 sourceRecords: freePlaySummary.cruises.map((c) => ({ label: `${c.shipName || 'Unknown Ship'} — ${c.sailDate}`, value: formatCurrencyDetailed(c.freePlay || 0), confidence: 'imported-csv' })),
                 missing: freePlaySummary.total === 0 ? ['No FreePlay recorded on any cruise or offer yet.'] : [],
+                relatedActions: [{ label: 'Open Benefits Ledger', onPress: () => { actionCenterDrill.close(); router.push('/casino/benefits-ledger' as any); } }],
               }),
             },
             {
@@ -3095,6 +3134,7 @@ export default function AnalyticsScreen() {
                 title: 'Tasks Due',
                 summary: `${actionChecklist.filter((item) => !item.done).length} of ${actionChecklist.length} checklist item(s) still need attention.`,
                 sourceRecords: actionChecklist.map((item) => ({ label: item.label, value: item.done ? 'Done' : 'Due', detail: item.detail })),
+                relatedActions: [{ label: 'Open Full Checklist', onPress: () => { actionCenterDrill.close(); router.push('/casino/checklist' as any); } }],
               }),
             },
           ].map((tile) => (
@@ -3150,6 +3190,10 @@ export default function AnalyticsScreen() {
               {formatCurrencyDetailed(freePlaySummary.total)}
             </Text>
             <Text style={casinoDashboardStyles.screenSubtitle}>Available FreePlay across {freePlaySummary.cruiseCount} cruises</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.viewFullLinkStandalone} activeOpacity={0.75} onPress={() => router.push('/casino/benefits-ledger' as any)} testID="action-center-open-benefits-ledger">
+            <Text style={styles.viewFullLinkText}>View Full Benefits Ledger (OBC, VOOM, dining, spa & more)</Text>
+            <ChevronRight size={13} color={CASINO_DASHBOARD_COLORS.royalBlue} />
           </TouchableOpacity>
         </View>
       )}
@@ -3224,30 +3268,75 @@ export default function AnalyticsScreen() {
         <View style={styles.sectionHeader}>
           <ClipboardList size={16} color={CASINO_DASHBOARD_COLORS.textPrimary} />
           <Text style={styles.sectionTitle}>Today's Checklist</Text>
+          <TouchableOpacity style={styles.viewFullLink} activeOpacity={0.75} onPress={() => router.push('/casino/checklist' as any)} testID="action-center-open-checklist">
+            <Text style={styles.viewFullLinkText}>Full Checklist</Text>
+            <ChevronRight size={13} color={CASINO_DASHBOARD_COLORS.royalBlue} />
+          </TouchableOpacity>
         </View>
         <View style={styles.cleanCard}>
-          {actionChecklist.map((item, index) => (
-            <TouchableOpacity
+          {displayChecklist.map((item, index) => (
+            <View
               key={item.id}
-              style={[styles.checklistRow, index === actionChecklist.length - 1 && { marginBottom: 0, borderBottomWidth: 0 }]}
-              activeOpacity={0.7}
-              onPress={() => showDetail(item.label, [{ label: 'Detail', value: item.detail }])}
+              style={[styles.checklistRow, index === displayChecklist.length - 1 && { marginBottom: 0, borderBottomWidth: 0 }]}
             >
-              {item.done ? <CheckCircle size={18} color={CASINO_DASHBOARD_COLORS.green} /> : <AlertTriangle size={18} color={CASINO_DASHBOARD_COLORS.orange} />}
-              <View style={styles.checklistTextBlock}>
+              <TouchableOpacity activeOpacity={0.7} onPress={() => setChecklistDone(item.id, !item.done)} testID={`action-center-checklist-toggle-${item.id}`}>
+                {item.done ? <CheckCircle size={18} color={CASINO_DASHBOARD_COLORS.green} /> : <AlertTriangle size={18} color={CASINO_DASHBOARD_COLORS.orange} />}
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.checklistTextBlock} activeOpacity={0.7} onPress={() => showDetail(item.label, [{ label: 'Detail', value: item.detail }])}>
                 <Text style={[styles.checklistText, item.done && styles.checklistTextDone]}>{item.label}</Text>
                 <Text style={styles.checklistDetail} numberOfLines={2}>{item.detail}</Text>
-              </View>
-            </TouchableOpacity>
+              </TouchableOpacity>
+              <TouchableOpacity style={{ padding: 4 }} activeOpacity={0.7} onPress={() => snoozeChecklistTask(item.id, 3)} testID={`action-center-checklist-snooze-${item.id}`}>
+                <Clock size={15} color={CASINO_DASHBOARD_COLORS.textSecondary} />
+              </TouchableOpacity>
+              <TouchableOpacity style={{ padding: 4 }} activeOpacity={0.7} onPress={() => hideChecklistTask(item.id, true)} testID={`action-center-checklist-hide-${item.id}`}>
+                <EyeOff size={15} color={CASINO_DASHBOARD_COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
           ))}
+          {displayChecklist.length === 0 && (
+            <Text style={{ color: CASINO_DASHBOARD_COLORS.textMuted, fontSize: 12.5, textAlign: 'center', paddingVertical: 8 }}>Nothing on your checklist right now.</Text>
+          )}
         </View>
       </View>
+
+      {lastCertificateSearch && (
+        <View style={styles.section}>
+          <TouchableOpacity
+            style={casinoDashboardStyles.card}
+            activeOpacity={0.85}
+            onPress={() => actionCenterDrill.open({
+              title: 'Last Certificate Search',
+              subtitle: `${lastCertificateSearch.monthLabel} · searched ${new Date(lastCertificateSearch.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
+              summary: `${lastCertificateSearch.certsFound} certificate PDF(s) scanned for ${lastCertificateSearch.monthLabel}, matching ${lastCertificateSearch.matchedCount} of your booked cruise(s).`,
+              inputs: [
+                { label: 'Certificate files found', value: String(lastCertificateSearch.certsFound) },
+                { label: 'Matched booked cruises', value: String(lastCertificateSearch.matchedCount) },
+                { label: 'Unmatched sailings', value: String(lastCertificateSearch.unmatchedCount) },
+                { label: 'Your certificates expiring soon', value: String(lastCertificateSearch.expiringSoonCount) },
+              ],
+              relatedActions: [
+                { label: 'Search Again', onPress: () => { actionCenterDrill.close(); router.push('/certificate-lookup' as any); } },
+                { label: 'Open Certificate Wallet', emphasis: 'secondary', onPress: () => { actionCenterDrill.close(); router.push('/casino/certificate-wallet' as any); } },
+              ],
+            })}
+            testID="action-center-cert-search-summary"
+          >
+            <Text style={styles.economicsTitle}>Last Certificate Search</Text>
+            <Text style={casinoDashboardStyles.screenSubtitle}>{lastCertificateSearch.monthLabel} — {lastCertificateSearch.certsFound} found, {lastCertificateSearch.matchedCount} matched to your cruises</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {instantCertBank.length > 0 && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Ticket size={16} color={CASINO_DASHBOARD_COLORS.green} />
             <Text style={styles.sectionTitle}>Instant Certificate Bank</Text>
+            <TouchableOpacity style={styles.viewFullLink} activeOpacity={0.75} onPress={() => router.push('/casino/certificate-wallet' as any)} testID="action-center-open-cert-wallet">
+              <Text style={styles.viewFullLinkText}>Full Wallet</Text>
+              <ChevronRight size={13} color={CASINO_DASHBOARD_COLORS.royalBlue} />
+            </TouchableOpacity>
           </View>
           <View style={{ flexDirection: 'row', gap: SPACING.sm, marginBottom: SPACING.sm }}>
             {instantCertBankByType.map((group) => (
@@ -3364,6 +3453,21 @@ export default function AnalyticsScreen() {
               pointsEarned: data.pointsEarned,
               notes: `Live tracked session - ${data.pph.toFixed(0)} pts/hr`,
             });
+            const stopLossHit = data.pointsEarned < 0;
+            actionCenterDrill.open({
+              title: 'Session Complete',
+              subtitle: `${data.durationMinutes} min · ${data.pph.toFixed(0)} pts/hr`,
+              summary: `Saved to your session ledger. ${data.pph >= targetPPH ? 'This session beat your target PPH.' : 'This session came in below your target PPH.'}`,
+              inputs: [
+                { label: 'Duration', value: `${data.durationMinutes} min` },
+                { label: 'Points earned', value: formatNumber(data.pointsEarned) },
+                { label: 'Points per hour', value: formatNumber(Math.round(data.pph)) },
+                { label: 'Target PPH', value: formatNumber(targetPPH) },
+                { label: 'Vs. target', value: `${data.pph >= targetPPH ? '+' : ''}${formatNumber(Math.round(data.pph - targetPPH))} pts/hr` },
+                { label: 'Stop-loss check', value: stopLossHit ? `Below your ${formatNumber(casinoSettings.defaultStopLoss)} stop-loss setting — consider a break` : 'Within your stop-loss setting' },
+              ],
+              relatedActions: [{ label: 'Open Full Checklist', emphasis: 'secondary', onPress: () => { actionCenterDrill.close(); router.push('/casino/checklist' as any); } }],
+            });
           }}
           historicalAvgPPH={sessionAnalytics.pointsPerHour}
         />
@@ -3376,6 +3480,37 @@ export default function AnalyticsScreen() {
           targetPPH={targetPPH}
           onTargetChange={setTargetPPH}
         />
+        <TouchableOpacity
+          style={styles.viewFullLinkStandalone}
+          activeOpacity={0.75}
+          onPress={() => {
+            const bestSession = [...sessions].sort((a, b) => {
+              const pphA = a.durationMinutes > 0 ? (a.pointsEarned || 0) / (a.durationMinutes / 60) : 0;
+              const pphB = b.durationMinutes > 0 ? (b.pointsEarned || 0) / (b.durationMinutes / 60) : 0;
+              return pphB - pphA;
+            })[0];
+            const bestSessionPph = bestSession && bestSession.durationMinutes > 0 ? (bestSession.pointsEarned || 0) / (bestSession.durationMinutes / 60) : 0;
+            actionCenterDrill.open({
+              title: 'PPH Goal Reasoning',
+              summary: 'Your target points-per-hour is compared against your own historical performance, not a generic assumption.',
+              inputs: [
+                { label: 'Current target PPH', value: formatNumber(targetPPH) },
+                { label: 'Your historical avg PPH', value: formatNumber(Math.round(sessionAnalytics.pointsPerHour)) },
+                { label: 'Best session PPH', value: formatNumber(Math.round(bestSessionPph)) },
+                { label: 'Default assumption (Casino Settings)', value: `${formatNumber(casinoSettings.defaultPointsPerHour)} pts/hr` },
+              ],
+              assumptions: [
+                'Required PPH for a tier is a rough estimate: tier target points ÷ your typical remaining play hours for the year, using Casino Settings’ default hours/day where session data is sparse.',
+              ],
+              sourceRecords: sessions.slice(0, 8).map((s) => ({ label: `${s.date} · ${s.durationMinutes}min`, value: `${formatNumber(Math.round(s.durationMinutes > 0 ? (s.pointsEarned || 0) / (s.durationMinutes / 60) : 0))} pts/hr`, confidence: 'user-entered' as SourceConfidence })),
+              missing: sessions.length === 0 ? ['No logged sessions yet — target PPH is currently just the Casino Settings default.'] : [],
+            });
+          }}
+          testID="pph-goals-reasoning-link"
+        >
+          <Text style={styles.viewFullLinkText}>Why this target? View PPH reasoning</Text>
+          <ChevronRight size={13} color={CASINO_DASHBOARD_COLORS.royalBlue} />
+        </TouchableOpacity>
       </View>
 
       <View style={styles.section}>
@@ -3391,6 +3526,24 @@ export default function AnalyticsScreen() {
             setShowCelebration(true);
           }}
         />
+        <TouchableOpacity
+          style={styles.viewFullLinkStandalone}
+          activeOpacity={0.75}
+          onPress={() => actionCenterDrill.open({
+            title: 'Weekly Goals — How They Work',
+            summary: 'Weekly goals reset every Monday and track your progress against a weekly points, session-count, play-time, or winnings target.',
+            formula: 'Weekly Progress % = Amount logged this week ÷ Weekly target',
+            inputs: [
+              { label: 'Sessions logged this week count toward', value: 'Points, Time, and Sessions goals' },
+              { label: 'Win/loss logged this week counts toward', value: 'Winnings goal' },
+            ],
+            assumptions: ['Weekly goal targets are set by you and can be adjusted from the goal card itself.'],
+          })}
+          testID="weekly-goals-formula-link"
+        >
+          <Text style={styles.viewFullLinkText}>How weekly goals are calculated</Text>
+          <ChevronRight size={13} color={CASINO_DASHBOARD_COLORS.royalBlue} />
+        </TouchableOpacity>
       </View>
 
       <View style={styles.section}>
@@ -3411,6 +3564,28 @@ export default function AnalyticsScreen() {
           initialItems={compItems}
           onCompValueChange={(totalValue) => {
             console.log('[Analytics] Comp value changed:', totalValue);
+          }}
+          saveTargets={bookedCruises
+            .filter((c) => isActiveUpcomingCruise(c))
+            .map((c) => ({ id: c.id, label: `${c.shipName || 'Unknown Ship'} — ${c.sailDate}` }))}
+          onSaveToCruise={(cruiseId, totalValue, items) => {
+            const byCategory = (category: string) => items.filter((i) => i.category === category).reduce((sum, i) => sum + i.value, 0);
+            updateBookedCruise(cruiseId, {
+              freePlay: byCategory('obc') > 0 ? undefined : undefined,
+              freeOBC: byCategory('obc') || undefined,
+              voomValue: byCategory('voom') || undefined,
+              diningValue: byCategory('dining') || undefined,
+              spaValue: byCategory('spa') || undefined,
+              beverageValue: byCategory('drinks') || undefined,
+              tradeInValue: byCategory('tradeIn') || undefined,
+              updatedAt: new Date().toISOString(),
+            });
+            void haptics.success();
+            actionCenterDrill.open({
+              title: 'Saved to Cruise',
+              summary: `${formatCurrencyDetailed(totalValue)} in comp items saved to this cruise’s casino ledger details.`,
+              missing: ['Values replace any existing OBC/VOOM/dining/spa/trade-in on this cruise rather than adding to them, so nothing gets double-counted.'],
+            });
           }}
         />
       </View>
@@ -5475,6 +5650,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: SPACING.sm,
     marginBottom: SPACING.sm,
+  },
+  viewFullLink: {
+    marginLeft: 'auto',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  viewFullLinkStandalone: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    marginTop: SPACING.sm,
+    paddingVertical: 6,
+  },
+  viewFullLinkText: {
+    fontSize: 12,
+    fontWeight: '700' as const,
+    color: CASINO_DASHBOARD_COLORS.royalBlue,
   },
   sectionLinkRow: {
     flexDirection: 'row',
