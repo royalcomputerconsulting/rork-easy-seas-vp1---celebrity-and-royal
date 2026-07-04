@@ -179,14 +179,22 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
     fontWeight: '400',
     letterSpacing: -1.1,
     mask: {
+      // v_seapass_date_gap_fix: the date erase/redraw rectangle used to start
+      // at y=104, which was ABOVE the time field's own mask bottom (y=120).
+      // That 16px overlap meant the date's background repaint ran back over
+      // the very bottom edge of the freshly-drawn time text, visually
+      // "biting into" the bottom of "10:30 am". Starting the date mask right
+      // at the time mask's bottom (with a small buffer) removes the overlap
+      // entirely while still fully covering the date glyph's ascender/descender
+      // bounds.
       x: 632,
-      y: 104,
+      y: 124,
       width: 336,
-      height: 128,
+      height: 108,
       fill: '#6B459A',
       radius: 0,
       sampleX: 414,
-      sampleY: 170,
+      sampleY: 190,
     },
   },
   deck: {
