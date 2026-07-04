@@ -9,7 +9,8 @@ function money(value: unknown): number {
 
 export function getFutureCruiseCreditStatus(fcc: FutureCruiseCredit, today = todayDateOnly()): FutureCruiseCredit['status'] {
   const expiration = normalizeDateOnly(fcc.expirationDate);
-  if (expiration && diffDays(today, expiration) < 0) return 'expired';
+  const daysUntilExpiration = expiration ? diffDays(today, expiration) : null;
+  if (daysUntilExpiration !== null && daysUntilExpiration < 0) return 'expired';
   if (money(fcc.amountRemaining) <= 0) return 'used';
   if (money(fcc.amountRemaining) < money(fcc.amountOriginal)) return 'partially-used';
   return fcc.status ?? 'available';
@@ -25,6 +26,8 @@ export function applyFutureCruiseCredit(fcc: FutureCruiseCredit, cruiseId: strin
 
 export function nextCruiseCertificateToWalletItem(cert: NextCruiseCertificate): FutureValueWalletItem {
   const amount = money(cert.confirmedValue) || money(cert.estimatedValue);
+  const walletStatus: FutureValueWalletItem['status'] =
+    cert.status === 'unassigned' ? 'available' : cert.status === 'cancelled' ? 'unknown' : cert.status;
   return {
     id: cert.id,
     type: 'nextcruise',
@@ -32,13 +35,16 @@ export function nextCruiseCertificateToWalletItem(cert: NextCruiseCertificate): 
     amount,
     expirationDate: cert.selectionDeadline,
     assignedCruiseId: cert.selectedCruiseId,
-    status: cert.status === 'unassigned' ? 'available' : cert.status,
+    status: walletStatus,
     source: 'nextcruise',
     notes: cert.notes,
   };
 }
 
 export function futureCruiseCreditToWalletItem(fcc: FutureCruiseCredit, today = todayDateOnly()): FutureValueWalletItem {
+  const fccStatus = getFutureCruiseCreditStatus(fcc, today);
+  const walletStatus: FutureValueWalletItem['status'] =
+    fccStatus === 'available' || fccStatus === 'partially-used' ? 'available' : fccStatus === 'unknown' ? 'unknown' : fccStatus;
   return {
     id: fcc.id,
     type: 'fcc',
@@ -46,7 +52,7 @@ export function futureCruiseCreditToWalletItem(fcc: FutureCruiseCredit, today = 
     amount: money(fcc.amountRemaining),
     expirationDate: fcc.expirationDate,
     assignedCruiseId: fcc.appliedCruiseIds?.[0],
-    status: getFutureCruiseCreditStatus(fcc, today) === 'available' || getFutureCruiseCreditStatus(fcc, today) === 'partially-used' ? 'available' : getFutureCruiseCreditStatus(fcc, today),
+    status: walletStatus,
     source: 'fcc',
     notes: fcc.notes,
   };

@@ -127,6 +127,7 @@ export function getFutureValueDateWarning(date?: string, today = todayDateOnly()
   const normalized = normalizeDateOnly(date);
   if (!normalized) return null;
   const days = diffDays(today, normalized);
+  if (days == null) return null;
   if (days < 0) return `Expired ${Math.abs(days)} day(s) ago.`;
   if (days <= 30) return `Expires in ${days} day(s).`;
   return null;

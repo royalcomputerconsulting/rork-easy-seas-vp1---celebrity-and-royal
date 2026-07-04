@@ -21,7 +21,7 @@ import { convertLoyaltyInfoToExtended, mergeExtendedLoyaltyData } from '@/lib/ro
 import { rcLogger } from '@/lib/royalCaribbean/logger';
 import { generateOffersCSV, generateBookedCruisesCSV } from '@/lib/royalCaribbean/csvGenerator';
 import { injectOffersExtraction } from '@/lib/royalCaribbean/step1_offers';
-import { injectLoyaltyWidgetScrape } from '@/lib/royalCaribbean/step4_loyalty';
+import { injectLoyaltyWidgetScrape, injectPageClassifier } from '@/lib/royalCaribbean/step4_loyalty';
 import { injectCarnivalOffersExtraction, injectCarnivalBookingsScrape, injectCarnivalCruiseSearchScrape, injectCarnivalTgoExtract } from '@/lib/carnival/carnivalOffersExtraction';
 import { createSyncPreview, calculateSyncCounts, applySyncPreview } from '@/lib/royalCaribbean/syncLogic';
 import { parseCasinoOffersPayload } from '@/lib/royalCaribbean/offerPayloadParser';
@@ -38,18 +38,45 @@ export const CRUISE_LINE_CONFIG = {
     loginUrl: 'https://www.royalcaribbean.com/club-royale',
     offersUrl: 'https://www.royalcaribbean.com/club-royale/offers',
     upcomingUrl: 'https://www.royalcaribbean.com/myaccount/my-trips',
+    // v991: the site's account routes have moved/changed shape more than once.
+    // Try every known-good route in order until one actually loads real trip data
+    // instead of trusting a single hardcoded URL.
+    upcomingUrlAlternates: [
+      'https://www.royalcaribbean.com/account/upcoming-cruises',
+      'https://www.royalcaribbean.com/myaccount/dashboard',
+      'https://www.royalcaribbean.com/myaccount',
+      'https://www.royalcaribbean.com/account',
+    ],
     holdsUrl: 'https://www.royalcaribbean.com/myaccount/my-trips',
     loyaltyClubName: 'Club Royale',
     loyaltyPageUrl: 'https://www.royalcaribbean.com/myaccount/loyalty-programs',
+    loyaltyPageUrlAlternates: [
+      'https://www.royalcaribbean.com/account/loyalty-programs',
+      'https://www.royalcaribbean.com/myaccount/dashboard',
+      'https://www.royalcaribbean.com/myaccount',
+      'https://www.royalcaribbean.com/account',
+    ],
   },
   celebrity: {
     name: 'Celebrity Cruises',
     loginUrl: 'https://www.celebritycruises.com/blue-chip-club/offers',
     offersUrl: 'https://www.celebritycruises.com/blue-chip-club/offers',
     upcomingUrl: 'https://www.celebritycruises.com/myaccount/my-trips',
+    upcomingUrlAlternates: [
+      'https://www.celebritycruises.com/account/upcoming-cruises',
+      'https://www.celebritycruises.com/myaccount/dashboard',
+      'https://www.celebritycruises.com/myaccount',
+      'https://www.celebritycruises.com/account',
+    ],
     holdsUrl: 'https://www.celebritycruises.com/myaccount/my-trips',
     loyaltyClubName: 'Blue Chip Club',
     loyaltyPageUrl: 'https://www.celebritycruises.com/myaccount/loyalty-programs',
+    loyaltyPageUrlAlternates: [
+      'https://www.celebritycruises.com/account/loyalty-programs',
+      'https://www.celebritycruises.com/myaccount/dashboard',
+      'https://www.celebritycruises.com/myaccount',
+      'https://www.celebritycruises.com/account',
+    ],
   },
   carnival: {
     name: 'Carnival Cruise Line',
@@ -164,14 +191,21 @@ function isActiveRecordLike(record: any): boolean {
 function isLoyaltyPayloadForCruiseLine(url: unknown, cruiseLine: CruiseLine): boolean {
   const normalizedUrl = String(url || '').toLowerCase();
   if (!normalizedUrl) return true;
+  // v991: only use this as a soft signal, never a hard reject. A real loyalty payload
+  // (tier/points fields present) should never be thrown away just because it arrived
+  // via a CDN/edge host or a relative URL that doesn't literally contain the brand
+  // domain - that was silently discarding valid Crown & Anchor / Club Royale data.
   if (cruiseLine === 'celebrity') {
-    return normalizedUrl.includes('celebritycruises.com') || normalizedUrl.includes('/en/celebrity/');
+    if (normalizedUrl.includes('royalcaribbean.com') || normalizedUrl.includes('carnival.com')) return false;
+    return true;
   }
   if (cruiseLine === 'royal_caribbean') {
-    return normalizedUrl.includes('royalcaribbean.com') || normalizedUrl.includes('/en/royal/');
+    if (normalizedUrl.includes('celebritycruises.com') || normalizedUrl.includes('carnival.com')) return false;
+    return true;
   }
   if (cruiseLine === 'carnival') {
-    return normalizedUrl.includes('carnival.com');
+    if (normalizedUrl.includes('royalcaribbean.com') || normalizedUrl.includes('celebritycruises.com')) return false;
+    return true;
   }
   return true;
 }
@@ -2134,22 +2168,21 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           : isCarnivalMode
           ? 'https://www.carnival.com/profilemanagement/profiles'
           : 'https://www.royalcaribbean.com/myaccount';
-        const CAPTURE_PAGES: { url: string; section: 'bookings' | 'loyalty'; name: string }[] = isCarnivalMode
-          ? [
-              { url: 'https://www.carnival.com/profilemanagement/profiles/cruises', section: 'bookings', name: 'My Cruises' },
-              { url: 'https://www.carnival.com/profilemanagement/profiles', section: 'loyalty', name: 'Profile Home' },
-              { url: 'https://www.carnival.com/profilemanagement/profiles/offers', section: 'loyalty', name: 'My Offers' },
-              { url: accountHomeUrl, section: 'loyalty', name: 'Account Home' },
-            ]
-          : [
-              { url: config.upcomingUrl, section: 'bookings', name: 'Upcoming / My Trips' },
-              { url: accountHomeUrl, section: 'bookings', name: 'Account Home / Trips Fallback' },
-              { url: config.loyaltyPageUrl, section: 'loyalty', name: 'Loyalty Programs' },
-              { url: accountHomeUrl, section: 'loyalty', name: 'Account Home' },
-            ];
-        
-        const MAX_CYCLES = 3;
-        
+
+        // v991: royalcaribbean.com/celebritycruises.com have changed their account route
+        // shape more than once. Rather than trust a single hardcoded URL for bookings/loyalty
+        // (which silently produces "0 cruises to sync" or lands on the wrong page when the
+        // route moves), cycle through every known-good candidate route across retry cycles
+        // until real data is actually captured.
+        const bookingUrlCandidates = isCarnivalMode
+          ? ['https://www.carnival.com/profilemanagement/profiles/cruises']
+          : [config.upcomingUrl, ...((config as any).upcomingUrlAlternates ?? [])];
+        const loyaltyUrlCandidates = isCarnivalMode
+          ? ['https://www.carnival.com/profilemanagement/profiles']
+          : [config.loyaltyPageUrl, ...((config as any).loyaltyPageUrlAlternates ?? [])];
+
+        const MAX_CYCLES = Math.max(bookingUrlCandidates.length, loyaltyUrlCandidates.length, 3) + 1;
+
         for (let cycle = 0; cycle < MAX_CYCLES; cycle++) {
           const needBookings = !capturedSections.current.bookings;
           const needLoyalty = !capturedSections.current.loyalty;
@@ -2165,7 +2198,24 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             if (needLoyalty) missing.push('loyalty');
             addLog(`🔄 Retry cycle ${cycle + 1}/${MAX_CYCLES} - still need: ${missing.join(', ')}`, 'info');
           }
-          
+
+          const bookingUrlForCycle = bookingUrlCandidates[Math.min(cycle, bookingUrlCandidates.length - 1)];
+          const loyaltyUrlForCycle = loyaltyUrlCandidates[Math.min(cycle, loyaltyUrlCandidates.length - 1)];
+
+          const CAPTURE_PAGES: { url: string; section: 'bookings' | 'loyalty'; name: string }[] = isCarnivalMode
+            ? [
+                { url: 'https://www.carnival.com/profilemanagement/profiles/cruises', section: 'bookings', name: 'My Cruises' },
+                { url: 'https://www.carnival.com/profilemanagement/profiles', section: 'loyalty', name: 'Profile Home' },
+                { url: 'https://www.carnival.com/profilemanagement/profiles/offers', section: 'loyalty', name: 'My Offers' },
+                { url: accountHomeUrl, section: 'loyalty', name: 'Account Home' },
+              ]
+            : [
+                { url: bookingUrlForCycle, section: 'bookings', name: `Upcoming / My Trips (${bookingUrlForCycle})` },
+                { url: accountHomeUrl, section: 'bookings', name: 'Account Home / Trips Fallback' },
+                { url: loyaltyUrlForCycle, section: 'loyalty', name: `Loyalty Programs (${loyaltyUrlForCycle})` },
+                { url: accountHomeUrl, section: 'loyalty', name: 'Account Home' },
+              ];
+
           for (const page of CAPTURE_PAGES) {
             if (capturedSections.current[page.section]) continue;
             
@@ -2177,6 +2227,14 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
               await delay(3000);
             }
             
+            if (!isCarnivalMode && webViewRef.current) {
+              // v991: classify whatever page we actually landed on (sign-in / sailings-list /
+              // real loyalty widgets / unrecognized) and log it clearly. This makes a broken
+              // route (site redesign, redirect, etc.) immediately diagnosable from the in-app
+              // sync log instead of silently producing "0 cruises" or missing points.
+              webViewRef.current.injectJavaScript(injectPageClassifier(page.section) + '; true;');
+            }
+
             if (!isCarnivalMode && page.section === 'loyalty' && webViewRef.current) {
               // Account home and loyalty-programs pages render the Crown & Anchor "Cruise Points"
               // and Club Royale tier-credit widgets directly in the DOM - scrape them as a

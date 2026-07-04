@@ -17,7 +17,17 @@ export function buildCasinoValueAgentXContext(input: {
   userId?: string;
 }): AskMyDataContextBlock[] {
   const cruises = input.bookedCruises ?? [];
-  const totals = cruises.reduce((acc, cruise) => {
+  interface CasinoValueTotals {
+    trueNetValue: number;
+    casinoCompValue: number;
+    crownAnchorValue: number;
+    futureCreditApplied: number;
+    internetBenefitValue: number;
+    signatureObc: number;
+    freePlay: number;
+    rows: number;
+  }
+  const totals = cruises.reduce<CasinoValueTotals>((acc, cruise) => {
     const result = calculateCruiseValueWithLedger(cruise);
     acc.trueNetValue += result.totals.trueNetValue;
     acc.casinoCompValue += result.totals.casinoCompValue;

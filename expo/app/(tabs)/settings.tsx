@@ -1621,17 +1621,8 @@ export default function SettingsScreen() {
         dataMode: isCloudBackupEnabled() ? 'cloud-backup-enabled' : 'local-first-self-contained',
       };
       recordDiagnosticEvent({ level: 'info', category: 'ADMIN', event: 'EXPORT_DIAGNOSTIC_LOGS', message: 'Admin exported diagnostic logs', data: snapshot });
-      const bundle = await buildDiagnosticExport(snapshot);
+      const content = await buildDiagnosticExport(snapshot);
       const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const content = [
-        bundle.summaryText,
-        '',
-        '--- RAW JSONL ---',
-        bundle.rawJsonl,
-        '',
-        '--- STATE SNAPSHOT ---',
-        bundle.stateSnapshot,
-      ].join('\n');
       const success = await exportFile(content, `easyseas_diagnostic_logs_${stamp}.txt`);
       Alert.alert(success ? 'Export Successful' : 'Export Info', success ? 'Diagnostic logs exported.' : 'Diagnostic log file was created, but sharing may not be available on this device.');
     } catch (error) {

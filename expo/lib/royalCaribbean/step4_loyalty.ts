@@ -957,3 +957,63 @@ export const LOYALTY_WIDGET_SCRAPE_SCRIPT = `
 export function injectLoyaltyWidgetScrape() {
   return LOYALTY_WIDGET_SCRAPE_SCRIPT;
 }
+
+// v991: royalcaribbean.com / celebritycruises.com have changed their account route
+// shape more than once, and a hardcoded route can silently land the WebView on the
+// wrong page (a sign-in screen, a generic fallback widget, or the sailings/trips list
+// instead of the loyalty widgets). This classifier runs on every account/loyalty/
+// bookings page load and reports back exactly what it actually sees so a broken route
+// shows up as a clear, readable log line instead of a silent "0 captured" result.
+export const PAGE_CLASSIFIER_SCRIPT_TEMPLATE = [
+  '(function() {',
+  '  function log(message, type) {',
+  '    try {',
+  "      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'log', message: message, logType: type || 'info' }));",
+  '    } catch (e) {}',
+  '  }',
+  '  function post(type, payload) {',
+  '    try {',
+  '      var msg = Object.assign({ type: type }, payload);',
+  '      window.ReactNativeWebView.postMessage(JSON.stringify(msg));',
+  '    } catch (e) {}',
+  '  }',
+  '  function classify() {',
+  '    try {',
+  '      var url = window.location ? window.location.href : \'\';',
+  "      var text = document.body ? (document.body.textContent || '') : '';",
+  '      var isSignIn = /sign in/i.test(text) && /password/i.test(text) && /email address/i.test(text);',
+  '      var hasSailingsList = /(upcoming cruise|my cruises|my trips|sailing date|manage reservation|reservation number)/i.test(text);',
+  "      var hasLoyaltyWidgets = /(cruise points|tier credits|crown\\s*&\\s*anchor|club royale|captain.s club|blue chip)/i.test(text);",
+  '      var isFallbackOnly = /how was your experience/i.test(text) && !hasLoyaltyWidgets && !hasSailingsList;',
+  "      var pageType = 'unknown';",
+  "      if (isSignIn) pageType = 'sign_in_required';",
+  "      else if (hasLoyaltyWidgets) pageType = 'loyalty_widgets';",
+  "      else if (hasSailingsList) pageType = 'sailings_list';",
+  "      else if (isFallbackOnly) pageType = 'fallback_no_route_match';",
+  "      var expected = '__EXPECTED_SECTION__';",
+  '      var mismatch = false;',
+  "      if (expected === 'loyalty' && pageType !== 'loyalty_widgets') mismatch = true;",
+  "      if (expected === 'bookings' && pageType !== 'sailings_list') mismatch = true;",
+  "      log('Page check [' + expected + ']: ' + pageType + ' @ ' + url, mismatch ? 'warning' : 'success');",
+  "      if (mismatch && pageType === 'sign_in_required') {",
+  "        log('   Landed on a sign-in screen - session may have expired mid-sync', 'warning');",
+  "      } else if (mismatch && pageType === 'fallback_no_route_match') {",
+  "        log('   This route did not match a real account page (site navigation may have changed) - trying the next known route', 'warning');",
+  "      } else if (mismatch && expected === 'loyalty' && pageType === 'sailings_list') {",
+  "        log('   This is the sailings/trips page, not the loyalty page - trying the next loyalty route', 'warning');",
+  '      } else if (mismatch) {',
+  "        log('   Unexpected page content for this step - trying the next known route', 'warning');",
+  '      }',
+  "      post('page_classification', { section: expected, pageType: pageType, url: url, mismatch: mismatch });",
+  '    } catch (e) {',
+  "      log('Page classifier failed: ' + (e && e.message), 'warning');",
+  '    }',
+  '  }',
+  '  setTimeout(classify, 1500);',
+  '  setTimeout(classify, 4000);',
+  '})();',
+].join('\n');
+
+export function injectPageClassifier(expectedSection: 'bookings' | 'loyalty') {
+  return PAGE_CLASSIFIER_SCRIPT_TEMPLATE.replace('__EXPECTED_SECTION__', expectedSection);
+}
