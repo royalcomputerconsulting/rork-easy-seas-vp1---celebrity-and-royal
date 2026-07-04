@@ -149,6 +149,20 @@ export const US_TERRITORIES = [
   'American Samoa',
 ];
 
+// St. Thomas (Charlotte Amalie), USVI has permitted cruise ship casinos to stay open
+// while docked in port since the Short-Term Revenue Enhancement Act of 1999 - unlike
+// every other US port/territory, the casino here does NOT have to close in port.
+export const CASINO_PERMITTED_US_TERRITORY_PORTS = [
+  'charlotte amalie',
+  'st. thomas',
+  'st thomas',
+];
+
+export function isCasinoPermittedUSTerritoryPort(portName: string): boolean {
+  const normalizedPort = portName.toLowerCase().trim();
+  return CASINO_PERMITTED_US_TERRITORY_PORTS.some((port) => normalizedPort.includes(port));
+}
+
 export const MEXICAN_PORTS = [
   'Cabo San Lucas',
   'Cabo',
@@ -341,6 +355,15 @@ export function determineCasinoAvailability(
     };
   }
   
+  if (isTerritory && isCasinoPermittedUSTerritoryPort(port)) {
+    return {
+      open: true,
+      hours: 'Open all day (local law permits casino while docked)',
+      reason: `${port} - USVI law (1999 Short-Term Revenue Enhancement Act) permits the casino to stay open while docked here`,
+      estimatedHours: 16,
+    };
+  }
+
   if (isTerritory) {
     return {
       open: false,
@@ -394,11 +417,12 @@ export function determineCasinoHoursWithContext(context: CasinoDayContext): Casi
   const isTerritory = isUSTerritory(port);
   const isMexico = isMexicanPort(port);
   const isNearshore = isNearshoreUSPort(port);
+  const isCasinoPermittedTerritory = isCasinoPermittedUSTerritoryPort(port);
   
   // For casino purposes: US ports (non-territory) and US territories are restricted
-  // EXCEPT nearshore ports like Catalina where ship reaches international waters
-  // Mexican ports, Caribbean ports, and nearshore US ports operate similarly
-  const isUSRestrictedPort = (isUS && !isTerritory && !isNearshore) || isTerritory;
+  // EXCEPT nearshore ports like Catalina where ship reaches international waters, and
+  // EXCEPT St. Thomas/Charlotte Amalie, USVI, where local law lets the casino stay open in port
+  const isUSRestrictedPort = ((isUS && !isTerritory && !isNearshore) || isTerritory) && !isCasinoPermittedTerritory;
 
   if (isDisembarkDay) {
     return {
@@ -443,6 +467,18 @@ export function determineCasinoHoursWithContext(context: CasinoDayContext): Casi
   }
 
   // Port day logic - US ports vs foreign ports (including Mexico and nearshore US)
+  if (isCasinoPermittedTerritory) {
+    // St. Thomas / Charlotte Amalie, USVI - local law permits the casino to stay open while docked
+    return {
+      open: true,
+      hours: 'Open all day (local law permits casino while docked)',
+      reason: `${port} - USVI law permits the casino to stay open while docked here`,
+      estimatedHours: isSeaDay ? 14 : 12,
+      openTime: '09:00',
+      closeTime: undefined,
+    };
+  }
+
   if (isUSRestrictedPort) {
     // US mainland/territory port day - truly closed all day
     return {

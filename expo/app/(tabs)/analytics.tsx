@@ -3216,26 +3216,26 @@ export default function AnalyticsScreen() {
             <Ship size={16} color={CASINO_DASHBOARD_COLORS.textPrimary} />
             <Text style={styles.sectionTitle}>Upcoming Cruises{upcomingCruisesAll.length > upcomingCruisesList.length ? ` (${upcomingCruisesList.length} of ${upcomingCruisesAll.length})` : ''}</Text>
           </View>
-          <View style={{ gap: SPACING.sm }}>
+          <View style={styles.miniCardGrid}>
             {upcomingCruisesList.map(({ cruise, daysUntil }) => (
               <TouchableOpacity
                 key={cruise.id}
-                style={styles.actionRow}
+                style={[casinoDashboardStyles.card, styles.miniCard]}
                 activeOpacity={0.8}
                 onPress={() => openCruiseDetailFromPortfolio(cruise)}
               >
-                <View style={styles.actionRowIcon}>
-                  <Ship size={16} color={CASINO_DASHBOARD_COLORS.textPrimary} />
+                <View style={styles.miniCardTopRow}>
+                  <View style={styles.miniCardIcon}>
+                    <Ship size={15} color={CASINO_DASHBOARD_COLORS.royalBlue} />
+                  </View>
+                  <View style={[styles.miniCardBadge, { backgroundColor: 'rgba(0, 82, 204, 0.14)' }]}>
+                    <Text style={[styles.miniCardBadgeText, { color: CASINO_DASHBOARD_COLORS.royalBlue }]}>{daysUntil === 0 ? 'Today' : `${daysUntil}d`}</Text>
+                  </View>
                 </View>
-                <View style={styles.actionRowContent}>
-                  <Text style={styles.actionRowTitle} numberOfLines={1}>{cruise.shipName || 'Unknown Ship'}</Text>
-                  <Text style={styles.actionRowSubtitle} numberOfLines={1}>
-                    {cruise.sailDate} · {cruise.nights || 0}N · {cruise.offerCode || 'No offer code'}
-                  </Text>
-                </View>
-                <View style={styles.actionRowBadge}>
-                  <Text style={styles.actionRowBadgeText}>{daysUntil === 0 ? 'Today' : `${daysUntil}d`}</Text>
-                </View>
+                <Text style={styles.miniCardTitle} numberOfLines={1}>{cruise.shipName || 'Unknown Ship'}</Text>
+                <Text style={styles.miniCardSubtitle} numberOfLines={2}>
+                  {cruise.sailDate} · {cruise.nights || 0}N{'\n'}{cruise.offerCode || 'No offer code'}
+                </Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -3248,11 +3248,11 @@ export default function AnalyticsScreen() {
             <Clock size={16} color={CASINO_DASHBOARD_COLORS.orange} />
             <Text style={styles.sectionTitle}>Offers Expiring Soon</Text>
           </View>
-          <View style={{ gap: SPACING.sm }}>
+          <View style={styles.miniCardGrid}>
             {expiringOffersList.map((offer) => (
               <TouchableOpacity
                 key={offer.id}
-                style={styles.actionRow}
+                style={[casinoDashboardStyles.card, styles.miniCard]}
                 activeOpacity={0.8}
                 onPress={() => showDetail(offer.title, [
                   { label: 'Offer code', value: offer.offerCode || '—' },
@@ -3260,16 +3260,16 @@ export default function AnalyticsScreen() {
                   { label: 'Days left', value: String(offer.daysLeft) },
                 ])}
               >
-                <View style={[styles.actionRowIcon, { backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
-                  <Clock size={16} color={CASINO_DASHBOARD_COLORS.orange} />
+                <View style={styles.miniCardTopRow}>
+                  <View style={[styles.miniCardIcon, { backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
+                    <Clock size={15} color={CASINO_DASHBOARD_COLORS.orange} />
+                  </View>
+                  <View style={[styles.miniCardBadge, { backgroundColor: 'rgba(245, 158, 11, 0.18)' }]}>
+                    <Text style={[styles.miniCardBadgeText, { color: CASINO_DASHBOARD_COLORS.goldText }]}>{offer.daysLeft}d</Text>
+                  </View>
                 </View>
-                <View style={styles.actionRowContent}>
-                  <Text style={styles.actionRowTitle} numberOfLines={1}>{offer.title}</Text>
-                  <Text style={styles.actionRowSubtitle} numberOfLines={1}>{offer.offerCode || 'No code'} · Expires {offer.expiryLabel}</Text>
-                </View>
-                <View style={[styles.actionRowBadge, { backgroundColor: 'rgba(245, 158, 11, 0.18)' }]}>
-                  <Text style={[styles.actionRowBadgeText, { color: CASINO_DASHBOARD_COLORS.goldText }]}>{offer.daysLeft}d</Text>
-                </View>
+                <Text style={styles.miniCardTitle} numberOfLines={1}>{offer.title}</Text>
+                <Text style={styles.miniCardSubtitle} numberOfLines={2}>{offer.offerCode || 'No code'}{'\n'}Expires {offer.expiryLabel}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -3285,14 +3285,11 @@ export default function AnalyticsScreen() {
             <ChevronRight size={13} color={CASINO_DASHBOARD_COLORS.royalBlue} />
           </TouchableOpacity>
         </View>
-        <View style={styles.cleanCard}>
-          {displayChecklist.map((item, index) => (
-            <View
-              key={item.id}
-              style={[styles.checklistRow, index === displayChecklist.length - 1 && { marginBottom: 0, borderBottomWidth: 0 }]}
-            >
+        <View style={{ gap: SPACING.sm }}>
+          {displayChecklist.map((item) => (
+            <View key={item.id} style={[casinoDashboardStyles.card, styles.checklistCard]}>
               <TouchableOpacity activeOpacity={0.7} onPress={() => setChecklistDone(item.id, !item.done)} testID={`action-center-checklist-toggle-${item.id}`}>
-                {item.done ? <CheckCircle size={18} color={CASINO_DASHBOARD_COLORS.green} /> : <AlertTriangle size={18} color={CASINO_DASHBOARD_COLORS.orange} />}
+                {item.done ? <CheckCircle size={20} color={CASINO_DASHBOARD_COLORS.green} /> : <AlertTriangle size={20} color={CASINO_DASHBOARD_COLORS.orange} />}
               </TouchableOpacity>
               <TouchableOpacity style={styles.checklistTextBlock} activeOpacity={0.7} onPress={() => showDetail(item.label, [{ label: 'Detail', value: item.detail }])}>
                 <Text style={[styles.checklistText, item.done && styles.checklistTextDone]}>{item.label}</Text>
@@ -3307,7 +3304,9 @@ export default function AnalyticsScreen() {
             </View>
           ))}
           {displayChecklist.length === 0 && (
-            <Text style={{ color: CASINO_DASHBOARD_COLORS.textMuted, fontSize: 12.5, textAlign: 'center', paddingVertical: 8 }}>Nothing on your checklist right now.</Text>
+            <View style={casinoDashboardStyles.card}>
+              <Text style={{ color: CASINO_DASHBOARD_COLORS.textMuted, fontSize: 12.5, textAlign: 'center', paddingVertical: 8 }}>Nothing on your checklist right now.</Text>
+            </View>
           )}
         </View>
       </View>
@@ -7290,6 +7289,53 @@ const styles = StyleSheet.create({
     paddingBottom: SPACING.sm,
     borderBottomWidth: 1,
     borderBottomColor: CASINO_DASHBOARD_COLORS.cardAlt,
+  },
+  checklistCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING.sm,
+  },
+  miniCardGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+  },
+  miniCard: {
+    flexGrow: 1,
+    flexBasis: '46%',
+    gap: 6,
+  },
+  miniCardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  miniCardIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(0, 82, 204, 0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  miniCardBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: BORDER_RADIUS.round,
+  },
+  miniCardBadgeText: {
+    fontSize: 11,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  miniCardTitle: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: CASINO_DASHBOARD_COLORS.textPrimary,
+  },
+  miniCardSubtitle: {
+    fontSize: 11,
+    color: CASINO_DASHBOARD_COLORS.textSecondary,
+    lineHeight: 15,
   },
   checklistTextBlock: {
     flex: 1,
