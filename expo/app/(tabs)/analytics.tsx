@@ -1694,7 +1694,7 @@ export default function AnalyticsScreen() {
         })}
         activeOpacity={0.85}
       >
-        <LinearGradient colors={['#EAF6FF', '#CFE9FA']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.portfolioCard}>
+        <View style={styles.portfolioCard}>
         <View style={styles.portfolioImageContainer}>
           <Image
             source={{ uri: cruiseImage }}
@@ -1704,24 +1704,23 @@ export default function AnalyticsScreen() {
           />
           {earnedPoints > 0 && (
             <View style={styles.pointsOverlay}>
-              <Award size={14} color={COLORS.white} />
+              <Award size={13} color={COLORS.white} />
               <Text style={styles.pointsOverlayText}>{formatNumber(earnedPoints)} pts</Text>
             </View>
           )}
+          <View style={[styles.roiBadgeImg, { backgroundColor: roiColor }]}>
+            <Text style={styles.roiBadgeImgText}>{valuePerDollarDisplay}/$</Text>
+          </View>
+          <View style={styles.portfolioNightsBadge}>
+            <Text style={styles.portfolioNightsBadgeText}>{cruise.nights || 0}N</Text>
+          </View>
         </View>
         <View style={styles.portfolioCardContent}>
-          <View style={styles.portfolioCardTopRow}>
-            <View style={styles.portfolioCardShipRow}>
-              <Ship size={13} color={CASINO_DASHBOARD_COLORS.textPrimary} />
-              <Text style={styles.portfolioCardShipName} numberOfLines={1}>
-                {cruise.shipName || 'Unknown Ship'}
-              </Text>
-            </View>
-            <View style={[styles.roiBadge, { backgroundColor: `${roiColor}15` }]}>
-              <Text style={[styles.roiBadgeText, { color: roiColor }]}>
-                {valuePerDollarDisplay}/$
-              </Text>
-            </View>
+          <View style={styles.portfolioCardShipRow}>
+            <Ship size={13} color={PORTFOLIO_CARD_TEXT_DARK} />
+            <Text style={styles.portfolioCardShipName} numberOfLines={1}>
+              {cruise.shipName || 'Unknown Ship'}
+            </Text>
           </View>
 
           <Text style={styles.portfolioCardItinerary} numberOfLines={1}>
@@ -1734,13 +1733,14 @@ export default function AnalyticsScreen() {
 
           <View style={styles.portfolioCardMetaRow}>
             <View style={styles.portfolioCardMeta}>
-              <Calendar size={12} color={CASINO_DASHBOARD_COLORS.textPrimary} />
+              <Calendar size={12} color={PORTFOLIO_CARD_TEXT_MUTED} />
               <Text style={styles.portfolioCardMetaText}>
                 {cruise.sailDate ? formatDateRange(cruise.sailDate, cruise.returnDate, cruise.nights) : 'No date'}
               </Text>
             </View>
-            <Text style={styles.portfolioCardNights}>{cruise.nights || 0}N</Text>
           </View>
+
+          <View style={styles.portfolioDivider} />
 
           <View style={styles.portfolioCardMetrics}>
             <View style={styles.portfolioMetric}>
@@ -1793,7 +1793,7 @@ export default function AnalyticsScreen() {
             </View>
           ) : null}
         </View>
-        </LinearGradient>
+        </View>
       </TouchableOpacity>
     );
   };
@@ -5877,66 +5877,77 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   portfolioCard: {
+    backgroundColor: '#FFFFFF',
     borderRadius: BORDER_RADIUS.md,
     overflow: 'hidden',
-    flexDirection: 'row',
-    alignItems: 'stretch',
     width: '100%',
     maxWidth: '100%',
     alignSelf: 'stretch',
   },
   portfolioImageContainer: {
     position: 'relative',
-    width: 72,
-    minHeight: 130,
-    flexShrink: 0,
+    width: '100%',
+    height: 96,
   },
   portfolioCardImage: {
-    width: 72,
+    width: '100%',
     height: '100%',
-    minHeight: 130,
-    borderTopLeftRadius: BORDER_RADIUS.md,
-    borderBottomLeftRadius: BORDER_RADIUS.md,
   },
   pointsOverlay: {
     position: 'absolute',
-    bottom: 6,
-    left: 4,
-    right: 4,
+    bottom: 8,
+    left: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
     backgroundColor: 'rgba(139, 92, 246, 0.92)',
-    paddingVertical: 6,
-    paddingHorizontal: 4,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
     borderRadius: 6,
   },
   pointsOverlayText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: COLORS.white,
-    letterSpacing: 0.5,
-    flex: 1,
-    textAlign: 'center',
+    letterSpacing: 0.3,
+  },
+  roiBadgeImg: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 5,
+  },
+  roiBadgeImgText: {
+    fontSize: 11,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.white,
+  },
+  portfolioNightsBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    backgroundColor: 'rgba(15, 42, 74, 0.85)',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 5,
+  },
+  portfolioNightsBadgeText: {
+    fontSize: 11,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.white,
   },
   portfolioCardContent: {
-    flex: 1,
     minWidth: 0,
     padding: SPACING.sm,
-    paddingRight: SPACING.sm,
-  },
-  portfolioCardTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 2,
   },
   portfolioCardShipRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    flex: 1,
+    marginBottom: 2,
   },
   portfolioCardShipName: {
     fontSize: 13,
@@ -5944,15 +5955,6 @@ const styles = StyleSheet.create({
     color: PORTFOLIO_CARD_TEXT_DARK,
     flex: 1,
     marginRight: 4,
-  },
-  roiBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  roiBadgeText: {
-    fontSize: 10,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   portfolioCardItinerary: {
     fontSize: 14,
@@ -5968,7 +5970,6 @@ const styles = StyleSheet.create({
   portfolioCardMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     marginBottom: 6,
   },
   portfolioCardMeta: {
@@ -5980,14 +5981,10 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: PORTFOLIO_CARD_TEXT_MUTED,
   },
-  portfolioCardNights: {
-    fontSize: 11,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#0B5FA8',
-    backgroundColor: 'rgba(11, 95, 168, 0.14)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+  portfolioDivider: {
+    height: 1,
+    backgroundColor: '#E5E7EB',
+    marginBottom: 8,
   },
   portfolioCardMetrics: {
     flexDirection: 'row',

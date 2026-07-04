@@ -253,44 +253,50 @@ export const CruiseCard = React.memo(function CruiseCard({
         activeOpacity={1}
         testID="cruise-card-mini"
       >
-        <LinearGradient
-          colors={miniGradientColors}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFill}
-        />
-        {showCompactImage ? (
-          <Image 
-            source={{ uri: compactImageUri }} 
-            style={styles.miniBackgroundImage}
-            resizeMode="cover"
-            onError={handleCompactImageError}
-          />
-        ) : null}
-        <View style={styles.miniImageOverlay} />
+        <View style={styles.miniImageSection}>
+          {showCompactImage ? (
+            <Image 
+              source={{ uri: compactImageUri }} 
+              style={styles.miniHeroImage}
+              resizeMode="cover"
+              onError={handleCompactImageError}
+            />
+          ) : (
+            <View style={[styles.miniHeroImage, styles.miniHeroImageFallback]} />
+          )}
+
+          <View style={[styles.miniStatusBadgeImg, { backgroundColor: statusBadge.bg }]}>
+            <Text style={[
+              styles.miniStatusBadgeText,
+              statusBadge.bg === COLORS.goldAccent || statusBadge.bg === COLORS.aquaAccent 
+                ? { color: COLORS.navyDeep } 
+                : { color: COLORS.white }
+            ]}>
+              {statusBadge.text}
+            </Text>
+          </View>
+
+          {futureTopTierBadge ? (
+            <View style={[styles.miniTopTierBadgeImg, { backgroundColor: futureTopTierBadge.bg }]} testID="cruise-card-top-tier-badge">
+              <Text style={[styles.miniTopTierBadgeText, { color: futureTopTierBadge.textColor }]}>{futureTopTierBadge.text}</Text>
+            </View>
+          ) : null}
+
+          <View style={styles.miniNightsBadgeImg}>
+            <Text style={styles.miniNightsBadgeImgText}>{cruise.nights}N</Text>
+          </View>
+
+          <View style={styles.miniScoreBadgeImg} testID="cruise-card-mini-sea-day-score">
+            <Gauge size={11} color="#0F766E" />
+            <Text style={styles.miniScoreBadgeImgText}>{seaDayDensity.casinoOpportunityScore}</Text>
+          </View>
+        </View>
+
         <View style={styles.miniContent}>
-          <View style={styles.miniTopRow}>
-            <View style={styles.miniShipRow}>
-              <Ship size={13} color={COLORS.navyDeep} />
-              <Text style={styles.miniShipName} numberOfLines={1}>{cruise.shipName}</Text>
-            </View>
-            <View style={styles.miniBadgeStack}>
-              <View style={[styles.miniStatusBadge, { backgroundColor: statusBadge.bg }]}>
-                <Text style={[
-                  styles.miniStatusBadgeText,
-                  statusBadge.bg === COLORS.goldAccent || statusBadge.bg === COLORS.aquaAccent 
-                    ? { color: COLORS.navyDeep } 
-                    : { color: COLORS.white }
-                ]}>
-                  {statusBadge.text}
-                </Text>
-              </View>
-              {futureTopTierBadge ? (
-                <View style={[styles.miniTopTierBadge, { backgroundColor: futureTopTierBadge.bg }]} testID="cruise-card-top-tier-badge">
-                  <Text style={[styles.miniTopTierBadgeText, { color: futureTopTierBadge.textColor }]}>{futureTopTierBadge.text}</Text>
-                </View>
-              ) : null}
-            </View>
+          <View style={styles.miniShipRow}>
+            <Ship size={13} color={COLORS.navyDeep} />
+            <Text style={styles.miniShipName} numberOfLines={1}>{cruise.shipName}</Text>
+            <ChevronRight size={16} color="#94A3B8" />
           </View>
           <Text style={styles.miniItinerary} numberOfLines={1}>{getItineraryName()}</Text>
           {conflictWarning ? (
@@ -299,7 +305,7 @@ export const CruiseCard = React.memo(function CruiseCard({
               <Text style={styles.miniConflictText} numberOfLines={2}>{conflictWarning}</Text>
             </View>
           ) : null}
-          <View style={styles.miniPlanningRow} testID="cruise-card-mini-sea-day-score">
+          <View style={styles.miniPlanningRow}>
             <Gauge size={10} color="#0F766E" />
             <Text style={styles.miniPlanningText}>Casino Availability Score {seaDayDensity.casinoOpportunityScore}</Text>
             <Text style={styles.miniPlanningMuted}>{seaDayDensity.seaDays} sea days • {seaDayDensity.portDays} port days</Text>
@@ -308,10 +314,11 @@ export const CruiseCard = React.memo(function CruiseCard({
             {cruise.departurePort ? `From ${cruise.departurePort}` : cruise.destination}
           </Text>
           {miniPorts.length > 0 ? (
-            <Text style={styles.miniPorts}>
+            <Text style={styles.miniPorts} numberOfLines={1}>
               {miniPorts.join(' • ')}
             </Text>
           ) : null}
+          <View style={styles.miniDivider} />
           <View style={styles.miniBottomRow}>
             <View style={styles.miniMetaRow}>
               <View style={styles.miniMeta}>
@@ -325,7 +332,6 @@ export const CruiseCard = React.memo(function CruiseCard({
                 <Text style={styles.miniDate}>{guestCount}G</Text>
               </View>
             </View>
-            <Text style={styles.miniNights}>{cruise.nights}N</Text>
           </View>
           <View style={styles.miniValueRow}>
             {showRetailValue && retailValue !== null && retailValue > 0 && (
@@ -736,40 +742,81 @@ const styles = StyleSheet.create({
     ...SHADOW.md,
   },
   miniContainer: {
+    backgroundColor: COLORS.white,
     borderRadius: BORDER_RADIUS.md,
     overflow: 'hidden',
-    marginBottom: SPACING.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 31, 63, 0.07)',
+    marginBottom: SPACING.md,
     ...SHADOW.sm,
   },
-  miniBackgroundImage: {
-    ...StyleSheet.absoluteFillObject,
-    opacity: 0.05,
+  miniImageSection: {
+    height: 100,
+    position: 'relative',
+    backgroundColor: '#E2E8F0',
   },
-  miniImageOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255,255,255,0.25)',
+  miniHeroImage: {
+    width: '100%',
+    height: '100%',
   },
-  miniContent: {
-    flex: 1,
-    paddingVertical: SPACING.xs,
+  miniHeroImageFallback: {
+    backgroundColor: '#E2E8F0',
   },
-  miniTopRow: {
+  miniStatusBadgeImg: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: BORDER_RADIUS.xs,
+  },
+  miniTopTierBadgeImg: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: BORDER_RADIUS.xs,
+    minWidth: 58,
+    alignItems: 'center',
+  },
+  miniNightsBadgeImg: {
+    position: 'absolute',
+    bottom: 8,
+    left: 8,
+    backgroundColor: 'rgba(0, 31, 63, 0.85)',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: BORDER_RADIUS.xs,
+  },
+  miniNightsBadgeImgText: {
+    fontSize: 11,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.white,
+  },
+  miniScoreBadgeImg: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 2,
+    gap: 3,
+    backgroundColor: 'rgba(255,255,255,0.94)',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: BORDER_RADIUS.xs,
+  },
+  miniScoreBadgeImgText: {
+    fontSize: 11,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#0F766E',
+  },
+  miniContent: {
+    padding: SPACING.sm,
   },
   miniShipRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    flex: 1,
+    gap: 6,
+    marginBottom: 2,
   },
   miniShipName: {
     fontSize: 13,
@@ -782,29 +829,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: '#000000',
-    marginBottom: 2,
-  },
-  miniBadgeStack: {
-    alignItems: 'flex-end',
-    gap: 3,
-    marginLeft: 6,
-  },
-  miniStatusBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    marginBottom: 4,
   },
   miniStatusBadgeText: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     letterSpacing: 0.3,
-  },
-  miniTopTierBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    minWidth: 54,
-    alignItems: 'center',
   },
   miniTopTierBadgeText: {
     fontSize: 9,
@@ -856,6 +886,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#4B5563',
     marginBottom: 3,
+  },
+  miniDivider: {
+    height: 1,
+    backgroundColor: '#E5E7EB',
+    marginTop: 4,
+    marginBottom: 8,
   },
   miniBottomRow: {
     flexDirection: 'row',

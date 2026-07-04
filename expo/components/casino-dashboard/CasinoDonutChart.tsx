@@ -73,8 +73,7 @@ export function CasinoDonutChart({
                 strokeDashoffset={offset}
                 strokeLinecap="butt"
                 fill="none"
-                rotation={-90}
-                origin={`${center}, ${center}`}
+                transform={`rotate(-90, ${center}, ${center})`}
               />
             );
           })}
