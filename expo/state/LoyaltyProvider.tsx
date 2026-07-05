@@ -98,6 +98,8 @@ interface LoyaltyState {
     pinnacleStatusLabel: string | null;
     thresholdCrossedShip: string | null;
     thresholdCrossedSailDate: string | null;
+    firstRoyalPinnacleShip: string | null;
+    firstRoyalPinnacleSailDate: string | null;
     projectedPointsAtPinnacle: number;
     pointsFromBookedToPinnacle: number;
     bookedNightsToPinnacle: number;
@@ -713,6 +715,8 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
     let pinnacleStatusLabel: string | null = null;
     let thresholdCrossedShip: string | null = null;
     let thresholdCrossedSailDate: string | null = null;
+    let firstRoyalPinnacleShip: string | null = null;
+    let firstRoyalPinnacleSailDate: string | null = null;
     let projectedPointsAtPinnacle = projectedCrownAnchorPoints;
     let pointsFromBookedToPinnacle = projectedBookedPoints;
     let bookedNightsToPinnacle = bookedNights;
@@ -748,6 +752,20 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
             pinnacleShip = null;
             pinnacleSailDate = null;
             pinnacleStatusLabel = null;
+          }
+
+          // Separately, find the first ROYAL CARIBBEAN-brand cruise sailing after Pinnacle is
+          // reached -- this is distinct from `pinnacleShip` above, which may land on a Celebrity
+          // sailing (reciprocal Zenith status) if that happens to come first chronologically.
+          const firstRoyalCruiseAfterPinnacle = upcomingTopTierStatusCruises.find((candidate) =>
+            candidate.sailDate.getTime() >= cruise.returnDate.getTime() && isRoyalCaribbeanShip(candidate.shipName)
+          );
+          if (firstRoyalCruiseAfterPinnacle) {
+            firstRoyalPinnacleShip = firstRoyalCruiseAfterPinnacle.shipName;
+            firstRoyalPinnacleSailDate = firstRoyalCruiseAfterPinnacle.sailDateStr;
+          } else {
+            firstRoyalPinnacleShip = null;
+            firstRoyalPinnacleSailDate = null;
           }
 
           console.log('[LoyaltyProvider] Pinnacle threshold crossed:', {
@@ -831,6 +849,8 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
       pinnacleStatusLabel,
       thresholdCrossedShip,
       thresholdCrossedSailDate,
+      firstRoyalPinnacleShip,
+      firstRoyalPinnacleSailDate,
       projectedPointsAtPinnacle,
       pointsFromBookedToPinnacle,
       bookedNightsToPinnacle,

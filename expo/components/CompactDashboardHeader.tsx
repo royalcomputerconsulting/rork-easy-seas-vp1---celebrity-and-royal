@@ -356,6 +356,24 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
                       ) : null}
                     </View>
                   </View>
+                  {pinnacleProgress.firstRoyalPinnacleShip && pinnacleProgress.firstRoyalPinnacleSailDate
+                    && (pinnacleProgress.firstRoyalPinnacleShip !== pinnacleProgress.pinnacleShip
+                      || pinnacleProgress.firstRoyalPinnacleSailDate !== pinnacleProgress.pinnacleSailDate) ? (
+                    <View style={[styles.pinnacleDetailRow, styles.pinnacleDetailRowWhite, progressDetailRowStyle]}>
+                      <View style={styles.pinnacleRoyalBadgeWhite}>
+                        <Anchor size={11} color={COLORS.navyDeep} />
+                      </View>
+                      <View style={styles.pinnacleDetailContent}>
+                        <Text style={[styles.pinnacleDetailLabel, progressMetaStyle]}>First Cruise on Royal as Pinnacle:</Text>
+                        <Text style={[styles.pinnacleDetailValue, styles.pinnacleHighlightWhite]} numberOfLines={1}>
+                          {`${pinnacleProgress.firstRoyalPinnacleShip} • ${formatCruiseDate(pinnacleProgress.firstRoyalPinnacleSailDate)}`}
+                        </Text>
+                        <Text style={[styles.pinnacleTapHint, progressMetaStyle]} numberOfLines={2}>
+                          First Royal Caribbean sailing booked after reaching Pinnacle
+                        </Text>
+                      </View>
+                    </View>
+                  ) : null}
                 </View>
               )}
             </View>
@@ -1160,6 +1178,17 @@ const styles = StyleSheet.create({
     marginTop: 2,
     borderWidth: 1.5,
     borderColor: DARK_ROYAL_COLORS.gold,
+  },
+  pinnacleRoyalBadgeWhite: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: COLORS.goldLight,
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+    marginTop: 2,
+    borderWidth: 1.5,
+    borderColor: COLORS.navyDeep,
   },
   pinnaclePText: {
     fontSize: 11,
