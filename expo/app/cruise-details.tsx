@@ -6,6 +6,8 @@ import type { ItineraryDay, BookedCruise, CasinoOffer, Cruise } from '@/types/mo
 import { Ship, Calendar, MapPin, Clock, DollarSign, Gift, Star, Users, Anchor, Tag, ArrowLeft, Edit3, X, Save, TrendingUp, Dice5, AlertCircle, Target, Trash2, Sparkles, ChevronRight } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
+import { GlassOverlayCard } from '@/components/ui/GlassOverlayCard';
+import { EasySeasRadius } from '@/constants/easySeasTheme';
 import { formatCurrency, formatNights, formatTime12Hour } from '@/lib/format';
 import { formatDate, getDaysUntil, createDateFromString } from '@/lib/date';
 import { useAppState } from '@/state/AppStateProvider';
@@ -1199,7 +1201,7 @@ export default function CruiseDetailsScreen() {
             onError={() => setHeroImageUri(DEFAULT_CRUISE_IMAGE)}
           />
           <LinearGradient
-            colors={['rgba(0,31,63,0.3)', 'rgba(0,31,63,0.7)']}
+            colors={['rgba(15,36,57,0.1)', 'rgba(15,36,57,0.35)', 'rgba(15,36,57,0.82)']}
             style={StyleSheet.absoluteFill}
           />
           {isBooked && (
@@ -1207,6 +1209,22 @@ export default function CruiseDetailsScreen() {
               <Text style={styles.bookedBadgeText}>BOOKED</Text>
             </View>
           )}
+          <GlassOverlayCard style={styles.heroGlassCard}>
+            <View style={styles.heroGlassShipRow}>
+              <Ship size={18} color="#FFFFFF" />
+              <Text style={styles.heroGlassShipName} numberOfLines={1}>{cruise.shipName}</Text>
+            </View>
+            <Text style={styles.heroGlassDestination} numberOfLines={1}>{cruise.itineraryName || cruise.destination || 'Cruise'}</Text>
+            <View style={styles.heroGlassMetaRow}>
+              <Text style={styles.heroGlassMetaText}>{formatDate(cruise.sailDate, 'short')} · {formatNights(accurateNights)}</Text>
+              {daysUntil > 0 ? (
+                <View style={styles.heroGlassCountdownPill}>
+                  <Clock size={12} color="#FFFFFF" />
+                  <Text style={styles.heroGlassCountdownText}>{daysUntil}d</Text>
+                </View>
+              ) : null}
+            </View>
+          </GlassOverlayCard>
           <View style={styles.heroButtonsContainer}>
             <TouchableOpacity 
               style={styles.editAllButton} 
@@ -2720,9 +2738,57 @@ const styles = StyleSheet.create({
   },
   heroPlaceholder: {
     width: '100%',
-    height: 200,
+    height: 240,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  heroGlassCard: {
+    position: 'absolute',
+    left: SPACING.lg,
+    right: SPACING.lg,
+    bottom: SPACING.lg,
+    borderRadius: EasySeasRadius.lg,
+  },
+  heroGlassShipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+  },
+  heroGlassShipName: {
+    fontSize: TYPOGRAPHY.fontSizeLG,
+    fontWeight: '800' as const,
+    color: '#FFFFFF',
+    flexShrink: 1,
+  },
+  heroGlassDestination: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: 'rgba(255,255,255,0.85)',
+    marginTop: 2,
+  },
+  heroGlassMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: SPACING.sm,
+  },
+  heroGlassMetaText: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: 'rgba(255,255,255,0.85)',
+    fontWeight: '600' as const,
+  },
+  heroGlassCountdownPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(212, 160, 10, 0.85)',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 3,
+    borderRadius: BORDER_RADIUS.round,
+  },
+  heroGlassCountdownText: {
+    fontSize: 11,
+    fontWeight: '800' as const,
+    color: '#FFFFFF',
   },
   bookedBadge: {
     position: 'absolute',

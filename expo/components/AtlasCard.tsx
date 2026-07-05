@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { ChevronRight, Star, Zap, Ship, Lock } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOW } from '@/constants/theme';
 import { MARBLE_TEXTURES } from '@/constants/marbleTextures';
+import { EasySeasBadge } from '@/components/ui/EasySeasBadge';
 import type { MachineEncyclopediaEntry } from '@/types/models';
 
 interface AtlasCardProps {
@@ -125,21 +126,11 @@ export function AtlasCard({
 
         <View style={styles.badgesRow}>
           {hasAPPotential && (
-            <View style={[styles.badge, styles.apBadge]}>
-              <Zap size={12} color={COLORS.white} fill={COLORS.white} />
-              <Text style={styles.badgeText}>
-                AP: {machine.apMetadata?.persistenceType}
-              </Text>
-            </View>
+            <EasySeasBadge label={`AP: ${machine.apMetadata?.persistenceType}`} type="success" size="small" />
           )}
-          <View style={[styles.badge, styles.volatilityBadge]}>
-            <Text style={styles.badgeText}>{machine.volatility}</Text>
-          </View>
+          <EasySeasBadge label={String(machine.volatility)} type="casino" size="small" />
           {shipCount > 0 && (
-            <View style={[styles.badge, styles.shipBadge]}>
-              <Ship size={12} color={COLORS.white} />
-              <Text style={styles.badgeText}>{shipCount} {shipCount === 1 ? 'ship' : 'ships'}</Text>
-            </View>
+            <EasySeasBadge label={`${shipCount} ${shipCount === 1 ? 'ship' : 'ships'}`} type="info" size="small" />
           )}
         </View>
 

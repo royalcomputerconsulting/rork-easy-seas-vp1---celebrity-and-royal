@@ -14,6 +14,7 @@ import {
   FileText,
 } from 'lucide-react-native';
 import { SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, COLORS } from '@/constants/theme';
+import { EasySeasBadge } from '@/components/ui/EasySeasBadge';
 import { createDateFromString } from '@/lib/date';
 import { getUniqueImageForCruise, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
 import type { Cruise, CasinoOffer } from '@/types/models';
@@ -344,14 +345,14 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
     void openCertificatePdf(certificatePdfMatch.pdfUrl);
   }, [certificatePdfMatch, offerCode]);
 
-  const getStatusBadge = () => {
+  const getStatusBadge = (): { text: string; type: 'danger' | 'premium' | 'success' } => {
     if (!isActive) {
-      return { text: 'EXPIRED', bg: '#EF4444' };
+      return { text: 'EXPIRED', type: 'danger' };
     }
     if (isBestValue) {
-      return { text: 'BEST VALUE', bg: COLORS.success };
+      return { text: 'BEST VALUE', type: 'premium' };
     }
-    return { text: 'ACTIVE', bg: COLORS.success };
+    return { text: 'ACTIVE', type: 'success' };
   };
 
   const statusBadge = getStatusBadge();
@@ -533,14 +534,13 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
           onError={() => setCardImageUri(DEFAULT_CRUISE_IMAGE)}
         />
         
-        <View style={[styles.statusBadgeLarge, { backgroundColor: statusBadge.bg }]}>
-          <Text style={styles.statusBadgeLargeText}>{statusBadge.text}</Text>
+        <View style={styles.statusBadgeLargeWrapper}>
+          <EasySeasBadge label={statusBadge.text} type={statusBadge.type} size="small" />
         </View>
 
         {expiryDays !== null && expiryDays <= 7 && expiryDays > 0 && (
-          <View style={styles.expiryAlertBadge}>
-            <Clock size={14} color={COLORS.white} />
-            <Text style={styles.expiryAlertText}>Expires in {expiryDays} days</Text>
+          <View style={styles.expiryAlertBadgeWrapper}>
+            <EasySeasBadge label={`Expires in ${expiryDays}d`} type="warning" size="small" />
           </View>
         )}
 
@@ -745,35 +745,15 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  statusBadgeLarge: {
+  statusBadgeLargeWrapper: {
     position: 'absolute',
     top: SPACING.xs,
     left: SPACING.xs,
-    paddingHorizontal: SPACING.xs,
-    paddingVertical: 3,
-    borderRadius: BORDER_RADIUS.xs,
   },
-  statusBadgeLargeText: {
-    fontSize: 10,
-    fontWeight: '700' as const,
-    color: COLORS.white,
-  },
-  expiryAlertBadge: {
+  expiryAlertBadgeWrapper: {
     position: 'absolute',
     top: SPACING.xs,
     right: SPACING.xs,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#DC2626',
-    paddingHorizontal: SPACING.xs,
-    paddingVertical: 3,
-    borderRadius: BORDER_RADIUS.xs,
-  },
-  expiryAlertText: {
-    fontSize: 10,
-    fontWeight: '700' as const,
-    color: COLORS.white,
   },
   cruiseCountBadge: {
     position: 'absolute',

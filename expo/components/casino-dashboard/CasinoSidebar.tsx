@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-nati
 import { useRouter } from 'expo-router';
 import { Award, DollarSign, Zap, LineChart, Settings as SettingsIcon, LayoutGrid, Anchor, Ship, ClipboardList, BookOpen, SlidersHorizontal, FileDown } from 'lucide-react-native';
 import { DARK_ROYAL_COLORS as CASINO_DASHBOARD_COLORS } from '@/constants/darkRoyalTheme';
+import { resolveTierColor, withAlpha } from '@/constants/easySeasTheme';
 
 export type CasinoSidebarTab = 'portfolio' | 'value' | 'action' | 'history';
 
@@ -51,6 +52,7 @@ export function CasinoSidebar({
   onStatusPress,
 }: CasinoSidebarProps) {
   const router = useRouter();
+  const tierColor = resolveTierColor('clubRoyale', clubRoyaleTier);
   return (
     <View style={styles.sidebar}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.navList}>
@@ -96,13 +98,20 @@ export function CasinoSidebar({
         </TouchableOpacity>
       </ScrollView>
 
-      <TouchableOpacity style={styles.statusCard} activeOpacity={0.85} onPress={onStatusPress} testID="sidebar-club-royale-status">
+      <TouchableOpacity
+        style={[styles.statusCard, { borderColor: withAlpha(tierColor, 0.45) }]}
+        activeOpacity={0.85}
+        onPress={onStatusPress}
+        testID="sidebar-club-royale-status"
+      >
         <Text style={styles.statusBrand}>Club Royale</Text>
-        <Text style={styles.statusTier}>{clubRoyaleTier || 'Choice'}</Text>
+        <View style={[styles.tierChip, { backgroundColor: tierColor }]}>
+          <Text style={styles.statusTier}>{clubRoyaleTier || 'Choice'}</Text>
+        </View>
         <Text style={styles.statusPoints}>{clubRoyalePoints.toLocaleString()} pts</Text>
         <Text style={styles.statusSubLabel}>{tierProgressLabel}</Text>
         <View style={styles.progressTrack}>
-          <View style={[styles.progressFill, { width: `${Math.max(2, Math.min(100, tierProgressPct))}%` }]} />
+          <View style={[styles.progressFill, { width: `${Math.max(2, Math.min(100, tierProgressPct))}%`, backgroundColor: tierColor }]} />
         </View>
       </TouchableOpacity>
     </View>
@@ -167,12 +176,17 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase' as const,
     letterSpacing: 0.5,
   },
+  tierChip: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 999,
+    marginTop: 4,
+  },
   statusTier: {
-    fontSize: 17,
-    fontWeight: '700' as const,
-    fontStyle: 'italic' as const,
+    fontSize: 15,
+    fontWeight: '800' as const,
     color: CASINO_DASHBOARD_COLORS.white,
-    marginTop: 2,
   },
   statusPoints: {
     fontSize: 20,

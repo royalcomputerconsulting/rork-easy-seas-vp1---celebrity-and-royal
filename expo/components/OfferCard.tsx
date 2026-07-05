@@ -10,6 +10,7 @@ import {
 } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { MARBLE_TEXTURES } from '@/constants/marbleTextures';
+import { EasySeasBadge } from '@/components/ui/EasySeasBadge';
 import { formatCurrency } from '@/lib/format';
 import { getDaysUntil, formatDate } from '@/lib/date';
 import { getUniqueImageForCruise, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
@@ -191,16 +192,16 @@ export const OfferCard = React.memo(function OfferCard({
     return total;
   }, [offer, valueBreakdown, aggregateValue]);
 
-  const getStatusBadge = () => {
+  const getStatusBadge = (): { text: string; type: 'success' | 'premium' | 'casino' } => {
     if (isBooked) {
-      return { text: 'BOOKED', bg: COLORS.money };
+      return { text: 'BOOKED', type: 'success' };
     }
     if (recommended) {
-      return { text: 'RECOMMENDED', bg: COLORS.gold };
+      return { text: 'RECOMMENDED', type: 'premium' };
     }
 
     const badgeName = (offerNameOverride || offer.offerName || inferredOfferName || 'CASINO OFFER').trim();
-    return { text: badgeName.length > 0 ? badgeName : 'CASINO OFFER', bg: COLORS.loyalty };
+    return { text: badgeName.length > 0 ? badgeName : 'CASINO OFFER', type: 'casino' };
   };
 
   const statusBadge = getStatusBadge();
@@ -321,14 +322,13 @@ export const OfferCard = React.memo(function OfferCard({
             onError={() => setHeroImageUri(DEFAULT_CRUISE_IMAGE)}
           />
           
-          <View style={styles.saleBadge}>
-            <Text style={styles.saleBadgeText}>{statusBadge.text}</Text>
+          <View style={styles.saleBadgeWrapper}>
+            <EasySeasBadge label={statusBadge.text} type={statusBadge.type} size="small" />
           </View>
 
           {isExpiringSoon && (
-            <View style={styles.expiresUrgentBadge}>
-              <Clock size={12} color="#DC2626" />
-              <Text style={styles.expiresUrgentText}>Expires in {getDaysUntil(offer.offerExpiry || '')} days</Text>
+            <View style={styles.expiresUrgentBadgeWrapper}>
+              <EasySeasBadge label={`Expires in ${getDaysUntil(offer.offerExpiry || '')}d`} type="warning" size="small" />
             </View>
           )}
 
@@ -468,19 +468,10 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  saleBadge: {
+  saleBadgeWrapper: {
     position: 'absolute',
     top: SPACING.xs,
     left: SPACING.xs,
-    backgroundColor: COLORS.loyalty,
-    paddingHorizontal: SPACING.xs,
-    paddingVertical: 3,
-    borderRadius: BORDER_RADIUS.xs,
-  },
-  saleBadgeText: {
-    fontSize: 10,
-    fontWeight: '700' as const,
-    color: COLORS.white,
   },
   nightsBadge: {
     position: 'absolute',
@@ -506,24 +497,10 @@ const styles = StyleSheet.create({
   iconButton: {
     padding: 4,
   },
-  expiresUrgentBadge: {
+  expiresUrgentBadgeWrapper: {
     position: 'absolute',
     top: SPACING.xs,
     right: SPACING.xs,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#FEF2F2',
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 4,
-    borderRadius: BORDER_RADIUS.round,
-    borderWidth: 1,
-    borderColor: '#DC2626',
-  },
-  expiresUrgentText: {
-    fontSize: 11,
-    fontWeight: '700' as const,
-    color: '#DC2626',
   },
   cruiseCountBadge: {
     position: 'absolute',
