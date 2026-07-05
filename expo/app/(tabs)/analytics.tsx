@@ -6109,13 +6109,16 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   portfolioMetricLabel: {
-    fontSize: 9,
-    color: PORTFOLIO_CARD_TEXT_MUTED,
-    marginBottom: 1,
-  },
-  portfolioMetricValue: {
     fontSize: 11,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: PORTFOLIO_CARD_TEXT_MUTED,
+    marginBottom: 2,
+    textTransform: 'uppercase',
+    letterSpacing: 0.2,
+  },
+  portfolioMetricValue: {
+    fontSize: 17,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
     color: PORTFOLIO_CARD_TEXT_DARK,
     flexShrink: 1,
   },
@@ -6127,12 +6130,13 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   portfolioCardCabin: {
-    fontSize: 10,
+    fontSize: 14,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
     color: '#0B5FA8',
     backgroundColor: 'rgba(11, 95, 168, 0.14)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
   },
   portfolioOfferBadge: {
     flexDirection: 'row',
@@ -6146,7 +6150,7 @@ const styles = StyleSheet.create({
   portfolioOfferCode: {
     fontSize: 10,
     fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: CASINO_DASHBOARD_COLORS.goldText,
+    color: '#8A5D00',
   },
   portfolioCertificateBadge: {
     flexDirection: 'row',
@@ -6165,15 +6169,15 @@ const styles = StyleSheet.create({
     color: CASINO_DASHBOARD_COLORS.green,
   },
   portfolioEditButton: {
-    backgroundColor: 'rgba(240, 180, 41, 0.12)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 4,
+    backgroundColor: 'rgba(240, 180, 41, 0.18)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 5,
   },
   portfolioEditButtonText: {
-    fontSize: 10,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: CASINO_DASHBOARD_COLORS.goldText,
+    fontSize: 14,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#8A5D00',
   },
   viewMoreButton: {
     flexDirection: 'row',

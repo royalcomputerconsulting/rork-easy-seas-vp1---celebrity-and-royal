@@ -1195,7 +1195,7 @@ const styles = StyleSheet.create({
     color: COLORS.goldDark,
   },
   pinnacleHighlightWhite: {
-    color: DARK_ROYAL_COLORS.goldText,
+    color: COLORS.goldDark,
     fontWeight: '700' as const,
   },
   achievedBadge: {
