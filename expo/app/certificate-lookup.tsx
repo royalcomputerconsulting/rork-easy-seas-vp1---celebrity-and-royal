@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -71,6 +71,20 @@ function getMonthLabel(target: MonthTarget): string {
   return base.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 }
 
+// Mirrors the backend's known certificate suffixes so the spinner can show
+// real background progress (which certificate code is currently being
+// checked) instead of a single static "loading" line.
+const KNOWN_CERTIFICATE_SUFFIXES = [
+  'VIP2', '01', '02', '02A', '03', '03A', '04', '05', '06', '07', '08', '09', '10',
+];
+
+function buildExpectedCertificateCodes(monthCode: string, includeA: boolean, includeC: boolean): string[] {
+  const types: Array<'A' | 'C'> = [];
+  if (includeA) types.push('A');
+  if (includeC) types.push('C');
+  return types.flatMap((type) => KNOWN_CERTIFICATE_SUFFIXES.map((suffix) => `${monthCode}${type}${suffix}`.toUpperCase()));
+}
+
 function normalizeText(value?: string | null): string {
   return String(value ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
@@ -96,6 +110,31 @@ export default function CertificateLookupScreen() {
   const examineMutation = trpc.certificateExplorer.examine.useMutation();
   const result = examineMutation.data;
   const hasSearched = examineMutation.isSuccess || examineMutation.isError;
+
+  const [progressCodes, setProgressCodes] = useState<string[]>([]);
+  const [progressIndex, setProgressIndex] = useState(0);
+  const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopProgressTicker = useCallback(() => {
+    if (progressTimerRef.current) {
+      clearInterval(progressTimerRef.current);
+      progressTimerRef.current = null;
+    }
+  }, []);
+
+  const startProgressTicker = useCallback((codes: string[]) => {
+    stopProgressTicker();
+    setProgressCodes(codes);
+    setProgressIndex(0);
+    if (codes.length === 0) return;
+    progressTimerRef.current = setInterval(() => {
+      setProgressIndex((prev) => (prev + 1 < codes.length ? prev + 1 : prev));
+    }, 900);
+  }, [stopProgressTicker]);
+
+  useEffect(() => {
+    return () => stopProgressTicker();
+  }, [stopProgressTicker]);
 
   const bookedLookup = useMemo(() => {
     const set = new Set<string>();
@@ -129,6 +168,7 @@ export default function CertificateLookupScreen() {
     const effectiveShipQuery = (customShipQuery ?? shipQuery).trim() || 'Star, Legend, Icon, Wonder, Utopia, Symphony, Harmony, Allure, Oasis, Odyssey, Anthem, Ovation, Quantum, Spectrum, Navigator, Voyager, Mariner, Explorer, Adventure, Freedom, Liberty, Independence, Enchantment, Grandeur, Rhapsody, Vision, Radiance, Brilliance, Serenade, Jewel';
 
     setActiveMonth(target);
+    startProgressTicker(buildExpectedCertificateCodes(monthCode, includeA, includeC));
 
     try {
       await examineMutation.mutateAsync({
@@ -142,10 +182,12 @@ export default function CertificateLookupScreen() {
       const isNetworkBlip = /Failed to fetch|Network request failed|abort/i.test(rawMsg);
       const friendlyMsg = isNetworkBlip
         ? 'The certificate server is temporarily busy or unreachable. Please wait a few seconds and try again.'
-        : rawMsg;
+        : `${rawMsg}\n\nYou can try again, or search a specific ship/month below.`;
       Alert.alert('Certificate search failed', friendlyMsg);
+    } finally {
+      stopProgressTicker();
     }
-  }, [examineMutation, includeA, includeC, shipQuery]);
+  }, [examineMutation, includeA, includeC, shipQuery, startProgressTicker, stopProgressTicker]);
 
   const handleThisMonth = useCallback(() => { void runSearch('thisMonth'); }, [runSearch]);
   const handleNextMonth = useCallback(() => { void runSearch('nextMonth'); }, [runSearch]);
@@ -397,7 +439,18 @@ export default function CertificateLookupScreen() {
             {isSearching ? (
               <View style={styles.loadingRow}>
                 <ActivityIndicator size="small" color={COLORS.navyDeep} />
-                <Text style={styles.loadingText}>Pulling official certificate documents…</Text>
+                <View style={styles.loadingTextColumn}>
+                  <Text style={styles.loadingText}>
+                    {progressCodes.length > 0
+                      ? `Checking certificate ${progressCodes[progressIndex]}…`
+                      : 'Pulling official certificate documents…'}
+                  </Text>
+                  {progressCodes.length > 0 ? (
+                    <Text style={styles.loadingSubtext}>
+                      {progressIndex + 1} of {progressCodes.length} certificate codes for this month
+                    </Text>
+                  ) : null}
+                </View>
               </View>
             ) : null}
 
@@ -643,9 +696,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: SPACING.sm,
   },
+  loadingTextColumn: {
+    gap: 2,
+  },
   loadingText: {
     color: CLEAN_THEME.text.secondary,
     fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+  },
+  loadingSubtext: {
+    color: CLEAN_THEME.text.muted,
+    fontSize: TYPOGRAPHY.fontSizeXS,
   },
   summaryRow: {
     flexDirection: 'row',

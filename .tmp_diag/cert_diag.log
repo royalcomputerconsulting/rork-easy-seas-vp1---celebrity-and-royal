@@ -1,0 +1,24 @@
+Easy Seas Diagnostic Summary
+Exported: 7/4/2026, 5:01:26 PM
+Events: 1
+Errors: 0
+Warnings: 0
+Slow tab switches: 0
+Sync events: 0
+
+Recent Events:
+2026-07-05T00:01:26.431Z [info] ADMIN/EXPORT_DIAGNOSTIC_LOGS: Admin exported diagnostic logs
+
+State Snapshot:
+{
+  "version": "9.10.89",
+  "exportedAt": "2026-07-05T00:01:26.430Z",
+  "counts": {
+    "availableCruises": 302,
+    "bookedCruises": 44,
+    "offers": 3,
+    "completedCruises": 30
+  },
+  "activeUser": "scott.merlis1@gmail.com",
+  "dataMode": "local-first-self-contained"
+}
