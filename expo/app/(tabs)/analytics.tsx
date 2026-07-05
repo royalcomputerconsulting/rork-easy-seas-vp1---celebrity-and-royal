@@ -229,6 +229,27 @@ function getCruiseROILevel(roi: number): 'high' | 'medium' | 'low' {
   return 'low';
 }
 
+// Club Royale tier points reset every April 1, not on the calendar year (Jan 1) — so "Historical
+// Casino Points" must be bucketed by that same casino year (Apr 1 – Mar 31) to match how the tier
+// year actually works, instead of splitting a single season across two calendar-year bars.
+const CASINO_SEASON_START_MONTH_INDEX = 3; // April, 0-indexed
+
+function getCasinoSeasonYearKey(sailDate: string | null | undefined): string | null {
+  if (!sailDate) return null;
+  const parsed = createDateFromString(sailDate);
+  if (Number.isNaN(parsed.getTime())) return null;
+  const year = parsed.getUTCFullYear();
+  const month = parsed.getUTCMonth();
+  const seasonStartYear = month >= CASINO_SEASON_START_MONTH_INDEX ? year : year - 1;
+  return String(seasonStartYear);
+}
+
+function getCasinoSeasonYearLabel(seasonStartYearKey: string): string {
+  const startYear = Number(seasonStartYearKey);
+  if (!Number.isFinite(startYear)) return seasonStartYearKey;
+  return `Apr ${startYear}\u2013Mar ${startYear + 1}`;
+}
+
 function formatTotalMinutes(minutes: number): string {
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
@@ -1334,18 +1355,35 @@ export default function AnalyticsScreen() {
   const pointsByYearData = useMemo(() => {
     const map = new Map<string, { points: number; rows: typeof cruiseEconomicsSummary.rows }>();
     chronologicalEconomicsRows.forEach((row) => {
-      const parsed = row.sailDate ? createDateFromString(row.sailDate) : null;
-      const year = parsed && !Number.isNaN(parsed.getTime()) ? String(parsed.getUTCFullYear()) : 'Unknown';
-      const existing = map.get(year) ?? { points: 0, rows: [] };
+      const seasonKey = getCasinoSeasonYearKey(row.sailDate);
+      if (!seasonKey) return;
+      const existing = map.get(seasonKey) ?? { points: 0, rows: [] };
       existing.points += row.points;
       existing.rows = [...existing.rows, row];
-      map.set(year, existing);
+      map.set(seasonKey, existing);
     });
+
+    const currentSeasonKey = getCasinoSeasonYearKey(currentSeasonMetrics.seasonStart);
+
     return Array.from(map.entries())
-      .filter(([year]) => year !== 'Unknown')
       .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([year, data]) => ({ year, points: data.points, rows: data.rows }));
-  }, [chronologicalEconomicsRows]);
+      .map(([seasonKey, data]) => {
+        const isCurrentSeason = seasonKey === currentSeasonKey;
+        // The still-open casino year can include real Club Royale play that isn't itemized against a
+        // specific logged cruise yet (extra table sessions, slow-to-post points, etc). When that's the
+        // case, the reconciled/synced season total (currentYearPoints) is authoritative over the
+        // itemized cruise sum here — never show less than what's actually been earned this season.
+        const points = isCurrentSeason ? Math.max(data.points, currentYearPoints) : data.points;
+        return {
+          year: seasonKey,
+          label: getCasinoSeasonYearLabel(seasonKey),
+          points,
+          itemizedPoints: data.points,
+          rows: data.rows,
+          isCurrentSeason,
+        };
+      });
+  }, [chronologicalEconomicsRows, currentSeasonMetrics.seasonStart, currentYearPoints]);
 
   const winLossHistoryData = useMemo(() => {
     return chronologicalEconomicsRows.slice(-10).map((row) => ({
@@ -4196,24 +4234,27 @@ export default function AnalyticsScreen() {
             activeOpacity={0.9}
             onPress={() => historyInsightsDrill.open({
               title: 'Historical Casino Points',
-              subtitle: 'By Calendar Year',
-              summary: 'Points earned on completed cruises, grouped by the calendar year they were sailed.',
-              sourceRecords: pointsByYearData.map((y) => ({ label: y.year, value: formatNumber(y.points) })),
+              subtitle: 'By Casino Year (Apr 1 \u2013 Mar 31)',
+              summary: 'Points earned on completed cruises, grouped by Club Royale casino year (April 1 \u2013 March 31) \u2014 matching when your tier points actually reset, not the calendar year.',
+              sourceRecords: pointsByYearData.map((y) => ({ label: y.label, value: formatNumber(y.points) })),
             })}
           >
             <Text style={styles.economicsTitle}>Historical Casino Points</Text>
-            <Text style={casinoDashboardStyles.screenSubtitle}>By Calendar Year — tap a bar or a year to see its cruises</Text>
+            <Text style={casinoDashboardStyles.screenSubtitle}>By Casino Year (Apr 1 \u2013 Mar 31) \u2014 tap a bar or a year to see its cruises</Text>
             <View style={{ marginTop: 12 }}>
               <CasinoGroupedBarChart
                 groups={pointsByYearData.map((y) => {
+                  const hasUnitemizedPoints = y.isCurrentSeason && y.points > y.itemizedPoints;
                   const openYearPointsDrill = () => historyInsightsDrill.open({
-                    title: `${y.year} Casino Points`,
-                    summary: `${formatNumber(y.points)} points earned across ${y.rows.length} cruise(s) sailed in ${y.year}.`,
+                    title: `${y.label} Casino Points`,
+                    summary: hasUnitemizedPoints
+                      ? `${formatNumber(y.points)} points this casino year, reconciled with your synced Club Royale balance. ${formatNumber(y.itemizedPoints)} of those are itemized across ${y.rows.length} logged cruise(s) below \u2014 the remaining ${formatNumber(y.points - y.itemizedPoints)} reflects casino play not yet tied to a specific logged cruise.`
+                      : `${formatNumber(y.points)} points earned across ${y.rows.length} cruise(s) sailed in the ${y.label} casino year.`,
                     sourceRecords: y.rows.map((row) => ({ label: `${row.ship} — ${row.sailDate}`, value: formatNumber(row.points) })),
                   });
                   return {
                     key: y.year,
-                    label: y.year,
+                    label: y.label,
                     bars: [{ key: 'points', value: y.points, color: CASINO_DASHBOARD_COLORS.royalBlue, onPress: openYearPointsDrill }],
                     onPress: openYearPointsDrill,
                   };
