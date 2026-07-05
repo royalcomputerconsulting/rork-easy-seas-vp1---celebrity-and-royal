@@ -4113,6 +4113,94 @@ export default function AnalyticsScreen() {
       </View>
 
       <View style={styles.section}>
+        <CasinoIntelligenceCard
+          analytics={sessionAnalytics}
+          completedCruises={bookedCruises.filter(c => {
+            if (c.completionState === 'completed' || c.status === 'completed') return true;
+            if (c.returnDate) {
+              const returnDate = new Date(c.returnDate);
+              return returnDate < new Date();
+            }
+            return false;
+          })}
+          cruiseEconomicsSummary={cruiseEconomicsSummary}
+        />
+      </View>
+
+      {pointsPerNightChartData.length > 0 && (
+        <View style={styles.section}>
+          <View style={casinoDashboardStyles.card}>
+            <Text style={styles.economicsTitle}>Points Per Night Trend</Text>
+            <Text style={casinoDashboardStyles.screenSubtitle}>All Time — tap a point for that sailing</Text>
+            <View style={{ marginTop: 12 }}>
+              <CasinoLineChart
+                series={[{
+                  key: 'pointsPerNight',
+                  label: 'Points / Night',
+                  color: CASINO_DASHBOARD_COLORS.purple,
+                  points: pointsPerNightChartData.map((row) => ({ x: row.sailDate.slice(5), y: row.pointsPerNight })),
+                }]}
+                onPointPress={(index) => {
+                  const row = pointsPerNightChartData[index];
+                  if (!row) return;
+                  historyInsightsDrill.open({
+                    title: `${row.ship} — ${row.sailDate}`,
+                    summary: `${row.pointsPerNight.toFixed(1)} points earned per night on this sailing.`,
+                    sourceRecords: [{ label: 'Points / Night', value: row.pointsPerNight.toFixed(1) }],
+                  });
+                }}
+              />
+            </View>
+          </View>
+        </View>
+      )}
+
+      {pointsPerNightTrend.length > 0 && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <TrendingUp size={16} color={CASINO_DASHBOARD_COLORS.textPrimary} />
+            <Text style={styles.sectionTitle}>Points-per-Night Trend</Text>
+          </View>
+          <View style={styles.cleanCard}>
+            {pointsPerNightTrend.map((entry, index) => {
+              const previous = pointsPerNightTrend[index - 1];
+              const delta = previous ? entry.pointsPerNight - previous.pointsPerNight : 0;
+              const nightsForEntry = bookedCruises.find((c) => c.id === entry.id)?.nights ?? null;
+              return (
+                <TouchableOpacity
+                  key={entry.id}
+                  style={[styles.dataRow, index === pointsPerNightTrend.length - 1 && { paddingBottom: 0 }]}
+                  activeOpacity={0.75}
+                  onPress={() => historyInsightsDrill.open({
+                    title: `${entry.ship} — Points per Night`,
+                    subtitle: entry.sailDate,
+                    summary: 'Points per night = casino points earned on this cruise ÷ nights sailed. A separate points-per-casino-open-day figure is shown when itinerary/casino-hours data exists for this sailing.',
+                    formula: 'Points per Night = Casino Points ÷ Nights',
+                    inputs: [
+                      { label: 'Nights', value: nightsForEntry != null ? String(nightsForEntry) : 'Unknown' },
+                      { label: 'Points per Night', value: `${entry.pointsPerNight.toFixed(1)}/night` },
+                      { label: 'Change vs. previous sailing', value: previous ? `${delta >= 0 ? '+' : ''}${delta.toFixed(1)}/night` : 'First sailing in trend' },
+                    ],
+                    missing: nightsForEntry == null ? ['Nights for this cruise could not be resolved from your records — value may be approximate.'] : [],
+                    relatedActions: [{ label: 'Open Cruise', onPress: () => { historyInsightsDrill.close(); openCruiseDetailFromPortfolio(bookedCruises.find((c) => c.id === entry.id) as BookedCruise); } }],
+                  })}
+                  testID={`points-per-night-row-${entry.id}`}
+                >
+                  <Text style={styles.dataLabel} numberOfLines={1}>{entry.ship} · {entry.sailDate}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Text style={styles.dataValue}>{entry.pointsPerNight.toFixed(1)}/night</Text>
+                    {index > 0 && (delta >= 0
+                      ? <TrendingUp size={13} color={CASINO_DASHBOARD_COLORS.green} />
+                      : <TrendingDown size={13} color={CASINO_DASHBOARD_COLORS.red} />)}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+      )}
+
+      <View style={styles.section}>
         <View style={styles.valueHeroGrid}>
           {[
             {
@@ -4294,34 +4382,6 @@ export default function AnalyticsScreen() {
         </View>
       )}
 
-      {pointsPerNightChartData.length > 0 && (
-        <View style={styles.section}>
-          <View style={casinoDashboardStyles.card}>
-            <Text style={styles.economicsTitle}>Points Per Night Trend</Text>
-            <Text style={casinoDashboardStyles.screenSubtitle}>All Time — tap a point for that sailing</Text>
-            <View style={{ marginTop: 12 }}>
-              <CasinoLineChart
-                series={[{
-                  key: 'pointsPerNight',
-                  label: 'Points / Night',
-                  color: CASINO_DASHBOARD_COLORS.purple,
-                  points: pointsPerNightChartData.map((row) => ({ x: row.sailDate.slice(5), y: row.pointsPerNight })),
-                }]}
-                onPointPress={(index) => {
-                  const row = pointsPerNightChartData[index];
-                  if (!row) return;
-                  historyInsightsDrill.open({
-                    title: `${row.ship} — ${row.sailDate}`,
-                    summary: `${row.pointsPerNight.toFixed(1)} points earned per night on this sailing.`,
-                    sourceRecords: [{ label: 'Points / Night', value: row.pointsPerNight.toFixed(1) }],
-                  });
-                }}
-              />
-            </View>
-          </View>
-        </View>
-      )}
-
       {shipPerformanceHistory.length > 0 && (
         <View style={styles.section}>
           <View style={casinoDashboardStyles.card}>
@@ -4430,51 +4490,6 @@ export default function AnalyticsScreen() {
         </View>
       )}
 
-      {pointsPerNightTrend.length > 0 && (
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <TrendingUp size={16} color={CASINO_DASHBOARD_COLORS.textPrimary} />
-            <Text style={styles.sectionTitle}>Points-per-Night Trend</Text>
-          </View>
-          <View style={styles.cleanCard}>
-            {pointsPerNightTrend.map((entry, index) => {
-              const previous = pointsPerNightTrend[index - 1];
-              const delta = previous ? entry.pointsPerNight - previous.pointsPerNight : 0;
-              const nightsForEntry = bookedCruises.find((c) => c.id === entry.id)?.nights ?? null;
-              return (
-                <TouchableOpacity
-                  key={entry.id}
-                  style={[styles.dataRow, index === pointsPerNightTrend.length - 1 && { paddingBottom: 0 }]}
-                  activeOpacity={0.75}
-                  onPress={() => historyInsightsDrill.open({
-                    title: `${entry.ship} — Points per Night`,
-                    subtitle: entry.sailDate,
-                    summary: 'Points per night = casino points earned on this cruise ÷ nights sailed. A separate points-per-casino-open-day figure is shown when itinerary/casino-hours data exists for this sailing.',
-                    formula: 'Points per Night = Casino Points ÷ Nights',
-                    inputs: [
-                      { label: 'Nights', value: nightsForEntry != null ? String(nightsForEntry) : 'Unknown' },
-                      { label: 'Points per Night', value: `${entry.pointsPerNight.toFixed(1)}/night` },
-                      { label: 'Change vs. previous sailing', value: previous ? `${delta >= 0 ? '+' : ''}${delta.toFixed(1)}/night` : 'First sailing in trend' },
-                    ],
-                    missing: nightsForEntry == null ? ['Nights for this cruise could not be resolved from your records — value may be approximate.'] : [],
-                    relatedActions: [{ label: 'Open Cruise', onPress: () => { historyInsightsDrill.close(); openCruiseDetailFromPortfolio(bookedCruises.find((c) => c.id === entry.id) as BookedCruise); } }],
-                  })}
-                  testID={`points-per-night-row-${entry.id}`}
-                >
-                  <Text style={styles.dataLabel} numberOfLines={1}>{entry.ship} · {entry.sailDate}</Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                    <Text style={styles.dataValue}>{entry.pointsPerNight.toFixed(1)}/night</Text>
-                    {index > 0 && (delta >= 0
-                      ? <TrendingUp size={13} color={CASINO_DASHBOARD_COLORS.green} />
-                      : <TrendingDown size={13} color={CASINO_DASHBOARD_COLORS.red} />)}
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-      )}
-
       <View style={styles.section}>
         <View style={casinoDashboardStyles.card}>
           <Text style={styles.economicsTitle}>Insights Overview</Text>
@@ -4557,21 +4572,6 @@ export default function AnalyticsScreen() {
             <ChevronDown size={16} color={CASINO_DASHBOARD_COLORS.textPrimary} />
           </TouchableOpacity>
         </View>
-      </View>
-
-      <View style={styles.section}>
-        <CasinoIntelligenceCard
-          analytics={sessionAnalytics}
-          completedCruises={bookedCruises.filter(c => {
-            if (c.completionState === 'completed' || c.status === 'completed') return true;
-            if (c.returnDate) {
-              const returnDate = new Date(c.returnDate);
-              return returnDate < new Date();
-            }
-            return false;
-          })}
-          cruiseEconomicsSummary={cruiseEconomicsSummary}
-        />
       </View>
 
       <View style={styles.section}>
