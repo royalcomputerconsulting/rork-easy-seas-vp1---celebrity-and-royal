@@ -5,6 +5,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { 
   ChevronLeft,
+  ChevronRight,
   Ship,
   Plane,
   User,
@@ -270,6 +271,19 @@ export default function DayAgendaScreen() {
     const [year, month, day] = date.split('-').map(Number);
     return new Date(year, month - 1, day);
   }, [date]);
+
+  const formatDateParam = useCallback((targetDate: Date): string => {
+    return `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
+  }, []);
+
+  const goToDayOffset = useCallback((offsetDays: number) => {
+    const nextDate = new Date(selectedDate);
+    nextDate.setDate(nextDate.getDate() + offsetDays);
+    router.setParams({ date: formatDateParam(nextDate) });
+  }, [selectedDate, router, formatDateParam]);
+
+  const goToPreviousDay = useCallback(() => goToDayOffset(-1), [goToDayOffset]);
+  const goToNextDay = useCallback(() => goToDayOffset(1), [goToDayOffset]);
 
   const formattedDate = useMemo(() => {
     return selectedDate.toLocaleDateString('en-US', {
@@ -1609,10 +1623,30 @@ export default function DayAgendaScreen() {
         </View>
 
           <View style={styles.dateHeader}>
-            <Text style={styles.dateText}>{formattedDate}</Text>
-            <Text style={styles.eventCount}>
-              {agendaItems.length} {agendaItems.length === 1 ? 'event' : 'events'}
-            </Text>
+            <View style={styles.dateNavRow}>
+              <TouchableOpacity
+                style={styles.dateNavButton}
+                onPress={goToPreviousDay}
+                activeOpacity={0.7}
+                testID="day-agenda-prev-day"
+              >
+                <ChevronLeft size={22} color="#FFFFFF" />
+              </TouchableOpacity>
+              <View style={styles.dateNavCenter}>
+                <Text style={styles.dateText}>{formattedDate}</Text>
+                <Text style={styles.eventCount}>
+                  {agendaItems.length} {agendaItems.length === 1 ? 'event' : 'events'}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.dateNavButton}
+                onPress={goToNextDay}
+                activeOpacity={0.7}
+                testID="day-agenda-next-day"
+              >
+                <ChevronRight size={22} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
           </View>
         </ResponsiveContainer>
 
@@ -1840,6 +1874,23 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.md,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  dateNavRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dateNavButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dateNavCenter: {
+    flex: 1,
+    alignItems: 'center',
   },
   dateText: {
     fontSize: TYPOGRAPHY.fontSizeXL,
