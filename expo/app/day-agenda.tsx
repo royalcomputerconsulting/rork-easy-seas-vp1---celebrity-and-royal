@@ -26,7 +26,7 @@ import { CasinoSessionTracker } from '@/components/CasinoSessionTracker';
 import { AddSessionModal } from '@/components/AddSessionModal';
 import type { PlayingHours } from '@/state/UserProvider';
 import { createDateFromString } from '@/lib/date';
-import { determineCasinoHoursWithContext, determineSeaDay, type CasinoDayContext } from '@/lib/casinoAvailability';
+import { determineCasinoHoursWithContext, determineSeaDay, isCasinoPermittedUSTerritoryPort, type CasinoDayContext } from '@/lib/casinoAvailability';
 import type { CalendarEvent, BookedCruise, ItineraryDay } from '@/types/models';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { TimeZoneConverter } from '@/components/TimeZoneConverter';
@@ -509,7 +509,20 @@ export default function DayAgendaScreen() {
             });
           }
           
-          if (casinoInfo.open && casinoInfo.openTime) {
+          const isPermittedTerritoryPortDay = isCasinoPermittedUSTerritoryPort(itineraryDay.port);
+          if (casinoInfo.open && isPermittedTerritoryPortDay) {
+            events.push({
+              id: `casino-port-${cruise.id}`,
+              type: 'casino',
+              title: 'Casino Open All Day',
+              subtitle: casinoInfo.reason,
+              startTime: '00:00',
+              endTime: '23:59',
+              color: '#FFFFFF',
+              icon: 'casino',
+              notes: 'Local law permits the casino to stay open while docked here.',
+            });
+          } else if (casinoInfo.open && casinoInfo.openTime) {
             const closeTimeDisplay = casinoInfo.closeTime || '24 hrs (slots)';
             events.push({
               id: `casino-port-${cruise.id}`,
@@ -1135,30 +1148,45 @@ export default function DayAgendaScreen() {
             type: 'casino',
           });
         } else if (!casinoContext.isDisembarkDay) {
-          addScheduleBlock({
-            id: `casino-carryover-${cruise.id}-${dayNum}`,
-            title: 'Casino Open',
-            subtitle: `${cruise.shipName} overnight carryover`,
-            notes: 'Open from midnight until the ship is back in port waters.',
-            startMinutes: 0,
-            endMinutes: 5 * 60,
-            color: EVENT_COLORS.casino,
-            icon: 'casino',
-            type: 'casino',
-          });
-          const reopenMinutes = parseScheduleTimeToMinutes(casinoInfo.openTime);
-          if (reopenMinutes !== null) {
+          const isPermittedTerritoryPortDay = itineraryDay?.port ? isCasinoPermittedUSTerritoryPort(itineraryDay.port) : false;
+          if (isPermittedTerritoryPortDay) {
             addScheduleBlock({
-              id: `casino-reopen-${cruise.id}-${dayNum}`,
-              title: 'Casino Reopens',
-              subtitle: itineraryDay?.port ? `${itineraryDay.port} sail away` : cruise.shipName,
+              id: `casino-open-allday-${cruise.id}-${dayNum}`,
+              title: 'Casino Open (Local Law Permits)',
+              subtitle: itineraryDay?.port ? `${itineraryDay.port} • ${cruise.shipName}` : cruise.shipName,
               notes: casinoInfo.reason,
-              startMinutes: reopenMinutes,
+              startMinutes: 0,
               endMinutes: MINUTES_PER_DAY,
               color: EVENT_COLORS.casino,
               icon: 'casino',
               type: 'casino',
             });
+          } else {
+            addScheduleBlock({
+              id: `casino-carryover-${cruise.id}-${dayNum}`,
+              title: 'Casino Open',
+              subtitle: `${cruise.shipName} overnight carryover`,
+              notes: 'Open from midnight until the ship is back in port waters.',
+              startMinutes: 0,
+              endMinutes: 5 * 60,
+              color: EVENT_COLORS.casino,
+              icon: 'casino',
+              type: 'casino',
+            });
+            const reopenMinutes = parseScheduleTimeToMinutes(casinoInfo.openTime);
+            if (reopenMinutes !== null) {
+              addScheduleBlock({
+                id: `casino-reopen-${cruise.id}-${dayNum}`,
+                title: 'Casino Reopens',
+                subtitle: itineraryDay?.port ? `${itineraryDay.port} sail away` : cruise.shipName,
+                notes: casinoInfo.reason,
+                startMinutes: reopenMinutes,
+                endMinutes: MINUTES_PER_DAY,
+                color: EVENT_COLORS.casino,
+                icon: 'casino',
+                type: 'casino',
+              });
+            }
           }
         }
       } else {
