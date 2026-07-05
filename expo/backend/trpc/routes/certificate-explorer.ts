@@ -416,11 +416,36 @@ function cleanStructuredValue(value?: string | null): string | null {
     .replace(/\bStateroom Type\b/gi, ' ')
     .replace(/\bOffer Type\b/gi, ' ')
     .replace(/\bNext Cruise Bonus\b/gi, ' ')
+    .replace(/\bNext Cruise OBC\b/gi, ' ')
     .replace(/\s+/g, ' ')
     .replace(/^[\s:|–—-]+|[\s:|–—-]+$/g, '')
     .trim();
 
   return cleaned.length > 0 ? cleaned : null;
+}
+
+function findAllTextMatches(text: string, patterns: RegExp[]): TextMatch[] {
+  const matches: TextMatch[] = [];
+
+  patterns.forEach((pattern) => {
+    const flags = pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`;
+    const matcher = new RegExp(pattern.source, flags);
+
+    for (const match of text.matchAll(matcher)) {
+      const index = match.index ?? -1;
+      if (index < 0 || !match[0]) {
+        continue;
+      }
+
+      matches.push({
+        label: cleanStructuredValue(match[0]) ?? match[0],
+        index,
+        raw: match[0],
+      });
+    }
+  });
+
+  return matches.sort((a, b) => a.index - b.index);
 }
 
 function findFirstTextMatch(text: string, patterns: RegExp[]): TextMatch | null {
@@ -500,12 +525,16 @@ function extractStructuredBenefitSnapshot(segment: string, nextCruiseBonusLabel:
   const normalizedBonusText = cleanStructuredValue(nextCruiseBonusLabel) ?? '';
   const { cabinLabel, cabinRank } = extractCabinBenefit(segment);
 
-  const freePlayValues = extractDollarValues(normalizedBonusText, [
+  // Royal Caribbean's certificate PDFs list "Next Cruise Bonus" (FreePlay) and
+  // "Next Cruise OBC" as two separate dollar fields on the same row, so we scan
+  // the full row segment rather than only the last-matched bonus phrase, ensuring
+  // a row with both a FreePlay amount and a separate OBC amount keeps both.
+  const freePlayValues = extractDollarValues(segment, [
     /\$\s*([0-9][0-9,]*)\s*(?:in\s*)?(?:free\s*play|freeplay|fp)\b/gi,
     /(?:free\s*play|freeplay|fp)\s*(?:of|included|:)?\s*\$?\s*([0-9][0-9,]*)\b/gi,
   ]);
 
-  const onBoardCreditValues = extractDollarValues(normalizedBonusText, [
+  const onBoardCreditValues = extractDollarValues(segment, [
     /\$\s*([0-9][0-9,]*)\s*(?:in\s*)?(?:obc|on[-\s]*board credit|onboard credit)\b/gi,
     /(?:obc|on[-\s]*board credit|onboard credit)\s*(?:of|included|:)?\s*\$?\s*([0-9][0-9,]*)\b/gi,
   ]);
@@ -579,13 +608,19 @@ function parseStructuredCertificateRow(segment: string): StructuredCertificateRo
 
   const cabinMatch = findCabinBenefitMatch(tailText);
   const offerTypeMatch = findFirstTextMatch(tailText, OFFER_TYPE_PATTERNS);
-  const bonusMatch = findLastTextMatch(tailText, BONUS_TEXT_PATTERNS);
-  const itineraryBoundaryCandidates = [cabinMatch?.index, offerTypeMatch?.index, bonusMatch?.index]
+  // Certificate rows can carry both a "Next Cruise Bonus" (FreePlay) value and a
+  // separate "Next Cruise OBC" value, collect every bonus phrase in the row
+  // (not just the last one) so neither dollar amount gets dropped.
+  const bonusMatches = findAllTextMatches(tailText, BONUS_TEXT_PATTERNS);
+  const earliestBonusIndex = bonusMatches.length > 0 ? Math.min(...bonusMatches.map((match) => match.index)) : -1;
+  const itineraryBoundaryCandidates = [cabinMatch?.index, offerTypeMatch?.index, earliestBonusIndex >= 0 ? earliestBonusIndex : undefined]
     .filter((value): value is number => typeof value === 'number' && value >= 0);
   const itineraryBoundary = itineraryBoundaryCandidates.length > 0 ? Math.min(...itineraryBoundaryCandidates) : tailText.length;
   const itinerary = cleanStructuredValue(tailText.slice(0, itineraryBoundary));
   const offerTypeLabel = cleanStructuredValue(offerTypeMatch?.label);
-  const nextCruiseBonusLabel = cleanStructuredValue(bonusMatch?.label);
+  const nextCruiseBonusLabel = bonusMatches.length > 0
+    ? cleanStructuredValue(bonusMatches.map((match) => match.label).join(' + '))
+    : null;
   const benefits = extractStructuredBenefitSnapshot(tailText, nextCruiseBonusLabel);
 
   console.log('[CertificateExplorer] Parsed structured certificate row:', {
