@@ -1235,6 +1235,79 @@ async function mapWithConcurrency<T, R>(items: T[], concurrency: number, mapper:
 }
 
 export const certificateExplorerRouter = createTRPCRouter({
+  // Fetches a single known certificate code's official PDF and returns every
+  // eligible sailing listed in it (no ship/date filtering) so the app can show
+  // an "all scraped cruises for this offer code" view, mirroring how
+  // royalcaribbean.com's own offer-code index pages work.
+  codeSailings: publicProcedure
+    .input(
+      z.object({
+        certificateCode: z.string().min(6).max(20),
+      })
+    )
+    .query(async ({ input }) => {
+      const certificateCode = input.certificateCode.trim().toUpperCase();
+      const typeChar = certificateCode.charAt(4);
+      const certificateType: 'A' | 'C' = typeChar === 'C' ? 'C' : 'A';
+      const monthCode = certificateCode.slice(0, 4);
+      const pdfUrl = buildPdfUrl(certificateCode);
+      const monthlyIndexUrl = buildPdfUrl(`${monthCode}${certificateType}`);
+
+      const indexEntry: IndexEntry = {
+        certificateCode,
+        certificateType,
+        points: null,
+        pdfUrl,
+        monthlyIndexUrl,
+      };
+
+      console.log('[CertificateExplorer] codeSailings request:', { certificateCode, pdfUrl });
+
+      const pdfText = await fetchPdfText(pdfUrl);
+
+      if (!pdfText || pdfText.length < 20) {
+        console.log('[CertificateExplorer] codeSailings: PDF not available:', { certificateCode });
+        return {
+          certificateCode,
+          certificateType,
+          points: null,
+          pdfUrl,
+          monthlyIndexUrl,
+          status: 'empty' as const,
+          sailings: [] as SailingEntry[],
+        };
+      }
+
+      const detectedPoints = extractPointsFromPdfText(certificateCode, pdfText);
+      if (detectedPoints !== null) {
+        indexEntry.points = detectedPoints;
+      }
+
+      const sailings = extractSailingsFromCertificatePdf(indexEntry, pdfText)
+        .sort((left, right) => {
+          if (left.sailDate !== right.sailDate) {
+            return left.sailDate.localeCompare(right.sailDate);
+          }
+          return left.shipName.localeCompare(right.shipName);
+        });
+
+      console.log('[CertificateExplorer] codeSailings complete:', {
+        certificateCode,
+        points: indexEntry.points,
+        sailingCount: sailings.length,
+      });
+
+      return {
+        certificateCode,
+        certificateType,
+        points: indexEntry.points,
+        pdfUrl,
+        monthlyIndexUrl,
+        status: (sailings.length > 0 ? 'ok' : 'no_sailings') as 'ok' | 'no_sailings',
+        sailings,
+      };
+    }),
+
   examine: publicProcedure
     .input(
       z.object({

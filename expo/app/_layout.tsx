@@ -430,6 +430,18 @@ function RootLayoutNav() {
           headerShown: false,
         }} 
       />
+      <Stack.Screen 
+        name="certificate-codes" 
+        options={{ 
+          headerShown: false,
+        }} 
+      />
+      <Stack.Screen 
+        name="certificate-code-detail" 
+        options={{ 
+          headerShown: false,
+        }} 
+      />
     </Stack>
   );
 }

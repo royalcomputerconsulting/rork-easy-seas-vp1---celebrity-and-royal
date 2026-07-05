@@ -319,6 +319,16 @@ export default function CertificateLookupScreen() {
           Pull the official public certificate documents for this month or next month, search by ship, and see which sailings you already have booked.
         </Text>
 
+        <TouchableOpacity
+          style={styles.browseCodesButton}
+          onPress={() => router.push('/certificate-codes' as any)}
+          activeOpacity={0.85}
+          testID="certificate-lookup.browse-codes-button"
+        >
+          <Text style={styles.browseCodesButtonText}>Browse offer codes by month (like royalcaribbean.com)</Text>
+          <ExternalLink size={13} color="#FFFFFF" />
+        </TouchableOpacity>
+
         <View style={styles.quickRow}>
           <TouchableOpacity
             style={[styles.quickButton, activeMonth === 'thisMonth' && styles.quickButtonActive]}
@@ -542,6 +552,24 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeSM,
     lineHeight: 19,
     marginBottom: SPACING.md,
+  },
+  browseCodesButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.xs,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.28)',
+    borderRadius: BORDER_RADIUS.round,
+    paddingVertical: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
+  browseCodesButtonText: {
+    color: '#FFFFFF',
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    textAlign: 'center',
   },
   quickRow: {
     flexDirection: 'row',
