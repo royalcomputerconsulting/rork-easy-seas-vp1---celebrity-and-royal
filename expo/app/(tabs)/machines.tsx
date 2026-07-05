@@ -41,6 +41,8 @@ import { useGamification } from '@/state/GamificationProvider';
 import type { MachineType, Denomination } from '@/state/CasinoSessionProvider';
 import type { MachineEncyclopediaEntry, SlotManufacturer, BookedCruise } from '@/types/models';
 import { createDateFromString } from '@/lib/date';
+import { useLoyalty } from '@/state/LoyaltyProvider';
+import { getClubRoyaleTierColor, getTabTierTint } from '@/constants/loyaltyTheme';
 
 type FilterOption = 'all' | 'favorites' | 'manufacturer' | 'ship';
 
@@ -50,6 +52,18 @@ export default function AtlasScreen() {
   useAuth();
 
   const { currentUser, updateUser, ensureOwner } = useUser();
+  const { clubRoyaleTier } = useLoyalty();
+
+  // Slots tab gradient reflects your current Club Royale casino tier with a subtle
+  // wash blended into the existing blue gradient stops -- see SeaPass Color Scheme tab tint.
+  const tierTintedGradient = useMemo<[string, string, string]>(() => {
+    const tierColor = getClubRoyaleTierColor(clubRoyaleTier);
+    return [
+      getTabTierTint(tierColor, '#1E3A8A', 0.16),
+      getTabTierTint(tierColor, '#60A5FA', 0.16),
+      getTabTierTint(tierColor, '#E8F4FC', 0.16),
+    ];
+  }, [clubRoyaleTier]);
   const { bookedCruises } = useCoreData();
   const [isSavingPlayingHours, setIsSavingPlayingHours] = useState(false);
 
@@ -893,7 +907,7 @@ export default function AtlasScreen() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <LinearGradient
-          colors={['#1E3A8A', '#60A5FA', '#E8F4FC']}
+          colors={tierTintedGradient}
           locations={[0, 0.5, 1]}
           style={styles.gradientContainer}
         >

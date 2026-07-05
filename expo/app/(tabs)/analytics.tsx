@@ -134,6 +134,7 @@ const PORTFOLIO_CARD_TEXT_DARK = '#0F2A4A';
 const PORTFOLIO_CARD_TEXT_MUTED = '#3E5A7A';
 import { useDrillDown, type CalculationDrillDownData } from '@/components/casino-dashboard/CalculationDrillDownDrawer';
 import type { SourceConfidence } from '@/constants/casinoDashboardTheme';
+import { getClubRoyaleTierColor, getTabTierTint } from '@/constants/loyaltyTheme';
 import { CasinoDonutChart } from '@/components/casino-dashboard/CasinoDonutChart';
 import { CasinoGroupedBarChart } from '@/components/casino-dashboard/CasinoGroupedBarChart';
 import { CasinoLineChart } from '@/components/casino-dashboard/CasinoLineChart';
@@ -293,6 +294,13 @@ export default function AnalyticsScreen() {
     crownAnchorPoints: loyaltyCrownAnchorPoints,
     crownAnchorLevel: loyaltyCrownAnchorLevel,
   } = useLoyalty();
+
+  // Casino tab background reflects your current Club Royale casino tier with a
+  // subtle wash over the existing background -- see SeaPass Color Scheme tab tint.
+  const tabTint = useMemo(
+    () => getTabTierTint(getClubRoyaleTierColor(loyaltyClubRoyaleTier), CASINO_DASHBOARD_COLORS.background, 0.12),
+    [loyaltyClubRoyaleTier]
+  );
 
   const [activeTab, setActiveTabState] = useState<AnalyticsTab>(() => {
     const paramTab = (Array.isArray(tabParam) ? tabParam[0] : tabParam) as AnalyticsTab | undefined;
@@ -5069,7 +5077,7 @@ export default function AnalyticsScreen() {
   );
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: tabTint }]}>
       <Stack.Screen options={{ headerShown: false }} />
 
       <View style={{ flex: 1, flexDirection: 'row' }}>

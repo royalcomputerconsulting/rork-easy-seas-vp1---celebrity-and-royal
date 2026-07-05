@@ -181,3 +181,14 @@ export function getCarnivalVifpTierColor(tier?: string | null): string {
 export function getCarnivalPlayersClubTierColor(tier?: string | null): string {
   return CARNIVAL_PLAYERS_CLUB_TIERS[tier ?? 'Blue']?.color ?? COLORS.navyDeep;
 }
+
+/**
+ * Produces a subtle wash of a loyalty/casino tier color over an existing screen
+ * background, used to tint whole-tab backgrounds by the user's current tier without
+ * touching any text/card colors. `tintStrength` is how much of the tier color shows
+ * through (0.12 = 12% tier color, 88% original background) -- deliberately light so
+ * every existing card and text color on top remains just as readable as before.
+ */
+export function getTabTierTint(tierColor: string, baseColor: string, tintStrength: number = 0.12): string {
+  return mixHexColors(tierColor, baseColor, 1 - tintStrength);
+}

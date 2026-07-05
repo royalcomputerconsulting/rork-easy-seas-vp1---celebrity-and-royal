@@ -36,7 +36,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
 import { withAlpha } from '@/constants/loyaltyColors';
-import { createLoyaltyCardTheme, getClubRoyaleTierColor } from '@/constants/loyaltyTheme';
+import { createLoyaltyCardTheme, getClubRoyaleTierColor, getCrownAnchorTierColor, getTabTierTint } from '@/constants/loyaltyTheme';
 import { LoyaltyPill } from '@/components/ui/LoyaltyPill';
 import { useAppState } from '@/state/AppStateProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
@@ -156,7 +156,15 @@ export default function BookedScreen() {
     clubRoyaleCurrentYearPoints,
     clubRoyaleHistoricalPoints,
     crownAnchorPoints,
+    crownAnchorLevel,
   } = useLoyalty();
+
+  // Booked tab background reflects your current Crown & Anchor loyalty tier with a
+  // subtle wash over the existing mint background -- see SeaPass Color Scheme tab tint.
+  const tabTint = useMemo(
+    () => getTabTierTint(getCrownAnchorTierColor(crownAnchorLevel), '#E0F2F1', 0.12),
+    [crownAnchorLevel]
+  );
 
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<FilterType>('all');
@@ -845,7 +853,7 @@ export default function BookedScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: tabTint }]}>
       <Stack.Screen options={{ headerShown: false }} />
       
       <SafeAreaView style={styles.safeArea} edges={['top']}>

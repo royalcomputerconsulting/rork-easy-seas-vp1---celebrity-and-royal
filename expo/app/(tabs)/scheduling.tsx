@@ -44,6 +44,8 @@ import { useIntelligenceFilters } from '@/state/IntelligenceFiltersProvider';
 import { filterRecordsByIntelligence } from '@/lib/intelligenceFilters';
 import { findBackToBackSets, type BackToBackSet, type CruiseOffer } from '@/lib/backToBackFinder';
 import { Link2, Calendar, Tag, Anchor } from 'lucide-react-native';
+import { useLoyalty } from '@/state/LoyaltyProvider';
+import { getCrownAnchorTierColor, getTabTierTint } from '@/constants/loyaltyTheme';
 
 type ViewTab = 'available' | 'all' | 'foryou' | 'booked';
 type CabinFilter = 'all' | 'Interior' | 'Oceanview' | 'Balcony' | 'Suite';
@@ -78,6 +80,14 @@ export default function SchedulingScreen() {
   const { bookedCruises: storedBookedCruises } = useCoreData();
   const { currentUser, users } = useUser();
   const { selectedProfileId, selectedBrand, selectedProgram } = useIntelligenceFilters();
+  const { crownAnchorLevel } = useLoyalty();
+
+  // Cruises tab background reflects your current Crown & Anchor loyalty tier with a
+  // subtle wash over the existing mint background -- see SeaPass Color Scheme tab tint.
+  const tabTint = useMemo(
+    () => getTabTierTint(getCrownAnchorTierColor(crownAnchorLevel), '#E0F2F1', 0.12),
+    [crownAnchorLevel]
+  );
 
   const [activeTab, setActiveTab] = useState<ViewTab>('available');
   const [filters, setFilters] = useState<FilterState>({
@@ -837,7 +847,7 @@ export default function SchedulingScreen() {
 
   if (appLoading) {
     return (
-      <View style={styles.loadingContainer}>
+      <View style={[styles.loadingContainer, { backgroundColor: tabTint }]}>
         <ActivityIndicator size="large" color={COLORS.navyDeep} />
         <Text style={styles.loadingText}>Loading cruises...</Text>
       </View>
@@ -845,7 +855,7 @@ export default function SchedulingScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: tabTint }]}>
       <Stack.Screen options={{ headerShown: false }} />
 
       <SafeAreaView style={styles.safeArea} edges={['top']}>
