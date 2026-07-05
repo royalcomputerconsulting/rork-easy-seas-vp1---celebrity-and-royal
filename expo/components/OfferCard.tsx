@@ -11,6 +11,7 @@ import {
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { MARBLE_TEXTURES } from '@/constants/marbleTextures';
 import { EasySeasBadge } from '@/components/ui/EasySeasBadge';
+import { EasySeasColors } from '@/constants/easySeasTheme';
 import { formatCurrency } from '@/lib/format';
 import { getDaysUntil, formatDate } from '@/lib/date';
 import { getUniqueImageForCruise, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
@@ -403,6 +404,8 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
     marginBottom: SPACING.lg,
+    borderLeftWidth: 4,
+    borderLeftColor: EasySeasColors.gold,
     ...SHADOW.md,
   },
   marbleBackground: {
@@ -429,15 +432,15 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   offerCodeHeaderBadge: {
-    backgroundColor: COLORS.navyDeep,
+    backgroundColor: EasySeasColors.gold,
     paddingHorizontal: SPACING.sm,
     paddingVertical: 5,
     borderRadius: BORDER_RADIUS.sm,
   },
   offerCodeHeaderText: {
     fontSize: 12,
-    fontWeight: '700' as const,
-    color: COLORS.white,
+    fontWeight: '800' as const,
+    color: EasySeasColors.navyDeep,
     letterSpacing: 0.5,
   },
   totalValueHeaderCard: {

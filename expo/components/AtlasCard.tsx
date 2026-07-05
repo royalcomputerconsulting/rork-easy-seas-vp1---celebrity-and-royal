@@ -5,6 +5,7 @@ import { ChevronRight, Star, Zap, Ship, Lock } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOW } from '@/constants/theme';
 import { MARBLE_TEXTURES } from '@/constants/marbleTextures';
 import { EasySeasBadge } from '@/components/ui/EasySeasBadge';
+import { EasySeasColors } from '@/constants/easySeasTheme';
 import type { MachineEncyclopediaEntry } from '@/types/models';
 
 interface AtlasCardProps {
@@ -207,6 +208,8 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
     marginBottom: SPACING.lg,
+    borderLeftWidth: 4,
+    borderLeftColor: EasySeasColors.purple,
     ...SHADOW.md,
   },
   marbleBackground: {
@@ -414,6 +417,8 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.xs,
     borderWidth: 1,
     borderColor: COLORS.borderLight,
+    borderLeftWidth: 3,
+    borderLeftColor: EasySeasColors.purple,
   },
   compactContent: {
     flexDirection: 'row',

@@ -5,6 +5,7 @@ import { buildCruiseDetailsParams } from '@/lib/navigation/cruiseDetails';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CalendarDays, ChevronLeft, ChevronRight, Ship, Plane, User, Users, Plus, AlertTriangle, Ban, Gift, Award, MapPin, Clock } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
+import { EasySeasColors } from '@/constants/easySeasTheme';
 import { IMAGES } from '@/constants/images';
 import { useAppState } from '@/state/AppStateProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
@@ -38,17 +39,21 @@ interface DayData {
   };
 }
 
+// Consistent event color language shared with the rest of the app's design
+// system: cruise = navy (app identity), sea/port = teal shades (ocean/data),
+// casino opportunity/tier = purple (casino), offer expiration = gold, travel
+// day = amber, gap/conflict = red, past/land day = muted gray.
 const EVENT_COLORS = {
-  cruise: '#22C55E',
-  travel: '#3B82F6', 
-  personal: '#A855F7',
-  sea: '#2563EB',
-  port: '#16A34A',
-  gap: '#DC2626',
-  expiration: '#D97706',
-  tier: '#7C3AED',
-  land: '#94A3B8',
-  passengerPersonal: '#EA580C',
+  cruise: EasySeasColors.navy,
+  travel: EasySeasColors.warning,
+  personal: EasySeasColors.purple,
+  sea: EasySeasColors.teal,
+  port: '#0B6B76',
+  gap: EasySeasColors.danger,
+  expiration: EasySeasColors.gold,
+  tier: EasySeasColors.purple,
+  land: EasySeasColors.textMuted,
+  passengerPersonal: EasySeasColors.warning,
 };
 
 interface PassengerDayItem {

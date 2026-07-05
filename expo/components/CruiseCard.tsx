@@ -4,6 +4,7 @@ import * as Haptics from 'expo-haptics';
 import { Calendar, ChevronRight, Users, Ship, Heart, Sparkles, Anchor, Ticket, Gauge, AlertTriangle } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
+import { EasySeasColors } from '@/constants/easySeasTheme';
 
 import { createDateFromString } from '@/lib/date';
 
@@ -739,6 +740,8 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
     marginBottom: SPACING.lg,
+    borderLeftWidth: 4,
+    borderLeftColor: EasySeasColors.navy,
     ...SHADOW.md,
   },
   miniContainer: {
@@ -746,6 +749,8 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.md,
     overflow: 'hidden',
     marginBottom: SPACING.md,
+    borderLeftWidth: 4,
+    borderLeftColor: EasySeasColors.navy,
     ...SHADOW.sm,
   },
   miniImageSection: {

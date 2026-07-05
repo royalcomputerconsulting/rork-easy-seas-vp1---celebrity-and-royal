@@ -15,6 +15,7 @@ import {
 } from 'lucide-react-native';
 import { SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, COLORS } from '@/constants/theme';
 import { EasySeasBadge } from '@/components/ui/EasySeasBadge';
+import { EasySeasColors } from '@/constants/easySeasTheme';
 import { createDateFromString } from '@/lib/date';
 import { getUniqueImageForCruise, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
 import type { Cruise, CasinoOffer } from '@/types/models';
@@ -708,6 +709,8 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
     marginBottom: SPACING.lg,
+    borderLeftWidth: 4,
+    borderLeftColor: EasySeasColors.gold,
     ...SHADOW.md,
   },
   offerHeaderSection: {
@@ -726,15 +729,15 @@ const styles = StyleSheet.create({
   },
   offerCodeHeaderBadge: {
     alignSelf: 'flex-start',
-    backgroundColor: COLORS.navyDeep,
+    backgroundColor: EasySeasColors.gold,
     paddingHorizontal: SPACING.sm,
     paddingVertical: 5,
     borderRadius: BORDER_RADIUS.sm,
   },
   offerCodeHeaderText: {
     fontSize: 12,
-    fontWeight: '700' as const,
-    color: COLORS.white,
+    fontWeight: '800' as const,
+    color: EasySeasColors.navyDeep,
     letterSpacing: 0.5,
   },
   imageSection: {

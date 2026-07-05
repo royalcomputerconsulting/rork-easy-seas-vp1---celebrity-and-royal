@@ -106,6 +106,7 @@ import {
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import { UserProfileCard } from '@/components/ui/UserProfileCard';
 import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
+import { EasySeasColors, EasySeasRadius, EasySeasShadows } from '@/constants/easySeasTheme';
 
 import { useSlotMachineLibrary } from '@/state/SlotMachineLibraryProvider';
 import { useCasinoSessions } from '@/state/CasinoSessionProvider';
@@ -2220,7 +2221,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
     icon: React.ReactNode,
     title: string,
     subtitle: string,
-    gradientColors: [string, string] = ['#0369A1', '#0284C7']
+    gradientColors: [string, string] = [EasySeasColors.navy, EasySeasColors.teal]
   ) => (
     <LinearGradient
       colors={gradientColors}
@@ -2292,7 +2293,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
 
           <View style={styles.dataOverviewCard}>
             <LinearGradient
-              colors={['#0369A1', '#0284C7'] as [string, string]}
+              colors={[EasySeasColors.navy, EasySeasColors.teal] as [string, string]}
               style={styles.dataOverviewHeader}
             >
               <View style={styles.dataOverviewHeaderContent}>
@@ -2308,7 +2309,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
             <View style={styles.dataOverviewBody}>
               <View style={styles.dataOverviewStatsRow}>
                 <View style={styles.dataOverviewStatCard}>
-                  <Anchor size={14} color="#0369A1" />
+                  <Anchor size={14} color={EasySeasColors.navy} />
                   <Text style={styles.dataOverviewStatValue}>{dataStats.cruises}</Text>
                   <Text style={styles.dataOverviewStatLabel}>Total Cruises</Text>
                 </View>
@@ -2840,7 +2841,7 @@ STEP 4: Optional Calendar Import
               defaultExpanded={false}
             >
               <View style={styles.sectionCard}>
-                <View style={[styles.dataSubsection, { backgroundColor: 'rgba(2, 132, 199, 0.08)' }]}>
+                <View style={[styles.dataSubsection, { backgroundColor: EasySeasColors.navySoft }]}>
                   <Text style={styles.subsectionLabel}>ADMIN FUNCTIONS</Text>
                   <Text style={styles.subsectionHelper}>Internal QA/diagnostic tools, admin-only.</Text>
                 </View>
@@ -2867,7 +2868,7 @@ STEP 4: Optional Calendar Import
 
                 <View style={styles.dataDivider} />
 
-                <View style={[styles.dataSubsection, { backgroundColor: 'rgba(3, 105, 161, 0.08)' }]}>
+                <View style={[styles.dataSubsection, { backgroundColor: EasySeasColors.tealSoft }]}>
                   <Text style={styles.subsectionLabel}>FREE USE WHITELIST</Text>
                   <Text style={styles.subsectionHelper}>Add any user email here to grant Free Use of App access. Only scott.merlis1@gmail.com and s@a.com are admins and cannot be removed.</Text>
                 </View>
@@ -2932,7 +2933,7 @@ STEP 4: Optional Calendar Import
 
                 <View style={styles.dataDivider} />
                 
-                <View style={[styles.dataSubsection, { backgroundColor: 'rgba(255, 87, 34, 0.1)' }]}>
+                <View style={[styles.dataSubsection, { backgroundColor: EasySeasColors.warningSoft }]}>
                   <Text style={styles.subsectionLabel}>MACHINES DATA</Text>
                   <Text style={styles.subsectionHelper}>Import/export machine library JSON files.</Text>
                 </View>
@@ -2964,7 +2965,7 @@ STEP 4: Optional Calendar Import
 
                 <View style={styles.dataDivider} />
                 
-                <View style={[styles.dataSubsection, { backgroundColor: 'rgba(75, 0, 130, 0.08)' }]}>
+                <View style={[styles.dataSubsection, { backgroundColor: EasySeasColors.purpleSoft }]}>
                   <Text style={styles.subsectionLabel}>SEAPASS GENERATOR</Text>
                   <Text style={styles.subsectionHelper}>Generate Royal Caribbean web SeaPass cards.</Text>
                 </View>
@@ -2987,9 +2988,9 @@ STEP 4: Optional Calendar Import
 
                 <View style={styles.dataDivider} />
 
-                <View style={[styles.dataSubsection, { backgroundColor: 'rgba(0, 31, 63, 0.08)' }]}>
+                <View style={[styles.dataSubsection, { backgroundColor: EasySeasColors.navySoft }]}>
                   <Text style={styles.subsectionLabel}>DATA TOOLS</Text>
-                  <Text style={styles.subsectionHelper}>Import CSV/XLSX files and reset app data.</Text>
+                  <Text style={styles.subsectionHelper}>Import CSV/XLSX files to add more data.</Text>
                 </View>
                 {renderSettingRow(
                   <FileSpreadsheet size={18} color={COLORS.navyDeep} />,
@@ -3017,6 +3018,13 @@ STEP 4: Optional Calendar Import
                   ) : undefined,
                   handleImportCompletedCruisesXLSX
                 )}
+
+                <View style={styles.dataDivider} />
+
+                <View style={[styles.dataSubsection, styles.dangerZoneBanner]}>
+                  <Text style={[styles.subsectionLabel, styles.dangerZoneLabel]}>DANGER ZONE</Text>
+                  <Text style={styles.subsectionHelper}>Irreversible — this permanently deletes every cruise, offer, and setting on this device.</Text>
+                </View>
                 {renderSettingRow(
                   <RefreshCcw size={18} color={COLORS.error} />,
                   'Reset All Data',
@@ -3197,7 +3205,7 @@ STEP 4: Optional Calendar Import
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: EasySeasColors.backgroundSoft,
   },
   safeArea: {
     flex: 1,
@@ -3235,28 +3243,34 @@ const styles = StyleSheet.create({
     color: COLORS.error,
   },
   sectionCard: {
-    backgroundColor: '#F0F9FF',
-    borderRadius: BORDER_RADIUS.lg,
+    backgroundColor: EasySeasColors.card,
+    borderRadius: EasySeasRadius.card,
     borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.2)',
+    borderColor: EasySeasColors.border,
     overflow: 'hidden',
-    ...SHADOW.sm,
+    ...EasySeasShadows.soft,
   },
   dangerCard: {
-    borderColor: 'rgba(244, 67, 54, 0.3)',
-    backgroundColor: '#FFF5F5',
+    borderColor: EasySeasColors.danger,
+    backgroundColor: EasySeasColors.dangerSoft,
+  },
+  dangerZoneBanner: {
+    backgroundColor: EasySeasColors.dangerSoft,
+  },
+  dangerZoneLabel: {
+    color: EasySeasColors.danger,
   },
   profileLoadingCard: {
     marginTop: SPACING.lg,
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.md,
-    backgroundColor: '#F0F9FF',
-    borderRadius: BORDER_RADIUS.lg,
+    backgroundColor: EasySeasColors.card,
+    borderRadius: EasySeasRadius.card,
     borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.2)',
+    borderColor: EasySeasColors.border,
     padding: SPACING.lg,
-    ...SHADOW.sm,
+    ...EasySeasShadows.soft,
   },
   profileLoadingIconWrap: {
     width: 44,
@@ -3264,7 +3278,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(3, 105, 161, 0.08)',
+    backgroundColor: EasySeasColors.navySoft,
   },
   profileLoadingCopy: {
     flex: 1,
@@ -3287,7 +3301,7 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(3, 105, 161, 0.08)',
+    borderBottomColor: EasySeasColors.border,
   },
   settingLeft: {
     flexDirection: 'row',
@@ -3364,7 +3378,7 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xl,
     paddingTop: SPACING.lg,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(3, 105, 161, 0.15)',
+    borderTopColor: EasySeasColors.border,
     paddingHorizontal: SPACING.md,
   },
   legalDisclaimerTitle: {
@@ -3397,13 +3411,13 @@ const styles = StyleSheet.create({
   },
   countBadge: {
     fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#64748B',
+    color: EasySeasColors.textSecondary,
     backgroundColor: COLORS.white,
     paddingHorizontal: SPACING.sm,
     paddingVertical: 4,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.1)',
+    borderColor: EasySeasColors.border,
     overflow: 'hidden' as const,
   },
   backupHint: {
@@ -3424,13 +3438,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingTop: SPACING.sm,
     paddingBottom: SPACING.xs,
-    backgroundColor: 'rgba(3, 105, 161, 0.05)',
+    backgroundColor: EasySeasColors.navySoft,
   },
   importBanner: {
-    backgroundColor: 'rgba(3, 105, 161, 0.08)',
+    backgroundColor: EasySeasColors.navySoft,
   },
   fullBackupBanner: {
-    backgroundColor: 'rgba(3, 105, 161, 0.06)',
+    backgroundColor: EasySeasColors.tealSoft,
   },
   subsectionLabel: {
     fontSize: 10,
@@ -3446,17 +3460,17 @@ const styles = StyleSheet.create({
   },
   dataDivider: {
     height: 1,
-    backgroundColor: 'rgba(3, 105, 161, 0.1)',
+    backgroundColor: EasySeasColors.border,
     marginVertical: SPACING.xs,
   },
   dataOverviewCard: {
-    borderRadius: BORDER_RADIUS.lg,
+    borderRadius: EasySeasRadius.card,
     overflow: 'hidden',
     marginBottom: SPACING.md,
-    backgroundColor: '#F0F9FF',
+    backgroundColor: EasySeasColors.card,
     borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.2)',
-    ...SHADOW.sm,
+    borderColor: EasySeasColors.border,
+    ...EasySeasShadows.soft,
   },
   dataOverviewHeader: {
     padding: SPACING.sm,
@@ -3508,7 +3522,7 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.sm,
     padding: SPACING.sm,
     borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.15)',
+    borderColor: EasySeasColors.border,
   },
   dataOverviewStatValue: {
     fontSize: 18,
@@ -3543,7 +3557,7 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.sm,
     padding: SPACING.sm,
     borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.15)',
+    borderColor: EasySeasColors.border,
   },
   dataOverviewGridIcon: {
     width: 28,
@@ -3566,12 +3580,12 @@ const styles = StyleSheet.create({
   },
   quickActionsSection: {
     marginBottom: SPACING.md,
-    backgroundColor: '#F0F9FF',
-    borderRadius: BORDER_RADIUS.lg,
+    backgroundColor: EasySeasColors.card,
+    borderRadius: EasySeasRadius.card,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.15)',
-    ...SHADOW.sm,
+    borderColor: EasySeasColors.border,
+    ...EasySeasShadows.soft,
   },
   quickActionFullWidth: {
     flexDirection: 'row',
@@ -3582,12 +3596,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 8,
     borderWidth: 1.5,
-    borderColor: 'rgba(3, 105, 161, 0.15)',
-    shadowColor: '#0369A1',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
+    borderColor: EasySeasColors.border,
+    ...EasySeasShadows.soft,
   },
   quickActionsRow: {
     flexDirection: 'row',
@@ -3602,12 +3612,8 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderWidth: 1.5,
-    borderColor: 'rgba(3, 105, 161, 0.15)',
-    shadowColor: '#0369A1',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
+    borderColor: EasySeasColors.border,
+    ...EasySeasShadows.soft,
   },
   quickActionIconSmall: {
     width: 34,
@@ -3627,9 +3633,9 @@ const styles = StyleSheet.create({
   adminHeader: {
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.md,
-    backgroundColor: 'rgba(3, 105, 161, 0.05)',
+    backgroundColor: EasySeasColors.navySoft,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(3, 105, 161, 0.12)',
+    borderBottomColor: EasySeasColors.border,
   },
   adminHeaderText: {
     fontSize: TYPOGRAPHY.fontSizeMD,
@@ -3648,7 +3654,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(3, 105, 161, 0.1)',
+    borderBottomColor: EasySeasColors.border,
   },
   addEmailInput: {
     flex: 1,
@@ -3659,10 +3665,10 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeMD,
     color: CLEAN_THEME.text.primary,
     borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.15)',
+    borderColor: EasySeasColors.border,
   },
   addEmailButton: {
-    backgroundColor: '#0369A1',
+    backgroundColor: EasySeasColors.navy,
     borderRadius: BORDER_RADIUS.md,
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.sm,
@@ -3698,7 +3704,7 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.md,
     marginBottom: SPACING.xs,
     borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.12)',
+    borderColor: EasySeasColors.border,
   },
   whitelistItemLeft: {
     flexDirection: 'row',
@@ -3749,12 +3755,12 @@ const styles = StyleSheet.create({
   },
   aboutPromoSection: {
     marginTop: SPACING.md,
-    borderRadius: BORDER_RADIUS.lg,
+    borderRadius: EasySeasRadius.card,
     overflow: 'hidden',
-    backgroundColor: '#F0F9FF',
+    backgroundColor: EasySeasColors.card,
     borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.15)',
-    ...SHADOW.sm,
+    borderColor: EasySeasColors.border,
+    ...EasySeasShadows.soft,
   },
   aboutBanner: {
     width: '100%',
@@ -3826,7 +3832,7 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.md,
     marginBottom: SPACING.xs,
     borderWidth: 1,
-    borderColor: 'rgba(3, 105, 161, 0.12)',
+    borderColor: EasySeasColors.border,
   },
   subscriptionStatusText: {
     flex: 1,
@@ -3849,7 +3855,7 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   calendarFeedBanner: {
-    backgroundColor: 'rgba(3, 105, 161, 0.1)',
+    backgroundColor: EasySeasColors.tealSoft,
   },
   calendarFeedSection: {
     paddingHorizontal: SPACING.md,
@@ -3860,7 +3866,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: SPACING.sm,
-    backgroundColor: '#0369A1',
+    backgroundColor: EasySeasColors.navy,
     borderRadius: BORDER_RADIUS.md,
     paddingVertical: 12,
     paddingHorizontal: SPACING.lg,
