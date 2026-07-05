@@ -290,6 +290,20 @@ function RootLayoutNav() {
           headerShown: false,
         }} 
       />
+      <Stack.Screen
+        name="cruise-details"
+        options={{
+          title: "Cruise Details",
+          presentation: "card",
+          headerStyle: {
+            backgroundColor: COLORS.navyDeep,
+          },
+          headerTintColor: COLORS.white,
+          headerTitleStyle: {
+            fontWeight: '600' as const,
+          },
+        }}
+      />
       <Stack.Screen 
         name="offer-details" 
         options={{ 

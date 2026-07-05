@@ -22,13 +22,6 @@ export default function OverviewLayout() {
           headerShown: false,
         }}
       />
-      <Stack.Screen
-        name="cruise-details"
-        options={{
-          title: "Cruise Details",
-          presentation: "card",
-        }}
-      />
     </Stack>
   );
 }
