@@ -1548,4 +1548,114 @@ export const certificateExplorerRouter = createTRPCRouter({
         matches,
       };
     }),
+
+  // Downloads every known certificate code's official PDF for a single
+  // month + type (13 codes: VIP2 down to 10) in one request, so the app
+  // can offer a "Download All" action and cache the full set locally for
+  // later evaluation (e.g. answering questions against every offer) rather
+  // than requiring the user to open each code one at a time.
+  codeSailingsBatch: publicProcedure
+    .input(
+      z.object({
+        monthCode: z.string().regex(MONTH_CODE_REGEX),
+        certificateType: z.enum(['A', 'C']),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const { monthCode, certificateType } = input;
+      const indexEntries = buildKnownIndexEntries(monthCode, certificateType);
+
+      console.log('[CertificateExplorer] codeSailingsBatch starting:', {
+        monthCode,
+        certificateType,
+        count: indexEntries.length,
+      });
+
+      const codeResults = await mapWithConcurrency(indexEntries, 3, async (entry, entryIndex) => {
+        if (entryIndex > 0 && entryIndex % 6 === 0) {
+          await sleep(jitteredDelay(700));
+        }
+
+        try {
+          const pdfText = await fetchPdfText(entry.pdfUrl);
+
+          if (!pdfText || pdfText.length < 20) {
+            return {
+              certificateCode: entry.certificateCode,
+              certificateType: entry.certificateType,
+              points: null as number | null,
+              pdfUrl: entry.pdfUrl,
+              monthlyIndexUrl: entry.monthlyIndexUrl,
+              status: 'empty' as const,
+              sailings: [] as SailingEntry[],
+            };
+          }
+
+          const detectedPoints = extractPointsFromPdfText(entry.certificateCode, pdfText);
+          if (detectedPoints !== null) {
+            entry.points = detectedPoints;
+          }
+
+          const sailings = extractSailingsFromCertificatePdf(entry, pdfText)
+            .sort((left, right) => {
+              if (left.sailDate !== right.sailDate) {
+                return left.sailDate.localeCompare(right.sailDate);
+              }
+              return left.shipName.localeCompare(right.shipName);
+            });
+
+          return {
+            certificateCode: entry.certificateCode,
+            certificateType: entry.certificateType,
+            points: entry.points,
+            pdfUrl: entry.pdfUrl,
+            monthlyIndexUrl: entry.monthlyIndexUrl,
+            status: (sailings.length > 0 ? 'ok' : 'no_sailings') as 'ok' | 'no_sailings',
+            sailings,
+          };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          console.error('[CertificateExplorer] codeSailingsBatch: code failed after retries:', {
+            certificateCode: entry.certificateCode,
+            message,
+          });
+          return {
+            certificateCode: entry.certificateCode,
+            certificateType: entry.certificateType,
+            points: null as number | null,
+            pdfUrl: entry.pdfUrl,
+            monthlyIndexUrl: entry.monthlyIndexUrl,
+            status: 'error' as const,
+            sailings: [] as SailingEntry[],
+            errorMessage: message,
+          };
+        }
+      });
+
+      const totalSailings = codeResults.reduce((sum, r) => sum + r.sailings.length, 0);
+      const okCount = codeResults.filter(r => r.status === 'ok').length;
+      const errorCount = codeResults.filter(r => r.status === 'error').length;
+
+      console.log('[CertificateExplorer] codeSailingsBatch complete:', {
+        monthCode,
+        certificateType,
+        total: codeResults.length,
+        ok: okCount,
+        errors: errorCount,
+        totalSailings,
+      });
+
+      return {
+        monthCode,
+        certificateType,
+        fetchedAt: new Date().toISOString(),
+        results: codeResults,
+        summary: {
+          total: codeResults.length,
+          ok: okCount,
+          errors: errorCount,
+          totalSailings,
+        },
+      };
+    }),
 });

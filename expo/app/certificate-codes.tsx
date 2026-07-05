@@ -1,11 +1,12 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ChevronLeft, ChevronRight, Lock, Sparkles } from 'lucide-react-native';
+import { CheckCircle2, ChevronLeft, ChevronRight, CloudDownload, Lock, Sparkles } from 'lucide-react-native';
 
 import { BORDER_RADIUS, COLORS, SPACING, TYPOGRAPHY } from '@/constants/theme';
+import { useCertificateOffers } from '@/state/CertificateOffersProvider';
 
 type CertType = 'C' | 'A';
 type MonthTarget = 'thisMonth' | 'nextMonth';
@@ -56,6 +57,8 @@ function daysRemainingInMonth(date: Date): number {
 export default function CertificateCodesScreen() {
   const router = useRouter();
   const [certType, setCertType] = useState<CertType>('C');
+  const { getOffer, countOffersForMonth, downloadAll, isDownloadingAll } = useCertificateOffers();
+  const [downloadingTarget, setDownloadingTarget] = useState<MonthTarget | null>(null);
 
   const nextMonthUnlocked = useMemo(() => daysRemainingInMonth(new Date()) <= 6, []);
   const daysLeft = useMemo(() => daysRemainingInMonth(new Date()), []);
@@ -66,11 +69,67 @@ export default function CertificateCodesScreen() {
     router.push({ pathname: '/certificate-code-detail', params: { code, type: certType } } as any);
   }, [certType, router]);
 
+  const handleDownloadAll = useCallback(async (target: MonthTarget) => {
+    const monthCode = getMonthCode(target);
+    const monthLabel = getMonthLabel(target);
+    setDownloadingTarget(target);
+    console.log('[CertificateCodes] Download all requested:', { monthCode, certType, target });
+
+    try {
+      const result = await downloadAll(monthCode, certType);
+      Alert.alert(
+        'Download complete',
+        `Pulled all ${result.ok + result.errors} offer codes for ${monthLabel} (${certType} certificates). Found ${result.totalSailings.toLocaleString()} sailings across ${result.ok} code${result.ok === 1 ? '' : 's'}${result.errors > 0 ? `, ${result.errors} code${result.errors === 1 ? '' : 's'} not published yet` : ''}. Saved on-device so the app can evaluate every offer instantly.`
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      console.error('[CertificateCodes] Download all failed:', message);
+      Alert.alert('Download failed', `Could not finish downloading all codes: ${message}. Tap Download All to try again.`);
+    } finally {
+      setDownloadingTarget(null);
+    }
+  }, [certType, downloadAll]);
+
+  const renderDownloadAllButton = useCallback((target: MonthTarget) => {
+    const monthCode = getMonthCode(target);
+    const downloadedCount = countOffersForMonth(monthCode, certType);
+    const isThisSectionDownloading = isDownloadingAll && downloadingTarget === target;
+    const allDownloaded = downloadedCount >= CERTIFICATE_LEVELS.length;
+
+    return (
+      <TouchableOpacity
+        style={[styles.downloadAllButton, allDownloaded && styles.downloadAllButtonDone]}
+        onPress={() => void handleDownloadAll(target)}
+        activeOpacity={0.85}
+        disabled={isDownloadingAll}
+        testID={`certificate-codes.download-all-${target}`}
+      >
+        {isThisSectionDownloading ? (
+          <ActivityIndicator size="small" color={allDownloaded ? '#0F6B3F' : '#FFFFFF'} />
+        ) : allDownloaded ? (
+          <CheckCircle2 size={16} color="#0F6B3F" />
+        ) : (
+          <CloudDownload size={16} color="#FFFFFF" />
+        )}
+        <Text style={[styles.downloadAllButtonText, allDownloaded && styles.downloadAllButtonTextDone]}>
+          {isThisSectionDownloading
+            ? `Downloading all ${CERTIFICATE_LEVELS.length} codes\u2026`
+            : allDownloaded
+              ? `All ${downloadedCount} codes downloaded`
+              : downloadedCount > 0
+                ? `Download All (${downloadedCount}/${CERTIFICATE_LEVELS.length} saved)`
+                : 'Download All Offer Codes'}
+        </Text>
+      </TouchableOpacity>
+    );
+  }, [certType, countOffersForMonth, downloadingTarget, handleDownloadAll, isDownloadingAll]);
+
   const renderGrid = useCallback((target: MonthTarget) => (
     <View style={styles.grid}>
       {CERTIFICATE_LEVELS.map((level) => {
         const monthCode = getMonthCode(target);
         const code = `${monthCode}${certType}${level.suffix}`.toUpperCase();
+        const cached = getOffer(code);
         return (
           <TouchableOpacity
             key={code}
@@ -79,13 +138,18 @@ export default function CertificateCodesScreen() {
             activeOpacity={0.8}
             testID={`certificate-codes.button-${code}`}
           >
+            {cached ? (
+              <View style={styles.cachedBadge} testID={`certificate-codes.cached-${code}`}>
+                <CheckCircle2 size={10} color="#0F6B3F" />
+              </View>
+            ) : null}
             <Text style={styles.codeButtonCode}>{code}</Text>
             <Text style={styles.codeButtonPoints}>{level.points.toLocaleString()} Points</Text>
           </TouchableOpacity>
         );
       })}
     </View>
-  ), [certType, handleOpenCode]);
+  ), [certType, getOffer, handleOpenCode]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -130,7 +194,8 @@ export default function CertificateCodesScreen() {
             <Text style={styles.crownMark}>CASINO ROYALE</Text>
           </View>
           <Text style={styles.sectionTitle}>This Month — {getMonthLabel('thisMonth')}</Text>
-          <Text style={styles.sectionHint}>Tap any offer code to view every scraped sailing it's eligible for.</Text>
+          <Text style={styles.sectionHint}>Tap any offer code to view every scraped sailing it's eligible for, or pull them all at once below.</Text>
+          {renderDownloadAllButton('thisMonth')}
           {renderGrid('thisMonth')}
         </View>
 
@@ -141,6 +206,7 @@ export default function CertificateCodesScreen() {
             </View>
             <Text style={styles.sectionTitle}>Next Month — {getMonthLabel('nextMonth')}</Text>
             <Text style={styles.sectionHint}>Codes just unlocked for the final stretch of this month — Royal Caribbean typically publishes these in the last week.</Text>
+            {renderDownloadAllButton('nextMonth')}
             {renderGrid('nextMonth')}
           </View>
         ) : (
@@ -285,6 +351,29 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
     justifyContent: 'space-between',
   },
+  downloadAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+    backgroundColor: '#0E7FA7',
+    borderRadius: BORDER_RADIUS.round,
+    paddingVertical: SPACING.md,
+    marginBottom: SPACING.md,
+  },
+  downloadAllButtonDone: {
+    backgroundColor: '#E5F5EC',
+    borderWidth: 1,
+    borderColor: '#B8E3C8',
+  },
+  downloadAllButtonText: {
+    color: '#FFFFFF',
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  downloadAllButtonTextDone: {
+    color: '#0F6B3F',
+  },
   codeButton: {
     width: '48%',
     backgroundColor: '#FFFFFF',
@@ -294,6 +383,18 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.md,
     alignItems: 'center',
     marginBottom: SPACING.sm,
+    position: 'relative',
+  },
+  cachedBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#E5F5EC',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   codeButtonCode: {
     color: '#5C3A00',

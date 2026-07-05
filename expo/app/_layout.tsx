@@ -23,6 +23,7 @@ import { LoyaltyProvider } from "@/state/LoyaltyProvider";
 import { AlertsProvider } from "@/state/AlertsProvider";
 import { AgentXProvider } from "@/state/AgentXProvider";
 import { CertificatesProvider } from "@/state/CertificatesProvider";
+import { CertificateOffersProvider } from "@/state/CertificateOffersProvider";
 import { HistoricalPerformanceProvider } from "@/state/HistoricalPerformanceProvider";
 import { PriceHistoryProvider } from "@/state/PriceHistoryProvider";
 import { PriceTrackingProvider } from "@/state/PriceTrackingProvider";
@@ -674,6 +675,7 @@ const ServiceProviders = composeProviders(
   TaxProvider,
   AlertsProvider,
   CertificatesProvider,
+  CertificateOffersProvider,
   IntelligenceFiltersProvider,
   SailingWeatherProvider,
   AgentXProvider,

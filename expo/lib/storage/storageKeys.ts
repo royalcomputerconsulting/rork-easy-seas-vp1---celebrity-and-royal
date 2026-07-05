@@ -79,6 +79,7 @@ export const ALL_STORAGE_KEYS = {
   COMP_ITEMS: '@easyseas/compItems',
   W2G_RECORDS: '@easyseas/w2gRecords',
   MILESTONE_TIER_STATE: 'easyseas_milestone_tier_state',
+  CERTIFICATE_OFFERS_CACHE: 'easyseas_certificate_offers_cache',
 } as const;
 
 export const GLOBAL_KEYS = new Set<string>([
@@ -88,6 +89,7 @@ export const GLOBAL_KEYS = new Set<string>([
   ALL_STORAGE_KEYS.EMAIL_WHITELIST_PENDING,
   ALL_STORAGE_KEYS.HAS_LAUNCHED_BEFORE,
   ALL_STORAGE_KEYS.MACHINE_ENCYCLOPEDIA,
+  ALL_STORAGE_KEYS.CERTIFICATE_OFFERS_CACHE,
 ]);
 
 export const STORAGE_KEYS = ALL_STORAGE_KEYS;

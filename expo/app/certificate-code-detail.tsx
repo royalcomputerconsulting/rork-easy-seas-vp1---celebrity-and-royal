@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -11,13 +11,17 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { AlertTriangle, ChevronLeft, ExternalLink, Ship as ShipIcon, Sparkles } from 'lucide-react-native';
+import { AlertTriangle, CheckCircle2, ChevronLeft, ExternalLink, Ship as ShipIcon, Sparkles } from 'lucide-react-native';
 
 import { BORDER_RADIUS, CLEAN_THEME, COLORS, SHADOW, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import { formatDate, getDaysUntil } from '@/lib/date';
 import { openCertificatePdf } from '@/lib/royalCaribbean/certificatePdf';
+import type { inferRouterOutputs } from '@trpc/server';
+import type { AppRouter } from '@/backend/trpc/app-router';
 import { trpc } from '@/lib/trpc';
 import { useCoreData } from '@/state/CoreDataProvider';
+import { useCertificateOffers } from '@/state/CertificateOffersProvider';
+import type { CachedCertificateOffer } from '@/state/CertificateOffersProvider';
 
 function normalizeText(value?: string | null): string {
   return String(value ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -28,26 +32,86 @@ function formatCurrency(value: number | null): string {
   return `$${value.toLocaleString()}`;
 }
 
+type RouterOutputs = inferRouterOutputs<AppRouter>;
+type CodeSailingsResult = RouterOutputs['certificateExplorer']['codeSailings'];
+
+// Shapes a cached (previously downloaded) offer into the exact same
+// discriminated-union response shape the live tRPC query returns, so it can
+// be handed to useQuery as initialData and rendered instantly while the
+// fresh fetch runs in the background.
+function buildInitialDataFromCache(cachedOffer: CachedCertificateOffer): CodeSailingsResult {
+  if (cachedOffer.status === 'empty' || cachedOffer.status === 'error') {
+    return {
+      certificateCode: cachedOffer.certificateCode,
+      certificateType: cachedOffer.certificateType,
+      points: null,
+      pdfUrl: cachedOffer.pdfUrl,
+      monthlyIndexUrl: cachedOffer.monthlyIndexUrl,
+      status: 'empty',
+      sailings: [],
+    };
+  }
+
+  return {
+    certificateCode: cachedOffer.certificateCode,
+    certificateType: cachedOffer.certificateType,
+    points: cachedOffer.points,
+    pdfUrl: cachedOffer.pdfUrl,
+    monthlyIndexUrl: cachedOffer.monthlyIndexUrl,
+    status: cachedOffer.status,
+    sailings: cachedOffer.sailings.map((sailing) => ({
+      ...sailing,
+      certificateCode: cachedOffer.certificateCode,
+      certificateType: cachedOffer.certificateType,
+      level: cachedOffer.certificateCode.slice(4),
+      points: cachedOffer.points,
+      pdfUrl: cachedOffer.pdfUrl,
+      monthlyIndexUrl: cachedOffer.monthlyIndexUrl,
+    })),
+  };
+}
+
 export default function CertificateCodeDetailScreen() {
   const router = useRouter();
   const { code } = useLocalSearchParams<{ code: string; type?: string }>();
   const { bookedCruises, cruises } = useCoreData();
+  const { getOffer, saveOffer } = useCertificateOffers();
 
   const certificateCode = String(code ?? '').toUpperCase();
+  const cachedOffer = useMemo(() => getOffer(certificateCode), [getOffer, certificateCode]);
 
   // The official PDF server is always up, so a failed attempt almost always
   // means a transient blip - keep retrying automatically with backoff before
-  // ever showing the user a "couldn't load" state.
+  // ever showing the user a "couldn't load" state. If this code was already
+  // downloaded before (single view or a "Download All" batch), show that
+  // cached result instantly instead of a blank spinner while the fresh fetch
+  // runs in the background.
   const query = trpc.certificateExplorer.codeSailings.useQuery(
     { certificateCode },
     {
       enabled: certificateCode.length >= 6,
       retry: 5,
       retryDelay: (attemptIndex) => Math.min(2000 * 2 ** attemptIndex, 20000),
+      initialData: cachedOffer ? buildInitialDataFromCache(cachedOffer) : undefined,
+      initialDataUpdatedAt: cachedOffer ? new Date(cachedOffer.fetchedAt).getTime() : undefined,
     }
   );
   const isRetrying = query.isError && query.isFetching;
   const retryAttempt = query.failureCount;
+
+  useEffect(() => {
+    if (!query.data || query.isFetching) return;
+    saveOffer({
+      certificateCode,
+      certificateType: query.data.certificateType,
+      points: query.data.points,
+      pdfUrl: query.data.pdfUrl,
+      monthlyIndexUrl: query.data.monthlyIndexUrl,
+      status: query.data.status,
+      sailings: query.data.sailings,
+      fetchedAt: new Date().toISOString(),
+    });
+  }, [query.data, query.isFetching, certificateCode, saveOffer]);
 
   const bookedLookup = useMemo(() => {
     const set = new Set<string>();
@@ -148,6 +212,13 @@ export default function CertificateCodeDetailScreen() {
         <Text style={styles.headerSubtitle}>
           {points != null ? `${points.toLocaleString()} points — ` : ''}All eligible sailings scraped from this offer's official document, so you can evaluate every one.
         </Text>
+
+        {cachedOffer && !query.isFetching ? (
+          <View style={styles.savedChip} testID="certificate-code-detail.saved-chip">
+            <CheckCircle2 size={12} color="#FFFFFF" />
+            <Text style={styles.savedChipText}>Saved on-device</Text>
+          </View>
+        ) : null}
 
         {query.data?.pdfUrl ? (
           <TouchableOpacity style={styles.pdfHeaderButton} onPress={handleOpenPdf} activeOpacity={0.85} testID="certificate-code-detail.open-pdf">
@@ -286,6 +357,22 @@ const styles = StyleSheet.create({
   pdfHeaderButtonText: {
     color: '#FFFFFF',
     fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  savedChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(15, 107, 63, 0.5)',
+    borderRadius: BORDER_RADIUS.round,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+    marginBottom: SPACING.sm,
+  },
+  savedChipText: {
+    color: '#FFFFFF',
+    fontSize: 10,
     fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   listContent: {
