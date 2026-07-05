@@ -1,4 +1,4 @@
-import { httpLink } from "@trpc/client";
+import { httpLink, splitLink } from "@trpc/client";
 import { createTRPCReact } from "@trpc/react-query";
 import superjson from "superjson";
 
@@ -111,17 +111,29 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 let _lastErrorLogTime = 0;
 const ERROR_LOG_THROTTLE = 30_000;
 
+// Certificate PDF scans hit the live royalcaribbean.com PDF server directly
+// and can legitimately take much longer than a normal API call (each code is
+// a real PDF download + parse, sometimes with server-side retries baked in).
+// The website itself is always reachable, so we never want our own client
+// timeout to be the reason a scan looks "failed" - give these calls a long
+// runway and let the backend's own retry loop do the heavy lifting instead
+// of racing it with a fresh request every 15s.
+const CERTIFICATE_PROCEDURE_PREFIX = "certificateExplorer.";
+const CERTIFICATE_FETCH_TIMEOUT_MS = 170_000;
+const DEFAULT_FETCH_TIMEOUT_MS = 15000;
+
 const fetchWithRetry = async (
   url: string,
   options: RequestInit | undefined,
-  maxRetries = 2
+  maxRetries = 2,
+  timeoutMs = DEFAULT_FETCH_TIMEOUT_MS
 ): Promise<Response> => {
   let lastError: Error | null = null;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
       const existingSignal = options?.signal;
       if (existingSignal?.aborted) {
@@ -205,27 +217,46 @@ export const getTrpcClient = () => {
     const backendUrl = getBackendUrl();
     console.log("[tRPC] Initializing client - Rork-hosted backend:", backendUrl || "(unset)");
 
+    const makeFetch = (timeoutMs: number, maxRetries: number) =>
+      async (url: unknown, options: RequestInit | undefined) => {
+        try {
+          const rawUrl = url as string | URL | Request;
+          const urlString = typeof rawUrl === "string" ? rawUrl : rawUrl instanceof URL ? rawUrl.href : (rawUrl as Request).url;
+          const response = await fetchWithRetry(urlString, options, maxRetries, timeoutMs);
+          return response;
+        } catch (error) {
+          const now = Date.now();
+          if (now - _lastErrorLogTime > ERROR_LOG_THROTTLE) {
+            _lastErrorLogTime = now;
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            console.log("[tRPC] Request failed:", errorMsg, "- operating in offline mode");
+          }
+          throw error;
+        }
+      };
+
+    const standardLink = httpLink({
+      url: `${backendUrl}/api/trpc`,
+      transformer: superjson,
+      fetch: makeFetch(DEFAULT_FETCH_TIMEOUT_MS, 2),
+    });
+
+    // Certificate scans get one long-lived attempt (no client-side retry -
+    // restarting a slow scan from scratch just wastes time) so the backend's
+    // own internal PDF retry loop has room to finish and come back with real
+    // data instead of the app giving up early.
+    const certificateLink = httpLink({
+      url: `${backendUrl}/api/trpc`,
+      transformer: superjson,
+      fetch: makeFetch(CERTIFICATE_FETCH_TIMEOUT_MS, 0),
+    });
+
     _trpcClient = trpc.createClient({
       links: [
-        httpLink({
-          url: `${backendUrl}/api/trpc`,
-          transformer: superjson,
-          fetch: async (url, options) => {
-            try {
-              const rawUrl = url as string | URL | Request;
-              const urlString = typeof rawUrl === "string" ? rawUrl : rawUrl instanceof URL ? rawUrl.href : (rawUrl as Request).url;
-              const response = await fetchWithRetry(urlString, options);
-              return response;
-            } catch (error) {
-              const now = Date.now();
-              if (now - _lastErrorLogTime > ERROR_LOG_THROTTLE) {
-                _lastErrorLogTime = now;
-                const errorMsg = error instanceof Error ? error.message : String(error);
-                console.log("[tRPC] Request failed:", errorMsg, "- operating in offline mode");
-              }
-              throw error;
-            }
-          },
+        splitLink({
+          condition: (op) => op.path.startsWith(CERTIFICATE_PROCEDURE_PREFIX),
+          true: certificateLink,
+          false: standardLink,
         }),
       ],
     });

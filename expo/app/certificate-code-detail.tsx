@@ -35,10 +35,19 @@ export default function CertificateCodeDetailScreen() {
 
   const certificateCode = String(code ?? '').toUpperCase();
 
+  // The official PDF server is always up, so a failed attempt almost always
+  // means a transient blip - keep retrying automatically with backoff before
+  // ever showing the user a "couldn't load" state.
   const query = trpc.certificateExplorer.codeSailings.useQuery(
     { certificateCode },
-    { enabled: certificateCode.length >= 6 }
+    {
+      enabled: certificateCode.length >= 6,
+      retry: 5,
+      retryDelay: (attemptIndex) => Math.min(2000 * 2 ** attemptIndex, 20000),
+    }
   );
+  const isRetrying = query.isError && query.isFetching;
+  const retryAttempt = query.failureCount;
 
   const bookedLookup = useMemo(() => {
     const set = new Set<string>();
@@ -168,16 +177,28 @@ export default function CertificateCodeDetailScreen() {
           ) : null
         }
         ListEmptyComponent={
-          query.isLoading ? (
+          query.isLoading || isRetrying ? (
             <View style={styles.loadingRow}>
               <ActivityIndicator size="small" color={COLORS.navyDeep} />
-              <Text style={styles.loadingText}>Pulling {certificateCode}'s official offer document…</Text>
+              <Text style={styles.loadingText}>
+                {isRetrying
+                  ? `Still working — retrying ${certificateCode}'s document (attempt ${retryAttempt + 1})…`
+                  : `Pulling ${certificateCode}'s official offer document…`}
+              </Text>
             </View>
           ) : query.isError ? (
             <View style={styles.emptyState} testID="certificate-code-detail.error-state">
               <AlertTriangle size={22} color="#DC2626" style={{ marginBottom: SPACING.sm }} />
-              <Text style={styles.emptyStateTitle}>Couldn't load this offer code</Text>
-              <Text style={styles.emptyStateText}>The certificate server may be temporarily busy. Pull down or go back and try again.</Text>
+              <Text style={styles.emptyStateTitle}>Taking longer than usual</Text>
+              <Text style={styles.emptyStateText}>The official document is still downloading in the background. Tap below to try again.</Text>
+              <TouchableOpacity
+                style={styles.retryButton}
+                onPress={() => query.refetch()}
+                activeOpacity={0.85}
+                testID="certificate-code-detail.retry-button"
+              >
+                <Text style={styles.retryButtonText}>Try again</Text>
+              </TouchableOpacity>
             </View>
           ) : query.data && query.data.status === 'empty' ? (
             <View style={styles.emptyState} testID="certificate-code-detail.no-pdf-state">
@@ -425,5 +446,17 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeSM,
     lineHeight: 20,
     textAlign: 'center',
+  },
+  retryButton: {
+    marginTop: SPACING.md,
+    backgroundColor: COLORS.navyDeep,
+    borderRadius: BORDER_RADIUS.round,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
   },
 });

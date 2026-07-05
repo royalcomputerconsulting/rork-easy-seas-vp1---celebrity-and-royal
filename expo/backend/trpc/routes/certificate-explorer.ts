@@ -969,9 +969,22 @@ async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: nu
   }
 }
 
-const MAX_RETRIES = 5;
-const FETCH_TIMEOUT_MS = 25000;
-const BASE_RETRY_DELAY_MS = 1500;
+// The official Royal Caribbean PDF server is effectively always up, so any
+// failure here is treated as transient rather than a real "this doesn't
+// exist" outcome (that's what the 404 branch below is for). We retry hard
+// and only give up after burning through a generous budget, throwing
+// instead of silently returning an empty string so callers can tell the
+// difference between "genuinely not published" (404) and "still trying".
+const MAX_RETRIES = 6;
+const FETCH_TIMEOUT_MS = 18000;
+const BASE_RETRY_DELAY_MS = 1200;
+
+class CertificatePdfUnavailableError extends Error {
+  constructor(url: string, cause?: string) {
+    super(`Certificate document temporarily unavailable for ${url}${cause ? `: ${cause}` : ''}`);
+    this.name = 'CertificatePdfUnavailableError';
+  }
+}
 
 async function fetchPdfText(url: string, retries = MAX_RETRIES): Promise<string> {
   console.log('[CertificateExplorer] Fetching PDF:', url);
@@ -1037,38 +1050,18 @@ async function fetchPdfText(url: string, retries = MAX_RETRIES): Promise<string>
       console.log('[CertificateExplorer] PDF downloaded:', { url, bytes: pdfBytes.length });
       return extractPdfText(pdfBytes);
     } catch (error) {
+      // The live site is always reachable, so treat every exception here as a
+      // transient blip (dropped connection, DNS hiccup, CDN cold start, etc.)
+      // and keep retrying rather than giving up on the first unfamiliar error.
       const isAbort = error instanceof DOMException && error.name === 'AbortError';
-      const isNetworkError = error instanceof TypeError && (
-        error.message.includes('fetch') ||
-        error.message.includes('Failed') ||
-        error.message.includes('network') ||
-        error.message.includes('ECONNREFUSED') ||
-        error.message.includes('ENOTFOUND') ||
-        error.message.includes('ETIMEDOUT')
-      );
-      const isRetryableError = error instanceof Error && (
-        error.message.includes('503') ||
-        error.message.includes('429') ||
-        error.message.includes('fetch') ||
-        error.message.includes('Failed') ||
-        error.message.includes('timeout') ||
-        error.message.includes('ECONNRESET') ||
-        error.message.includes('socket')
-      );
-
-      if (isAbort || isNetworkError || isRetryableError) {
-        lastError = error instanceof Error ? error : new Error(String(error));
-        console.warn(`[CertificateExplorer] ${isAbort ? 'Timeout' : 'Network error'} on attempt ${attempt}:`, lastError.message);
-        continue;
-      }
-
-      console.error('[CertificateExplorer] Non-retryable error:', error);
-      return '';
+      lastError = error instanceof Error ? error : new Error(String(error));
+      console.warn(`[CertificateExplorer] ${isAbort ? 'Timeout' : 'Fetch error'} on attempt ${attempt}:`, lastError.message);
+      continue;
     }
   }
 
   console.error(`[CertificateExplorer] All ${retries} attempts exhausted for ${url}:`, lastError?.message);
-  return '';
+  throw new CertificatePdfUnavailableError(url, lastError?.message);
 }
 
 const KNOWN_CERTIFICATE_SUFFIXES = [
@@ -1298,10 +1291,22 @@ export const certificateExplorerRouter = createTRPCRouter({
 
       console.log('[CertificateExplorer] codeSailings request:', { certificateCode, pdfUrl });
 
-      const pdfText = await fetchPdfText(pdfUrl);
+      let pdfText: string;
+      try {
+        pdfText = await fetchPdfText(pdfUrl);
+      } catch (error) {
+        // fetchPdfText already retried hard against the live PDF server; a
+        // thrown error here means every attempt was exhausted, not that the
+        // certificate doesn't exist. Surface a clear, retryable tRPC error so
+        // the app's own query-level retry (and the user's manual retry) can
+        // try again rather than treating this as "no such offer code".
+        const message = error instanceof Error ? error.message : String(error);
+        console.error('[CertificateExplorer] codeSailings: PDF fetch exhausted retries:', { certificateCode, message });
+        throw new Error(`Certificate document is temporarily unavailable, please try again: ${message}`);
+      }
 
       if (!pdfText || pdfText.length < 20) {
-        console.log('[CertificateExplorer] codeSailings: PDF not available:', { certificateCode });
+        console.log('[CertificateExplorer] codeSailings: PDF not published (404):', { certificateCode });
         return {
           certificateCode,
           certificateType,
@@ -1377,9 +1382,9 @@ export const certificateExplorerRouter = createTRPCRouter({
 
       const pdfScanLog: PdfScanLogEntry[] = [];
 
-      const sailingResults = await mapWithConcurrency<IndexEntry, SailingEntry[]>(allIndexEntries, 2, async (entry, entryIndex) => {
-        if (entryIndex > 0 && entryIndex % 4 === 0) {
-          await sleep(jitteredDelay(800));
+      const sailingResults = await mapWithConcurrency<IndexEntry, SailingEntry[]>(allIndexEntries, 3, async (entry, entryIndex) => {
+        if (entryIndex > 0 && entryIndex % 6 === 0) {
+          await sleep(jitteredDelay(700));
         }
         try {
           const pdfText = await fetchPdfText(entry.pdfUrl);

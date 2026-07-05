@@ -113,6 +113,7 @@ export default function CertificateLookupScreen() {
 
   const [progressCodes, setProgressCodes] = useState<string[]>([]);
   const [progressIndex, setProgressIndex] = useState(0);
+  const [retryAttempt, setRetryAttempt] = useState(0);
   const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const stopProgressTicker = useCallback(() => {
@@ -163,30 +164,52 @@ export default function CertificateLookupScreen() {
       .sort((a, b) => a.daysLeft - b.daysLeft);
   }, [ownedCertificates]);
 
+  // The Royal Caribbean PDF server is always reachable, so a failed scan
+  // almost always means a transient hiccup rather than a real outage. Retry
+  // the whole scan automatically with backoff, only alerting the user after
+  // every attempt is exhausted, so the experience never reads as "failed"
+  // over what's really just a slow retry cycle.
   const runSearch = useCallback(async (target: MonthTarget | null, customShipQuery?: string) => {
     const monthCode = target ? getMonthCode(target) : getMonthCode('thisMonth');
     const effectiveShipQuery = (customShipQuery ?? shipQuery).trim() || 'Star, Legend, Icon, Wonder, Utopia, Symphony, Harmony, Allure, Oasis, Odyssey, Anthem, Ovation, Quantum, Spectrum, Navigator, Voyager, Mariner, Explorer, Adventure, Freedom, Liberty, Independence, Enchantment, Grandeur, Rhapsody, Vision, Radiance, Brilliance, Serenade, Jewel';
+    const maxAttempts = 3;
 
     setActiveMonth(target);
     startProgressTicker(buildExpectedCertificateCodes(monthCode, includeA, includeC));
+    setRetryAttempt(0);
 
-    try {
-      await examineMutation.mutateAsync({
-        shipQuery: effectiveShipQuery,
-        monthCode,
-        includeA,
-        includeC,
-      });
-    } catch (error) {
-      const rawMsg = error instanceof Error ? error.message : 'Unknown error';
-      const isNetworkBlip = /Failed to fetch|Network request failed|abort/i.test(rawMsg);
-      const friendlyMsg = isNetworkBlip
-        ? 'The certificate server is temporarily busy or unreachable. Please wait a few seconds and try again.'
-        : `${rawMsg}\n\nYou can try again, or search a specific ship/month below.`;
-      Alert.alert('Certificate search failed', friendlyMsg);
-    } finally {
-      stopProgressTicker();
+    let lastError: unknown = null;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        if (attempt > 1) {
+          setRetryAttempt(attempt - 1);
+          await new Promise((resolve) => setTimeout(resolve, 1500 * attempt));
+        }
+        await examineMutation.mutateAsync({
+          shipQuery: effectiveShipQuery,
+          monthCode,
+          includeA,
+          includeC,
+        });
+        lastError = null;
+        break;
+      } catch (error) {
+        lastError = error;
+        console.log('[CertificateLookup] Scan attempt failed, will retry:', attempt, error instanceof Error ? error.message : String(error));
+      }
     }
+
+    if (lastError) {
+      const rawMsg = lastError instanceof Error ? lastError.message : 'Unknown error';
+      Alert.alert(
+        'Still working on it',
+        `The certificate documents are taking longer than usual after ${maxAttempts} attempts. Tap "This Month" or "Next Month" again to keep trying.\n\n${rawMsg}`
+      );
+    }
+
+    setRetryAttempt(0);
+    stopProgressTicker();
   }, [examineMutation, includeA, includeC, shipQuery, startProgressTicker, stopProgressTicker]);
 
   const handleThisMonth = useCallback(() => { void runSearch('thisMonth'); }, [runSearch]);
