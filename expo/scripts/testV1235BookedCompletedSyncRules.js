@@ -1,0 +1,32 @@
+const fs = require('fs');
+const path = require('path');
+function read(p){ return fs.readFileSync(path.join(process.cwd(), p), 'utf8'); }
+function assert(c,m){ if(!c) throw new Error(m); }
+const app = JSON.parse(read('app.json'));
+const pkg = JSON.parse(read('package.json'));
+const provider = read('state/RoyalCaribbeanSyncProvider.tsx');
+const syncLogic = read('lib/royalCaribbean/syncLogic.ts');
+const filters = read('lib/intelligenceFilters.ts');
+assert(app.expo.version === '12.4.2', 'app version must be 12.4.2');
+assert(app.expo.ios.buildNumber === '311', 'iOS build must be 311');
+assert(app.expo.android.versionCode === 120402, 'Android versionCode must be 120402');
+assert(pkg.version === '12.4.2', 'package version must be 12.4.2');
+assert(syncLogic.includes('v12.3.5: active bookings and completed/past cruises are independent lanes'), 'booked/completed lane marker missing');
+assert(provider.includes('extractedBookedCruisesRef.current = mergedBookedCruises'), 'booked capture must stage synchronously into ref');
+assert(provider.includes('allowActiveBookedCruiseRemoval'), 'active booked lane authority missing');
+assert(provider.includes('allowCompletedCruiseRemoval'), 'completed cruise lane authority missing');
+assert(provider.includes('Booked/completed lane authority'), 'lane authority sync log missing');
+assert(provider.includes('No authoritative completed/history rows captured'), 'completed preservation warning missing');
+assert(provider.includes('No authoritative active booked rows captured'), 'active booked preservation warning missing');
+assert(provider.includes('mergeSharedBookedInventoryRows(finalBookedCruises)'), 'final shared booked dedupe missing');
+assert(syncLogic.includes('allowActiveBookedCruiseRemoval?: boolean'), 'sync options must expose active booked removal flag');
+assert(syncLogic.includes('allowCompletedCruiseRemoval?: boolean'), 'sync options must expose completed removal flag');
+assert(syncLogic.includes('hasAuthoritativeActiveBooked'), 'active authoritative lane logic missing');
+assert(syncLogic.includes('hasAuthoritativeCompletedHistory'), 'completed authoritative lane logic missing');
+assert(syncLogic.includes('existingIsCompleted ? hasAuthoritativeCompletedHistory : hasAuthoritativeActiveBooked'), 'replacement must be lane-specific');
+assert(syncLogic.includes('offers are shared travel inventory'), 'offer identity must ignore owner for shared inventory');
+assert(syncLogic.includes('available sailings are shared household inventory'), 'available cruise identity must ignore owner');
+assert(syncLogic.includes('booked and completed cruises are shared travel inventory'), 'booked/completed identity must ignore owner');
+assert(!syncLogic.includes('`${source}|${owner}|booking:${booking}`'), 'booked identity must not include owner');
+assert(filters.includes('Cruises, offer catalogs, booked trips, completed trips, and available sailings are shared household data'), 'profile filters must keep travel inventory visible to both users');
+console.log('PASS testV1235BookedCompletedSyncRules');

@@ -1,0 +1,23 @@
+const fs = require('fs');
+const path = require('path');
+const root = path.resolve(__dirname, '..');
+const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+const batch = read('lib/certificates/certificateBatchDownload.ts');
+const lookup = read('app/certificate-lookup.tsx');
+const codes = read('app/certificate-codes.tsx');
+const offer = read('app/offer-details.tsx');
+const app = JSON.parse(read('app.json'));
+const pkg = JSON.parse(read('package.json'));
+function ok(v,m){ if(!v) throw new Error(m); }
+ok(batch.includes('v12.4.0-certificate-download-live-log-export'), 'missing current certificate batch runtime marker');
+ok(batch.includes('chunk(entries, 3)'), 'certificate scans must be chunked');
+ok(batch.includes('retrying one code at a time'), 'missing per-code fallback');
+ok(lookup.includes('downloadCertificateCatalogBatched'), 'lookup must use batched downloader');
+ok(codes.includes('downloadCertificateCatalogBatched'), 'codes page must use batched downloader');
+ok(offer.includes('showOfferSummary'), 'offer summary must be collapsible');
+ok(offer.includes('Show offer summary'), 'compact header toggle missing');
+ok(app.expo.version === '12.4.2', 'app version must be 12.4.2');
+ok(app.expo.ios.buildNumber === '311', 'iOS build number must be 311');
+ok(app.expo.android.versionCode === 120402, 'Android versionCode must be 120402');
+ok(pkg.version === '12.4.2', 'package version must be 12.4.2');
+console.log('PASS testV1239CertificateBatchCompactOffer');

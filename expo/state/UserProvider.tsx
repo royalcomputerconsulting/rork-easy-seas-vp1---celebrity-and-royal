@@ -1,0 +1,882 @@
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import createContextHook from "@nkzw/create-context-hook";
+import { useAuth } from "./AuthProvider";
+import { ALL_STORAGE_KEYS, getUserScopedKey } from "@/lib/storage/storageKeys";
+
+export interface PlayingHours {
+  enabled: boolean;
+  startTime: string;
+  endTime: string;
+  preferSeaDayMorning: boolean;
+  preferPortDayEvening: boolean;
+  sessions: PlayingSession[];
+}
+
+export interface PlayingSession {
+  id: string;
+  name: string;
+  startTime: string;
+  endTime: string;
+  enabled: boolean;
+}
+
+export const DEFAULT_PLAYING_HOURS: PlayingHours = {
+  enabled: true,
+  startTime: '05:00',
+  endTime: '07:30',
+  preferSeaDayMorning: true,
+  preferPortDayEvening: true,
+  sessions: [
+    { id: 'early_morning', name: 'Early Morning', startTime: '05:00', endTime: '07:30', enabled: true },
+    { id: 'late_morning', name: 'Late Morning', startTime: '10:00', endTime: '12:00', enabled: true },
+    { id: 'afternoon', name: 'Afternoon', startTime: '14:00', endTime: '17:00', enabled: true },
+    { id: 'evening', name: 'Evening', startTime: '19:00', endTime: '23:00', enabled: true },
+    { id: 'late_night', name: 'Late Night', startTime: '23:00', endTime: '02:30', enabled: true },
+  ],
+};
+
+export interface UserProfile {
+  id: string;
+  name: string;
+  displayName?: string;
+  relationshipLabel?: string;
+  email: string;
+  isOwner?: boolean;
+  defaultProfile?: boolean;
+  active?: boolean;
+  avatarUrl?: string;
+  crownAnchorNumber?: string;
+  royalCaribbeanNumber?: string;
+  clubRoyaleId?: string;
+  clubRoyalePoints?: number;
+  clubRoyaleTier?: string;
+  crownAnchorLevel?: string;
+  loyaltyPoints?: number;
+  playingHours?: PlayingHours;
+  celebrityEmail?: string;
+  celebrityCaptainsClubNumber?: string;
+  blueChipId?: string;
+  celebrityCaptainsClubPoints?: number;
+  celebrityBlueChipPoints?: number;
+  celebrityBlueChipTier?: string;
+  preferredBrand?: 'royal' | 'celebrity' | 'silversea' | 'carnival';
+  silverseaEmail?: string;
+  silverseaVenetianNumber?: string;
+  silverseaVenetianTier?: string;
+  silverseaVenetianPoints?: number;
+  carnivalVifpNumber?: string;
+  carnivalVifpTier?: string;
+  carnivalVifpPoints?: number;
+  carnivalCruiseDayPoints?: number;
+  carnivalTotalCruises?: number;
+  carnivalPlayersClubTier?: string;
+  carnivalPlayersClubPoints?: number;
+  birthdate?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface UserState {
+  users: UserProfile[];
+  currentUserId: string | null;
+  currentUser: UserProfile | null;
+  isLoading: boolean;
+  addUser: (user: { id?: string; name: string; email: string; avatarUrl?: string }) => Promise<UserProfile>;
+  switchUser: (userId: string) => Promise<void>;
+  removeUser: (userId: string) => Promise<void>;
+  updateUser: (userId: string, updates: Partial<UserProfile>) => Promise<void>;
+  ensureOwner: () => Promise<UserProfile>;
+  syncFromStorage: () => Promise<void>;
+}
+
+const KEYS = {
+  USERS: ALL_STORAGE_KEYS.USERS,
+  CURRENT_USER: ALL_STORAGE_KEYS.CURRENT_USER,
+} as const;
+
+const DEFAULT_OWNER = {
+  name: 'Player',
+  email: 'player@easyseas.app',
+  crownAnchorNumber: '',
+  crownAnchorLevel: '',
+  loyaltyPoints: 0,
+  clubRoyalePoints: 0,
+  clubRoyaleTier: '',
+  celebrityEmail: '',
+  celebrityCaptainsClubNumber: '',
+  celebrityCaptainsClubPoints: 0,
+  celebrityBlueChipPoints: 0,
+  celebrityBlueChipTier: '',
+  preferredBrand: 'royal' as const,
+  silverseaEmail: '',
+  silverseaVenetianNumber: '',
+  silverseaVenetianTier: '',
+  silverseaVenetianPoints: 0,
+};
+
+let uniqueIdCounter = 0;
+
+/**
+ * Generates a collision-proof id. `Date.now()` alone can produce the exact same value if two
+ * profiles are created within the same millisecond (e.g. an auto-created "Second User" profile
+ * racing with an import-review profile creation), which previously caused duplicate React keys
+ * and silently-merged profiles. Adding a monotonically increasing counter plus a random suffix
+ * guarantees every generated id is unique even when created back-to-back synchronously.
+ */
+function generateUniqueUserId(prefix: string): string {
+  uniqueIdCounter += 1;
+  const randomSuffix = Math.random().toString(36).slice(2, 8);
+  return `${prefix}_${Date.now()}_${uniqueIdCounter}_${randomSuffix}`;
+}
+
+function normalizeEmail(email: string | null | undefined): string | null {
+  if (!email) {
+    return null;
+  }
+
+  const normalizedEmail = email.toLowerCase().trim();
+  return normalizedEmail.length > 0 ? normalizedEmail : null;
+}
+
+function getScopedUserKeys(email: string | null) {
+  return {
+    USERS: getUserScopedKey(KEYS.USERS, email),
+    CURRENT_USER: getUserScopedKey(KEYS.CURRENT_USER, email),
+  } as const;
+}
+
+function createOwnerProfile(email: string | null): UserProfile {
+  const now = new Date().toISOString();
+
+  return {
+    id: generateUniqueUserId('user'),
+    name: DEFAULT_OWNER.name,
+    displayName: DEFAULT_OWNER.name,
+    relationshipLabel: 'Self',
+    email: email ?? DEFAULT_OWNER.email,
+    isOwner: true,
+    defaultProfile: true,
+    active: true,
+    crownAnchorNumber: DEFAULT_OWNER.crownAnchorNumber,
+    royalCaribbeanNumber: DEFAULT_OWNER.crownAnchorNumber,
+    clubRoyaleId: '',
+    clubRoyalePoints: DEFAULT_OWNER.clubRoyalePoints,
+    clubRoyaleTier: DEFAULT_OWNER.clubRoyaleTier,
+    crownAnchorLevel: DEFAULT_OWNER.crownAnchorLevel,
+    loyaltyPoints: DEFAULT_OWNER.loyaltyPoints,
+    celebrityEmail: DEFAULT_OWNER.celebrityEmail,
+    celebrityCaptainsClubNumber: DEFAULT_OWNER.celebrityCaptainsClubNumber,
+    blueChipId: '',
+    celebrityCaptainsClubPoints: DEFAULT_OWNER.celebrityCaptainsClubPoints,
+    celebrityBlueChipPoints: DEFAULT_OWNER.celebrityBlueChipPoints,
+    celebrityBlueChipTier: DEFAULT_OWNER.celebrityBlueChipTier,
+    preferredBrand: DEFAULT_OWNER.preferredBrand,
+    silverseaEmail: DEFAULT_OWNER.silverseaEmail,
+    silverseaVenetianNumber: DEFAULT_OWNER.silverseaVenetianNumber,
+    silverseaVenetianTier: DEFAULT_OWNER.silverseaVenetianTier,
+    silverseaVenetianPoints: DEFAULT_OWNER.silverseaVenetianPoints,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+function sanitizePlayingSession(session: unknown, index: number): PlayingSession | null {
+  if (!session || typeof session !== 'object') {
+    return null;
+  }
+
+  const sessionRecord = session as Partial<PlayingSession>;
+  const fallbackSession = DEFAULT_PLAYING_HOURS.sessions[index] ?? DEFAULT_PLAYING_HOURS.sessions[0];
+
+  return {
+    id: typeof sessionRecord.id === 'string' && sessionRecord.id.trim().length > 0 ? sessionRecord.id : `${fallbackSession.id}_${index}`,
+    name: typeof sessionRecord.name === 'string' && sessionRecord.name.trim().length > 0 ? sessionRecord.name : fallbackSession.name,
+    startTime: typeof sessionRecord.startTime === 'string' ? sessionRecord.startTime : fallbackSession.startTime,
+    endTime: typeof sessionRecord.endTime === 'string' ? sessionRecord.endTime : fallbackSession.endTime,
+    enabled: typeof sessionRecord.enabled === 'boolean' ? sessionRecord.enabled : fallbackSession.enabled,
+  };
+}
+
+function sanitizePlayingHours(value: unknown): PlayingHours | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+
+  const playingHours = value as Partial<PlayingHours>;
+  const sessions = Array.isArray(playingHours.sessions)
+    ? playingHours.sessions
+        .map((session, index) => sanitizePlayingSession(session, index))
+        .filter((session): session is PlayingSession => session !== null)
+    : DEFAULT_PLAYING_HOURS.sessions;
+
+  return {
+    enabled: typeof playingHours.enabled === 'boolean' ? playingHours.enabled : DEFAULT_PLAYING_HOURS.enabled,
+    startTime: typeof playingHours.startTime === 'string' ? playingHours.startTime : DEFAULT_PLAYING_HOURS.startTime,
+    endTime: typeof playingHours.endTime === 'string' ? playingHours.endTime : DEFAULT_PLAYING_HOURS.endTime,
+    preferSeaDayMorning: typeof playingHours.preferSeaDayMorning === 'boolean' ? playingHours.preferSeaDayMorning : DEFAULT_PLAYING_HOURS.preferSeaDayMorning,
+    preferPortDayEvening: typeof playingHours.preferPortDayEvening === 'boolean' ? playingHours.preferPortDayEvening : DEFAULT_PLAYING_HOURS.preferPortDayEvening,
+    sessions: sessions.length > 0 ? sessions : DEFAULT_PLAYING_HOURS.sessions,
+  };
+}
+
+function sanitizeUserProfile(user: unknown, fallbackEmail: string | null, index: number): UserProfile | null {
+  if (!user || typeof user !== 'object') {
+    return null;
+  }
+
+  const userRecord = user as Partial<UserProfile>;
+  const now = new Date().toISOString();
+  const normalizedEmail = normalizeEmail(userRecord.email) ?? fallbackEmail ?? DEFAULT_OWNER.email;
+
+  return {
+    id: typeof userRecord.id === 'string' && userRecord.id.trim().length > 0 ? userRecord.id : generateUniqueUserId(`user_${index}`),
+    name: typeof userRecord.name === 'string' && userRecord.name.trim().length > 0 ? userRecord.name : DEFAULT_OWNER.name,
+    displayName: typeof userRecord.displayName === 'string' && userRecord.displayName.trim().length > 0 ? userRecord.displayName : (typeof userRecord.name === 'string' && userRecord.name.trim().length > 0 ? userRecord.name : DEFAULT_OWNER.name),
+    relationshipLabel: typeof userRecord.relationshipLabel === 'string' ? userRecord.relationshipLabel : (userRecord.isOwner === true ? 'Self' : ''),
+    email: normalizedEmail,
+    isOwner: userRecord.isOwner === true,
+    defaultProfile: userRecord.defaultProfile === true || userRecord.isOwner === true,
+    active: userRecord.active !== false,
+    avatarUrl: typeof userRecord.avatarUrl === 'string' ? userRecord.avatarUrl : undefined,
+    crownAnchorNumber: typeof userRecord.crownAnchorNumber === 'string' ? userRecord.crownAnchorNumber : DEFAULT_OWNER.crownAnchorNumber,
+    royalCaribbeanNumber: typeof userRecord.royalCaribbeanNumber === 'string' ? userRecord.royalCaribbeanNumber : (typeof userRecord.crownAnchorNumber === 'string' ? userRecord.crownAnchorNumber : DEFAULT_OWNER.crownAnchorNumber),
+    clubRoyaleId: typeof userRecord.clubRoyaleId === 'string' ? userRecord.clubRoyaleId : '',
+    clubRoyalePoints: typeof userRecord.clubRoyalePoints === 'number' ? userRecord.clubRoyalePoints : DEFAULT_OWNER.clubRoyalePoints,
+    clubRoyaleTier: typeof userRecord.clubRoyaleTier === 'string' ? userRecord.clubRoyaleTier : DEFAULT_OWNER.clubRoyaleTier,
+    crownAnchorLevel: typeof userRecord.crownAnchorLevel === 'string' ? userRecord.crownAnchorLevel : DEFAULT_OWNER.crownAnchorLevel,
+    loyaltyPoints: typeof userRecord.loyaltyPoints === 'number' ? userRecord.loyaltyPoints : DEFAULT_OWNER.loyaltyPoints,
+    playingHours: sanitizePlayingHours(userRecord.playingHours),
+    celebrityEmail: typeof userRecord.celebrityEmail === 'string' ? userRecord.celebrityEmail : DEFAULT_OWNER.celebrityEmail,
+    celebrityCaptainsClubNumber: typeof userRecord.celebrityCaptainsClubNumber === 'string' ? userRecord.celebrityCaptainsClubNumber : DEFAULT_OWNER.celebrityCaptainsClubNumber,
+    blueChipId: typeof userRecord.blueChipId === 'string' ? userRecord.blueChipId : '',
+    celebrityCaptainsClubPoints: typeof userRecord.celebrityCaptainsClubPoints === 'number' ? userRecord.celebrityCaptainsClubPoints : DEFAULT_OWNER.celebrityCaptainsClubPoints,
+    celebrityBlueChipPoints: typeof userRecord.celebrityBlueChipPoints === 'number' ? userRecord.celebrityBlueChipPoints : DEFAULT_OWNER.celebrityBlueChipPoints,
+    celebrityBlueChipTier: typeof userRecord.celebrityBlueChipTier === 'string' ? userRecord.celebrityBlueChipTier : DEFAULT_OWNER.celebrityBlueChipTier,
+    preferredBrand: userRecord.preferredBrand === 'royal' || userRecord.preferredBrand === 'celebrity' || userRecord.preferredBrand === 'silversea' || userRecord.preferredBrand === 'carnival'
+      ? userRecord.preferredBrand
+      : DEFAULT_OWNER.preferredBrand,
+    silverseaEmail: typeof userRecord.silverseaEmail === 'string' ? userRecord.silverseaEmail : DEFAULT_OWNER.silverseaEmail,
+    silverseaVenetianNumber: typeof userRecord.silverseaVenetianNumber === 'string' ? userRecord.silverseaVenetianNumber : DEFAULT_OWNER.silverseaVenetianNumber,
+    silverseaVenetianTier: typeof userRecord.silverseaVenetianTier === 'string' ? userRecord.silverseaVenetianTier : DEFAULT_OWNER.silverseaVenetianTier,
+    silverseaVenetianPoints: typeof userRecord.silverseaVenetianPoints === 'number' ? userRecord.silverseaVenetianPoints : DEFAULT_OWNER.silverseaVenetianPoints,
+    carnivalVifpNumber: typeof userRecord.carnivalVifpNumber === 'string' ? userRecord.carnivalVifpNumber : '',
+    carnivalVifpTier: typeof userRecord.carnivalVifpTier === 'string' ? userRecord.carnivalVifpTier : '',
+    carnivalVifpPoints: typeof userRecord.carnivalVifpPoints === 'number' ? userRecord.carnivalVifpPoints : 0,
+    carnivalCruiseDayPoints: typeof userRecord.carnivalCruiseDayPoints === 'number' ? userRecord.carnivalCruiseDayPoints : 0,
+    carnivalTotalCruises: typeof userRecord.carnivalTotalCruises === 'number' ? userRecord.carnivalTotalCruises : 0,
+    carnivalPlayersClubTier: typeof userRecord.carnivalPlayersClubTier === 'string' ? userRecord.carnivalPlayersClubTier : '',
+    carnivalPlayersClubPoints: typeof userRecord.carnivalPlayersClubPoints === 'number' ? userRecord.carnivalPlayersClubPoints : 0,
+    birthdate: typeof userRecord.birthdate === 'string' ? userRecord.birthdate : undefined,
+    createdAt: typeof userRecord.createdAt === 'string' ? userRecord.createdAt : now,
+    updatedAt: typeof userRecord.updatedAt === 'string' ? userRecord.updatedAt : now,
+  };
+}
+
+/**
+ * Collapses duplicate non-owner ("second user") profiles into a single one.
+ * A past bug could repeatedly auto-create a profile named "Second User" on
+ * every Settings screen mount, leaving several duplicate profiles behind in
+ * storage. This keeps the earliest-created non-owner profile (preferring one
+ * that actually has synced loyalty data over an empty duplicate) and drops
+ * the rest so the app only ever shows one "Second User" going forward.
+ */
+function dedupeSecondProfiles(profiles: UserProfile[]): UserProfile[] {
+  const ownerProfiles = profiles.filter((profile) => profile.isOwner);
+  const nonOwnerProfiles = profiles.filter((profile) => !profile.isOwner);
+
+  if (nonOwnerProfiles.length <= 1) {
+    return profiles;
+  }
+
+  const hasSyncedData = (profile: UserProfile) => Boolean(profile.crownAnchorNumber || profile.clubRoyaleId || (profile.clubRoyalePoints ?? 0) > 0 || (profile.loyaltyPoints ?? 0) > 0);
+
+  const sorted = [...nonOwnerProfiles].sort((a, b) => {
+    const aSynced = hasSyncedData(a) ? 1 : 0;
+    const bSynced = hasSyncedData(b) ? 1 : 0;
+    if (aSynced !== bSynced) return bSynced - aSynced;
+    return (a.createdAt || '').localeCompare(b.createdAt || '');
+  });
+
+  const [keptSecondProfile] = sorted;
+  return [...ownerProfiles, ...(keptSecondProfile ? [keptSecondProfile] : [])];
+}
+
+/**
+ * Guarantees every profile in the list has a globally-unique id, even if corrupted data from
+ * before the collision-proof id generator (see `generateUniqueUserId`) left two profiles sharing
+ * the exact same id in storage. A shared id between two different profile objects (e.g. the real
+ * owner and a blank auto-created "Second User" stub) causes React lists that key off `profile.id`
+ * to throw "two children with the same key" and, worse, makes `users.find(u => u.id === x)` return
+ * whichever of the two happens to appear first -- which can silently resolve `currentUser` to the
+ * wrong (blank/stale) profile and make every screen that reads loyalty/profile data look unsynced.
+ * When a collision is found, the more "authoritative" profile (owner, has real loyalty data, etc.)
+ * keeps the original id and the other one is assigned a brand-new unique id.
+ */
+function ensureUniqueProfileIds(profiles: UserProfile[]): UserProfile[] {
+  const scoreOf = (candidate: UserProfile): number => {
+    let value = 0;
+    if (candidate.isOwner) value += 100;
+    if (candidate.defaultProfile) value += 50;
+    if ((candidate.crownAnchorNumber ?? '').trim().length > 0) value += 10;
+    if ((candidate.clubRoyaleId ?? '').trim().length > 0) value += 10;
+    if ((candidate.clubRoyalePoints ?? 0) > 0) value += 5;
+    if ((candidate.loyaltyPoints ?? 0) > 0) value += 5;
+    if ((candidate.name ?? '').trim().length > 0 && candidate.name !== 'Second User') value += 2;
+    return value;
+  };
+
+  const byId = new Map<string, UserProfile>();
+  let repaired = false;
+
+  for (const profile of profiles) {
+    const existing = byId.get(profile.id);
+    if (!existing) {
+      byId.set(profile.id, profile);
+      continue;
+    }
+
+    repaired = true;
+    const keepExisting = scoreOf(existing) >= scoreOf(profile);
+    const keep = keepExisting ? existing : profile;
+    const rename = keepExisting ? profile : existing;
+    const newId = generateUniqueUserId(rename.isOwner ? 'user_owner' : 'user_second');
+
+    console.warn('[UserProvider] Repairing duplicate profile id collision so no two profiles ever share an id:', {
+      collidingId: profile.id,
+      keptProfileName: keep.name,
+      keptProfileIsOwner: keep.isOwner === true,
+      renamedProfileOldId: rename.id,
+      renamedProfileNewId: newId,
+      renamedProfileName: rename.name,
+    });
+
+    byId.set(keep.id, keep);
+    byId.set(newId, { ...rename, id: newId });
+  }
+
+  if (!repaired) {
+    return profiles;
+  }
+
+  return Array.from(byId.values());
+}
+
+function parseStoredUsers(rawValue: string | null, fallbackEmail: string | null): UserProfile[] {
+  if (!rawValue) {
+    return [];
+  }
+
+  try {
+    const parsedValue = JSON.parse(rawValue) as unknown;
+
+    if (!Array.isArray(parsedValue)) {
+      console.warn('[UserProvider] Stored users payload is not an array, ignoring invalid value');
+      return [];
+    }
+
+    const sanitizedUsers = parsedValue
+      .map((user, index) => sanitizeUserProfile(user, fallbackEmail, index))
+      .filter((user): user is UserProfile => user !== null);
+
+    return ensureUniqueProfileIds(sanitizedUsers);
+  } catch (error) {
+    console.error('[UserProvider] Failed to parse stored users payload:', error);
+    return [];
+  }
+}
+
+export const [UserProvider, useUser] = createContextHook((): UserState => {
+  const { authenticatedEmail } = useAuth();
+  const normalizedAuthenticatedEmail = normalizeEmail(authenticatedEmail);
+  const [users, setUsers] = useState<UserProfile[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const lastAuthenticatedEmailRef = useRef<string | null>(normalizedAuthenticatedEmail);
+
+  const currentUser = useMemo(() => {
+    const resolvedUser = users.find((user) => user.id === currentUserId) || users.find((user) => user.isOwner) || null;
+
+    if (!resolvedUser || !normalizedAuthenticatedEmail) {
+      return resolvedUser;
+    }
+
+    const resolvedEmail = normalizeEmail(resolvedUser.email);
+    if (resolvedEmail !== normalizedAuthenticatedEmail) {
+      // Only actually hide the profile if there is a DIFFERENT profile in storage that genuinely
+      // belongs to the authenticated account -- that's the real "just switched accounts, still
+      // loading the other account's data" case this guard exists for. If no such profile exists,
+      // this is just email drift on the same single profile (e.g. it was created before the
+      // authenticated email settled), so keep showing it instead of blacking out every screen
+      // that depends on the current profile (loyalty header, portfolio, etc. all read this).
+      const matchingProfileForAuthenticatedEmail = users.find((user) => user.id !== resolvedUser.id && normalizeEmail(user.email) === normalizedAuthenticatedEmail);
+      if (matchingProfileForAuthenticatedEmail) {
+        console.log('[UserProvider] Suppressing stale user during account transition:', {
+          authenticatedEmail: normalizedAuthenticatedEmail,
+          resolvedEmail,
+          userId: resolvedUser.id,
+        });
+        return null;
+      }
+
+      console.log('[UserProvider] Profile email differs from authenticated email but no alternate profile exists -- showing it anyway instead of blacking out the app:', {
+        authenticatedEmail: normalizedAuthenticatedEmail,
+        resolvedEmail,
+        userId: resolvedUser.id,
+      });
+    }
+
+    return resolvedUser;
+  }, [currentUserId, normalizedAuthenticatedEmail, users]);
+
+  useEffect(() => {
+    if (!currentUser || !normalizedAuthenticatedEmail) {
+      return;
+    }
+
+    const resolvedEmail = normalizeEmail(currentUser.email);
+    if (resolvedEmail === normalizedAuthenticatedEmail) {
+      return;
+    }
+
+    // Self-heal the drifted email so future renders don't keep re-detecting the same mismatch.
+    console.log('[UserProvider] Self-healing profile email drift to match authenticated email:', {
+      profileId: currentUser.id,
+      oldEmail: currentUser.email,
+      newEmail: normalizedAuthenticatedEmail,
+    });
+    void updateUser(currentUser.id, { email: normalizedAuthenticatedEmail });
+  }, [currentUser, normalizedAuthenticatedEmail]);
+
+  useEffect(() => {
+    if (lastAuthenticatedEmailRef.current === normalizedAuthenticatedEmail) {
+      return;
+    }
+
+    console.log('[UserProvider] Authenticated email changed, clearing in-memory user state:', {
+      previousEmail: lastAuthenticatedEmailRef.current,
+      nextEmail: normalizedAuthenticatedEmail,
+    });
+
+    lastAuthenticatedEmailRef.current = normalizedAuthenticatedEmail;
+    setUsers([]);
+    setCurrentUserId(null);
+    setIsLoading(!!normalizedAuthenticatedEmail);
+  }, [normalizedAuthenticatedEmail]);
+
+  const persistUsers = useCallback(async (newUsers: UserProfile[]) => {
+    const scopedKeys = getScopedUserKeys(normalizedAuthenticatedEmail);
+
+    try {
+      await AsyncStorage.setItem(scopedKeys.USERS, JSON.stringify(newUsers));
+      console.log('[UserProvider] Persisted scoped users:', {
+        email: normalizedAuthenticatedEmail,
+        count: newUsers.length,
+        key: scopedKeys.USERS,
+      });
+    } catch (error) {
+      console.error('[UserProvider] Failed to persist scoped users:', error);
+    }
+  }, [normalizedAuthenticatedEmail]);
+
+  const persistCurrentUser = useCallback(async (userId: string | null) => {
+    const scopedKeys = getScopedUserKeys(normalizedAuthenticatedEmail);
+
+    try {
+      if (userId) {
+        await AsyncStorage.setItem(scopedKeys.CURRENT_USER, userId);
+      } else {
+        await AsyncStorage.removeItem(scopedKeys.CURRENT_USER);
+      }
+
+      console.log('[UserProvider] Persisted scoped current user:', {
+        email: normalizedAuthenticatedEmail,
+        userId,
+        key: scopedKeys.CURRENT_USER,
+      });
+    } catch (error) {
+      console.error('[UserProvider] Failed to persist scoped current user:', error);
+    }
+  }, [normalizedAuthenticatedEmail]);
+
+  const migrateLegacyUsersIfNeeded = useCallback(async (): Promise<{ migratedUsers: UserProfile[]; migratedCurrentUserId: string | null } | null> => {
+    if (!normalizedAuthenticatedEmail) {
+      return null;
+    }
+
+    try {
+      const [legacyUsersRaw, legacyCurrentUserId] = await Promise.all([
+        AsyncStorage.getItem(KEYS.USERS),
+        AsyncStorage.getItem(KEYS.CURRENT_USER),
+      ]);
+
+      if (!legacyUsersRaw) {
+        return null;
+      }
+
+      const parsedLegacyUsers = parseStoredUsers(legacyUsersRaw, normalizedAuthenticatedEmail);
+      const matchingUsers = parsedLegacyUsers.filter((user) => normalizeEmail(user.email) === normalizedAuthenticatedEmail);
+
+      if (matchingUsers.length === 0) {
+        console.log('[UserProvider] Legacy user storage does not match authenticated email, skipping migration:', normalizedAuthenticatedEmail);
+        return null;
+      }
+
+      const selectedCurrentUser = matchingUsers.find((user) => user.id === legacyCurrentUserId)
+        || matchingUsers.find((user) => user.isOwner)
+        || matchingUsers[0]
+        || null;
+
+      if (!selectedCurrentUser) {
+        return null;
+      }
+
+      const migratedUsers = matchingUsers.map((user) => ({
+        ...user,
+        email: normalizeEmail(user.email) ?? normalizedAuthenticatedEmail,
+        isOwner: user.id === selectedCurrentUser.id,
+      }));
+
+      const scopedKeys = getScopedUserKeys(normalizedAuthenticatedEmail);
+      await Promise.all([
+        AsyncStorage.setItem(scopedKeys.USERS, JSON.stringify(migratedUsers)),
+        AsyncStorage.setItem(scopedKeys.CURRENT_USER, selectedCurrentUser.id),
+      ]);
+
+      console.log('[UserProvider] Migrated legacy profile data into scoped storage for:', normalizedAuthenticatedEmail);
+
+      return {
+        migratedUsers,
+        migratedCurrentUserId: selectedCurrentUser.id,
+      };
+    } catch (error) {
+      console.error('[UserProvider] Failed to migrate legacy user storage:', error);
+      return null;
+    }
+  }, [normalizedAuthenticatedEmail]);
+
+  const loadUsers = useCallback(async () => {
+    if (!normalizedAuthenticatedEmail) {
+      console.log('[UserProvider] No authenticated email, resetting scoped user state');
+      setUsers([]);
+      setCurrentUserId(null);
+      setIsLoading(false);
+      return;
+    }
+
+    const scopedKeys = getScopedUserKeys(normalizedAuthenticatedEmail);
+
+    try {
+      setIsLoading(true);
+      console.log('[UserProvider] Loading scoped users from storage:', {
+        email: normalizedAuthenticatedEmail,
+        usersKey: scopedKeys.USERS,
+        currentUserKey: scopedKeys.CURRENT_USER,
+      });
+
+      let [storedUsersRaw, storedCurrentUserId] = await Promise.all([
+        AsyncStorage.getItem(scopedKeys.USERS),
+        AsyncStorage.getItem(scopedKeys.CURRENT_USER),
+      ]);
+
+      if (!storedUsersRaw) {
+        const migratedData = await migrateLegacyUsersIfNeeded();
+        if (migratedData) {
+          setUsers(migratedData.migratedUsers);
+          setCurrentUserId(migratedData.migratedCurrentUserId);
+          console.log('[UserProvider] Scoped user state restored from migrated legacy data');
+          return;
+        }
+      }
+
+      storedUsersRaw = storedUsersRaw ?? await AsyncStorage.getItem(scopedKeys.USERS);
+      storedCurrentUserId = storedCurrentUserId ?? await AsyncStorage.getItem(scopedKeys.CURRENT_USER);
+
+      if (storedUsersRaw) {
+        const parsedUsers = parseStoredUsers(storedUsersRaw, normalizedAuthenticatedEmail);
+        const normalizedUsers = parsedUsers.map((user) => ({
+          ...user,
+          email: normalizeEmail(user.email) ?? normalizedAuthenticatedEmail,
+        }));
+
+        const dedupedUsers = dedupeSecondProfiles(normalizedUsers);
+        if (dedupedUsers.length !== normalizedUsers.length) {
+          console.log('[UserProvider] Collapsed duplicate "Second User" profiles into one on load:', {
+            email: normalizedAuthenticatedEmail,
+            before: normalizedUsers.length,
+            after: dedupedUsers.length,
+          });
+          await AsyncStorage.setItem(scopedKeys.USERS, JSON.stringify(dedupedUsers));
+        }
+
+        const owner = dedupedUsers.find((user) => user.isOwner) ?? dedupedUsers[0] ?? null;
+        const resolvedCurrentUserId = storedCurrentUserId && dedupedUsers.some((user) => user.id === storedCurrentUserId)
+          ? storedCurrentUserId
+          : owner?.id ?? null;
+
+        setUsers(dedupedUsers);
+        setCurrentUserId(resolvedCurrentUserId);
+
+        if (resolvedCurrentUserId !== storedCurrentUserId) {
+          await persistCurrentUser(resolvedCurrentUserId);
+        }
+
+        console.log('[UserProvider] Loaded scoped users:', {
+          email: normalizedAuthenticatedEmail,
+          count: dedupedUsers.length,
+          currentUserId: resolvedCurrentUserId,
+        });
+        return;
+      }
+
+      const owner = createOwnerProfile(normalizedAuthenticatedEmail);
+      const newUsers = [owner];
+      setUsers(newUsers);
+      setCurrentUserId(owner.id);
+      await Promise.all([
+        AsyncStorage.setItem(scopedKeys.USERS, JSON.stringify(newUsers)),
+        AsyncStorage.setItem(scopedKeys.CURRENT_USER, owner.id),
+      ]);
+
+      console.log('[UserProvider] Created new scoped owner profile:', {
+        email: normalizedAuthenticatedEmail,
+        ownerId: owner.id,
+      });
+    } catch (error) {
+      console.error('[UserProvider] Failed to load scoped users:', error);
+      setUsers([]);
+      setCurrentUserId(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [migrateLegacyUsersIfNeeded, normalizedAuthenticatedEmail, persistCurrentUser]);
+
+  useEffect(() => {
+    void loadUsers();
+  }, [loadUsers]);
+
+  const addUser = useCallback(async (user: { id?: string; name: string; email: string; avatarUrl?: string }): Promise<UserProfile> => {
+    const now = new Date().toISOString();
+    const normalizedEmail = normalizeEmail(user.email) ?? normalizedAuthenticatedEmail ?? DEFAULT_OWNER.email;
+
+    const isFirstUser = users.length === 0;
+
+    // Each account can only ever have ONE non-owner "second traveler" slot. If a caller (e.g. the
+    // Settings screen's auto-create effect) races and asks to create another one while one already
+    // exists, return the existing profile instead of creating a duplicate "Second User" entry.
+    if (!isFirstUser && !user.id) {
+      const existingNonOwner = users.find((candidate) => candidate.active !== false && !candidate.isOwner && !candidate.defaultProfile);
+      if (existingNonOwner) {
+        console.log('[UserProvider] Reusing existing second-traveler profile instead of creating a duplicate:', existingNonOwner.id);
+        return existingNonOwner;
+      }
+    }
+
+    const newUser: UserProfile = {
+      id: user.id || generateUniqueUserId('user'),
+      name: user.name,
+      displayName: user.name,
+      relationshipLabel: isFirstUser ? 'Self' : '',
+      email: normalizedEmail,
+      avatarUrl: user.avatarUrl,
+      isOwner: isFirstUser,
+      defaultProfile: isFirstUser,
+      active: true,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const newUsers = [...users, newUser];
+    setUsers(newUsers);
+    await persistUsers(newUsers);
+
+    if (!currentUserId) {
+      setCurrentUserId(newUser.id);
+      await persistCurrentUser(newUser.id);
+    }
+
+    console.log('[UserProvider] Added scoped user:', {
+      authenticatedEmail: normalizedAuthenticatedEmail,
+      userId: newUser.id,
+      name: newUser.name,
+    });
+
+    return newUser;
+  }, [currentUserId, normalizedAuthenticatedEmail, persistCurrentUser, persistUsers, users]);
+
+  const switchUser = useCallback(async (userId: string) => {
+    const user = users.find((candidate) => candidate.id === userId);
+
+    if (!user) {
+      return;
+    }
+
+    setCurrentUserId(userId);
+    await persistCurrentUser(userId);
+    console.log('[UserProvider] Switched scoped user:', {
+      authenticatedEmail: normalizedAuthenticatedEmail,
+      userId,
+      name: user.name,
+    });
+  }, [normalizedAuthenticatedEmail, persistCurrentUser, users]);
+
+  const removeUser = useCallback(async (userId: string) => {
+    const user = users.find((candidate) => candidate.id === userId);
+
+    if (user?.isOwner) {
+      console.warn('[UserProvider] Cannot remove owner user');
+      return;
+    }
+
+    const newUsers = users.filter((candidate) => candidate.id !== userId);
+    const nextCurrentUser = currentUserId === userId ? (newUsers.find((candidate) => candidate.isOwner) ?? newUsers[0] ?? null) : null;
+
+    setUsers(newUsers);
+    await persistUsers(newUsers);
+
+    if (nextCurrentUser) {
+      setCurrentUserId(nextCurrentUser.id);
+      await persistCurrentUser(nextCurrentUser.id);
+    }
+
+    console.log('[UserProvider] Removed scoped user:', {
+      authenticatedEmail: normalizedAuthenticatedEmail,
+      removedUserId: userId,
+    });
+  }, [currentUserId, normalizedAuthenticatedEmail, persistCurrentUser, persistUsers, users]);
+
+  const updateUser = useCallback(async (userId: string, updates: Partial<UserProfile>) => {
+    try {
+      const scopedKeys = getScopedUserKeys(normalizedAuthenticatedEmail);
+      const storedUsersRaw = await AsyncStorage.getItem(scopedKeys.USERS);
+      const inMemoryScopedUsers = users.filter((user) => normalizeEmail(user.email) === normalizedAuthenticatedEmail);
+      let currentUsers: UserProfile[] = storedUsersRaw ? parseStoredUsers(storedUsersRaw, normalizedAuthenticatedEmail) : inMemoryScopedUsers;
+
+      if (currentUsers.length === 0 && inMemoryScopedUsers.length > 0) {
+        currentUsers = inMemoryScopedUsers;
+      }
+
+      const normalizedUpdates: Partial<UserProfile> = {
+        ...updates,
+        email: updates.email !== undefined ? (normalizeEmail(updates.email) ?? normalizedAuthenticatedEmail ?? DEFAULT_OWNER.email) : updates.email,
+      };
+
+      const targetUserBeforeUpdate = currentUsers.find((user) => user.id === userId) ?? null;
+      const updatedUsers = currentUsers.map((user) => (
+        user.id === userId
+          ? { ...user, ...normalizedUpdates, updatedAt: new Date().toISOString() }
+          : user
+      ));
+
+      await AsyncStorage.setItem(scopedKeys.USERS, JSON.stringify(updatedUsers));
+
+      const normalizedTargetEmail = updates.email !== undefined ? normalizeEmail(updates.email) : normalizedAuthenticatedEmail;
+      if (targetUserBeforeUpdate?.isOwner === true && normalizedTargetEmail && normalizedTargetEmail !== normalizedAuthenticatedEmail) {
+        const targetScopedKeys = getScopedUserKeys(normalizedTargetEmail);
+        const targetScopedUsers = updatedUsers.map((user) => (
+          user.id === userId
+            ? { ...user, email: normalizedTargetEmail, isOwner: true, updatedAt: new Date().toISOString() }
+            : { ...user, email: normalizeEmail(user.email) ?? normalizedTargetEmail }
+        ));
+        await Promise.all([
+          AsyncStorage.setItem(targetScopedKeys.USERS, JSON.stringify(targetScopedUsers)),
+          AsyncStorage.setItem(targetScopedKeys.CURRENT_USER, userId),
+        ]);
+        console.log('[UserProvider] Mirrored profile update into new email scope:', {
+          previousEmail: normalizedAuthenticatedEmail,
+          targetEmail: normalizedTargetEmail,
+          userId,
+        });
+      }
+
+      setUsers(updatedUsers);
+
+      console.log('[UserProvider] Updated scoped user:', {
+        authenticatedEmail: normalizedAuthenticatedEmail,
+        userId,
+        updates: normalizedUpdates,
+      });
+    } catch (error) {
+      console.error('[UserProvider] Failed to persist scoped user update:', error);
+      setUsers((previousUsers) => previousUsers.map((user) => (
+        user.id === userId
+          ? {
+              ...user,
+              ...updates,
+              email: updates.email !== undefined ? (normalizeEmail(updates.email) ?? normalizedAuthenticatedEmail ?? DEFAULT_OWNER.email) : user.email,
+              updatedAt: new Date().toISOString(),
+            }
+          : user
+      )));
+    }
+  }, [normalizedAuthenticatedEmail, users]);
+
+  const ensureOwner = useCallback(async (): Promise<UserProfile> => {
+    const existingOwner = users.find((user) => {
+      if (!user.isOwner) {
+        return false;
+      }
+
+      if (!normalizedAuthenticatedEmail) {
+        return true;
+      }
+
+      return normalizeEmail(user.email) === normalizedAuthenticatedEmail;
+    });
+
+    if (existingOwner) {
+      if (!currentUserId) {
+        setCurrentUserId(existingOwner.id);
+        await persistCurrentUser(existingOwner.id);
+      }
+
+      return existingOwner;
+    }
+
+    const scopedKeys = getScopedUserKeys(normalizedAuthenticatedEmail);
+
+    try {
+      const storedUsersRaw = await AsyncStorage.getItem(scopedKeys.USERS);
+      if (storedUsersRaw) {
+        const parsedUsers = parseStoredUsers(storedUsersRaw, normalizedAuthenticatedEmail);
+        const storedOwner = parsedUsers.find((user) => user.isOwner) ?? parsedUsers[0] ?? null;
+
+        if (storedOwner) {
+          setUsers(parsedUsers);
+          setCurrentUserId(storedOwner.id);
+          await persistCurrentUser(storedOwner.id);
+          return storedOwner;
+        }
+      }
+    } catch (error) {
+      console.error('[UserProvider] Error checking scoped users for owner:', error);
+    }
+
+    const owner = createOwnerProfile(normalizedAuthenticatedEmail);
+    const newUsers = [owner];
+    setUsers(newUsers);
+    setCurrentUserId(owner.id);
+    await persistUsers(newUsers);
+    await persistCurrentUser(owner.id);
+
+    console.log('[UserProvider] Created scoped owner:', {
+      authenticatedEmail: normalizedAuthenticatedEmail,
+      ownerId: owner.id,
+    });
+
+    return owner;
+  }, [currentUserId, normalizedAuthenticatedEmail, persistCurrentUser, persistUsers, users]);
+
+  return useMemo(() => ({
+    users,
+    currentUserId,
+    currentUser,
+    isLoading,
+    addUser,
+    switchUser,
+    removeUser,
+    updateUser,
+    ensureOwner,
+    syncFromStorage: loadUsers,
+  }), [users, currentUserId, currentUser, isLoading, addUser, switchUser, removeUser, updateUser, ensureOwner, loadUsers]);
+});
