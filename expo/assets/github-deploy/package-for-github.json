@@ -1,0 +1,17 @@
+{
+  "name": "easyseas-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.7",
+    "@hono/trpc-server": "^0.4.2",
+    "@trpc/server": "^11.9.0",
+    "hono": "^4.11.7",
+    "superjson": "^2.2.6",
+    "surrealdb.js": "^1.0.0",
+    "zod": "^3.23.8"
+  }
+}

@@ -1,0 +1,599 @@
+import { Platform } from 'react-native';
+import * as DocumentPicker from 'expo-document-picker';
+import { File as ExpoFile, Paths as ExpoPaths } from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import { getAllStoredData, importAllData, type DataProfileGate, type FullAppDataBundle } from '../dataBundle/bundleOperations';
+
+type LegacyFullDataBundle = Partial<FullAppDataBundle> & {
+  offers?: unknown;
+  booked?: unknown;
+  calendar?: unknown;
+  profile?: unknown;
+  localData?: {
+    cruises?: unknown;
+    booked?: unknown;
+    bookedCruises?: unknown;
+    offers?: unknown;
+    casinoOffers?: unknown;
+    calendar?: unknown;
+    calendarEvents?: unknown;
+  };
+};
+
+type ImportedCalendarEvent = FullAppDataBundle['calendarEvents'][number];
+type ImportedBookedCruise = FullAppDataBundle['bookedCruises'][number];
+type CasinoDataBundle = NonNullable<FullAppDataBundle['casinoData']>;
+
+export interface ExportAllDataSummary {
+  cruiseSailings: number;
+  bookedCruises: number;
+  casinoOffers: number;
+  calendarEvents: number;
+  casinoSessions: number;
+  certificates: number;
+  machineEncyclopedia: number;
+  savedAtlasMachines: number;
+  customSlotMachines: number;
+  deckPlanLocations: number;
+  crewMembers: number;
+  crewRecognitionEntries: number;
+  crewSailings: number;
+  userProfiles: number;
+  primaryUserProfiles: number;
+  appSettingsRecords: number;
+  clubRoyaleProfiles: number;
+  playingHoursRecords: number;
+  loyaltyPointFields: number;
+  extendedLoyaltyFields: number;
+  bankrollLimits: number;
+  bankrollAlerts: number;
+  casinoOpenHourRecords: number;
+  compItems: number;
+  w2gRecords: number;
+  totalCasinoPoints: number;
+  totalCasinoCoinIn: number;
+  cruisesWithCasinoPoints: number;
+}
+
+function normalizeImportedArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? value as T[] : [];
+}
+
+function hasObjectFields(value: unknown): boolean {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value as Record<string, unknown>).length > 0);
+}
+
+function countUniqueCrewMembers(entries: FullAppDataBundle['crewRecognition']['entries']): number {
+  const uniqueCrew = new Set<string>();
+
+  entries.forEach((entry, index) => {
+    const record = entry as unknown as Record<string, unknown>;
+    const crewMemberId = typeof record.crewMemberId === 'string' ? record.crewMemberId.trim().toLowerCase() : '';
+    const fullName = typeof record.fullName === 'string' ? record.fullName.trim().toLowerCase() : '';
+    const department = typeof record.department === 'string' ? record.department.trim().toLowerCase() : '';
+    const roleTitle = typeof record.roleTitle === 'string' ? record.roleTitle.trim().toLowerCase() : '';
+    const fallbackKey = [fullName, department, roleTitle].filter(Boolean).join('|');
+    uniqueCrew.add(crewMemberId || fallbackKey || `crew-entry-${index}`);
+  });
+
+  return uniqueCrew.size;
+}
+
+function formatCount(count: number, singular: string, plural?: string): string {
+  return `${count.toLocaleString()} ${count === 1 ? singular : plural ?? `${singular}s`}`;
+}
+
+/** Builds exact counts from the backup bundle that is actually written to disk. */
+export function buildExportAllDataSummary(bundle: FullAppDataBundle): ExportAllDataSummary {
+  const casinoData = bundle.casinoData;
+  const loyaltyData = bundle.loyaltyData;
+
+  const casinoPointSummary = casinoData?.casinoPointSummary;
+
+  return {
+    cruiseSailings: bundle.cruises.length,
+    bookedCruises: bundle.bookedCruises.length,
+    casinoOffers: bundle.casinoOffers.length,
+    calendarEvents: bundle.calendarEvents.length,
+    casinoSessions: bundle.casinoSessions.length,
+    certificates: bundle.certificates.length,
+    machineEncyclopedia: bundle.machines.encyclopedia.length,
+    savedAtlasMachines: bundle.machines.atlasIds.length,
+    customSlotMachines: bundle.machines.userMachines?.length ?? 0,
+    deckPlanLocations: bundle.machines.deckLocations?.length ?? 0,
+    crewMembers: countUniqueCrewMembers(bundle.crewRecognition.entries),
+    crewRecognitionEntries: bundle.crewRecognition.entries.length,
+    crewSailings: bundle.crewRecognition.sailings.length,
+    userProfiles: bundle.users.length,
+    primaryUserProfiles: bundle.userProfile ? 1 : 0,
+    appSettingsRecords: bundle.settings ? 1 : 0,
+    clubRoyaleProfiles: bundle.clubRoyaleProfile ? 1 : 0,
+    playingHoursRecords: bundle.playingHours ? 1 : 0,
+    loyaltyPointFields: Object.values(loyaltyData).filter((value) => value !== null && value !== undefined).length,
+    extendedLoyaltyFields: hasObjectFields(bundle.extendedLoyaltyData) ? Object.keys(bundle.extendedLoyaltyData as Record<string, unknown>).length : 0,
+    bankrollLimits: casinoData?.bankrollLimits.length ?? 0,
+    bankrollAlerts: casinoData?.bankrollAlerts.length ?? 0,
+    casinoOpenHourRecords: casinoData?.casinoOpenHours ? Object.keys(casinoData.casinoOpenHours).length : 0,
+    compItems: casinoData?.compItems.length ?? 0,
+    w2gRecords: casinoData?.w2gRecords.length ?? 0,
+    totalCasinoPoints: casinoPointSummary?.totalCasinoPoints ?? bundle.metadata.totalCasinoPoints ?? 0,
+    totalCasinoCoinIn: casinoPointSummary?.totalCasinoCoinIn ?? bundle.metadata.totalCasinoCoinIn ?? 0,
+    cruisesWithCasinoPoints: casinoPointSummary?.cruisesWithCasinoPoints ?? bundle.metadata.cruisesWithCasinoPoints ?? 0,
+  };
+}
+
+/** Formats a user-facing backup summary with only counts derived from the exported file contents. */
+export function formatExportAllDataSummary(summary: ExportAllDataSummary, fileName: string): string {
+  return [
+    `Exported to ${fileName}:`,
+    '',
+    'Cruises & offers:',
+    `• ${formatCount(summary.cruiseSailings, 'cruise sailing record')}`,
+    `• ${formatCount(summary.bookedCruises, 'booked cruise')}`,
+    `• ${formatCount(summary.casinoOffers, 'casino offer')}`,
+    `• ${formatCount(summary.calendarEvents, 'calendar event')}`,
+    `• ${formatCount(summary.certificates, 'certificate')}`,
+    '',
+    'Casino tracking:',
+    `• ${formatCount(summary.casinoSessions, 'casino session')}`,
+    `• ${formatCount(summary.cruisesWithCasinoPoints, 'cruise with stored casino points')}`,
+    `• ${summary.totalCasinoPoints.toLocaleString()} stored Club Royale / casino point${summary.totalCasinoPoints === 1 ? '' : 's'}`,
+    `• ${summary.totalCasinoCoinIn.toLocaleString()} point-derived coin-in`,
+    `• ${formatCount(summary.bankrollLimits, 'bankroll limit')}`,
+    `• ${formatCount(summary.bankrollAlerts, 'bankroll alert')}`,
+    `• ${formatCount(summary.casinoOpenHourRecords, 'casino-open-hours record')}`,
+    `• ${formatCount(summary.compItems, 'comp item')}`,
+    `• ${formatCount(summary.w2gRecords, 'W-2G record')}`,
+    '',
+    'Machines & crew:',
+    `• ${formatCount(summary.machineEncyclopedia, 'machine encyclopedia record')}`,
+    `• ${formatCount(summary.savedAtlasMachines, 'saved atlas machine')}`,
+    `• ${formatCount(summary.customSlotMachines, 'custom slot machine')}`,
+    `• ${formatCount(summary.deckPlanLocations, 'deck-plan location')}`,
+    `• ${formatCount(summary.crewMembers, 'unique crew member')}`,
+    `• ${formatCount(summary.crewRecognitionEntries, 'crew recognition entry', 'crew recognition entries')}`,
+    `• ${formatCount(summary.crewSailings, 'crew sailing')}`,
+    '',
+    'Profiles & settings:',
+    `• ${formatCount(summary.userProfiles, 'user profile')}`,
+    `• ${formatCount(summary.primaryUserProfiles, 'primary user profile snapshot')}`,
+    `• ${formatCount(summary.appSettingsRecords, 'app settings record')}`,
+    `• ${formatCount(summary.clubRoyaleProfiles, 'Club Royale profile')}`,
+    `• ${formatCount(summary.playingHoursRecords, 'playing-hours record')}`,
+    `• ${formatCount(summary.loyaltyPointFields, 'loyalty point field')}`,
+    `• ${formatCount(summary.extendedLoyaltyFields, 'extended loyalty field')}`,
+  ].join('\n');
+}
+
+function normalizeImportedDateOnly(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  return trimmed.includes('T') ? trimmed.split('T')[0] : trimmed;
+}
+
+function dateOnlyTime(value: string): number | null {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const [, year, month, day] = match;
+  return Date.UTC(Number(year), Number(month) - 1, Number(day));
+}
+
+function diffDateOnlyDays(startDate: string, endDate: string): number {
+  const startTime = dateOnlyTime(startDate);
+  const endTime = dateOnlyTime(endDate);
+  if (startTime === null || endTime === null) return 0;
+  return Math.max(0, Math.round((endTime - startTime) / 86400000));
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function extractDescriptionValue(description: string | undefined, label: string): string | undefined {
+  if (!description) return undefined;
+  const escapedLabel = escapeRegExp(label);
+  const match = description.match(new RegExp(`${escapedLabel}\\s+([^•]+)`, 'i'));
+  const value = match?.[1]?.trim();
+  return value && value.length > 0 ? value : undefined;
+}
+
+function getStringField(record: unknown, field: string): string | undefined {
+  if (!record || typeof record !== 'object') return undefined;
+  const value = (record as Record<string, unknown>)[field];
+  return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
+}
+
+function inferShipNameFromCruiseEvents(events: ImportedCalendarEvent[]): string {
+  const spanEvent = events.find((event) => {
+    const startDate = normalizeImportedDateOnly(event.startDate ?? event.start);
+    const endDate = normalizeImportedDateOnly(event.endDate ?? event.end);
+    return event.id?.includes('generated-cruise-span-') || (!!startDate && !!endDate && startDate !== endDate);
+  });
+
+  if (spanEvent?.title?.trim()) return spanEvent.title.trim();
+
+  const description = events.find((event) => typeof event.description === 'string' && event.description.includes('•'))?.description;
+  const fromDescription = description?.split('•')[0]?.trim();
+  if (fromDescription) return fromDescription;
+
+  return events.find((event) => event.location?.trim())?.location?.trim() || 'Imported Cruise';
+}
+
+function inferCruiseDateRange(events: ImportedCalendarEvent[]): { sailDate: string; returnDate: string } | null {
+  const spanEvent = events.find((event) => event.id?.includes('generated-cruise-span-'));
+  const spanStart = normalizeImportedDateOnly(spanEvent?.startDate ?? spanEvent?.start);
+  const spanEnd = normalizeImportedDateOnly(spanEvent?.endDate ?? spanEvent?.end);
+  if (spanStart && spanEnd) return { sailDate: spanStart, returnDate: spanEnd };
+
+  const dates = events
+    .flatMap((event) => [
+      normalizeImportedDateOnly(event.startDate ?? event.start),
+      normalizeImportedDateOnly(event.endDate ?? event.end),
+    ])
+    .filter((date): date is string => date.length > 0)
+    .sort();
+
+  if (dates.length === 0) return null;
+  return { sailDate: dates[0], returnDate: dates[dates.length - 1] };
+}
+
+function inferCruiseStatus(returnDate: string): Pick<ImportedBookedCruise, 'status' | 'completionState'> {
+  const today = new Date().toISOString().split('T')[0];
+  if (returnDate && returnDate < today) {
+    return { status: 'completed', completionState: 'completed' };
+  }
+  return { status: 'booked', completionState: 'upcoming' };
+}
+
+function inferCruiseSource(brand: string | undefined): NonNullable<ImportedBookedCruise['cruiseSource']> {
+  const normalizedBrand = brand?.toLowerCase().trim() ?? '';
+  if (normalizedBrand === 'celebrity') return 'celebrity';
+  if (normalizedBrand === 'carnival') return 'carnival';
+  return 'royal';
+}
+
+function recoverBookedCruisesFromCalendarEvents(events: ImportedCalendarEvent[]): ImportedBookedCruise[] {
+  const groupedCruiseEvents = new Map<string, ImportedCalendarEvent[]>();
+
+  events.forEach((event) => {
+    if (event.type !== 'cruise' && event.sourceType !== 'cruise') return;
+    const cruiseId = typeof event.cruiseId === 'string' && event.cruiseId.trim().length > 0
+      ? event.cruiseId.trim()
+      : event.id?.replace(/^generated-cruise-(?:span|day|sea-day|time-in-port|port-arrival|all-aboard)-/, '').replace(/-\d+$/, '');
+    if (!cruiseId) return;
+    groupedCruiseEvents.set(cruiseId, [...(groupedCruiseEvents.get(cruiseId) ?? []), event]);
+  });
+
+  return Array.from(groupedCruiseEvents.entries()).flatMap(([cruiseId, cruiseEvents]) => {
+    const dateRange = inferCruiseDateRange(cruiseEvents);
+    if (!dateRange) return [];
+
+    const shipName = inferShipNameFromCruiseEvents(cruiseEvents);
+    const spanEvent = cruiseEvents.find((event) => event.id?.includes('generated-cruise-span-')) ?? cruiseEvents[0];
+    const embarkationEvent = cruiseEvents.find((event) => event.title?.toLowerCase().includes('embarkation'));
+    const description = spanEvent?.description ?? cruiseEvents.find((event) => event.description)?.description;
+    const nights = diffDateOnlyDays(dateRange.sailDate, dateRange.returnDate);
+    const reservationNumber = extractDescriptionValue(description, 'Reservation');
+    const cabinNumber = extractDescriptionValue(description, 'Cabin');
+    const statusFields = inferCruiseStatus(dateRange.returnDate);
+    const brand = spanEvent?.brand ?? embarkationEvent?.brand ?? 'royal';
+    const syncedAt = getStringField(spanEvent, 'dataOwnerSyncedAt') ?? new Date().toISOString();
+
+    return [{
+      id: cruiseId,
+      shipName,
+      sailDate: dateRange.sailDate,
+      returnDate: dateRange.returnDate,
+      departurePort: embarkationEvent?.location ?? spanEvent?.location ?? '',
+      destination: 'Cruise',
+      nights,
+      itineraryName: `${nights || 1} Night ${shipName} Cruise`,
+      reservationNumber,
+      bookingId: reservationNumber,
+      cabinNumber,
+      cabinType: cabinNumber ? undefined : 'Balcony',
+      guests: 2,
+      guestNames: [],
+      cruiseSource: inferCruiseSource(brand),
+      createdAt: syncedAt,
+      updatedAt: syncedAt,
+      ownerProfileId: spanEvent?.ownerProfileId ?? embarkationEvent?.ownerProfileId,
+      sourceEmail: spanEvent?.sourceEmail ?? embarkationEvent?.sourceEmail,
+      brand,
+      casinoProgram: spanEvent?.casinoProgram ?? embarkationEvent?.casinoProgram,
+      importStatus: spanEvent?.importStatus ?? embarkationEvent?.importStatus,
+      reconciliationStatus: spanEvent?.reconciliationStatus ?? embarkationEvent?.reconciliationStatus,
+      ...statusFields,
+    } satisfies ImportedBookedCruise];
+  });
+}
+
+function normalizeImportedBackup(rawBundle: LegacyFullDataBundle): FullAppDataBundle {
+  const localData = rawBundle.localData;
+  const cruises = normalizeImportedArray<FullAppDataBundle['cruises'][number]>(
+    rawBundle.cruises ?? localData?.cruises
+  );
+  const importedBookedCruises = normalizeImportedArray<FullAppDataBundle['bookedCruises'][number]>(
+    rawBundle.bookedCruises ?? rawBundle.booked ?? localData?.bookedCruises ?? localData?.booked
+  );
+  const casinoOffers = normalizeImportedArray<FullAppDataBundle['casinoOffers'][number]>(
+    rawBundle.casinoOffers ?? rawBundle.offers ?? localData?.casinoOffers ?? localData?.offers
+  );
+  const calendarEvents = normalizeImportedArray<FullAppDataBundle['calendarEvents'][number]>(
+    rawBundle.calendarEvents ?? rawBundle.calendar ?? localData?.calendarEvents ?? localData?.calendar
+  );
+  const recoveredBookedCruises = importedBookedCruises.length === 0 && calendarEvents.length > 0
+    ? recoverBookedCruisesFromCalendarEvents(calendarEvents)
+    : [];
+  const bookedCruises = importedBookedCruises.length > 0 ? importedBookedCruises : recoveredBookedCruises;
+  if (recoveredBookedCruises.length > 0) {
+    console.log('[DataFileIO] Recovered booked cruises from generated calendar events:', recoveredBookedCruises.length);
+  }
+  const rawCasinoData = rawBundle.casinoData && typeof rawBundle.casinoData === 'object' ? rawBundle.casinoData : undefined;
+  const casinoSessions = normalizeImportedArray<FullAppDataBundle['casinoSessions'][number]>(rawBundle.casinoSessions ?? rawCasinoData?.sessions);
+  const certificates = normalizeImportedArray<FullAppDataBundle['certificates'][number]>(rawBundle.certificates);
+  const users = normalizeImportedArray<FullAppDataBundle['users'][number]>(rawBundle.users);
+  const machineData = rawBundle.machines && typeof rawBundle.machines === 'object' ? rawBundle.machines : undefined;
+  const crewRecognition = rawBundle.crewRecognition && typeof rawBundle.crewRecognition === 'object' ? rawBundle.crewRecognition : undefined;
+  const casinoData = {
+    sessions: casinoSessions,
+    bankrollLimits: normalizeImportedArray<CasinoDataBundle['bankrollLimits'][number]>(rawCasinoData?.bankrollLimits),
+    bankrollAlerts: normalizeImportedArray<CasinoDataBundle['bankrollAlerts'][number]>(rawCasinoData?.bankrollAlerts),
+    casinoOpenHours: rawCasinoData?.casinoOpenHours && typeof rawCasinoData.casinoOpenHours === 'object'
+      ? rawCasinoData.casinoOpenHours as CasinoDataBundle['casinoOpenHours']
+      : {},
+    compItems: normalizeImportedArray<CasinoDataBundle['compItems'][number]>(rawCasinoData?.compItems),
+    w2gRecords: normalizeImportedArray<CasinoDataBundle['w2gRecords'][number]>(rawCasinoData?.w2gRecords),
+    askMyDataOverview: rawCasinoData?.askMyDataOverview && typeof rawCasinoData.askMyDataOverview === 'object'
+      ? rawCasinoData.askMyDataOverview as CasinoDataBundle['askMyDataOverview']
+      : undefined,
+  };
+
+  return {
+    ...rawBundle,
+    version: typeof rawBundle.version === 'string' ? rawBundle.version : '2.0.0',
+    exportDate: typeof rawBundle.exportDate === 'string' ? rawBundle.exportDate : new Date().toISOString(),
+    cruises,
+    bookedCruises,
+    casinoOffers,
+    calendarEvents,
+    casinoSessions,
+    certificates,
+    clubRoyaleProfile: rawBundle.clubRoyaleProfile ?? (rawBundle.profile as FullAppDataBundle['clubRoyaleProfile'] | undefined) ?? null,
+    settings: rawBundle.settings ?? null,
+    loyaltyData: rawBundle.loyaltyData ?? {
+      manualClubRoyalePoints: rawBundle.userProfile?.clubRoyalePoints ?? null,
+      manualCrownAnchorPoints: rawBundle.userProfile?.loyaltyPoints ?? null,
+      userPoints: rawBundle.userProfile?.loyaltyPoints ?? null,
+    },
+    extendedLoyaltyData: rawBundle.extendedLoyaltyData ?? null,
+    userProfile: rawBundle.userProfile ?? null,
+    users,
+    machines: {
+      encyclopedia: normalizeImportedArray<FullAppDataBundle['machines']['encyclopedia'][number]>(machineData?.encyclopedia),
+      atlasIds: normalizeImportedArray<string>(machineData?.atlasIds),
+      userMachines: normalizeImportedArray<NonNullable<FullAppDataBundle['machines']['userMachines']>[number]>(machineData?.userMachines),
+      deckLocations: normalizeImportedArray<NonNullable<FullAppDataBundle['machines']['deckLocations']>[number]>(machineData?.deckLocations),
+    },
+    crewRecognition: {
+      entries: normalizeImportedArray<FullAppDataBundle['crewRecognition']['entries'][number]>(crewRecognition?.entries),
+      sailings: normalizeImportedArray<FullAppDataBundle['crewRecognition']['sailings'][number]>(crewRecognition?.sailings),
+    },
+    casinoData,
+    metadata: {
+      totalCruises: cruises.length,
+      totalBooked: bookedCruises.length,
+      totalOffers: casinoOffers.length,
+      totalEvents: calendarEvents.length,
+      totalCertificates: certificates.length,
+      totalSessions: casinoSessions.length,
+      totalMachines: normalizeImportedArray<string>(machineData?.atlasIds).length || normalizeImportedArray<FullAppDataBundle['machines']['encyclopedia'][number]>(machineData?.encyclopedia).length,
+      totalCrewEntries: normalizeImportedArray<FullAppDataBundle['crewRecognition']['entries'][number]>(crewRecognition?.entries).length,
+      totalBankrollLimits: casinoData.bankrollLimits.length,
+      totalCasinoOpenHours: Object.keys(casinoData.casinoOpenHours).length,
+      totalCompItems: casinoData.compItems.length,
+      totalW2GRecords: casinoData.w2gRecords.length,
+    },
+  };
+}
+
+export async function exportAllDataToFile(email?: string | null, profileGate?: DataProfileGate): Promise<{
+  success: boolean;
+  fileName?: string;
+  summary?: ExportAllDataSummary;
+  summaryText?: string;
+  error?: string;
+}> {
+  try {
+    console.log('[DataFileIO] Exporting all data to file for email/profile gate:', {
+      email: email || '(none)',
+      activeProfileId: profileGate?.activeProfileId,
+      activeProfileEmail: profileGate?.activeProfileEmail,
+    });
+    
+    const bundle = await getAllStoredData(email, profileGate);
+    const summary = buildExportAllDataSummary(bundle);
+    const jsonContent = JSON.stringify(bundle, null, 2);
+    
+    const now = new Date();
+    const month = (now.getMonth() + 1).toString().padStart(2, '0');
+    const day = now.getDate().toString().padStart(2, '0');
+    const year = now.getFullYear().toString().slice(-2);
+    const timestamp = `${month}.${day}.${year}`;
+    
+    const fileName = `Easy Seas - Backup ${timestamp}.json`;
+    const summaryText = formatExportAllDataSummary(summary, fileName);
+
+    if (Platform.OS === 'web') {
+      const blob = new Blob([jsonContent], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      console.log('[DataFileIO] Web download initiated', summary);
+      return { success: true, fileName, summary, summaryText };
+    }
+
+    const file = new ExpoFile(ExpoPaths.cache, fileName);
+    await file.write(jsonContent);
+
+    const canShare = await Sharing.isAvailableAsync();
+    if (canShare) {
+      await Sharing.shareAsync(file.uri, {
+        mimeType: 'application/json',
+        dialogTitle: `Export ${fileName}`,
+      });
+    }
+
+    console.log('[DataFileIO] File exported successfully', summary);
+    return { success: true, fileName, summary, summaryText };
+  } catch (error) {
+    console.error('[DataFileIO] Export error:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    };
+  }
+}
+
+export async function importAllDataFromFile(email?: string | null, profileGate?: DataProfileGate): Promise<{
+  success: boolean;
+  imported?: {
+    cruises: number;
+    bookedCruises: number;
+    casinoOffers: number;
+    calendarEvents: number;
+    casinoSessions: number;
+    certificates: number;
+    machines: number;
+    crewRecognitionEntries: number;
+    bankrollLimits: number;
+    casinoOpenHours: number;
+    compItems: number;
+    w2gRecords: number;
+  };
+  error?: string;
+}> {
+  try {
+    console.log('[DataFileIO] Opening file picker for import...');
+
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ['application/json', 'text/plain'],
+      copyToCacheDirectory: true,
+    });
+
+    if (result.canceled || !result.assets || result.assets.length === 0) {
+      console.log('[DataFileIO] File picker cancelled');
+      return { success: false, error: 'Import cancelled' };
+    }
+
+    const asset = result.assets[0];
+    console.log(`[DataFileIO] File selected: ${asset.name}`);
+
+    let content: string;
+    if (Platform.OS === 'web') {
+      console.log('[DataFileIO] Reading web file, URI:', asset.uri);
+      
+      if (asset.uri.startsWith('blob:')) {
+        const response = await fetch(asset.uri);
+        content = await response.text();
+      } else if (asset.uri.startsWith('data:')) {
+        const base64Data = asset.uri.split(',')[1];
+        content = atob(base64Data);
+      } else {
+        const response = await fetch(asset.uri);
+        content = await response.text();
+      }
+      
+      console.log('[DataFileIO] Web file read successfully, length:', content.length);
+    } else {
+      const expoFile = new ExpoFile(asset.uri);
+      content = await expoFile.text();
+    }
+
+    let bundle: FullAppDataBundle;
+    try {
+      const parsedBundle = JSON.parse(content) as LegacyFullDataBundle;
+      bundle = normalizeImportedBackup(parsedBundle);
+    } catch (parseError) {
+      console.error('[DataFileIO] JSON parse error:', parseError);
+      return { 
+        success: false, 
+        error: 'Invalid JSON format. Please use a valid EasySeas backup file.' 
+      };
+    }
+
+    if (!bundle || typeof bundle !== 'object') {
+      return { 
+        success: false, 
+        error: 'Invalid backup file format. File does not contain valid data.' 
+      };
+    }
+
+    if (
+      bundle.cruises.length === 0 &&
+      bundle.bookedCruises.length === 0 &&
+      bundle.casinoOffers.length === 0 &&
+      bundle.calendarEvents.length === 0 &&
+      bundle.casinoSessions.length === 0 &&
+      bundle.certificates.length === 0 &&
+      bundle.users.length === 0 &&
+      bundle.machines.atlasIds.length === 0 &&
+      (bundle.machines.userMachines?.length ?? 0) === 0 &&
+      (bundle.machines.deckLocations?.length ?? 0) === 0 &&
+      bundle.crewRecognition.entries.length === 0 &&
+      (bundle.casinoData?.bankrollLimits.length ?? 0) === 0 &&
+      (bundle.casinoData?.bankrollAlerts.length ?? 0) === 0 &&
+      Object.keys(bundle.casinoData?.casinoOpenHours ?? {}).length === 0 &&
+      (bundle.casinoData?.compItems.length ?? 0) === 0 &&
+      (bundle.casinoData?.w2gRecords.length ?? 0) === 0 &&
+      !bundle.clubRoyaleProfile &&
+      !bundle.userProfile
+    ) {
+      return {
+        success: false,
+        error: 'Invalid backup file format. Please use an EasySeas backup file.'
+      };
+    }
+
+    console.log('[DataFileIO] Import validation passed. Bundle version:', bundle.version);
+    console.log('[DataFileIO] Bundle contains:', {
+      cruises: bundle.cruises?.length || 0,
+      bookedCruises: bundle.bookedCruises?.length || 0,
+      casinoOffers: bundle.casinoOffers?.length || 0,
+      calendarEvents: bundle.calendarEvents?.length || 0,
+      casinoSessions: bundle.casinoSessions?.length || 0,
+      certificates: bundle.certificates?.length || 0,
+      users: bundle.users?.length || 0,
+      machines: bundle.machines?.atlasIds?.length || bundle.machines?.encyclopedia?.length || 0,
+      userMachines: bundle.machines?.userMachines?.length || 0,
+      deckLocations: bundle.machines?.deckLocations?.length || 0,
+      bankrollLimits: bundle.casinoData?.bankrollLimits?.length || 0,
+      casinoOpenHours: Object.keys(bundle.casinoData?.casinoOpenHours ?? {}).length,
+      compItems: bundle.casinoData?.compItems?.length || 0,
+      w2gRecords: bundle.casinoData?.w2gRecords?.length || 0,
+    });
+
+    const importResult = await importAllData(bundle, email ?? null, profileGate);
+    
+    if (importResult.errors.length > 0) {
+      console.log('[DataFileIO] Import completed with errors:', importResult.errors);
+    }
+
+    return { 
+      success: true, 
+      imported: importResult.imported 
+    };
+  } catch (error) {
+    console.error('[DataFileIO] Import error:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    };
+  }
+}

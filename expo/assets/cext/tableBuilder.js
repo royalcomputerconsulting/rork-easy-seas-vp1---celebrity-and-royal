@@ -1,0 +1,1 @@
+(function(){window.EasySeas=window.EasySeas||{};EasySeas.TableBuilder={};})();
