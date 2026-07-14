@@ -1,0 +1,37 @@
+Easy Seas 12.4.2 Final Build Validation
+=======================================
+
+Version
+- Expo app version: 12.4.2
+- iOS buildNumber: 310
+- Android versionCode: 120401
+- Carnival sync access: administrator-only
+- Carnival mobile runtime marker: v12.4.2-carnival-safe-isolated-sync active
+- Browser extension version: 3.4.0
+
+Static validation
+- 408 TypeScript/TSX files parsed successfully
+- 0 TypeScript syntax errors
+- All extension JavaScript files passed node --check
+- All QA JavaScript files passed node --check
+- Embedded extension files exactly matched assets/easy-seas-extension
+
+Functional QA passed
+- PASS testV1076NativeNoRevenueCatCasino
+- PASS testV1076CasinoEnginesFunctional
+- PASS testV1077RemainingRecommendationChanges
+- PASS testV1230LoyaltySyncRepair
+- PASS testV1231CasinoSectionWiring
+- PASS testV1232RoyalOfferZeroRowPreservation
+- PASS testV1233DynamicRoyalOfferCatalog
+- PASS testV1234SharedProfilesManualAdd
+- PASS testV1235BookedCompletedSyncRules
+- PASS testV1236AskMyDataOfferIntent
+- PASS testV1237CertificateBankRobustDownload
+- PASS testV1238CertificateOfferCodesChat
+- PASS testV1239CertificateBatchCompactOffer
+- PASS testV1240CertificateDownloadLog
+- PASS testV9160CarnivalAdminSync
+
+Release note
+A live authenticated TestFlight run is still required to validate Carnival's current production website behavior and account-specific payloads. Static code validation cannot prove a third-party website will not change after packaging.

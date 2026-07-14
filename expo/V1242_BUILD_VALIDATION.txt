@@ -1,0 +1,20 @@
+Easy Seas 12.4.2 App Store Version Hard-Lock Validation
+
+Authoritative source values:
+- Expo version: 12.4.2
+- iOS buildNumber: 311
+- Android versionCode: 120402
+
+Safeguards:
+- Static app.json configuration
+- Dynamic app.config.js override after incoming Rork/EAS config
+- Native Expo config plugin writing Info.plist and Xcode settings
+- EAS post-install version verification hook
+- IPA-level verification script
+
+Validation performed:
+- app.config.js syntax: PASS
+- native config plugin syntax: PASS
+- app.json/package.json parse: PASS
+- stale incoming 9.17.1 simulation resolves to 12.4.2: PASS
+- 17 included functional QA scripts: PASS

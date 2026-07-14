@@ -1,12 +1,14 @@
 {
   "name": "expo-app",
   "main": "expo-router/entry",
-  "version": "12.3.0",
+  "version": "12.4.2",
   "scripts": {
     "start": "bunx rork start -p g131hcw7cxhvg2godfob0",
     "start-web": "bunx rork start -p g131hcw7cxhvg2godfob0 --web",
     "start-web-dev": "DEBUG=expo* bunx rork start -p g131hcw7cxhvg2godfob0 --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "verify:app-store-version": "node scripts/verifyAppStoreVersion.js",
+    "eas-build-post-install": "node scripts/verifyAppStoreVersion.js"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
