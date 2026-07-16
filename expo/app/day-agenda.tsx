@@ -1303,11 +1303,11 @@ export default function DayAgendaScreen() {
     }
   }, [normalizedBookedCruises, coreData]);
 
-  const renderAllDayScheduleItem = useCallback((item: AllDayScheduleItem) => {
+  const renderAllDayScheduleItem = useCallback((item: AllDayScheduleItem, index: number) => {
     const IconComponent = getTimelineIcon(item.icon);
     return (
       <View
-        key={item.id}
+        key={`${item.id}-${index}`}
         style={[
           styles.allDayItem,
           { borderColor: `${item.color}55`, backgroundColor: `${item.color}18` },
@@ -1325,7 +1325,7 @@ export default function DayAgendaScreen() {
     );
   }, [getTimelineIcon]);
 
-  const renderDayScheduleBlock = useCallback((block: DayScheduleBlock) => {
+  const renderDayScheduleBlock = useCallback((block: DayScheduleBlock, index: number) => {
     const IconComponent = getTimelineIcon(block.icon);
     const top = (block.startMinutes / 60) * HOUR_ROW_HEIGHT;
     const rawHeight = ((block.endMinutes - block.startMinutes) / 60) * HOUR_ROW_HEIGHT;
@@ -1336,7 +1336,7 @@ export default function DayAgendaScreen() {
     const isCompact = blockHeight < 82;
     return (
       <View
-        key={block.id}
+        key={`${block.id}-${index}`}
         style={[
           styles.dayScheduleBlock,
           {
@@ -1364,12 +1364,12 @@ export default function DayAgendaScreen() {
     );
   }, [getTimelineIcon]);
 
-  const renderTimelineEvent = useCallback((event: TimelineEvent) => {
+  const renderTimelineEvent = useCallback((event: TimelineEvent, index: number) => {
     const IconComponent = getTimelineIcon(event.icon);
     const isOpportune = event.isOpportune || event.type === 'opportune';
     
     return (
-      <View key={event.id} style={[
+      <View key={`${event.id}-${index}`} style={[
         styles.timelineEvent,
         isOpportune && styles.timelineEventOpportune,
       ]}>
@@ -1424,7 +1424,7 @@ export default function DayAgendaScreen() {
     );
   }, [getTimelineIcon]);
 
-  const renderAgendaItem = useCallback((item: AgendaItem) => {
+  const renderAgendaItem = useCallback((item: AgendaItem, index: number) => {
     const IconComponent = getIcon(item.type);
     const isCruise = item.type === 'cruise' && 'bookings' in item.data;
     const cruiseData = isCruise ? (item.data as MergedCruiseData) : null;
@@ -1433,7 +1433,7 @@ export default function DayAgendaScreen() {
     
     return (
       <TouchableOpacity
-        key={item.id}
+        key={`${item.id}-${index}`}
         style={styles.agendaItem}
         activeOpacity={isCruise ? 0.7 : 1}
         onPress={() => handleItemPress(item)}

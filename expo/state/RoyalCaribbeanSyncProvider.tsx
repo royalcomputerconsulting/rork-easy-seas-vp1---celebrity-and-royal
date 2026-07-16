@@ -854,8 +854,24 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       const row = item as Partial<BookedCruiseRow> & Record<string, unknown>;
       const rawBooking = row.rawBooking && typeof row.rawBooking === 'object' ? row.rawBooking : item;
       const suppliedBookingId = stringifyValue(row.bookingId);
-      const normalizedStartDate = normalizeSyncDate(firstString(row.sailingStartDate, (row as any).sailDate, (row as any).departureDate, (row as any).startDate));
-      const normalizedEndDate = normalizeSyncDate(firstString(row.sailingEndDate, (row as any).returnDate, (row as any).endDate));
+      let normalizedStartDate = normalizeSyncDate(firstString(row.sailingStartDate, (row as any).sailDate, (row as any).departureDate, (row as any).startDate));
+      let normalizedEndDate = normalizeSyncDate(firstString(row.sailingEndDate, (row as any).returnDate, (row as any).endDate));
+      // v13.1: this general booked/completed ingestion path previously only checked a fixed
+      // list of field names. The loyalty/history ledger date-recovery scan (added earlier for
+      // parseCompletedSailingsPayload) was never applied here, so completed cruises captured
+      // through other pages (My Cruises DOM scrape, profile bookings API, etc.) whose date
+      // lived under an unanticipated key still fell through to an empty sail date - which the
+      // card renderer then showed as "Date unavailable" even though a real date existed on the
+      // row. Apply the same fallback scan here so every booked/completed ingestion path can
+      // recover a real date, not just the loyalty-ledger one.
+      if (!normalizedStartDate) {
+        const scannedStart = scanForDateLikeField(row, SAIL_DATE_KEY_PATTERN, SAIL_DATE_EXCLUDE_PATTERN) || scanForDateLikeField(rawBooking, SAIL_DATE_KEY_PATTERN, SAIL_DATE_EXCLUDE_PATTERN);
+        if (scannedStart) normalizedStartDate = normalizeSyncDate(scannedStart);
+      }
+      if (!normalizedEndDate) {
+        const scannedEnd = scanForDateLikeField(row, RETURN_DATE_KEY_PATTERN, RETURN_DATE_EXCLUDE_PATTERN) || scanForDateLikeField(rawBooking, RETURN_DATE_KEY_PATTERN, RETURN_DATE_EXCLUDE_PATTERN);
+        if (scannedEnd) normalizedEndDate = normalizeSyncDate(scannedEnd);
+      }
       const explicitNights = typeof row.numberOfNights === 'number'
         ? row.numberOfNights
         : Number.parseInt(stringifyValue(row.numberOfNights), 10);

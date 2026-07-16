@@ -1,0 +1,1517 @@
+[07/16/2026, 09:30:21] Parsing loyalty data
+[07/16/2026, 09:30:21] Reading loyalty data
+[07/16/2026, 09:30:21] 🎰 Club Royale Status
+[07/16/2026, 09:30:21] 📊 Tier: "Signature"
+[07/16/2026, 09:30:21] 💎 Points: 20,941
+[07/16/2026, 09:30:21] Reading loyalty data
+[07/16/2026, 09:30:27] Opening offers
+[07/16/2026, 09:30:27] Reading offers page
+[07/16/2026, 09:30:29] Opening offers page for Club Royale
+[07/16/2026, 09:30:29] 🔎 Offer discovery pass 1: 0 offer(s), 0 View Sailings button(s)
+[07/16/2026, 09:30:29] Parsing loyalty data
+[07/16/2026, 09:30:29] Reading loyalty data
+[07/16/2026, 09:30:29] 🎰 Club Royale Status
+[07/16/2026, 09:30:29] 📊 Tier: "Signature"
+[07/16/2026, 09:30:29] 💎 Points: 20,941
+[07/16/2026, 09:30:29] Reading loyalty data
+[07/16/2026, 09:30:31] 🔎 Offer discovery pass 2: 0 offer(s), 0 View Sailings button(s)
+[07/16/2026, 09:30:32] Widget scrape: CA -/- | CR Signature/20941
+[07/16/2026, 09:30:32] ✅ Merged DOM fallback loyalty fields without suppressing missing-field fallbacks
+[07/16/2026, 09:30:32] 🎰 Club Royale tier: Signature
+[07/16/2026, 09:30:32] 💎 Club Royale points: 20,941
+[07/16/2026, 09:30:33] Found offer 26NPR503 — Limitless Luck
+[07/16/2026, 09:30:33] Found offer 26SEP103 — September Shuffle
+[07/16/2026, 09:30:33] Found offer 26MIX403 — Stacked Sailings
+[07/16/2026, 09:30:33] Found offer 2607C06 — July Instant Cruise Reward
+[07/16/2026, 09:30:33] Found offer 26VAR403 — Island Advantage
+[07/16/2026, 09:30:33] DOM discovery: parsed 5 visible/linked offer card(s), found 5 View Sailings button(s)
+[07/16/2026, 09:30:33] Opening offer 1/5: 26NPR503
+[07/16/2026, 09:30:35] Widget scrape: CA -/- | CR Signature/20941
+[07/16/2026, 09:30:35] ✅ Merged DOM fallback loyalty fields without suppressing missing-field fallbacks
+[07/16/2026, 09:30:35] 🎰 Club Royale tier: Signature
+[07/16/2026, 09:30:35] 💎 Club Royale points: 20,941
+[07/16/2026, 09:30:36] Scraping offer 26NPR503
+[07/16/2026, 09:30:39] Widget scrape: CA -/- | CR Signature/20941
+[07/16/2026, 09:30:39] ✅ Merged DOM fallback loyalty fields without suppressing missing-field fallbacks
+[07/16/2026, 09:30:39] 🎰 Club Royale tier: Signature
+[07/16/2026, 09:30:39] 💎 Club Royale points: 20,941
+[07/16/2026, 09:30:53] Finished offer 26NPR503: 66 sailing(s)
+[07/16/2026, 09:30:53] Saved offer 26NPR503: 66 sailing(s), 66 total
+[07/16/2026, 09:30:53] ✅ React Native handoff attempted for 26NPR503: 66 row(s)
+[07/16/2026, 09:30:53] ACK offers_batch 26NPR503-checkpoint-1-1784219453183: received 44, accepted 44, app-side total 44
+[07/16/2026, 09:30:53] ✅ Captured casino offer "Limitless Luck" (Code: 26NPR503)
+[07/16/2026, 09:30:53] 📊 Captured 44 sailing(s) for this offer
+[07/16/2026, 09:30:53] 🚢 Sailing 1: Enchantment of the Seas - 2026-09-05
+[07/16/2026, 09:30:53] 🚢 Sailing 2: Enchantment of the Seas - 2026-09-19
+[07/16/2026, 09:30:53] 🚢 Sailing 3: Enchantment of the Seas - 2026-09-26
+[07/16/2026, 09:30:53] ➕ ...and 41 more sailing(s)
+[07/16/2026, 09:30:53] ACK offers_batch 26NPR503-checkpoint-2-1784219453183: received 22, accepted 22, app-side total 66
+[07/16/2026, 09:30:53] ✅ Captured casino offer "Limitless Luck" (Code: 26NPR503)
+[07/16/2026, 09:30:53] 📊 Captured 22 sailing(s) for this offer
+[07/16/2026, 09:30:53] 🚢 Sailing 1: Enchantment of the Seas - 2026-09-12
+[07/16/2026, 09:30:53] 🚢 Sailing 2: Enchantment of the Seas - 2026-10-19
+[07/16/2026, 09:30:53] 🚢 Sailing 3: Enchantment of the Seas - 2026-10-24
+[07/16/2026, 09:30:53] ➕ ...and 19 more sailing(s)
+[07/16/2026, 09:30:53] Opening offers page for Club Royale
+[07/16/2026, 09:30:55] Reading loyalty data
+[07/16/2026, 09:30:55] 🔎 Offer discovery pass 1: 0 offer(s), 0 View Sailings button(s)
+[07/16/2026, 09:30:56] Reading loyalty data
+[07/16/2026, 09:30:56] 🔎 Offer discovery pass 2: 0 offer(s), 0 View Sailings button(s)
+[07/16/2026, 09:30:58] Found offer 26NPR503 — Limitless Luck
+[07/16/2026, 09:30:58] Found offer 26SEP103 — September Shuffle
+[07/16/2026, 09:30:58] Found offer 26MIX403 — Stacked Sailings
+[07/16/2026, 09:30:58] Found offer 2607C06 — July Instant Cruise Reward
+[07/16/2026, 09:30:58] Found offer 26VAR403 — Island Advantage
+[07/16/2026, 09:30:58] DOM discovery: parsed 5 visible/linked offer card(s), found 5 View Sailings button(s)
+[07/16/2026, 09:30:58] Opening offer 2/5: 26SEP103
+[07/16/2026, 09:31:01] Scraping offer 26SEP103
+[07/16/2026, 09:31:15] Finished offer 26SEP103: 58 sailing(s)
+[07/16/2026, 09:31:15] Saved offer 26SEP103: 58 sailing(s), 124 total
+[07/16/2026, 09:31:15] ✅ React Native handoff attempted for 26SEP103: 58 row(s)
+[07/16/2026, 09:31:15] ACK offers_batch 26SEP103-checkpoint-1-1784219475593: received 47, accepted 47, app-side total 113
+[07/16/2026, 09:31:15] ✅ Captured casino offer "September Shuffle" (Code: 26SEP103)
+[07/16/2026, 09:31:15] 📊 Captured 47 sailing(s) for this offer
+[07/16/2026, 09:31:15] 🚢 Sailing 1: Harmony of the Seas - 2026-09-03
+[07/16/2026, 09:31:15] 🚢 Sailing 2: Radiance of the Seas - 2026-09-03
+[07/16/2026, 09:31:15] 🚢 Sailing 3: Radiance of the Seas - 2026-09-17
+[07/16/2026, 09:31:15] ➕ ...and 44 more sailing(s)
+[07/16/2026, 09:31:15] ACK offers_batch 26SEP103-checkpoint-2-1784219475593: received 11, accepted 11, app-side total 124
+[07/16/2026, 09:31:15] ✅ Captured casino offer "September Shuffle" (Code: 26SEP103)
+[07/16/2026, 09:31:15] 📊 Captured 11 sailing(s) for this offer
+[07/16/2026, 09:31:15] 🚢 Sailing 1: Allure of the Seas - 2026-09-19
+[07/16/2026, 09:31:15] 🚢 Sailing 2: Allure of the Seas - 2026-09-26
+[07/16/2026, 09:31:15] 🚢 Sailing 3: Allure of the Seas - 2026-09-14
+[07/16/2026, 09:31:15] ➕ ...and 8 more sailing(s)
+[07/16/2026, 09:31:17] Opening offers page for Club Royale
+[07/16/2026, 09:31:17] Reading loyalty data
+[07/16/2026, 09:31:18] 🔎 Offer discovery pass 1: 0 offer(s), 0 View Sailings button(s)
+[07/16/2026, 09:31:19] Reading loyalty data
+[07/16/2026, 09:31:19] 🔎 Offer discovery pass 2: 0 offer(s), 0 View Sailings button(s)
+[07/16/2026, 09:31:22] Found offer 26NPR503 — Limitless Luck
+[07/16/2026, 09:31:22] Found offer 26SEP103 — September Shuffle
+[07/16/2026, 09:31:22] Found offer 26MIX403 — Stacked Sailings
+[07/16/2026, 09:31:22] Found offer 2607C06 — July Instant Cruise Reward
+[07/16/2026, 09:31:22] Found offer 26VAR403 — Island Advantage
+[07/16/2026, 09:31:22] DOM discovery: parsed 5 visible/linked offer card(s), found 5 View Sailings button(s)
+[07/16/2026, 09:31:22] Opening offer 3/5: 26MIX403
+[07/16/2026, 09:31:23] Scraping offer 26MIX403
+[07/16/2026, 09:31:47] Finished offer 26MIX403: 307 sailing(s)
+[07/16/2026, 09:31:47] Saved offer 26MIX403: 307 sailing(s), 431 total
+[07/16/2026, 09:31:47] ✅ React Native handoff attempted for 26MIX403: 307 row(s)
+[07/16/2026, 09:31:47] ACK offers_batch 26MIX403-checkpoint-1-1784219507408: received 40, accepted 40, app-side total 164
+[07/16/2026, 09:31:47] ✅ Captured casino offer "Stacked Sailings" (Code: 26MIX403)
+[07/16/2026, 09:31:47] 📊 Captured 40 sailing(s) for this offer
+[07/16/2026, 09:31:47] 🚢 Sailing 1: Harmony of the Seas - 2026-10-01
+[07/16/2026, 09:31:47] 🚢 Sailing 2: Harmony of the Seas - 2026-10-29
+[07/16/2026, 09:31:47] 🚢 Sailing 3: Harmony of the Seas - 2026-10-20
+[07/16/2026, 09:31:47] ➕ ...and 37 more sailing(s)
+[07/16/2026, 09:31:47] ACK offers_batch 26MIX403-checkpoint-2-1784219507408: received 39, accepted 39, app-side total 203
+[07/16/2026, 09:31:47] ✅ Captured casino offer "Stacked Sailings" (Code: 26MIX403)
+[07/16/2026, 09:31:47] 📊 Captured 39 sailing(s) for this offer
+[07/16/2026, 09:31:47] 🚢 Sailing 1: Wonder of the Seas - 2026-12-02
+[07/16/2026, 09:31:47] 🚢 Sailing 2: Wonder of the Seas - 2026-12-07
+[07/16/2026, 09:31:47] 🚢 Sailing 3: Wonder of the Seas - 2026-02-15
+[07/16/2026, 09:31:47] ➕ ...and 36 more sailing(s)
+[07/16/2026, 09:31:47] ACK offers_batch 26MIX403-checkpoint-3-1784219507408: received 39, accepted 39, app-side total 242
+[07/16/2026, 09:31:47] ✅ Captured casino offer "Stacked Sailings" (Code: 26MIX403)
+[07/16/2026, 09:31:47] 📊 Captured 39 sailing(s) for this offer
+[07/16/2026, 09:31:47] 🚢 Sailing 1: Utopia of the Seas - 2026-11-30
+[07/16/2026, 09:31:47] 🚢 Sailing 2: Utopia of the Seas - 2026-11-20
+[07/16/2026, 09:31:47] 🚢 Sailing 3: Utopia of the Seas - 2026-11-27
+[07/16/2026, 09:31:47] ➕ ...and 36 more sailing(s)
+[07/16/2026, 09:31:47] ACK offers_batch 26MIX403-checkpoint-4-1784219507409: received 39, accepted 39, app-side total 281
+[07/16/2026, 09:31:47] ✅ Captured casino offer "Stacked Sailings" (Code: 26MIX403)
+[07/16/2026, 09:31:47] 📊 Captured 39 sailing(s) for this offer
+[07/16/2026, 09:31:47] 🚢 Sailing 1: Oasis of the Seas - 2026-02-12
+[07/16/2026, 09:31:47] 🚢 Sailing 2: Oasis of the Seas - 2026-02-19
+[07/16/2026, 09:31:47] 🚢 Sailing 3: Oasis of the Seas - 2027-12-18
+[07/16/2026, 09:31:47] ➕ ...and 36 more sailing(s)
+[07/16/2026, 09:31:47] ACK offers_batch 26MIX403-checkpoint-5-1784219507409: received 40, accepted 40, app-side total 321
+[07/16/2026, 09:31:47] ✅ Captured casino offer "Stacked Sailings" (Code: 26MIX403)
+[07/16/2026, 09:31:47] 📊 Captured 40 sailing(s) for this offer
+[07/16/2026, 09:31:47] 🚢 Sailing 1: Jewel of the Seas - 2026-11-12
+[07/16/2026, 09:31:47] 🚢 Sailing 2: Jewel of the Seas - 2026-12-16
+[07/16/2026, 09:31:47] 🚢 Sailing 3: Jewel of the Seas - 2026-12-20
+[07/16/2026, 09:31:47] ➕ ...and 37 more sailing(s)
+[07/16/2026, 09:31:47] ACK offers_batch 26MIX403-checkpoint-6-1784219507409: received 41, accepted 41, app-side total 362
+[07/16/2026, 09:31:47] ✅ Captured casino offer "Stacked Sailings" (Code: 26MIX403)
+[07/16/2026, 09:31:47] 📊 Captured 41 sailing(s) for this offer
+[07/16/2026, 09:31:47] 🚢 Sailing 1: Brilliance of the Seas - 2026-02-15
+[07/16/2026, 09:31:47] 🚢 Sailing 2: Wonder of the Seas - 2026-11-20
+[07/16/2026, 09:31:47] 🚢 Sailing 3: Adventure of the Seas - 2026-11-29
+[07/16/2026, 09:31:47] ➕ ...and 38 more sailing(s)
+[07/16/2026, 09:31:47] ACK offers_batch 26MIX403-checkpoint-7-1784219507409: received 69, accepted 69, app-side total 431
+[07/16/2026, 09:31:47] ✅ Captured casino offer "Stacked Sailings" (Code: 26MIX403)
+[07/16/2026, 09:31:47] 📊 Captured 69 sailing(s) for this offer
+[07/16/2026, 09:31:47] 🚢 Sailing 1: Brilliance of the Seas - 2027-02-22
+[07/16/2026, 09:31:47] 🚢 Sailing 2: Freedom of the Seas - 2026-10-03
+[07/16/2026, 09:31:47] 🚢 Sailing 3: Freedom of the Seas - 2026-10-17
+[07/16/2026, 09:31:47] ➕ ...and 66 more sailing(s)
+[07/16/2026, 09:31:48] Opening offers page for Club Royale
+[07/16/2026, 09:31:49] Reading loyalty data
+[07/16/2026, 09:31:49] 🔎 Offer discovery pass 1: 0 offer(s), 0 View Sailings button(s)
+[07/16/2026, 09:31:50] Reading loyalty data
+[07/16/2026, 09:31:51] Found offer 26NPR503 — Limitless Luck
+[07/16/2026, 09:31:51] Found offer 26SEP103 — September Shuffle
+[07/16/2026, 09:31:51] Found offer 26MIX403 — Stacked Sailings
+[07/16/2026, 09:31:51] Found offer 2607C06 — July Instant Cruise Reward
+[07/16/2026, 09:31:51] Found offer 26VAR403 — Island Advantage
+[07/16/2026, 09:31:51] DOM discovery: parsed 5 visible/linked offer card(s), found 5 View Sailings button(s)
+[07/16/2026, 09:31:51] Opening offer 4/5: 2607C06
+[07/16/2026, 09:31:54] Scraping offer 2607C06
+[07/16/2026, 09:34:47] ⏱️ 2607C06 scrape timeout guard reached after 150s; stopping with 1037 valid row(s)
+[07/16/2026, 09:34:47] Finished offer 2607C06: 1,037 sailing(s)
+[07/16/2026, 09:34:47] Saved offer 2607C06: 1,037 sailing(s), 1,468 total
+[07/16/2026, 09:34:47] ✅ React Native handoff attempted for 2607C06: 1037 row(s)
+[07/16/2026, 09:34:47] ACK offers_batch 2607C06-checkpoint-1-1784219687821: received 35, accepted 35, app-side total 466
+[07/16/2026, 09:34:47] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:34:47] 📊 Captured 35 sailing(s) for this offer
+[07/16/2026, 09:34:47] 🚢 Sailing 1: Jewel of the Seas - 2026-07-20
+[07/16/2026, 09:34:47] 🚢 Sailing 2: Jewel of the Seas - 2026-07-24
+[07/16/2026, 09:34:47] 🚢 Sailing 3: Mariner of the Seas - 2026-07-25
+[07/16/2026, 09:34:47] ➕ ...and 32 more sailing(s)
+[07/16/2026, 09:34:47] ACK offers_batch 2607C06-checkpoint-2-1784219687821: received 38, accepted 38, app-side total 504
+[07/16/2026, 09:34:47] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:34:47] 📊 Captured 38 sailing(s) for this offer
+[07/16/2026, 09:34:47] 🚢 Sailing 1: Enchantment of the Seas - 2027-04-11
+[07/16/2026, 09:34:47] 🚢 Sailing 2: Jewel of the Seas - 2026-08-03
+[07/16/2026, 09:34:47] 🚢 Sailing 3: Freedom of the Seas - 2026-08-03
+[07/16/2026, 09:34:47] ➕ ...and 35 more sailing(s)
+[07/16/2026, 09:34:47] ACK offers_batch 2607C06-checkpoint-3-1784219687821: received 39, accepted 39, app-side total 543
+[07/16/2026, 09:34:47] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:34:47] 📊 Captured 39 sailing(s) for this offer
+[07/16/2026, 09:34:47] 🚢 Sailing 1: Wonder of the Seas - 2026-10-30
+[07/16/2026, 09:34:47] 🚢 Sailing 2: Wonder of the Seas - 2026-11-27
+[07/16/2026, 09:34:47] 🚢 Sailing 3: Wonder of the Seas - 2026-12-11
+[07/16/2026, 09:34:47] ➕ ...and 36 more sailing(s)
+[07/16/2026, 09:34:47] ACK offers_batch 2607C06-checkpoint-4-1784219687821: received 38, accepted 38, app-side total 581
+[07/16/2026, 09:34:47] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:34:47] 📊 Captured 38 sailing(s) for this offer
+[07/16/2026, 09:34:47] 🚢 Sailing 1: Mariner of the Seas - 2026-10-08
+[07/16/2026, 09:34:47] 🚢 Sailing 2: Freedom of the Seas - 2026-08-27
+[07/16/2026, 09:34:47] 🚢 Sailing 3: Spectrum of the Seas - 2026-08-28
+[07/16/2026, 09:34:47] ➕ ...and 35 more sailing(s)
+[07/16/2026, 09:34:47] ACK offers_batch 2607C06-checkpoint-5-1784219687821: received 38, accepted 38, app-side total 619
+[07/16/2026, 09:34:47] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:34:47] 📊 Captured 38 sailing(s) for this offer
+[07/16/2026, 09:34:47] 🚢 Sailing 1: Harmony of the Seas - 2026-09-10
+[07/16/2026, 09:34:47] 🚢 Sailing 2: Mariner of the Seas - 2026-09-10
+[07/16/2026, 09:34:47] 🚢 Sailing 3: Voyager of the Seas - 2026-09-11
+[07/16/2026, 09:34:47] ➕ ...and 35 more sailing(s)
+[07/16/2026, 09:34:47] ACK offers_batch 2607C06-checkpoint-6-1784219687821: received 38, accepted 38, app-side total 657
+[07/16/2026, 09:34:47] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:34:47] 📊 Captured 38 sailing(s) for this offer
+[07/16/2026, 09:34:47] 🚢 Sailing 1: Jewel of the Seas - 2026-09-21
+[07/16/2026, 09:34:47] 🚢 Sailing 2: Radiance of the Seas - 2026-09-21
+[07/16/2026, 09:34:47] 🚢 Sailing 3: Radiance of the Seas - 2026-10-02
+[07/16/2026, 09:34:47] ➕ ...and 35 more sailing(s)
+[07/16/2026, 09:34:47] ACK offers_batch 2607C06-checkpoint-7-1784219687821: received 38, accepted 38, app-side total 695
+[07/16/2026, 09:34:47] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:34:47] 📊 Captured 38 sailing(s) for this offer
+[07/16/2026, 09:34:47] 🚢 Sailing 1: Enchantment of the Seas - 2026-11-29
+[07/16/2026, 09:34:47] 🚢 Sailing 2: Enchantment of the Seas - 2026-12-06
+[07/16/2026, 09:34:47] 🚢 Sailing 3: Enchantment of the Seas - 2026-12-13
+[07/16/2026, 09:34:47] ➕ ...and 35 more sailing(s)
+[07/16/2026, 09:34:47] ACK offers_batch 2607C06-checkpoint-8-1784219687822: received 38, accepted 38, app-side total 733
+[07/16/2026, 09:34:47] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:34:47] 📊 Captured 38 sailing(s) for this offer
+[07/16/2026, 09:34:47] 🚢 Sailing 1: Ovation of the Seas - 2026-12-14
+[07/16/2026, 09:34:47] 🚢 Sailing 2: Ovation of the Seas - 2026-12-20
+[07/16/2026, 09:34:47] 🚢 Sailing 3: Ovation of the Seas - 2026-12-27
+[07/16/2026, 09:34:47] ➕ ...and 35 more sailing(s)
+[07/16/2026, 09:34:47] ACK offers_batch 2607C06-checkpoint-9-1784219687822: received 37, accepted 37, app-side total 770
+[07/16/2026, 09:34:47] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:34:47] 📊 Captured 37 sailing(s) for this offer
+[07/16/2026, 09:34:47] 🚢 Sailing 1: Vision of the Seas - 2026-11-02
+[07/16/2026, 09:34:47] 🚢 Sailing 2: Vision of the Seas - 2026-11-07
+[07/16/2026, 09:34:47] 🚢 Sailing 3: Vision of the Seas - 2026-03-28
+[07/16/2026, 09:34:47] ➕ ...and 34 more sailing(s)
+[07/16/2026, 09:34:47] ACK offers_batch 2607C06-checkpoint-10-1784219687822: received 38, accepted 38, app-side total 808
+[07/16/2026, 09:34:47] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:34:47] 📊 Captured 38 sailing(s) for this offer
+[07/16/2026, 09:34:47] 🚢 Sailing 1: Oasis of the Seas - 2027-02-26
+[07/16/2026, 09:34:47] 🚢 Sailing 2: Oasis of the Seas - 2027-03-05
+[07/16/2026, 09:34:47] 🚢 Sailing 3: Oasis of the Seas - 2027-04-02
+[07/16/2026, 09:34:47] ➕ ...and 35 more sailing(s)
+[07/16/2026, 09:34:47] ACK offers_batch 2607C06-checkpoint-11-1784219687822: received 39, accepted 39, app-side total 847
+[07/16/2026, 09:34:47] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:34:47] 📊 Captured 39 sailing(s) for this offer
+[07/16/2026, 09:34:47] 🚢 Sailing 1: Quantum of the Seas - 2026-11-13
+[07/16/2026, 09:34:47] 🚢 Sailing 2: Grandeur of the Seas - 2026-11-14
+[07/16/2026, 09:34:47] 🚢 Sailing 3: Mariner of the Seas - 2026-11-14
+[07/16/2026, 09:34:47] ➕ ...and 36 more sailing(s)
+[07/16/2026, 09:34:47] ACK offers_batch 2607C06-checkpoint-12-1784219687822: received 36, accepted 36, app-side total 883
+[07/16/2026, 09:34:47] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:34:47] 📊 Captured 36 sailing(s) for this offer
+[07/16/2026, 09:34:47] 🚢 Sailing 1: Serenade of the Seas - 2026-01-28
+[07/16/2026, 09:34:47] 🚢 Sailing 2: Serenade of the Seas - 2027-12-20
+[07/16/2026, 09:34:47] 🚢 Sailing 3: Vision of the Seas - 2026-11-22
+[07/16/2026, 09:34:47] ➕ ...and 33 more sailing(s)
+[07/16/2026, 09:34:47] ACK offers_batch 2607C06-checkpoint-13-1784219687822: received 37, accepted 37, app-side total 920
+[07/16/2026, 09:34:47] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:34:47] 📊 Captured 37 sailing(s) for this offer
+[07/16/2026, 09:34:47] 🚢 Sailing 1: Oasis of the Seas - 2027-02-15
+[07/16/2026, 09:34:47] 🚢 Sailing 2: Oasis of the Seas - 2027-02-22
+[07/16/2026, 09:34:47] 🚢 Sailing 3: Oasis of the Seas - 2027-03-01
+[07/16/2026, 09:34:47] ➕ ...and 34 more sailing(s)
+[07/16/2026, 09:34:47] ACK offers_batch 2607C06-checkpoint-14-1784219687822: received 38, accepted 38, app-side total 958
+[07/16/2026, 09:34:47] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:34:47] 📊 Captured 38 sailing(s) for this offer
+[07/16/2026, 09:34:47] 🚢 Sailing 1: Allure of the Seas - 2026-12-06
+[07/16/2026, 09:34:47] 🚢 Sailing 2: Spectrum of the Seas - 2026-12-06
+[07/16/2026, 09:34:47] 🚢 Sailing 3: Symphony of the Seas - 2026-12-06
+[07/16/2026, 09:34:47] ➕ ...and 35 more sailing(s)
+[07/16/2026, 09:34:47] ACK offers_batch 2607C06-checkpoint-15-1784219687822: received 37, accepted 37, app-side total 995
+[07/16/2026, 09:34:47] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:34:47] 📊 Captured 37 sailing(s) for this offer
+[07/16/2026, 09:34:47] 🚢 Sailing 1: Independence of the Seas - 2027-01-03
+[07/16/2026, 09:34:47] 🚢 Sailing 2: Serenade of the Seas - 2027-01-03
+[07/16/2026, 09:34:47] 🚢 Sailing 3: Brilliance of the Seas - 2027-01-04
+[07/16/2026, 09:34:47] ➕ ...and 34 more sailing(s)
+[07/16/2026, 09:34:47] ACK offers_batch 2607C06-checkpoint-16-1784219687823: received 37, accepted 37, app-side total 1032
+[07/16/2026, 09:34:47] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:34:47] 📊 Captured 37 sailing(s) for this offer
+[07/16/2026, 09:34:47] 🚢 Sailing 1: Brilliance of the Seas - 2027-04-02
+[07/16/2026, 09:34:47] 🚢 Sailing 2: Brilliance of the Seas - 2027-04-09
+[07/16/2026, 09:34:47] 🚢 Sailing 3: Brilliance of the Seas - 2027-04-16
+[07/16/2026, 09:34:47] ➕ ...and 34 more sailing(s)
+[07/16/2026, 09:34:47] ACK offers_batch 2607C06-checkpoint-17-1784219687823: received 39, accepted 39, app-side total 1071
+[07/16/2026, 09:34:47] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:34:47] 📊 Captured 39 sailing(s) for this offer
+[07/16/2026, 09:34:47] 🚢 Sailing 1: Serenade of the Seas - 2027-04-22
+[07/16/2026, 09:34:47] 🚢 Sailing 2: Brilliance of the Seas - 2027-01-15
+[07/16/2026, 09:34:47] 🚢 Sailing 3: Jewel of the Seas - 2027-01-16
+[07/16/2026, 09:34:47] ➕ ...and 36 more sailing(s)
+[07/16/2026, 09:34:47] ACK offers_batch 2607C06-checkpoint-18-1784219687823: received 39, accepted 39, app-side total 1110
+[07/16/2026, 09:34:47] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:34:47] 📊 Captured 39 sailing(s) for this offer
+[07/16/2026, 09:34:47] 🚢 Sailing 1: Voyager of the Seas - 2027-02-15
+[07/16/2026, 09:34:47] 🚢 Sailing 2: Freedom of the Seas - 2027-02-20
+[07/16/2026, 09:34:47] 🚢 Sailing 3: Radiance of the Seas - 2027-02-20
+[07/16/2026, 09:34:47] ➕ ...and 36 more sailing(s)
+[07/16/2026, 09:34:47] ACK offers_batch 2607C06-checkpoint-19-1784219687823: received 59, accepted 59, app-side total 1169
+[07/16/2026, 09:34:47] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:34:47] 📊 Captured 59 sailing(s) for this offer
+[07/16/2026, 09:34:47] 🚢 Sailing 1: Navigator of the Seas - 2027-06-11
+[07/16/2026, 09:34:47] 🚢 Sailing 2: Navigator of the Seas - 2027-06-18
+[07/16/2026, 09:34:47] 🚢 Sailing 3: Navigator of the Seas - 2027-06-25
+[07/16/2026, 09:34:47] ➕ ...and 56 more sailing(s)
+[07/16/2026, 09:34:47] ACK offers_batch 2607C06-checkpoint-20-1784219687823: received 65, accepted 65, app-side total 1234
+[07/16/2026, 09:34:47] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:34:47] 📊 Captured 65 sailing(s) for this offer
+[07/16/2026, 09:34:47] 🚢 Sailing 1: Allure of the Seas - 2026-10-03
+[07/16/2026, 09:34:47] 🚢 Sailing 2: Harmony of the Seas - 2026-09-05
+[07/16/2026, 09:34:47] 🚢 Sailing 3: Harmony of the Seas - 2026-09-26
+[07/16/2026, 09:34:47] ➕ ...and 62 more sailing(s)
+[07/16/2026, 09:34:47] ACK offers_batch 2607C06-checkpoint-21-1784219687823: received 65, accepted 65, app-side total 1299
+[07/16/2026, 09:34:47] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:34:47] 📊 Captured 65 sailing(s) for this offer
+[07/16/2026, 09:34:47] 🚢 Sailing 1: Mariner of the Seas - 2026-12-20
+[07/16/2026, 09:34:47] 🚢 Sailing 2: Mariner of the Seas - 2026-12-27
+[07/16/2026, 09:34:47] 🚢 Sailing 3: Mariner of the Seas - 2026-02-13
+[07/16/2026, 09:34:47] ➕ ...and 62 more sailing(s)
+[07/16/2026, 09:34:48] ACK offers_batch 2607C06-checkpoint-22-1784219687823: received 58, accepted 58, app-side total 1357
+[07/16/2026, 09:34:48] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:34:48] 📊 Captured 58 sailing(s) for this offer
+[07/16/2026, 09:34:48] 🚢 Sailing 1: Wonder of the Seas - 2026-12-02
+[07/16/2026, 09:34:48] 🚢 Sailing 2: Wonder of the Seas - 2026-12-07
+[07/16/2026, 09:34:48] 🚢 Sailing 3: Wonder of the Seas - 2026-01-04
+[07/16/2026, 09:34:48] ➕ ...and 55 more sailing(s)
+[07/16/2026, 09:34:48] ACK offers_batch 2607C06-checkpoint-23-1784219687823: received 61, accepted 61, app-side total 1418
+[07/16/2026, 09:34:48] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:34:48] 📊 Captured 61 sailing(s) for this offer
+[07/16/2026, 09:34:48] 🚢 Sailing 1: Star of the Seas - 2026-09-20
+[07/16/2026, 09:34:48] 🚢 Sailing 2: Freedom of the Seas - 2026-10-08
+[07/16/2026, 09:34:48] 🚢 Sailing 3: Freedom of the Seas - 2026-11-05
+[07/16/2026, 09:34:48] ➕ ...and 58 more sailing(s)
+[07/16/2026, 09:34:48] ACK offers_batch 2607C06-checkpoint-24-1784219687824: received 50, accepted 50, app-side total 1468
+[07/16/2026, 09:34:48] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:34:48] 📊 Captured 50 sailing(s) for this offer
+[07/16/2026, 09:34:48] 🚢 Sailing 1: Vision of the Seas - 2026-03-14
+[07/16/2026, 09:34:48] 🚢 Sailing 2: Brilliance of the Seas - 2026-12-21
+[07/16/2026, 09:34:48] 🚢 Sailing 3: Explorer of the Seas - 2026-12-21
+[07/16/2026, 09:34:48] ➕ ...and 47 more sailing(s)
+[07/16/2026, 09:34:48] Opening offers page for Club Royale
+[07/16/2026, 09:34:49] Reading loyalty data
+[07/16/2026, 09:34:50] 🔎 Offer discovery pass 1: 0 offer(s), 0 View Sailings button(s)
+[07/16/2026, 09:34:50] Reading loyalty data
+[07/16/2026, 09:34:51] 🔎 Offer discovery pass 2: 0 offer(s), 0 View Sailings button(s)
+[07/16/2026, 09:34:53] Found offer 26NPR503 — Limitless Luck
+[07/16/2026, 09:34:53] Found offer 26SEP103 — September Shuffle
+[07/16/2026, 09:34:53] Found offer 26MIX403 — Stacked Sailings
+[07/16/2026, 09:34:53] Found offer 2607C06 — July Instant Cruise Reward
+[07/16/2026, 09:34:53] Found offer 26VAR403 — Island Advantage
+[07/16/2026, 09:34:53] DOM discovery: parsed 5 visible/linked offer card(s), found 5 View Sailings button(s)
+[07/16/2026, 09:34:53] Opening offer 5/5: 26VAR403
+[07/16/2026, 09:34:55] Scraping offer 26VAR403
+[07/16/2026, 09:35:03] Finished offer 26VAR403: 143 sailing(s)
+[07/16/2026, 09:35:03] Saved offer 26VAR403: 143 sailing(s), 1,611 total
+[07/16/2026, 09:35:03] ✅ React Native handoff attempted for 26VAR403: 143 row(s)
+[07/16/2026, 09:35:03] Accepted full row: 26NPR503 | Enchantment of the Seas | 09/05/2026 | 7 Night Western Caribbean Cruise | Fort Lauderdale
+[07/16/2026, 09:35:03] Accepted full row: 26NPR503 | Enchantment of the Seas | 09/19/2026 | 7 Night Western Caribbean Cruise | Fort Lauderdale
+[07/16/2026, 09:35:03] Accepted full row: 26NPR503 | Enchantment of the Seas | 09/26/2026 | 7 Night Western Caribbean Cruise | Fort Lauderdale
+[07/16/2026, 09:35:03] Accepted full row: 26NPR503 | Enchantment of the Seas | 10/03/2026 | 7 Night Western Caribbean Cruise | Fort Lauderdale
+[07/16/2026, 09:35:03] Accepted full row: 26NPR503 | Enchantment of the Seas | 10/10/2026 | 7 Night Western Caribbean Cruise | Fort Lauderdale
+[07/16/2026, 09:35:03] Accepted full row: 26NPR503 | Enchantment of the Seas | 10/17/2026 | 7 Night Western Caribbean Cruise | Fort Lauderdale
+[07/16/2026, 09:35:03] Accepted full row: 26NPR503 | Enchantment of the Seas | 11/22/2026 | 7 Night Western Caribbean Cruise | Fort Lauderdale
+[07/16/2026, 09:35:03] Accepted full row: 26NPR503 | Enchantment of the Seas | 12/06/2026 | 7 Night Western Caribbean Cruise | Fort Lauderdale
+[07/16/2026, 09:35:03] Accepted full row: 26NPR503 | Radiance of the Seas | 09/07/2026 | 5 Night Western Caribbean Cruise | Fort Lauderdale
+[07/16/2026, 09:35:03] Accepted full row: 26NPR503 | Radiance of the Seas | 09/12/2026 | 5 Night Western Caribbean Cruise | Fort Lauderdale
+[07/16/2026, 09:35:03] Accepted full row: 26NPR503 | Radiance of the Seas | 09/26/2026 | 5 Night Western Caribbean Cruise | Fort Lauderdale
+[07/16/2026, 09:35:03] Accepted full row: 26NPR503 | Radiance of the Seas | 10/19/2026 | 5 Night Western Caribbean Cruise | Fort Lauderdale
+[07/16/2026, 09:35:03] Accepted full row: 26NPR503 | Radiance of the Seas | 10/24/2026 | 5 Night Western Caribbean Cruise | Fort Lauderdale
+[07/16/2026, 09:35:03] Accepted full row: 26NPR503 | Radiance of the Seas | 11/02/2026 | 5 Night Western Caribbean Cruise | Fort Lauderdale
+[07/16/2026, 09:35:03] Accepted full row: 26NPR503 | Radiance of the Seas | 09/17/2026 | 4 Night Western Caribbean Cruise | Fort Lauderdale
+[07/16/2026, 09:35:03] Accepted full row: 26NPR503 | Jewel of the Seas | 10/27/2026 | 6 Night Western Caribbean Cruise | Fort Lauderdale
+[07/16/2026, 09:35:03] Accepted full row: 26NPR503 | Jewel of the Seas | 11/16/2026 | 6 Night Western Caribbean Cruise | Fort Lauderdale
+[07/16/2026, 09:35:03] Accepted full row: 26NPR503 | Enchantment of the Seas | 10/31/2026 | 8 Night Western Caribbean Cruise | Fort Lauderdale
+[07/16/2026, 09:35:03] Accepted full row: 26NPR503 | Jewel of the Seas | 11/02/2026 | 5 Night Western Caribbean Cruise | Fort Lauderdale
+[07/16/2026, 09:35:03] Accepted full row: 26NPR503 | Jewel of the Seas | 11/07/2026 | 5 Night Western Caribbean Cruise | Fort Lauderdale
+[07/16/2026, 09:35:03] Accepted full row: 26NPR503 | Jewel of the Seas | 11/27/2026 | 5 Night Western Caribbean Cruise | Fort Lauderdale
+[07/16/2026, 09:35:03] Accepted full row: 26NPR503 | Jewel of the Seas | 12/02/2026 | 5 Night Western Caribbean Cruise | Fort Lauderdale
+[07/16/2026, 09:35:03] Accepted full row: 26NPR503 | Radiance of the Seas | 11/07/2026 | 7 Night Western Caribbean Cruise | Fort Lauderdale
+[07/16/2026, 09:35:03] Accepted full row: 26NPR503 | Jewel of the Seas | 11/12/2026 | 4 Night Western Caribbean Cruise | Fort Lauderdale
+[07/16/2026, 09:35:03] Accepted full row: 26NPR503 | Jewel of the Seas | 12/16/2026 | 4 Night Western Caribbean Cruise | Fort Lauderdale
+[07/16/2026, 09:35:03] ✅ Final offer count 26NPR503: 66 cruise row(s)
+[07/16/2026, 09:35:03] ✅ Final offer count 26SEP103: 58 cruise row(s)
+[07/16/2026, 09:35:03] ✅ Final offer count 26MIX403: 307 cruise row(s)
+[07/16/2026, 09:35:03] ✅ Final offer count 2607C06: 1037 cruise row(s)
+[07/16/2026, 09:35:03] ✅ Final offer count 26VAR403: 143 cruise row(s)
+[07/16/2026, 09:35:03] Offers complete: 5 offer(s), 1,611 sailing(s)
+[07/16/2026, 09:35:03] ACK offers_batch 26VAR403-checkpoint-1-1784219703600: received 40, accepted 40, app-side total 1508
+[07/16/2026, 09:35:03] ✅ Captured casino offer "Island Advantage" (Code: 26VAR403)
+[07/16/2026, 09:35:03] 📊 Captured 40 sailing(s) for this offer
+[07/16/2026, 09:35:03] 🚢 Sailing 1: Harmony of the Seas - 2026-09-03
+[07/16/2026, 09:35:03] 🚢 Sailing 2: Harmony of the Seas - 2026-10-01
+[07/16/2026, 09:35:03] 🚢 Sailing 3: Harmony of the Seas - 2026-10-29
+[07/16/2026, 09:35:03] ➕ ...and 37 more sailing(s)
+[07/16/2026, 09:35:03] ACK offers_batch 26VAR403-checkpoint-2-1784219703600: received 40, accepted 40, app-side total 1548
+[07/16/2026, 09:35:03] ✅ Captured casino offer "Island Advantage" (Code: 26VAR403)
+[07/16/2026, 09:35:03] 📊 Captured 40 sailing(s) for this offer
+[07/16/2026, 09:35:03] 🚢 Sailing 1: Liberty of the Seas - 2026-12-07
+[07/16/2026, 09:35:03] 🚢 Sailing 2: Liberty of the Seas - 2026-12-12
+[07/16/2026, 09:35:03] 🚢 Sailing 3: Jewel of the Seas - 2026-11-12
+[07/16/2026, 09:35:03] ➕ ...and 37 more sailing(s)
+[07/16/2026, 09:35:03] ACK offers_batch 26VAR403-checkpoint-3-1784219703601: received 32, accepted 32, app-side total 1580
+[07/16/2026, 09:35:03] ✅ Captured casino offer "Island Advantage" (Code: 26VAR403)
+[07/16/2026, 09:35:03] 📊 Captured 32 sailing(s) for this offer
+[07/16/2026, 09:35:03] 🚢 Sailing 1: Harmony of the Seas - 2026-10-16
+[07/16/2026, 09:35:03] 🚢 Sailing 2: Harmony of the Seas - 2026-12-04
+[07/16/2026, 09:35:03] 🚢 Sailing 3: Harmony of the Seas - 2026-09-21
+[07/16/2026, 09:35:03] ➕ ...and 29 more sailing(s)
+[07/16/2026, 09:35:03] ACK offers_batch 26VAR403-checkpoint-4-1784219703601: received 31, accepted 31, app-side total 1611
+[07/16/2026, 09:35:03] ✅ Captured casino offer "Island Advantage" (Code: 26VAR403)
+[07/16/2026, 09:35:03] 📊 Captured 31 sailing(s) for this offer
+[07/16/2026, 09:35:03] 🚢 Sailing 1: Harmony of the Seas - 2026-12-17
+[07/16/2026, 09:35:03] 🚢 Sailing 2: Harmony of the Seas - 2026-01-14
+[07/16/2026, 09:35:03] 🚢 Sailing 3: Harmony of the Seas - 2026-01-28
+[07/16/2026, 09:35:03] ➕ ...and 28 more sailing(s)
+[07/16/2026, 09:35:03] Step 1 completed with 1611 items
+[07/16/2026, 09:35:03] ACK offers_batch 26NPR503: received 38, accepted 38, app-side total 1611
+[07/16/2026, 09:35:03] ✅ Captured casino offer "Limitless Luck" (Code: 26NPR503)
+[07/16/2026, 09:35:03] 📊 Captured 38 sailing(s) for this offer
+[07/16/2026, 09:35:03] 🚢 Sailing 1: Enchantment of the Seas - 2026-09-05
+[07/16/2026, 09:35:03] 🚢 Sailing 2: Enchantment of the Seas - 2026-09-19
+[07/16/2026, 09:35:03] 🚢 Sailing 3: Enchantment of the Seas - 2026-09-26
+[07/16/2026, 09:35:03] ➕ ...and 35 more sailing(s)
+[07/16/2026, 09:35:03] ACK offers_batch 26SEP103: received 38, accepted 38, app-side total 1611
+[07/16/2026, 09:35:03] ✅ Captured casino offer "September Shuffle" (Code: 26SEP103)
+[07/16/2026, 09:35:03] 📊 Captured 38 sailing(s) for this offer
+[07/16/2026, 09:35:03] 🚢 Sailing 1: Jewel of the Seas - 2026-09-04
+[07/16/2026, 09:35:03] 🚢 Sailing 2: Enchantment of the Seas - 2026-09-05
+[07/16/2026, 09:35:03] 🚢 Sailing 3: Enchantment of the Seas - 2026-09-19
+[07/16/2026, 09:35:03] ➕ ...and 35 more sailing(s)
+[07/16/2026, 09:35:03] ACK offers_batch 26MIX403: received 37, accepted 37, app-side total 1611
+[07/16/2026, 09:35:03] ✅ Captured casino offer "Stacked Sailings" (Code: 26MIX403)
+[07/16/2026, 09:35:03] 📊 Captured 37 sailing(s) for this offer
+[07/16/2026, 09:35:03] 🚢 Sailing 1: Ovation of the Seas - 2026-01-22
+[07/16/2026, 09:35:03] 🚢 Sailing 2: Ovation of the Seas - 2027-12-11
+[07/16/2026, 09:35:03] 🚢 Sailing 3: Wonder of the Seas - 2026-10-02
+[07/16/2026, 09:35:03] ➕ ...and 34 more sailing(s)
+[07/16/2026, 09:35:03] ACK offers_batch 26MIX403: received 36, accepted 36, app-side total 1611
+[07/16/2026, 09:35:03] ✅ Captured casino offer "Stacked Sailings" (Code: 26MIX403)
+[07/16/2026, 09:35:03] 📊 Captured 36 sailing(s) for this offer
+[07/16/2026, 09:35:03] 🚢 Sailing 1: Symphony of the Seas - 2026-01-31
+[07/16/2026, 09:35:03] 🚢 Sailing 2: Symphony of the Seas - 2026-02-21
+[07/16/2026, 09:35:03] 🚢 Sailing 3: Symphony of the Seas - 2027-12-13
+[07/16/2026, 09:35:03] ➕ ...and 33 more sailing(s)
+[07/16/2026, 09:35:03] ACK offers_batch 26MIX403: received 37, accepted 37, app-side total 1611
+[07/16/2026, 09:35:03] ✅ Captured casino offer "Stacked Sailings" (Code: 26MIX403)
+[07/16/2026, 09:35:03] 📊 Captured 37 sailing(s) for this offer
+[07/16/2026, 09:35:03] 🚢 Sailing 1: Utopia of the Seas - 2027-01-25
+[07/16/2026, 09:35:03] 🚢 Sailing 2: Utopia of the Seas - 2027-02-01
+[07/16/2026, 09:35:03] 🚢 Sailing 3: Utopia of the Seas - 2027-02-08
+[07/16/2026, 09:35:03] ➕ ...and 34 more sailing(s)
+[07/16/2026, 09:35:03] ACK offers_batch 26MIX403: received 37, accepted 37, app-side total 1611
+[07/16/2026, 09:35:03] ✅ Captured casino offer "Stacked Sailings" (Code: 26MIX403)
+[07/16/2026, 09:35:03] 📊 Captured 37 sailing(s) for this offer
+[07/16/2026, 09:35:03] 🚢 Sailing 1: Radiance of the Seas - 2026-01-02
+[07/16/2026, 09:35:03] 🚢 Sailing 2: Liberty of the Seas - 2026-11-09
+[07/16/2026, 09:35:03] 🚢 Sailing 3: Liberty of the Seas - 2026-11-14
+[07/16/2026, 09:35:03] ➕ ...and 34 more sailing(s)
+[07/16/2026, 09:35:03] ACK offers_batch 26MIX403: received 37, accepted 37, app-side total 1611
+[07/16/2026, 09:35:03] ✅ Captured casino offer "Stacked Sailings" (Code: 26MIX403)
+[07/16/2026, 09:35:03] 📊 Captured 37 sailing(s) for this offer
+[07/16/2026, 09:35:03] 🚢 Sailing 1: Jewel of the Seas - 2026-02-18
+[07/16/2026, 09:35:03] 🚢 Sailing 2: Jewel of the Seas - 2027-12-16
+[07/16/2026, 09:35:03] 🚢 Sailing 3: Jewel of the Seas - 2027-01-21
+[07/16/2026, 09:35:03] ➕ ...and 34 more sailing(s)
+[07/16/2026, 09:35:03] ACK offers_batch 26MIX403: received 38, accepted 38, app-side total 1611
+[07/16/2026, 09:35:03] ✅ Captured casino offer "Stacked Sailings" (Code: 26MIX403)
+[07/16/2026, 09:35:03] 📊 Captured 38 sailing(s) for this offer
+[07/16/2026, 09:35:03] 🚢 Sailing 1: Enchantment of the Seas - 2026-12-13
+[07/16/2026, 09:35:03] 🚢 Sailing 2: Enchantment of the Seas - 2026-12-20
+[07/16/2026, 09:35:03] 🚢 Sailing 3: Enchantment of the Seas - 2026-12-27
+[07/16/2026, 09:35:03] ➕ ...and 35 more sailing(s)
+[07/16/2026, 09:35:03] ACK offers_batch 2607C06: received 33, accepted 33, app-side total 1611
+[07/16/2026, 09:35:03] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:35:03] 📊 Captured 33 sailing(s) for this offer
+[07/16/2026, 09:35:03] 🚢 Sailing 1: Jewel of the Seas - 2026-07-20
+[07/16/2026, 09:35:03] 🚢 Sailing 2: Jewel of the Seas - 2026-07-24
+[07/16/2026, 09:35:03] 🚢 Sailing 3: Mariner of the Seas - 2026-07-25
+[07/16/2026, 09:35:03] ➕ ...and 30 more sailing(s)
+[07/16/2026, 09:35:03] ACK offers_batch 2607C06: received 35, accepted 35, app-side total 1611
+[07/16/2026, 09:35:03] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:35:03] 📊 Captured 35 sailing(s) for this offer
+[07/16/2026, 09:35:03] 🚢 Sailing 1: Enchantment of the Seas - 2027-03-28
+[07/16/2026, 09:35:03] 🚢 Sailing 2: Enchantment of the Seas - 2027-04-04
+[07/16/2026, 09:35:03] 🚢 Sailing 3: Enchantment of the Seas - 2027-04-11
+[07/16/2026, 09:35:03] ➕ ...and 32 more sailing(s)
+[07/16/2026, 09:35:03] ACK offers_batch 2607C06: received 36, accepted 36, app-side total 1611
+[07/16/2026, 09:35:03] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:35:03] 📊 Captured 36 sailing(s) for this offer
+[07/16/2026, 09:35:03] 🚢 Sailing 1: Jewel of the Seas - 2026-09-11
+[07/16/2026, 09:35:03] 🚢 Sailing 2: Wonder of the Seas - 2026-08-14
+[07/16/2026, 09:35:03] 🚢 Sailing 3: Wonder of the Seas - 2026-08-21
+[07/16/2026, 09:35:03] ➕ ...and 33 more sailing(s)
+[07/16/2026, 09:35:03] ACK offers_batch 2607C06: received 36, accepted 36, app-side total 1611
+[07/16/2026, 09:35:03] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:35:03] 📊 Captured 36 sailing(s) for this offer
+[07/16/2026, 09:35:03] 🚢 Sailing 1: Grandeur of the Seas - 2026-09-27
+[07/16/2026, 09:35:03] 🚢 Sailing 2: Symphony of the Seas - 2026-08-23
+[07/16/2026, 09:35:03] 🚢 Sailing 3: Symphony of the Seas - 2026-09-20
+[07/16/2026, 09:35:03] ➕ ...and 33 more sailing(s)
+[07/16/2026, 09:35:03] ACK offers_batch 2607C06: received 35, accepted 35, app-side total 1611
+[07/16/2026, 09:35:03] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:35:03] 📊 Captured 35 sailing(s) for this offer
+[07/16/2026, 09:35:03] 🚢 Sailing 1: Jewel of the Seas - 2026-09-04
+[07/16/2026, 09:35:03] 🚢 Sailing 2: Voyager of the Seas - 2026-09-04
+[07/16/2026, 09:35:03] 🚢 Sailing 3: Explorer of the Seas - 2026-09-05
+[07/16/2026, 09:35:03] ➕ ...and 32 more sailing(s)
+[07/16/2026, 09:35:03] ACK offers_batch 2607C06: received 36, accepted 36, app-side total 1611
+[07/16/2026, 09:35:03] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:35:03] 📊 Captured 36 sailing(s) for this offer
+[07/16/2026, 09:35:03] 🚢 Sailing 1: Harmony of the Seas - 2026-11-10
+[07/16/2026, 09:35:03] 🚢 Sailing 2: Independence of the Seas - 2026-09-17
+[07/16/2026, 09:35:03] 🚢 Sailing 3: Independence of the Seas - 2026-10-15
+[07/16/2026, 09:35:03] ➕ ...and 33 more sailing(s)
+[07/16/2026, 09:35:03] ACK offers_batch 2607C06: received 35, accepted 35, app-side total 1611
+[07/16/2026, 09:35:03] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:35:03] 📊 Captured 35 sailing(s) for this offer
+[07/16/2026, 09:35:03] 🚢 Sailing 1: Rhapsody of the Seas - 2026-10-03
+[07/16/2026, 09:35:03] 🚢 Sailing 2: Rhapsody of the Seas - 2026-10-31
+[07/16/2026, 09:35:03] 🚢 Sailing 3: Rhapsody of the Seas - 2026-11-07
+[07/16/2026, 09:35:03] ➕ ...and 32 more sailing(s)
+[07/16/2026, 09:35:03] ACK offers_batch 2607C06: received 36, accepted 36, app-side total 1611
+[07/16/2026, 09:35:03] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:35:03] 📊 Captured 36 sailing(s) for this offer
+[07/16/2026, 09:35:03] 🚢 Sailing 1: Serenade of the Seas - 2026-10-11
+[07/16/2026, 09:35:03] 🚢 Sailing 2: Jewel of the Seas - 2026-10-12
+[07/16/2026, 09:35:03] 🚢 Sailing 3: Mariner of the Seas - 2026-10-12
+[07/16/2026, 09:35:03] ➕ ...and 33 more sailing(s)
+[07/16/2026, 09:35:03] ACK offers_batch 2607C06: received 36, accepted 36, app-side total 1611
+[07/16/2026, 09:35:03] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:35:03] 📊 Captured 36 sailing(s) for this offer
+[07/16/2026, 09:35:03] 🚢 Sailing 1: Harmony of the Seas - 2026-10-24
+[07/16/2026, 09:35:03] 🚢 Sailing 2: Harmony of the Seas - 2026-10-31
+[07/16/2026, 09:35:03] 🚢 Sailing 3: Radiance of the Seas - 2026-10-24
+[07/16/2026, 09:35:03] ➕ ...and 33 more sailing(s)
+[07/16/2026, 09:35:03] ACK offers_batch 2607C06: received 35, accepted 35, app-side total 1611
+[07/16/2026, 09:35:03] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:35:03] 📊 Captured 35 sailing(s) for this offer
+[07/16/2026, 09:35:03] 🚢 Sailing 1: Liberty of the Seas - 2027-12-17
+[07/16/2026, 09:35:03] 🚢 Sailing 2: Liberty of the Seas - 2027-02-25
+[07/16/2026, 09:35:03] 🚢 Sailing 3: Liberty of the Seas - 2027-04-08
+[07/16/2026, 09:35:03] ➕ ...and 32 more sailing(s)
+[07/16/2026, 09:35:03] ACK offers_batch 2607C06: received 36, accepted 36, app-side total 1611
+[07/16/2026, 09:35:03] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:35:03] 📊 Captured 36 sailing(s) for this offer
+[07/16/2026, 09:35:03] 🚢 Sailing 1: Odyssey of the Seas - 2026-11-29
+[07/16/2026, 09:35:03] 🚢 Sailing 2: Odyssey of the Seas - 2026-12-06
+[07/16/2026, 09:35:03] 🚢 Sailing 3: Navigator of the Seas - 2026-11-09
+[07/16/2026, 09:35:03] ➕ ...and 33 more sailing(s)
+[07/16/2026, 09:35:03] ACK offers_batch 2607C06: received 36, accepted 36, app-side total 1611
+[07/16/2026, 09:35:03] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:35:03] 📊 Captured 36 sailing(s) for this offer
+[07/16/2026, 09:35:03] 🚢 Sailing 1: Explorer of the Seas - 2026-11-18
+[07/16/2026, 09:35:03] 🚢 Sailing 2: Liberty of the Seas - 2026-11-19
+[07/16/2026, 09:35:03] 🚢 Sailing 3: Wonder of the Seas - 2026-11-20
+[07/16/2026, 09:35:03] ➕ ...and 33 more sailing(s)
+[07/16/2026, 09:35:03] ACK offers_batch 2607C06: received 33, accepted 33, app-side total 1611
+[07/16/2026, 09:35:03] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:35:03] 📊 Captured 33 sailing(s) for this offer
+[07/16/2026, 09:35:03] 🚢 Sailing 1: Brilliance of the Seas - 2026-03-15
+[07/16/2026, 09:35:03] 🚢 Sailing 2: Oasis of the Seas - 2026-11-23
+[07/16/2026, 09:35:03] 🚢 Sailing 3: Oasis of the Seas - 2026-11-30
+[07/16/2026, 09:35:03] ➕ ...and 30 more sailing(s)
+[07/16/2026, 09:35:04] ACK offers_batch 2607C06: received 35, accepted 35, app-side total 1611
+[07/16/2026, 09:35:04] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:35:04] 📊 Captured 35 sailing(s) for this offer
+[07/16/2026, 09:35:04] 🚢 Sailing 1: Oasis of the Seas - 2027-03-29
+[07/16/2026, 09:35:04] 🚢 Sailing 2: Oasis of the Seas - 2027-04-05
+[07/16/2026, 09:35:04] 🚢 Sailing 3: Oasis of the Seas - 2027-04-12
+[07/16/2026, 09:35:04] ➕ ...and 32 more sailing(s)
+[07/16/2026, 09:35:04] ACK offers_batch 2607C06: received 35, accepted 35, app-side total 1611
+[07/16/2026, 09:35:04] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:35:04] 📊 Captured 35 sailing(s) for this offer
+[07/16/2026, 09:35:04] 🚢 Sailing 1: Brilliance of the Seas - 2026-12-02
+[07/16/2026, 09:35:04] 🚢 Sailing 2: Brilliance of the Seas - 2026-12-07
+[07/16/2026, 09:35:04] 🚢 Sailing 3: Brilliance of the Seas - 2026-01-11
+[07/16/2026, 09:35:04] ➕ ...and 32 more sailing(s)
+[07/16/2026, 09:35:04] ACK offers_batch 2607C06: received 34, accepted 34, app-side total 1611
+[07/16/2026, 09:35:04] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:35:04] 📊 Captured 34 sailing(s) for this offer
+[07/16/2026, 09:35:04] 🚢 Sailing 1: Serenade of the Seas - 2027-01-03
+[07/16/2026, 09:35:04] 🚢 Sailing 2: Brilliance of the Seas - 2027-01-04
+[07/16/2026, 09:35:04] 🚢 Sailing 3: Brilliance of the Seas - 2027-04-12
+[07/16/2026, 09:35:04] ➕ ...and 31 more sailing(s)
+[07/16/2026, 09:35:04] ACK offers_batch 2607C06: received 35, accepted 35, app-side total 1611
+[07/16/2026, 09:35:04] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:35:04] 📊 Captured 35 sailing(s) for this offer
+[07/16/2026, 09:35:04] 🚢 Sailing 1: Brilliance of the Seas - 2027-02-26
+[07/16/2026, 09:35:04] 🚢 Sailing 2: Brilliance of the Seas - 2027-03-05
+[07/16/2026, 09:35:04] 🚢 Sailing 3: Brilliance of the Seas - 2027-04-02
+[07/16/2026, 09:35:04] ➕ ...and 32 more sailing(s)
+[07/16/2026, 09:35:04] ACK offers_batch 2607C06: received 36, accepted 36, app-side total 1611
+[07/16/2026, 09:35:04] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:35:04] 📊 Captured 36 sailing(s) for this offer
+[07/16/2026, 09:35:04] 🚢 Sailing 1: Serenade of the Seas - 2027-03-18
+[07/16/2026, 09:35:04] 🚢 Sailing 2: Serenade of the Seas - 2027-03-25
+[07/16/2026, 09:35:04] 🚢 Sailing 3: Serenade of the Seas - 2027-04-08
+[07/16/2026, 09:35:04] ➕ ...and 33 more sailing(s)
+[07/16/2026, 09:35:04] ACK offers_batch 2607C06: received 36, accepted 36, app-side total 1611
+[07/16/2026, 09:35:04] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:35:04] 📊 Captured 36 sailing(s) for this offer
+[07/16/2026, 09:35:04] 🚢 Sailing 1: Brilliance of the Seas - 2027-03-26
+[07/16/2026, 09:35:04] 🚢 Sailing 2: Rhapsody of the Seas - 2027-02-13
+[07/16/2026, 09:35:04] 🚢 Sailing 3: Independence of the Seas - 2027-02-14
+[07/16/2026, 09:35:04] ➕ ...and 33 more sailing(s)
+[07/16/2026, 09:35:04] ACK offers_batch 2607C06: received 37, accepted 37, app-side total 1611
+[07/16/2026, 09:35:04] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:35:04] 📊 Captured 37 sailing(s) for this offer
+[07/16/2026, 09:35:04] 🚢 Sailing 1: Freedom of the Seas - 2027-04-22
+[07/16/2026, 09:35:04] 🚢 Sailing 2: Grandeur of the Seas - 2027-04-24
+[07/16/2026, 09:35:04] 🚢 Sailing 3: Serenade of the Seas - 2027-04-25
+[07/16/2026, 09:35:04] ➕ ...and 34 more sailing(s)
+[07/16/2026, 09:35:04] ACK offers_batch 26VAR403: received 38, accepted 38, app-side total 1611
+[07/16/2026, 09:35:04] ✅ Captured casino offer "Island Advantage" (Code: 26VAR403)
+[07/16/2026, 09:35:04] 📊 Captured 38 sailing(s) for this offer
+[07/16/2026, 09:35:04] 🚢 Sailing 1: Ovation of the Seas - 2026-10-01
+[07/16/2026, 09:35:04] 🚢 Sailing 2: Ovation of the Seas - 2026-10-09
+[07/16/2026, 09:35:04] 🚢 Sailing 3: Ovation of the Seas - 2026-11-06
+[07/16/2026, 09:35:04] ➕ ...and 35 more sailing(s)
+[07/16/2026, 09:35:04] ACK offers_batch 26VAR403: received 57, accepted 57, app-side total 1611
+[07/16/2026, 09:35:04] ✅ Captured casino offer "Island Advantage" (Code: 26VAR403)
+[07/16/2026, 09:35:04] 📊 Captured 57 sailing(s) for this offer
+[07/16/2026, 09:35:04] 🚢 Sailing 1: Oasis of the Seas - 2026-12-14
+[07/16/2026, 09:35:04] 🚢 Sailing 2: Oasis of the Seas - 2026-12-20
+[07/16/2026, 09:35:04] 🚢 Sailing 3: Oasis of the Seas - 2026-12-27
+[07/16/2026, 09:35:04] ➕ ...and 54 more sailing(s)
+[07/16/2026, 09:35:04] ACK offers_batch 26MIX403: received 60, accepted 60, app-side total 1611
+[07/16/2026, 09:35:04] ✅ Captured casino offer "Stacked Sailings" (Code: 26MIX403)
+[07/16/2026, 09:35:04] 📊 Captured 60 sailing(s) for this offer
+[07/16/2026, 09:35:04] 🚢 Sailing 1: Independence of the Seas - 2026-11-29
+[07/16/2026, 09:35:04] 🚢 Sailing 2: Voyager of the Seas - 2026-12-02
+[07/16/2026, 09:35:04] 🚢 Sailing 3: Voyager of the Seas - 2026-12-07
+[07/16/2026, 09:35:04] ➕ ...and 57 more sailing(s)
+[07/16/2026, 09:35:04] ACK offers_batch 2607C06: received 56, accepted 56, app-side total 1611
+[07/16/2026, 09:35:04] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:35:04] 📊 Captured 56 sailing(s) for this offer
+[07/16/2026, 09:35:04] 🚢 Sailing 1: Wonder of the Seas - 2026-02-22
+[07/16/2026, 09:35:04] 🚢 Sailing 2: Wonder of the Seas - 2026-03-01
+[07/16/2026, 09:35:04] 🚢 Sailing 3: Wonder of the Seas - 2026-03-08
+[07/16/2026, 09:35:04] ➕ ...and 53 more sailing(s)
+[07/16/2026, 09:35:04] ACK offers_batch 2607C06: received 58, accepted 58, app-side total 1611
+[07/16/2026, 09:35:04] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:35:04] 📊 Captured 58 sailing(s) for this offer
+[07/16/2026, 09:35:04] 🚢 Sailing 1: Adventure of the Seas - 2026-10-16
+[07/16/2026, 09:35:04] 🚢 Sailing 2: Voyager of the Seas - 2026-10-16
+[07/16/2026, 09:35:04] 🚢 Sailing 3: Allure of the Seas - 2026-10-17
+[07/16/2026, 09:35:04] ➕ ...and 55 more sailing(s)
+[07/16/2026, 09:35:04] ACK offers_batch 2607C06: received 57, accepted 57, app-side total 1611
+[07/16/2026, 09:35:04] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:35:04] 📊 Captured 57 sailing(s) for this offer
+[07/16/2026, 09:35:04] 🚢 Sailing 1: Brilliance of the Seas - 2026-12-21
+[07/16/2026, 09:35:04] 🚢 Sailing 2: Explorer of the Seas - 2026-12-21
+[07/16/2026, 09:35:04] 🚢 Sailing 3: Freedom of the Seas - 2026-12-21
+[07/16/2026, 09:35:04] ➕ ...and 54 more sailing(s)
+[07/16/2026, 09:35:04] ACK offers_batch 2607C06: received 52, accepted 52, app-side total 1611
+[07/16/2026, 09:35:04] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:35:04] 📊 Captured 52 sailing(s) for this offer
+[07/16/2026, 09:35:04] 🚢 Sailing 1: Wonder of the Seas - 2026-12-02
+[07/16/2026, 09:35:04] 🚢 Sailing 2: Wonder of the Seas - 2026-12-07
+[07/16/2026, 09:35:04] 🚢 Sailing 3: Wonder of the Seas - 2026-01-04
+[07/16/2026, 09:35:04] ➕ ...and 49 more sailing(s)
+[07/16/2026, 09:35:04] ACK offers_batch 2607C06: received 55, accepted 55, app-side total 1611
+[07/16/2026, 09:35:04] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:35:04] 📊 Captured 55 sailing(s) for this offer
+[07/16/2026, 09:35:04] 🚢 Sailing 1: Freedom of the Seas - 2026-10-03
+[07/16/2026, 09:35:04] 🚢 Sailing 2: Freedom of the Seas - 2026-10-17
+[07/16/2026, 09:35:04] 🚢 Sailing 3: Ovation of the Seas - 2026-09-11
+[07/16/2026, 09:35:04] ➕ ...and 52 more sailing(s)
+[07/16/2026, 09:35:04] ACK offers_batch 2607C06: received 55, accepted 55, app-side total 1611
+[07/16/2026, 09:35:04] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:35:04] 📊 Captured 55 sailing(s) for this offer
+[07/16/2026, 09:35:04] 🚢 Sailing 1: Voyager of the Seas - 2026-12-11
+[07/16/2026, 09:35:04] 🚢 Sailing 2: Harmony of the Seas - 2026-12-12
+[07/16/2026, 09:35:04] 🚢 Sailing 3: Freedom of the Seas - 2026-12-12
+[07/16/2026, 09:35:04] ➕ ...and 52 more sailing(s)
+[07/16/2026, 09:35:04] ACK offers_batch 2607C06: received 35, accepted 35, app-side total 1611
+[07/16/2026, 09:35:04] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 09:35:04] 📊 Captured 35 sailing(s) for this offer
+[07/16/2026, 09:35:04] 🚢 Sailing 1: Enchantment of the Seas - 2027-05-19
+[07/16/2026, 09:35:04] 🚢 Sailing 2: Anthem of the Seas - 2027-05-21
+[07/16/2026, 09:35:04] 🚢 Sailing 3: Enchantment of the Seas - 2027-05-24
+[07/16/2026, 09:35:04] ➕ ...and 32 more sailing(s)
+[07/16/2026, 09:35:04] ACK offers_batch 26SEP103: received 31, accepted 31, app-side total 1611
+[07/16/2026, 09:35:04] ✅ Captured casino offer "September Shuffle" (Code: 26SEP103)
+[07/16/2026, 09:35:04] 📊 Captured 31 sailing(s) for this offer
+[07/16/2026, 09:35:04] 🚢 Sailing 1: Allure of the Seas - 2026-09-25
+[07/16/2026, 09:35:04] 🚢 Sailing 2: Allure of the Seas - 2026-09-05
+[07/16/2026, 09:35:04] 🚢 Sailing 3: Allure of the Seas - 2026-09-19
+[07/16/2026, 09:35:04] ➕ ...and 28 more sailing(s)
+[07/16/2026, 09:35:04] ACK offers_batch 26VAR403: received 31, accepted 31, app-side total 1611
+[07/16/2026, 09:35:04] ✅ Captured casino offer "Island Advantage" (Code: 26VAR403)
+[07/16/2026, 09:35:04] 📊 Captured 31 sailing(s) for this offer
+[07/16/2026, 09:35:04] 🚢 Sailing 1: Harmony of the Seas - 2026-11-06
+[07/16/2026, 09:35:04] 🚢 Sailing 2: Harmony of the Seas - 2026-10-18
+[07/16/2026, 09:35:04] 🚢 Sailing 3: Harmony of the Seas - 2026-10-25
+[07/16/2026, 09:35:04] ➕ ...and 28 more sailing(s)
+[07/16/2026, 09:35:04] ACK offers_batch 26VAR403: received 22, accepted 22, app-side total 1611
+[07/16/2026, 09:35:04] ✅ Captured casino offer "Island Advantage" (Code: 26VAR403)
+[07/16/2026, 09:35:04] 📊 Captured 22 sailing(s) for this offer
+[07/16/2026, 09:35:04] 🚢 Sailing 1: Harmony of the Seas - 2027-01-25
+[07/16/2026, 09:35:04] 🚢 Sailing 2: Harmony of the Seas - 2027-10-01
+[07/16/2026, 09:35:04] 🚢 Sailing 3: Harmony of the Seas - 2027-10-09
+[07/16/2026, 09:35:04] ➕ ...and 19 more sailing(s)
+[07/16/2026, 09:35:04] ✅ Royal offer rows are staged for Apply Sync: 5 offer code(s), 1611 sailing row(s)
+[07/16/2026, 09:35:04] ✅ STEP 1 COMPLETE: Captured 5 active casino offer(s) with 1611 total sailing(s)
+[07/16/2026, 09:35:04] Opening loyalty and booked cruise pages
+[07/16/2026, 09:35:04] Opening booked cruises page
+[07/16/2026, 09:35:08] Reading booked cruises
+[07/16/2026, 09:35:08] ✅ Captured 13 booking(s) from Royal Caribbean API
+[07/16/2026, 09:35:08] ✅ Captured booking: Navigator of the Seas - 20260717 - Balcony 6334 (7 nights) [Upcoming]
+[07/16/2026, 09:35:08] ✅ Captured booking: Navigator of the Seas - 20260724 - Balcony 6666 (7 nights) [Upcoming]
+[07/16/2026, 09:35:08] ✅ Captured booking: Icon of the Seas - 20260829 - GTY (7 nights) [Courtesy Hold]
+[07/16/2026, 09:35:08] ✅ Captured booking: Harmony of the Seas - 20260910 - Balcony 7146 (5 nights) [Upcoming]
+[07/16/2026, 09:35:08] ✅ Captured booking: Harmony of the Seas - 20260915 - Interior GTY (4 nights) [Upcoming]
+[07/16/2026, 09:35:08] ✅ Captured booking: Harmony of the Seas - 20260919 - Ocean View 10506 (7 nights) [Upcoming]
+[07/16/2026, 09:35:08] ✅ Captured booking: Anthem of the Seas - 20260929 - Ocean View GTY (12 nights) [Upcoming]
+[07/16/2026, 09:35:08] ✅ Captured booking: Allure of the Seas - 20261017 - Ocean View 8510 (8 nights) [Upcoming]
+[07/16/2026, 09:35:08] ✅ Captured booking: Allure of the Seas - 20261025 - Ocean View 3214 (7 nights) [Upcoming]
+[07/16/2026, 09:35:08] ✅ Captured booking: Oasis of the Seas - 20261109 - Balcony GTY (4 nights) [Upcoming]
+[07/16/2026, 09:35:08] ✅ Captured booking: Adventure of the Seas - 20261115 - Balcony GTY (6 nights) [Upcoming]
+[07/16/2026, 09:35:08] ✅ Captured booking: Adventure of the Seas - 20261213 - Ocean View 1832 (6 nights) [Upcoming]
+[07/16/2026, 09:35:08] 📦 Captured Bookings API payload with 0 bookings from
+[07/16/2026, 09:35:08] ✅ Step 2 auto-completing with 13 bookings from network monitor
+[07/16/2026, 09:35:08] ✅ Voyage enrichment data stored for merging with bookings
+[07/16/2026, 09:35:08] 📦 Captured Voyage Enrichment data with 3 voyages from
+[07/16/2026, 09:35:10] Page check [bookings]: loyalty_widgets @
+[07/16/2026, 09:35:10] Unexpected page content for this step - trying the next known route
+[07/16/2026, 09:35:10] Parsing loyalty data
+[07/16/2026, 09:35:10] Reading loyalty data
+[07/16/2026, 09:35:10] ✅ Parsed 59 completed cruise sailing(s) from loyalty/history payload; added 59, reconciled 0 repeat(s)
+[07/16/2026, 09:35:12] Page check [bookings]: loyalty_widgets @
+[07/16/2026, 09:35:12] Unexpected page content for this step - trying the next known route
+[07/16/2026, 09:35:14] Opening booked cruises page
+[07/16/2026, 09:35:14] ✅ All data sections captured!
+[07/16/2026, 09:35:14] ✅ STEP 2 COMPLETE: Captured 72 cruise(s) (12 booked, 1 courtesy holds)
+[07/16/2026, 09:35:14] ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 09:35:14] Parsing loyalty data
+[07/16/2026, 09:35:14] Reading loyalty data
+[07/16/2026, 09:35:14] Captured loyalty from /guestAccounts/loyalty/info (correct endpoint)
+[07/16/2026, 09:35:14] ⚠️ Loyalty payload did not include usable tier or point fields; keeping loyalty capture open
+[07/16/2026, 09:35:14] Reading loyalty data
+[07/16/2026, 09:35:14] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 09:35:14] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 09:35:14] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 09:35:15] ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 09:35:15] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 09:35:15] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 09:35:15] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 09:35:16] ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 09:35:16] Reading loyalty data
+[07/16/2026, 09:35:16] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 09:35:16] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 09:35:16] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 09:35:16] ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 09:35:16] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 09:35:17] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 09:35:17] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 09:35:18] ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 09:35:20] Reading loyalty data
+[07/16/2026, 09:35:20] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 09:35:20] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 09:35:20] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 09:35:20] ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 09:35:20] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 09:35:20] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 09:35:20] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 09:35:22] ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 09:35:23] Reading loyalty data
+[07/16/2026, 09:35:23] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 09:35:23] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 09:35:23] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 09:35:23] ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 09:35:23] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 09:35:23] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 09:35:24] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 09:35:28] ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 09:35:28] Reading loyalty data
+[07/16/2026, 09:35:28] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 09:35:29] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 09:35:29] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 09:35:30] ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 09:35:30] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 09:35:30] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 09:35:30] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 09:35:36] ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 09:35:36] Reading loyalty data
+[07/16/2026, 09:35:36] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 09:35:36] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 09:35:37] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 09:35:37] ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 09:35:37] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 09:35:37] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 09:35:37] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 09:35:46] ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 09:35:46] Reading loyalty data
+[07/16/2026, 09:35:46] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 09:35:46] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 09:35:47] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 09:35:47] ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 09:35:47] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 09:35:47] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 09:35:48] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 09:35:54] ⚠️ Dedicated Crown & Anchor capture timed out; preserving existing C&A fields rather than overwriting them
+[07/16/2026, 09:36:19] Step 3 reached max timeout (65s) - continuing with collected data
+[07/16/2026, 09:36:19] 🎉 ====== ALL STEPS COMPLETE ======
+[07/16/2026, 09:36:19] ✅ All data extracted successfully - ready to sync to your app!
+[07/16/2026, 09:36:19] ✅ STEP 3 COMPLETE: Club Royale captured authoritatively; Crown & Anchor preserved/not captured
+[07/16/2026, 09:36:19] Ready to review: 5 offer(s), 1,611 sailing(s)
+[07/16/2026, 09:36:19] Ready to review: 12 upcoming, 59 completed/past cruise(s)
+[07/16/2026, 09:36:19] 📊 SUMMARY: Loyalty status captured successfully
+[07/16/2026, 09:37:18] Applying selected sync data
+[07/16/2026, 09:37:48] ✅ Offers persisted to storage
+[07/16/2026, 09:37:51] ✅ Available cruises persisted to storage
+[07/16/2026, 09:37:51] Opening completed cruise history
+[07/16/2026, 09:37:53] ✅ Booked cruises persisted to storage
+[07/16/2026, 09:37:56] Extended loyalty data synced successfully
+[07/16/2026, 09:37:56] → Crown & Anchor lane remained incomplete; only individually authoritative C&A fields were updated and all others were preserved
+[07/16/2026, 09:37:57] ✅ Primary User profile updated and verified from storage
+[07/16/2026, 09:37:57] ✅ Data synced successfully to app!
+[07/16/2026, 09:37:57] Sync applied successfully
+
+--- NOTES ---
+[07/16/2026, 09:30:03] (INFO) 🌐 Network monitoring active - will capture all API payloads
+[07/16/2026, 09:30:04] (INFO) User logged in successfully
+[07/16/2026, 09:30:04] (INFO) Authentication detected - logged in successfully
+[07/16/2026, 09:30:06] (INFO) Auth check #10: LOGGED IN (token: false, signals: 0 account, 5 content, cookies: true)
+[07/16/2026, 09:30:21] (INFO) Processing captured Loyalty API payload...
+[07/16/2026, 09:30:21] (INFO) Loyalty captured from: https://www.royalcaribbean.com/api/casino/v1/loyalty-data
+[07/16/2026, 09:30:21] (INFO) Loyalty payload keys: casinoLoyaltyId, cruiseLoyaltyId, consumerId, lastName, tier, individualPoints, relationshipPoints, evaluationPeriodStartDateForPoints, evaluationPeriodEndDateForPoints, address, status, message, multipleCasinoProfiles
+[07/16/2026, 09:30:21] (INFO) Loyalty field authority (https://www.royalcaribbean.com/api/casino/v1/loyalty-data): clubRoyaleId:casino_api/authoritative, clubRoyaleTier:casino_api/authoritative, clubRoyalePoints:casino_api/authoritative, clubRoyaleRelationshipPoints:casino_api/authoritative, clubRoyaleEvaluationPeriodStartDate:casino_api/authoritative, clubRoyaleEvaluationPeriodEndDate:casino_api/authoritative, crownAndAnchorId:casino_api/authoritative
+[07/16/2026, 09:30:22] (INFO) Auth check #20: LOGGED IN (token: false, signals: 0 account, 5 content, cookies: true)
+[07/16/2026, 09:30:27] (INFO) Starting ingestion process...
+[07/16/2026, 09:30:27] (INFO) 🚀 ====== STEP 1: CLUB ROYALE OFFERS ======
+[07/16/2026, 09:30:27] (INFO) 📍 Loading Club Royale offers page...
+[07/16/2026, 09:30:27] (INFO) ⏱️ This may take several minutes - extracting all offers and sailings...
+[07/16/2026, 09:30:27] (INFO) 📍 Navigating to offers page...
+[07/16/2026, 09:30:27] (INFO) 🌐 Navigating [nav 1] to https://www.royalcaribbean.com/club-royale/offers
+[07/16/2026, 09:30:28] (INFO) 🌐 Network monitoring active - will capture all API payloads
+[07/16/2026, 09:30:28] (INFO) 🔁 Re-arming offer worker after WebView navigation: https://www.royalcaribbean.com/club-royale/offers
+[07/16/2026, 09:30:28] (INFO) 🔁 Re-arming offer worker after WebView navigation: https://www.royalcaribbean.com/club-royale/offers
+[07/16/2026, 09:30:29] (INFO) Easy Seas Sync Now rebuild engine v12.3.3-dynamic-visible-offer-catalog active for Royal Caribbean / Club Royale
+[07/16/2026, 09:30:29] (INFO) Mode: WebView-first browser workflow; saved offer list -> detail URL continuation -> pending-block rejection -> checkpoint ACK -> review before commit
+[07/16/2026, 09:30:29] (INFO) Authentication detected - logged in successfully
+[07/16/2026, 09:30:29] (WARNING) 🔎 Offer discovery pass 1: 0 offer(s), 0 View Sailings button(s)
+[07/16/2026, 09:30:29] (INFO) Processing captured Loyalty API payload...
+[07/16/2026, 09:30:29] (INFO) Loyalty captured from: https://www.royalcaribbean.com/api/casino/v1/loyalty-data
+[07/16/2026, 09:30:29] (INFO) Loyalty payload keys: casinoLoyaltyId, cruiseLoyaltyId, consumerId, lastName, tier, individualPoints, relationshipPoints, evaluationPeriodStartDateForPoints, evaluationPeriodEndDateForPoints, address, status, message, multipleCasinoProfiles
+[07/16/2026, 09:30:29] (INFO) Loyalty field authority (https://www.royalcaribbean.com/api/casino/v1/loyalty-data): clubRoyaleId:casino_api/authoritative, clubRoyaleTier:casino_api/authoritative, clubRoyalePoints:casino_api/authoritative, clubRoyaleRelationshipPoints:casino_api/authoritative, clubRoyaleEvaluationPeriodStartDate:casino_api/authoritative, clubRoyaleEvaluationPeriodEndDate:casino_api/authoritative, crownAndAnchorId:casino_api/authoritative
+[07/16/2026, 09:30:30] (INFO) Auth check #10: LOGGED IN (token: false, signals: 0 account, 6 content, cookies: true)
+[07/16/2026, 09:30:31] (WARNING) 🔎 Offer discovery pass 2: 0 offer(s), 0 View Sailings button(s)
+[07/16/2026, 09:30:32] (INFO) Loyalty field authority (DOM fallback): clubRoyaleId:casino_api/authoritative, clubRoyaleTier:casino_api/authoritative, clubRoyalePoints:casino_api/authoritative, clubRoyaleRelationshipPoints:casino_api/authoritative, clubRoyaleEvaluationPeriodStartDate:casino_api/authoritative, clubRoyaleEvaluationPeriodEndDate:casino_api/authoritative, crownAndAnchorId:casino_api/authoritative
+[07/16/2026, 09:30:33] (INFO) 🔎 Offer discovery pass 3: 5 offer(s), 5 View Sailings button(s)
+[07/16/2026, 09:30:33] (INFO) 🔗 Fallback offer detail href staged for 26NPR503: https://www.royalcaribbean.com/club-royale/offers/26NPR503?playerOfferId=0d648ba4-13f2-4230-9ee0-362a822b679f
+[07/16/2026, 09:30:33] (INFO) 🔁 Re-arming offer worker after WebView navigation: https://www.royalcaribbean.com/club-royale/offers/26NPR503?playerOfferId=0d648ba4-13f2-4230-9ee0-362a822b679f
+[07/16/2026, 09:30:35] (INFO) Loyalty field authority (DOM fallback): clubRoyaleId:casino_api/authoritative, clubRoyaleTier:casino_api/authoritative, clubRoyalePoints:casino_api/authoritative, clubRoyaleRelationshipPoints:casino_api/authoritative, clubRoyaleEvaluationPeriodStartDate:casino_api/authoritative, clubRoyaleEvaluationPeriodEndDate:casino_api/authoritative, crownAndAnchorId:casino_api/authoritative
+[07/16/2026, 09:30:37] (INFO) 🧭 WebView-first scrape for 26NPR503: using authenticated detail page DOM/download with passive network enrichment only
+[07/16/2026, 09:30:37] (INFO) ⬇️ Download list/export control found for 26NPR503
+[07/16/2026, 09:30:39] (INFO) Loyalty field authority (DOM fallback): clubRoyaleId:casino_api/authoritative, clubRoyaleTier:casino_api/authoritative, clubRoyalePoints:casino_api/authoritative, clubRoyaleRelationshipPoints:casino_api/authoritative, clubRoyaleEvaluationPeriodStartDate:casino_api/authoritative, clubRoyaleEvaluationPeriodEndDate:casino_api/authoritative, crownAndAnchorId:casino_api/authoritative
+[07/16/2026, 09:30:40] (INFO) Auth check #20: LOGGED IN (token: false, signals: 0 account, 5 content, cookies: true)
+[07/16/2026, 09:30:40] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 09:30:41] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 5 Night Western Caribbean Cruise
+[07/16/2026, 09:30:41] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Western Caribbean Cruise
+[07/16/2026, 09:30:42] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 6 Night Western Caribbean Cruise
+[07/16/2026, 09:30:42] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 8 Night Western Caribbean Cruise
+[07/16/2026, 09:30:43] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 5 Night Western Caribbean Cruise
+[07/16/2026, 09:30:43] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 09:30:43] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Western Caribbean Cruise
+[07/16/2026, 09:30:44] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 09:30:44] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 09:30:46] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 09:30:47] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 09:30:47] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 09:30:48] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 9 Night Eastern Caribbean Cruise
+[07/16/2026, 09:30:49] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 8 Night Western Caribbean Holiday Cruise
+[07/16/2026, 09:30:53] (INFO) 📤 Sent checkpoint 26NPR503 chunk 1 with 44 row(s) (total 44/66)
+[07/16/2026, 09:30:53] (INFO) 📤 Sent checkpoint 26NPR503 chunk 2 with 22 row(s) (total 66/66)
+[07/16/2026, 09:30:53] (INFO) ➡️ Continuing to next saved offer 2/5: 26SEP103
+[07/16/2026, 09:30:53] (INFO) ↩️ Returning to live My Offers list to open 26SEP103 with its current View Sailings button
+[07/16/2026, 09:30:53] (INFO) 🌐 Network monitoring active - will capture all API payloads
+[07/16/2026, 09:30:53] (INFO) 🔁 Re-arming offer worker after WebView navigation: https://www.royalcaribbean.com/club-royale/offers
+[07/16/2026, 09:30:53] (INFO) 🔁 Re-arming offer worker after WebView navigation: https://www.royalcaribbean.com/club-royale/offers
+[07/16/2026, 09:30:53] (INFO) Easy Seas Sync Now rebuild engine v12.3.3-dynamic-visible-offer-catalog active for Royal Caribbean / Club Royale
+[07/16/2026, 09:30:53] (INFO) Mode: WebView-first browser workflow; saved offer list -> detail URL continuation -> pending-block rejection -> checkpoint ACK -> review before commit
+[07/16/2026, 09:30:54] (INFO) Authentication detected - logged in successfully
+[07/16/2026, 09:30:55] (INFO) 🔁 Resuming offer crawler from My Offers page at offer index 2
+[07/16/2026, 09:30:55] (WARNING) 🔎 Offer discovery pass 1: 0 offer(s), 0 View Sailings button(s)
+[07/16/2026, 09:30:56] (INFO) Auth check #10: LOGGED IN (token: false, signals: 0 account, 6 content, cookies: true)
+[07/16/2026, 09:30:56] (WARNING) 🔎 Offer discovery pass 2: 0 offer(s), 0 View Sailings button(s)
+[07/16/2026, 09:30:58] (INFO) 🔎 Offer discovery pass 3: 5 offer(s), 5 View Sailings button(s)
+[07/16/2026, 09:30:58] (INFO) 🔗 Fallback offer detail href staged for 26SEP103: https://www.royalcaribbean.com/club-royale/offers/26SEP103?playerOfferId=b555187d-b25b-49b9-a1a0-9ba1247afb0f
+[07/16/2026, 09:30:59] (INFO) 🔁 Re-arming offer worker after WebView navigation: https://www.royalcaribbean.com/club-royale/offers/26SEP103?playerOfferId=b555187d-b25b-49b9-a1a0-9ba1247afb0f
+[07/16/2026, 09:31:02] (INFO) 🧭 WebView-first scrape for 26SEP103: using authenticated detail page DOM/download with passive network enrichment only
+[07/16/2026, 09:31:02] (INFO) ⬇️ Download list/export control found for 26SEP103
+[07/16/2026, 09:31:05] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 2 Night Perfect Day Getaway Cruise
+[07/16/2026, 09:31:05] (INFO) Auth check #20: LOGGED IN (token: false, signals: 0 account, 5 content, cookies: true)
+[07/16/2026, 09:31:06] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Western Caribbean Cruise
+[07/16/2026, 09:31:06] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Bahamas Getaway Cruise
+[07/16/2026, 09:31:07] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 09:31:07] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 5 Night Western Caribbean Cruise
+[07/16/2026, 09:31:08] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Southern Caribbean Cruise
+[07/16/2026, 09:31:09] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 5 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:31:09] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Bahamas Getaway Cruise
+[07/16/2026, 09:31:10] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Ensenada Cruise
+[07/16/2026, 09:31:10] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Southern Caribbean Cruise
+[07/16/2026, 09:31:11] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:31:12] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Perfect Day Getaway Cruise
+[07/16/2026, 09:31:12] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Southern Caribbean Cruise
+[07/16/2026, 09:31:13] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Bahamas Getaway Cruise
+[07/16/2026, 09:31:15] (INFO) 📤 Sent checkpoint 26SEP103 chunk 1 with 47 row(s) (total 47/58)
+[07/16/2026, 09:31:15] (INFO) 📤 Sent checkpoint 26SEP103 chunk 2 with 11 row(s) (total 58/58)
+[07/16/2026, 09:31:15] (INFO) ➡️ Continuing to next saved offer 3/5: 26MIX403
+[07/16/2026, 09:31:15] (INFO) ↩️ Returning to live My Offers list to open 26MIX403 with its current View Sailings button
+[07/16/2026, 09:31:16] (INFO) 🌐 Network monitoring active - will capture all API payloads
+[07/16/2026, 09:31:16] (INFO) 🔁 Re-arming offer worker after WebView navigation: https://www.royalcaribbean.com/club-royale/offers
+[07/16/2026, 09:31:16] (INFO) 🔁 Re-arming offer worker after WebView navigation: https://www.royalcaribbean.com/club-royale/offers
+[07/16/2026, 09:31:17] (INFO) Easy Seas Sync Now rebuild engine v12.3.3-dynamic-visible-offer-catalog active for Royal Caribbean / Club Royale
+[07/16/2026, 09:31:17] (INFO) Mode: WebView-first browser workflow; saved offer list -> detail URL continuation -> pending-block rejection -> checkpoint ACK -> review before commit
+[07/16/2026, 09:31:17] (INFO) Authentication detected - logged in successfully
+[07/16/2026, 09:31:18] (INFO) 🔁 Resuming offer crawler from My Offers page at offer index 3
+[07/16/2026, 09:31:18] (WARNING) 🔎 Offer discovery pass 1: 0 offer(s), 0 View Sailings button(s)
+[07/16/2026, 09:31:18] (INFO) Auth check #10: LOGGED IN (token: false, signals: 0 account, 6 content, cookies: true)
+[07/16/2026, 09:31:19] (WARNING) 🔎 Offer discovery pass 2: 0 offer(s), 0 View Sailings button(s)
+[07/16/2026, 09:31:22] (INFO) 🔎 Offer discovery pass 3: 5 offer(s), 5 View Sailings button(s)
+[07/16/2026, 09:31:22] (INFO) 🔗 Fallback offer detail href staged for 26MIX403: https://www.royalcaribbean.com/club-royale/offers/26MIX403?playerOfferId=a9bb1c4e-e002-44c6-8341-b902405877ba
+[07/16/2026, 09:31:22] (INFO) 🔁 Re-arming offer worker after WebView navigation: https://www.royalcaribbean.com/club-royale/offers/26MIX403?playerOfferId=a9bb1c4e-e002-44c6-8341-b902405877ba
+[07/16/2026, 09:31:25] (INFO) 🧭 WebView-first scrape for 26MIX403: using authenticated detail page DOM/download with passive network enrichment only
+[07/16/2026, 09:31:25] (INFO) ⬇️ Download list/export control found for 26MIX403
+[07/16/2026, 09:31:28] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 2 Night Perfect Day Getaway Cruise
+[07/16/2026, 09:31:28] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Ensenada Cruise
+[07/16/2026, 09:31:28] (INFO) Auth check #20: LOGGED IN (token: false, signals: 0 account, 5 content, cookies: true)
+[07/16/2026, 09:31:28] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:31:28] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 5 Night Bermuda Cruise
+[07/16/2026, 09:31:29] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:31:30] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 09:31:30] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Catalina & Ensenada Cruise
+[07/16/2026, 09:31:31] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:31:32] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Western Caribbean Cruise
+[07/16/2026, 09:31:32] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:31:32] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 09:31:32] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 5 Night Western Caribbean Cruise
+[07/16/2026, 09:31:33] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:31:33] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Western Caribbean Cruise
+[07/16/2026, 09:31:34] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 09:31:34] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 09:31:34] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Perfect Day Bahamas Cruise
+[07/16/2026, 09:31:34] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Bahamas Getaway Cruise
+[07/16/2026, 09:31:35] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Perfect Day Getaway Cruise
+[07/16/2026, 09:31:35] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 6 Night Eastern Caribbean Cruise
+[07/16/2026, 09:31:36] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 09:31:36] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 09:31:36] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Eastern Caribbean Cruise
+[07/16/2026, 09:31:37] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:31:38] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 6 Night Western Caribbean Cruise
+[07/16/2026, 09:31:38] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 09:31:39] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:31:39] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 09:31:40] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 09:31:40] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 6 Night Western Caribbean Cruise
+[07/16/2026, 09:31:41] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 09:31:41] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Eastern Caribbean Cruise
+[07/16/2026, 09:31:42] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Key West & Bahamas Cruise
+[07/16/2026, 09:31:43] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 09:31:44] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:31:45] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Key West & Perfect Day Cruise
+[07/16/2026, 09:31:47] (INFO) 📤 Sent checkpoint 26MIX403 chunk 1 with 40 row(s) (total 40/307)
+[07/16/2026, 09:31:47] (INFO) 📤 Sent checkpoint 26MIX403 chunk 2 with 39 row(s) (total 79/307)
+[07/16/2026, 09:31:47] (INFO) 📤 Sent checkpoint 26MIX403 chunk 3 with 39 row(s) (total 118/307)
+[07/16/2026, 09:31:47] (INFO) 📤 Sent checkpoint 26MIX403 chunk 4 with 39 row(s) (total 157/307)
+[07/16/2026, 09:31:47] (INFO) 📤 Sent checkpoint 26MIX403 chunk 5 with 40 row(s) (total 197/307)
+[07/16/2026, 09:31:47] (INFO) 📤 Sent checkpoint 26MIX403 chunk 6 with 41 row(s) (total 238/307)
+[07/16/2026, 09:31:47] (INFO) 📤 Sent checkpoint 26MIX403 chunk 7 with 69 row(s) (total 307/307)
+[07/16/2026, 09:31:47] (INFO) ➡️ Continuing to next saved offer 4/5: 2607C06
+[07/16/2026, 09:31:47] (INFO) ↩️ Returning to live My Offers list to open 2607C06 with its current View Sailings button
+[07/16/2026, 09:31:47] (INFO) 🌐 Network monitoring active - will capture all API payloads
+[07/16/2026, 09:31:47] (INFO) 🔁 Re-arming offer worker after WebView navigation: https://www.royalcaribbean.com/club-royale/offers
+[07/16/2026, 09:31:48] (INFO) 🔁 Re-arming offer worker after WebView navigation: https://www.royalcaribbean.com/club-royale/offers
+[07/16/2026, 09:31:48] (INFO) Easy Seas Sync Now rebuild engine v12.3.3-dynamic-visible-offer-catalog active for Royal Caribbean / Club Royale
+[07/16/2026, 09:31:48] (INFO) Mode: WebView-first browser workflow; saved offer list -> detail URL continuation -> pending-block rejection -> checkpoint ACK -> review before commit
+[07/16/2026, 09:31:48] (INFO) Authentication detected - logged in successfully
+[07/16/2026, 09:31:49] (INFO) 🔁 Resuming offer crawler from My Offers page at offer index 4
+[07/16/2026, 09:31:49] (WARNING) 🔎 Offer discovery pass 1: 0 offer(s), 0 View Sailings button(s)
+[07/16/2026, 09:31:50] (INFO) Auth check #10: LOGGED IN (token: false, signals: 0 account, 6 content, cookies: true)
+[07/16/2026, 09:31:51] (INFO) 🔎 Offer discovery pass 2: 5 offer(s), 5 View Sailings button(s)
+[07/16/2026, 09:31:51] (INFO) 🔗 Fallback offer detail href staged for 2607C06: https://www.royalcaribbean.com/club-royale/offers/2607C06?playerOfferId=c49a2e64-383f-4a87-9a4f-909e36529445
+[07/16/2026, 09:31:51] (INFO) 🔁 Re-arming offer worker after WebView navigation: https://www.royalcaribbean.com/club-royale/offers/2607C06?playerOfferId=c49a2e64-383f-4a87-9a4f-909e36529445
+[07/16/2026, 09:31:55] (INFO) 🧭 WebView-first scrape for 2607C06: using authenticated detail page DOM/download with passive network enrichment only
+[07/16/2026, 09:31:55] (INFO) ⬇️ Download list/export control found for 2607C06
+[07/16/2026, 09:31:58] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Bahamas Getaway Cruise
+[07/16/2026, 09:31:59] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Perfect Day Getaway Cruise
+[07/16/2026, 09:32:00] (INFO) Auth check #20: LOGGED IN (token: false, signals: 0 account, 5 content, cookies: true)
+[07/16/2026, 09:32:00] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 5 Night Western Caribbean Cruise
+[07/16/2026, 09:32:01] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:32:02] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 6 Night Western Caribbean Cruise
+[07/16/2026, 09:32:03] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 09:32:04] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Key West & Perfect Day Cruise
+[07/16/2026, 09:32:07] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 5 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:32:08] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Ensenada Cruise
+[07/16/2026, 09:32:09] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:32:10] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 5 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:32:12] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 6 Night Western Caribbean Cruise
+[07/16/2026, 09:32:13] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 5 Night Western Caribbean Cruise
+[07/16/2026, 09:32:13] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:32:16] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Catalina & Ensenada Cruise
+[07/16/2026, 09:32:17] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Western Caribbean Cruise
+[07/16/2026, 09:32:19] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:32:20] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Bahamas Getaway Cruise
+[07/16/2026, 09:32:22] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 6 Night Western Caribbean Cruise
+[07/16/2026, 09:32:24] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Southern Caribbean Cruise
+[07/16/2026, 09:32:25] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 5 Night Western Caribbean Cruise
+[07/16/2026, 09:32:29] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:32:30] (INFO) Auth check #30: LOGGED IN (token: false, signals: 0 account, 5 content, cookies: true)
+[07/16/2026, 09:32:32] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Western Caribbean Cruise
+[07/16/2026, 09:32:32] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 5 Night Eastern Caribbean Cruise
+[07/16/2026, 09:32:42] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Southern Caribbean Cruise
+[07/16/2026, 09:32:48] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Busan Cruise
+[07/16/2026, 09:32:51] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Bermuda Cruise
+[07/16/2026, 09:32:53] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Okinawa Cruise
+[07/16/2026, 09:32:58] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Bahamas Getaway Cruise
+[07/16/2026, 09:33:01] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Greek Isles Cruise
+[07/16/2026, 09:33:02] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Southern Caribbean Cruise
+[07/16/2026, 09:33:02] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Perfect Day Bahamas Cruise
+[07/16/2026, 09:33:04] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:33:07] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:33:08] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 5 Night Western Caribbean Cruise
+[07/16/2026, 09:33:09] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 5 Night Fukuoka & Nagasaki Cruise
+[07/16/2026, 09:33:11] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Bahamas Getaway Cruise
+[07/16/2026, 09:33:11] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Alaska Adventure Cruise
+[07/16/2026, 09:33:12] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Greek Isles Cruise
+[07/16/2026, 09:33:12] (INFO) Auth check #40: LOGGED IN (token: false, signals: 0 account, 5 content, cookies: true)
+[07/16/2026, 09:33:14] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Southern Caribbean Cruise
+[07/16/2026, 09:33:14] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 5 Night Fukuoka & Jeju Cruise
+[07/16/2026, 09:33:15] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Bahamas Getaway Cruise
+[07/16/2026, 09:33:17] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 5 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:33:18] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 5 Night Bermuda Cruise
+[07/16/2026, 09:33:20] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:33:22] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Ensenada Cruise
+[07/16/2026, 09:33:23] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:33:25] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 9 Night Canada & New England Cruise
+[07/16/2026, 09:33:26] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 5 Night Cabo Overnight Cruise
+[07/16/2026, 09:33:28] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Perfect Day Getaway Cruise
+[07/16/2026, 09:33:30] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Spain & France Cruise
+[07/16/2026, 09:33:31] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Vancouver To Los Angeles Cruise
+[07/16/2026, 09:33:32] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Greece & Croatia Cruise
+[07/16/2026, 09:33:34] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Southern Caribbean Cruise
+[07/16/2026, 09:33:34] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Jeju Cruise
+[07/16/2026, 09:33:35] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Bahamas Getaway Cruise
+[07/16/2026, 09:33:36] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Ensenada Cruise
+[07/16/2026, 09:33:36] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Ensenada Cruise
+[07/16/2026, 09:33:37] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Busan Cruise
+[07/16/2026, 09:33:38] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Greek Isles Cruise
+[07/16/2026, 09:33:39] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 12 Night Hawaii Cruise
+[07/16/2026, 09:33:41] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Ensenada Cruise
+[07/16/2026, 09:33:41] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:33:43] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 5 Night Bermuda Cruise
+[07/16/2026, 09:33:44] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 5 Night Cabo Overnight Cruise
+[07/16/2026, 09:33:45] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Ensenada, Cabo & La Paz Cruise
+[07/16/2026, 09:33:46] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Ensenada Cruise
+[07/16/2026, 09:33:47] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Bahamas Getaway Cruise
+[07/16/2026, 09:33:47] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 6 Night Norwegian Adventure Cruise
+[07/16/2026, 09:33:48] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 5 Night Kagoshima & Okinawa Cruise
+[07/16/2026, 09:33:49] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Catalina & Ensenada Cruise
+[07/16/2026, 09:33:49] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Key West & Perfect Day Cruise
+[07/16/2026, 09:33:50] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Catalina & Ensenada Cruise
+[07/16/2026, 09:33:51] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Ensenada Cruise
+[07/16/2026, 09:33:51] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Greece & Croatia Cruise
+[07/16/2026, 09:33:52] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 09:33:52] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Bahamas Getaway Cruise
+[07/16/2026, 09:33:53] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 9 Night Southern Caribbean Cruise
+[07/16/2026, 09:33:53] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Bahamas Getaway Cruise
+[07/16/2026, 09:33:54] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 10 Night Baltimore To San Juan Cruise
+[07/16/2026, 09:33:55] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Italy & France Cruise
+[07/16/2026, 09:33:55] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 5 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:33:56] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 5 Night Western Caribbean Cruise
+[07/16/2026, 09:33:56] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Italy & France Cruise
+[07/16/2026, 09:33:57] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Western Caribbean Cruise
+[07/16/2026, 09:33:57] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 6 Night Western Caribbean Cruise
+[07/16/2026, 09:33:58] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 10 Night Southern Caribbean Cruise
+[07/16/2026, 09:33:58] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 8 Night Western Caribbean Cruise
+[07/16/2026, 09:33:58] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 5 Night Western Caribbean Cruise
+[07/16/2026, 09:33:59] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 5 Night Jeju & Busan Cruise
+[07/16/2026, 09:34:00] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Southern Caribbean Cruise
+[07/16/2026, 09:34:00] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 6 Night Western Caribbean Cruise
+[07/16/2026, 09:34:01] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Ensenada, Cabo & Mazatlan Cruise
+[07/16/2026, 09:34:01] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 5 Night Western Caribbean Cruise
+[07/16/2026, 09:34:02] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Western Caribbean Cruise
+[07/16/2026, 09:34:02] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:34:02] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 5 Night Okinawa Cruise
+[07/16/2026, 09:34:02] (INFO) Auth check #50: LOGGED IN (token: false, signals: 0 account, 5 content, cookies: true)
+[07/16/2026, 09:34:02] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:34:03] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 8 Night Eastern Caribbean Cruise
+[07/16/2026, 09:34:04] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 09:34:04] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 09:34:04] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Perfect Day Bahamas Cruise
+[07/16/2026, 09:34:04] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Penang Cruise
+[07/16/2026, 09:34:04] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:34:05] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 5 Night Okinawa & Ishigaki Cruise
+[07/16/2026, 09:34:05] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Western Caribbean Cruise
+[07/16/2026, 09:34:05] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 5 Night Eastern Caribbean Cruise
+[07/16/2026, 09:34:06] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:34:06] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night South Pacific Cruise
+[07/16/2026, 09:34:07] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 10 Night Southern Caribbean Cruise
+[07/16/2026, 09:34:08] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 09:34:08] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Southern Caribbean Cruise
+[07/16/2026, 09:34:08] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 09:34:08] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:34:09] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Chan May Cruise
+[07/16/2026, 09:34:10] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Bahamas Getaway Cruise
+[07/16/2026, 09:34:10] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 9 Night Southern Caribbean Cruise
+[07/16/2026, 09:34:11] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Perfect Day Getaway Cruise
+[07/16/2026, 09:34:11] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Bahamas Getaway Cruise
+[07/16/2026, 09:34:11] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 8 Night Southern Caribbean Cruise
+[07/16/2026, 09:34:12] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 09:34:12] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Eastern Caribbean Cruise
+[07/16/2026, 09:34:12] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 09:34:12] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Cabo, Mazatlan & La Paz Cruise
+[07/16/2026, 09:34:13] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Southern Caribbean Cruise
+[07/16/2026, 09:34:13] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Bahamas Getaway Cruise
+[07/16/2026, 09:34:14] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:34:14] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Bahamas Getaway Cruise
+[07/16/2026, 09:34:15] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 5 Night Western Caribbean Cruise
+[07/16/2026, 09:34:15] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Ensenada Cruise
+[07/16/2026, 09:34:16] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 6 Night Eastern Caribbean Cruise
+[07/16/2026, 09:34:16] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:34:17] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 5 Night Okinawa & Ishigaki Cruise
+[07/16/2026, 09:34:17] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 8 Night South Pacific Cruise
+[07/16/2026, 09:34:18] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 8 Night Southern Caribbean Cruise
+[07/16/2026, 09:34:18] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 09:34:18] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 5 Night Okinawa & Taipei Cruise
+[07/16/2026, 09:34:19] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 09:34:20] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:34:20] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 9 Night Eastern Caribbean Cruise
+[07/16/2026, 09:34:20] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 6 Night Western Caribbean Cruise
+[07/16/2026, 09:34:20] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Bahamas Getaway Cruise
+[07/16/2026, 09:34:21] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 5 Night Western Caribbean Cruise
+[07/16/2026, 09:34:21] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Western Caribbean Cruise
+[07/16/2026, 09:34:22] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Eastern Caribbean Cruise
+[07/16/2026, 09:34:22] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Ensenada Cruise
+[07/16/2026, 09:34:23] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 8 Night Western Caribbean Holiday Cruise
+[07/16/2026, 09:34:23] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 5 Night Western Caribbean Cruise
+[07/16/2026, 09:34:23] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 09:34:23] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:34:23] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 5 Night Western Caribbean Cruise
+[07/16/2026, 09:34:24] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Catalina & Ensenada Cruise
+[07/16/2026, 09:34:24] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Catalina & Ensenada Cruise
+[07/16/2026, 09:34:24] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Bahamas Getaway Cruise
+[07/16/2026, 09:34:25] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 5 Night Caribbean Getaway Cruise
+[07/16/2026, 09:34:26] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 8 Night Western Caribbean Cruise
+[07/16/2026, 09:34:26] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Southern Caribbean Cruise
+[07/16/2026, 09:34:27] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Western Caribbean Cruise
+[07/16/2026, 09:34:28] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Ensenada Cruise
+[07/16/2026, 09:34:29] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Key West & Bahamas Cruise
+[07/16/2026, 09:34:29] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 09:34:29] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 6 Night Western Caribbean Cruise
+[07/16/2026, 09:34:30] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Southern Caribbean Cruise
+[07/16/2026, 09:34:30] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 09:34:30] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:34:31] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 5 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:34:31] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:34:32] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 09:34:32] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 6 Night Western Caribbean Cruise
+[07/16/2026, 09:34:32] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Eastern Caribbean Cruise
+[07/16/2026, 09:34:32] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 09:34:33] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Key West & Bahamas Cruise
+[07/16/2026, 09:34:33] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 5 Night Catalina & Ensenada Cruise
+[07/16/2026, 09:34:34] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 5 Night Cabo Overnight Cruise
+[07/16/2026, 09:34:34] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 6 Night Western Caribbean Cruise
+[07/16/2026, 09:34:35] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:34:35] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Bahamas Getaway Cruise
+[07/16/2026, 09:34:35] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Southern Caribbean Cruise
+[07/16/2026, 09:34:36] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 09:34:36] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Bahamas Getaway Cruise
+[07/16/2026, 09:34:37] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Ensenada Cruise
+[07/16/2026, 09:34:37] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Key West & Perfect Day Cruise
+[07/16/2026, 09:34:37] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 09:34:37] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Southern Caribbean Cruise
+[07/16/2026, 09:34:38] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Bahamas Getaway Cruise
+[07/16/2026, 09:34:39] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 10 Night Southern Caribbean Cruise
+[07/16/2026, 09:34:39] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 09:34:40] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 6 Night Western Caribbean Cruise
+[07/16/2026, 09:34:40] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Eastern Caribbean Cruise
+[07/16/2026, 09:34:41] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Southern Caribbean Cruise
+[07/16/2026, 09:34:41] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 10 Night Southern Caribbean Cruise
+[07/16/2026, 09:34:42] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Bahamas Getaway Cruise
+[07/16/2026, 09:34:42] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Western Caribbean Cruise
+[07/16/2026, 09:34:42] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 6 Night Western Caribbean Cruise
+[07/16/2026, 09:34:43] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 5 Night Western Caribbean Cruise
+[07/16/2026, 09:34:44] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Colon To San Juan Cruise
+[07/16/2026, 09:34:44] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Ensenada, Cabo & La Paz Cruise
+[07/16/2026, 09:34:44] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Pacific Coastal Cruise
+[07/16/2026, 09:34:45] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Ensenada Getaway Cruise
+[07/16/2026, 09:34:45] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Alaska Experience Cruise
+[07/16/2026, 09:34:46] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Alaska Experience Cruise
+[07/16/2026, 09:34:46] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Mexican Riviera Cruise
+[07/16/2026, 09:34:47] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 9 Night Bermuda & Bahamas Cruise
+[07/16/2026, 09:34:47] (WARNING) ⏱️ 2607C06 scrape timeout guard reached after 150s; stopping with 1037 valid row(s)
+[07/16/2026, 09:34:47] (INFO) 📤 Sent checkpoint 2607C06 chunk 1 with 35 row(s) (total 35/1037)
+[07/16/2026, 09:34:47] (INFO) 📤 Sent checkpoint 2607C06 chunk 2 with 38 row(s) (total 73/1037)
+[07/16/2026, 09:34:47] (INFO) 📤 Sent checkpoint 2607C06 chunk 3 with 39 row(s) (total 112/1037)
+[07/16/2026, 09:34:47] (INFO) 📤 Sent checkpoint 2607C06 chunk 4 with 38 row(s) (total 150/1037)
+[07/16/2026, 09:34:47] (INFO) 📤 Sent checkpoint 2607C06 chunk 5 with 38 row(s) (total 188/1037)
+[07/16/2026, 09:34:47] (INFO) 📤 Sent checkpoint 2607C06 chunk 6 with 38 row(s) (total 226/1037)
+[07/16/2026, 09:34:47] (INFO) 📤 Sent checkpoint 2607C06 chunk 7 with 38 row(s) (total 264/1037)
+[07/16/2026, 09:34:47] (INFO) 📤 Sent checkpoint 2607C06 chunk 8 with 38 row(s) (total 302/1037)
+[07/16/2026, 09:34:47] (INFO) 📤 Sent checkpoint 2607C06 chunk 9 with 37 row(s) (total 339/1037)
+[07/16/2026, 09:34:47] (INFO) 📤 Sent checkpoint 2607C06 chunk 10 with 38 row(s) (total 377/1037)
+[07/16/2026, 09:34:47] (INFO) 📤 Sent checkpoint 2607C06 chunk 11 with 39 row(s) (total 416/1037)
+[07/16/2026, 09:34:47] (INFO) 📤 Sent checkpoint 2607C06 chunk 12 with 36 row(s) (total 452/1037)
+[07/16/2026, 09:34:47] (INFO) 📤 Sent checkpoint 2607C06 chunk 13 with 37 row(s) (total 489/1037)
+[07/16/2026, 09:34:47] (INFO) 📤 Sent checkpoint 2607C06 chunk 14 with 38 row(s) (total 527/1037)
+[07/16/2026, 09:34:47] (INFO) 📤 Sent checkpoint 2607C06 chunk 15 with 37 row(s) (total 564/1037)
+[07/16/2026, 09:34:47] (INFO) 📤 Sent checkpoint 2607C06 chunk 16 with 37 row(s) (total 601/1037)
+[07/16/2026, 09:34:47] (INFO) 📤 Sent checkpoint 2607C06 chunk 17 with 39 row(s) (total 640/1037)
+[07/16/2026, 09:34:47] (INFO) 📤 Sent checkpoint 2607C06 chunk 18 with 39 row(s) (total 679/1037)
+[07/16/2026, 09:34:47] (INFO) 📤 Sent checkpoint 2607C06 chunk 19 with 59 row(s) (total 738/1037)
+[07/16/2026, 09:34:47] (INFO) 📤 Sent checkpoint 2607C06 chunk 20 with 65 row(s) (total 803/1037)
+[07/16/2026, 09:34:47] (INFO) 📤 Sent checkpoint 2607C06 chunk 21 with 65 row(s) (total 868/1037)
+[07/16/2026, 09:34:47] (INFO) 📤 Sent checkpoint 2607C06 chunk 22 with 58 row(s) (total 926/1037)
+[07/16/2026, 09:34:47] (INFO) 📤 Sent checkpoint 2607C06 chunk 23 with 61 row(s) (total 987/1037)
+[07/16/2026, 09:34:47] (INFO) 📤 Sent checkpoint 2607C06 chunk 24 with 50 row(s) (total 1037/1037)
+[07/16/2026, 09:34:47] (INFO) ➡️ Continuing to next saved offer 5/5: 26VAR403
+[07/16/2026, 09:34:47] (INFO) ↩️ Returning to live My Offers list to open 26VAR403 with its current View Sailings button
+[07/16/2026, 09:34:48] (INFO) 🌐 Network monitoring active - will capture all API payloads
+[07/16/2026, 09:34:48] (INFO) 🔁 Re-arming offer worker after WebView navigation: https://www.royalcaribbean.com/club-royale/offers
+[07/16/2026, 09:34:48] (INFO) 🔁 Re-arming offer worker after WebView navigation: https://www.royalcaribbean.com/club-royale/offers
+[07/16/2026, 09:34:48] (INFO) Easy Seas Sync Now rebuild engine v12.3.3-dynamic-visible-offer-catalog active for Royal Caribbean / Club Royale
+[07/16/2026, 09:34:48] (INFO) Mode: WebView-first browser workflow; saved offer list -> detail URL continuation -> pending-block rejection -> checkpoint ACK -> review before commit
+[07/16/2026, 09:34:48] (INFO) Authentication detected - logged in successfully
+[07/16/2026, 09:34:50] (INFO) 🔁 Resuming offer crawler from My Offers page at offer index 5
+[07/16/2026, 09:34:50] (WARNING) 🔎 Offer discovery pass 1: 0 offer(s), 0 View Sailings button(s)
+[07/16/2026, 09:34:50] (INFO) Auth check #10: LOGGED IN (token: false, signals: 0 account, 6 content, cookies: true)
+[07/16/2026, 09:34:51] (WARNING) 🔎 Offer discovery pass 2: 0 offer(s), 0 View Sailings button(s)
+[07/16/2026, 09:34:53] (INFO) 🔎 Offer discovery pass 3: 5 offer(s), 5 View Sailings button(s)
+[07/16/2026, 09:34:53] (INFO) 🔗 Fallback offer detail href staged for 26VAR403: https://www.royalcaribbean.com/club-royale/offers/26VAR403?playerOfferId=8d6c5ba8-719e-489d-a24e-8ae93b40fcb9
+[07/16/2026, 09:34:53] (INFO) 🔁 Re-arming offer worker after WebView navigation: https://www.royalcaribbean.com/club-royale/offers/26VAR403?playerOfferId=8d6c5ba8-719e-489d-a24e-8ae93b40fcb9
+[07/16/2026, 09:34:56] (INFO) 🧭 WebView-first scrape for 26VAR403: using authenticated detail page DOM/download with passive network enrichment only
+[07/16/2026, 09:34:56] (INFO) ⬇️ Download list/export control found for 26VAR403
+[07/16/2026, 09:34:57] (INFO) Auth check #20: LOGGED IN (token: false, signals: 0 account, 5 content, cookies: true)
+[07/16/2026, 09:34:59] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 2 Night Perfect Day Getaway Cruise
+[07/16/2026, 09:35:00] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:35:00] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:35:00] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:35:00] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Ensenada Cruise
+[07/16/2026, 09:35:00] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Ensenada, Cabo & La Paz Cruise
+[07/16/2026, 09:35:01] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Ensenada, Cabo & Mazatlan Cruise
+[07/16/2026, 09:35:01] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:35:01] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 5 Night Western Caribbean Cruise
+[07/16/2026, 09:35:01] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Western Caribbean Cruise
+[07/16/2026, 09:35:01] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Western Caribbean Cruise
+[07/16/2026, 09:35:01] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 3 Night Perfect Day Getaway Cruise
+[07/16/2026, 09:35:01] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 09:35:03] (INFO) 📤 Sent checkpoint 26VAR403 chunk 1 with 40 row(s) (total 40/143)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent checkpoint 26VAR403 chunk 2 with 40 row(s) (total 80/143)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent checkpoint 26VAR403 chunk 3 with 32 row(s) (total 112/143)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent checkpoint 26VAR403 chunk 4 with 31 row(s) (total 143/143)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent Sync Now v970 batch 1 with 38 row(s) (total 38/1611)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent Sync Now v970 batch 2 with 38 row(s) (total 76/1611)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent Sync Now v970 batch 3 with 37 row(s) (total 113/1611)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent Sync Now v970 batch 4 with 36 row(s) (total 149/1611)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent Sync Now v970 batch 5 with 37 row(s) (total 186/1611)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent Sync Now v970 batch 6 with 37 row(s) (total 223/1611)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent Sync Now v970 batch 7 with 37 row(s) (total 260/1611)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent Sync Now v970 batch 8 with 38 row(s) (total 298/1611)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent Sync Now v970 batch 9 with 33 row(s) (total 331/1611)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent Sync Now v970 batch 10 with 35 row(s) (total 366/1611)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent Sync Now v970 batch 11 with 36 row(s) (total 402/1611)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent Sync Now v970 batch 12 with 36 row(s) (total 438/1611)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent Sync Now v970 batch 13 with 35 row(s) (total 473/1611)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent Sync Now v970 batch 14 with 36 row(s) (total 509/1611)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent Sync Now v970 batch 15 with 35 row(s) (total 544/1611)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent Sync Now v970 batch 16 with 36 row(s) (total 580/1611)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent Sync Now v970 batch 17 with 36 row(s) (total 616/1611)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent Sync Now v970 batch 18 with 35 row(s) (total 651/1611)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent Sync Now v970 batch 19 with 36 row(s) (total 687/1611)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent Sync Now v970 batch 20 with 36 row(s) (total 723/1611)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent Sync Now v970 batch 21 with 33 row(s) (total 756/1611)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent Sync Now v970 batch 22 with 35 row(s) (total 791/1611)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent Sync Now v970 batch 23 with 35 row(s) (total 826/1611)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent Sync Now v970 batch 24 with 34 row(s) (total 860/1611)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent Sync Now v970 batch 25 with 35 row(s) (total 895/1611)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent Sync Now v970 batch 26 with 36 row(s) (total 931/1611)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent Sync Now v970 batch 27 with 36 row(s) (total 967/1611)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent Sync Now v970 batch 28 with 37 row(s) (total 1004/1611)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent Sync Now v970 batch 29 with 38 row(s) (total 1042/1611)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent Sync Now v970 batch 30 with 57 row(s) (total 1099/1611)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent Sync Now v970 batch 31 with 60 row(s) (total 1159/1611)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent Sync Now v970 batch 32 with 56 row(s) (total 1215/1611)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent Sync Now v970 batch 33 with 58 row(s) (total 1273/1611)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent Sync Now v970 batch 34 with 57 row(s) (total 1330/1611)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent Sync Now v970 batch 35 with 52 row(s) (total 1382/1611)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent Sync Now v970 batch 36 with 55 row(s) (total 1437/1611)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent Sync Now v970 batch 37 with 55 row(s) (total 1492/1611)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent Sync Now v970 batch 38 with 35 row(s) (total 1527/1611)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent Sync Now v970 batch 39 with 31 row(s) (total 1558/1611)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent Sync Now v970 batch 40 with 31 row(s) (total 1589/1611)
+[07/16/2026, 09:35:03] (INFO) 📤 Sent Sync Now v970 batch 41 with 22 row(s) (total 1611/1611)
+[07/16/2026, 09:35:03] (INFO) Step 1 dynamic catalog metadata: 5 visible offer(s), 1611 sailing row(s)
+[07/16/2026, 09:35:04] (INFO) ℹ️ Dynamic Club Royale catalog accepted: 5 visible offer(s), 5 row-bearing offer code(s), 1611 sailing row(s).
+[07/16/2026, 09:35:04] (INFO) 🚀 ====== STEP 2: BOOKINGS & LOYALTY ======
+[07/16/2026, 09:35:04] (INFO) 📡 Visiting account pages to capture API data...
+[07/16/2026, 09:35:04] (INFO) 📍 Visiting Upcoming / My Trips (https://www.royalcaribbean.com/myaccount/my-trips)...
+[07/16/2026, 09:35:04] (INFO) 🌐 Navigating [nav 2] to https://www.royalcaribbean.com/myaccount/my-trips
+[07/16/2026, 09:35:05] (INFO) 🌐 Network monitoring active - will capture all API payloads
+[07/16/2026, 09:35:05] (INFO) Authentication detected - logged in successfully
+[07/16/2026, 09:35:08] (INFO) ⏳ Waiting for Upcoming / My Trips (https://www.royalcaribbean.com/myaccount/my-trips) API response...
+[07/16/2026, 09:35:08] (INFO) Auth check #10: LOGGED IN (token: false, signals: 0 account, 2 content, cookies: true)
+[07/16/2026, 09:35:08] (INFO) 📦 Processing captured upcomingCruises API payload...
+[07/16/2026, 09:35:08] (INFO) 📦 Data keys: status, errors, payload
+[07/16/2026, 09:35:08] (INFO) 📦 Processing 13 booking(s) from API response...
+[07/16/2026, 09:35:08] (INFO) 📦 Processing captured Voyage Enrichment data...
+[07/16/2026, 09:35:10] (WARNING) Page check [bookings]: loyalty_widgets @ https://www.royalcaribbean.com/myaccount/my-trips
+[07/16/2026, 09:35:10] (WARNING)    Unexpected page content for this step - trying the next known route
+[07/16/2026, 09:35:10] (INFO) Processing captured Loyalty API payload...
+[07/16/2026, 09:35:10] (INFO) Loyalty captured from: https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/loyalty/history/G0992031?loyaltyNumber=305812247
+[07/16/2026, 09:35:10] (INFO) Loyalty payload keys: sailings
+[07/16/2026, 09:35:10] (INFO) ℹ️ Loyalty/history payload contained completed sailings but no Crown & Anchor / Club Royale tier-point values; keeping loyalty capture open
+[07/16/2026, 09:35:12] (WARNING) Page check [bookings]: loyalty_widgets @ https://www.royalcaribbean.com/myaccount/my-trips
+[07/16/2026, 09:35:12] (WARNING)    Unexpected page content for this step - trying the next known route
+[07/16/2026, 09:35:14] (INFO) 🚀 ====== STEP 3: LOYALTY DIRECT FETCH ======
+[07/16/2026, 09:35:14] (INFO) 📡 Attempting direct loyalty API call as fallback...
+[07/16/2026, 09:35:14] (INFO) 📡 Connecting to Royal Caribbean loyalty API...
+[07/16/2026, 09:35:14] (INFO) ⏳ Retrieving Crown & Anchor and Club Royale status...
+[07/16/2026, 09:35:14] (INFO) ⏳ Waiting for loyalty data capture...
+[07/16/2026, 09:35:14] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:14] (INFO) 🧭 Keeping the current authenticated page alive while resolving Crown & Anchor...
+[07/16/2026, 09:35:14] (INFO) 🔁 Initial attempt: requesting dedicated loyalty data from current page using account-id, appkey, x-api-key
+[07/16/2026, 09:35:14] (WARNING) ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 09:35:14] (INFO) ✅ Loyalty account page primed inside the authenticated session
+[07/16/2026, 09:35:14] (INFO) Processing captured Loyalty API payload...
+[07/16/2026, 09:35:14] (INFO) Loyalty payload keys: message
+[07/16/2026, 09:35:14] (WARNING) ⚠️ Loyalty payload did not include usable tier or point fields; keeping loyalty capture open
+[07/16/2026, 09:35:14] (WARNING) 📦 Captured Loyalty API payload (403) from https://www.royalcaribbean.com/api/guestAccounts/loyalty/info
+[07/16/2026, 09:35:14] (WARNING) ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 09:35:14] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:14] (WARNING) ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 09:35:14] (WARNING) ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 09:35:14] (INFO) 🔁 Initial attempt: requesting dedicated loyalty data from loyalty account page using account-id, appkey, x-api-key
+[07/16/2026, 09:35:15] (WARNING) ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 09:35:15] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:15] (WARNING) ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 09:35:15] (WARNING) ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 09:35:15] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:15] (WARNING) ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 09:35:16] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:16] (INFO) 🔁 Retry 4: requesting dedicated loyalty data from current page using account-id, appkey, x-api-key
+[07/16/2026, 09:35:16] (WARNING) ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 09:35:16] (WARNING) 📦 Captured Loyalty API payload (403) from https://www.royalcaribbean.com/api/guestAccounts/loyalty/info
+[07/16/2026, 09:35:16] (WARNING) ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 09:35:16] (WARNING) ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 09:35:16] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:16] (WARNING) ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 09:35:16] (INFO) 🔁 Retry 4: requesting dedicated loyalty data from loyalty account page using account-id, appkey, x-api-key
+[07/16/2026, 09:35:16] (WARNING) ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 09:35:16] (WARNING) ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 09:35:17] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:17] (WARNING) ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 09:35:17] (WARNING) ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 09:35:17] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:18] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:18] (INFO) 🔁 Retry 8: requesting dedicated loyalty data from current page using account-id, appkey, x-api-key
+[07/16/2026, 09:35:18] (WARNING) ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 09:35:20] (WARNING) 📦 Captured Loyalty API payload (403) from https://www.royalcaribbean.com/api/guestAccounts/loyalty/info
+[07/16/2026, 09:35:20] (WARNING) ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 09:35:20] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:20] (WARNING) ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 09:35:20] (WARNING) ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 09:35:20] (INFO) 🔁 Retry 8: requesting dedicated loyalty data from loyalty account page using account-id, appkey, x-api-key
+[07/16/2026, 09:35:20] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:20] (WARNING) ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 09:35:20] (WARNING) ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 09:35:20] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:20] (WARNING) ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 09:35:20] (WARNING) ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 09:35:20] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:20] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:21] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:21] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:22] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:22] (INFO) 🔁 Retry 16: requesting dedicated loyalty data from current page using account-id, appkey, x-api-key
+[07/16/2026, 09:35:22] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:22] (WARNING) ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 09:35:23] (WARNING) 📦 Captured Loyalty API payload (403) from https://www.royalcaribbean.com/api/guestAccounts/loyalty/info
+[07/16/2026, 09:35:23] (WARNING) ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 09:35:23] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:23] (WARNING) ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 09:35:23] (WARNING) ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 09:35:23] (INFO) 🔁 Retry 16: requesting dedicated loyalty data from loyalty account page using account-id, appkey, x-api-key
+[07/16/2026, 09:35:23] (WARNING) ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 09:35:23] (WARNING) ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 09:35:23] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:23] (WARNING) ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 09:35:24] (WARNING) ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 09:35:24] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:24] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:25] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:25] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:26] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:26] (INFO) Auth check #20: LOGGED IN (token: false, signals: 1 account, 3 content, cookies: true)
+[07/16/2026, 09:35:26] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:27] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:27] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:28] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:28] (INFO) 🔁 Retry 28: requesting dedicated loyalty data from current page using account-id, appkey, x-api-key
+[07/16/2026, 09:35:28] (WARNING) ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 09:35:28] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:28] (WARNING) 📦 Captured Loyalty API payload (403) from https://www.royalcaribbean.com/api/guestAccounts/loyalty/info
+[07/16/2026, 09:35:28] (WARNING) ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 09:35:29] (WARNING) ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 09:35:29] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:29] (WARNING) ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 09:35:29] (INFO) 🔁 Retry 28: requesting dedicated loyalty data from loyalty account page using account-id, appkey, x-api-key
+[07/16/2026, 09:35:29] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:30] (WARNING) ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 09:35:30] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:30] (WARNING) ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 09:35:30] (WARNING) ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 09:35:30] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:30] (WARNING) ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 09:35:31] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:31] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:32] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:32] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:33] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:33] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:34] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:34] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:35] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:35] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:36] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:36] (INFO) 🔁 Retry 44: requesting dedicated loyalty data from current page using account-id, appkey, x-api-key
+[07/16/2026, 09:35:36] (WARNING) ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 09:35:36] (WARNING) 📦 Captured Loyalty API payload (403) from https://www.royalcaribbean.com/api/guestAccounts/loyalty/info
+[07/16/2026, 09:35:36] (WARNING) ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 09:35:36] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:36] (WARNING) ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 09:35:37] (WARNING) ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 09:35:37] (INFO) 🔁 Retry 44: requesting dedicated loyalty data from loyalty account page using account-id, appkey, x-api-key
+[07/16/2026, 09:35:37] (WARNING) ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 09:35:37] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:37] (WARNING) ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 09:35:37] (WARNING) ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 09:35:37] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:37] (WARNING) ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 09:35:38] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:38] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:39] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:39] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:40] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:40] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:41] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:41] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:42] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:42] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:43] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:43] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:44] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:44] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:45] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:45] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:46] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:46] (INFO) 🔁 Retry 64: requesting dedicated loyalty data from current page using account-id, appkey, x-api-key
+[07/16/2026, 09:35:46] (WARNING) ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 09:35:46] (WARNING) 📦 Captured Loyalty API payload (403) from https://www.royalcaribbean.com/api/guestAccounts/loyalty/info
+[07/16/2026, 09:35:46] (WARNING) ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 09:35:46] (WARNING) ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 09:35:46] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:47] (WARNING) ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 09:35:47] (INFO) 🔁 Retry 64: requesting dedicated loyalty data from loyalty account page using account-id, appkey, x-api-key
+[07/16/2026, 09:35:47] (WARNING) ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 09:35:47] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:47] (WARNING) ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 09:35:47] (WARNING) ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 09:35:47] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:48] (WARNING) ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 09:35:48] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:48] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:49] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:49] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:50] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:50] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:51] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:51] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:52] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:52] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:53] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:53] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:54] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 09:35:54] (WARNING) ⚠️ Dedicated Crown & Anchor capture timed out; preserving existing C&A fields rather than overwriting them
+[07/16/2026, 09:35:54] (INFO) ℹ️ Ignored a premature loyalty step-complete signal because only Club Royale or partial loyalty data was captured; continuing the dedicated Crown & Anchor lane
+[07/16/2026, 09:35:56] (INFO) Auth check #30: LOGGED IN (token: false, signals: 1 account, 3 content, cookies: true)
+[07/16/2026, 09:36:19] (WARNING) Step 3 reached max timeout (65s) - continuing with collected data
+[07/16/2026, 09:36:19] (INFO) ⏳ Please review and confirm to sync this data to your app
+[07/16/2026, 09:36:45] (INFO) Auth check #40: LOGGED IN (token: false, signals: 1 account, 3 content, cookies: true)
+[07/16/2026, 09:37:18] (INFO) APPLY_SYNC_STARTED: user confirmed unified sync review
+[07/16/2026, 09:37:18] (INFO) 🚀 Starting sync to app...
+[07/16/2026, 09:37:18] (INFO) Sync target: Primary User (SCOTT MERLIS)
+[07/16/2026, 09:37:18] (INFO) Travel inventory is shared: offers, available sailings, booked cruises, and completed cruises will be visible to both Main User and Second User. Loyalty IDs/points remain profile-specific.
+[07/16/2026, 09:37:18] (INFO) Selected sections: offers=yes, available=yes, booked=yes, completed=yes, loyalty=yes
+[07/16/2026, 09:37:18] (INFO) ⏳ Waiting briefly for Royal Caribbean loyalty/history completed cruises before building review...
+[07/16/2026, 09:37:23] (INFO) Creating sync preview...
+[07/16/2026, 09:37:23] (INFO) Completed sync source breakdown: reported past=59, live=0, stored/history=59, existing=83, canonical candidates=59
+[07/16/2026, 09:37:46] (INFO) Preview: 0 new offers, 5 updated offers
+[07/16/2026, 09:37:46] (INFO) Preview: 7 new available cruises, 1604 updated available cruises
+[07/16/2026, 09:37:46] (INFO) Preview: 0 new booked cruises, 72 updated booked cruises
+[07/16/2026, 09:37:46] (INFO) Preview canonical input: 12 upcoming, 1 holds
+[07/16/2026, 09:37:46] (INFO) Preview canonical input: 59 completed/past cruise(s) staged; 29 existing row(s) preserved separately
+[07/16/2026, 09:37:46] (INFO) Dynamic offer catalog metadata for Apply Sync: 5 visible offer(s), 0 zero-row visible offer(s)
+[07/16/2026, 09:37:46] (INFO) Booked/completed lane authority: active=authoritative (13), completed=authoritative (59)
+[07/16/2026, 09:37:46] (INFO) Applying sync...
+[07/16/2026, 09:37:46] (INFO) Setting 5 total offers in app
+[07/16/2026, 09:37:46] (INFO) Auth check #50: LOGGED IN (token: false, signals: 1 account, 3 content, cookies: true)
+[07/16/2026, 09:37:48] (INFO) Setting 1611 total available cruises in app
+[07/16/2026, 09:37:51] (INFO) Setting 14 active booked cruise(s) and 59 completed cruise(s) in app (74 total including history)
+[07/16/2026, 09:37:53] (INFO) Syncing extended loyalty data...
+[07/16/2026, 09:37:53] (INFO)   → Club Royale: Signature - 20,941 points
+[07/16/2026, 09:37:56] (INFO)   → Name: SCOTT MERLIS
+[07/16/2026, 09:37:56] (INFO)   → Club Royale points: 20,941
+[07/16/2026, 09:37:56] (INFO)   → Club Royale tier: Signature
+[07/16/2026, 09:37:56] (INFO)   → Club Royale ID: [redacted]
+[07/16/2026, 09:37:56] (INFO)   → Club Royale relationship points: 20,941
+[07/16/2026, 09:37:56] (INFO)   → Crown & Anchor #: [redacted]
+[07/16/2026, 09:37:56] (WARNING)   → Crown & Anchor lane remained incomplete; only individually authoritative C&A fields were updated and all others were preserved
+[07/16/2026, 09:37:56] (INFO) Syncing primary user profile from loyalty data...
+[07/16/2026, 09:37:57] (INFO) Local-first mode: cloud backup skipped after Apply Sync
+[07/16/2026, 09:38:25] (INFO) Auth check #60: LOGGED IN (token: false, signals: 1 account, 3 content, cookies: true)

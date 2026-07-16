@@ -59,7 +59,16 @@ function hasOwnerOrSource(value: { ownerProfileId?: string; sourceEmail?: string
 function isPlaceholderBookedIdentifier(value: unknown): boolean {
   const normalized = normalizeKeyPart(value);
   if (!normalized) return true;
-  return /^(?:unconfirmed:|booking[_:-]?\d*|rc[_:-]?\d*|cruise[_:-]?\d*|row[_:-]?\d*|temp(?:orary)?[_:-]?\d*|unknown(?:[_:-].*)?)$/i.test(normalized);
+  // v13.1: earlier this only matched a bare `rc_123` / `booking_1` shape. The app's own
+  // legacy synthetic-ID generator (`rc_${Date.now()}_${randomSuffix}`) always appends a
+  // non-numeric random suffix after the timestamp, which this pattern did NOT match - so
+  // those generated IDs were being treated as real, stable reservation numbers instead of
+  // placeholders. That let two extractions of the exact same cruise (each minting its own
+  // fresh random rc_ id) look like two distinct bookings forever, and let generated IDs leak
+  // into UI list keys as if they were authoritative, non-colliding identifiers. Matching any
+  // trailing suffix (like bookedExtractionIdentity.ts's PLACEHOLDER_BOOKING_ID already does)
+  // closes that gap.
+  return /^(?:unconfirmed:|(?:booking|rc|cruise|row|temp(?:orary)?|unknown)[_:-]?\d*(?:[_:-].*)?)$/i.test(normalized);
 }
 
 function getBookedReservationKey(cruise: BookedCruise): string {

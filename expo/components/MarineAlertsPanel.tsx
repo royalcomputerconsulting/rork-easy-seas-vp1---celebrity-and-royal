@@ -269,6 +269,7 @@ export function MarineAlertsPanel({
   );
   const forceRefreshRef = useRef<boolean>(false);
   const [isSyncingNow, setIsSyncingNow] = useState(false);
+  const [syncNowError, setSyncNowError] = useState<string | null>(null);
   const [selectedForecastId, setSelectedForecastId] = useState<string | null>(null);
 
   const alertsQuery = useQuery({
@@ -360,9 +361,25 @@ export function MarineAlertsPanel({
   const handleSyncNow = useCallback(async () => {
     forceRefreshRef.current = true;
     setIsSyncingNow(true);
+    setSyncNowError(null);
     try {
-      await alertsQuery.refetch();
+      // v13.1: on-device (iOS/Android) network calls can genuinely fail (flaky connection,
+      // DNS hiccup, request timeout) in ways the web preview rarely hits. Previously a failed
+      // refetch() here was swallowed entirely (React Query only logs a failed refetch by
+      // default) - the button would just stop spinning with no feedback, which looked exactly
+      // like "the Sync Now button doesn't work". Inspect the settled result explicitly (rather
+      // than relying on throwOnError, which can hang on some React Query versions) so a real
+      // failure is surfaced instead of silently doing nothing.
+      const result = await alertsQuery.refetch();
+      if (result.isError || result.error) {
+        throw result.error ?? new Error('Forecast refetch failed');
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn('[MarineAlertsPanel] Sync now failed', message);
+      setSyncNowError('Could not reach the forecast service. Check your connection and try again.');
     } finally {
+      forceRefreshRef.current = false;
       setIsSyncingNow(false);
     }
   }, [alertsQuery]);
@@ -434,6 +451,13 @@ export function MarineAlertsPanel({
         ) : null}
       </View>
 
+      {syncNowError ? (
+        <View style={styles.syncErrorBanner} testID="marine-alerts-sync-error">
+          <AlertTriangle size={13} color="#FFD59E" />
+          <Text style={styles.syncErrorText}>{syncNowError}</Text>
+        </View>
+      ) : null}
+
       {alertsQuery.isLoading ? (
         <View style={styles.emptyState}>
           <CloudSun size={18} color="#CFEFFF" />
@@ -445,9 +469,11 @@ export function MarineAlertsPanel({
       {!alertsQuery.isLoading && forecasts.length === 0 ? (
         <View style={styles.emptyState}>
           <Ship size={18} color="#CFEFFF" />
-          <Text style={styles.emptyTitle}>Forecast not loaded yet</Text>
+          <Text style={styles.emptyTitle}>{alertsQuery.isError ? 'Forecast could not load' : 'Forecast not loaded yet'}</Text>
           <Text style={styles.emptySubtitle}>
-            The 10-day sailing window needs a resolvable departure port or itinerary before detailed weather can be shown.
+            {alertsQuery.isError
+              ? 'The forecast service could not be reached. Check your connection and tap Sync now to retry.'
+              : 'The 10-day sailing window needs a resolvable departure port or itinerary before detailed weather can be shown.'}
           </Text>
         </View>
       ) : null}
@@ -743,6 +769,23 @@ const styles = StyleSheet.create({
   },
   backgroundSyncText: {
     color: 'rgba(232, 246, 255, 0.85)',
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+  },
+  syncErrorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 8,
+    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: 'rgba(239, 68, 68, 0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 213, 158, 0.35)',
+  },
+  syncErrorText: {
+    flex: 1,
+    color: '#FFE7C7',
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
