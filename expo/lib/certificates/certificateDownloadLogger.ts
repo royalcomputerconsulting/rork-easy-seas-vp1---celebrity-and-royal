@@ -110,7 +110,12 @@ class CertificateDownloadLogger {
     if (this.entries.length > 750) {
       this.entries = this.entries.slice(-750);
     }
-    const consoleMethod = type === 'error' ? console.error : type === 'warning' ? console.warn : console.log;
+    // Certificate download failures are already caught, retried, surfaced in
+    // this in-app log panel, and shown via a friendly Alert to the user — so
+    // we intentionally use console.warn (not console.error) here. A raw
+    // console.error triggers a disruptive full-screen dev error overlay that
+    // looks like the app crashed, even though the failure is fully handled.
+    const consoleMethod = type === 'error' || type === 'warning' ? console.warn : console.log;
     consoleMethod(`[Certificate Download ${type.toUpperCase()}] ${entry.message}`);
     if (emit) this.emit();
   }

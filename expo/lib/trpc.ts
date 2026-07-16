@@ -173,14 +173,20 @@ const fetchWithRetry = async (
       const isCertificateRequest = String(url).toLowerCase().includes("certificateexplorer") ||
         (typeof options?.body === "string" && options.body.toLowerCase().includes("certificateexplorer"));
 
-      // Defensive guard for intermittent mobile/CDN truncation. If an OK tRPC
-      // response has no JSON body, retry here instead of letting the app show
-      // a raw JSON.parse Unexpected end of input alert.
-      if (response.ok && isTrpcJson && isCertificateRequest) {
+      // Defensive guard for intermittent mobile/CDN truncation. If a tRPC
+      // response (ok or not) has a body that is not valid JSON, retry here
+      // instead of letting the app show a raw JSON.parse crash (e.g.
+      // "Unexpected character: N" from a proxy/hosting error page).
+      if (isTrpcJson && isCertificateRequest) {
         const responseText = await response.clone().text();
         const trimmed = responseText.trim();
-        if (!trimmed || trimmed === "undefined" || trimmed.startsWith("<")) {
+        const looksLikeJson = trimmed.startsWith("{") || trimmed.startsWith("[");
+        if (!trimmed || trimmed === "undefined" || !looksLikeJson) {
           throw new Error("Certificate download returned an empty or non-JSON response; retrying");
+        }
+        if (response.ok) {
+          _backendReachable = true;
+          _lastHealthCheck = Date.now();
         }
         return new Response(responseText, {
           status: response.status,

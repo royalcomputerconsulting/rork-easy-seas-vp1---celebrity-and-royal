@@ -1,0 +1,62 @@
+CARNIVAL CRUISE LINE - SYNC LOG
+Generated: 7/16/2026, 7:07:42 AM
+Status: logged_in
+Last Sync: 7/16/2026, 7:07:35 AM
+
+--- SYNC SUMMARY ---
+Offers: 0 unique deal(s)
+Sailings: 0 total sailing(s)
+Booked Cruises: 17
+Courtesy Holds: 1
+Completed Cruises: 83
+
+--- DETAILED LOG ---
+07/16/2026, 07:03:51 [INFO] Reading booked cruises
+07/16/2026, 07:03:51 [OK] ✅ Captured 1 booking(s) from Carnival API
+07/16/2026, 07:03:51 [OK] ✅ Captured booking: CARNIVAL PANORAMA - 2023-09-02T00:00:00Z - GTY (0 nights) [Completed]
+07/16/2026, 07:03:51 [OK] 📦 Auto-captured Carnival bookings (1) from /profilemanagement/api/v1.0/Profiles
+07/16/2026, 07:03:51 [OK] 📦 Captured Carnival bookings (1) from /profilemanagement/api/v1.0/Profiles
+07/16/2026, 07:03:52 [OK] Carnival authentication preflight passed via the protected profile API.
+07/16/2026, 07:03:54 [OK] [9gmwlcbp] ✅ Carnival load end [nav 1]:
+07/16/2026, 07:03:56 [INFO] Reading booked cruises
+07/16/2026, 07:03:56 [OK] [9gmwlcbp] ✅ Captured 1 booking(s) from Carnival API
+07/16/2026, 07:03:56 [OK] [9gmwlcbp] ✅ Captured booking: CARNIVAL PANORAMA - 2023-09-02T00:00:00Z - GTY (0 nights) [Completed]
+07/16/2026, 07:03:56 [OK] [9gmwlcbp] 📦 Captured Carnival bookings (1) from /profilemanagement/api/v1.0/Profiles
+07/16/2026, 07:03:59 [OK] [9gmwlcbp] ✅ Carnival load end [nav 2]:
+07/16/2026, 07:04:00 [OK] [9gmwlcbp] Personalized Carnival search is linked to VIFP# 9013404591
+07/16/2026, 07:04:00 [OK] [9gmwlcbp] 📊 Carnival reconciliation — discovered=0, completed=0, incomplete=0, offers=0, unique sailings=0; by code:
+07/16/2026, 07:04:00 [WARN] [9gmwlcbp] ⚠️ Carnival did not expose a trustworthy personalized offer catalog. Existing Carnival offers will be preserved during Apply Sync.
+07/16/2026, 07:04:01 [OK] [9gmwlcbp] ✅ Carnival load end [nav 3]: Carnival profile/history page 1
+07/16/2026, 07:04:05 [OK] [9gmwlcbp] 📦 Captured Carnival bookings (1) from /profilemanagement/api/v1.0/Profiles
+07/16/2026, 07:04:05 [OK] [9gmwlcbp] ✅ Carnival load end [nav 3]: Carnival profile/history page 1
+07/16/2026, 07:04:06 [OK] [9gmwlcbp] Carnival profile/history discovery: 6 protected payload(s), 2 additional page link(s)
+07/16/2026, 07:04:11 [OK] [9gmwlcbp] 📦 Captured Carnival bookings (1) from /profilemanagement/api/v1.0/Profiles
+07/16/2026, 07:04:11 [OK] [9gmwlcbp] ✅ Carnival load end [nav 4]: Carnival profile/history page 2
+07/16/2026, 07:04:12 [OK] [9gmwlcbp] Carnival profile/history discovery: 7 protected payload(s), 2 additional page link(s)
+07/16/2026, 07:04:16 [OK] [9gmwlcbp] ✅ Carnival load end [nav 5]: Carnival profile/history page 3
+07/16/2026, 07:04:17 [OK] [9gmwlcbp] Carnival profile/history discovery: 2 protected payload(s), 0 additional page link(s)
+07/16/2026, 07:04:22 [OK] [9gmwlcbp] 📦 Captured Carnival bookings (1) from /profilemanagement/api/v1.0/Profiles
+07/16/2026, 07:04:22 [OK] [9gmwlcbp] ✅ Carnival load end [nav 6]: Carnival profile/history page 4
+07/16/2026, 07:04:23 [OK] [9gmwlcbp] Carnival profile/history discovery: 6 protected payload(s), 1 additional page link(s)
+07/16/2026, 07:04:23 [WARN] [9gmwlcbp] ⚠️ Carnival active booking lane was not authoritative; existing Carnival booked/upcoming cruises will be preserved.
+07/16/2026, 07:04:23 [WARN] [9gmwlcbp] ⚠️ Carnival completed-history lane was incomplete (profile reports 7 total cruise(s), captured 1); existing Carnival completed cruises will be preserved.
+07/16/2026, 07:04:23 [OK] [9gmwlcbp] ✅ Carnival loyalty captured: VIFP Red #9013404591; Players Club Unknown (0 pts)
+07/16/2026, 07:04:23 [OK] [9gmwlcbp] ✅ STEP 2 COMPLETE: 0 booked/upcoming and 1 completed/history cruise(s) captured
+07/16/2026, 07:04:23 [OK] [9gmwlcbp] 🎉 ====== CARNIVAL EXTRACTION COMPLETE ======
+07/16/2026, 07:04:23 [OK] [9gmwlcbp] Ready to review: 0 Carnival offer(s), 0 available sailing(s)
+07/16/2026, 07:04:23 [OK] [9gmwlcbp] Ready to review: 0 booked/upcoming, 1 completed/history Carnival cruise(s)
+07/16/2026, 07:07:17 [WARN] ⚠️ No fully authoritative VIFP Club offer catalog was captured, so existing offers and available sailings will be preserved
+07/16/2026, 07:07:17 [WARN] ⚠️ No booked/completed cruise rows were captured for Carnival Cruise Line, so existing booked and completed cruises will be preserved
+07/16/2026, 07:07:17 [WARN] 🛡️ Preserving 5 existing offer record(s); no authoritative new offer payload was captured
+07/16/2026, 07:07:17 [WARN] 🛡️ Preserving 1379 existing available cruise record(s); no authoritative new sailing payload was captured
+07/16/2026, 07:07:17 [WARN] 🛡️ Preserving 101 existing booked/completed cruise record(s); no authoritative booking/history payload was captured
+07/16/2026, 07:07:28 [OK] ✅ Offers persisted to storage
+07/16/2026, 07:07:29 [OK] ✅ Available cruises persisted to storage
+07/16/2026, 07:07:30 [OK] ✅ Booked cruises persisted to storage
+07/16/2026, 07:07:31 [OK] ✅ Carnival loyalty/profile transaction write succeeded: VIFP Red #9013404591 (1 pts); Players Club unchanged
+07/16/2026, 07:07:35 [OK] ✅ Carnival transactional Apply Sync committed (carnival-apply-1784210837194-7vm1lq)
+07/16/2026, 07:07:35 [OK] ✅ Carnival manifest committed as complete with unique, explainable counts.
+07/16/2026, 07:07:35 [OK] ✅ Data synced successfully to app!
+07/16/2026, 07:07:40 [OK] 📦 Captured Carnival bookings (1) from /profilemanagement/api/v1.0/Profiles
+
+--- END OF LOG ---

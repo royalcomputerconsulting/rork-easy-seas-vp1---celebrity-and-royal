@@ -1,8 +1,9 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Modal, Pressable, ScrollView, View, Text, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, CloudSun, Ship, Waves, Wind } from 'lucide-react-native';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { AlertTriangle, CloudSun, MapPin, RefreshCw, Ship, Waves, Wind, X } from 'lucide-react-native';
 import { BORDER_RADIUS, COLORS, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import { useSailingWeather, type SailingWeatherCruiseInput, type SailingWeatherForecast } from '@/state/SailingWeatherProvider';
 
@@ -58,6 +59,9 @@ interface MarineForecastItem {
 interface MarinePanelData {
   alerts: MarineAlertItem[];
   forecasts: MarineForecastItem[];
+  liveCount: number;
+  cacheCount: number;
+  offlineCount: number;
 }
 
 const EMPTY_PANEL_DATA: MarinePanelData = { alerts: [], forecasts: [] };
@@ -262,13 +266,18 @@ export function MarineAlertsPanel({
     () => cruises.map((cruise) => `${cruise.id}:${cruise.sailDate}:${cruise.returnDate}`).join('|'),
     [cruises],
   );
+  const forceRefreshRef = useRef<boolean>(false);
+  const [isSyncingNow, setIsSyncingNow] = useState(false);
+  const [selectedForecastId, setSelectedForecastId] = useState<string | null>(null);
 
   const alertsQuery = useQuery({
     queryKey: ['marine-alerts-panel', cruisesSignature, formatDateKey(normalizedStartDate), daysAhead],
     queryFn: async (): Promise<MarinePanelData> => {
+      const shouldForce = forceRefreshRef.current;
+      forceRefreshRef.current = false;
       const requests = cruises.flatMap((cruise) => {
         return buildCruiseDatesInWindow(cruise, normalizedStartDate, daysAhead).map(async (targetDate) => {
-          const forecast = await getForecastForCruiseDay(cruise, targetDate);
+          const forecast = await getForecastForCruiseDay(cruise, targetDate, { force: shouldForce });
           return {
             cruise,
             forecast,
@@ -279,11 +288,18 @@ export function MarineAlertsPanel({
       const forecastResults = await Promise.all(requests);
       const nextAlerts: MarineAlertItem[] = [];
       const nextForecasts: MarineForecastItem[] = [];
+      let liveCount = 0;
+      let cacheCount = 0;
+      let offlineCount = 0;
 
       forecastResults.forEach(({ cruise, forecast }) => {
         if (!forecast) {
           return;
         }
+
+        if (forecast.source === 'live') liveCount += 1;
+        else if (forecast.source === 'cache-stale') offlineCount += 1;
+        else cacheCount += 1;
 
         nextForecasts.push(buildForecastItem(forecast, normalizedStartDate));
 
@@ -318,6 +334,9 @@ export function MarineAlertsPanel({
       return {
         alerts: dedupedAlerts,
         forecasts: dedupedForecasts,
+        liveCount,
+        cacheCount,
+        offlineCount,
       };
     },
     enabled: isHydrated && cruises.length > 0,
@@ -334,6 +353,29 @@ export function MarineAlertsPanel({
   const visibleAlerts = useMemo(() => alerts.slice(0, maxItems), [alerts, maxItems]);
   const strongestSeverity = alerts[0]?.severity ?? null;
   const panelColors = getPanelGradientColors(alerts.length > 0, strongestSeverity);
+
+  const handleSyncNow = useCallback(async () => {
+    forceRefreshRef.current = true;
+    setIsSyncingNow(true);
+    try {
+      await alertsQuery.refetch();
+    } finally {
+      setIsSyncingNow(false);
+    }
+  }, [alertsQuery]);
+
+  const selectedForecast = useMemo(
+    () => forecasts.find((forecast) => forecast.id === selectedForecastId) ?? null,
+    [forecasts, selectedForecastId],
+  );
+
+  const liveStatusLabel = panelData.offlineCount > 0 && panelData.liveCount === 0
+    ? 'Offline · showing saved forecast'
+    : panelData.liveCount > 0
+      ? `Live · ${panelData.liveCount}/${forecasts.length || panelData.liveCount} day${(forecasts.length || panelData.liveCount) === 1 ? '' : 's'} fresh`
+      : forecasts.length > 0
+        ? 'Cached'
+        : null;
 
   if (cruises.length === 0) {
     return null;

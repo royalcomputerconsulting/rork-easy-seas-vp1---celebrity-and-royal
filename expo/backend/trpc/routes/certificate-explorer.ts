@@ -936,9 +936,9 @@ async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: nu
   }
 }
 
-const MAX_RETRIES = 5;
-const FETCH_TIMEOUT_MS = 25000;
-const BASE_RETRY_DELAY_MS = 1500;
+const MAX_RETRIES = 3;
+const FETCH_TIMEOUT_MS = 12000;
+const BASE_RETRY_DELAY_MS = 900;
 
 async function fetchPdfText(url: string, retries = MAX_RETRIES): Promise<string> {
   const cached = pdfTextCache.get(url);
@@ -1300,6 +1300,15 @@ export const certificateExplorerRouter = createTRPCRouter({
         throw new Error('Select at least one certificate source.');
       }
 
+      // Hard wall-clock budget for the whole mutation. Hosting has its own outer
+      // request timeout; if we got close to it the platform (not our code) would
+      // cut the connection and return a non-JSON error page that the client
+      // cannot safely JSON.parse. Always returning a valid (possibly partial)
+      // JSON payload well before that outer limit prevents that raw parse crash.
+      const MUTATION_TIME_BUDGET_MS = 45_000;
+      const mutationStartedAt = Date.now();
+      const timeBudgetExceeded = () => Date.now() - mutationStartedAt > MUTATION_TIME_BUDGET_MS;
+
       const requestedCodeSet = new Set((input.certificateCodes ?? []).map(code => code.toUpperCase().trim()));
       const allIndexEntries = certificateTypes.flatMap(certificateType =>
         buildKnownIndexEntries(monthCode, certificateType)
@@ -1314,6 +1323,16 @@ export const certificateExplorerRouter = createTRPCRouter({
       const pdfScanLog: PdfScanLogEntry[] = [];
 
       const sailingResults = await mapWithConcurrency<IndexEntry, SailingEntry[]>(allIndexEntries, 5, async (entry, entryIndex) => {
+        if (timeBudgetExceeded()) {
+          pdfScanLog.push({
+            certificateCode: entry.certificateCode,
+            status: 'error',
+            textLength: 0,
+            sailingsFound: 0,
+            errorMessage: 'Skipped: certificate download time budget reached. Try again or download fewer codes at once.',
+          });
+          return [] as SailingEntry[];
+        }
         if (entryIndex > 0 && entryIndex % 4 === 0) {
           await sleep(jitteredDelay(800));
         }
