@@ -84,7 +84,7 @@ import {
   mergeImportedCruisesWithReconciliation,
   mergeImportedOffersWithReconciliation,
 } from '@/lib/importMerge';
-import { RENDER_BACKEND_URL, isCloudBackupEnabled, trpc } from '@/lib/trpc';
+import { BACKEND_BASE_URL, isCloudBackupEnabled, trpc } from '@/lib/trpc';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import * as XLSX from 'xlsx';
@@ -657,7 +657,7 @@ export default function SettingsScreen() {
         const stored = await AsyncStorage.getItem('easyseas_calendar_feed_token');
         if (stored) {
           setCalendarFeedToken(stored);
-          setCalendarFeedUrl(`${RENDER_BACKEND_URL}/api/calendar-feed/${stored}`);
+          setCalendarFeedUrl(`${BACKEND_BASE_URL}/api/calendar-feed/${stored}`);
           const lastUpdate = await AsyncStorage.getItem('easyseas_calendar_feed_updated');
           if (lastUpdate) setFeedLastUpdated(lastUpdate);
           console.log('[Settings] Loaded calendar feed token:', stored.slice(0, 8) + '...');
@@ -700,7 +700,7 @@ export default function SettingsScreen() {
         icsContent,
       });
 
-      const feedUrl = `${RENDER_BACKEND_URL}/api/calendar-feed/${token}`;
+      const feedUrl = `${BACKEND_BASE_URL}/api/calendar-feed/${token}`;
       setCalendarFeedUrl(feedUrl);
       const now = new Date().toISOString();
       setFeedLastUpdated(now);

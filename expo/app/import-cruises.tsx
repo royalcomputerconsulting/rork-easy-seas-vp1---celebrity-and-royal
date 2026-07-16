@@ -9,7 +9,7 @@ import type { BookedCruise } from '@/types/models';
 import { syncCruisePricing, SyncProgress, CruisePricing } from '@/lib/cruisePricingSync';
 import { generateCalendarFeed, generateFeedToken } from '@/lib/calendar/feedGenerator';
 import { exportFile } from '@/lib/fileIO/fileOperations';
-import { trpc, RENDER_BACKEND_URL } from '@/lib/trpc';
+import { trpc, BACKEND_BASE_URL } from '@/lib/trpc';
 
 type ScreenMode = 'auto' | 'manual' | 'calendar';
 
@@ -58,7 +58,7 @@ export default function ImportCruisesScreen() {
         const stored = await AsyncStorage.getItem('easyseas_calendar_feed_token');
         if (stored) {
           setCalendarFeedToken(stored);
-          setCalendarFeedUrl(`${RENDER_BACKEND_URL}/api/calendar-feed/${stored}`);
+          setCalendarFeedUrl(`${BACKEND_BASE_URL}/api/calendar-feed/${stored}`);
           const lastUpdate = await AsyncStorage.getItem('easyseas_calendar_feed_updated');
           if (lastUpdate) setFeedLastUpdated(lastUpdate);
           console.log('[ImportCruises] Loaded calendar feed token:', stored.slice(0, 8) + '...');
@@ -102,7 +102,7 @@ export default function ImportCruisesScreen() {
         icsContent,
       });
 
-      const feedUrl = `${RENDER_BACKEND_URL}/api/calendar-feed/${token}`;
+      const feedUrl = `${BACKEND_BASE_URL}/api/calendar-feed/${token}`;
       setCalendarFeedUrl(feedUrl);
       const now = new Date().toISOString();
       setFeedLastUpdated(now);

@@ -7,41 +7,31 @@ import { isCloudBackupEnabledByEnv } from "@/lib/localFirstMode";
 
 export const trpc = createTRPCReact<AppRouter>();
 
-const DEFAULT_RENDER_URL = "https://easy-seas-backend-v2.onrender.com";
-
 function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, '');
 }
 
-// The legacy standalone Render service (easy-seas-backend-v2) is no longer
-// deployed and now returns a bare 404 for every route, including "/". This
-// broke certificate downloads, Carnival sync, and anything else that talks to
-// trpcClient. This project's own backend/hono.ts is auto-hosted by Rork at
-// EXPO_PUBLIC_RORK_API_BASE_URL and is always live, so prefer it whenever it
-// is present; only fall back to the legacy Render URL if Rork hasn't set one
-// (e.g. an older/offline build) or the app explicitly overrides it.
-const RORK_HOSTED_API_BASE_URL = trimTrailingSlash(
+// This project has exactly ONE backend: expo/backend/hono.ts, auto-hosted by
+// Rork at EXPO_PUBLIC_RORK_API_BASE_URL. There used to be a second, dead
+// legacy standalone Render service (easy-seas-backend-v2.onrender.com) that
+// every request silently fell back to and which returned a bare 404 for
+// every route, including "/" - that broke certificate downloads, Carnival
+// sync, and the calendar feed link (they all pointed at the wrong host).
+// That fallback has been removed; BACKEND_BASE_URL is the single source of
+// truth for where the backend actually lives.
+export const BACKEND_BASE_URL = trimTrailingSlash(
   process.env.EXPO_PUBLIC_RORK_API_BASE_URL?.trim() || ''
 );
 
-export const RENDER_BACKEND_URL = trimTrailingSlash(
-  process.env.EXPO_PUBLIC_RENDER_BACKEND_URL?.trim() || DEFAULT_RENDER_URL
-);
-
-const USE_RORK_HOSTED_BACKEND = RORK_HOSTED_API_BASE_URL.length > 0
-  && !process.env.EXPO_PUBLIC_RENDER_BACKEND_URL?.trim();
-
 // Base URL used for non-tRPC helper endpoints (calendar feed, SeaPass shell
 // proxy) that expect an "/api" prefixed root rather than the tRPC path.
-export const BACKEND_API_ROOT_URL = USE_RORK_HOSTED_BACKEND
-  ? (RORK_HOSTED_API_BASE_URL.endsWith('/api') ? RORK_HOSTED_API_BASE_URL : `${RORK_HOSTED_API_BASE_URL}/api`)
-  : RENDER_BACKEND_URL;
+export const BACKEND_API_ROOT_URL = BACKEND_BASE_URL.length > 0
+  ? (BACKEND_BASE_URL.endsWith('/api') ? BACKEND_BASE_URL : `${BACKEND_BASE_URL}/api`)
+  : '';
 
 export const isCloudBackupEnabled = (): boolean => isCloudBackupEnabledByEnv();
 
-export const isRenderBackendAvailable = () => isCloudBackupEnabled();
-
-const getBackendUrl = (): string => (USE_RORK_HOSTED_BACKEND ? BACKEND_API_ROOT_URL : RENDER_BACKEND_URL);
+const getBackendUrl = (): string => BACKEND_API_ROOT_URL;
 
 let _backendReachable: boolean | null = null;
 let _lastHealthCheck = 0;
@@ -57,6 +47,11 @@ const checkBackendHealth = async (): Promise<boolean> => {
   }
 
   const baseUrl = getBackendUrl();
+  if (!baseUrl) {
+    _backendReachable = false;
+    _lastHealthCheck = Date.now();
+    return false;
+  }
 
   const now = Date.now();
   if (_backendReachable !== null && now - _lastHealthCheck < HEALTH_CHECK_INTERVAL) {
@@ -259,7 +254,7 @@ export const getTrpcClient = () => {
   if (!_trpcClient) {
     const backendUrl = getBackendUrl();
     const trpcUrl = `${backendUrl}/trpc`;
-    console.log("[tRPC] Initializing client -", USE_RORK_HOSTED_BACKEND ? "Rork-hosted backend:" : "Render backend:", backendUrl);
+    console.log("[tRPC] Initializing client - backend:", backendUrl || '(none configured)');
 
     _trpcClient = trpc.createClient({
       links: [

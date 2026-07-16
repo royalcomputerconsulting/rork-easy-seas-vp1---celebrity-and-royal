@@ -19,7 +19,7 @@ import {
   getCrownAnchorTierColor,
   getSilverseaTierColor,
 } from '@/constants/loyaltyTheme';
-import { trpc, isWebSyncAvailable, RENDER_BACKEND_URL } from '@/lib/trpc';
+import { trpc, isWebSyncAvailable, BACKEND_BASE_URL } from '@/lib/trpc';
 import { syncCruisePricing } from '@/lib/cruisePricingSync';
 function normalizeProfileLabel(value: string | undefined): string {
   return value?.trim().toLowerCase() ?? '';
@@ -170,7 +170,7 @@ function RoyalCaribbeanSyncScreen() {
   
   const handleCookieSync = async (cookies: string) => {
     console.log('[CookieSync] Starting cookie-based sync...');
-    console.log('[CookieSync] Backend URL:', RENDER_BACKEND_URL);
+    console.log('[CookieSync] Backend URL:', BACKEND_BASE_URL);
     setCookieSyncError(null);
     
     if (!isBackendAvailable) {
@@ -223,7 +223,7 @@ function RoyalCaribbeanSyncScreen() {
 
   const handleWebSync = async (username: string, password: string) => {
     console.log('[WebSync] Starting web-based sync...');
-    console.log('[WebSync] Backend URL:', RENDER_BACKEND_URL);
+    console.log('[WebSync] Backend URL:', BACKEND_BASE_URL);
     setWebSyncError(null);
     
     if (!isBackendAvailable) {

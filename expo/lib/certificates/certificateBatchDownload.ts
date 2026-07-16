@@ -6,8 +6,9 @@ import {
   type CertificateType,
   ROYAL_CERTIFICATE_BROAD_SHIP_QUERY,
 } from '@/lib/certificates/certificateCatalog';
+import { fetchCertificatesDirectFromRoyalCaribbean } from '@/lib/certificates/clientCertificatePdfEngine';
 
-export const CERTIFICATE_BATCH_DOWNLOAD_VERSION = 'v12.4.0-certificate-download-live-log-export';
+export const CERTIFICATE_BATCH_DOWNLOAD_VERSION = 'v13.0.0-direct-device-fallback';
 
 export interface CertificateBatchResult {
   catalog: any[];
@@ -163,13 +164,40 @@ export async function downloadCertificateCatalogBatched(input: {
             [entry.certificateCode],
           );
         } catch (singleError) {
-          failedCodes.push(entry.certificateCode);
-          certificateDownloadLogger.log(
-            `${entry.certificateCode} failed: ${singleError instanceof Error ? singleError.message : String(singleError)}.`,
-            'error',
-            [entry.certificateCode],
-          );
-          console.warn('[CertificateBatchDownload] code failed', entry.certificateCode, singleError);
+          // Our own backend failed (outage, capacity limit, timeout, bad
+          // response). The certificate PDF itself is a public file on
+          // royalcaribbean.com with nothing backend-specific about reading
+          // it, so before giving up, try fetching and parsing it directly
+          // from the device. This keeps certificate downloads working even
+          // when our backend is temporarily down.
+          const fallbackActivity = `Backend unavailable for ${entry.certificateCode} - downloading directly from Royal Caribbean instead.`;
+          certificateDownloadLogger.setActivity(fallbackActivity, [entry.certificateCode]);
+          certificateDownloadLogger.log(fallbackActivity, 'warning', [entry.certificateCode]);
+          try {
+            const directResult = await fetchCertificatesDirectFromRoyalCaribbean({
+              monthCode: input.monthCode,
+              shipQuery: input.shipQuery?.trim() || ROYAL_CERTIFICATE_BROAD_SHIP_QUERY,
+              certificateCodes: [entry.certificateCode],
+            });
+            catalog.push(...directResult.catalog);
+            matches.push(...directResult.matches);
+            const directSailingCount = directResult.matches.filter((match) =>
+              (match?.levels ?? []).some((level: any) => String(level?.certificateCode ?? '').toUpperCase() === entry.certificateCode.toUpperCase()),
+            ).length;
+            certificateDownloadLogger.log(
+              `Downloaded ${entry.certificateCode} directly from Royal Caribbean (backend was unavailable): ${directSailingCount.toLocaleString()} eligible sailing group${directSailingCount === 1 ? '' : 's'} found.`,
+              'success',
+              [entry.certificateCode],
+            );
+          } catch (directError) {
+            failedCodes.push(entry.certificateCode);
+            certificateDownloadLogger.log(
+              `${entry.certificateCode} failed on both the backend and a direct device download: ${directError instanceof Error ? directError.message : String(directError)}.`,
+              'error',
+              [entry.certificateCode],
+            );
+            console.warn('[CertificateBatchDownload] code failed on backend and direct fallback', entry.certificateCode, singleError, directError);
+          }
         }
       }
     }
