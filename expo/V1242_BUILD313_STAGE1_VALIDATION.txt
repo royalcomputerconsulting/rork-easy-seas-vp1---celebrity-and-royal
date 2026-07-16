@@ -1,0 +1,43 @@
+EASY SEAS v12.4.2 BUILD 313 — CARNIVAL PRIORITY 0 STAGE 1 VALIDATION
+Date: 2026-07-14
+
+BUILD IDENTIFIERS
+- Marketing version: 12.4.2
+- iOS buildNumber: 313
+- Android versionCode: 120404
+
+BASELINE REGRESSION
+- Build 311: 17/17 bundled test files passed
+- Build 312: 18/18 bundled test files passed
+- Build 313 Stage 1: 19/19 bundled test files passed
+
+SYNTAX TRANSPILATION
+- Build 311: 408 TS/TSX files checked, 0 syntax errors
+- Build 312: 409 TS/TSX files checked, 0 syntax errors
+- Build 313: 410 TS/TSX files checked, 0 syntax errors
+
+SELECTED CHANGED-FILE TYPE CHECK
+- Diagnostics reported: 30
+- Missing dependency/module-resolution diagnostics: 30
+- Relevant source-code diagnostics: 0
+
+APP STORE VERSION CHECK
+- PASS: resolved iOS version 12.4.2 (313)
+- PASS: stale 9.17.1 override defeated
+- PASS: Android versionCode 120404
+
+NEW BEHAVIORAL QA
+- Account-bound checkpoint compatibility: PASS
+- Different VIFP rejection: PASS
+- Different offer-context rejection: PASS
+- Missing VIFP auto-resume rejection: PASS
+- Explicit per-code terminal/resumable status behavior: PASS
+- Recovery-journal checksum/tamper detection: PASS
+- Profile target/snapshot validation: PASS
+- Partial-write rollback simulation: PASS
+- Carnival-only profile-field guard: PASS
+
+LIMITATIONS
+- No authenticated live Carnival run was possible in this environment.
+- No native iOS/Android binary or WebView runtime test was possible.
+- The source archive does not include installed dependencies; full dependency-resolved typecheck was therefore not available.

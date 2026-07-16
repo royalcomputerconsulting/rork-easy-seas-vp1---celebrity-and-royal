@@ -1,7 +1,7 @@
 const { withInfoPlist, withXcodeProject } = require('expo/config-plugins');
 
 const APP_STORE_VERSION = '12.4.2';
-const IOS_BUILD_NUMBER = '311';
+const IOS_BUILD_NUMBER = '314';
 
 /**
  * Final native safeguard. This runs during Expo prebuild and writes the values

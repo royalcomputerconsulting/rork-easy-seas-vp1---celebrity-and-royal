@@ -778,24 +778,13 @@ void function() {
   }
 
   async function startCarnivalSync() {
-    addLog('Starting Carnival sync...', 'info');
-
-    await chrome.storage.local.remove([
-      'es_offers', 'es_upcomingCruises', 'es_courtesyHolds', 'es_loyalty', 'es_pricingCache'
-    ]);
-    capturedData.offers = null;
-    capturedData.upcomingCruises = null;
-    capturedData.courtesyHolds = null;
-    capturedData.loyalty = null;
-    pricingCache = {};
-
-    saveCapturedToStorage();
-
-    var urls = getPageUrls();
-    updateProgress(1, 3, 'Step 1/3: Navigating to cruise deals...');
-    addLog('Step 1: Navigating to Carnival My Offers to discover every personalized rate code...', 'info');
-    await setSyncState(SYNC_STEPS.OFFERS, 0);
-    navigateTo(urls.offers);
+    var reason = window.EasySeasCarnivalSync && window.EasySeasCarnivalSync.deprecationReason
+      ? window.EasySeasCarnivalSync.deprecationReason
+      : 'Legacy Carnival extension sync is disabled. Use the authenticated Easy Seas mobile sync engine or import an existing Carnival CSV export.';
+    addLog(reason, 'warning');
+    updateProgress(0, 0, 'Carnival desktop sync disabled');
+    await setSyncState(SYNC_STEPS.DONE, 0);
+    updateUI();
   }
 
   async function startSync() {
@@ -1007,9 +996,16 @@ void function() {
   }
 
   async function resumeCarnivalSync(state, urls) {
+    var carnival = window.EasySeasCarnivalSync;
+    if (carnival && carnival.disabled) {
+      addLog(carnival.deprecationReason, 'warning');
+      await setSyncState(SYNC_STEPS.DONE, 0);
+      updateProgress(0, 0, 'Carnival desktop sync disabled');
+      updateUI();
+      return;
+    }
     addLog('Resuming Carnival sync step: ' + state.step, 'info');
 
-    var carnival = window.EasySeasCarnivalSync;
     if (!carnival) {
       addLog('Carnival sync helper did not load. Reload the page and try again.', 'error');
       await setSyncState(SYNC_STEPS.DONE);

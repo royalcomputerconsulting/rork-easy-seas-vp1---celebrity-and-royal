@@ -1,0 +1,14 @@
+{
+  "payload": {
+    "widgets": [
+      {
+        "component": "future-redesign",
+        "items": []
+      }
+    ],
+    "total": 329
+  },
+  "analytics": {
+    "total": 50000
+  }
+}

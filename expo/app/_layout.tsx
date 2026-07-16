@@ -46,6 +46,8 @@ import { composeProviders } from "@/lib/composeProviders";
 import { ensureStorageHealthy } from "@/lib/storage/storageRecovery";
 import { SailingWeatherProvider } from "@/state/SailingWeatherProvider";
 import { IntelligenceFiltersProvider } from "@/state/IntelligenceFiltersProvider";
+import { PersonalCertificateOptimizerProvider } from "@/state/PersonalCertificateOptimizerProvider";
+import { PersonalOptimizationAlertsProvider } from "@/state/PersonalOptimizationAlertsProvider";
 
 try {
   void SplashScreen.preventAutoHideAsync();
@@ -625,6 +627,8 @@ const ServiceProviders = composeProviders(
   IntelligenceFiltersProvider,
   SailingWeatherProvider,
   AgentXProvider,
+  PersonalCertificateOptimizerProvider,
+  PersonalOptimizationAlertsProvider,
 );
 
 export default function RootLayout() {

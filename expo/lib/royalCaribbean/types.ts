@@ -1,3 +1,5 @@
+import type { CarnivalCodeLedgerEntry, CarnivalSyncManifest } from '@/lib/carnival/carnivalDataRuntime';
+
 export type SyncStatus = 
   | 'not_logged_in'
   | 'logged_in'
@@ -8,6 +10,8 @@ export type SyncStatus =
   | 'awaiting_confirmation'
   | 'syncing'
   | 'complete'
+  | 'partial'
+  | 'cancelled'
   | 'login_expired'
   | 'error';
 
@@ -45,6 +49,34 @@ export interface RoyalCaribbeanLoyaltyApiResponse {
   };
 }
 
+export type LoyaltyAuthorityField =
+  | 'clubRoyaleId'
+  | 'clubRoyaleTier'
+  | 'clubRoyalePoints'
+  | 'clubRoyaleRelationshipPoints'
+  | 'clubRoyaleEvaluationPeriodStartDate'
+  | 'clubRoyaleEvaluationPeriodEndDate'
+  | 'crownAndAnchorId'
+  | 'crownAndAnchorTier'
+  | 'crownAndAnchorPoints'
+  | 'crownAndAnchorRelationshipPoints'
+  | 'crownAndAnchorNextTier'
+  | 'crownAndAnchorRemainingPoints';
+
+export interface LoyaltyFieldAuthority {
+  source: 'casino_api' | 'crown_anchor_api' | 'generic_api' | 'dom' | 'stored';
+  confidence: 'authoritative' | 'fallback' | 'preserved';
+  capturedAt: string;
+  accountId?: string;
+}
+
+export interface LoyaltyConversionContext {
+  sourceUrl?: string;
+  sourceType?: 'api' | 'dom' | 'stored';
+  capturedAt?: string;
+  accountId?: string;
+}
+
 export interface LoyaltyApiInformation {
   captainsClubId?: string;
   crownAndAnchorId?: string;
@@ -69,6 +101,16 @@ export interface LoyaltyApiInformation {
   clubRoyaleLoyaltyTier?: string;
   clubRoyaleLoyaltyIndividualPoints?: number;
   clubRoyaleLoyaltyRelationshipPoints?: number;
+
+  // Current Club Royale casino endpoint fields. These generic names are only
+  // interpreted when endpoint/source context identifies the casino payload.
+  casinoLoyaltyId?: string;
+  cruiseLoyaltyId?: string;
+  tier?: string;
+  individualPoints?: number | string;
+  relationshipPoints?: number | string;
+  evaluationPeriodStartDateForPoints?: string;
+  evaluationPeriodEndDateForPoints?: string;
 
   crownAndAnchorSocietyLoyaltyTier?: string;
   crownAndAnchorSocietyTier?: string;
@@ -109,6 +151,9 @@ export interface ExtendedLoyaltyData extends LoyaltyData {
   clubRoyaleTierFromApi?: string;
   clubRoyalePointsFromApi?: number;
   clubRoyaleRelationshipPointsFromApi?: number;
+  clubRoyaleId?: string;
+  clubRoyaleEvaluationPeriodStartDate?: string;
+  clubRoyaleEvaluationPeriodEndDate?: string;
 
   crownAndAnchorId?: string;
   crownAndAnchorTier?: string;
@@ -128,6 +173,8 @@ export interface ExtendedLoyaltyData extends LoyaltyData {
   hasCoBrandCard?: boolean;
   coBrandCardStatus?: number;
   coBrandCardErrorMessage?: string;
+
+  loyaltyFieldAuthority?: Partial<Record<LoyaltyAuthorityField, LoyaltyFieldAuthority>>;
 }
 
 export interface OfferRow {
@@ -162,6 +209,7 @@ export interface OfferRow {
   catalogVisibleOfferCount?: number;
   catalogZeroRowOfferCodes?: string;
   catalogRowBearingOfferCodes?: string;
+  catalogIncompleteOfferCodes?: string;
 }
 
 
@@ -311,4 +359,6 @@ export interface RoyalCaribbeanSyncState {
   syncCounts: SyncDataCounts | null;
   syncPreview: any | null;
   scrapePricingAndItinerary: boolean;
+  carnivalManifest?: CarnivalSyncManifest | null;
+  carnivalCodeLedger?: CarnivalCodeLedgerEntry[];
 }

@@ -1,0 +1,20 @@
+OPT-0 full project typecheck status
+===================================
+
+Command attempted:
+  tsc --noEmit --pretty false
+
+Result:
+  Not a meaningful project validation in the extracted archive because node_modules and the Expo/React Native dependency type tree were not included.
+
+Observed root causes include:
+  - missing expo/tsconfig.base;
+  - missing React, React Native, Expo Router, and other dependency declarations;
+  - the inherited JSX/target/lib options therefore cannot be resolved.
+
+Action taken:
+  - package.json, lockfiles, Expo, React, TypeScript, Metro, Babel, and native configuration were not changed;
+  - all 416 TypeScript/TSX source files were syntax-transpiled independently with TypeScript 5.8.3 and passed;
+  - all executable source-contract and regression scripts passed.
+
+A complete project typecheck must be run after the unchanged dependency tree is installed in the normal EasySeas development environment.

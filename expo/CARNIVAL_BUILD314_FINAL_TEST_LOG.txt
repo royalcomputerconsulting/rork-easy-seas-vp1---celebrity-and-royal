@@ -1,0 +1,58 @@
+EasySeas V12.4.2 Build 314 — Carnival Sync Final Test Log
+Date: 2026-07-15 (America/Phoenix)
+
+RUNTIME
+- Node: v22.16.0
+- npm: 10.9.2
+
+CARNIVAL REGRESSION TESTS
+PASS — scripts/testV9160CarnivalAdminSync.js
+PASS — scripts/testV1242Build312CarnivalResumableSync.js
+PASS — scripts/testV1242Build313CarnivalIntegrityStage1.js
+PASS — scripts/testV1242Build314CarnivalAuthFalseNegativeFix.js
+PASS — scripts/testV1242Build314CarnivalPriority1To3.js
+PASS — scripts/testV1242Build315CarnivalPriority4To8.js
+
+VERSION / CONFIGURATION
+PASS — scripts/verifyAppStoreVersion.js resolved iOS 12.4.2 (314)
+PASS — app.json is byte-identical to the original archive
+PASS — app.config.js is byte-identical to the original archive
+PASS — babel.config.js is byte-identical to the original archive
+PASS — metro.config.js is byte-identical to the original archive
+PASS — package.json is byte-identical to the original archive
+PASS — tsconfig.json is byte-identical to the original archive
+PASS — eslint.config.js is byte-identical to the original archive
+PASS — no original source file is missing
+
+SYNTAX / STATIC VALIDATION
+PASS — 398 TypeScript/TSX files transpiled for syntax with zero syntax diagnostics
+PASS — all modified Carnival runtime/provider files transpiled independently
+PASS — all WebView message case labels are unique
+PASS — navigation timeout and settle timeout cleanup found
+PASS — abort listeners clear bounded extraction timers
+PASS — cancellation and unmount abort active Carnival extraction
+PASS — stale navigation sequence IDs are rejected
+PASS — stale bridge run/request IDs are rejected
+PASS — offer and sailing destructive writes require authoritative catalog completion
+PASS — booked/upcoming and completed/history authority are independent
+PASS — field-level loyalty authority preserves missing stored values
+PASS — inferred VIFP tier cannot overwrite a stored tier
+PASS — Apply Sync transaction journal and rollback remain active
+PASS — no new credential, cookie, token, private-number, or uploaded-log pattern was added
+
+BEHAVIORAL FIXTURE VALIDATION
+PASS — authoritative VIFP tier wins over inferred tier
+PASS — authoritative zero points remain distinguishable from missing values
+PASS — VIFP number, tier, points, cruise-day points, total cruises, Players tier, and Players points retain independent authority evidence
+PASS — protected profile payload ledger, bounded history discovery, date-derived nights, and history reconciliation guards are present
+
+FULL PROJECT TYPESCRIPT CHECK
+NOT TESTABLE IN THIS CONTAINER — `tsc --noEmit` cannot load `expo/tsconfig.base`, React/React Native/Expo declarations, or the project dependency graph because the original archive intentionally contains no node_modules and package/lock files were not changed. The command exits 2 from missing dependencies/configuration, not from a demonstrated syntax failure in the changed files.
+
+EXPO LINT
+NOT TESTABLE IN THIS CONTAINER — the existing `npm run lint` command invokes `expo lint`, but the Expo CLI is unavailable because dependencies are not installed. The command exits 127 (`expo: not found`). No dependency installation or package/lock mutation was performed.
+
+LIVE ACCOUNT / DEVICE VALIDATION
+NOT TESTABLE IN THIS CONTAINER — final confirmation of all personalized offers, all attached sailings, the account's booked cruises, and all seven reported completed cruises requires the user's authenticated Carnival WebView session on the app/device. The supplied logs already prove authentication preflight and personalized rate-code discovery; this build repairs the downstream navigation, correlation, pagination, profile/history, and authority failures shown by those logs.
+
+POST-REDACTION FINAL REGRESSION: PASS — all six Carnival scripts and version verification re-run successfully.

@@ -29,9 +29,9 @@ import { ALL_STORAGE_KEYS, getUserScopedKey } from "@/lib/storage/storageKeys";
 import { buildOwnerScopeId, getInstallationId } from "@/lib/storage/installationId";
 import { containsKnownForeignPersonalData, filterRecordsForOwner, isOwnerScopeForEmail, stampRecordsForOwner } from "@/lib/storage/dataOwnership";
 import { updateAllCruiseLifecycles } from "@/lib/lifecycleManager";
-import { dedupeBookedCruises, dedupeCalendarEvents, dedupeCasinoOffers, dedupeCruises } from "@/lib/dataIdentity";
+import { dedupeBookedCruises, dedupeBookedCruisesWithLedger, dedupeCalendarEvents, dedupeCasinoOffers, dedupeCruises, getBookedCruiseIdentityKey, getCruiseIdentityKey, getOfferIdentityKey } from "@/lib/dataIdentity";
 import { generateCruiseCalendarEvents } from "@/lib/calendar/cruiseEvents";
-import { annotateOverlappingCruises, applyKnownBookingCorrectionsToCruise, applyUserConfirmedBookedCruiseManifest, isKnownInvalidBookedCruise } from "@/lib/cruiseOverlapGuards";
+import { annotateOverlappingCruises, applyKnownBookingCorrectionsToCruise, applyUserConfirmedBookedCruiseManifestWithLedger, isKnownInvalidBookedCruise } from "@/lib/cruiseOverlapGuards";
 import { isKnownCasinoProfile } from "@/lib/knownProfileFallback";
 import { normalizeCruisesWithCasinoEconomics } from "@/lib/casinoCruiseEconomics";
 import { getBookedCruiseCasinoPoints, normalizeCruiseCasinoPerformance } from "@/lib/casinoPointTruth";
@@ -1241,17 +1241,66 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
 
   const setCruises = useCallback(async (newCruises: Cruise[]) => {
     markLocalDataAuthoritative('setCruises');
-    const ownedCruises = dedupeCruises(stampRecordsForProfile(prepareOwnedRecords<Cruise>(newCruises, ownerScopeId, authenticatedEmail, 'set available cruises'), currentUser), 'set available cruises');
-    setCruisesState(normalizeAvailableCruiseCatalogRows(ownedCruises));
-    await persistData(skRef.current.CRUISES, ownedCruises);
-    await quotaSafeSetItem(skRef.current.HAS_IMPORTED_DATA, 'true').catch(console.error);
-    console.log('[CoreData] Cruises state updated and persisted:', ownedCruises.length);
-    if (ownedCruises.length > BACKEND_AVAILABLE_CRUISE_SKIP_THRESHOLD) {
-      console.log('[CoreData] Deferred backend sync for large available-cruise catalog; local storage is authoritative:', ownedCruises.length);
-    } else {
-      scheduleSyncToBackend('setCruises');
+    const storageKey = skRef.current.CRUISES;
+    const previousRaw = await quotaSafeGetItem(storageKey).catch(() => null);
+    const previousCruises = (() => {
+      try {
+        return previousRaw
+          ? normalizeAvailableCruiseCatalogRows(dedupeCruises(JSON.parse(previousRaw) as Cruise[], 'previous available cruises rollback'))
+          : [];
+      } catch {
+        return [];
+      }
+    })();
+
+    try {
+      const ownedInput = stampRecordsForProfile(
+        prepareOwnedRecords<Cruise>(newCruises, ownerScopeId, authenticatedEmail, 'set available cruises'),
+        currentUser,
+      );
+      const canonicalCruises = dedupeCruises(ownedInput, 'set available cruises');
+      const canonicalIdentitySet = new Set(canonicalCruises.map(getCruiseIdentityKey));
+      const lightweightStateRows = normalizeAvailableCruiseCatalogRows(canonicalCruises);
+      if (lightweightStateRows.length !== canonicalCruises.length) {
+        throw new Error(`Available sailing state normalization count mismatch: canonical ${canonicalCruises.length}, state ${lightweightStateRows.length}`);
+      }
+
+      await quotaSafeSetJsonItem(storageKey, canonicalCruises);
+      await persistLastSyncDate();
+      const readbackRaw = await quotaSafeGetItem(storageKey);
+      const readbackCruises = readbackRaw
+        ? dedupeCruises(JSON.parse(readbackRaw) as Cruise[], 'available sailing storage readback')
+        : [];
+      const readbackIdentitySet = new Set(readbackCruises.map(getCruiseIdentityKey));
+      const missingIdentities = Array.from(canonicalIdentitySet).filter((identity) => !readbackIdentitySet.has(identity));
+      if (readbackCruises.length !== canonicalCruises.length || missingIdentities.length > 0) {
+        throw new Error(`Available sailing storage readback mismatch: wrote ${canonicalCruises.length}, read ${readbackCruises.length}, missing ${missingIdentities.length}`);
+      }
+
+      const readbackStateRows = normalizeAvailableCruiseCatalogRows(readbackCruises);
+      setCruisesState(readbackStateRows);
+      await quotaSafeSetItem(skRef.current.HAS_IMPORTED_DATA, 'true');
+      console.log('[CoreData] Available sailing reconciliation audit:', {
+        inputOfferSailingRows: newCruises.length,
+        ownershipStampedRows: ownedInput.length,
+        canonicalRows: canonicalCruises.length,
+        persistedRows: readbackCruises.length,
+        inMemoryRows: readbackStateRows.length,
+        exactDuplicatesMerged: ownedInput.length - canonicalCruises.length,
+      });
+      if (canonicalCruises.length > BACKEND_AVAILABLE_CRUISE_SKIP_THRESHOLD) {
+        console.log('[CoreData] Deferred backend sync for large available-cruise catalog; local storage is authoritative:', canonicalCruises.length);
+      } else {
+        scheduleSyncToBackend('setCruises');
+      }
+    } catch (error) {
+      console.error('[CoreData] Available sailing transaction failed; restoring prior storage:', error);
+      if (previousRaw !== null) await quotaSafeSetItem(storageKey, previousRaw);
+      else await quotaSafeRemoveItem(storageKey);
+      setCruisesState(previousCruises);
+      throw error;
     }
-  }, [markLocalDataAuthoritative, persistData, scheduleSyncToBackend, ownerScopeId, authenticatedEmail, currentUser]);
+  }, [markLocalDataAuthoritative, persistLastSyncDate, scheduleSyncToBackend, ownerScopeId, authenticatedEmail, currentUser]);
 
   const addCruise = useCallback((cruise: Cruise) => {
     setCruisesState(prev => {
@@ -1279,54 +1328,142 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
 
   const setBookedCruises = useCallback(async (newCruises: BookedCruise[]) => {
     markLocalDataAuthoritative('setBookedCruises');
-    const ownedInputCruises = stampRecordsForProfile(prepareOwnedRecords<BookedCruise>(newCruises, ownerScopeId, authenticatedEmail, 'set booked cruises'), currentUser);
-    const booked = ownedInputCruises.filter(c => c.status !== 'available');
-    
-    // Filter out mock/demo cruises when setting real data
-    const nonMockCruises = booked.filter(cruise => 
-      !cruise.id?.includes('demo-') && 
-      !cruise.id?.includes('booked-virtual') &&
-      cruise.reservationNumber !== 'DEMO123' &&
-      cruise.reservationNumber !== 'DEMO456' &&
-      cruise.shipName !== 'Virtually a Ship of the Seas' &&
-      !isKnownInvalidBookedCruise(cruise)
-    );
-    
-    console.log('[CoreData] Setting booked cruises:', { 
-      total: booked.length, 
-      nonMock: nonMockCruises.length 
-    });
-    
-    const withConfirmedManifest = applyUserConfirmedBookedCruiseManifest(nonMockCruises.map(applyKnownBookingCorrectionsToCruise));
-    const withItineraries = enrichCruisesWithMockItineraries(withConfirmedManifest);
-    const withKnownRetail = applyKnownRetailValues(withItineraries);
-    const withFreeplayOBC = applyFreeplayOBCData(withKnownRetail);
-    const enrichedCruises = enrichCruisesWithReceiptData(withFreeplayOBC);
-    const lifecycleResult = updateAllCruiseLifecycles(enrichedCruises);
-    const normalizedCruises = annotateOverlappingCruises(dedupeBookedCruises(stampRecordsForProfile(prepareOwnedRecords<BookedCruise>(lifecycleResult.updatedCruises.map(normalizeCruiseCasinoPerformance), ownerScopeId, authenticatedEmail, 'normalized booked cruises'), currentUser), 'normalized booked cruises'));
-    console.log('[CoreData] Normalized booked cruise lifecycle before persist:', {
-      total: normalizedCruises.length,
-      upcoming: lifecycleResult.report.upcomingCount,
-      inProgress: lifecycleResult.report.inProgressCount,
-      completed: lifecycleResult.report.completedCount,
-    });
-    setBookedCruisesState(normalizedCruises);
-    await persistData(skRef.current.BOOKED_CRUISES, normalizedCruises);
-    await quotaSafeSetItem(skRef.current.HAS_IMPORTED_DATA, 'true').catch(console.error);
-    
-    // Auto-generate calendar events from booked cruises
-    console.log('[CoreData] Auto-generating calendar events from', normalizedCruises.length, 'booked cruises');
-    const newCalendarEvents: CalendarEvent[] = dedupeCalendarEvents(
-      stampRecordsForProfile(prepareOwnedRecords<CalendarEvent>(generateCruiseCalendarEvents(normalizedCruises), ownerScopeId, authenticatedEmail, 'booked cruise calendar events'), currentUser),
-      'booked cruise calendar events'
-    );
-    
-    console.log('[CoreData] Generated', newCalendarEvents.length, 'calendar events from cruises');
-    setCalendarEventsState(newCalendarEvents);
-    await persistData(skRef.current.CALENDAR_EVENTS, newCalendarEvents);
-    console.log('[CoreData] Booked cruises state updated and persisted:', normalizedCruises.length);
-    scheduleSyncToBackend('setBookedCruises');
-  }, [markLocalDataAuthoritative, persistData, scheduleSyncToBackend, ownerScopeId, authenticatedEmail, currentUser]);
+    const storageKey = skRef.current.BOOKED_CRUISES;
+    const previousRaw = await quotaSafeGetItem(storageKey).catch(() => null);
+    const previousCruises = (() => {
+      try { return previousRaw ? JSON.parse(previousRaw) as BookedCruise[] : []; } catch { return []; }
+    })();
+
+    try {
+      const audit: Record<string, number> = { input: newCruises.length };
+      const ownedInputCruises = stampRecordsForProfile(
+        prepareOwnedRecords<BookedCruise>(newCruises, ownerScopeId, authenticatedEmail, 'set booked cruises'),
+        currentUser,
+      );
+      audit.ownershipStamped = ownedInputCruises.length;
+      const booked = ownedInputCruises.filter((cruise) => cruise.status !== 'available');
+      audit.afterAvailableFilter = booked.length;
+      const nonMockCruises = booked.filter((cruise) =>
+        !cruise.id?.includes('demo-') &&
+        !cruise.id?.includes('booked-virtual') &&
+        cruise.reservationNumber !== 'DEMO123' &&
+        cruise.reservationNumber !== 'DEMO456' &&
+        cruise.shipName !== 'Virtually a Ship of the Seas' &&
+        !isKnownInvalidBookedCruise(cruise)
+      );
+      audit.afterMockInvalidFilter = nonMockCruises.length;
+
+      const correctedCruises = nonMockCruises.map(applyKnownBookingCorrectionsToCruise);
+      audit.afterKnownCorrections = correctedCruises.length;
+      const manifestResult = applyUserConfirmedBookedCruiseManifestWithLedger(correctedCruises);
+      audit.afterManifestOverlay = manifestResult.cruises.length;
+      const withItineraries = enrichCruisesWithMockItineraries(manifestResult.cruises);
+      audit.afterItineraryEnrichment = withItineraries.length;
+      const withKnownRetail = applyKnownRetailValues(withItineraries);
+      audit.afterRetailEnrichment = withKnownRetail.length;
+      const withFreeplayOBC = applyFreeplayOBCData(withKnownRetail);
+      audit.afterFreeplayOBC = withFreeplayOBC.length;
+      const enrichedCruises = enrichCruisesWithReceiptData(withFreeplayOBC);
+      audit.afterReceiptEnrichment = enrichedCruises.length;
+      const lifecycleResult = updateAllCruiseLifecycles(enrichedCruises);
+      audit.afterLifecycleNormalization = lifecycleResult.updatedCruises.length;
+
+      const preDedupeCruises = stampRecordsForProfile(
+        prepareOwnedRecords<BookedCruise>(
+          lifecycleResult.updatedCruises.map(normalizeCruiseCasinoPerformance),
+          ownerScopeId,
+          authenticatedEmail,
+          'normalized booked cruises',
+        ),
+        currentUser,
+      );
+      audit.beforeDedupe = preDedupeCruises.length;
+      const dedupeResult = dedupeBookedCruisesWithLedger(preDedupeCruises, 'normalized booked cruises');
+      const normalizedCruises = annotateOverlappingCruises(dedupeResult.cruises);
+      audit.afterDedupe = normalizedCruises.length;
+      audit.dedupeMerged = dedupeResult.ledger.filter((entry) => entry.action === 'merged').length;
+
+      // Every input row must map to a real final row. Identity upgrades are allowed—for example,
+      // a partial ship/date/cabin row may gain a reservation number from a more complete duplicate.
+      // The old raw identity-set comparison incorrectly treated that safe upgrade as deletion.
+      const invalidLedgerEntries = dedupeResult.ledger.filter((entry) =>
+        entry.inputIndex < 0 ||
+        entry.inputIndex >= preDedupeCruises.length ||
+        entry.outputIndex < 0 ||
+        entry.outputIndex >= normalizedCruises.length ||
+        !entry.outputIdentity
+      );
+      if (dedupeResult.ledger.length !== preDedupeCruises.length || invalidLedgerEntries.length > 0) {
+        throw new Error(`Booked cruise normalization ledger mismatch: inputs ${preDedupeCruises.length}, ledger ${dedupeResult.ledger.length}, invalid ${invalidLedgerEntries.length}`);
+      }
+
+      // Two different reservation numbers are never allowed to collapse into one canonical row.
+      const outputReservations = new Map<number, Set<string>>();
+      dedupeResult.ledger.forEach((entry) => {
+        const reservation = String(entry.reservationNumber || '').trim().toUpperCase();
+        if (!reservation) return;
+        const reservations = outputReservations.get(entry.outputIndex) ?? new Set<string>();
+        reservations.add(reservation);
+        outputReservations.set(entry.outputIndex, reservations);
+      });
+      const conflictingReservationOutputs = Array.from(outputReservations.entries())
+        .filter(([, reservations]) => reservations.size > 1);
+      if (conflictingReservationOutputs.length > 0) {
+        throw new Error(`Booked cruise normalization merged distinct reservation numbers into ${conflictingReservationOutputs.length} row(s)`);
+      }
+
+      const finalIdentitySet = new Set(normalizedCruises.map(getBookedCruiseIdentityKey));
+      console.log('[CoreData] Booked cruise reconciliation audit:', {
+        ...audit,
+        lifecycle: lifecycleResult.report,
+        manifestActivated: manifestResult.activated,
+        manifestLedger: manifestResult.ledger,
+        dedupeLedger: dedupeResult.ledger,
+      });
+
+      await quotaSafeSetJsonItem(storageKey, normalizedCruises);
+      await persistLastSyncDate();
+      const readbackRaw = await quotaSafeGetItem(storageKey);
+      const readbackCruises = readbackRaw ? JSON.parse(readbackRaw) as BookedCruise[] : [];
+      audit.persisted = normalizedCruises.length;
+      audit.readback = readbackCruises.length;
+      const readbackIdentitySet = new Set(readbackCruises.map(getBookedCruiseIdentityKey));
+      const missingAfterPersist = Array.from(finalIdentitySet).filter((key) => !readbackIdentitySet.has(key));
+      if (readbackCruises.length !== normalizedCruises.length || missingAfterPersist.length > 0) {
+        throw new Error(`Booked cruise storage readback mismatch: wrote ${normalizedCruises.length}, read ${readbackCruises.length}, missing ${missingAfterPersist.length}`);
+      }
+
+      const lifecycleCounts = readbackCruises.reduce((counts, cruise) => {
+        const status = `${cruise.completionState || ''} ${cruise.status || ''}`.toLowerCase();
+        if (status.includes('completed') || status.includes('past')) counts.completed += 1;
+        else if (status.includes('progress')) counts.inProgress += 1;
+        else counts.upcoming += 1;
+        return counts;
+      }, { upcoming: 0, inProgress: 0, completed: 0 });
+      console.log('[CoreData] Booked cruise persisted/readback audit complete:', { ...audit, lifecycleCounts });
+
+      setBookedCruisesState(readbackCruises);
+      await quotaSafeSetItem(skRef.current.HAS_IMPORTED_DATA, 'true');
+
+      const newCalendarEvents: CalendarEvent[] = dedupeCalendarEvents(
+        stampRecordsForProfile(
+          prepareOwnedRecords<CalendarEvent>(generateCruiseCalendarEvents(readbackCruises), ownerScopeId, authenticatedEmail, 'booked cruise calendar events'),
+          currentUser,
+        ),
+        'booked cruise calendar events',
+      );
+      setCalendarEventsState(newCalendarEvents);
+      await persistData(skRef.current.CALENDAR_EVENTS, newCalendarEvents);
+      console.log('[CoreData] Booked cruises state updated and verified:', readbackCruises.length);
+      scheduleSyncToBackend('setBookedCruises');
+    } catch (error) {
+      console.error('[CoreData] Booked cruise transaction failed; restoring prior storage:', error);
+      if (previousRaw !== null) await quotaSafeSetItem(storageKey, previousRaw);
+      else await quotaSafeRemoveItem(storageKey);
+      setBookedCruisesState(previousCruises);
+      throw error;
+    }
+  }, [markLocalDataAuthoritative, persistData, persistLastSyncDate, scheduleSyncToBackend, ownerScopeId, authenticatedEmail, currentUser]);
 
   const buildCalendarEventFromCruise = useCallback((cruise: BookedCruise): CalendarEvent => ({
     id: `cruise-${cruise.id}`,
@@ -1426,24 +1563,63 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
 
   const setCasinoOffers = useCallback(async (newOffers: CasinoOffer[]) => {
     markLocalDataAuthoritative('setCasinoOffers');
-    const ownedOffers = dedupeCasinoOffers(stampRecordsForProfile(prepareOwnedRecords<CasinoOffer>(newOffers, ownerScopeId, authenticatedEmail, 'set casino offers'), currentUser), 'set casino offers');
-    const nonMockOffers = ownedOffers.filter(offer => 
-      !offer.id?.includes('demo-') &&
-      offer.offerCode !== 'NOWHERE2025'
-    );
-    
-    console.log('[CoreData] Setting casino offers:', { 
-      total: newOffers.length, 
-      owned: ownedOffers.length,
-      nonMock: nonMockOffers.length 
-    });
-    
-    setCasinoOffersState(nonMockOffers);
-    await persistData(skRef.current.CASINO_OFFERS, nonMockOffers);
-    await quotaSafeSetItem(skRef.current.HAS_IMPORTED_DATA, 'true').catch(console.error);
-    console.log('[CoreData] Casino offers state updated and persisted:', nonMockOffers.length);
-    scheduleSyncToBackend('setCasinoOffers');
-  }, [markLocalDataAuthoritative, persistData, scheduleSyncToBackend, ownerScopeId, authenticatedEmail, currentUser]);
+    const storageKey = skRef.current.CASINO_OFFERS;
+    const previousRaw = await quotaSafeGetItem(storageKey).catch(() => null);
+    const previousOffers = (() => {
+      try { return previousRaw ? dedupeCasinoOffers(JSON.parse(previousRaw) as CasinoOffer[], 'previous casino offers rollback') : []; }
+      catch { return []; }
+    })();
+
+    try {
+      const ownedInput = stampRecordsForProfile(
+        prepareOwnedRecords<CasinoOffer>(newOffers, ownerScopeId, authenticatedEmail, 'set casino offers'),
+        currentUser,
+      );
+      const ownedOffers = dedupeCasinoOffers(ownedInput, 'set casino offers');
+      const nonMockOffers = ownedOffers.filter((offer) =>
+        !offer.id?.includes('demo-') && offer.offerCode !== 'NOWHERE2025'
+      );
+      const canonicalIdentitySet = new Set(nonMockOffers.map(getOfferIdentityKey));
+      const expectedRelationshipCounts = new Map(nonMockOffers.map((offer) => [
+        getOfferIdentityKey(offer),
+        new Set([...(offer.cruiseIds || []), ...(offer.cruiseId ? [offer.cruiseId] : [])].filter(Boolean)).size,
+      ]));
+
+      await quotaSafeSetJsonItem(storageKey, nonMockOffers);
+      await persistLastSyncDate();
+      const readbackRaw = await quotaSafeGetItem(storageKey);
+      const readbackOffers = readbackRaw
+        ? dedupeCasinoOffers(JSON.parse(readbackRaw) as CasinoOffer[], 'casino offer storage readback')
+        : [];
+      const readbackIdentitySet = new Set(readbackOffers.map(getOfferIdentityKey));
+      const missingIdentities = Array.from(canonicalIdentitySet).filter((identity) => !readbackIdentitySet.has(identity));
+      const relationshipMismatches = readbackOffers.filter((offer) => {
+        const identity = getOfferIdentityKey(offer);
+        const actual = new Set([...(offer.cruiseIds || []), ...(offer.cruiseId ? [offer.cruiseId] : [])].filter(Boolean)).size;
+        return expectedRelationshipCounts.get(identity) !== actual;
+      });
+      if (readbackOffers.length !== nonMockOffers.length || missingIdentities.length > 0 || relationshipMismatches.length > 0) {
+        throw new Error(`Casino offer storage readback mismatch: wrote ${nonMockOffers.length}, read ${readbackOffers.length}, missing ${missingIdentities.length}, relationship mismatches ${relationshipMismatches.length}`);
+      }
+
+      setCasinoOffersState(readbackOffers);
+      await quotaSafeSetItem(skRef.current.HAS_IMPORTED_DATA, 'true');
+      console.log('[CoreData] Casino offer reconciliation audit:', {
+        inputOffers: newOffers.length,
+        ownershipStampedOffers: ownedInput.length,
+        canonicalOffers: nonMockOffers.length,
+        persistedOffers: readbackOffers.length,
+        offerToSailingRelationships: readbackOffers.reduce((sum, offer) => sum + new Set([...(offer.cruiseIds || []), ...(offer.cruiseId ? [offer.cruiseId] : [])].filter(Boolean)).size, 0),
+      });
+      scheduleSyncToBackend('setCasinoOffers');
+    } catch (error) {
+      console.error('[CoreData] Casino offer transaction failed; restoring prior storage:', error);
+      if (previousRaw !== null) await quotaSafeSetItem(storageKey, previousRaw);
+      else await quotaSafeRemoveItem(storageKey);
+      setCasinoOffersState(previousOffers);
+      throw error;
+    }
+  }, [markLocalDataAuthoritative, persistLastSyncDate, scheduleSyncToBackend, ownerScopeId, authenticatedEmail, currentUser]);
 
   const addCasinoOffer = useCallback((offer: CasinoOffer) => {
     setCasinoOffersState(prev => {

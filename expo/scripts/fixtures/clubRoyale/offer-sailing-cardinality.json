@@ -1,0 +1,9 @@
+{
+  "offers": [
+    { "offerCode": "TESTA001", "rowCount": 367 },
+    { "offerCode": "TESTB002", "rowCount": 367 },
+    { "offerCode": "TESTC003", "rowCount": 367 },
+    { "offerCode": "TESTD004", "rowCount": 366 }
+  ],
+  "totalEligibilityRows": 1467
+}

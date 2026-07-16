@@ -37,6 +37,11 @@ interface CompactDashboardHeaderProps {
   availableCruises?: number;
   bookedCruises?: number;
   activeOffers?: number;
+  carnivalOfferMetrics?: {
+    personalizedOffers: number;
+    offersWithSailings: number;
+    eligibleSailings: number;
+  };
   onCruisesPress?: () => void;
   onBookedPress?: () => void;
   onOffersPress?: () => void;
@@ -72,6 +77,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
   availableCruises = 0,
   bookedCruises = 0,
   activeOffers = 0,
+  carnivalOfferMetrics,
   onCruisesPress,
   onBookedPress,
   onOffersPress,
@@ -94,6 +100,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
   } = useLoyalty();
   const { currentUser } = useUser();
   const { selectedBrand, setSelectedBrand, setSelectedProgram } = useIntelligenceFilters();
+  const isAllBrands = selectedBrand === 'all' || selectedBrand === 'unknown';
   const selectedHeaderBrand: BrandType = selectedBrand !== 'all' && selectedBrand !== 'unknown'
     ? selectedBrand
     : (currentUser?.preferredBrand || 'royal');
@@ -122,6 +129,11 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         : brand === 'carnival' ? 'playersClub'
         : 'venetianSociety'
     );
+  }, [setSelectedBrand, setSelectedProgram]);
+
+  const handleAllBrands = useCallback(() => {
+    setSelectedBrand('all');
+    setSelectedProgram('all');
   }, [setSelectedBrand, setSelectedProgram]);
 
   const celebrityCaptainsClubPoints = currentUser?.celebrityCaptainsClubPoints || 0;
@@ -189,17 +201,22 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
   }), [playerCardTheme.borderColor, playerCardTheme.surfaceColorMuted]);
 
   const displayName = currentUser?.name || memberName;
-  const rawNumber = activeBrand === 'royal' 
+  const rawNumber = isAllBrands
+    ? ''
+    : activeBrand === 'royal'
     ? (crownAnchorNumber || currentUser?.crownAnchorNumber || '')
     : activeBrand === 'celebrity'
     ? (currentUser?.celebrityCaptainsClubNumber || '')
     : activeBrand === 'silversea'
     ? (currentUser?.silverseaVenetianNumber || '')
     : (currentUser?.carnivalVifpNumber || '');
-  const displayNumber = rawNumber
+  const displayNumber = isAllBrands
+    ? 'Combined portfolio'
+    : rawNumber
     ? (showNumber ? rawNumber : '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022')
     : 'Not set';
-  const displayNumberLabel = activeBrand === 'royal' ? 'C&A #'
+  const displayNumberLabel = isAllBrands ? 'All Brands •'
+    : activeBrand === 'royal' ? 'C&A #'
     : activeBrand === 'celebrity' ? 'Captain\'s Club #'
     : activeBrand === 'silversea' ? 'Venetian Society #'
     : 'VIFP Club #';
@@ -263,9 +280,48 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         </View>
       </View>
 
-      <BrandToggle activeBrand={activeBrand} onToggle={handleBrandToggle} />
+      <TouchableOpacity
+        style={[styles.allBrandsButton, isAllBrands && styles.allBrandsButtonActive]}
+        onPress={handleAllBrands}
+        activeOpacity={0.75}
+        accessibilityRole="button"
+        accessibilityState={{ selected: isAllBrands }}
+        testID="dashboard-brand-all"
+      >
+        <Text style={[styles.allBrandsButtonText, isAllBrands && styles.allBrandsButtonTextActive]}>All Brands</Text>
+        <Text style={[styles.allBrandsButtonMeta, isAllBrands && styles.allBrandsButtonMetaActive]}>Combined portfolio totals</Text>
+      </TouchableOpacity>
 
-      {activeBrand === 'royal' ? (
+      <BrandToggle activeBrand={activeBrand} onToggle={handleBrandToggle} noActiveSelection={isAllBrands} />
+
+      {isAllBrands ? (
+        <>
+          <View style={[styles.allBrandsSummaryCard, progressCardStyle]}>
+            <Text style={[styles.allBrandsSummaryTitle, progressLabelStyle]}>ALL BRANDS</Text>
+            <Text style={[styles.allBrandsSummaryText, progressMetaStyle]}>
+              These totals combine Royal Caribbean, Celebrity, Silversea, and Carnival. Select a cruise line above for loyalty status and brand-only totals.
+            </Text>
+          </View>
+
+          <View style={styles.quickStatsPillRow}>
+            <TouchableOpacity style={[styles.quickStatPill, progressCardStyle]} onPress={onCruisesPress} activeOpacity={0.7}>
+              <Anchor size={14} color={COLORS.points} />
+              <Text style={[styles.quickStatPillValue, progressLabelStyle]}>{availableCruises}</Text>
+              <Text style={[styles.quickStatPillLabel, progressMetaStyle]}>Cruises</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.quickStatPill, progressCardStyle]} onPress={onBookedPress} activeOpacity={0.7}>
+              <Ship size={14} color={COLORS.money} />
+              <Text style={[styles.quickStatPillValue, progressLabelStyle]}>{bookedCruises}</Text>
+              <Text style={[styles.quickStatPillLabel, progressMetaStyle]}>Booked</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.quickStatPill, progressCardStyle]} onPress={onOffersPress} activeOpacity={0.7}>
+              <Tag size={14} color={COLORS.gold} />
+              <Text style={[styles.quickStatPillValue, progressLabelStyle]}>{activeOffers}</Text>
+              <Text style={[styles.quickStatPillLabel, progressMetaStyle]}>Offers</Text>
+            </TouchableOpacity>
+          </View>
+        </>
+      ) : activeBrand === 'royal' ? (
         <>
       {/* === ROYAL CARIBBEAN === */}
       {hasRoyalIdentity ? (
@@ -504,7 +560,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         >
           <Anchor size={14} color={COLORS.points} />
           <Text style={[styles.quickStatPillValue, progressLabelStyle]}>{availableCruises}</Text>
-          <Text style={[styles.quickStatPillLabel, progressMetaStyle]}>Cruises</Text>
+          <Text style={[styles.quickStatPillLabel, progressMetaStyle]}>Available</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 
@@ -797,6 +853,25 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         <LoyaltyPill label={hasCarnivalPlayersData ? `Players ${carnivalPlayersClubTier}` : 'Players Club not synced'} color={getCarnivalPlayersClubTierColor(carnivalPlayersClubTier)} size="small" />
       </View>
 
+      {carnivalOfferMetrics ? (
+        <View style={[styles.statsRow, progressCardStyle]} testID="carnival-offer-metrics">
+          <View style={styles.statItem}>
+            <Text style={[styles.statValue, progressLabelStyle]}>{carnivalOfferMetrics.personalizedOffers}</Text>
+            <Text style={[styles.statLabel, progressMetaStyle]}>Personalized Offers</Text>
+          </View>
+          <View style={[styles.statDivider, progressDividerStyle]} />
+          <View style={styles.statItem}>
+            <Text style={[styles.statValue, progressLabelStyle]}>{carnivalOfferMetrics.offersWithSailings}</Text>
+            <Text style={[styles.statLabel, progressMetaStyle]}>With Sailings</Text>
+          </View>
+          <View style={[styles.statDivider, progressDividerStyle]} />
+          <View style={styles.statItem}>
+            <Text style={[styles.statValue, progressLabelStyle]}>{carnivalOfferMetrics.eligibleSailings}</Text>
+            <Text style={[styles.statLabel, progressMetaStyle]}>Eligible Sailings</Text>
+          </View>
+        </View>
+      ) : null}
+
       <View style={styles.progressGrid}>
         {(() => {
           if (!hasCarnivalVifpData) {
@@ -915,7 +990,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         >
           <Anchor size={14} color={COLORS.points} />
           <Text style={[styles.quickStatPillValue, progressLabelStyle]}>{availableCruises}</Text>
-          <Text style={[styles.quickStatPillLabel, progressMetaStyle]}>Cruises</Text>
+          <Text style={[styles.quickStatPillLabel, progressMetaStyle]}>Available</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 
@@ -935,7 +1010,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         >
           <Tag size={14} color={COLORS.gold} />
           <Text style={[styles.quickStatPillValue, progressLabelStyle]}>{activeOffers}</Text>
-          <Text style={[styles.quickStatPillLabel, progressMetaStyle]}>Offers</Text>
+          <Text style={[styles.quickStatPillLabel, progressMetaStyle]}>Active</Text>
         </TouchableOpacity>
       </View>
         </>
@@ -1484,6 +1559,58 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '900' as const,
     letterSpacing: 0.2,
+  },
+  allBrandsButton: {
+    marginHorizontal: SPACING.md,
+    marginTop: SPACING.xs,
+    marginBottom: 2,
+    paddingVertical: 7,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.20)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    alignItems: 'center',
+  },
+  allBrandsButtonActive: {
+    backgroundColor: COLORS.goldAccent,
+    borderColor: COLORS.goldAccent,
+  },
+  allBrandsButtonText: {
+    fontSize: 11,
+    fontWeight: '900' as const,
+    color: DARK_ROYAL_COLORS.textPrimary,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
+  },
+  allBrandsButtonTextActive: {
+    color: COLORS.navyDeep,
+  },
+  allBrandsButtonMeta: {
+    marginTop: 1,
+    fontSize: 9,
+    fontWeight: '600' as const,
+    color: DARK_ROYAL_COLORS.textSecondary,
+  },
+  allBrandsButtonMetaActive: {
+    color: COLORS.navyDeep,
+  },
+  allBrandsSummaryCard: {
+    borderWidth: 1,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+    marginTop: SPACING.xs,
+  },
+  allBrandsSummaryTitle: {
+    fontSize: 13,
+    fontWeight: '900' as const,
+    letterSpacing: 0.7,
+  },
+  allBrandsSummaryText: {
+    marginTop: 3,
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: '600' as const,
   },
   quickStatsPillRow: {
     flexDirection: 'row',

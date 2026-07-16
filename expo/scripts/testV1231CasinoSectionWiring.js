@@ -7,8 +7,8 @@ const pkg = JSON.parse(read('package.json'));
 const analytics = read('app/(tabs)/analytics.tsx');
 const provider = read('state/RoyalCaribbeanSyncProvider.tsx');
 assert(app.expo.version === '12.4.2', 'app version must be 12.4.2');
-assert(app.expo.ios.buildNumber === '311', 'iOS build must be 311');
-assert(app.expo.android.versionCode === 120402, 'Android versionCode must be 120402');
+assert(app.expo.ios.buildNumber === '314', 'iOS build must be 314');
+assert(app.expo.android.versionCode === 120405, 'Android versionCode must be 120405');
 assert(pkg.version === '12.4.2', 'package version must be 12.4.2');
 assert(!analytics.includes('expo-linear-gradient'), 'Casino route must not import expo-linear-gradient');
 [

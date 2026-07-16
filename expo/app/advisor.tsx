@@ -2,15 +2,17 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { AlertTriangle, Calculator, CheckCircle, Crown, Gauge, HelpCircle, Map, Ship, Sparkles, Target, Trophy } from 'lucide-react-native';
+import { AlertTriangle, Calculator, CheckCircle, Crown, Gauge, HelpCircle, Map, ShieldCheck, Ship, Sparkles, Target, Trophy } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOW } from '@/constants/theme';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { buildCruiseDetailsParams } from '@/lib/navigation/cruiseDetails';
 import { buildOfferRecommendations, buildTripStackCandidates, buildUpgradeMath, getCasinoPaysForLabel } from '@/lib/easySeasAdvisor';
+import { usePersonalCertificateOptimizer } from '@/state/PersonalCertificateOptimizerProvider';
 
 export default function AdvisorScreen() {
   const router = useRouter();
   const { cruises, bookedCruises, casinoOffers } = useCoreData();
+  const { bundle: optimizationBundle } = usePersonalCertificateOptimizer();
   const recommendations = useMemo(() => buildOfferRecommendations(cruises, bookedCruises, casinoOffers), [cruises, bookedCruises, casinoOffers]);
   const tripStacks = useMemo(() => buildTripStackCandidates(cruises, bookedCruises), [cruises, bookedCruises]);
   const top = recommendations[0];
@@ -43,6 +45,20 @@ export default function AdvisorScreen() {
             <Text style={styles.emptyText}>No active offer sailings found yet. Sync Royal, Celebrity, or Carnival or import offers to unlock recommendations.</Text>
           </View>
         )}
+
+
+        <Section title="Personal Certificate Optimizer" icon={<ShieldCheck size={18} color={COLORS.navyDeep} />}>
+          {optimizationBundle?.currentRecommendation ? (
+            <>
+              <Text style={styles.bodyText}>{optimizationBundle.currentRecommendation.actionLabel} · {optimizationBundle.currentRecommendation.currentPoints.toLocaleString()} points</Text>
+              <Bullet text={optimizationBundle.currentRecommendation.recommendedTargetPoints === null ? 'The current certificate is the saved optimal stopping point.' : `Saved target: ${optimizationBundle.currentRecommendation.recommendedTargetPoints.toLocaleString()} points.`} positive />
+              <Bullet text={`Expected additional loss: $${optimizationBundle.currentRecommendation.expectedAdditionalLoss.toFixed(0)} · Risk-adjusted EV: $${optimizationBundle.currentRecommendation.riskAdjustedIncrementalExpectedValue.toFixed(0)}`} positive={optimizationBundle.currentRecommendation.riskAdjustedIncrementalExpectedValue >= 0} />
+              <TouchableOpacity style={styles.secondaryButton} onPress={() => router.push({ pathname: '/casino/personal-gambling-profile' as any, params: { ownerProfileId: optimizationBundle.ownerProfileId } })}>
+                <Text style={styles.secondaryButtonText}>Open Personal Profile</Text>
+              </TouchableOpacity>
+            </>
+          ) : <Bullet text="No saved personal optimization snapshot is available for the active profile yet. Legacy offer advice remains active." />}
+        </Section>
 
         <Section title="Why this cruise?" icon={<Sparkles size={18} color={COLORS.navyDeep} />}>
           {(top?.reasons ?? ['Sync offers to generate a recommendation explanation.']).map((reason) => (

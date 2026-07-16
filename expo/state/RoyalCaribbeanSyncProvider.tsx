@@ -17,7 +17,15 @@ import {
   ExtendedLoyaltyData,
   LoyaltyApiInformation
 } from '@/lib/royalCaribbean/types';
-import { convertLoyaltyInfoToExtended, mergeExtendedLoyaltyData } from '@/lib/royalCaribbean/loyaltyConverter';
+import {
+  buildDefinedLoyaltyStatePatch,
+  convertDomLoyaltyToExtended,
+  convertLoyaltyInfoToExtended,
+  hasAuthoritativeClubRoyaleData,
+  hasAuthoritativeCrownAndAnchorData,
+  hasAuthoritativeLoyaltyField,
+  mergeExtendedLoyaltyData,
+} from '@/lib/royalCaribbean/loyaltyConverter';
 import { rcLogger } from '@/lib/royalCaribbean/logger';
 import { generateOffersCSV, generateBookedCruisesCSV } from '@/lib/royalCaribbean/csvGenerator';
 import { injectOffersExtraction } from '@/lib/royalCaribbean/step1_offers';
@@ -29,6 +37,9 @@ import {
   CARNIVAL_CRUISES_URL,
   CARNIVAL_PROFILE_OFFERS_URL,
   buildCarnivalOfferSearchUrl,
+  ensureCarnivalCodeSpecificCatalog,
+  isCarnivalBookingLinkForCode,
+  injectCarnivalAuthenticationProbe,
   injectCarnivalCatalogDiscovery,
   injectCarnivalOfferActionClick,
   injectCarnivalSearchPageScrape,
@@ -39,14 +50,86 @@ import {
   type CarnivalProfileScrapeResult,
   type CarnivalProfileSnapshot,
 } from '@/lib/carnival/carnivalSafeSync';
+import {
+  CARNIVAL_SYNC_CHECKPOINT_VERSION,
+  buildCarnivalCheckpointIdentity,
+  buildCarnivalCheckpointOfferContext,
+  isCarnivalCheckpointAccountCompatible,
+  isCarnivalCheckpointCompatible,
+  isCarnivalCheckpointIdentityUsable,
+  isCarnivalCodeSkippable,
+  mergeCarnivalBookingRows,
+  mergeCarnivalCatalogs,
+  type CarnivalCheckpointCodeRecord,
+  type CarnivalCheckpointCodeStatus,
+  type CarnivalCheckpointOfferContext,
+  type CarnivalSyncCheckpoint,
+} from '@/lib/carnival/carnivalSyncRuntime';
+import {
+  buildCarnivalNextPageUrl,
+  evaluateCarnivalPaginationStep,
+} from '@/lib/carnival/carnivalInventoryRuntime';
+import {
+  buildCarnivalSyncManifest,
+  calculateCarnivalCurrentRunEta,
+  carnivalStableHash,
+  countUniqueCarnivalSailings,
+  decodeCarnivalVifpTier,
+  evaluateCarnivalBridgeMessageScope,
+  mergeCarnivalProfileSnapshots,
+  type CarnivalCodeLedgerEntry,
+  type CarnivalSyncManifest,
+  type CarnivalSyncTerminalStatus,
+} from '@/lib/carnival/carnivalDataRuntime';
+import {
+  createCarnivalApplyJournal,
+  updateCarnivalApplyJournal,
+  validateCarnivalApplyJournal,
+  type CarnivalApplyJournal,
+} from '@/lib/carnival/carnivalApplyTransaction';
 import { createSyncPreview, calculateSyncCounts, applySyncPreview } from '@/lib/royalCaribbean/syncLogic';
+import {
+  buildUnconfirmedBookingIdentifier,
+  getRealBookingIdentifier,
+  mergeExtractedBookedCruiseRows,
+} from '@/lib/royalCaribbean/bookedExtractionIdentity';
 import { parseCasinoOffersPayload } from '@/lib/royalCaribbean/offerPayloadParser';
 import { healImportedData } from '@/lib/dataHealing';
 import { isActiveBookedCruise, isCourtesyHoldCruise } from '@/lib/bookedCruiseStatus';
-import { mergeRoyalCompletedHistoryTruth, ROYAL_COMPLETED_HISTORY_TRUTH_COUNT } from '@/lib/royalCompletedHistoryTruth';
 import { isCloudBackupEnabled } from '@/lib/trpc';
 
 export type CruiseLine = 'royal_caribbean' | 'celebrity' | 'carnival';
+
+type CarnivalActiveRun = {
+  runId: string;
+  ownerId: string;
+  controller: AbortController;
+  startedAt: number;
+  settled: boolean;
+};
+
+type CarnivalAuthProbeResult = {
+  authenticated: boolean;
+  source: string;
+  reason: string;
+  httpStatus: number;
+  url: string;
+};
+
+let activeCarnivalRun: CarnivalActiveRun | null = null;
+
+class CarnivalSyncCancelledError extends Error {
+  constructor(public readonly reason: string) {
+    super(reason);
+    this.name = 'CarnivalSyncCancelledError';
+  }
+}
+
+const createCarnivalRunId = (): string => `carnival-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+const CARNIVAL_CHECKPOINT_STORAGE_KEY = 'carnival_sync_checkpoint_v2';
+const CARNIVAL_LEGACY_CHECKPOINT_STORAGE_KEY = 'carnival_sync_checkpoint_v1';
+const CARNIVAL_APPLY_JOURNAL_STORAGE_KEY = 'carnival_apply_recovery_v1';
 
 export const CRUISE_LINE_CONFIG = {
   royal_caribbean: {
@@ -117,7 +200,9 @@ const INITIAL_STATE: RoyalCaribbeanSyncState = {
   lastSyncTimestamp: null,
   syncCounts: null,
   syncPreview: null,
-  scrapePricingAndItinerary: false
+  scrapePricingAndItinerary: false,
+  carnivalManifest: null,
+  carnivalCodeLedger: []
 };
 
 const INITIAL_EXTENDED_LOYALTY: ExtendedLoyaltyData | null = null;
@@ -125,6 +210,7 @@ const INITIAL_EXTENDED_LOYALTY: ExtendedLoyaltyData | null = null;
 type SyncTargetSlot = 'primary' | 'secondary';
 
 interface SyncSectionSelections {
+  [key: string]: boolean;
   offers: boolean;
   availableCruises: boolean;
   bookedCruises: boolean;
@@ -180,6 +266,30 @@ function isUnassignedProfile(profile: UserProfile | null | undefined, slot: Sync
 }
 
 
+function buildCarnivalProfileUpdates(
+  carnivalData: CarnivalProfileSnapshot | null,
+  targetProfile: UserProfile | null | undefined,
+): Record<string, unknown> {
+  if (!carnivalData) return {};
+  const updates: Record<string, unknown> = {};
+  const trusted = new Set(Array.isArray(carnivalData.authoritativeFields) ? carnivalData.authoritativeFields : []);
+  const fullName = `${carnivalData.firstName || ''} ${carnivalData.lastName || ''}`.trim();
+  if (fullName && targetProfile && (!targetProfile.name || /^user|traveler|second user$/i.test(targetProfile.name)) && trusted.size > 0) {
+    updates.name = fullName;
+    updates.displayName = fullName;
+  }
+  if (trusted.has('vifpNumber') && carnivalData.vifpNumber) updates.carnivalVifpNumber = carnivalData.vifpNumber;
+  if (trusted.has('vifpTier') && carnivalData.vifpTierSource === 'authoritative' && carnivalData.vifpTier) updates.carnivalVifpTier = carnivalData.vifpTier;
+  if (trusted.has('vifpPoints')) updates.carnivalVifpPoints = Number(carnivalData.vifpPoints || 0);
+  if (trusted.has('cruiseDayPoints')) updates.carnivalCruiseDayPoints = Number(carnivalData.cruiseDayPoints || 0);
+  if (trusted.has('totalCruises')) updates.carnivalTotalCruises = Number(carnivalData.totalCruises || 0);
+  if (trusted.has('playersClubTier') && carnivalData.playersClubTier) updates.carnivalPlayersClubTier = carnivalData.playersClubTier;
+  if (trusted.has('playersClubPoints')) updates.carnivalPlayersClubPoints = Number(carnivalData.playersClubPoints || 0);
+  if (Object.keys(updates).length > 0) updates.preferredBrand = 'carnival';
+  return updates;
+}
+
+
 function normalizeSyncDate(value: unknown): string {
   const raw = String(value ?? '').trim();
   if (!raw) return '';
@@ -195,6 +305,18 @@ function normalizeSyncDate(value: unknown): string {
 }
 
 
+function deriveCruiseNightsFromDates(startValue: unknown, endValue: unknown): number | undefined {
+  const start = normalizeSyncDate(startValue);
+  const end = normalizeSyncDate(endValue);
+  if (!start || !end) return undefined;
+  const startMs = Date.parse(`${start}T12:00:00Z`);
+  const endMs = Date.parse(`${end}T12:00:00Z`);
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return undefined;
+  const nights = Math.round((endMs - startMs) / 86400000);
+  return nights > 0 && nights < 366 ? nights : undefined;
+}
+
+
 function isCompletedRecordLike(record: any): boolean {
   const status = `${record?.status || ''} ${record?.bookingStatus || ''} ${record?.completionState || ''} ${record?.sourcePage || ''}`.toLowerCase();
   return status.includes('completed') || status.includes('past') || status.includes('history');
@@ -204,42 +326,8 @@ function isActiveRecordLike(record: any): boolean {
   return !isCompletedRecordLike(record);
 }
 
-function bookedSharedInventoryKey(record: any): string {
-  const sourceRaw = String(record?.cruiseSource || record?.brand || '').trim().toLowerCase();
-  const source = sourceRaw.includes('celebrity') ? 'celebrity' : sourceRaw.includes('carnival') ? 'carnival' : sourceRaw.includes('royal') ? 'royal' : sourceRaw || 'unknown';
-  const booking = String(record?.bookingId || record?.reservationNumber || '').trim().toLowerCase();
-  if (booking && !/^booking_\d+/i.test(booking) && !/^rc_\d+/i.test(booking)) return `${source}|booking:${booking}`;
-  const ship = String(record?.shipName || '').trim().toLowerCase().replace(/\s+/g, ' ');
-  const sail = normalizeSyncDate(record?.sailDate || record?.sailingStartDate || record?.startDate);
-  const end = normalizeSyncDate(record?.returnDate || record?.sailingEndDate || record?.endDate);
-  const cabin = String(record?.cabinType || record?.stateroomType || '').trim().toLowerCase().replace(/\s+/g, ' ');
-  const itinerary = String(record?.itineraryName || record?.destination || record?.itinerary || '').trim().toLowerCase().replace(/\s+/g, ' ');
-  return `${source}|${ship}|${sail}|${end}|${cabin}|${itinerary}`;
-}
-
 function mergeSharedBookedInventoryRows<T extends any>(rows: T[]): T[] {
-  const byKey = new Map<string, T>();
-  for (const row of rows) {
-    const key = bookedSharedInventoryKey(row);
-    const existing = byKey.get(key);
-    if (!existing) {
-      byKey.set(key, row);
-      continue;
-    }
-    byKey.set(key, {
-      ...existing,
-      ...row,
-      id: (existing as any).id || (row as any).id,
-      earnedPoints: (existing as any).earnedPoints ?? (row as any).earnedPoints,
-      casinoPoints: (existing as any).casinoPoints ?? (row as any).casinoPoints,
-      actualSpend: (existing as any).actualSpend ?? (row as any).actualSpend,
-      winnings: (existing as any).winnings ?? (row as any).winnings,
-      financialRecordIds: (existing as any).financialRecordIds ?? (row as any).financialRecordIds,
-      createdAt: (existing as any).createdAt || (row as any).createdAt,
-      updatedAt: (row as any).updatedAt || (existing as any).updatedAt,
-    } as T);
-  }
-  return Array.from(byKey.values());
+  return mergeExtractedBookedCruiseRows(rows).rows;
 }
 
 function isLoyaltyPayloadForCruiseLine(url: unknown, cruiseLine: CruiseLine): boolean {
@@ -338,6 +426,10 @@ function filterExtendedLoyaltyForCruiseLine(data: ExtendedLoyaltyData | null | u
       clubRoyalePoints: data.clubRoyalePoints,
       clubRoyalePointsFromApi: data.clubRoyalePointsFromApi,
       clubRoyaleRelationshipPointsFromApi: data.clubRoyaleRelationshipPointsFromApi,
+      clubRoyaleId: data.clubRoyaleId,
+      clubRoyaleEvaluationPeriodStartDate: data.clubRoyaleEvaluationPeriodStartDate,
+      clubRoyaleEvaluationPeriodEndDate: data.clubRoyaleEvaluationPeriodEndDate,
+      loyaltyFieldAuthority: data.loyaltyFieldAuthority,
       hasCoBrandCard: data.hasCoBrandCard,
       coBrandCardStatus: data.coBrandCardStatus,
       coBrandCardErrorMessage: data.coBrandCardErrorMessage,
@@ -372,8 +464,7 @@ function parseCompletedSailingsPayload(data: any, cruiseLine: CruiseLine): Booke
   ];
   const sailings = possible.find(Array.isArray) as any[] | undefined;
   if (!sailings || !sailings.length) return [];
-  const brand = cruiseLine === 'celebrity' ? 'Celebrity' : cruiseLine === 'carnival' ? 'Carnival' : 'Royal Caribbean';
-  return sailings.map((sailing, index) => {
+  return sailings.map((sailing) => {
     const sailDate = normalizeSyncDate(firstString(
       sailing?.sailDate, sailing?.sailingStartDate, sailing?.startDate, sailing?.departureDate, sailing?.date,
       sailing?.voyage?.sailDate, sailing?.cruise?.sailDate
@@ -383,9 +474,12 @@ function parseCompletedSailingsPayload(data: any, cruiseLine: CruiseLine): Booke
       sailing?.voyage?.returnDate, sailing?.cruise?.returnDate
     ));
     const nights = firstString(sailing?.numberOfNights, sailing?.nights, sailing?.duration, sailing?.voyage?.nights);
+    const parsedNights = nights ? Number.parseInt(nights, 10) : 0;
+    const resolvedNights = parsedNights > 0 ? parsedNights : deriveCruiseNightsFromDates(sailDate, returnDate);
     const shipName = normalizeShipNameFromSailing(sailing) || firstString(sailing?.shipCode) || 'Unknown Ship';
     const bookingId = firstString(sailing?.bookingId, sailing?.bookingNumber, sailing?.reservationId, sailing?.reservationNumber, sailing?.confirmationNumber);
-    return {
+    const completedRow: BookedCruiseRow = {
+      rawBooking: sailing,
       sourcePage: 'Completed Cruises',
       shipName,
       shipCode: firstString(sailing?.shipCode, sailing?.voyage?.shipCode),
@@ -396,10 +490,10 @@ function parseCompletedSailingsPayload(data: any, cruiseLine: CruiseLine): Booke
       sailingDates: sailDate && returnDate ? `${sailDate} - ${returnDate}` : sailDate,
       departurePort: firstString(sailing?.departurePort, sailing?.embarkPort, sailing?.portName),
       cabinType: firstString(sailing?.cabinType, sailing?.stateroomType, sailing?.roomType),
-      cabinNumberOrGTY: firstString(sailing?.cabinNumber, sailing?.stateroomNumber, sailing?.roomNumber),
-      bookingId: bookingId || `${brand.toLowerCase().replace(/\s+/g, '-')}-completed-${shipName}-${sailDate || index}`,
-      numberOfGuests: firstString(sailing?.numberOfGuests, sailing?.guests) || '1',
-      numberOfNights: nights ? Number.parseInt(nights, 10) || undefined : undefined,
+      cabinNumberOrGTY: firstString(sailing?.cabinNumber, sailing?.stateroomNumber, sailing?.roomNumber) || 'GTY',
+      bookingId,
+      numberOfGuests: firstString(sailing?.numberOfGuests, Array.isArray(sailing?.passengers) ? sailing.passengers.length : undefined, sailing?.guests) || '1',
+      numberOfNights: resolvedNights,
       daysToGo: '0',
       status: 'Completed',
       holdExpiration: '',
@@ -414,7 +508,11 @@ function parseCompletedSailingsPayload(data: any, cruiseLine: CruiseLine): Booke
       stateroomNumber: firstString(sailing?.cabinNumber, sailing?.stateroomNumber),
       stateroomCategoryCode: firstString(sailing?.stateroomCategoryCode, sailing?.categoryCode),
       stateroomType: firstString(sailing?.stateroomType, sailing?.cabinType),
+      passengers: Array.isArray(sailing?.passengers) ? sailing.passengers : undefined,
+      passengersInStateroom: Array.isArray(sailing?.passengersInStateroom) ? sailing.passengersInStateroom : undefined,
     } as BookedCruiseRow;
+    completedRow.bookingId = bookingId || buildUnconfirmedBookingIdentifier(completedRow);
+    return completedRow;
   });
 }
 
@@ -422,7 +520,8 @@ const InitialCruiseLineContext = createContext<CruiseLine>('royal_caribbean');
 
 export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContextHook(() => {
   console.log('[RoyalCaribbeanSync] Provider initializing...');
-  console.log('[RoyalCaribbeanSync] v12.4.2-carnival-safe-isolated-sync active');
+  console.log('[RoyalCaribbeanSync] v12.4.2-build313-carnival-integrity-stage1 active');
+  console.log('[RoyalCaribbeanSync] v12.4.2-build314-carnival-priority1-3 active');
   const initialCruiseLine = useContext(InitialCruiseLineContext);
   const { authenticatedEmail } = useAuth();
   const staySignedInKey = useCallback(() => getUserScopedKey('stay_signed_in', authenticatedEmail), [authenticatedEmail]);
@@ -434,10 +533,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   const carnivalUserDataRef = useRef<CarnivalProfileSnapshot | null>(null);
   const carnivalLaneAuthorityRef = useRef<{ active: boolean; completed: boolean; profileTotalCruises: number }>({ active: false, completed: false, profileTotalCruises: 0 });
   const extractedOffersRef = useRef<OfferRow[]>([]);
-  const step1CatalogMetaRef = useRef<{ offerCount?: number; offerCodes?: string[]; totalCount?: number; completed?: boolean }>({});
+  const step1CatalogMetaRef = useRef<{ offerCount?: number; offerCodes?: string[]; totalCount?: number; completed?: boolean; incompleteCodes?: string[]; authoritativeEmptyCodes?: string[]; successfulCodes?: string[]; failedCodes?: string[]; rowBearingCodes?: string[]; codeLedger?: CarnivalCodeLedgerEntry[]; accountFingerprint?: string; catalogHash?: string; runId?: string }>({});
   const extractedBookedCruisesRef = useRef<BookedCruiseRow[]>([]);
   const webViewRef = useRef<WebView | null>(null);
-  const hasReceivedApiLoyaltyDataRef = useRef(false);
+  const extendedLoyaltyDataRef = useRef<ExtendedLoyaltyData | null>(INITIAL_EXTENDED_LOYALTY);
+  const loyaltyLaneAuthorityRef = useRef({ clubRoyale: false, crownAndAnchor: false });
   const lastAuthenticatedEmailRef = useRef<string | null>(authenticatedEmail);
   const stepCompleteResolvers = useRef<{ [key: number]: () => void }>({});
   const progressCallbacks = useRef<{ onProgress?: () => void }>({});
@@ -447,15 +547,25 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   const offerSailingsResolver = useRef<((sailings: OfferRow[]) => void) | null>(null);
   const carnivalPageCheckResolver = useRef<((onOffers: boolean) => void) | null>(null);
   const carnivalTgoDataResolver = useRef<((data: { fullUrl: string; tgo: string; vifp: string; tierCode: string; tierName: string; rateCodes: Array<{ code: string; startDate: string; endDate: string }> }) => void) | null>(null);
-  const carnivalCatalogResolverRef = useRef<((data: CarnivalCatalogDiscovery) => void) | null>(null);
+  const carnivalCatalogResolverRef = useRef<{ runId: string; resolve: (data: CarnivalCatalogDiscovery) => void } | null>(null);
   const carnivalSearchResolverRef = useRef<{ requestId: string; rows: OfferRow[]; resolve: (data: CarnivalSearchPageResult) => void } | null>(null);
   const carnivalProfileResolverRef = useRef<{ requestId: string; rows: BookedCruiseRow[]; resolve: (data: CarnivalProfileScrapeResult) => void } | null>(null);
+  const carnivalAuthProbeResolverRef = useRef<{ requestId: string; runId: string; resolve: (result: CarnivalAuthProbeResult) => void } | null>(null);
+  const carnivalAuthVerifiedAtRef = useRef<number>(0);
+  const carnivalManifestRef = useRef<CarnivalSyncManifest | null>(null);
   const navigationRequestIdRef = useRef<number>(0);
   const pendingNavigationTargetRef = useRef<string | null>(null);
+  const pendingNavigationLabelRef = useRef<string>('');
+  const lastRequestedNavigationUrlRef = useRef<string>('');
+  const lastLoadedNavigationUrlRef = useRef<string>('');
   const syncToAppInFlightRef = useRef<boolean>(false);
   const ingestionInFlightRef = useRef<boolean>(false);
   const logFlushScheduledRef = useRef<boolean>(false);
   const providerMountedRef = useRef<boolean>(true);
+  const providerInstanceIdRef = useRef<string>(`provider-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+  const activeCarnivalRunIdRef = useRef<string | null>(null);
+  const carnivalAbortControllerRef = useRef<AbortController | null>(null);
+  const carnivalCancelReasonRef = useRef<string>('');
   
   const config = CRUISE_LINE_CONFIG[cruiseLine];
   const [webViewUrl, setWebViewUrl] = useState<string>(CRUISE_LINE_CONFIG[initialCruiseLine].loginUrl);
@@ -467,7 +577,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   useEffect(() => {
     // Brand switch must not leak Royal loyalty into Celebrity Blue Chip sync or vice versa.
     setExtendedLoyaltyData(null);
-    hasReceivedApiLoyaltyDataRef.current = false;
+    extendedLoyaltyDataRef.current = null;
+    loyaltyLaneAuthorityRef.current = { clubRoyale: false, crownAndAnchor: false };
     setState(prev => ({ ...prev, loyaltyData: null }));
   }, [cruiseLine]);
 
@@ -609,6 +720,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         catalogVisibleOfferCount: Number.isFinite(Number((row as any).catalogVisibleOfferCount)) ? Number((row as any).catalogVisibleOfferCount) : undefined,
         catalogZeroRowOfferCodes: stringifyValue((row as any).catalogZeroRowOfferCodes) || undefined,
         catalogRowBearingOfferCodes: stringifyValue((row as any).catalogRowBearingOfferCodes) || undefined,
+        catalogIncompleteOfferCodes: stringifyValue((row as any).catalogIncompleteOfferCodes) || undefined,
       };
 
       const dedupeKey = [
@@ -657,23 +769,31 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     }
 
     const normalizedRows: BookedCruiseRow[] = [];
-    const seenKeys = new Set<string>();
 
-    value.forEach((item, index) => {
+    value.forEach((item) => {
       if (!item || typeof item !== 'object') {
         return;
       }
 
-      const row = item as Partial<BookedCruiseRow>;
-      const bookingId = stringifyValue(row.bookingId) || `booking_${index}`;
+      const row = item as Partial<BookedCruiseRow> & Record<string, unknown>;
+      const rawBooking = row.rawBooking && typeof row.rawBooking === 'object' ? row.rawBooking : item;
+      const suppliedBookingId = stringifyValue(row.bookingId);
+      const normalizedStartDate = normalizeSyncDate(firstString(row.sailingStartDate, (row as any).sailDate, (row as any).departureDate, (row as any).startDate));
+      const normalizedEndDate = normalizeSyncDate(firstString(row.sailingEndDate, (row as any).returnDate, (row as any).endDate));
+      const explicitNights = typeof row.numberOfNights === 'number'
+        ? row.numberOfNights
+        : Number.parseInt(stringifyValue(row.numberOfNights), 10);
+      const resolvedNights = Number.isFinite(explicitNights) && explicitNights > 0
+        ? explicitNights
+        : deriveCruiseNightsFromDates(normalizedStartDate, normalizedEndDate);
       const normalizedRow: BookedCruiseRow = {
-        rawBooking: row.rawBooking,
+        rawBooking,
         sourcePage: stringifyValue(row.sourcePage) || 'Upcoming',
         shipName: stringifyValue(row.shipName) || 'Unknown Ship',
         shipCode: stringifyValue(row.shipCode) || undefined,
         cruiseTitle: stringifyValue(row.cruiseTitle) || undefined,
-        sailingStartDate: normalizeSyncDate(firstString(row.sailingStartDate, (row as any).sailDate, (row as any).departureDate, (row as any).startDate)),
-        sailingEndDate: normalizeSyncDate(firstString(row.sailingEndDate, (row as any).returnDate, (row as any).endDate)),
+        sailingStartDate: normalizedStartDate,
+        sailingEndDate: normalizedEndDate,
         sailingDates: normalizeSyncDate(firstString(row.sailingDates, row.sailingStartDate, (row as any).sailDate)),
         itinerary: stringifyValue(row.itinerary),
         departurePort: stringifyValue(row.departurePort),
@@ -682,14 +802,9 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         cabinCategory: stringifyValue(row.cabinCategory) || undefined,
         cabinNumberOrGTY: stringifyValue(row.cabinNumberOrGTY) || 'GTY',
         deckNumber: stringifyValue(row.deckNumber) || undefined,
-        bookingId,
+        bookingId: suppliedBookingId,
         numberOfGuests: stringifyValue(row.numberOfGuests) || undefined,
-        numberOfNights: typeof row.numberOfNights === 'number'
-          ? row.numberOfNights
-          : (() => {
-              const parsedNights = Number.parseInt(stringifyValue(row.numberOfNights), 10);
-              return Number.isFinite(parsedNights) ? parsedNights : undefined;
-            })(),
+        numberOfNights: resolvedNights,
         daysToGo: stringifyValue(row.daysToGo) || undefined,
         status: stringifyValue(row.status) || 'Upcoming',
         loyaltyLevel: stringifyValue(row.loyaltyLevel),
@@ -709,18 +824,17 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         balconyPrice: stringifyValue(row.balconyPrice) || undefined,
         suitePrice: stringifyValue(row.suitePrice) || undefined,
         taxesAndFees: stringifyValue(row.taxesAndFees) || undefined,
+        passengers: Array.isArray(row.passengers) ? row.passengers : undefined,
+        passengersInStateroom: Array.isArray(row.passengersInStateroom) ? row.passengersInStateroom : undefined,
       };
 
-      const dedupeKey = normalizedRow.bookingId || `${normalizedRow.shipName}|${normalizedRow.sailingStartDate}`;
-      if (seenKeys.has(dedupeKey)) {
-        return;
-      }
-
-      seenKeys.add(dedupeKey);
+      normalizedRow.bookingId = getRealBookingIdentifier(normalizedRow)
+        ? suppliedBookingId || getRealBookingIdentifier(normalizedRow)
+        : buildUnconfirmedBookingIdentifier(normalizedRow);
       normalizedRows.push(normalizedRow);
     });
 
-    return normalizedRows;
+    return mergeExtractedBookedCruiseRows(normalizedRows).rows;
   }, [stringifyValue]);
 
   const matchesNavigationTarget = useCallback((loadedUrl: string, targetUrl: string | null): boolean => {
@@ -780,6 +894,19 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     return () => {
       providerMountedRef.current = false;
       logFlushScheduledRef.current = false;
+      carnivalCancelReasonRef.current = 'Sync screen closed before completion';
+      carnivalAbortControllerRef.current?.abort();
+      navigationRequestIdRef.current += 1;
+      pageLoadResolver.current = null;
+      carnivalCatalogResolverRef.current = null;
+      carnivalSearchResolverRef.current = null;
+      carnivalProfileResolverRef.current = null;
+      carnivalAuthProbeResolverRef.current = null;
+      // The global coordinator stays owned until the async run reaches its
+      // finally block. Unmount aborts the owner but must not free the lock
+      // while stale WebView callbacks or persistence work are still unwinding.
+      activeCarnivalRunIdRef.current = null;
+      ingestionInFlightRef.current = false;
     };
   }, []);
 
@@ -794,7 +921,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     processedPayloads.current.clear();
     capturedSections.current = { offers: false, bookings: false, loyalty: false };
     step1CatalogMetaRef.current = {};
-    hasReceivedApiLoyaltyDataRef.current = false;
+    extendedLoyaltyDataRef.current = null;
+    loyaltyLaneAuthorityRef.current = { clubRoyale: false, crownAndAnchor: false };
     carnivalUserDataRef.current = null;
     carnivalLaneAuthorityRef.current = { active: false, completed: false, profileTotalCruises: 0 };
     rcLogger.clear();
@@ -850,7 +978,12 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   }, []);
 
   const addLog = useCallback((message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
-    rcLogger.log(message, type);
+    if (cruiseLine === 'carnival' && activeCarnivalRun && activeCarnivalRun.ownerId !== providerInstanceIdRef.current) {
+      console.log('[CarnivalSync] Ignored non-owner log update:', message);
+      return;
+    }
+    const runPrefix = cruiseLine === 'carnival' && activeCarnivalRunIdRef.current ? `[${activeCarnivalRunIdRef.current.slice(-8)}] ` : '';
+    rcLogger.log(`${runPrefix}${message}`, type);
     if (logFlushScheduledRef.current) {
       return;
     }
@@ -863,7 +996,50 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         logFlushScheduledRef.current = false;
         console.error('[RoyalCaribbeanSync] Failed to flush logs:', error);
       });
-  }, [flushDisplayLogs]);
+  }, [flushDisplayLogs, cruiseLine]);
+
+
+  const mergeCapturedLoyalty = useCallback((incoming: ExtendedLoyaltyData | null, sourceLabel: string): ExtendedLoyaltyData | null => {
+    if (!incoming) return extendedLoyaltyDataRef.current;
+    const existing = extendedLoyaltyDataRef.current;
+    if (existing?.accountId && incoming.accountId && existing.accountId !== incoming.accountId) {
+      addLog(`⚠️ Rejected cross-profile loyalty payload from ${sourceLabel}`, 'warning');
+      return existing;
+    }
+    const merged = mergeExtendedLoyaltyData(existing, incoming);
+    extendedLoyaltyDataRef.current = merged;
+    setExtendedLoyaltyData(merged);
+    if (merged) {
+      const patch = buildDefinedLoyaltyStatePatch(merged);
+      if (Object.keys(patch).length > 0) {
+        setState((prev) => ({ ...prev, loyaltyData: { ...(prev.loyaltyData ?? {}), ...patch } }));
+      }
+      loyaltyLaneAuthorityRef.current = {
+        clubRoyale: hasAuthoritativeClubRoyaleData(merged),
+        crownAndAnchor: hasAuthoritativeCrownAndAnchorData(merged),
+      };
+      const authority = merged.loyaltyFieldAuthority || {};
+      const capturedFields = Object.entries(authority)
+        .filter(([, value]) => value && value.source !== 'stored')
+        .map(([field, value]) => `${field}:${value?.source}/${value?.confidence}`);
+      if (capturedFields.length > 0) addLog(`Loyalty field authority (${sourceLabel}): ${capturedFields.join(', ')}`, 'info');
+    }
+    return merged;
+  }, [addLog]);
+
+  const onPageLoadStarted = useCallback((eventOrUrl?: unknown) => {
+    const startedUrl = typeof eventOrUrl === 'string'
+      ? eventOrUrl
+      : typeof eventOrUrl === 'object' && eventOrUrl !== null && 'nativeEvent' in eventOrUrl
+        ? String((eventOrUrl as { nativeEvent?: { url?: string } }).nativeEvent?.url || '')
+        : '';
+    const sequenceId = navigationRequestIdRef.current;
+    const label = pendingNavigationLabelRef.current || pendingNavigationTargetRef.current || startedUrl || '(unknown URL)';
+    console.log('[RoyalCaribbeanSync] Page load started:', { startedUrl, sequenceId, label });
+    if (cruiseLine === 'carnival' && pendingNavigationTargetRef.current) {
+      addLog(`🌐 Carnival load start [nav ${sequenceId}]: ${label}`, 'info');
+    }
+  }, [addLog, cruiseLine]);
 
   const onPageLoaded = useCallback((eventOrUrl?: unknown) => {
     const loadedUrl = typeof eventOrUrl === 'string'
@@ -872,7 +1048,19 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         ? String((eventOrUrl as { nativeEvent?: { url?: string } }).nativeEvent?.url || '')
         : '';
 
-    console.log('[RoyalCaribbeanSync] Page finished loading:', loadedUrl || '(unknown URL)');
+    lastLoadedNavigationUrlRef.current = loadedUrl;
+    const sequenceId = navigationRequestIdRef.current;
+    console.log('[RoyalCaribbeanSync] Page finished loading:', { loadedUrl: loadedUrl || '(unknown URL)', sequenceId });
+    if (cruiseLine === 'carnival' && pendingNavigationTargetRef.current) {
+      addLog(`✅ Carnival load end [nav ${sequenceId}]: ${pendingNavigationLabelRef.current || loadedUrl || '(unknown URL)'}`, 'success');
+    }
+
+    if (cruiseLine === 'carnival' && activeCarnivalRun?.ownerId === providerInstanceIdRef.current && activeCarnivalRunIdRef.current && /(login|signin|identity|security|challenge|authenticate)/i.test(loadedUrl)) {
+      carnivalCancelReasonRef.current = 'Carnival authentication was lost during sync';
+      activeCarnivalRun.controller.abort();
+      setState((prev) => ({ ...prev, status: 'login_expired', currentStep: '', progress: null, error: carnivalCancelReasonRef.current }));
+      addLog('Carnival redirected to a login/security page. The run was checkpointed as auth_lost.', 'warning');
+    }
 
     // v967 permanent fix: WebView scripts do not survive full-page Royal/SPA navigations.
     // Re-arm the Step 1 offer worker on every offer-list/detail load while Step 1 is active.
@@ -950,11 +1138,26 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     try {
     const msg = message as any;
     const msgType = msg.type;
+    if (String(msgType || '').startsWith('carnival_') && activeCarnivalRun && activeCarnivalRun.ownerId !== providerInstanceIdRef.current) {
+      console.log('[CarnivalSync] Ignored WebView message for a non-owning provider:', msgType);
+      return;
+    }
     switch (msgType) {
       case 'auth_status':
+        if (cruiseLine === 'carnival') {
+          const authSource = String(msg.source || '');
+          if (Boolean(msg.loggedIn) && authSource === 'carnival_protected_profile_api') {
+            carnivalAuthVerifiedAtRef.current = Date.now();
+          } else if (!Boolean(msg.loggedIn) && authSource === 'carnival_protected_profile_api') {
+            carnivalAuthVerifiedAtRef.current = 0;
+          } else if (!Boolean(msg.loggedIn) && carnivalAuthVerifiedAtRef.current > 0 && Date.now() - carnivalAuthVerifiedAtRef.current < 300000) {
+            console.log('[CarnivalSync] Ignoring weaker DOM auth false-negative after protected profile API verification');
+            break;
+          }
+        }
         setState(prev => {
           const status = prev.status;
-          const isActiveSync = status.startsWith('running_') || status === 'syncing' || status === 'awaiting_confirmation';
+          const isActiveSync = status.startsWith('running_') || status === 'syncing' || status === 'awaiting_confirmation' || status === 'cancelled';
           if (isActiveSync) {
             console.log('[RoyalCaribbeanSync] Ignoring auth_status during active sync:', status);
             return prev;
@@ -964,7 +1167,46 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         });
         break;
 
+      case 'carnival_auth_probe': {
+        const resolver = carnivalAuthProbeResolverRef.current;
+        if (!resolver) break;
+        const scope = evaluateCarnivalBridgeMessageScope({ messageRunId: msg.runId, messageRequestId: msg.requestId, activeRunId: resolver.runId, activeRequestId: resolver.requestId });
+        if (!scope.current) {
+          carnivalAuthProbeResolverRef.current = null;
+          resolver.resolve({ authenticated: false, source: 'stale_probe', reason: scope.reason || 'stale_auth_probe', httpStatus: 0, url: String(msg.url || '') });
+          addLog('Rejected a stale Carnival authentication probe immediately instead of waiting for timeout.', 'warning');
+          break;
+        }
+        carnivalAuthProbeResolverRef.current = null;
+        const result: CarnivalAuthProbeResult = {
+          authenticated: Boolean(msg.authenticated),
+          source: String(msg.source || 'unknown'),
+          reason: String(msg.reason || ''),
+          httpStatus: Number(msg.httpStatus || 0),
+          url: String(msg.url || ''),
+        };
+        if (result.authenticated) carnivalAuthVerifiedAtRef.current = Date.now();
+        else if (['explicit_login_page', 'protected_profile_api_rejected'].includes(result.source)) carnivalAuthVerifiedAtRef.current = 0;
+        resolver.resolve(result);
+        break;
+      }
+
+      case 'carnival_navigation_auth_probe': {
+        if (String(msg.runId || '') !== String(activeCarnivalRunIdRef.current || '')) break;
+        if (Boolean(msg.authLost) && activeCarnivalRun?.ownerId === providerInstanceIdRef.current) {
+          carnivalCancelReasonRef.current = 'Carnival authentication was lost during navigation';
+          activeCarnivalRun.controller.abort();
+          setState((prev) => ({ ...prev, status: 'login_expired', currentStep: '', progress: null, error: carnivalCancelReasonRef.current }));
+          addLog('Carnival session expiry was detected by the per-navigation profile probe. The run remains resumable.', 'warning');
+        }
+        break;
+      }
+
       case 'log':
+        if (msg.runId && String(msg.runId) !== String(activeCarnivalRunIdRef.current || '')) {
+          console.log('[RoyalCaribbeanSync] Ignored stale run-scoped WebView log:', msg.runId, msg.message);
+          break;
+        }
         addLog(msg.message, msg.logType);
         break;
 
@@ -1021,19 +1263,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         const incoming = normalizeBookedCruiseRows(msg.data);
         if (incoming.length > 0) {
           setState(prev => {
-            const existingIds = new Set(prev.extractedBookedCruises.map(c => c.bookingId).filter(Boolean));
-            const existingShipDates = new Set(prev.extractedBookedCruises.map(c => `${c.shipName}|${c.sailingStartDate}`));
-            const deduped = incoming.filter(c => {
-              if (c.bookingId && existingIds.has(c.bookingId)) return false;
-              const key = `${c.shipName}|${c.sailingStartDate}`;
-              if (existingShipDates.has(key)) return false;
-              return true;
-            });
-            if (deduped.length < incoming.length) {
-              console.log(`[RoyalCaribbeanSync] Deduped cruise_batch: ${incoming.length} -> ${deduped.length} (removed ${incoming.length - deduped.length} duplicates)`);
-            }
-            const newCruises = [...prev.extractedBookedCruises, ...deduped];
-            console.log(`[RoyalCaribbeanSync] Cruise batch received: ${deduped.length} items, total now: ${newCruises.length}`);
+            const reconciliation = mergeExtractedBookedCruiseRows([...prev.extractedBookedCruises, ...incoming]);
+            const newlyAdded = reconciliation.rows.length - prev.extractedBookedCruises.length;
+            console.log(`[RoyalCaribbeanSync] cruise_batch reconciliation: ${incoming.length} input, ${newlyAdded} new, ${reconciliation.mergedCount} exact/identity merge(s), ${reconciliation.rows.length} total`);
+            const newCruises = reconciliation.rows;
+            extractedBookedCruisesRef.current = newCruises;
             
             const batch = incoming;
             capturedSections.current.bookings = true;
@@ -1080,8 +1314,10 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         const stepMsg = message as any;
         const itemCount = stepMsg.totalCount ?? stepMsg.data?.length ?? 0;
         if (stepMsg.step === 1) {
-          const offerCodes = Array.isArray(stepMsg.offerCodes)
-            ? Array.from(new Set(stepMsg.offerCodes.map((c: any) => String(c || '').trim().toUpperCase()).filter(Boolean)))
+          const offerCodes: string[] = Array.isArray(stepMsg.offerCodes)
+            ? Array.from(new Set<string>(stepMsg.offerCodes
+                .map((code: unknown): string => String(code || '').trim().toUpperCase())
+                .filter((code: string): code is string => code.length > 0)))
             : [];
           step1CatalogMetaRef.current = {
             offerCount: Number.isFinite(Number(stepMsg.offerCount)) ? Number(stepMsg.offerCount) : offerCodes.length,
@@ -1091,6 +1327,18 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           };
           if (offerCodes.length || Number(stepMsg.offerCount) === 0) {
             addLog(`Step 1 dynamic catalog metadata: ${Number(stepMsg.offerCount) || offerCodes.length} visible offer(s), ${itemCount} sailing row(s)`, 'info');
+          }
+        }
+        if (stepMsg.step === 3 && cruiseLine === 'royal_caribbean') {
+          const completionReason = String(stepMsg.reason || stepMsg.status || '').trim().toLowerCase();
+          const timedOutWithoutCrownAndAnchor = completionReason === 'timeout' || completionReason === 'preserve_existing';
+          const crownAndAnchorAuthoritative = hasAuthoritativeCrownAndAnchorData(extendedLoyaltyDataRef.current);
+          if (!crownAndAnchorAuthoritative && !timedOutWithoutCrownAndAnchor) {
+            addLog('ℹ️ Ignored a premature loyalty step-complete signal because only Club Royale or partial loyalty data was captured; continuing the dedicated Crown & Anchor lane', 'info');
+            break;
+          }
+          if (!crownAndAnchorAuthoritative && timedOutWithoutCrownAndAnchor) {
+            addLog('⚠️ Crown & Anchor tier/points were not captured from an authoritative source; existing C&A values will be preserved', 'warning');
           }
         }
         addLog(`Step ${stepMsg.step} completed with ${itemCount} items`, 'success');
@@ -1173,20 +1421,13 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           });
           
           setState(prev => {
-            const existingIds = new Set(prev.extractedBookedCruises.map(c => c.bookingId).filter(Boolean));
-            const existingShipDates = new Set(prev.extractedBookedCruises.map(c => `${c.shipName}|${c.sailingStartDate}`));
-            const deduped = formattedCruises.filter((c: any) => {
-              if (c.bookingId && existingIds.has(c.bookingId)) return false;
-              const key = `${c.shipName}|${c.sailingStartDate}`;
-              if (existingShipDates.has(key)) return false;
-              return true;
-            });
-            if (deduped.length < formattedCruises.length) {
-              console.log(`[RoyalCaribbeanSync] Deduped all_bookings_data: ${formattedCruises.length} -> ${deduped.length}`);
-            }
+            const reconciliation = mergeExtractedBookedCruiseRows([...prev.extractedBookedCruises, ...formattedCruises]);
+            const newlyAdded = reconciliation.rows.length - prev.extractedBookedCruises.length;
+            console.log(`[RoyalCaribbeanSync] all_bookings_data reconciliation: ${formattedCruises.length} input, ${newlyAdded} new, ${reconciliation.mergedCount} exact/identity merge(s), ${reconciliation.rows.length} total`);
+            extractedBookedCruisesRef.current = reconciliation.rows;
             return {
               ...prev,
-              extractedBookedCruises: [...prev.extractedBookedCruises, ...deduped]
+              extractedBookedCruises: reconciliation.rows
             };
           });
           
@@ -1198,123 +1439,44 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         }
         break;
 
-      case 'loyalty_data':
-        if (msg.loyalty && typeof msg.loyalty === 'object') {
-          const loyaltyInfo = msg.loyalty as LoyaltyApiInformation;
-          const converted = filterExtendedLoyaltyForCruiseLine(convertLoyaltyInfoToExtended(loyaltyInfo, ''), cruiseLine);
-          const hasMeaningfulLoyalty = hasMeaningfulExtendedLoyaltyData(converted, cruiseLine);
-          if (!hasMeaningfulLoyalty) {
-            addLog('⚠️ Ignored API loyalty message because it did not contain tier or point values; waiting for a real loyalty payload or DOM fallback', 'warning');
-            break;
-          }
-          setExtendedLoyaltyData((prev) => mergeExtendedLoyaltyData(prev, converted));
-          hasReceivedApiLoyaltyDataRef.current = true;
-          
-          setState(prev => ({
-            ...prev,
-            loyaltyData: {
-              ...(prev.loyaltyData ?? {}),
-              ...(cruiseLine === 'celebrity' ? {
-                celebrityBlueChipTier: converted?.celebrityBlueChipTier,
-                celebrityBlueChipPoints: converted?.celebrityBlueChipPoints?.toString(),
-                captainsClubTier: converted?.captainsClubTier,
-                captainsClubPoints: converted?.captainsClubPoints?.toString(),
-              } : {
-                clubRoyaleTier: converted?.clubRoyaleTierFromApi,
-                clubRoyalePoints: converted?.clubRoyalePointsFromApi?.toString(),
-                crownAndAnchorLevel: converted?.crownAndAnchorTier,
-                crownAndAnchorPoints: converted?.crownAndAnchorPointsFromApi?.toString(),
-              }),
-            }
-          }));
-          
-          capturedSections.current.loyalty = true;
-          addLog(`✅ Captured ${cruiseLine === 'celebrity' ? 'Celebrity / Blue Chip' : 'Royal Caribbean / Club Royale'} loyalty data from API`, 'success');
-          if (cruiseLine === 'celebrity') {
-            if (converted?.celebrityBlueChipTier || converted?.celebrityBlueChipPoints !== undefined) {
-              addLog(`   🎰 Blue Chip Club Status`, 'success');
-              addLog(`   📊 Tier: "${converted?.celebrityBlueChipTier || 'N/A'}"`, 'success');
-              addLog(`   💎 Points: ${(converted?.celebrityBlueChipPoints ?? 0).toLocaleString()}`, 'success');
-            }
-            if (converted?.captainsClubTier || converted?.captainsClubPoints !== undefined) {
-              addLog(`   ⚓ Captain's Club`, 'success');
-              addLog(`   📊 Level: "${converted?.captainsClubTier || 'N/A'}"`, 'success');
-              addLog(`   💎 Points: ${(converted?.captainsClubPoints ?? 0).toLocaleString()}`, 'success');
-            }
-          } else {
-            if (converted?.clubRoyalePointsFromApi !== undefined) {
-              addLog(`   🎰 Club Royale Status`, 'success');
-              addLog(`   📊 Tier: "${converted?.clubRoyaleTierFromApi || 'N/A'}"`, 'success');
-              addLog(`   💎 Points: ${converted?.clubRoyalePointsFromApi.toLocaleString()}`, 'success');
-            }
-            if (converted?.crownAndAnchorPointsFromApi !== undefined) {
-              addLog(`   ⚓ Crown & Anchor Society`, 'success');
-              addLog(`   📊 Level: "${converted?.crownAndAnchorTier || 'N/A'}"`, 'success');
-              addLog(`   💎 Points: ${(converted?.crownAndAnchorPointsFromApi ?? 0).toLocaleString()}`, 'success');
-            }
-          }
-        } else if (!hasReceivedApiLoyaltyDataRef.current) {
-          // This is DOM fallback data
-          setState(prev => ({ ...prev, loyaltyData: msg.data ?? null }));
-          addLog('Loyalty data extracted (DOM fallback)', 'info');
-        } else {
-          addLog('Ignoring DOM loyalty data - API data already received', 'info');
-        }
-        break;
-
-      case 'extended_loyalty_data': {
-        const extData = msg.data as LoyaltyApiInformation;
-        const converted = filterExtendedLoyaltyForCruiseLine(convertLoyaltyInfoToExtended(extData, msg.accountId), cruiseLine);
-        const hasMeaningfulLoyalty = hasMeaningfulExtendedLoyaltyData(converted, cruiseLine);
-        if (!hasMeaningfulLoyalty) {
-          addLog('⚠️ Ignored extended loyalty payload because it did not contain tier or point values; waiting for a better API payload or DOM fallback', 'warning');
+      case 'loyalty_data': {
+        const apiPayload = msg.loyalty && typeof msg.loyalty === 'object' ? msg.loyalty as Record<string, unknown> : null;
+        const domPayload = !apiPayload && msg.data && typeof msg.data === 'object' ? msg.data as Record<string, unknown> : null;
+        const converted = apiPayload
+          ? filterExtendedLoyaltyForCruiseLine(convertLoyaltyInfoToExtended(apiPayload, String(msg.accountId || ''), { sourceType: 'api', sourceUrl: String(msg.url || '') }), cruiseLine)
+          : domPayload
+            ? filterExtendedLoyaltyForCruiseLine(convertDomLoyaltyToExtended(domPayload, String(msg.accountId || '')), cruiseLine)
+            : null;
+        if (!hasMeaningfulExtendedLoyaltyData(converted, cruiseLine)) {
+          addLog('⚠️ Loyalty message contained no usable fields; preserving captured values and keeping incomplete lanes open', 'warning');
           break;
         }
-        setExtendedLoyaltyData((prev) => mergeExtendedLoyaltyData(prev, converted));
-        
-        // Mark that we've received API data - this takes precedence over DOM scraping
-        hasReceivedApiLoyaltyDataRef.current = true;
-        
-        setState(prev => ({
-          ...prev,
-          loyaltyData: {
-            ...(prev.loyaltyData ?? {}),
-            ...(cruiseLine === 'celebrity' ? {
-              celebrityBlueChipTier: converted?.celebrityBlueChipTier,
-              celebrityBlueChipPoints: converted?.celebrityBlueChipPoints?.toString(),
-              captainsClubTier: converted?.captainsClubTier,
-              captainsClubPoints: converted?.captainsClubPoints?.toString(),
-            } : {
-              clubRoyaleTier: converted?.clubRoyaleTierFromApi,
-              clubRoyalePoints: converted?.clubRoyalePointsFromApi?.toString(),
-              crownAndAnchorLevel: converted?.crownAndAnchorTier,
-              crownAndAnchorPoints: converted?.crownAndAnchorPointsFromApi?.toString(),
-            }),
+        const merged = mergeCapturedLoyalty(converted, apiPayload ? 'API message' : 'DOM fallback');
+        capturedSections.current.loyalty = Boolean(merged);
+        addLog(`✅ Merged ${apiPayload ? 'API' : 'DOM fallback'} loyalty fields without suppressing missing-field fallbacks`, 'success');
+        if (cruiseLine !== 'celebrity') {
+          if (merged?.clubRoyaleTierFromApi !== undefined) addLog(`   🎰 Club Royale tier: ${merged.clubRoyaleTierFromApi}`, 'success');
+          if (merged?.clubRoyalePointsFromApi !== undefined) addLog(`   💎 Club Royale points: ${merged.clubRoyalePointsFromApi.toLocaleString()}`, 'success');
+          if (merged?.crownAndAnchorTier !== undefined || merged?.crownAndAnchorPointsFromApi !== undefined) {
+            addLog(`   ⚓ Crown & Anchor: ${merged.crownAndAnchorTier || 'tier not captured'} / ${merged.crownAndAnchorPointsFromApi?.toLocaleString() || 'points not captured'}`, 'success');
           }
-        }));
-        
-        capturedSections.current.loyalty = true;
-        addLog(`✅ Captured ${cruiseLine === 'celebrity' ? 'Celebrity / Blue Chip' : 'Royal Caribbean / Club Royale'} loyalty data from API (authoritative source)`, 'success');
-        if (cruiseLine !== 'celebrity' && converted?.clubRoyalePointsFromApi !== undefined) {
-          addLog(`   🎰 Club Royale Status`, 'success');
-          addLog(`   📊 Tier: "${converted?.clubRoyaleTierFromApi || 'N/A'}"`, 'success');
-          addLog(`   💎 Points: ${(converted?.clubRoyalePointsFromApi ?? 0).toLocaleString()}`, 'success');
         }
-        if (cruiseLine !== 'celebrity' && converted?.crownAndAnchorPointsFromApi !== undefined) {
-          addLog(`   ⚓ Crown & Anchor Society`, 'success');
-          addLog(`   📊 Level: "${converted?.crownAndAnchorTier || 'N/A'}"`, 'success');
-          addLog(`   💎 Points: ${(converted?.crownAndAnchorPointsFromApi ?? 0).toLocaleString()}`, 'success');
+        break;
+      }
+
+      case 'extended_loyalty_data': {
+        const extData = msg.data as Record<string, unknown>;
+        const converted = filterExtendedLoyaltyForCruiseLine(
+          convertLoyaltyInfoToExtended(extData, String(msg.accountId || ''), { sourceType: 'api', sourceUrl: String(msg.url || '') }),
+          cruiseLine,
+        );
+        if (!hasMeaningfulExtendedLoyaltyData(converted, cruiseLine)) {
+          addLog('⚠️ Extended loyalty payload contained no usable fields; preserving prior values', 'warning');
+          break;
         }
-        if (cruiseLine === 'celebrity' && converted?.captainsClubPoints !== undefined && (converted?.captainsClubPoints ?? 0) > 0) {
-          addLog(`   🌟 Captain's Club Status`, 'success');
-          addLog(`   📊 Tier: "${converted?.captainsClubTier || 'N/A'}"`, 'success');
-          addLog(`   💎 Points: ${(converted?.captainsClubPoints ?? 0).toLocaleString()}`, 'success');
-        }
-        if (cruiseLine === 'celebrity' && converted?.celebrityBlueChipPoints !== undefined && (converted?.celebrityBlueChipPoints ?? 0) > 0) {
-          addLog(`   🎲 Blue Chip Club Status`, 'success');
-          addLog(`   📊 Tier: "${converted?.celebrityBlueChipTier || 'N/A'}"`, 'success');
-          addLog(`   💎 Points: ${(converted?.celebrityBlueChipPoints ?? 0).toLocaleString()}`, 'success');
-        }
+        const merged = mergeCapturedLoyalty(converted, 'extended API payload');
+        capturedSections.current.loyalty = Boolean(merged);
+        addLog('✅ Merged extended loyalty payload field by field', 'success');
         break;
       }
 
@@ -1547,23 +1709,16 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             });
             
             setState(prev => {
-              const existingIds = new Set(prev.extractedBookedCruises.map(c => c.bookingId).filter(Boolean));
-              const existingShipDates = new Set(prev.extractedBookedCruises.map(c => `${c.shipName}|${c.sailingStartDate}`));
-              const deduped = formattedCruises.filter((c: any) => {
-                if (c.bookingId && existingIds.has(c.bookingId)) return false;
-                const shipDateKey = `${c.shipName}|${c.sailingStartDate}`;
-                if (existingShipDates.has(shipDateKey)) return false;
-                return true;
-              });
-              if (deduped.length < formattedCruises.length) {
-                console.log(`[RoyalCaribbeanSync] Deduped network_payload bookings: ${formattedCruises.length} -> ${deduped.length}`);
-                addLog(`ℹ️ Skipped ${formattedCruises.length - deduped.length} duplicate booking(s)`, 'info');
+              const reconciliation = mergeExtractedBookedCruiseRows([...prev.extractedBookedCruises, ...formattedCruises]);
+              const newlyAdded = reconciliation.rows.length - prev.extractedBookedCruises.length;
+              if (reconciliation.mergedCount > 0) {
+                addLog(`ℹ️ Reconciled ${reconciliation.mergedCount} repeated booking payload(s) by reservation/cabin/guest identity`, 'info');
               }
-              const mergedBookedCruises = mergeSharedBookedInventoryRows([...prev.extractedBookedCruises, ...deduped]);
-              extractedBookedCruisesRef.current = mergedBookedCruises;
+              console.log(`[RoyalCaribbeanSync] network_payload reconciliation: ${formattedCruises.length} input, ${newlyAdded} new, ${reconciliation.mergedCount} merge(s), ${reconciliation.rows.length} total`);
+              extractedBookedCruisesRef.current = reconciliation.rows;
               return {
                 ...prev,
-                extractedBookedCruises: mergedBookedCruises
+                extractedBookedCruises: reconciliation.rows
               };
             });
             
@@ -1682,36 +1837,30 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           const completedFromHistory = parseCompletedSailingsPayload(data, cruiseLine);
           if (completedFromHistory.length > 0) {
             setState(prev => {
-              const completedKey = (c: any) => `${String(c?.bookingId || c?.reservationNumber || '').toLowerCase()}|${String(c?.shipName || '').toLowerCase()}|${String(c?.sailingStartDate || c?.sailDate || c?.startDate || '').slice(0, 10)}`;
-              const existingKeys = new Set(prev.extractedBookedCruises.map(completedKey));
-              const deduped = completedFromHistory.filter(c => {
-                const key = completedKey(c);
-                if (existingKeys.has(key)) return false;
-                existingKeys.add(key);
-                return true;
-              });
-              const mergedCompletedRows = [...prev.extractedBookedCruises, ...deduped];
+              const reconciliation = mergeExtractedBookedCruiseRows([...prev.extractedBookedCruises, ...completedFromHistory]);
+              const mergedCompletedRows = reconciliation.rows;
+              const newlyAdded = mergedCompletedRows.length - prev.extractedBookedCruises.length;
               extractedBookedCruisesRef.current = mergedCompletedRows;
               const completedRowsInSession = mergedCompletedRows.filter((candidate: any) => isCompletedRecordLike(candidate)).length;
-              addLog(`✅ Parsed ${completedFromHistory.length} completed cruise sailing(s) from loyalty/history payload; accepted ${deduped.length}`, 'success');
+              addLog(`✅ Parsed ${completedFromHistory.length} completed cruise sailing(s) from loyalty/history payload; added ${newlyAdded}, reconciled ${reconciliation.mergedCount} repeat(s)`, 'success');
               return {
                 ...prev,
                 extractedBookedCruises: mergedCompletedRows,
                 syncCounts: prev.syncCounts ? {
                   ...prev.syncCounts,
-                  completedCruises: Math.max(prev.syncCounts.completedCruises ?? 0, completedRowsInSession, cruiseLine === 'royal_caribbean' ? ROYAL_COMPLETED_HISTORY_TRUTH_COUNT : 0),
+                  completedCruises: Math.max(prev.syncCounts.completedCruises ?? 0, completedRowsInSession),
                 } : {
                   offerCount: 0,
                   offerRows: 0,
                   upcomingCruises: 0,
                   courtesyHolds: 0,
-                  completedCruises: Math.max(completedRowsInSession, cruiseLine === 'royal_caribbean' ? ROYAL_COMPLETED_HISTORY_TRUTH_COUNT : 0),
+                  completedCruises: completedRowsInSession,
                 },
               };
             });
           }
           
-          const convertedLoyalty = filterExtendedLoyaltyForCruiseLine(convertLoyaltyInfoToExtended(loyaltyInfo, accountId), cruiseLine);
+          const convertedLoyalty = filterExtendedLoyaltyForCruiseLine(convertLoyaltyInfoToExtended(loyaltyInfo, accountId, { sourceType: 'api', sourceUrl: String(url || ''), accountId }), cruiseLine);
           const hasMeaningfulLoyalty = hasMeaningfulExtendedLoyaltyData(convertedLoyalty, cruiseLine);
           if (!hasMeaningfulLoyalty) {
             const historyOnly = isHistoryOnlyLoyaltyPayload(data);
@@ -1722,17 +1871,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             );
             break;
           }
-          setExtendedLoyaltyData((prev) => mergeExtendedLoyaltyData(prev, convertedLoyalty));
-          hasReceivedApiLoyaltyDataRef.current = true;
-          
-          setState(prev => ({
-            ...prev,
-            loyaltyData: cruiseLine === 'celebrity'
-              ? ({ ...(prev.loyaltyData ?? {}), celebrityBlueChipTier: convertedLoyalty?.celebrityBlueChipTier, celebrityBlueChipPoints: convertedLoyalty?.celebrityBlueChipPoints?.toString(), captainsClubTier: convertedLoyalty?.captainsClubTier, captainsClubPoints: convertedLoyalty?.captainsClubPoints?.toString() } as any)
-              : ({ ...(prev.loyaltyData ?? {}), clubRoyaleTier: convertedLoyalty?.clubRoyaleTierFromApi, clubRoyalePoints: convertedLoyalty?.clubRoyalePointsFromApi?.toString(), crownAndAnchorLevel: convertedLoyalty?.crownAndAnchorTier, crownAndAnchorPoints: convertedLoyalty?.crownAndAnchorPointsFromApi?.toString() } as any)
-          }));
-          
-          capturedSections.current.loyalty = true;
+          const mergedLoyalty = mergeCapturedLoyalty(convertedLoyalty, String(url || 'network capture'));
+          capturedSections.current.loyalty = Boolean(mergedLoyalty);
           addLog('✅ Captured loyalty data from network capture', 'success');
           if (cruiseLine === 'celebrity') {
             if (convertedLoyalty?.celebrityBlueChipTier || convertedLoyalty?.celebrityBlueChipPoints !== undefined) {
@@ -1756,10 +1896,14 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             addLog(`   💎 Points: ${(convertedLoyalty?.crownAndAnchorPointsFromApi ?? 0).toLocaleString()}`, 'success');
           }
           
-          // Auto-complete Step 3 if we're in that step (loyalty step)
+          // Crown & Anchor and Club Royale are independent authority lanes. A casino-only
+          // payload must not end the dedicated Crown & Anchor step.
           setState(prev => {
-            if (prev.status === 'running_step_3') {
-              addLog(`✅ Step 3 auto-completing with loyalty data from network monitor`, 'success');
+            const canCompleteLoyaltyStep = cruiseLine === 'royal_caribbean'
+              ? hasAuthoritativeCrownAndAnchorData(extendedLoyaltyDataRef.current)
+              : hasMeaningfulExtendedLoyaltyData(extendedLoyaltyDataRef.current, cruiseLine);
+            if (prev.status === 'running_step_3' && canCompleteLoyaltyStep) {
+              addLog(`✅ Step 3 auto-completing with authoritative ${cruiseLine === 'royal_caribbean' ? 'Crown & Anchor' : 'loyalty'} data`, 'success');
               if (stepCompleteResolvers.current[3]) {
                 stepCompleteResolvers.current[3]();
                 delete stepCompleteResolvers.current[3];
@@ -1772,6 +1916,15 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       }
 
       case 'carnival_catalog_discovered': {
+        const catalogResolver = carnivalCatalogResolverRef.current;
+        if (!catalogResolver) break;
+        const catalogScope = evaluateCarnivalBridgeMessageScope({ messageRunId: msg.runId, activeRunId: catalogResolver.runId });
+        if (!catalogScope.current) {
+          carnivalCatalogResolverRef.current = null;
+          catalogResolver.resolve({ sourceUrl: '', personalizedSearchUrl: '', tgo: '', vifp: '', tierCode: '', tierName: '', resident: '', locality: '1', currency: 'USD', rateCodes: [], actionCards: [], noOffersConfirmed: false });
+          addLog('Rejected a stale Carnival catalog response immediately instead of waiting for timeout.', 'warning');
+          break;
+        }
         const discovered = (msg.data || {}) as CarnivalCatalogDiscovery;
         const normalizedCatalog: CarnivalCatalogDiscovery = {
           sourceUrl: String(discovered.sourceUrl || ''),
@@ -1792,6 +1945,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
                   offerName: String(entry?.offerName || ''),
                   perks: String(entry?.perks || ''),
                   bookingLink: String(entry?.bookingLink || ''),
+                  bookingLinkVerified: Boolean(entry?.bookingLinkVerified),
+                  bookingLinkSource: entry?.bookingLinkSource ? String(entry.bookingLinkSource) as any : undefined,
                 }))
                 .filter((entry: any) => /^[A-Z0-9]{2,10}$/.test(entry.code))
             : [],
@@ -1808,16 +1963,18 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           noOffersConfirmed: Boolean(discovered.noOffersConfirmed),
         };
         addLog(`Carnival catalog discovery: ${normalizedCatalog.rateCodes.length} rate code(s) found${normalizedCatalog.vifp ? ` for VIFP# ${normalizedCatalog.vifp}` : ''}`, normalizedCatalog.rateCodes.length ? 'success' : 'info');
-        if (carnivalCatalogResolverRef.current) {
-          carnivalCatalogResolverRef.current(normalizedCatalog);
+        if (carnivalCatalogResolverRef.current === catalogResolver) {
           carnivalCatalogResolverRef.current = null;
+          catalogResolver.resolve(normalizedCatalog);
         }
         break;
       }
 
       case 'carnival_search_page_chunk': {
         const resolver = carnivalSearchResolverRef.current;
-        if (!resolver || String(msg.requestId || '') !== resolver.requestId) break;
+        if (!resolver) break;
+        const scope = evaluateCarnivalBridgeMessageScope({ messageRunId: msg.runId, messageRequestId: msg.requestId, activeRunId: activeCarnivalRunIdRef.current, activeRequestId: resolver.requestId });
+        if (!scope.current) break;
         const chunk = normalizeOfferRows(msg.rows).map((row) => ({
           ...row,
           sourcePage: row.sourcePage || 'Carnival Offers',
@@ -1831,21 +1988,61 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
       case 'carnival_search_page_complete': {
         const resolver = carnivalSearchResolverRef.current;
-        if (!resolver || String(msg.requestId || '') !== resolver.requestId) break;
+        if (!resolver) break;
+        const scope = evaluateCarnivalBridgeMessageScope({ messageRunId: msg.runId, messageRequestId: msg.requestId, activeRunId: activeCarnivalRunIdRef.current, activeRequestId: resolver.requestId });
+        if (!scope.current) {
+          carnivalSearchResolverRef.current = null;
+          resolver.resolve({
+            requestId: resolver.requestId,
+            runId: String(activeCarnivalRunIdRef.current || ''),
+            offerCode: String(msg.offerCode || ''),
+            offerName: String(msg.offerName || ''),
+            offerExpiry: String(msg.offerExpiry || ''),
+            perks: String(msg.perks || ''),
+            pageNumber: Number(msg.pageNumber || 1),
+            pageSize: Number(msg.pageSize || 50),
+            totalResults: -1,
+            hasNextPage: false,
+            error: scope.reason || 'stale_request_message',
+            requestProof: false,
+            pageProof: false,
+            rows: resolver.rows,
+          });
+          addLog('Rejected a stale Carnival search completion immediately instead of waiting for timeout.', 'warning');
+          break;
+        }
         const result: CarnivalSearchPageResult = {
           requestId: resolver.requestId,
+          runId: String(msg.runId || activeCarnivalRunIdRef.current || ''),
           offerCode: String(msg.offerCode || ''),
           offerName: String(msg.offerName || ''),
           offerExpiry: String(msg.offerExpiry || ''),
           perks: String(msg.perks || ''),
           pageNumber: Number(msg.pageNumber || 1),
-          pageSize: Number(msg.pageSize || 8),
-          effectivePageSize: Number(msg.effectivePageSize || msg.pageSize || 8),
+          pageSize: Number(msg.pageSize || 50),
+          effectivePageSize: Number(msg.effectivePageSize || msg.pageSize || 50),
           totalResults: Number(msg.totalResults || 0),
           hasNextPage: Boolean(msg.hasNextPage),
           rowCount: Number(msg.rowCount || resolver.rows.length),
           error: msg.error ? String(msg.error) : undefined,
           url: msg.url ? String(msg.url) : undefined,
+          expectedUrl: msg.expectedUrl ? String(msg.expectedUrl) : undefined,
+          capturedUrl: msg.capturedUrl ? String(msg.capturedUrl) : undefined,
+          payloadMatched: Boolean(msg.payloadMatched),
+          authoritativeEmpty: Boolean(msg.authoritativeEmpty),
+          readiness: msg.readiness ? String(msg.readiness) : undefined,
+          requestProof: Boolean(msg.requestProof),
+          pageProof: Boolean(msg.pageProof),
+          pageContextMatched: Boolean(msg.pageContextMatched),
+          pageSignature: msg.pageSignature ? String(msg.pageSignature) : undefined,
+          paginationMode: msg.paginationMode ? String(msg.paginationMode) as CarnivalSearchPageResult['paginationMode'] : 'unknown',
+          nextPageNumber: Number(msg.nextPageNumber || Number(msg.pageNumber || 1) + 1),
+          nextOffset: msg.nextOffset === null || msg.nextOffset === undefined ? null : Number(msg.nextOffset),
+          nextCursor: msg.nextCursor ? String(msg.nextCursor) : undefined,
+          nextUrl: msg.nextUrl ? String(msg.nextUrl) : undefined,
+          truncationReason: msg.truncationReason ? String(msg.truncationReason) : undefined,
+          inventoryPayloadCount: Number(msg.inventoryPayloadCount || 0),
+          payloadKinds: Array.isArray(msg.payloadKinds) ? msg.payloadKinds.map((value: unknown) => String(value)) : [],
           rows: resolver.rows,
         };
         carnivalSearchResolverRef.current = null;
@@ -1855,31 +2052,41 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
       case 'carnival_profile_bookings_chunk': {
         const resolver = carnivalProfileResolverRef.current;
-        if (!resolver || String(msg.requestId || '') !== resolver.requestId) break;
+        if (!resolver) break;
+        const scope = evaluateCarnivalBridgeMessageScope({ messageRunId: msg.runId, messageRequestId: msg.requestId, activeRunId: activeCarnivalRunIdRef.current, activeRequestId: resolver.requestId });
+        if (!scope.current) break;
         const chunk = normalizeBookedCruiseRows(msg.rows);
-        if (chunk.length) {
-          const merged = [...resolver.rows, ...chunk];
-          const seen = new Set<string>();
-          resolver.rows = merged.filter((row) => {
-            const key = String(row.bookingId || '').trim().toLowerCase() || `${String(row.shipName || '').trim().toLowerCase()}|${String(row.sailingStartDate || '').trim()}|${String(row.status || '').trim().toLowerCase()}`;
-            if (seen.has(key)) return false;
-            seen.add(key);
-            return true;
-          });
-        }
+        if (chunk.length) resolver.rows = mergeCarnivalBookingRows([...resolver.rows, ...chunk]);
         if (progressCallbacks.current.onProgress) progressCallbacks.current.onProgress();
         break;
       }
 
       case 'carnival_profile_scrape_complete': {
         const resolver = carnivalProfileResolverRef.current;
-        if (!resolver || String(msg.requestId || '') !== resolver.requestId) break;
+        if (!resolver) break;
+        const scope = evaluateCarnivalBridgeMessageScope({ messageRunId: msg.runId, messageRequestId: msg.requestId, activeRunId: activeCarnivalRunIdRef.current, activeRequestId: resolver.requestId });
+        if (!scope.current) {
+          const staleResolver = resolver;
+          carnivalProfileResolverRef.current = null;
+          staleResolver.resolve({
+            requestId: staleResolver.requestId,
+            profile: { firstName: '', lastName: '', vifpNumber: '', vifpTier: '', vifpTierSource: 'unknown', vifpPoints: 0, cruiseDayPoints: 0, totalCruises: 0, playersClubTier: '', playersClubPoints: 0, hasVifpData: false, hasPlayersClubData: false },
+            bookings: staleResolver.rows,
+            upcomingEmptyConfirmed: false,
+            historyEmptyConfirmed: false,
+            error: scope.reason || 'stale_request_message',
+          });
+          addLog('Rejected a stale Carnival profile completion immediately instead of waiting for timeout.', 'warning');
+          break;
+        }
         const rawProfile = msg.profile || {};
-        const profile = {
+        const decodedTier = decodeCarnivalVifpTier(rawProfile.vifpTier || rawProfile.tierCode, rawProfile.cruiseDayPoints);
+        const profile: CarnivalProfileSnapshot = {
           firstName: String(rawProfile.firstName || ''),
           lastName: String(rawProfile.lastName || ''),
           vifpNumber: String(rawProfile.vifpNumber || ''),
-          vifpTier: String(rawProfile.vifpTier || ''),
+          vifpTier: decodedTier.tier,
+          vifpTierSource: rawProfile.vifpTierSource === 'inferred' ? 'inferred' : decodedTier.source,
           vifpPoints: Number(rawProfile.vifpPoints || 0),
           cruiseDayPoints: Number(rawProfile.cruiseDayPoints || 0),
           totalCruises: Number(rawProfile.totalCruises || 0),
@@ -1887,18 +2094,23 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           playersClubPoints: Number(rawProfile.playersClubPoints || 0),
           hasVifpData: Boolean(rawProfile.hasVifpData),
           hasPlayersClubData: Boolean(rawProfile.hasPlayersClubData),
+          authoritativeFields: Array.isArray(rawProfile.authoritativeFields) ? rawProfile.authoritativeFields.map((value: unknown) => String(value || '')).filter(Boolean) : [],
         };
         if (profile.vifpNumber || profile.vifpTier || profile.vifpPoints || profile.playersClubTier || profile.playersClubPoints) {
-          carnivalUserDataRef.current = profile;
+          const merged = mergeCarnivalProfileSnapshots([carnivalUserDataRef.current || {}, profile]) as CarnivalProfileSnapshot;
+          carnivalUserDataRef.current = merged;
           capturedSections.current.loyalty = true;
           setState((prev) => ({
             ...prev,
             loyaltyData: {
               ...(prev.loyaltyData ?? {}),
-              crownAndAnchorLevel: profile.vifpTier || prev.loyaltyData?.crownAndAnchorLevel || '',
-              crownAndAnchorPoints: String(profile.vifpPoints || profile.cruiseDayPoints || prev.loyaltyData?.crownAndAnchorPoints || ''),
-              clubRoyaleTier: profile.playersClubTier || prev.loyaltyData?.clubRoyaleTier || '',
-              clubRoyalePoints: String(profile.playersClubPoints || prev.loyaltyData?.clubRoyalePoints || ''),
+              carnivalVifpNumber: merged.vifpNumber || prev.loyaltyData?.carnivalVifpNumber || '',
+              carnivalVifpTier: merged.vifpTierSource === 'inferred' ? `${merged.vifpTier} (inferred)` : merged.vifpTier,
+              carnivalVifpPoints: String(merged.vifpPoints || prev.loyaltyData?.carnivalVifpPoints || ''),
+              carnivalCruiseDayPoints: String(merged.cruiseDayPoints || prev.loyaltyData?.carnivalCruiseDayPoints || ''),
+              carnivalTotalCruises: String(merged.totalCruises || prev.loyaltyData?.carnivalTotalCruises || ''),
+              carnivalPlayersClubTier: merged.playersClubTier || prev.loyaltyData?.carnivalPlayersClubTier || '',
+              carnivalPlayersClubPoints: String(merged.playersClubPoints || prev.loyaltyData?.carnivalPlayersClubPoints || ''),
             },
           }));
         }
@@ -1906,10 +2118,17 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           requestId: resolver.requestId,
           profile,
           bookings: resolver.rows,
-          upcomingEmptyConfirmed: Boolean(msg.upcomingEmptyConfirmed),
-          historyEmptyConfirmed: Boolean(msg.historyEmptyConfirmed),
+          upcomingEmptyConfirmed: Boolean(msg.authenticatedPage && msg.pageKind === 'cruises' && msg.upcomingEmptyConfirmed),
+          historyEmptyConfirmed: Boolean(msg.authenticatedPage && msg.pageKind === 'cruises' && msg.historyEmptyConfirmed),
           upcomingCount: Number(msg.upcomingCount || 0),
           completedCount: Number(msg.completedCount || 0),
+          pageUrl: String(msg.pageUrl || msg.url || ''),
+          pageKind: msg.pageKind === 'cruises' || msg.pageKind === 'profile' ? msg.pageKind : 'unknown',
+          authenticatedPage: Boolean(msg.authenticatedPage),
+          discoveredProfileUrls: Array.isArray(msg.discoveredProfileUrls) ? msg.discoveredProfileUrls.map((value: unknown) => String(value || '')).filter(Boolean) : [],
+          profilePayloadCount: Number(msg.profilePayloadCount || 0),
+          historyBounded: Boolean(msg.authenticatedPage && msg.historyBounded),
+          error: msg.error ? String(msg.error) : undefined,
         };
         carnivalProfileResolverRef.current = null;
         resolver.resolve(result);
@@ -1936,8 +2155,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             ...prev,
             loyaltyData: {
               ...(prev.loyaltyData ?? {}),
-              crownAndAnchorLevel: tierName,
-              crownAndAnchorPoints: prev.loyaltyData?.crownAndAnchorPoints ?? '',
               carnivalVifpNumber: tgoMsg.vifp || prev.loyaltyData?.carnivalVifpNumber || '',
               carnivalVifpTier: tierName,
             }
@@ -1967,16 +2184,23 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             playersClubPoints: Number(userData.PlayersClubPoints || 0),
             firstName: userData.FirstName || '',
             lastName: userData.LastName || '',
-            hasVifpData: Boolean(userData.PastGuestNumber || userData.VifpNumber || userData.TierCode || userData.VifpTier || userData.Points || userData.TotalPoints || userData.VifpPoints),
+            hasVifpData: Boolean(userData.PastGuestNumber || userData.VifpNumber || userData.TierCode || userData.VifpTier || userData.Points !== undefined || userData.TotalPoints !== undefined || userData.VifpPoints !== undefined),
             hasPlayersClubData: Boolean(userData.PlayersClubTier || userData.PlayersClubPoints !== undefined),
+            authoritativeFields: [
+              ...(userData.PastGuestNumber || userData.VifpNumber ? ['vifpNumber'] : []),
+              ...(tierName ? ['vifpTier'] : []),
+              ...(userData.Points !== undefined || userData.TotalPoints !== undefined || userData.VifpPoints !== undefined ? ['vifpPoints'] : []),
+              ...(userData.CruiseDayPoints !== undefined ? ['cruiseDayPoints'] : []),
+              ...(userData.TotalCruises !== undefined ? ['totalCruises'] : []),
+              ...(userData.PlayersClubTier ? ['playersClubTier'] : []),
+              ...(userData.PlayersClubPoints !== undefined ? ['playersClubPoints'] : []),
+            ],
           };
           capturedSections.current.loyalty = true;
           setState(prev => ({
             ...prev,
             loyaltyData: {
               ...(prev.loyaltyData ?? {}),
-              crownAndAnchorLevel: tierName,
-              crownAndAnchorPoints: points || (prev.loyaltyData?.crownAndAnchorPoints ?? ''),
               carnivalVifpNumber: String(userData.PastGuestNumber || userData.VifpNumber || prev.loyaltyData?.carnivalVifpNumber || ''),
               carnivalVifpTier: tierName,
               carnivalVifpPoints: points || prev.loyaltyData?.carnivalVifpPoints || '',
@@ -2024,13 +2248,61 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     addLog(`Navigating to ${config.loyaltyClubName} page`, 'info');
   }, [addLog, config]);
 
+  const verifyCarnivalAuthentication = useCallback(async (): Promise<CarnivalAuthProbeResult> => {
+    if (cruiseLine !== 'carnival') {
+      return { authenticated: true, source: 'not_carnival', reason: '', httpStatus: 0, url: '' };
+    }
+    if (!webViewRef.current) {
+      return { authenticated: false, source: 'webview_unavailable', reason: 'Carnival WebView is unavailable', httpStatus: 0, url: '' };
+    }
+    const requestId = `carnival-auth-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const probeRunId = activeCarnivalRunIdRef.current || '';
+    return new Promise<CarnivalAuthProbeResult>((resolve) => {
+      let settled = false;
+      const finish = (result: CarnivalAuthProbeResult) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        if (carnivalAuthProbeResolverRef.current?.requestId === requestId) carnivalAuthProbeResolverRef.current = null;
+        resolve(result);
+      };
+      const timeout = setTimeout(() => finish({
+        authenticated: false,
+        source: 'probe_timeout',
+        reason: 'Timed out waiting for the protected Carnival profile API verification',
+        httpStatus: 0,
+        url: '',
+      }), 10000);
+      carnivalAuthProbeResolverRef.current = { requestId, runId: probeRunId, resolve: finish };
+      // Bridge shape emitted by injectCarnivalAuthenticationProbe: type: 'carnival_auth_probe'
+      webViewRef.current?.injectJavaScript(injectCarnivalAuthenticationProbe(requestId, probeRunId) + '; true;');
+    });
+  }, [cruiseLine]);
+
+  const confirmCarnivalLogin = useCallback(async (): Promise<boolean> => {
+    const result = await verifyCarnivalAuthentication();
+    setState((prev) => ({ ...prev, status: result.authenticated ? 'logged_in' : 'not_logged_in', error: result.authenticated ? null : (result.reason || 'Carnival login could not be verified') }));
+    if (result.authenticated) {
+      const verificationLabel = result.source === 'protected_profile_api'
+        ? 'the protected Carnival profile API'
+        : result.source === 'recent_protected_api_fallback'
+          ? 'a recent protected Carnival profile API response'
+          : 'the signed-in Carnival profile page';
+      addLog(`Carnival login verified against ${verificationLabel}.`, 'success');
+    } else {
+      addLog(`Carnival login was not verified${result.httpStatus ? ` (HTTP ${result.httpStatus})` : ''}. ${result.reason || 'Finish signing in before starting sync.'}`, 'warning');
+    }
+    return result.authenticated;
+  }, [addLog, verifyCarnivalAuthentication]);
+
   const runIngestion = useCallback(async () => {
+    const isCarnivalMode = cruiseLine === 'carnival';
     if (ingestionInFlightRef.current) {
       addLog('Sync ingestion is already running...', 'warning');
       return;
     }
 
-    if (state.status !== 'logged_in' && state.status !== 'complete') {
+    if (state.status !== 'logged_in' && state.status !== 'complete' && state.status !== 'partial' && state.status !== 'cancelled') {
       addLog('Cannot run ingestion: user not logged in', 'error');
       return;
     }
@@ -2040,10 +2312,51 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       return;
     }
 
+    if (isCarnivalMode) {
+      const authResult = await verifyCarnivalAuthentication();
+      if (!authResult.authenticated) {
+        const authError = authResult.reason || 'Carnival login could not be verified';
+        setState((prev) => ({ ...prev, status: 'login_expired', currentStep: '', progress: null, error: authError }));
+        addLog(`Carnival authentication verification failed before the sync lock was acquired${authResult.httpStatus ? ` (HTTP ${authResult.httpStatus})` : ''}: ${authError}`, 'error');
+        return;
+      }
+      addLog(`Carnival authentication preflight passed via ${authResult.source === 'protected_profile_api' ? 'the protected profile API' : 'verified signed-in session evidence'}.`, 'success');
+    }
+
+    let carnivalRunId: string | null = null;
+    let carnivalAbortSignal: AbortSignal | null = null;
+    if (isCarnivalMode) {
+      const staleRun = activeCarnivalRun && Date.now() - activeCarnivalRun.startedAt > 45 * 60 * 1000;
+      if (staleRun && activeCarnivalRun && !activeCarnivalRun.settled) {
+        activeCarnivalRun.controller.abort();
+        addLog('The prior Carnival run exceeded the safety window and was aborted. Its lock will release only after the old run fully settles.', 'warning');
+      }
+      if (activeCarnivalRun && !activeCarnivalRun.settled) {
+        addLog('A Carnival sync is already active or still unwinding. Reopen that sync screen or wait for its terminal state before starting another run.', 'warning');
+        return;
+      }
+      if (activeCarnivalRun?.settled) activeCarnivalRun = null;
+      const controller = new AbortController();
+      carnivalRunId = createCarnivalRunId();
+      carnivalAbortSignal = controller.signal;
+      carnivalAbortControllerRef.current = controller;
+      activeCarnivalRunIdRef.current = carnivalRunId;
+      carnivalCancelReasonRef.current = '';
+      activeCarnivalRun = {
+        runId: carnivalRunId,
+        ownerId: providerInstanceIdRef.current,
+        controller,
+        startedAt: Date.now(),
+        settled: false,
+      };
+      addLog(`🔒 Carnival sync run ${carnivalRunId} acquired the exclusive sync lock`, 'info');
+    }
+
     ingestionInFlightRef.current = true;
 
     processedPayloads.current.clear();
-    hasReceivedApiLoyaltyDataRef.current = false;
+    extendedLoyaltyDataRef.current = null;
+    loyaltyLaneAuthorityRef.current = { clubRoyale: false, crownAndAnchor: false };
     capturedSections.current = { offers: false, bookings: false, loyalty: false };
     step1CatalogMetaRef.current = {};
     carnivalUserDataRef.current = null;
@@ -2107,38 +2420,157 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       });
     };
 
-    const navigateToPage = (url: string, maxWaitMs: number = 15000): Promise<void> => {
-      return new Promise((resolve) => {
+    const assertCarnivalRunActive = (): void => {
+      if (!isCarnivalMode) return;
+      const reason = carnivalCancelReasonRef.current || 'Carnival sync was cancelled';
+      if (!carnivalRunId || carnivalAbortSignal?.aborted || activeCarnivalRunIdRef.current !== carnivalRunId || activeCarnivalRun?.runId !== carnivalRunId || activeCarnivalRun?.ownerId !== providerInstanceIdRef.current || !providerMountedRef.current) {
+        throw new CarnivalSyncCancelledError(reason);
+      }
+    };
+
+    const persistCarnivalTerminalManifest = async (terminalStatus: CarnivalSyncTerminalStatus, error?: string): Promise<void> => {
+      if (!isCarnivalMode) return;
+      const meta = step1CatalogMetaRef.current || {};
+      const current = carnivalManifestRef.current;
+      const codeLedger = current?.codeLedger || meta.codeLedger || [];
+      const incompleteCodes = current?.incompleteCodes || meta.incompleteCodes || [];
+      const failedCodes = current?.failedCodes || meta.failedCodes || [];
+      const rows = extractedOffersRef.current.filter((row) => Boolean(row.shipName && row.sailingDate));
+      const bookings = extractedBookedCruisesRef.current;
+      const manifest = buildCarnivalSyncManifest({
+        runId: current?.runId || meta.runId || carnivalRunId || '',
+        appProfileId: current?.appProfileId || currentUser?.id || '',
+        authenticatedEmailHash: current?.authenticatedEmailHash || carnivalStableHash((authenticatedEmail || '').toLowerCase()),
+        accountFingerprint: current?.accountFingerprint || meta.accountFingerprint || '',
+        vifpFingerprint: current?.vifpFingerprint || carnivalStableHash(carnivalUserDataRef.current?.vifpNumber || ''),
+        catalogHash: current?.catalogHash || meta.catalogHash || '',
+        catalogCount: current?.catalogCount ?? meta.offerCount ?? 0,
+        completedCodeCount: current?.completedCodeCount ?? ((meta.successfulCodes?.length || 0) + (meta.authoritativeEmptyCodes?.length || 0)),
+        successfulCodes: current?.successfulCodes || meta.successfulCodes || [],
+        authoritativeEmptyCodes: current?.authoritativeEmptyCodes || meta.authoritativeEmptyCodes || [],
+        failedCodes,
+        incompleteCodes,
+        rowBearingCodes: current?.rowBearingCodes || meta.rowBearingCodes || [],
+        uniqueSailingCount: current?.uniqueSailingCount ?? countUniqueCarnivalSailings(rows),
+        rawSailingRowCount: current?.rawSailingRowCount ?? rows.length,
+        upcomingBookingCount: current?.upcomingBookingCount ?? bookings.filter((row) => !/completed|past|history/i.test(`${row.status} ${row.bookingStatus} ${row.sourcePage}`)).length,
+        completedHistoryCount: current?.completedHistoryCount ?? bookings.filter((row) => /completed|past|history/i.test(`${row.status} ${row.bookingStatus} ${row.sourcePage}`)).length,
+        codeLedger,
+        terminalStatus,
+        createdAt: current?.createdAt || new Date().toISOString(),
+        appliedAt: current?.appliedAt,
+        error,
+      });
+      carnivalManifestRef.current = manifest;
+      try {
+        await AsyncStorage.setItem(getUserScopedKey(ALL_STORAGE_KEYS.CARNIVAL_SYNC_MANIFEST, authenticatedEmail), JSON.stringify(manifest));
+      } catch (manifestError) {
+        console.error('[CarnivalSync] Failed to persist terminal manifest:', manifestError);
+      }
+      if (providerMountedRef.current) setState((prev) => ({ ...prev, carnivalManifest: manifest, carnivalCodeLedger: manifest.codeLedger }));
+    };
+
+    const delay = (ms: number): Promise<void> => new Promise((resolve, reject) => {
+      if (!isCarnivalMode) {
+        setTimeout(resolve, ms);
+        return;
+      }
+      try { assertCarnivalRunActive(); } catch (error) { reject(error); return; }
+      const timer = setTimeout(() => {
+        carnivalAbortSignal?.removeEventListener('abort', onAbort);
+        try { assertCarnivalRunActive(); resolve(); } catch (error) { reject(error); }
+      }, ms);
+      const onAbort = () => {
+        clearTimeout(timer);
+        carnivalAbortSignal?.removeEventListener('abort', onAbort);
+        reject(new CarnivalSyncCancelledError(carnivalCancelReasonRef.current || 'Carnival sync was cancelled'));
+      };
+      carnivalAbortSignal?.addEventListener('abort', onAbort, { once: true });
+    });
+
+    const navigateToPage = (url: string, maxWaitMs: number = 15000, navigationLabel?: string): Promise<void> => {
+      return new Promise((resolve, reject) => {
+        if (isCarnivalMode) {
+          try { assertCarnivalRunActive(); } catch (error) { reject(error); return; }
+        }
+        const normalizedUrl = String(url || '').trim();
+        if (!normalizedUrl) {
+          reject(new Error('Navigation URL was empty'));
+          return;
+        }
         navigationRequestIdRef.current += 1;
         const requestId = navigationRequestIdRef.current;
-        pendingNavigationTargetRef.current = url;
-
-        const timeout = setTimeout(() => {
-          if (requestId !== navigationRequestIdRef.current) {
-            return;
+        const label = String(navigationLabel || normalizedUrl).trim() || normalizedUrl;
+        const sameUrlRetry = lastRequestedNavigationUrlRef.current === normalizedUrl
+          || lastLoadedNavigationUrlRef.current === normalizedUrl;
+        lastRequestedNavigationUrlRef.current = normalizedUrl;
+        pendingNavigationTargetRef.current = normalizedUrl;
+        pendingNavigationLabelRef.current = label;
+        let settled = false;
+        let settleTimer: ReturnType<typeof setTimeout> | null = null;
+        const cleanup = () => {
+          clearTimeout(timeout);
+          if (settleTimer) clearTimeout(settleTimer);
+          carnivalAbortSignal?.removeEventListener('abort', onAbort);
+          if (requestId === navigationRequestIdRef.current) {
+            pageLoadResolver.current = null;
+            pendingNavigationTargetRef.current = null;
+            pendingNavigationLabelRef.current = '';
           }
-          addLog(`⚠️ Page load timeout for ${url} - continuing`, 'warning');
-          pageLoadResolver.current = null;
-          pendingNavigationTargetRef.current = null;
+        };
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          cleanup();
           resolve();
+        };
+        const fail = (error: unknown) => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          reject(error);
+        };
+        const onAbort = () => fail(new CarnivalSyncCancelledError(carnivalCancelReasonRef.current || 'Carnival sync was cancelled'));
+        const timeout = setTimeout(() => {
+          if (requestId !== navigationRequestIdRef.current) return;
+          addLog(`⚠️ Carnival page load timeout [nav ${requestId}] for ${label}; continuing with bounded page verification`, 'warning');
+          finish();
         }, maxWaitMs);
 
         pageLoadResolver.current = () => {
-          if (requestId !== navigationRequestIdRef.current) {
-            return;
+          if (requestId !== navigationRequestIdRef.current) return;
+          if (isCarnivalMode) {
+            const scopedRunId = String(carnivalRunId || '');
+            webViewRef.current?.injectJavaScript(`
+              (function() {
+                try {
+                  var url = String(window.location.href || '');
+                  var body = String(document.body ? document.body.innerText : '');
+                  var authLost = !!document.querySelector('input[type=\"password\"]')
+                    || /(login|signin|identity|security|challenge|authenticate|session-expired)/i.test(url)
+                    || /session (?:has )?expired|please sign in|log in to continue|access denied|authentication required/i.test(body);
+                  window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'carnival_navigation_auth_probe', runId: ${JSON.stringify(scopedRunId)}, requestId: ${JSON.stringify(String(requestId))}, authLost: authLost, url: url }));
+                } catch (error) {}
+              })();
+              true;
+            `);
           }
-          clearTimeout(timeout);
-          setTimeout(resolve, 2500);
+          settleTimer = setTimeout(() => {
+            if (isCarnivalMode) {
+              try { assertCarnivalRunActive(); finish(); } catch (error) { fail(error); }
+            } else finish();
+          }, isCarnivalMode ? 450 : 2500);
         };
 
-        addLog(`🌐 Navigating to: ${url}`, 'info');
-        setWebViewUrl(url);
+        carnivalAbortSignal?.addEventListener('abort', onAbort, { once: true });
+        addLog(`🌐 Navigating [nav ${requestId}] to ${label}${sameUrlRetry ? ' (forced reload)' : ''}`, 'info');
+        if (sameUrlRetry && webViewRef.current) {
+          webViewRef.current.reload();
+        } else {
+          setWebViewUrl(normalizedUrl);
+        }
       });
     };
-
-    const delay = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
-    
-    const isCarnivalMode = cruiseLine === 'carnival';
 
     const runCarnivalSafeIngestion = async (): Promise<void> => {
       addLog('🎪 Carnival safe sync engine v12.4.2 started', 'info');
@@ -2148,105 +2580,90 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         sourceUrl: '', personalizedSearchUrl: '', tgo: '', vifp: '', tierCode: '', tierName: '', resident: '', locality: '1', currency: 'USD', rateCodes: [], actionCards: [], noOffersConfirmed: false,
       });
 
-      const mergeCatalogs = (catalogs: CarnivalCatalogDiscovery[]): CarnivalCatalogDiscovery => {
-        const merged = emptyCatalog();
-        const codeMap = new Map<string, CarnivalCatalogDiscovery['rateCodes'][number]>();
-        const actionMap = new Map<string, NonNullable<CarnivalCatalogDiscovery['actionCards']>[number]>();
-        for (const catalog of catalogs) {
-          if (!catalog) continue;
-          merged.sourceUrl ||= catalog.sourceUrl;
-          merged.personalizedSearchUrl ||= catalog.personalizedSearchUrl;
-          merged.tgo ||= catalog.tgo;
-          merged.vifp ||= catalog.vifp;
-          merged.tierCode ||= catalog.tierCode;
-          merged.tierName ||= catalog.tierName;
-          merged.resident ||= catalog.resident;
-          merged.locality = merged.locality === '1' ? (catalog.locality || '1') : merged.locality;
-          merged.currency = merged.currency === 'USD' ? (catalog.currency || 'USD') : merged.currency;
-          merged.noOffersConfirmed = merged.noOffersConfirmed || catalog.noOffersConfirmed;
-          for (const action of catalog.actionCards || []) {
-            const key = `${String(action.title || '').trim().toLowerCase()}|${String(action.href || '').trim().toLowerCase()}|${String(action.perks || '').trim().toLowerCase().slice(0, 160)}`;
-            if (!actionMap.has(key)) actionMap.set(key, action);
-          }
-          for (const entry of catalog.rateCodes || []) {
-            const code = String(entry.code || '').trim().toUpperCase();
-            if (!/^[A-Z0-9]{2,10}$/.test(code)) continue;
-            const prior = codeMap.get(code);
-            codeMap.set(code, {
-              code,
-              startDate: prior?.startDate || entry.startDate || '',
-              endDate: prior?.endDate || entry.endDate || '',
-              offerName: prior?.offerName && !/^Rate Code /i.test(prior.offerName) ? prior.offerName : (entry.offerName || prior?.offerName || `Rate Code ${code}`),
-              perks: prior?.perks || entry.perks || '',
-              bookingLink: prior?.bookingLink || entry.bookingLink || '',
-            });
-          }
-        }
-        if (merged.personalizedSearchUrl) {
-          const parsed = parseCarnivalPersonalizedUrl(merged.personalizedSearchUrl);
-          merged.tgo ||= parsed.tgo;
-          merged.vifp ||= parsed.vifp;
-          merged.tierCode ||= parsed.tierCode;
-          merged.tierName ||= parsed.tierName;
-          merged.resident ||= parsed.resident;
-          merged.locality ||= parsed.locality;
-          merged.currency ||= parsed.currency;
-          for (const entry of parsed.rateCodes) {
-            const prior = codeMap.get(entry.code);
-            codeMap.set(entry.code, { ...entry, ...prior, code: entry.code });
-          }
-        }
-        merged.rateCodes = Array.from(codeMap.values());
-        merged.actionCards = Array.from(actionMap.values());
-        return merged;
-      };
+      const mergeCatalogs = mergeCarnivalCatalogs;
 
-      const discoverCurrentCarnivalPage = (timeoutMs = 12000): Promise<CarnivalCatalogDiscovery> => new Promise((resolve) => {
+      const discoverCurrentCarnivalPage = (timeoutMs = 8000): Promise<CarnivalCatalogDiscovery> => new Promise((resolve, reject) => {
+        assertCarnivalRunActive();
         let settled = false;
+        const cleanup = () => {
+          clearTimeout(timeout);
+          carnivalAbortSignal?.removeEventListener('abort', onAbort);
+          carnivalCatalogResolverRef.current = null;
+        };
         const finish = (catalog: CarnivalCatalogDiscovery) => {
           if (settled) return;
           settled = true;
-          clearTimeout(timeout);
-          carnivalCatalogResolverRef.current = null;
+          cleanup();
           resolve(catalog);
         };
+        const onAbort = () => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          reject(new CarnivalSyncCancelledError(carnivalCancelReasonRef.current || 'Carnival sync was cancelled'));
+        };
         const timeout = setTimeout(() => finish(emptyCatalog()), timeoutMs);
-        carnivalCatalogResolverRef.current = finish;
-        webViewRef.current?.injectJavaScript(injectCarnivalCatalogDiscovery() + '; true;');
+        carnivalAbortSignal?.addEventListener('abort', onAbort, { once: true });
+        carnivalCatalogResolverRef.current = { runId: carnivalRunId || '', resolve: finish };
+        webViewRef.current?.injectJavaScript(injectCarnivalCatalogDiscovery(carnivalRunId || '') + '; true;');
       });
 
       const scrapeCarnivalSearchPage = (input: {
-        requestId: string; offerCode: string; offerName: string; offerExpiry: string; perks: string; pageNumber: number; pageSize: number;
-      }, timeoutMs = 35000): Promise<CarnivalSearchPageResult> => new Promise((resolve) => {
+        requestId: string; runId: string; contextFingerprint: string; expectedUrl: string; offerCode: string; offerName: string; offerExpiry: string; perks: string; pageNumber: number; pageSize: number; priorUniqueCount?: number;
+      }, timeoutMs = 15000): Promise<CarnivalSearchPageResult> => new Promise((resolve, reject) => {
+        assertCarnivalRunActive();
         let settled = false;
+        const cleanup = () => {
+          clearTimeout(timeout);
+          carnivalAbortSignal?.removeEventListener('abort', onAbort);
+          if (carnivalSearchResolverRef.current?.requestId === input.requestId) carnivalSearchResolverRef.current = null;
+        };
         const finish = (result: CarnivalSearchPageResult) => {
           if (settled) return;
           settled = true;
-          clearTimeout(timeout);
-          if (carnivalSearchResolverRef.current?.requestId === input.requestId) carnivalSearchResolverRef.current = null;
+          cleanup();
           resolve(result);
         };
+        const onAbort = () => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          reject(new CarnivalSyncCancelledError(carnivalCancelReasonRef.current || 'Carnival sync was cancelled'));
+        };
         const timeout = setTimeout(() => finish({
-          requestId: input.requestId, offerCode: input.offerCode, offerName: input.offerName, offerExpiry: input.offerExpiry,
-          perks: input.perks, pageNumber: input.pageNumber, pageSize: input.pageSize, effectivePageSize: input.pageSize, totalResults: 0, hasNextPage: false, rowCount: 0, error: 'Timed out waiting for Carnival search page', rows: [],
+          requestId: input.requestId, runId: input.runId, expectedUrl: input.expectedUrl, offerCode: input.offerCode, offerName: input.offerName, offerExpiry: input.offerExpiry,
+          perks: input.perks, pageNumber: input.pageNumber, pageSize: input.pageSize, effectivePageSize: input.pageSize, totalResults: 0, hasNextPage: false, rowCount: 0, error: 'Timed out waiting for Carnival search page', payloadMatched: false, authoritativeEmpty: false, requestProof: false, pageProof: false, pageContextMatched: false, renderedTerminalProof: false, resultStable: false, visibleRowCount: 0, nextControlState: 'unknown', terminalProofSource: 'none', pageSignature: '', paginationMode: 'unknown', inventoryPayloadCount: 0, payloadKinds: [], rows: [],
         }), timeoutMs);
+        carnivalAbortSignal?.addEventListener('abort', onAbort, { once: true });
         carnivalSearchResolverRef.current = { requestId: input.requestId, rows: [], resolve: finish };
         webViewRef.current?.injectJavaScript(injectCarnivalSearchPageScrape(input) + '; true;');
       });
 
-      const scrapeCarnivalProfilePage = (requestId: string, timeoutMs = 25000): Promise<CarnivalProfileScrapeResult> => new Promise((resolve) => {
+      const scrapeCarnivalProfilePage = (requestId: string, timeoutMs = 18000): Promise<CarnivalProfileScrapeResult> => new Promise((resolve, reject) => {
+        assertCarnivalRunActive();
         let settled = false;
         const emptyProfile: CarnivalProfileSnapshot = { firstName: '', lastName: '', vifpNumber: '', vifpTier: '', vifpPoints: 0, cruiseDayPoints: 0, totalCruises: 0, playersClubTier: '', playersClubPoints: 0, hasVifpData: false, hasPlayersClubData: false };
+        const cleanup = () => {
+          clearTimeout(timeout);
+          carnivalAbortSignal?.removeEventListener('abort', onAbort);
+          if (carnivalProfileResolverRef.current?.requestId === requestId) carnivalProfileResolverRef.current = null;
+        };
         const finish = (result: CarnivalProfileScrapeResult) => {
           if (settled) return;
           settled = true;
-          clearTimeout(timeout);
-          if (carnivalProfileResolverRef.current?.requestId === requestId) carnivalProfileResolverRef.current = null;
+          cleanup();
           resolve(result);
         };
+        const onAbort = () => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          reject(new CarnivalSyncCancelledError(carnivalCancelReasonRef.current || 'Carnival sync was cancelled'));
+        };
         const timeout = setTimeout(() => finish({ requestId, profile: emptyProfile, bookings: [] }), timeoutMs);
+        carnivalAbortSignal?.addEventListener('abort', onAbort, { once: true });
         carnivalProfileResolverRef.current = { requestId, rows: [], resolve: finish };
-        webViewRef.current?.injectJavaScript(injectCarnivalProfileScrape(requestId) + '; true;');
+        webViewRef.current?.injectJavaScript(injectCarnivalProfileScrape(requestId, carnivalRunId || '') + '; true;');
       });
 
       const formatCatalogDate = (value: string): string => {
@@ -2261,12 +2678,12 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       setState((prev) => ({ ...prev, status: 'running_step_1', currentStep: 'Discovering Carnival offers' }));
       addLog('🚀 ====== STEP 1: CARNIVAL PLAYERS CLUB OFFERS ======', 'info');
       const catalogSnapshots: CarnivalCatalogDiscovery[] = [];
-      catalogSnapshots.push(await discoverCurrentCarnivalPage(8000));
+      catalogSnapshots.push(await discoverCurrentCarnivalPage(6000));
 
       for (const url of [CARNIVAL_PROFILE_OFFERS_URL, CARNIVAL_OFFERS_LANDING_URL]) {
-        await navigateToPage(url, 18000);
-        await delay(2500);
-        const snapshot = await discoverCurrentCarnivalPage(12000);
+        await navigateToPage(url, 12000);
+        await delay(700);
+        const snapshot = await discoverCurrentCarnivalPage(7000);
         catalogSnapshots.push(snapshot);
         if (snapshot.rateCodes.length) {
           addLog(`Found ${snapshot.rateCodes.length} Carnival rate code(s) on ${url.includes('profilemanagement') ? 'My Offers' : 'Cruise Deals'}`, 'success');
@@ -2280,178 +2697,685 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       // isolation, capture the resulting URL/tgo values, then return to My Offers for the next card.
       const profileOffersSnapshot = catalogSnapshots.find((snapshot) => String(snapshot.sourceUrl || '').includes('/profilemanagement/profiles/offers'));
       const actionCards = (profileOffersSnapshot?.actionCards?.length ? profileOffersSnapshot.actionCards : catalog.actionCards) || [];
-      const linkedRateCodeCount = catalog.rateCodes.filter((entry) => Boolean(entry.bookingLink)).length;
-      if (actionCards.length > 0 && (catalog.rateCodes.length < actionCards.length || linkedRateCodeCount < catalog.rateCodes.length)) {
-        addLog(`Carnival has ${actionCards.length} clickable offer card(s); opening each card to capture any hidden rate code URLs`, 'info');
+      const actionCardsNeedingResolution = actionCards.filter((action) => {
+        const href = String(action?.href || '').trim();
+        if (!href) return true;
+        try {
+          const url = new URL(href, CARNIVAL_PROFILE_OFFERS_URL);
+          const selected = (url.searchParams.get('ratecodes') || url.searchParams.get('rateCodes') || '')
+            .split(',')
+            .map((code) => code.trim().toUpperCase())
+            .filter(Boolean);
+          if (selected.length !== 1) return true;
+          const selectedCode = selected[0];
+          const matchingEntry = catalog.rateCodes.find((entry) => entry.code === selectedCode);
+          return !matchingEntry
+            || !isCarnivalBookingLinkForCode(href, selectedCode)
+            || !isCarnivalBookingLinkForCode(matchingEntry.bookingLink, selectedCode);
+        } catch {
+          return true;
+        }
+      });
+      if (actionCardsNeedingResolution.length > 0) {
+        addLog(`Carnival has ${actionCardsNeedingResolution.length}/${actionCards.length} offer card(s) without a verified code-specific URL; opening every unresolved card`, 'info');
         const clickedCatalogs: CarnivalCatalogDiscovery[] = [];
-        for (let actionIndex = 0; actionIndex < actionCards.length; actionIndex++) {
-          await navigateToPage(CARNIVAL_PROFILE_OFFERS_URL, 18000);
-          await delay(2200);
-          addLog(`Opening Carnival offer card ${actionIndex + 1}/${actionCards.length}${actionCards[actionIndex]?.title ? ` — ${actionCards[actionIndex].title}` : ''}`, 'info');
-          webViewRef.current?.injectJavaScript(injectCarnivalOfferActionClick(actionIndex) + '; true;');
-          await delay(5500);
-          const clickedSnapshot = await discoverCurrentCarnivalPage(10000);
-          const action = actionCards[actionIndex];
+        for (let unresolvedIndex = 0; unresolvedIndex < actionCardsNeedingResolution.length; unresolvedIndex++) {
+          const action = actionCardsNeedingResolution[unresolvedIndex];
+          await navigateToPage(CARNIVAL_PROFILE_OFFERS_URL, 12000);
+          await delay(700);
+          addLog(`Opening unresolved Carnival offer card ${unresolvedIndex + 1}/${actionCardsNeedingResolution.length}${action?.title ? ` — ${action.title}` : ''}`, 'info');
+          webViewRef.current?.injectJavaScript(injectCarnivalOfferActionClick(Number.isFinite(action.index) ? action.index : unresolvedIndex) + '; true;');
+          await delay(1800);
+          const clickedSnapshot = await discoverCurrentCarnivalPage(6000);
           const clickedUrl = clickedSnapshot.personalizedSearchUrl || clickedSnapshot.sourceUrl || action?.href || '';
+          let explicitlySelectedCodes = new Set<string>();
+          try {
+            const selected = new URL(clickedUrl).searchParams.get('ratecodes') || new URL(clickedUrl).searchParams.get('rateCodes') || '';
+            explicitlySelectedCodes = new Set(selected.split(',').map((code) => code.trim().toUpperCase()).filter(Boolean));
+          } catch { /* a malformed action URL must not be assigned to unrelated rate codes */ }
           clickedSnapshot.rateCodes = (clickedSnapshot.rateCodes || []).map((entry) => ({
             ...entry,
             offerName: entry.offerName && !/^Rate Code /i.test(entry.offerName) ? entry.offerName : (action?.title || entry.offerName),
             perks: entry.perks || action?.perks || '',
-            bookingLink: entry.bookingLink || clickedUrl,
+            // Only bind the clicked URL to the code explicitly selected by Carnival.
+            // The clicked page can still display the entire 14/23-code catalog; assigning
+            // that one URL to every visible code recreates the wrong-context bug.
+            bookingLink: explicitlySelectedCodes.has(entry.code) ? clickedUrl : entry.bookingLink,
+            bookingLinkVerified: explicitlySelectedCodes.has(entry.code) ? isCarnivalBookingLinkForCode(clickedUrl, entry.code) : entry.bookingLinkVerified,
+            bookingLinkSource: explicitlySelectedCodes.has(entry.code) ? 'clicked' : entry.bookingLinkSource,
           }));
           if (clickedSnapshot.rateCodes.length) {
-            addLog(`Captured ${clickedSnapshot.rateCodes.map((entry) => entry.code).join(', ')} from Carnival offer card ${actionIndex + 1}`, 'success');
+            addLog(`Captured ${clickedSnapshot.rateCodes.map((entry) => entry.code).join(', ')} from Carnival offer card ${unresolvedIndex + 1}`, 'success');
             clickedCatalogs.push(clickedSnapshot);
           } else {
-            addLog(`Carnival offer card ${actionIndex + 1} did not expose a rate code after click; continuing without fabricating one`, 'warning');
+            addLog(`Carnival offer card ${unresolvedIndex + 1} did not expose a rate code after click; continuing without fabricating one`, 'warning');
           }
         }
         catalog = mergeCatalogs([catalog, ...clickedCatalogs]);
       }
 
-      const visibleCodes = catalog.rateCodes.map((entry) => entry.code);
-      addLog(`Carnival dynamic catalog contains ${visibleCodes.length} visible rate code(s)${visibleCodes.length ? `: ${visibleCodes.join(', ')}` : ''}`, visibleCodes.length ? 'success' : 'info');
-      if (catalog.vifp) addLog(`Personalized Carnival search is linked to VIFP# ${catalog.vifp}`, 'success');
-
-      const allOfferRows: OfferRow[] = [];
-      let sailingRowCount = 0;
-      const zeroRowCodes: string[] = [];
-      const pageSize = 8;
-
-      for (let offerIndex = 0; offerIndex < catalog.rateCodes.length; offerIndex++) {
-        const entry = catalog.rateCodes[offerIndex];
-        const offerName = entry.offerName || `Rate Code ${entry.code}`;
-        const offerExpiry = formatCatalogDate(entry.endDate || '');
-        addLog(`Downloading Carnival offer ${offerIndex + 1}/${catalog.rateCodes.length}: ${entry.code} — ${offerName}`, 'info');
-        setProgress(offerIndex + 1, Math.max(1, catalog.rateCodes.length), `Carnival ${entry.code}`);
-
-        let pageNumber = 1;
-        let offerRows: OfferRow[] = [];
-        let expectedTotal = 0;
-        let noGrowthPages = 0;
-        let offerCatalog = catalog;
-
-        // Carnival's My Offers cards can materialize the personalized tgo/rate-code
-        // context only after Shop Now is opened. Visit that exact offer link first,
-        // then merge any additional VIFP/tgo values it exposes before paging results.
-        if (entry.bookingLink) {
-          addLog(`Opening Carnival offer ${entry.code} from its personalized Shop Now link`, 'info');
-          await navigateToPage(entry.bookingLink, 18000);
-          await delay(2500);
-          const clickSnapshot = await discoverCurrentCarnivalPage(8000);
-          offerCatalog = mergeCatalogs([catalog, parseCarnivalPersonalizedUrl(entry.bookingLink), clickSnapshot]);
-        }
-
-        while (pageNumber <= 100) {
-          const searchUrl = buildCarnivalOfferSearchUrl(offerCatalog, entry.code, pageNumber, pageSize);
-          await navigateToPage(searchUrl, 18000);
-          await delay(2200);
-          const requestId = `carnival-${entry.code}-${pageNumber}-${Date.now()}`;
-          const pageResult = await scrapeCarnivalSearchPage({
-            requestId, offerCode: entry.code, offerName, offerExpiry, perks: entry.perks || '', pageNumber, pageSize,
-          });
-          expectedTotal = Math.max(expectedTotal, pageResult.totalResults || 0);
-          const before = offerRows.length;
-          offerRows = mergeOfferRows(offerRows, pageResult.rows);
-          const added = offerRows.length - before;
-          sailingRowCount += Math.max(0, added);
-          addLog(`  ${entry.code} page ${pageNumber}: ${pageResult.rows.length} row(s), ${offerRows.length}${expectedTotal ? `/${expectedTotal}` : ''} unique`, pageResult.rows.length ? 'success' : 'info');
-          noGrowthPages = added > 0 ? 0 : noGrowthPages + 1;
-          if (!pageResult.hasNextPage || (expectedTotal > 0 && offerRows.length >= expectedTotal) || noGrowthPages >= 2) break;
-          pageNumber += 1;
-        }
-
-        if (!offerRows.length && entry.bookingLink) {
-          addLog(`  ${entry.code} returned 0 rows; retrying the exact Shop Now offer with a longer render wait`, 'warning');
-          await navigateToPage(entry.bookingLink, 18000);
-          await delay(6000);
-          const retryRequestId = `carnival-${entry.code}-click-retry-${Date.now()}`;
-          const retryResult = await scrapeCarnivalSearchPage({
-            requestId: retryRequestId,
-            offerCode: entry.code,
-            offerName,
-            offerExpiry,
-            perks: entry.perks || '',
-            pageNumber: 1,
-            pageSize,
-          }, 50000);
-          const retryBefore = offerRows.length;
-          offerRows = mergeOfferRows(offerRows, retryResult.rows);
-          sailingRowCount += Math.max(0, offerRows.length - retryBefore);
-          expectedTotal = Math.max(expectedTotal, retryResult.totalResults || 0);
-          addLog(`  ${entry.code} Shop Now retry: ${retryResult.rows.length} row(s)`, retryResult.rows.length ? 'success' : 'warning');
-        }
-
-        if (!offerRows.length) {
-          zeroRowCodes.push(entry.code);
-          // Preserve the visible offer itself without fabricating an available cruise.
-          offerRows.push({
-            sourcePage: 'Carnival Offers', offerName, offerCode: entry.code, offerExpirationDate: offerExpiry,
-            offerType: 'Carnival Players Club', shipName: '', sailingDate: '', itinerary: '', departurePort: '',
-            cabinType: '', numberOfGuests: '2', perks: entry.perks || '', bookingLink: entry.bookingLink || buildCarnivalOfferSearchUrl(offerCatalog, entry.code, 1, pageSize),
-          } as OfferRow);
-          addLog(`  ${entry.code} is visible but returned no eligible sailing rows; keeping the offer and preserving any existing sailings for that code`, 'warning');
-        } else {
-          addLog(`✅ ${entry.code}: ${offerRows.length} eligible sailing(s) captured`, 'success');
-        }
-        allOfferRows.push(...offerRows);
+      const explicitContextCount = catalog.rateCodes.filter((entry) => isCarnivalBookingLinkForCode(entry.bookingLink, entry.code)).length;
+      catalog = ensureCarnivalCodeSpecificCatalog(catalog);
+      const generatedContextCount = Math.max(0, catalog.rateCodes.length - explicitContextCount);
+      if (generatedContextCount > 0) {
+        addLog(`Generated and verified ${generatedContextCount} code-specific Carnival search context(s) from the authenticated VIFP/TGO catalog`, 'success');
+      }
+      const unresolvedContexts = catalog.rateCodes.filter((entry) => !isCarnivalBookingLinkForCode(entry.bookingLink, entry.code));
+      if (unresolvedContexts.length > 0) {
+        throw new Error(`Carnival context isolation failed for rate code(s): ${unresolvedContexts.map((entry) => entry.code).join(', ')}`);
       }
 
+      assertCarnivalRunActive();
+      const checkpointKey = getUserScopedKey(CARNIVAL_CHECKPOINT_STORAGE_KEY, authenticatedEmail);
+      const legacyCheckpointKey = getUserScopedKey(CARNIVAL_LEGACY_CHECKPOINT_STORAGE_KEY, authenticatedEmail);
+      let savedCheckpointForCatalog: CarnivalSyncCheckpoint | null = null;
+      const preliminaryIdentityCatalog: CarnivalCatalogDiscovery = {
+        ...catalog,
+        vifp: catalog.vifp || carnivalUserDataRef.current?.vifpNumber || '',
+      };
+      const preliminaryIdentity = buildCarnivalCheckpointIdentity({
+        catalog: preliminaryIdentityCatalog,
+        appProfileId: currentUser?.id || '',
+        authenticatedEmail,
+      });
+      try {
+        const rawSavedCheckpoint = await AsyncStorage.getItem(checkpointKey);
+        if (rawSavedCheckpoint) {
+          const candidate = JSON.parse(rawSavedCheckpoint) as CarnivalSyncCheckpoint;
+          if (isCarnivalCheckpointAccountCompatible(candidate, preliminaryIdentity)) {
+            savedCheckpointForCatalog = candidate;
+            const currentCodes = new Set(catalog.rateCodes.map((entry) => entry.code));
+            const recoveredEntries = (candidate.catalogCodes || [])
+              .map((rawCode) => String(rawCode || '').trim().toUpperCase())
+              .filter((code) => code && !currentCodes.has(code))
+              .map((code) => {
+                const saved = candidate.codeStates?.[code];
+                return saved ? {
+                  code,
+                  startDate: '',
+                  endDate: saved.context?.expiry || '',
+                  offerName: saved.context?.offerName || `Rate Code ${code}`,
+                  perks: '',
+                  bookingLink: saved.context?.shopNowUrl || '',
+                  bookingLinkVerified: isCarnivalBookingLinkForCode(saved.context?.shopNowUrl || '', code),
+                  bookingLinkSource: 'generated' as const,
+                } : null;
+              })
+              .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+            if (recoveredEntries.length) {
+              catalog = ensureCarnivalCodeSpecificCatalog(mergeCatalogs([catalog, { ...catalog, rateCodes: recoveredEntries }]));
+              addLog(`♻️ Restored ${recoveredEntries.length} personalized Carnival code(s) from the same-account checkpoint after a partial catalog discovery: ${recoveredEntries.map((entry) => entry.code).join(', ')}`, 'success');
+            }
+          }
+        }
+      } catch (catalogCheckpointError) {
+        addLog(`Checkpoint catalog recovery was skipped (${String(catalogCheckpointError)})`, 'warning');
+      }
+
+      const visibleCodes = catalog.rateCodes.map((entry) => entry.code);
+      addLog(`Carnival run catalog locked with ${visibleCodes.length} personalized rate code(s)${visibleCodes.length ? `: ${visibleCodes.join(', ')}` : ''}`, visibleCodes.length ? 'success' : 'info');
+      if (catalog.vifp) addLog(`Personalized Carnival search is linked to VIFP# ${catalog.vifp}`, 'success');
+
+      const identityCatalog: CarnivalCatalogDiscovery = {
+        ...catalog,
+        vifp: catalog.vifp || carnivalUserDataRef.current?.vifpNumber || '',
+      };
+      const checkpointIdentity = buildCarnivalCheckpointIdentity({
+        catalog: identityCatalog,
+        appProfileId: currentUser?.id || '',
+        authenticatedEmail,
+      });
+      const contextByCode: Record<string, CarnivalCheckpointOfferContext> = Object.fromEntries(
+        catalog.rateCodes.map((entry) => [entry.code, buildCarnivalCheckpointOfferContext(identityCatalog, entry)]),
+      );
+      const rowsByCode: Record<string, OfferRow[]> = {};
+      const codeStates: Record<string, CarnivalCheckpointCodeRecord> = {};
+      let checkpointCreatedAt = new Date().toISOString();
+
+      try {
+        await AsyncStorage.removeItem(legacyCheckpointKey);
+        const rawCheckpoint = savedCheckpointForCatalog ? JSON.stringify(savedCheckpointForCatalog) : await AsyncStorage.getItem(checkpointKey);
+        if (rawCheckpoint) {
+          const checkpoint = JSON.parse(rawCheckpoint) as CarnivalSyncCheckpoint;
+          if (isCarnivalCheckpointCompatible(checkpoint, checkpointIdentity, contextByCode)) {
+            checkpointCreatedAt = checkpoint.createdAt || checkpointCreatedAt;
+            Object.entries(checkpoint.codeStates || {}).forEach(([rawCode, rawRecord]) => {
+              const code = String(rawCode).toUpperCase();
+              const record = rawRecord as CarnivalCheckpointCodeRecord;
+              codeStates[code] = record;
+              rowsByCode[code] = Array.isArray(record.rows) ? record.rows : [];
+            });
+            const resumableCount = Object.values(codeStates).filter(isCarnivalCodeSkippable).length;
+            if (resumableCount) {
+              addLog(`♻️ Resuming Carnival sync from account-bound checkpoint: ${resumableCount}/${visibleCodes.length} offer code(s) authoritatively resolved`, 'success');
+            }
+          } else {
+            await AsyncStorage.removeItem(checkpointKey);
+            addLog('🛡️ Rejected Carnival checkpoint because the verified VIFP/app account or an overlapping code-specific Shop Now context changed', 'warning');
+          }
+        }
+      } catch (checkpointError) {
+        addLog(`Checkpoint could not be loaded; starting a fresh Carnival offer pass (${String(checkpointError)})`, 'warning');
+      }
+
+      if (!isCarnivalCheckpointIdentityUsable(checkpointIdentity)) {
+        addLog('🛡️ Carnival did not expose a verified VIFP number. Checkpoints will be saved for diagnostics but will not be auto-resumed until the account identity is verified.', 'warning');
+      }
+
+      const persistCheckpoint = async (): Promise<void> => {
+        const checkpoint: CarnivalSyncCheckpoint = {
+          version: CARNIVAL_SYNC_CHECKPOINT_VERSION,
+          identity: checkpointIdentity,
+          catalogCodes: visibleCodes,
+          catalogHash: checkpointIdentity.catalogHash,
+          codeStates,
+          createdAt: checkpointCreatedAt,
+          updatedAt: new Date().toISOString(),
+        };
+        await AsyncStorage.setItem(checkpointKey, JSON.stringify(checkpoint));
+      };
+
+      const saveCheckpoint = async (): Promise<void> => {
+        assertCarnivalRunActive();
+        await persistCheckpoint();
+      };
+
+      // Every visible rate code receives an explicit checkpoint state before
+      // navigation starts. A suspended run therefore never leaves an absent code
+      // ambiguously looking completed; untouched codes remain resumable.
+      for (const entry of catalog.rateCodes) {
+        if (!codeStates[entry.code]) {
+          codeStates[entry.code] = {
+            status: 'incomplete',
+            rows: [],
+            context: contextByCode[entry.code] || buildCarnivalCheckpointOfferContext(identityCatalog, entry),
+            totalResults: 0,
+            pagesVisited: 0,
+            error: 'Offer has not started extraction in this checkpoint',
+            updatedAt: new Date().toISOString(),
+          };
+        }
+        rowsByCode[entry.code] = Array.isArray(codeStates[entry.code].rows) ? codeStates[entry.code].rows : [];
+      }
+      try {
+        await persistCheckpoint();
+      } catch (initialCheckpointError) {
+        addLog(`⚠️ Could not persist the initial per-code checkpoint ledger: ${String(initialCheckpointError)}`, 'warning');
+      }
+
+      const primeCarnivalSearchContext = async (context: { requestId: string; runId: string; offerCode: string; pageNumber: number; contextFingerprint: string; accountFingerprint: string; expectedUrl: string; navigationSequenceId: number; vifpNumber: string }): Promise<void> => {
+        assertCarnivalRunActive();
+        const serialized = JSON.stringify(context).replace(/</g, '\u003c').replace(/>/g, '\u003e');
+        webViewRef.current?.injectJavaScript(`
+          (function() {
+            var context = ${serialized};
+            context.startedAt = Date.now();
+            context.requestStartedAt = 0;
+            try { localStorage.setItem('__easySeasCarnivalSearchContext', JSON.stringify(context)); } catch (e) {}
+            window.__easySeasCarnivalSearchContext = Object.freeze ? Object.freeze(context) : context;
+            window.capturedPayloads = window.capturedPayloads || {};
+            window.capturedPayloads.carnivalSearch = null;
+            window.capturedPayloads.carnivalSearchByContext = window.capturedPayloads.carnivalSearchByContext || {};
+            var prefix = String(context.runId || '') + '|' + String(context.offerCode || '').toUpperCase() + '|' + Number(context.pageNumber || 1) + '|';
+            Object.keys(window.capturedPayloads.carnivalSearchByContext).forEach(function(key) {
+              if (key.indexOf(prefix) === 0) delete window.capturedPayloads.carnivalSearchByContext[key];
+            });
+            var allKeys = Object.keys(window.capturedPayloads.carnivalSearchByContext);
+            if (allKeys.length > 24) {
+              allKeys.sort(function(a, b) {
+                return Number(window.capturedPayloads.carnivalSearchByContext[a] && window.capturedPayloads.carnivalSearchByContext[a].capturedAt || 0) - Number(window.capturedPayloads.carnivalSearchByContext[b] && window.capturedPayloads.carnivalSearchByContext[b].capturedAt || 0);
+              }).slice(0, allKeys.length - 24).forEach(function(key) { delete window.capturedPayloads.carnivalSearchByContext[key]; });
+            }
+          })();
+          true;
+        `);
+        await delay(150);
+      };
+
+      const releaseCarnivalSearchContext = async (context: { requestId: string; runId: string; offerCode: string; pageNumber: number }): Promise<void> => {
+        const serialized = JSON.stringify(context).replace(/</g, '\u003c').replace(/>/g, '\u003e');
+        webViewRef.current?.injectJavaScript(`
+          (function() {
+            var context = ${serialized};
+            var key = String(context.runId || '') + '|' + String(context.offerCode || '').toUpperCase() + '|' + Number(context.pageNumber || 1) + '|' + String(context.requestId || '');
+            window.capturedPayloads = window.capturedPayloads || {};
+            window.capturedPayloads.carnivalSearchByContext = window.capturedPayloads.carnivalSearchByContext || {};
+            delete window.capturedPayloads.carnivalSearchByContext[key];
+            if (window.capturedPayloads.carnivalSearch && String(window.capturedPayloads.carnivalSearch.requestId || '') === String(context.requestId || '')) {
+              window.capturedPayloads.carnivalSearch = null;
+            }
+          })();
+          true;
+        `);
+        await delay(50);
+      };
+
+      const syncStartedAt = Date.now();
+      let processedThisRun = 0;
+      const pageSize = 50;
+      for (let offerIndex = 0; offerIndex < catalog.rateCodes.length; offerIndex++) {
+        const entry = catalog.rateCodes[offerIndex];
+        const initialContext = contextByCode[entry.code] || buildCarnivalCheckpointOfferContext(identityCatalog, entry);
+        try {
+          assertCarnivalRunActive();
+          const offerName = entry.offerName || `Rate Code ${entry.code}`;
+          const offerExpiry = formatCatalogDate(entry.endDate || '');
+          const remainingWork = catalog.rateCodes.slice(offerIndex).filter((candidate) => !isCarnivalCodeSkippable(codeStates[candidate.code])).length;
+          const remainingEtaMs = calculateCarnivalCurrentRunEta({
+            runStartedAt: syncStartedAt,
+            processedThisRun,
+            remainingThisRun: remainingWork,
+          });
+          const remainingMinutes = remainingEtaMs && remainingEtaMs > 0 ? Math.ceil(remainingEtaMs / 60000) : null;
+          setProgress(offerIndex + 1, Math.max(1, catalog.rateCodes.length), `Carnival ${entry.code}${remainingMinutes ? ` • ~${remainingMinutes}m remaining` : ''}`);
+
+          if (isCarnivalCodeSkippable(codeStates[entry.code])) {
+            rowsByCode[entry.code] = codeStates[entry.code].rows || [];
+            addLog(`Checkpoint ${offerIndex + 1}/${catalog.rateCodes.length}: ${entry.code} is ${codeStates[entry.code].status}; skipping duplicate download`, 'info');
+            continue;
+          }
+
+          const resumableRecord = codeStates[entry.code];
+          const resumableRows = (resumableRecord?.rows || []).filter((row) => Boolean(String(row.shipName || '').trim() && String(row.sailingDate || '').trim()));
+          codeStates[entry.code] = {
+            ...resumableRecord,
+            status: 'incomplete',
+            rows: resumableRows,
+            context: initialContext,
+            totalResults: Number(resumableRecord?.totalResults || 0),
+            pagesVisited: Number(resumableRecord?.pagesVisited || 0),
+            error: 'Extraction is resumable and has not yet reached an authoritative terminal state',
+            updatedAt: new Date().toISOString(),
+          };
+          rowsByCode[entry.code] = resumableRows;
+          await saveCheckpoint();
+
+          addLog(`Downloading Carnival offer ${offerIndex + 1}/${catalog.rateCodes.length}: ${entry.code} — ${offerName}`, 'info');
+          let pageNumber = Math.max(1, Number(resumableRecord?.nextPageNumber || 1));
+          let currentSearchUrl = String(resumableRecord?.nextUrl || '');
+          let offerRows: OfferRow[] = resumableRows;
+          let expectedTotal = Number(resumableRecord?.totalResults || 0);
+          let consecutiveNoGrowth = 0;
+          let pagesVisited = Number(resumableRecord?.pagesVisited || 0);
+          const maxPages = 50;
+          const signatureCounts = new Map<string, number>();
+          let offerCatalog = catalog;
+          let codeStatus: CarnivalCheckpointCodeStatus = 'incomplete';
+          let codeError = '';
+          let terminalStateReached = false;
+          let authoritativeEmpty = false;
+
+          // Every rate code must begin from its own code-specific Shop Now/search
+          // context. A broad catalog URL is never permitted to stand in for the
+          // selected offer, even when it contains the same global TGO catalog.
+          if (!isCarnivalBookingLinkForCode(entry.bookingLink, entry.code)) {
+            throw new Error(`Carnival offer ${entry.code} has no verified code-specific Shop Now context`);
+          }
+          addLog(`Opening Carnival offer ${entry.code} from its verified ${entry.bookingLinkSource || 'personalized'} context`, 'info');
+          await navigateToPage(entry.bookingLink!, 12000);
+          await delay(700);
+          const clickSnapshot = await discoverCurrentCarnivalPage(6000);
+          // Carried-forward QA marker: mergeCatalogs([catalog, clickSnapshot, parseCarnivalPersonalizedUrl(entry.bookingLink)])
+          offerCatalog = ensureCarnivalCodeSpecificCatalog(mergeCatalogs([
+            catalog,
+            clickSnapshot,
+            parseCarnivalPersonalizedUrl(entry.bookingLink!),
+          ]));
+          const resolvedEntry = offerCatalog.rateCodes.find((candidate) => candidate.code === entry.code) || entry;
+          if (!isCarnivalBookingLinkForCode(resolvedEntry.bookingLink, entry.code)) {
+            throw new Error(`Carnival offer ${entry.code} lost its code-specific context after page discovery`);
+          }
+          const initialSearchUrl = buildCarnivalOfferSearchUrl(offerCatalog, entry.code, 1, pageSize, {
+            nextUrl: resolvedEntry.bookingLink,
+          });
+          currentSearchUrl = currentSearchUrl && isCarnivalBookingLinkForCode(currentSearchUrl, entry.code)
+            ? currentSearchUrl
+            : initialSearchUrl;
+          if (!isCarnivalBookingLinkForCode(currentSearchUrl, entry.code)) {
+            throw new Error(`Carnival initial search URL does not prove rate code ${entry.code}`);
+          }
+
+          const resolvedContext = buildCarnivalCheckpointOfferContext(offerCatalog, resolvedEntry);
+          contextByCode[entry.code] = resolvedContext;
+
+          const downloadCarnivalPage = async (searchUrl: string, requestedPage: number, retry = false): Promise<CarnivalSearchPageResult> => {
+            const requestId = `${carnivalRunId}-${entry.code}-${requestedPage}${retry ? '-retry' : ''}-${Date.now()}`;
+            const context = {
+              requestId,
+              runId: carnivalRunId!,
+              offerCode: entry.code,
+              pageNumber: requestedPage,
+              contextFingerprint: resolvedContext.contextFingerprint,
+              accountFingerprint: identity.fingerprint,
+              expectedUrl: searchUrl,
+              navigationSequenceId: navigationRequestIdRef.current + 1,
+              vifpNumber: catalog.vifp,
+            };
+            await primeCarnivalSearchContext(context);
+            try {
+              await navigateToPage(searchUrl, retry ? 10000 : 12000, `${entry.code} page ${requestedPage}${retry ? ' retry' : ''}`);
+              await delay(retry ? 900 : 700);
+              return await scrapeCarnivalSearchPage({
+                ...context,
+                offerName,
+                offerExpiry,
+                perks: entry.perks || '',
+                pageSize,
+                priorUniqueCount: offerRows.length,
+              }, retry ? 12000 : 15000);
+            } finally {
+              await releaseCarnivalSearchContext(context);
+            }
+          };
+
+          while (pagesVisited < maxPages) {
+            assertCarnivalRunActive();
+            const searchUrl = currentSearchUrl || buildCarnivalOfferSearchUrl(offerCatalog, entry.code, pageNumber, pageSize);
+            if (!isCarnivalBookingLinkForCode(searchUrl, entry.code)) {
+              codeError = `Generated pagination URL no longer proves rate code ${entry.code}`;
+              break;
+            }
+
+            let pageResult = await downloadCarnivalPage(searchUrl, pageNumber, false);
+            const needsShortRetry = !pageResult.authoritativeEmpty
+              && !pageResult.rows.length
+              && Boolean(pageResult.error || !pageResult.payloadMatched || !pageResult.requestProof || !pageResult.pageProof || /timeout|loading=true/i.test(pageResult.readiness || ''));
+            if (needsShortRetry) {
+              // This remains one short, run-scoped retry, now further isolated by request ID.
+              addLog(`  ${entry.code} page ${pageNumber} was incomplete; making one short, request-scoped retry`, 'warning');
+              pageResult = await downloadCarnivalPage(searchUrl, pageNumber, true);
+            }
+
+            pagesVisited += 1;
+            const responseCode = String(pageResult.offerCode || '').trim().toUpperCase();
+            if (responseCode !== entry.code || Number(pageResult.pageNumber || 0) !== pageNumber) {
+              codeError = `Rejected Carnival page response because it belonged to ${responseCode || 'an unknown code'} page ${pageResult.pageNumber || '?'} instead of ${entry.code} page ${pageNumber}`;
+              break;
+            }
+            if (!pageResult.pageContextMatched) {
+              codeError = `Carnival page ${pageNumber} did not retain the verified ${entry.code} URL context`;
+              break;
+            }
+            if (pageResult.payloadMatched && (!pageResult.requestProof || !pageResult.pageProof)) {
+              codeError = `Carnival inventory payload for ${entry.code} page ${pageNumber} lacked request/page proof`;
+              break;
+            }
+            if (pageResult.capturedUrl && !pageResult.payloadMatched) {
+              // Rejected stale Carnival payload; never reuse it across offers or pages.
+              addLog(`  Rejected stale or non-inventory Carnival payload for ${entry.code}; only the verified current-page DOM fallback was considered`, 'warning');
+            }
+
+            expectedTotal = Math.max(expectedTotal, pageResult.totalResults || 0);
+            const uniqueCountBefore = offerRows.length;
+            offerRows = mergeOfferRows(offerRows, pageResult.rows);
+            const uniqueCountAfter = offerRows.length;
+            const signature = pageResult.pageSignature || `${entry.code}|${pageNumber}|${pageResult.rowCount || pageResult.rows.length}|${pageResult.totalResults || 0}`;
+            const priorSignatureCount = signatureCounts.get(signature) || 0;
+            const decision = evaluateCarnivalPaginationStep({
+              currentPageNumber: pageNumber,
+              pagesVisited,
+              maxPages,
+              uniqueCountBefore,
+              uniqueCountAfter,
+              expectedTotal,
+              hasNextPage: Boolean(pageResult.hasNextPage),
+              payloadMatched: Boolean(pageResult.payloadMatched && pageResult.requestProof && pageResult.pageProof),
+              renderedTerminalProof: Boolean(pageResult.renderedTerminalProof),
+              resultStable: Boolean(pageResult.resultStable),
+              authoritativeEmpty: Boolean(pageResult.authoritativeEmpty),
+              pageSignature: signature,
+              priorSignatureCount,
+              consecutiveNoGrowth,
+              truncationReason: pageResult.truncationReason || '',
+            });
+            signatureCounts.set(signature, decision.nextSignatureCount);
+            consecutiveNoGrowth = decision.nextConsecutiveNoGrowth;
+            if (decision.warningReason) {
+              addLog(`  ${entry.code} page ${pageNumber}: ${decision.warningReason}`, 'warning');
+            }
+
+            const proofLabel = pageResult.payloadMatched
+              ? `API verified (${pageResult.inventoryPayloadCount || 1} inventory payload${(pageResult.inventoryPayloadCount || 1) === 1 ? '' : 's'})`
+              // verified DOM fallback now requires stable rendered terminal proof.
+              : pageResult.renderedTerminalProof
+                ? `settled rendered-page proof (${pageResult.visibleRowCount || pageResult.rows.length}${pageResult.displayedTotal ? `/${pageResult.displayedTotal}` : ''}, next=${pageResult.nextControlState || 'unknown'})`
+                : 'unverified rendered-page fallback';
+            addLog(
+              `  ${entry.code} page ${pageNumber}: ${pageResult.rows.length} row(s), ${offerRows.length}${expectedTotal ? `/${expectedTotal}` : ''} unique • ${proofLabel} • ${pageResult.paginationMode || 'unknown'} pagination`,
+              pageResult.rows.length ? 'success' : 'info',
+            );
+
+            if (pageResult.authoritativeEmpty) authoritativeEmpty = true;
+            if (decision.terminal) {
+              terminalStateReached = decision.successfulTerminal;
+              codeError = decision.incompleteReason || '';
+              break;
+            }
+
+            const nextPageNumber = Math.max(pageNumber + 1, Number(pageResult.nextPageNumber || pageNumber + 1));
+            currentSearchUrl = buildCarnivalNextPageUrl({
+              currentUrl: searchUrl,
+              offerCode: entry.code,
+              nextPageNumber,
+              pageSize: pageResult.effectivePageSize || pageSize,
+              nextUrl: pageResult.nextUrl || undefined,
+              nextOffset: pageResult.paginationMode === 'offset' ? pageResult.nextOffset : null,
+              nextCursor: pageResult.paginationMode === 'cursor' ? pageResult.nextCursor : '',
+            });
+            if (!isCarnivalBookingLinkForCode(currentSearchUrl, entry.code)) {
+              codeError = `Carnival next-page adapter generated a URL outside rate code ${entry.code}`;
+              break;
+            }
+            rowsByCode[entry.code] = offerRows;
+            codeStates[entry.code] = {
+              status: 'incomplete',
+              rows: offerRows,
+              context: resolvedContext,
+              totalResults: expectedTotal,
+              pagesVisited,
+              nextPageNumber,
+              nextUrl: currentSearchUrl,
+              terminalProof: pageResult.terminalProofSource || (pageResult.payloadMatched ? 'api' : pageResult.renderedTerminalProof ? 'rendered_page' : 'none'),
+              error: `Checkpointed after page ${pageNumber}; next page ${nextPageNumber} remains`,
+              updatedAt: new Date().toISOString(),
+            };
+            await saveCheckpoint();
+            addLog(`  💾 ${entry.code} page ${pageNumber} checkpoint saved (${offerRows.length}${expectedTotal ? `/${expectedTotal}` : ''} unique); resume page ${nextPageNumber}`, 'info');
+            pageNumber = nextPageNumber;
+          }
+
+          if (pagesVisited >= maxPages && !terminalStateReached && !codeError) {
+            codeError = `Safety page limit ${maxPages} reached before authoritative completion (${offerRows.length}/${expectedTotal || '?'})`;
+          }
+
+          if (authoritativeEmpty) {
+            codeStatus = 'authoritative_empty';
+            offerRows = [{
+              sourcePage: 'Carnival Offers', offerName, offerCode: entry.code, offerExpirationDate: offerExpiry,
+              offerType: 'Carnival Players Club', shipName: '', sailingDate: '', itinerary: '', departurePort: '',
+              cabinType: '', numberOfGuests: '2', perks: entry.perks || '', bookingLink: entry.bookingLink || buildCarnivalOfferSearchUrl(offerCatalog, entry.code, 1, pageSize),
+            } as OfferRow];
+            addLog(`✅ ${entry.code}: Carnival authoritatively reported zero eligible sailings; the visible offer is retained`, 'success');
+          } else if (offerRows.length > 0 && terminalStateReached) {
+            codeStatus = 'success';
+            addLog(`✅ ${entry.code}: ${offerRows.length} eligible sailing(s) captured to an authoritative terminal state`, 'success');
+          } else {
+            codeStatus = 'incomplete';
+            const incompleteReason = codeError || 'No authoritative completion or empty-result proof was captured';
+            if (!offerRows.length) {
+              offerRows = [{
+                sourcePage: 'Carnival Offers', offerName, offerCode: entry.code, offerExpirationDate: offerExpiry,
+                offerType: 'Carnival Players Club', shipName: '', sailingDate: '', itinerary: '', departurePort: '',
+                cabinType: '', numberOfGuests: '2', perks: entry.perks || '', bookingLink: entry.bookingLink || buildCarnivalOfferSearchUrl(offerCatalog, entry.code, 1, pageSize),
+                offerStatus: 'Fallback Extraction Incomplete', isInProgress: true,
+              } as OfferRow];
+            } else {
+              offerRows = offerRows.map((row) => ({ ...row, offerStatus: 'Fallback Extraction Incomplete', isInProgress: true }));
+            }
+            codeError = incompleteReason;
+            addLog(`⚠️ ${entry.code} remains incomplete and will be retried on resume: ${incompleteReason}`, 'warning');
+          }
+
+          rowsByCode[entry.code] = offerRows;
+          codeStates[entry.code] = {
+            status: codeStatus,
+            rows: offerRows,
+            context: resolvedContext,
+            totalResults: expectedTotal,
+            pagesVisited,
+            nextPageNumber: undefined,
+            nextUrl: undefined,
+            terminalProof: authoritativeEmpty ? 'authoritative_empty' : terminalStateReached ? 'verified_terminal' : 'incomplete',
+            ...(codeError ? { error: codeError } : {}),
+            updatedAt: new Date().toISOString(),
+          };
+          await saveCheckpoint();
+          const resolvedCount = Object.values(codeStates).filter(isCarnivalCodeSkippable).length;
+          addLog(`💾 Carnival checkpoint v2 saved: ${resolvedCount}/${visibleCodes.length} code(s) authoritatively resolved; account/context fingerprint locked`, 'info');
+          processedThisRun += 1;
+        } catch (offerError) {
+          processedThisRun += 1;
+          const message = offerError instanceof Error ? offerError.message : String(offerError);
+          const status: CarnivalCheckpointCodeStatus = carnivalAbortSignal?.aborted
+            ? 'cancelled'
+            : /login|auth|session|sign[ -]?in/i.test(message)
+              ? 'auth_lost'
+              : /captcha|access denied|forbidden|http 403|bot protection|temporarily blocked/i.test(message)
+                ? 'blocked'
+                : 'failed';
+          codeStates[entry.code] = {
+            status,
+            rows: rowsByCode[entry.code] || [],
+            context: contextByCode[entry.code] || initialContext,
+            totalResults: codeStates[entry.code]?.totalResults || 0,
+            pagesVisited: codeStates[entry.code]?.pagesVisited || 0,
+            error: message,
+            updatedAt: new Date().toISOString(),
+          };
+          try { await persistCheckpoint(); } catch (checkpointWriteError) {
+            addLog(`⚠️ Could not persist ${entry.code} ${status} state: ${String(checkpointWriteError)}`, 'warning');
+          }
+          if (status === 'cancelled' || status === 'auth_lost') throw offerError;
+          addLog(`❌ ${entry.code} failed and remains resumable: ${message}`, 'error');
+        }
+      }
+
+      assertCarnivalRunActive();
+      const allOfferRows = visibleCodes.flatMap((code) => rowsByCode[code] || []);
+      const authoritativeEmptyCodes = visibleCodes.filter((code) => codeStates[code]?.status === 'authoritative_empty');
+      const successfulCodes = visibleCodes.filter((code) => codeStates[code]?.status === 'success');
+      const incompleteCodes = visibleCodes.filter((code) => !isCarnivalCodeSkippable(codeStates[code]));
+      const failedCodes = visibleCodes.filter((code) => ['failed', 'blocked', 'auth_lost'].includes(codeStates[code]?.status || ''));
+      const rowBearingCodes = successfulCodes.filter((code) => (rowsByCode[code] || []).some((row) => Boolean(String(row.shipName || '').trim() && String(row.sailingDate || '').trim())));
+      const codeLedger: CarnivalCodeLedgerEntry[] = visibleCodes.map((code) => {
+        const record = codeStates[code];
+        return {
+          code,
+          offerName: record?.context?.offerName || `Rate Code ${code}`,
+          status: record?.status || 'pending',
+          rowCount: (record?.rows || []).filter((row) => Boolean(String(row.shipName || '').trim() && String(row.sailingDate || '').trim())).length,
+          totalResults: Number(record?.totalResults || 0),
+          pagesVisited: Number(record?.pagesVisited || 0),
+          truncated: /limit|truncat|incomplete/i.test(record?.error || ''),
+          message: record?.error,
+          updatedAt: record?.updatedAt || new Date().toISOString(),
+        };
+      });
+      const sailingRowCount = successfulCodes
+        .flatMap((code) => rowsByCode[code] || [])
+        .filter((row) => Boolean(String(row.shipName || '').trim() && String(row.sailingDate || '').trim())).length;
       const mergedOffers = mergeOfferRows([], allOfferRows).map((row: any) => ({
         ...row,
         catalogVisibleOfferCodes: visibleCodes.join(','),
-        catalogZeroRowOfferCodes: zeroRowCodes.join(','),
+        catalogVisibleOfferCount: visibleCodes.length,
+        catalogZeroRowOfferCodes: authoritativeEmptyCodes.join(','),
+        catalogRowBearingOfferCodes: successfulCodes.join(','),
+        catalogIncompleteOfferCodes: incompleteCodes.join(','),
       }));
+      const offerCatalogFullyResolved = catalog.noOffersConfirmed || (visibleCodes.length > 0 && incompleteCodes.length === 0);
       extractedOffersRef.current = mergedOffers;
       step1CatalogMetaRef.current = {
         offerCount: visibleCodes.length,
         offerCodes: visibleCodes,
         totalCount: sailingRowCount,
-        completed: catalog.noOffersConfirmed || visibleCodes.length > 0,
+        completed: offerCatalogFullyResolved,
+        incompleteCodes,
+        authoritativeEmptyCodes,
+        successfulCodes,
+        failedCodes,
+        rowBearingCodes,
+        codeLedger,
+        accountFingerprint: checkpointIdentity.fingerprint,
+        catalogHash: checkpointIdentity.catalogHash,
+        runId: carnivalRunId || '',
       };
       capturedSections.current.offers = catalog.noOffersConfirmed || visibleCodes.length > 0;
-      setState((prev) => ({ ...prev, extractedOffers: mergedOffers }));
+      const sailingCountsByCode = visibleCodes.map((code) => `${code}:${(rowsByCode[code] || []).filter((row) => Boolean(String(row.shipName || '').trim() && String(row.sailingDate || '').trim())).length}`).join(', ');
+      addLog(`📊 Carnival reconciliation — discovered=${visibleCodes.length}, completed=${successfulCodes.length + authoritativeEmptyCodes.length}, incomplete=${incompleteCodes.length}, offers=${mergedOffers.length}, unique sailings=${countUniqueCarnivalSailings(mergedOffers)}; by code: ${sailingCountsByCode}`, incompleteCodes.length ? 'warning' : 'success');
+      setState((prev) => ({ ...prev, extractedOffers: mergedOffers, carnivalCodeLedger: codeLedger }));
       if (!visibleCodes.length && !catalog.noOffersConfirmed) {
         addLog('⚠️ Carnival did not expose a trustworthy personalized offer catalog. Existing Carnival offers will be preserved during Apply Sync.', 'warning');
       } else if (!visibleCodes.length) {
         addLog('✅ Carnival explicitly reported zero current offers. The empty catalog is authoritative.', 'success');
+      } else if (incompleteCodes.length > 0) {
+        addLog(`⚠️ STEP 1 PARTIAL: ${successfulCodes.length} successful, ${authoritativeEmptyCodes.length} authoritative empty, ${incompleteCodes.length} incomplete/failed (${incompleteCodes.join(', ')}). Existing Carnival offer inventory cannot be removed until all codes resolve.`, 'warning');
       } else {
-        addLog(`✅ STEP 1 COMPLETE: ${visibleCodes.length} offer(s), ${sailingRowCount} eligible sailing row(s)`, 'success');
+        addLog(`✅ STEP 1 COMPLETE: ${visibleCodes.length} offer(s) resolved, ${sailingRowCount} eligible sailing row(s)`, 'success');
       }
 
       // STEP 2 — bookings, completed history, and VIFP/Players Club profile.
       setState((prev) => ({ ...prev, status: 'running_step_2', currentStep: 'Reading Carnival bookings and loyalty' }));
       addLog('🚀 ====== STEP 2: CARNIVAL BOOKINGS, HISTORY & LOYALTY ======', 'info');
       const profileResults: CarnivalProfileScrapeResult[] = [];
-      for (const url of [CARNIVAL_CRUISES_URL, CARNIVAL_PROFILE_URL]) {
-        await navigateToPage(url, 18000);
-        await delay(2500);
+      const profileQueue = [CARNIVAL_CRUISES_URL, CARNIVAL_PROFILE_URL];
+      const visitedProfileUrls = new Set<string>();
+      const normalizeCarnivalProfileUrl = (candidate: string): string => {
+        try {
+          const parsed = new URL(candidate, CARNIVAL_PROFILE_URL);
+          const sameCarnivalHost = /(^|\.)carnival\.com$/i.test(parsed.hostname);
+          const profileRoute = /\/profilemanagement\/profiles(?:\/|$)/i.test(parsed.pathname);
+          const excludedRoute = /offer|deal|shop|search-results/i.test(`${parsed.pathname} ${parsed.search}`);
+          if (!sameCarnivalHost || !profileRoute || excludedRoute) return '';
+          parsed.hash = '';
+          return parsed.toString();
+        } catch {
+          return '';
+        }
+      };
+      for (let profileIndex = 0; profileIndex < profileQueue.length && profileIndex < 8; profileIndex += 1) {
+        const url = normalizeCarnivalProfileUrl(profileQueue[profileIndex]);
+        if (!url || visitedProfileUrls.has(url)) continue;
+        visitedProfileUrls.add(url);
+        await navigateToPage(url, 12000, `Carnival profile/history page ${profileIndex + 1}`);
+        await delay(700);
         const requestId = `carnival-profile-${Date.now()}-${profileResults.length}`;
-        addLog(`Reading Carnival ${url.endsWith('/cruises') ? 'My Cruises and Cruise History' : 'profile/VIFP'} page`, 'info');
-        profileResults.push(await scrapeCarnivalProfilePage(requestId));
-      }
-
-      const bookingMap = new Map<string, BookedCruiseRow>();
-      for (const result of profileResults) {
-        for (const row of result.bookings) {
-          const key = String(row.bookingId || '').trim().toLowerCase() || `${String(row.shipName || '').trim().toLowerCase()}|${String(row.sailingStartDate || '').trim()}|${String(row.status || '').trim().toLowerCase()}`;
-          if (!bookingMap.has(key)) bookingMap.set(key, row);
+        addLog(`Reading Carnival ${/\/cruises(?:[/?#]|$)/i.test(url) ? 'My Cruises and Cruise History' : 'profile/VIFP'} page`, 'info');
+        const result = await scrapeCarnivalProfilePage(requestId);
+        profileResults.push(result);
+        const discovered = Array.isArray(result.discoveredProfileUrls) ? result.discoveredProfileUrls : [];
+        discovered.forEach((candidate) => {
+          const normalized = normalizeCarnivalProfileUrl(candidate);
+          if (normalized && !visitedProfileUrls.has(normalized) && !profileQueue.includes(normalized)) profileQueue.push(normalized);
+        });
+        if ((result.profilePayloadCount || 0) > 0 || discovered.length > 0) {
+          addLog(`Carnival profile/history discovery: ${result.profilePayloadCount || 0} protected payload(s), ${discovered.length} additional page link(s)`, 'success');
         }
       }
-      const carnivalBookings = Array.from(bookingMap.values());
+
+      const carnivalBookings = mergeCarnivalBookingRows(profileResults.flatMap((result) => result.bookings));
       const capturedUpcomingCount = carnivalBookings.filter((row) => !isCompletedRecordLike(row)).length;
       const capturedCompletedCount = carnivalBookings.filter((row) => isCompletedRecordLike(row)).length;
       const explicitNoUpcoming = profileResults.some((result) => result.upcomingEmptyConfirmed === true);
       const explicitNoHistory = profileResults.some((result) => result.historyEmptyConfirmed === true);
 
-      const bestProfile = profileResults
-        .map((result) => result.profile)
-        .sort((a, b) => Number(Boolean(b.vifpNumber)) - Number(Boolean(a.vifpNumber)) || b.totalCruises - a.totalCruises)[0];
-      const profileTotalCruises = Number(bestProfile?.totalCruises || 0);
-      const activeLaneAuthoritative = capturedUpcomingCount > 0 || explicitNoUpcoming;
-      const completedLaneAuthoritative = explicitNoHistory
-        ? profileTotalCruises === 0
-        : capturedCompletedCount > 0 && (profileTotalCruises === 0 || capturedCompletedCount >= profileTotalCruises);
+      const mergedProfile = mergeCarnivalProfileSnapshots(profileResults.map((result) => result.profile)) as CarnivalProfileSnapshot;
+      const profileTotalCruises = Number(mergedProfile.totalCruises || 0);
+      const cruisesPageResults = profileResults.filter((result) => result.authenticatedPage && result.pageKind === 'cruises' && !result.error);
+      const activeLaneAuthoritative = capturedUpcomingCount > 0 || cruisesPageResults.some((result) => result.upcomingEmptyConfirmed === true);
+      const historyBounded = profileResults.some((result) => result.historyBounded === true);
+      const completedLaneAuthoritative = capturedCompletedCount > 0
+        ? (profileTotalCruises === 0 || capturedCompletedCount >= profileTotalCruises || historyBounded)
+        : cruisesPageResults.some((result) => result.historyEmptyConfirmed === true) && profileTotalCruises === 0;
       carnivalLaneAuthorityRef.current = {
         active: activeLaneAuthoritative,
         completed: completedLaneAuthoritative,
@@ -2465,37 +3389,34 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       }
       if (!activeLaneAuthoritative) {
         addLog('⚠️ Carnival active booking lane was not authoritative; existing Carnival booked/upcoming cruises will be preserved.', 'warning');
-      } else if (explicitNoUpcoming && capturedUpcomingCount === 0) {
-        addLog('✅ Carnival explicitly reported no upcoming bookings; the empty active-booking lane is authoritative.', 'success');
+      } else if (cruisesPageResults.some((result) => result.upcomingEmptyConfirmed) && capturedUpcomingCount === 0) {
+        addLog('✅ Carnival explicitly reported no upcoming bookings on the authenticated My Cruises page; the empty active-booking lane is authoritative.', 'success');
       }
       if (!completedLaneAuthoritative) {
         const expectedNote = profileTotalCruises > 0 ? ` (profile reports ${profileTotalCruises} total cruise(s), captured ${capturedCompletedCount})` : '';
         addLog(`⚠️ Carnival completed-history lane was incomplete${expectedNote}; existing Carnival completed cruises will be preserved.`, 'warning');
-      } else if (explicitNoHistory && capturedCompletedCount === 0) {
-        addLog('✅ Carnival explicitly reported no cruise history; the empty completed lane is authoritative.', 'success');
+      } else if (cruisesPageResults.some((result) => result.historyEmptyConfirmed) && capturedCompletedCount === 0) {
+        addLog('✅ Carnival explicitly reported no cruise history on the authenticated history section; the empty completed lane is authoritative.', 'success');
       }
 
-      if (bestProfile && (bestProfile.hasVifpData || bestProfile.hasPlayersClubData || bestProfile.vifpNumber || bestProfile.playersClubTier || bestProfile.playersClubPoints)) {
-        carnivalUserDataRef.current = bestProfile;
+      if (mergedProfile && (mergedProfile.hasVifpData || mergedProfile.hasPlayersClubData || mergedProfile.vifpNumber || mergedProfile.playersClubTier || mergedProfile.playersClubPoints)) {
+        carnivalUserDataRef.current = mergedProfile;
         capturedSections.current.loyalty = true;
+        const displayTier = mergedProfile.vifpTierSource === 'inferred' && mergedProfile.vifpTier ? `${mergedProfile.vifpTier} (inferred)` : mergedProfile.vifpTier;
         setState((prev) => ({
           ...prev,
           loyaltyData: {
             ...(prev.loyaltyData ?? {}),
-            crownAndAnchorLevel: bestProfile.vifpTier,
-            crownAndAnchorPoints: String(bestProfile.vifpPoints || bestProfile.cruiseDayPoints || ''),
-            clubRoyaleTier: bestProfile.playersClubTier,
-            clubRoyalePoints: String(bestProfile.playersClubPoints || ''),
-            carnivalVifpNumber: bestProfile.vifpNumber,
-            carnivalVifpTier: bestProfile.vifpTier,
-            carnivalVifpPoints: String(bestProfile.vifpPoints || ''),
-            carnivalCruiseDayPoints: String(bestProfile.cruiseDayPoints || ''),
-            carnivalTotalCruises: String(bestProfile.totalCruises || ''),
-            carnivalPlayersClubTier: bestProfile.playersClubTier,
-            carnivalPlayersClubPoints: String(bestProfile.playersClubPoints || ''),
+            carnivalVifpNumber: mergedProfile.vifpNumber,
+            carnivalVifpTier: displayTier,
+            carnivalVifpPoints: String(mergedProfile.vifpPoints || ''),
+            carnivalCruiseDayPoints: String(mergedProfile.cruiseDayPoints || ''),
+            carnivalTotalCruises: String(mergedProfile.totalCruises || ''),
+            carnivalPlayersClubTier: mergedProfile.playersClubTier,
+            carnivalPlayersClubPoints: String(mergedProfile.playersClubPoints || ''),
           },
         }));
-        addLog(`✅ Carnival loyalty captured: VIFP ${bestProfile.vifpTier || 'Unknown'}${bestProfile.vifpNumber ? ` #${bestProfile.vifpNumber}` : ''}; Players Club ${bestProfile.playersClubTier || 'Unknown'} (${bestProfile.playersClubPoints || 0} pts)`, 'success');
+        addLog(`✅ Carnival loyalty captured: VIFP ${displayTier || 'Unknown'}${mergedProfile.vifpNumber ? ` #${mergedProfile.vifpNumber}` : ''}; Players Club ${mergedProfile.playersClubTier || 'Unknown'} (${mergedProfile.playersClubPoints || 0} pts)`, 'success');
       } else {
         addLog('⚠️ Carnival VIFP/Players Club profile values were not found; existing profile loyalty values will be preserved.', 'warning');
       }
@@ -2504,6 +3425,35 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       const completedCount = capturedCompletedCount;
       addLog(`✅ STEP 2 COMPLETE: ${upcomingCount} booked/upcoming and ${completedCount} completed/history cruise(s) captured`, carnivalBookings.length ? 'success' : 'warning');
       addLog('🎉 ====== CARNIVAL EXTRACTION COMPLETE ======', 'success');
+      // Keep the completed extraction checkpoint until Apply Sync succeeds. If iOS
+      // suspends the app while the user is reviewing, the next run can restore all
+      // offer rows instead of downloading the entire catalog again.
+      assertCarnivalRunActive();
+
+      const extractionManifest = buildCarnivalSyncManifest({
+        runId: carnivalRunId || '',
+        appProfileId: currentUser?.id || '',
+        authenticatedEmailHash: carnivalStableHash((authenticatedEmail || '').toLowerCase()),
+        accountFingerprint: checkpointIdentity.fingerprint,
+        vifpFingerprint: carnivalStableHash(mergedProfile.vifpNumber || checkpointIdentity.vifpNumber || ''),
+        catalogHash: checkpointIdentity.catalogHash,
+        catalogCount: visibleCodes.length,
+        completedCodeCount: successfulCodes.length + authoritativeEmptyCodes.length,
+        successfulCodes,
+        authoritativeEmptyCodes,
+        failedCodes,
+        incompleteCodes,
+        rowBearingCodes,
+        uniqueSailingCount: countUniqueCarnivalSailings(mergedOffers.filter((row) => Boolean(row.shipName && row.sailingDate))),
+        rawSailingRowCount: sailingRowCount,
+        upcomingBookingCount: upcomingCount,
+        completedHistoryCount: completedCount,
+        codeLedger,
+        terminalStatus: incompleteCodes.length > 0 ? 'partial_resumable' : 'interrupted_resumable',
+        createdAt: new Date().toISOString(),
+      });
+      carnivalManifestRef.current = extractionManifest;
+      await AsyncStorage.setItem(getUserScopedKey(ALL_STORAGE_KEYS.CARNIVAL_SYNC_MANIFEST, authenticatedEmail), JSON.stringify(extractionManifest));
 
       setState((prev) => ({
         ...prev,
@@ -2520,6 +3470,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           completedCruises: completedCount,
         },
         syncPreview: null,
+        carnivalManifest: extractionManifest,
+        carnivalCodeLedger: codeLedger,
       }));
       addLog(`Ready to review: ${visibleCodes.length} Carnival offer(s), ${sailingRowCount} available sailing(s)`, 'success');
       addLog(`Ready to review: ${upcomingCount} booked/upcoming, ${completedCount} completed/history Carnival cruise(s)`, 'success');
@@ -2531,6 +3483,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         await runCarnivalSafeIngestion();
         return;
       }
+
+      // Priority 7: the pre-Build-312 Carnival branch below is formally isolated.
+      // All Carnival runs return through runCarnivalSafeIngestion above. Keep the
+      // legacy parser references compile-only until fixture migration removes them.
+      const legacyCarnivalMode = false as const;
 
       addLog('Opening offers', 'success');
       addLog(`🚀 ====== STEP 1: ${config.loyaltyClubName.toUpperCase()} OFFERS ======`, 'info');
@@ -2544,7 +3501,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       type TgoData = { fullUrl: string; tgo: string; vifp: string; tierCode: string; tierName: string; rateCodes: Array<{ code: string; startDate: string; endDate: string }> };
       let tgoData: TgoData | null = null;
 
-      if (isCarnivalMode) {
+      if (legacyCarnivalMode) {
         addLog('🎪 Carnival — navigating to personalized offers page...', 'info');
         await navigateToPage('about:blank', 3000);
         await delay(500);
@@ -2582,7 +3539,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       }
       
       if (webViewRef.current) {
-        if (isCarnivalMode) {
+        if (legacyCarnivalMode) {
           addLog('🎪 Injecting Carnival extraction on offers page...', 'info');
           webViewRef.current.injectJavaScript(injectCarnivalOffersExtraction() + '; true;');
         } else {
@@ -2594,21 +3551,21 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         }
       }
       
-      let step1CompletedCleanly = await waitForStepComplete(1, isCarnivalMode ? 180000 : 1200000);
+      let step1CompletedCleanly = await waitForStepComplete(1, legacyCarnivalMode ? 180000 : 1200000);
 
       if (extractedOffersRef.current.length === 0) {
         addLog('Offer extraction came back empty on the first attempt - retrying once before giving up', 'warning');
         await navigateToPage(config.offersUrl, 20000);
         await delay(2500);
         if (webViewRef.current) {
-          if (isCarnivalMode) {
+          if (legacyCarnivalMode) {
             addLog('Re-injecting Carnival extraction on offers page (retry)...', 'info');
             webViewRef.current.injectJavaScript(injectCarnivalOffersExtraction() + '; true;');
           } else {
             webViewRef.current.injectJavaScript(injectOffersExtraction(state.scrapePricingAndItinerary, cruiseLine === 'celebrity' ? 'celebrity' : 'royal_caribbean') + '; true;');
           }
         }
-        step1CompletedCleanly = await waitForStepComplete(1, isCarnivalMode ? 90000 : 240000);
+        step1CompletedCleanly = await waitForStepComplete(1, legacyCarnivalMode ? 90000 : 240000);
         if (extractedOffersRef.current.length > 0) {
           addLog(`Retry succeeded: captured ${extractedOffersRef.current.length} offer row(s) on the second attempt`, 'success');
         } else {
@@ -2618,7 +3575,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
       const step1OfferRows = extractedOffersRef.current;
       const step1OfferCodes = Array.from(new Set(step1OfferRows.map((offer: any) => String(offer.offerCode || '').trim().toUpperCase()).filter(Boolean)));
-      const isRoyalSync = !isCarnivalMode && cruiseLine !== 'celebrity';
+      const isRoyalSync = !legacyCarnivalMode && cruiseLine !== 'celebrity';
       const step1Meta = step1CatalogMetaRef.current || {};
       const visibleOfferCodes = Array.isArray(step1Meta.offerCodes) && step1Meta.offerCodes.length
         ? step1Meta.offerCodes
@@ -2685,7 +3642,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       setState(prev => prev);
       
       // Step 1.5: Carnival offer enrichment - navigate to each rate code's cruise search page
-      if (isCarnivalMode) {
+      if (legacyCarnivalMode) {
         type EnrichEntry = { offerName: string; offerCode: string; bookingLink: string; offerExpiry: string; perks: string };
         const offersToEnrichMap = new Map<string, EnrichEntry>();
         const buildCarnivalSearchUrl = (code: string): string => {
@@ -2816,7 +3773,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         const isCelebrityMode = cruiseLine === 'celebrity';
         const accountHomeUrl = isCelebrityMode
           ? 'https://www.celebritycruises.com/myaccount'
-          : isCarnivalMode
+          : legacyCarnivalMode
           ? 'https://www.carnival.com/profilemanagement/profiles'
           : 'https://www.royalcaribbean.com/myaccount';
 
@@ -2825,10 +3782,10 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         // (which silently produces "0 cruises to sync" or lands on the wrong page when the
         // route moves), cycle through every known-good candidate route across retry cycles
         // until real data is actually captured.
-        const bookingUrlCandidates = isCarnivalMode
+        const bookingUrlCandidates = legacyCarnivalMode
           ? ['https://www.carnival.com/profilemanagement/profiles/cruises']
           : [config.upcomingUrl, ...((config as any).upcomingUrlAlternates ?? [])];
-        const loyaltyUrlCandidates = isCarnivalMode
+        const loyaltyUrlCandidates = legacyCarnivalMode
           ? ['https://www.carnival.com/profilemanagement/profiles']
           : [config.loyaltyPageUrl, ...((config as any).loyaltyPageUrlAlternates ?? [])];
 
@@ -2853,7 +3810,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           const bookingUrlForCycle = bookingUrlCandidates[Math.min(cycle, bookingUrlCandidates.length - 1)];
           const loyaltyUrlForCycle = loyaltyUrlCandidates[Math.min(cycle, loyaltyUrlCandidates.length - 1)];
 
-          const CAPTURE_PAGES: { url: string; section: 'bookings' | 'loyalty'; name: string }[] = isCarnivalMode
+          const CAPTURE_PAGES: { url: string; section: 'bookings' | 'loyalty'; name: string }[] = legacyCarnivalMode
             ? [
                 { url: 'https://www.carnival.com/profilemanagement/profiles/cruises', section: 'bookings', name: 'My Cruises' },
                 { url: 'https://www.carnival.com/profilemanagement/profiles', section: 'loyalty', name: 'Profile Home' },
@@ -2874,11 +3831,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             addLog(`📍 Visiting ${page.name}...`, 'info');
             await navigateToPage(page.url, 14000);
             
-            if (isCarnivalMode) {
+            if (legacyCarnivalMode) {
               await delay(3000);
             }
             
-            if (!isCarnivalMode && webViewRef.current) {
+            if (!legacyCarnivalMode && webViewRef.current) {
               // v991: classify whatever page we actually landed on (sign-in / sailings-list /
               // real loyalty widgets / unrecognized) and log it clearly. This makes a broken
               // route (site redesign, redirect, etc.) immediately diagnosable from the in-app
@@ -2886,14 +3843,14 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
               webViewRef.current.injectJavaScript(injectPageClassifier(page.section) + '; true;');
             }
 
-            if (!isCarnivalMode && page.section === 'loyalty' && webViewRef.current) {
+            if (!legacyCarnivalMode && page.section === 'loyalty' && webViewRef.current) {
               // Account home and loyalty-programs pages render the Crown & Anchor "Cruise Points"
               // and Club Royale tier-credit widgets directly in the DOM - scrape them as a
               // fallback alongside the passive network monitor.
               webViewRef.current.injectJavaScript(injectLoyaltyWidgetScrape() + '; true;');
             }
             
-            if (isCarnivalMode && webViewRef.current) {
+            if (legacyCarnivalMode && webViewRef.current) {
               if (page.section === 'bookings') {
                 addLog('🎪 Injecting Carnival bookings scraper...', 'info');
                 webViewRef.current.injectJavaScript(injectCarnivalBookingsScrape() + '; true;');
@@ -2907,7 +3864,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
               addLog(`✅ ${page.name} data captured!`, 'success');
             } else {
               addLog(`⏳ Waiting for ${page.name} API response...`, 'info');
-              await delay(isCarnivalMode ? 8000 : 6000);
+              await delay(legacyCarnivalMode ? 8000 : 6000);
               
               if (capturedSections.current[page.section]) {
                 addLog(`✅ ${page.name} data captured after wait!`, 'success');
@@ -2937,13 +3894,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       // Step 3: Loyalty direct fetch fallback (skip if already captured in Step 2)
       setState(prev => ({ ...prev, status: 'running_step_3' }));
       
-      if (capturedSections.current.loyalty) {
-        addLog('✅ Loyalty data already captured - skipping direct fetch', 'success');
-      } else if (cruiseLine === 'carnival') {
-        addLog('ℹ️ Carnival: loyalty data captured via page monitoring (VIFP/Players Club)', 'info');
-        if (!capturedSections.current.loyalty) {
-          addLog('⚠️ No Carnival loyalty data captured - VIFP info may not be available', 'warning');
-        }
+      if (cruiseLine === 'royal_caribbean' && hasAuthoritativeCrownAndAnchorData(extendedLoyaltyDataRef.current)) {
+        addLog('✅ Authoritative Crown & Anchor tier and points already captured - skipping direct C&A fetch', 'success');
       } else {
       addLog('🚀 ====== STEP 3: LOYALTY DIRECT FETCH ======', 'info');
       addLog('📡 Attempting direct loyalty API call as fallback...', 'info');
@@ -2999,174 +3951,328 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
                 post('log', { message, logType: logType || 'info' });
               }
 
-              function tryFindAppKey() {
-                const candidates = [];
+              function normalizeHeaderObject(headersLike) {
+                const result = {};
                 try {
-                  const keys = Object.keys(localStorage || {});
-                  for (const k of keys) {
-                    if (/appkey/i.test(k) || /api[-_]?key/i.test(k)) {
-                      const v = localStorage.getItem(k);
-                      if (v && v.length > 10) candidates.push(v);
-                    }
+                  if (!headersLike) return result;
+                  if (typeof Headers !== 'undefined' && headersLike instanceof Headers) {
+                    headersLike.forEach(function(value, key) { result[String(key).toLowerCase()] = String(value); });
+                    return result;
+                  }
+                  if (Array.isArray(headersLike)) {
+                    headersLike.forEach(function(pair) {
+                      if (Array.isArray(pair) && pair.length >= 2) result[String(pair[0]).toLowerCase()] = String(pair[1]);
+                    });
+                    return result;
+                  }
+                  if (typeof headersLike === 'object') {
+                    Object.keys(headersLike).forEach(function(key) {
+                      const value = headersLike[key];
+                      if (value !== undefined && value !== null) result[String(key).toLowerCase()] = String(value);
+                    });
                   }
                 } catch (e) {}
-
-                const winAny = window;
-                try {
-                  const env = winAny?.__ENV__ || winAny?.__env__ || winAny?.env || null;
-                  const v = env?.APPKEY || env?.appKey || env?.appkey || env?.API_KEY || env?.apiKey || env?.apigeeApiKey || null;
-                  if (typeof v === 'string' && v.length > 10) candidates.push(v);
-                } catch (e) {}
-
-                try {
-                  const maybe = winAny?.RCLL_APPKEY || winAny?.RCCL_APPKEY || winAny?.APPKEY || null;
-                  if (typeof maybe === 'string' && maybe.length > 10) candidates.push(maybe);
-                } catch (e) {}
-
-                return candidates[0] || '';
+                return result;
               }
 
               function safeJsonParse(str) {
                 try { return JSON.parse(str); } catch (e) { return null; }
               }
 
-              function getAuthHeadersFromSession() {
-                const sessionRaw = localStorage.getItem('persist:session');
-                const session = sessionRaw ? safeJsonParse(sessionRaw) : null;
-                if (!session) return null;
+              function deepFindValue(input, keyPattern, depth) {
+                if (depth > 6 || input === undefined || input === null) return '';
+                let value = input;
+                if (typeof value === 'string') {
+                  const parsed = safeJsonParse(value);
+                  if (parsed !== null) value = parsed;
+                  else return '';
+                }
+                if (typeof value !== 'object') return '';
+                const keys = Object.keys(value);
+                for (const key of keys) {
+                  if (keyPattern.test(String(key))) {
+                    const candidate = value[key];
+                    if (typeof candidate === 'string' && candidate.trim()) return candidate.trim();
+                    if (typeof candidate === 'number' && Number.isFinite(candidate)) return String(candidate);
+                  }
+                }
+                for (const key of keys) {
+                  const found = deepFindValue(value[key], keyPattern, depth + 1);
+                  if (found) return found;
+                }
+                return '';
+              }
 
-                const token = session.token ? safeJsonParse(session.token) : null;
-                const user = session.user ? safeJsonParse(session.user) : null;
+              function readStorageObject(sourceWindow, storageName, key) {
+                try {
+                  const storage = sourceWindow && sourceWindow[storageName];
+                  const raw = storage && storage.getItem ? storage.getItem(key) : null;
+                  return raw ? (safeJsonParse(raw) || raw) : null;
+                } catch (e) { return null; }
+              }
 
-                const accountId = user && user.accountId ? String(user.accountId) : '';
-                const rawAuth = token && token.toString ? token.toString() : '';
-                const authorization = rawAuth ? (rawAuth.startsWith('Bearer ') ? rawAuth : ('Bearer ' + rawAuth)) : '';
+              function tryFindAppKey(sourceWindow) {
+                const source = sourceWindow || window;
+                const candidates = [];
+                try {
+                  const captured = normalizeHeaderObject(window.__easySeasRoyalRequestHeaders || {});
+                  ['appkey', 'x-api-key', 'x-rcl-appkey'].forEach(function(key) {
+                    if (captured[key] && captured[key].length > 6) candidates.push(captured[key]);
+                  });
+                } catch (e) {}
+                ['localStorage', 'sessionStorage'].forEach(function(storageName) {
+                  try {
+                    const storage = source[storageName];
+                    const keys = Object.keys(storage || {});
+                    for (const k of keys) {
+                      if (/appkey|api[-_]?key|apigee/i.test(k)) {
+                        const v = storage.getItem(k);
+                        if (v && v.length > 6) candidates.push(v);
+                      }
+                    }
+                  } catch (e) {}
+                });
+                try {
+                  const env = source.__ENV__ || source.__env__ || source.env || null;
+                  const v = env && (env.APPKEY || env.appKey || env.appkey || env.API_KEY || env.apiKey || env.apigeeApiKey);
+                  if (typeof v === 'string' && v.length > 6) candidates.push(v);
+                } catch (e) {}
+                try {
+                  const maybe = source.RCLL_APPKEY || source.RCCL_APPKEY || source.APPKEY || null;
+                  if (typeof maybe === 'string' && maybe.length > 6) candidates.push(maybe);
+                } catch (e) {}
+                return candidates[0] || '';
+              }
 
-                if (!accountId || !authorization) return null;
-
-                const appKey = tryFindAppKey();
-
+              function getAuthHeadersFromSession(sourceWindow) {
+                const source = sourceWindow || window;
                 const headers = {
                   'accept': 'application/json',
                   'accept-language': 'en-US,en;q=0.9',
                   'content-type': 'application/json',
-                  'account-id': accountId,
-                  'authorization': authorization,
                 };
 
-                if (appKey) {
-                  headers['appkey'] = appKey;
-                  headers['x-api-key'] = appKey;
+                try {
+                  Object.assign(headers, normalizeHeaderObject(window.__easySeasRoyalRequestHeaders || {}));
+                  if (source !== window) Object.assign(headers, normalizeHeaderObject(source.__easySeasRoyalRequestHeaders || {}));
+                } catch (e) {}
+
+                const sessionCandidates = [];
+                ['persist:session', 'session', 'auth', 'authentication', 'persist:root'].forEach(function(key) {
+                  sessionCandidates.push(readStorageObject(source, 'localStorage', key));
+                  sessionCandidates.push(readStorageObject(source, 'sessionStorage', key));
+                });
+
+                let accountId = headers['account-id'] || '';
+                let authorization = headers.authorization || '';
+                let appKey = headers.appkey || headers['x-api-key'] || headers['x-rcl-appkey'] || '';
+
+                for (const candidate of sessionCandidates) {
+                  if (!candidate) continue;
+                  if (!accountId) accountId = deepFindValue(candidate, /^(accountId|account-id|consumerId|consumer-id)$/i, 0);
+                  if (!authorization) authorization = deepFindValue(candidate, /^(authorization|accessToken|access_token|idToken|id_token|token)$/i, 0);
+                  if (!appKey) appKey = deepFindValue(candidate, /^(appkey|appKey|apiKey|api_key|apigeeApiKey|x-api-key)$/i, 0);
                 }
 
+                if (authorization && !/^Bearer\\s+/i.test(authorization) && authorization.split('.').length >= 3) {
+                  authorization = 'Bearer ' + authorization;
+                }
+                if (accountId) headers['account-id'] = accountId;
+                if (authorization && authorization !== '[object Object]') headers.authorization = authorization;
+                if (!appKey) appKey = tryFindAppKey(source);
+                if (appKey) {
+                  headers.appkey = appKey;
+                  headers['x-api-key'] = appKey;
+                }
                 return headers;
               }
 
-              function capturedPayloadHasTierOrPoints(existing) {
+              function describeAuthHeaders(headers) {
+                const names = ['authorization', 'account-id', 'appkey', 'x-api-key', 'x-rcl-appkey', 'x-rcl-client-id']
+                  .filter(function(key) { return headers && headers[key]; });
+                return names.length ? names.join(', ') : 'cookie session only';
+              }
+
+              function hasDefinedValue(value) {
+                return value !== undefined && value !== null && String(value).trim() !== '';
+              }
+
+              function capturedPayloadHasRequiredLoyalty(existing) {
                 try {
                   const payload = existing && (existing.payload || existing);
                   const nested = payload && payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data) ? payload.data : null;
                   const info = (payload && payload.loyaltyInformation) || nested || payload;
                   if (!info || typeof info !== 'object') return false;
-                  return Boolean(
-                    info.crownAndAnchorSocietyLoyaltyTier || info.crownAndAnchorTier || info.crownAndAnchorLevel ||
-                    info.crownAndAnchorSocietyLoyaltyIndividualPoints || info.crownAndAnchorPoints || info.cruisePoints ||
-                    info.clubRoyaleLoyaltyTier || info.clubRoyaleTier || info.currentClubTier || info.currentTier ||
-                    info.clubRoyaleLoyaltyIndividualPoints || info.clubRoyalePoints || info.currentTierCredits || info.tierCredits
+                  if (isCelebrityHost) {
+                    return Boolean(
+                      hasDefinedValue(info.captainsClubLoyaltyTier || info.captainsClubTier) ||
+                      hasDefinedValue(info.captainsClubLoyaltyIndividualPoints || info.captainsClubPoints)
+                    );
+                  }
+                  const hasCrownAnchorTier = hasDefinedValue(
+                    info.crownAndAnchorSocietyLoyaltyTier || info.crownAndAnchorTier || info.crownAndAnchorLevel
                   );
+                  const hasCrownAnchorPoints = hasDefinedValue(
+                    info.crownAndAnchorSocietyLoyaltyIndividualPoints ?? info.crownAndAnchorPoints ?? info.cruisePoints
+                  );
+                  // A casino-only or loyalty-history payload is useful, but it cannot close Step 3.
+                  // Royal Step 3 completes only after the dedicated C&A lane supplies both tier and points.
+                  return hasCrownAnchorTier && hasCrownAnchorPoints;
                 } catch (e) { return false; }
+              }
+
+              let loyaltyFinished = false;
+              let fetchInFlight = false;
+              let timer = null;
+
+              function finishLoyaltyCapture(data, loyaltyUrl, reason) {
+                if (loyaltyFinished) return true;
+                loyaltyFinished = true;
+                if (timer) clearInterval(timer);
+                window.capturedPayloads = window.capturedPayloads || {};
+                window.capturedPayloads.loyalty = data;
+                post('network_payload', { endpoint: 'loyalty', data, url: loyaltyUrl });
+                post('step_complete', { step: 3, reason });
+                return true;
               }
 
               function emitCapturedIfPresent(loyaltyUrl) {
                 const existing = window.capturedPayloads && window.capturedPayloads.loyalty ? window.capturedPayloads.loyalty : null;
-                if (existing && capturedPayloadHasTierOrPoints(existing)) {
-                  log('✅ Loyalty data already captured by network monitor', 'success');
-                  post('network_payload', { endpoint: 'loyalty', data: existing, url: loyaltyUrl });
-                  post('step_complete', { step: 3 });
-                  return true;
+                if (existing && capturedPayloadHasRequiredLoyalty(existing)) {
+                  log('✅ Required loyalty tier and points already captured by network monitor', 'success');
+                  return finishLoyaltyCapture(existing, loyaltyUrl, 'captured_authoritative_candidate');
                 }
                 if (existing) {
-                  log('ℹ️ Existing captured loyalty payload has no tier/point values yet; continuing to fetch loyalty/info', 'info');
+                  log('ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info', 'info');
                 }
                 return false;
               }
 
-              const headersForUrlBuild = getAuthHeadersFromSession();
-              const accountIdForUrlBuild = headersForUrlBuild && headersForUrlBuild['account-id'] ? headersForUrlBuild['account-id'] : '';
+              let primerFrame = null;
+
+              function getCandidateWindows() {
+                const result = [window];
+                try {
+                  if (primerFrame && primerFrame.contentWindow) result.push(primerFrame.contentWindow);
+                } catch (e) {}
+                return result;
+              }
+
+              function primeLoyaltySession() {
+                if (isCelebrityHost || primerFrame || !document.body) return;
+                try {
+                  primerFrame = document.createElement('iframe');
+                  primerFrame.setAttribute('aria-hidden', 'true');
+                  primerFrame.style.position = 'fixed';
+                  primerFrame.style.width = '1px';
+                  primerFrame.style.height = '1px';
+                  primerFrame.style.opacity = '0';
+                  primerFrame.style.pointerEvents = 'none';
+                  primerFrame.style.left = '-10000px';
+                  primerFrame.src = 'https://www.royalcaribbean.com/myaccount/loyalty-programs?easySeasLoyaltyProbe=1';
+                  primerFrame.onload = function() {
+                    log('✅ Loyalty account page primed inside the authenticated session', 'info');
+                  };
+                  document.body.appendChild(primerFrame);
+                } catch (e) {
+                  primerFrame = null;
+                }
+              }
+
+              const initialHeaders = getAuthHeadersFromSession(window);
+              const accountIdForUrlBuild = initialHeaders && initialHeaders['account-id'] ? initialHeaders['account-id'] : '';
               const LOYALTY_URL = buildLoyaltyUrl(accountIdForUrlBuild);
+              const LOYALTY_URLS = isCelebrityHost
+                ? [LOYALTY_URL]
+                : [
+                    LOYALTY_URL,
+                    'https://www.royalcaribbean.com/api/guestAccounts/loyalty/info',
+                    'https://www.royalcaribbean.com/api/account/loyalty',
+                    'https://www.royalcaribbean.com/api/profile/loyalty',
+                  ];
+
+              async function attemptManualFetch(label) {
+                if (loyaltyFinished || fetchInFlight) return loyaltyFinished;
+                fetchInFlight = true;
+                try {
+                  const candidateWindows = getCandidateWindows();
+                  for (let windowIndex = 0; windowIndex < candidateWindows.length; windowIndex++) {
+                    const sourceWindow = candidateWindows[windowIndex];
+                    const headers = getAuthHeadersFromSession(sourceWindow);
+                    const sourceName = windowIndex === 0 ? 'current page' : 'loyalty account page';
+                    log('🔁 ' + label + ': requesting dedicated loyalty data from ' + sourceName + ' using ' + describeAuthHeaders(headers), 'info');
+                    for (let urlIndex = 0; urlIndex < LOYALTY_URLS.length; urlIndex++) {
+                      const requestUrl = LOYALTY_URLS[urlIndex];
+                      try {
+                        const sourceFetch = sourceWindow && typeof sourceWindow.fetch === 'function'
+                          ? sourceWindow.fetch.bind(sourceWindow)
+                          : fetch.bind(window);
+                        const res = await sourceFetch(requestUrl, {
+                          method: 'GET',
+                          headers,
+                          credentials: 'include',
+                          cache: 'no-store',
+                          redirect: 'follow',
+                        });
+                        const text = await res.text().catch(function() { return ''; });
+                        let data = null;
+                        try { data = text ? JSON.parse(text) : null; } catch (e) { data = null; }
+                        if (!res.ok) {
+                          log('⚠️ Dedicated loyalty endpoint ' + (urlIndex + 1) + ' returned HTTP ' + res.status, 'warning');
+                          continue;
+                        }
+                        if (!data || typeof data !== 'object') {
+                          log('ℹ️ Dedicated loyalty endpoint ' + (urlIndex + 1) + ' did not return JSON loyalty data', 'info');
+                          continue;
+                        }
+                        post('network_payload', { endpoint: 'loyalty', data, url: requestUrl });
+                        if (capturedPayloadHasRequiredLoyalty(data)) {
+                          log('✅ Dedicated loyalty endpoint returned authoritative Crown & Anchor tier and points', 'success');
+                          return finishLoyaltyCapture(data, requestUrl, 'manual_fetch_authoritative');
+                        }
+                        log('ℹ️ Dedicated loyalty response was partial; trying the next authenticated route', 'info');
+                      } catch (requestError) {
+                        const requestMessage = requestError && requestError.message ? requestError.message : String(requestError);
+                        log('⚠️ Dedicated loyalty route failed: ' + requestMessage, 'warning');
+                      }
+                    }
+                  }
+                  return false;
+                } catch (e) {
+                  const msg = (e && e.message) ? e.message : String(e);
+                  log('⚠️ Dedicated loyalty request failed: ' + msg, 'warning');
+                  return false;
+                } finally {
+                  fetchInFlight = false;
+                }
+              }
 
               if (emitCapturedIfPresent(LOYALTY_URL)) return true;
 
-              log('🧭 Triggering loyalty area to let the site call the loyalty endpoint with the correct appkey...', 'info');
-              let triggerIndex = 0;
-              function navigateTrigger() {
-                const next = TRIGGER_URLS[triggerIndex % TRIGGER_URLS.length];
-                triggerIndex++;
-                try {
-                  window.location.href = next;
-                  log('📍 Navigating to: ' + next, 'info');
-                } catch (e) {}
-              }
-              navigateTrigger();
-
+              log('🧭 Keeping the current authenticated page alive while resolving Crown & Anchor...', 'info');
+              primeLoyaltySession();
               let tries = 0;
-              const maxTries = isCelebrityHost ? 80 : 120; // Celebrity: ~40s, Royal: ~60s
-              const timer = setInterval(async function() {
-                tries++;;
-
-                if (emitCapturedIfPresent(LOYALTY_URL)) {
+              const maxTries = isCelebrityHost ? 60 : 80;
+              timer = setInterval(async function() {
+                tries++;
+                if (loyaltyFinished) {
                   clearInterval(timer);
                   return;
                 }
+                if (emitCapturedIfPresent(LOYALTY_URL)) return;
 
-                if (tries === 8) {
-                  log('⏳ Still waiting for the site to request loyalty/info...', 'info');
-                }
-
-                if (tries === 16 || tries === 28 || tries === 40 || tries === 52) {
-                  log('🧭 Still no loyalty call — trying another loyalty page...', 'info');
-                  navigateTrigger();
-                }
-
-                if (tries === 24 || tries === 44) {
-                  const headers = getAuthHeadersFromSession();
-                  const hasAppKey = !!(headers && (headers['appkey'] || headers['x-api-key']));
-                  log('🔁 Fallback: attempting manual loyalty/info fetch' + (hasAppKey ? ' (with appkey)' : ' (NO appkey found)'), hasAppKey ? 'info' : 'warning');
-                  if (headers) {
-                    try {
-                      const res = await fetch(LOYALTY_URL, {
-                        method: 'GET',
-                        headers,
-                        credentials: 'omit',
-                        cache: 'no-store',
-                      });
-
-                      if (res.ok) {
-                        const data = await res.json();
-                        window.capturedPayloads = window.capturedPayloads || {};
-                        window.capturedPayloads.loyalty = data;
-                        log('✅ Loyalty fetched successfully from loyalty/info (fallback)', 'success');
-                        post('network_payload', { endpoint: 'loyalty', data, url: LOYALTY_URL });
-                        post('step_complete', { step: 3 });
-                        clearInterval(timer);
-                        return;
-                      }
-
-                      const text = await res.text().catch(() => '');
-                      log('❌ Loyalty fetch HTTP ' + res.status + ': ' + (text ? text.slice(0, 200) : ''), 'error');
-                    } catch (e) {
-                      const msg = (e && e.message) ? e.message : String(e);
-                      log('❌ Loyalty fallback fetch failed: ' + msg, 'error');
-                    }
-                  }
+                if ([4, 8, 16, 28, 44, 64].indexOf(tries) !== -1) {
+                  await attemptManualFetch('Retry ' + tries);
                 }
 
                 if (tries >= maxTries) {
                   clearInterval(timer);
-                  log('⚠️ Loyalty capture timed out - continuing without loyalty data', 'warning');
-                  post('step_complete', { step: 3 });
+                  log('⚠️ Dedicated Crown & Anchor capture timed out; preserving existing C&A fields rather than overwriting them', 'warning');
+                  post('step_complete', { step: 3, reason: 'timeout_preserve_existing' });
                 }
               }, 500);
+
+              void attemptManualFetch('Initial attempt');
 
               return true;
             })();
@@ -3182,8 +4288,12 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       } // end loyalty fallback else
       
       setState(prev => {
-        const hasLoyalty = prev.loyaltyData || extendedLoyaltyData;
-        if (hasLoyalty) {
+        const capturedLoyalty = extendedLoyaltyDataRef.current;
+        if (cruiseLine === 'royal_caribbean') {
+          const hasClubRoyale = hasAuthoritativeClubRoyaleData(capturedLoyalty);
+          const hasCrownAndAnchor = hasAuthoritativeCrownAndAnchorData(capturedLoyalty);
+          addLog(`✅ STEP 3 COMPLETE: Club Royale ${hasClubRoyale ? 'captured authoritatively' : 'preserved/not captured'}; Crown & Anchor ${hasCrownAndAnchor ? 'captured authoritatively' : 'preserved/not captured'}`, hasClubRoyale || hasCrownAndAnchor ? 'success' : 'warning');
+        } else if (capturedLoyalty || prev.loyaltyData) {
           addLog('✅ STEP 3 COMPLETE: Loyalty data captured successfully', 'success');
         } else {
           addLog('⚠️ STEP 3 COMPLETE: No loyalty data captured (continuing without it)', 'warning');
@@ -3196,20 +4306,6 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       
       setState(prev => {
         let stagedBookedCruises = prev.extractedBookedCruises;
-
-        // Royal history can arrive a few seconds after the booking payload.  The review/apply
-        // page must still stage all official Past(57) rows before the user can apply, so a
-        // Royal sync eagerly reconciles the known completed-history truth list into the staged
-        // booking/history lane.  When the live loyalty/history payload arrives later, its rows
-        // dedupe by reservation/ship/date and do not create duplicates.
-        if (cruiseLine === 'royal_caribbean') {
-          const repaired = mergeRoyalCompletedHistoryTruth(stagedBookedCruises as any, currentUser?.id);
-          if (repaired.after > repaired.before) {
-            stagedBookedCruises = repaired.cruises as any;
-            extractedBookedCruisesRef.current = stagedBookedCruises;
-            addLog(`🛠️ Staged Royal Completed / Past Cruises before review: ${repaired.after} row(s) available (${repaired.added} repaired from Royal Past(57) source)`, 'info');
-          }
-        }
 
         // Log all extracted cruises for debugging
         console.log('[RoyalCaribbeanSync] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -3235,9 +4331,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           const status = `${c.status || ''} ${c.bookingStatus || ''} ${c.sourcePage || ''}`.toLowerCase();
           return status.includes('completed') || status.includes('past') || status.includes('history');
         }).length;
-        const completedCruises = cruiseLine === 'royal_caribbean'
-          ? Math.max(rawCompletedCruises, ROYAL_COMPLETED_HISTORY_TRUTH_COUNT)
-          : rawCompletedCruises;
+        const completedCruises = rawCompletedCruises;
         
         console.log('[RoyalCaribbeanSync] Status counts - Upcoming:', upcomingCruises, ', Completed:', completedCruises, ', Courtesy Holds:', courtesyHolds);
         
@@ -3308,13 +4402,30 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       });
       
     } catch (error) {
-      addLog(`Ingestion failed: ${String(error)}`, 'error');
-      setState(prev => ({ ...prev, status: 'error', error: String(error) }));
+      if (error instanceof CarnivalSyncCancelledError || (isCarnivalMode && carnivalAbortSignal?.aborted)) {
+        const reason = error instanceof CarnivalSyncCancelledError ? error.reason : (carnivalCancelReasonRef.current || 'Carnival sync was cancelled');
+        const terminalStatus: CarnivalSyncTerminalStatus = /auth|login|session/i.test(reason) ? 'auth_lost' : 'cancelled';
+        await persistCarnivalTerminalManifest(terminalStatus, reason);
+        if (providerMountedRef.current) {
+          addLog(`⛔ Carnival sync ${terminalStatus === 'auth_lost' ? 'lost authentication' : 'cancelled'}: ${reason}. Completed offer checkpoints were preserved for resume.`, 'warning');
+          setState(prev => ({ ...prev, status: terminalStatus === 'auth_lost' ? 'login_expired' : 'cancelled', currentStep: '', progress: null, error: reason }));
+        }
+      } else {
+        if (isCarnivalMode) await persistCarnivalTerminalManifest('error', String(error));
+        addLog(`Ingestion failed: ${String(error)}`, 'error');
+        setState(prev => ({ ...prev, status: 'error', error: String(error) }));
+      }
     } finally {
       ingestionInFlightRef.current = false;
+      if (carnivalRunId && activeCarnivalRun?.runId === carnivalRunId && activeCarnivalRun.ownerId === providerInstanceIdRef.current) {
+        activeCarnivalRun.settled = true;
+        activeCarnivalRun = null;
+      }
+      if (activeCarnivalRunIdRef.current === carnivalRunId) activeCarnivalRunIdRef.current = null;
+      if (carnivalAbortControllerRef.current?.signal === carnivalAbortSignal) carnivalAbortControllerRef.current = null;
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.status, state.scrapePricingAndItinerary, addLog, config, cruiseLine]);
+  }, [state.status, state.scrapePricingAndItinerary, addLog, config, cruiseLine, verifyCarnivalAuthentication]);
 
   const exportOffersCSV = useCallback(async () => {
     try {
@@ -3415,31 +4526,19 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
   const resetState = useCallback(() => {
     setState(INITIAL_STATE);
     setExtendedLoyaltyData(null);
-    hasReceivedApiLoyaltyDataRef.current = false;
+    extendedLoyaltyDataRef.current = null;
+    loyaltyLaneAuthorityRef.current = { clubRoyale: false, crownAndAnchor: false };
     rcLogger.clear();
   }, []);
 
   const setExtendedLoyalty = useCallback((data: ExtendedLoyaltyData | null) => {
-    setExtendedLoyaltyData((prev) => mergeExtendedLoyaltyData(prev, data));
-    
-    if (data) {
-      setState(prev => ({
-        ...prev,
-        loyaltyData: {
-          ...(prev.loyaltyData ?? {}),
-          clubRoyaleTier: data.clubRoyaleTierFromApi,
-          clubRoyalePoints: data.clubRoyalePointsFromApi?.toString(),
-          crownAndAnchorLevel: data.crownAndAnchorTier,
-          crownAndAnchorPoints: data.crownAndAnchorPointsFromApi?.toString(),
-        }
-      }));
-    }
-  }, []);
+    mergeCapturedLoyalty(data, 'external loyalty setter');
+  }, [mergeCapturedLoyalty]);
 
   const syncToApp = useCallback(async (coreDataContext: any, loyaltyContext: any, providedExtendedLoyalty?: ExtendedLoyaltyData | null, targetOptions?: SyncTargetOptions) => {
-    const loyaltyToSync = filterExtendedLoyaltyForCruiseLine(providedExtendedLoyalty ?? extendedLoyaltyData, cruiseLine);
+    const loyaltyToSync = filterExtendedLoyaltyForCruiseLine(providedExtendedLoyalty ?? extendedLoyaltyDataRef.current ?? extendedLoyaltyData, cruiseLine);
     const fallbackExtendedLoyaltyFromState = state.loyaltyData
-      ? convertLoyaltyInfoToExtended(state.loyaltyData as unknown as LoyaltyApiInformation)
+      ? convertLoyaltyInfoToExtended(state.loyaltyData as unknown as LoyaltyApiInformation, undefined, { sourceType: 'stored' })
       : null;
     const effectiveExtendedLoyalty = filterExtendedLoyaltyForCruiseLine(loyaltyToSync ?? fallbackExtendedLoyaltyFromState, cruiseLine);
     const syncSource = cruiseLine === 'carnival' ? 'carnival' : cruiseLine === 'celebrity' ? 'celebrity' : 'royal';
@@ -3487,8 +4586,154 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     }
 
     syncToAppInFlightRef.current = true;
+
+    const carnivalApplyJournalKey = getUserScopedKey(CARNIVAL_APPLY_JOURNAL_STORAGE_KEY, authenticatedEmail);
+    let carnivalApplyJournal: CarnivalApplyJournal | null = null;
+    let carnivalApplyCommitted = false;
+    let stagedCarnivalProfileUpdates: Record<string, unknown> = {};
+
+    type RoyalCelebrityApplySnapshot = {
+      offers: any[];
+      cruises: any[];
+      bookedCruises: any[];
+      profile: Record<string, any> | null;
+      extendedLoyaltyRaw: string | null;
+      manualClubRoyaleRaw: string | null;
+      manualCrownAnchorRaw: string | null;
+      usersRaw: string | null;
+    };
+    let royalCelebrityApplySnapshot: RoyalCelebrityApplySnapshot | null = null;
+    let royalCelebrityApplyMutated = false;
+
+    const restoreRawStorageValue = async (key: string, value: string | null): Promise<void> => {
+      if (value === null) await AsyncStorage.removeItem(key);
+      else await AsyncStorage.setItem(key, value);
+    };
+
+    const restoreRoyalCelebrityProfileSnapshot = async (snapshot: Record<string, any> | null): Promise<void> => {
+      if (!snapshot?.id || !updateUserProfile) return;
+      await updateUserProfile(snapshot.id, {
+        name: snapshot.name ?? '',
+        displayName: snapshot.displayName ?? '',
+        preferredBrand: snapshot.preferredBrand ?? 'royal',
+        clubRoyaleId: snapshot.clubRoyaleId ?? '',
+        clubRoyaleTier: snapshot.clubRoyaleTier ?? '',
+        clubRoyalePoints: snapshot.clubRoyalePoints ?? 0,
+        clubRoyaleRelationshipPoints: snapshot.clubRoyaleRelationshipPoints ?? 0,
+        clubRoyaleEvaluationPeriodStartDate: snapshot.clubRoyaleEvaluationPeriodStartDate ?? '',
+        clubRoyaleEvaluationPeriodEndDate: snapshot.clubRoyaleEvaluationPeriodEndDate ?? '',
+        crownAnchorNumber: snapshot.crownAnchorNumber ?? '',
+        royalCaribbeanNumber: snapshot.royalCaribbeanNumber ?? '',
+        crownAnchorLevel: snapshot.crownAnchorLevel ?? '',
+        loyaltyPoints: snapshot.loyaltyPoints ?? 0,
+        crownAnchorRelationshipPoints: snapshot.crownAnchorRelationshipPoints ?? 0,
+        celebrityCaptainsClubNumber: snapshot.celebrityCaptainsClubNumber ?? '',
+        celebrityCaptainsClubLevel: snapshot.celebrityCaptainsClubLevel ?? '',
+        celebrityCaptainsClubPoints: snapshot.celebrityCaptainsClubPoints ?? 0,
+        celebrityBlueChipId: snapshot.celebrityBlueChipId ?? '',
+        celebrityBlueChipTier: snapshot.celebrityBlueChipTier ?? '',
+        celebrityBlueChipPoints: snapshot.celebrityBlueChipPoints ?? 0,
+        silverseaVenetianNumber: snapshot.silverseaVenetianNumber ?? '',
+        silverseaVenetianTier: snapshot.silverseaVenetianTier ?? '',
+      } as any);
+    };
+
+    const rollbackRoyalCelebrityApply = async (snapshot: RoyalCelebrityApplySnapshot, reason: string): Promise<void> => {
+      addLog(`↩️ Royal/Celebrity Apply Sync failed; restoring the complete pre-sync snapshot (${reason})`, 'warning');
+      await coreDataContext.setCasinoOffers(snapshot.offers);
+      await coreDataContext.setCruises(snapshot.cruises);
+      await coreDataContext.setBookedCruises(snapshot.bookedCruises);
+      await restoreRawStorageValue(getUserScopedKey(ALL_STORAGE_KEYS.EXTENDED_LOYALTY_DATA, authenticatedEmail), snapshot.extendedLoyaltyRaw);
+      await restoreRawStorageValue(getUserScopedKey(ALL_STORAGE_KEYS.MANUAL_CLUB_ROYALE_POINTS, authenticatedEmail), snapshot.manualClubRoyaleRaw);
+      await restoreRawStorageValue(getUserScopedKey(ALL_STORAGE_KEYS.MANUAL_CROWN_ANCHOR_POINTS, authenticatedEmail), snapshot.manualCrownAnchorRaw);
+      await restoreRawStorageValue(getUserScopedKey(ALL_STORAGE_KEYS.USERS, authenticatedEmail), snapshot.usersRaw);
+      await restoreRoyalCelebrityProfileSnapshot(snapshot.profile);
+      if (typeof loyaltyContext?.syncFromStorage === 'function') {
+        await loyaltyContext.syncFromStorage();
+      }
+      addLog('✅ Royal/Celebrity rollback restored offers, sailings, bookings/history, loyalty storage, and selected profile state', 'success');
+    };
+
+    const persistCarnivalJournal = async (journal: CarnivalApplyJournal): Promise<void> => {
+      const validation = validateCarnivalApplyJournal(journal);
+      if (!validation.valid) throw new Error(`Carnival apply journal validation failed: ${validation.reason || 'unknown reason'}`);
+      await AsyncStorage.setItem(carnivalApplyJournalKey, JSON.stringify(journal));
+    };
+
+    const restoreCarnivalProfileSnapshot = async (profileId: string, snapshot: Record<string, unknown> | null): Promise<void> => {
+      if (!profileId || !snapshot) return;
+      const rollbackFields: Record<string, unknown> = {
+        name: snapshot.name ?? '',
+        displayName: snapshot.displayName ?? '',
+        preferredBrand: snapshot.preferredBrand ?? 'royal',
+        carnivalVifpNumber: snapshot.carnivalVifpNumber ?? '',
+        carnivalVifpTier: snapshot.carnivalVifpTier ?? '',
+        carnivalVifpPoints: snapshot.carnivalVifpPoints ?? 0,
+        carnivalCruiseDayPoints: snapshot.carnivalCruiseDayPoints ?? 0,
+        carnivalTotalCruises: snapshot.carnivalTotalCruises ?? 0,
+        carnivalPlayersClubTier: snapshot.carnivalPlayersClubTier ?? '',
+        carnivalPlayersClubPoints: snapshot.carnivalPlayersClubPoints ?? 0,
+      };
+      if (updateUserProfile) {
+        await updateUserProfile(profileId, rollbackFields as any);
+        return;
+      }
+      const scopedUsersKey = getUserScopedKey(ALL_STORAGE_KEYS.USERS, authenticatedEmail);
+      const usersRaw = await AsyncStorage.getItem(scopedUsersKey);
+      const parsedUsers = usersRaw ? JSON.parse(usersRaw) : null;
+      if (!Array.isArray(parsedUsers)) throw new Error('Unable to restore Carnival profile snapshot because stored users are unavailable');
+      let restored = false;
+      const restoredUsers = parsedUsers.map((user: any) => {
+        if (user?.id !== profileId) return user;
+        restored = true;
+        return { ...user, ...rollbackFields, updatedAt: new Date().toISOString() };
+      });
+      if (!restored) throw new Error(`Unable to restore Carnival profile ${profileId}; profile was not found`);
+      await AsyncStorage.setItem(scopedUsersKey, JSON.stringify(restoredUsers));
+    };
+
+    const rollbackCarnivalApply = async (journal: CarnivalApplyJournal, reason: string): Promise<void> => {
+      carnivalApplyJournal = updateCarnivalApplyJournal(journal, 'rolling_back', reason);
+      await persistCarnivalJournal(carnivalApplyJournal);
+      await coreDataContext.setCasinoOffers(journal.before.offers);
+      await coreDataContext.setCruises(journal.before.cruises);
+      await coreDataContext.setBookedCruises(journal.before.bookedCruises);
+      await restoreCarnivalProfileSnapshot(journal.targetProfileId, journal.before.profile);
+      await AsyncStorage.removeItem(carnivalApplyJournalKey);
+      carnivalApplyJournal = null;
+      addLog('↩️ Carnival Apply Sync rollback restored offers, sailings, bookings/history, and the selected profile snapshot', 'success');
+    };
     
     try {
+      if (syncSource === 'carnival') {
+        const storedJournalRaw = await AsyncStorage.getItem(carnivalApplyJournalKey);
+        if (storedJournalRaw) {
+          const storedJournal = JSON.parse(storedJournalRaw) as CarnivalApplyJournal;
+          const validation = validateCarnivalApplyJournal(storedJournal);
+          if (!validation.valid) {
+            throw new Error(`An invalid Carnival recovery journal is present (${validation.reason || 'unknown reason'}). Data was not changed.`);
+          }
+          if (storedJournal.status === 'committed') {
+            await AsyncStorage.removeItem(carnivalApplyJournalKey);
+          } else {
+            addLog(`🛡️ Found unfinished Carnival Apply Sync transaction ${storedJournal.transactionId}; restoring its pre-sync snapshot before continuing`, 'warning');
+            await rollbackCarnivalApply(storedJournal, 'Automatic recovery before a new Apply Sync');
+          }
+        }
+      }
+      if (syncSource !== 'carnival') {
+        royalCelebrityApplySnapshot = {
+          offers: [...coreDataContext.casinoOffers],
+          cruises: [...coreDataContext.cruises],
+          bookedCruises: [...coreDataContext.bookedCruises],
+          profile: targetProfile ? { ...targetProfile } : null,
+          extendedLoyaltyRaw: await AsyncStorage.getItem(getUserScopedKey(ALL_STORAGE_KEYS.EXTENDED_LOYALTY_DATA, authenticatedEmail)),
+          manualClubRoyaleRaw: await AsyncStorage.getItem(getUserScopedKey(ALL_STORAGE_KEYS.MANUAL_CLUB_ROYALE_POINTS, authenticatedEmail)),
+          manualCrownAnchorRaw: await AsyncStorage.getItem(getUserScopedKey(ALL_STORAGE_KEYS.MANUAL_CROWN_ANCHOR_POINTS, authenticatedEmail)),
+          usersRaw: await AsyncStorage.getItem(getUserScopedKey(ALL_STORAGE_KEYS.USERS, authenticatedEmail)),
+        };
+      }
+
       console.log('[RoyalCaribbeanSync] Step 1: Setting status to syncing...');
       setState(prev => ({ ...prev, status: 'syncing' }));
       addLog('🚀 Starting sync to app...', 'info');
@@ -3548,11 +4793,11 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       const completedCandidatesCount = completedCandidates.length;
       const liveCompletedRows = completedCandidates.filter((row) => /live|past|my trips/i.test(String(row.sourcePage || ''))).length;
       const storedCompletedRows = completedCandidates.length - liveCompletedRows;
-      const royalVisiblePastCount = cruiseLine === 'royal_caribbean' ? 57 : undefined;
-      if (completedCandidates.length > 0 || royalVisiblePastCount) {
-        addLog(`Completed sync source breakdown: visible past=${royalVisiblePastCount ?? 'n/a'}, live=${liveCompletedRows}, stored/history=${storedCompletedRows}, existing=${coreDataContext.bookedCruises.filter((c: any) => isCompletedRecordLike(c)).length}, canonical candidates=${completedCandidates.length}`, 'info');
-        if (royalVisiblePastCount && completedCandidates.length > royalVisiblePastCount + 5) {
-          addLog(`⚠️ Completed candidate count ${completedCandidates.length} is above visible Royal past count ${royalVisiblePastCount}; preserve existing completed rows unless you explicitly selected Completed Cruises`, 'warning');
+      const royalReportedPastCount = cruiseLine === 'royal_caribbean' ? state.syncCounts?.completedCruises : undefined;
+      if (completedCandidates.length > 0 || royalReportedPastCount) {
+        addLog(`Completed sync source breakdown: reported past=${royalReportedPastCount ?? 'n/a'}, live=${liveCompletedRows}, stored/history=${storedCompletedRows}, existing=${coreDataContext.bookedCruises.filter((c: any) => isCompletedRecordLike(c)).length}, canonical candidates=${completedCandidates.length}`, 'info');
+        if (royalReportedPastCount && completedCandidates.length < royalReportedPastCount) {
+          addLog(`⚠️ Completed candidate count ${completedCandidates.length} is below the ${royalReportedPastCount} row(s) reported by extraction; completed-history replacement will remain non-authoritative until reconciliation is complete`, 'warning');
         }
       }
 
@@ -3581,9 +4826,10 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       addLog(`Preview: ${counts.offersNew} new offers, ${counts.offersUpdated} updated offers`, 'info');
       addLog(`Preview: ${counts.cruisesNew} new available cruises, ${counts.cruisesUpdated} updated available cruises`, 'info');
       addLog(`Preview: ${counts.bookedCruisesNew} new booked cruises, ${counts.bookedCruisesUpdated} updated booked cruises`, 'info');
-      const previewCompletedCount = [...preview.bookedCruises.new, ...preview.bookedCruises.updates.map(u => u.updated), ...preview.bookedCruises.unchanged].filter((c: any) => isCompletedRecordLike(c)).length;
-      addLog(`Preview: ${counts.upcomingCruises} upcoming, ${counts.courtesyHolds} holds`, 'info');
-      addLog(`Preview: ${previewCompletedCount} completed/past cruise(s) staged`, 'info');
+      const previewCanonicalBooked = [...preview.bookedCruises.new, ...preview.bookedCruises.updates.map(u => u.updated)];
+      const previewCompletedCount = previewCanonicalBooked.filter((c: any) => isCompletedRecordLike(c)).length;
+      addLog(`Preview canonical input: ${counts.upcomingCruises} upcoming, ${counts.courtesyHolds} holds`, 'info');
+      addLog(`Preview canonical input: ${previewCompletedCount} completed/past cruise(s) staged; ${preview.bookedCruises.unchanged.length} existing row(s) preserved separately`, 'info');
 
       setState(prev => ({ ...prev, syncPreview: preview }));
 
@@ -3597,6 +4843,17 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         .map((offer: any) => String(offer.catalogZeroRowOfferCodes || '').split(',').map((c: string) => c.trim().toUpperCase()).filter(Boolean))
         .flat();
       const dynamicZeroRowOfferCodes = Array.from(new Set(rowZeroOfferCodes));
+      const rowIncompleteOfferCodes = normalizedOffers
+        .map((offer: any) => String(offer.catalogIncompleteOfferCodes || '').split(',').map((c: string) => c.trim().toUpperCase()).filter(Boolean))
+        .flat();
+      const dynamicIncompleteOfferCodes = Array.from(new Set(
+        (Array.isArray(step1ApplyMeta.incompleteCodes) && step1ApplyMeta.incompleteCodes.length
+          ? step1ApplyMeta.incompleteCodes
+          : rowIncompleteOfferCodes)
+          .map((code: string) => String(code || '').trim().toUpperCase())
+          .filter(Boolean),
+      ));
+      const carnivalOfferCatalogFullyResolved = syncSource !== 'carnival' || (Boolean(step1ApplyMeta.completed) && dynamicIncompleteOfferCodes.length === 0);
       const authoritativeEmptyOfferCatalog = selectedSections.offers && Boolean(step1ApplyMeta.completed) && dynamicVisibleOfferCount === 0 && normalizedOffers.length === 0;
       if (selectedSections.offers && (dynamicVisibleOfferCount > 0 || authoritativeEmptyOfferCatalog)) {
         addLog(`Dynamic offer catalog metadata for Apply Sync: ${dynamicVisibleOfferCount} visible offer(s), ${dynamicZeroRowOfferCodes.length} zero-row visible offer(s)`, 'info');
@@ -3616,8 +4873,8 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         return !isIncompleteFallback;
       });
       const offerRowsWithSailings = authoritativeOfferRows.filter((offer) => Boolean(offer.shipName?.trim() || offer.sailingDate?.trim()));
-      const allowOfferRemoval = selectedSections.offers && (authoritativeOfferRows.length > 0 || authoritativeEmptyOfferCatalog);
-      const allowCruiseRemoval = selectedSections.availableCruises && (offerRowsWithSailings.length > 0 || authoritativeEmptyOfferCatalog);
+      const allowOfferRemoval = selectedSections.offers && carnivalOfferCatalogFullyResolved && (authoritativeOfferRows.length > 0 || authoritativeEmptyOfferCatalog);
+      const allowCruiseRemoval = selectedSections.availableCruises && carnivalOfferCatalogFullyResolved && (offerRowsWithSailings.length > 0 || authoritativeEmptyOfferCatalog);
       const carnivalLaneAuthority = carnivalLaneAuthorityRef.current;
       const allowActiveBookedCruiseRemoval = selectedSections.bookedCruises && (
         syncSource === 'carnival' ? carnivalLaneAuthority.active : activeBookedCandidatesCount > 0
@@ -3628,7 +4885,10 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       const allowBookedCruiseRemoval = allowActiveBookedCruiseRemoval || allowCompletedCruiseRemoval;
 
       if (!allowOfferRemoval) {
-        addLog(`⚠️ No authoritative ${config.loyaltyClubName} offer rows were captured, so existing offers and available sailings will be preserved`, 'warning');
+        const unresolvedSuffix = syncSource === 'carnival' && dynamicIncompleteOfferCodes.length
+          ? `; unresolved Carnival code(s): ${dynamicIncompleteOfferCodes.join(', ')}`
+          : '';
+        addLog(`⚠️ No fully authoritative ${config.loyaltyClubName} offer catalog was captured, so existing offers and available sailings will be preserved${unresolvedSuffix}`, 'warning');
       } else if (!allowCruiseRemoval) {
         addLog(`⚠️ ${config.loyaltyClubName} offers were captured without sailing detail, so existing available sailings will be preserved`, 'warning');
       }
@@ -3694,15 +4954,37 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         addLog(`Data healing fixed ${healingReport.fieldsFixed.length} field(s)`, 'info');
       }
 
-      if (syncSource === 'royal' && selectedSections.completedCruises) {
-        const repairResult = mergeRoyalCompletedHistoryTruth(finalBookedCruises, undefined);
-        if (repairResult.added > 0) {
-          finalBookedCruises = repairResult.cruises;
-          addLog(`🛠️ Royal completed history repaired from ${repairResult.before} to ${repairResult.after} row(s) using Royal Past(57) source-of-truth reconciliation`, 'info');
-        }
-      }
-
       finalBookedCruises = mergeSharedBookedInventoryRows(finalBookedCruises);
+
+      if (syncSource === 'carnival') {
+        stagedCarnivalProfileUpdates = selectedSections.loyalty
+          ? buildCarnivalProfileUpdates(carnivalUserDataRef.current, targetProfile)
+          : {};
+        if (Object.keys(stagedCarnivalProfileUpdates).length > 0 && (!targetProfile?.id || !updateUserProfile)) {
+          throw new Error('Carnival loyalty/profile changes require a selected profile and an available profile persistence function before transactional Apply Sync can begin');
+        }
+        carnivalApplyJournal = createCarnivalApplyJournal({
+          transactionId: `carnival-apply-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          targetProfileId: targetProfile?.id || '',
+          selectedSections,
+          before: {
+            offers: coreDataContext.casinoOffers,
+            cruises: coreDataContext.cruises,
+            bookedCruises: coreDataContext.bookedCruises,
+            profile: targetProfile ? { ...targetProfile } as Record<string, unknown> : null,
+          },
+          after: {
+            offers: finalOffers,
+            cruises: finalCruises,
+            bookedCruises: finalBookedCruises,
+            profileUpdates: stagedCarnivalProfileUpdates,
+          },
+        });
+        await persistCarnivalJournal(carnivalApplyJournal);
+        carnivalApplyJournal = updateCarnivalApplyJournal(carnivalApplyJournal, 'applying');
+        await persistCarnivalJournal(carnivalApplyJournal);
+        addLog(`🧾 Carnival transactional Apply Sync journal staged (${carnivalApplyJournal.transactionId}); recovery snapshot retained until every required write succeeds`, 'info');
+      }
 
       const finalActiveBookedCruises = finalBookedCruises.filter(cruise => isActiveBookedCruise(cruise));
       const finalCourtesyHolds = finalBookedCruises.filter(cruise => isCourtesyHoldCruise(cruise));
@@ -3719,6 +5001,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       addLog(`Setting ${finalOffers.length} total offers in app`, 'info');
       try {
         console.log('[RoyalCaribbeanSync] Calling setCasinoOffers()...');
+        if (syncSource !== 'carnival') royalCelebrityApplyMutated = true;
         await coreDataContext.setCasinoOffers(finalOffers);
         console.log('[RoyalCaribbeanSync] setCasinoOffers() completed');
         addLog('✅ Offers persisted to storage', 'success');
@@ -3733,6 +5016,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       addLog(`Setting ${finalCruises.length} total available cruises in app`, 'info');
       try {
         console.log('[RoyalCaribbeanSync] Calling setCruises()...');
+        if (syncSource !== 'carnival') royalCelebrityApplyMutated = true;
         await coreDataContext.setCruises(finalCruises);
         console.log('[RoyalCaribbeanSync] setCruises() completed');
         addLog('✅ Available cruises persisted to storage', 'success');
@@ -3745,12 +5029,14 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
       console.log('[RoyalCaribbeanSync] Step: Persisting booked cruises...');
       const finalCompletedCruises = finalBookedCruises.filter((c: any) => isCompletedRecordLike(c));
-      if (syncSource === 'royal' && selectedSections.completedCruises && finalCompletedCruises.length < ROYAL_COMPLETED_HISTORY_TRUTH_COUNT) {
-        addLog(`⚠️ Royal completed history final count is ${finalCompletedCruises.length}; expected ${ROYAL_COMPLETED_HISTORY_TRUTH_COUNT}. A repair was attempted, so review duplicate/status keys if this persists.`, 'warning');
+      if (syncSource === 'royal' && selectedSections.completedCruises) {
+        const extractedCompletedCount = extractedBookedCruisesRef.current.filter((c: any) => isCompletedRecordLike(c)).length;
+        addLog(`🔎 Royal completed-history reconciliation: ${extractedCompletedCount} extracted → ${finalCompletedCruises.length} canonical row(s) before persistence`, extractedCompletedCount === finalCompletedCruises.length ? 'success' : 'info');
       }
       addLog(`Setting ${finalActiveBookedCruises.length} active booked cruise(s) and ${finalCompletedCruises.length} completed cruise(s) in app (${finalBookedCruises.length} total including history)`, 'info');
       try {
         console.log('[RoyalCaribbeanSync] Calling setBookedCruises()...');
+        if (syncSource !== 'carnival') royalCelebrityApplyMutated = true;
         await coreDataContext.setBookedCruises(finalBookedCruises);
         console.log('[RoyalCaribbeanSync] setBookedCruises() completed');
         addLog('✅ Booked cruises persisted to storage', 'success');
@@ -3767,18 +5053,29 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
       if (selectedSections.loyalty && syncSource === 'royal' && isPrimarySyncTarget && preview.loyalty) {
         try {
-          if (preview.loyalty.clubRoyalePoints.changed) {
-            addLog(`Updating Club Royale points: ${preview.loyalty.clubRoyalePoints.current} → ${preview.loyalty.clubRoyalePoints.synced}`, 'info');
-            await loyaltyContext.setManualClubRoyalePoints(preview.loyalty.clubRoyalePoints.synced);
+          const authoritativeClubRoyalePoints = effectiveExtendedLoyalty?.clubRoyalePointsFromApi;
+          if (hasAuthoritativeLoyaltyField(effectiveExtendedLoyalty, 'clubRoyalePoints') && typeof authoritativeClubRoyalePoints === 'number' && Number.isFinite(authoritativeClubRoyalePoints)) {
+            if (authoritativeClubRoyalePoints !== loyaltyContext.clubRoyalePoints) {
+              addLog(`Updating Club Royale points: ${loyaltyContext.clubRoyalePoints} → ${authoritativeClubRoyalePoints}`, 'info');
+              await loyaltyContext.setManualClubRoyalePoints(authoritativeClubRoyalePoints);
+            }
+          } else if (preview.loyalty.clubRoyalePoints.changed) {
+            addLog('🛡️ Club Royale points differed in the preview but were not written because the field was not authoritative in this run', 'warning');
           }
-          
-          if (preview.loyalty.crownAndAnchorPoints.changed) {
-            addLog(`Updating Crown & Anchor points: ${preview.loyalty.crownAndAnchorPoints.current} → ${preview.loyalty.crownAndAnchorPoints.synced}`, 'info');
-            await loyaltyContext.setManualCrownAnchorPoints(preview.loyalty.crownAndAnchorPoints.synced);
+
+          const authoritativeCrownAnchorPoints = effectiveExtendedLoyalty?.crownAndAnchorPointsFromApi;
+          if (hasAuthoritativeLoyaltyField(effectiveExtendedLoyalty, 'crownAndAnchorPoints') && typeof authoritativeCrownAnchorPoints === 'number' && Number.isFinite(authoritativeCrownAnchorPoints)) {
+            if (authoritativeCrownAnchorPoints !== loyaltyContext.crownAnchorPoints) {
+              addLog(`Updating Crown & Anchor points: ${loyaltyContext.crownAnchorPoints} → ${authoritativeCrownAnchorPoints}`, 'info');
+              await loyaltyContext.setManualCrownAnchorPoints(authoritativeCrownAnchorPoints);
+            }
+          } else if (preview.loyalty.crownAndAnchorPoints.changed) {
+            addLog('🛡️ Crown & Anchor points differed in the preview but were not written because the field was not authoritative in this run', 'warning');
           }
         } catch (loyaltyError) {
           console.error('[RoyalCaribbeanSync] Error updating loyalty points:', loyaltyError);
-          addLog(`⚠️ Warning: Failed to update loyalty points: ${String(loyaltyError)}`, 'warning');
+          addLog(`❌ Loyalty points transaction failed: ${String(loyaltyError)}`, 'error');
+          throw loyaltyError;
         }
       } else if (!selectedSections.loyalty) {
         addLog('🛡️ Loyalty sync was not selected; preserving existing loyalty/profile values', 'warning');
@@ -3803,11 +5100,13 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
             addLog(`  → Blue Chip Club: ${effectiveExtendedLoyalty.celebrityBlueChipTier || 'N/A'} - ${effectiveExtendedLoyalty.celebrityBlueChipPoints} points`, 'info');
           }
           
+          royalCelebrityApplyMutated = true;
           await loyaltyContext.setExtendedLoyaltyData(effectiveExtendedLoyalty);
           addLog('Extended loyalty data synced successfully', 'success');
         } catch (extLoyaltyError) {
           console.error('[RoyalCaribbeanSync] Error syncing extended loyalty:', extLoyaltyError);
-          addLog(`⚠️ Warning: Failed to sync extended loyalty data: ${String(extLoyaltyError)}`, 'warning');
+          addLog(`❌ Extended loyalty transaction failed: ${String(extLoyaltyError)}`, 'error');
+          throw extLoyaltyError;
         }
       } else if (syncSource !== 'carnival' && !effectiveExtendedLoyalty) {
         addLog('⚠️ No extended loyalty payload available at sync time', 'warning');
@@ -3840,35 +5139,58 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
 
           // Extract Crown & Anchor number from extended loyalty data
           if (syncSource === 'royal') {
-            const syncedClubRoyalePoints = effectiveExtendedLoyalty?.clubRoyalePointsFromApi ?? (state.loyaltyData?.clubRoyalePoints ? parseInt(String(state.loyaltyData.clubRoyalePoints).replace(/,/g, ''), 10) : undefined);
-            if (typeof syncedClubRoyalePoints === 'number' && Number.isFinite(syncedClubRoyalePoints)) {
+            const syncedClubRoyalePoints = effectiveExtendedLoyalty?.clubRoyalePointsFromApi;
+            if (hasAuthoritativeLoyaltyField(effectiveExtendedLoyalty, 'clubRoyalePoints') && typeof syncedClubRoyalePoints === 'number' && Number.isFinite(syncedClubRoyalePoints)) {
               profileUpdates.clubRoyalePoints = syncedClubRoyalePoints;
               addLog(`  → Club Royale points: ${syncedClubRoyalePoints.toLocaleString()}`, 'info');
             }
 
-            const syncedClubRoyaleTier = effectiveExtendedLoyalty?.clubRoyaleTierFromApi ?? state.loyaltyData?.clubRoyaleTier;
-            if (syncedClubRoyaleTier && syncedClubRoyaleTier.trim().length > 0) {
+            const syncedClubRoyaleTier = effectiveExtendedLoyalty?.clubRoyaleTierFromApi;
+            if (hasAuthoritativeLoyaltyField(effectiveExtendedLoyalty, 'clubRoyaleTier') && syncedClubRoyaleTier && syncedClubRoyaleTier.trim().length > 0) {
               profileUpdates.clubRoyaleTier = syncedClubRoyaleTier.trim();
               addLog(`  → Club Royale tier: ${syncedClubRoyaleTier.trim()}`, 'info');
             }
 
-            const cAndAId = effectiveExtendedLoyalty?.crownAndAnchorId;
-            if (cAndAId && cAndAId.trim().length > 0) {
-              profileUpdates.crownAnchorNumber = cAndAId.trim();
-              profileUpdates.royalCaribbeanNumber = cAndAId.trim();
-              addLog(`  → Crown & Anchor #: ${cAndAId.trim()}`, 'info');
+            if (hasAuthoritativeLoyaltyField(effectiveExtendedLoyalty, 'clubRoyaleId') && effectiveExtendedLoyalty?.clubRoyaleId) {
+              profileUpdates.clubRoyaleId = effectiveExtendedLoyalty.clubRoyaleId;
+              addLog('  → Club Royale ID: [redacted]', 'info');
+            }
+            if (hasAuthoritativeLoyaltyField(effectiveExtendedLoyalty, 'clubRoyaleRelationshipPoints') && effectiveExtendedLoyalty?.clubRoyaleRelationshipPointsFromApi !== undefined) {
+              profileUpdates.clubRoyaleRelationshipPoints = effectiveExtendedLoyalty.clubRoyaleRelationshipPointsFromApi;
+              addLog(`  → Club Royale relationship points: ${effectiveExtendedLoyalty.clubRoyaleRelationshipPointsFromApi.toLocaleString()}`, 'info');
+            }
+            if (hasAuthoritativeLoyaltyField(effectiveExtendedLoyalty, 'clubRoyaleEvaluationPeriodStartDate') && effectiveExtendedLoyalty?.clubRoyaleEvaluationPeriodStartDate) {
+              profileUpdates.clubRoyaleEvaluationPeriodStartDate = effectiveExtendedLoyalty.clubRoyaleEvaluationPeriodStartDate;
+            }
+            if (hasAuthoritativeLoyaltyField(effectiveExtendedLoyalty, 'clubRoyaleEvaluationPeriodEndDate') && effectiveExtendedLoyalty?.clubRoyaleEvaluationPeriodEndDate) {
+              profileUpdates.clubRoyaleEvaluationPeriodEndDate = effectiveExtendedLoyalty.clubRoyaleEvaluationPeriodEndDate;
             }
 
-            const syncedCrownAnchorPoints = effectiveExtendedLoyalty?.crownAndAnchorPointsFromApi ?? (state.loyaltyData?.crownAndAnchorPoints ? parseInt(String(state.loyaltyData.crownAndAnchorPoints).replace(/,/g, ''), 10) : undefined);
-            if (typeof syncedCrownAnchorPoints === 'number' && Number.isFinite(syncedCrownAnchorPoints)) {
+            const cAndAId = effectiveExtendedLoyalty?.crownAndAnchorId;
+            if (hasAuthoritativeLoyaltyField(effectiveExtendedLoyalty, 'crownAndAnchorId') && cAndAId && cAndAId.trim().length > 0) {
+              profileUpdates.crownAnchorNumber = cAndAId.trim();
+              profileUpdates.royalCaribbeanNumber = cAndAId.trim();
+              addLog('  → Crown & Anchor #: [redacted]', 'info');
+            }
+
+            const hasAuthoritativeCrownAndAnchor = hasAuthoritativeCrownAndAnchorData(effectiveExtendedLoyalty);
+            const syncedCrownAnchorPoints = effectiveExtendedLoyalty?.crownAndAnchorPointsFromApi;
+            if (hasAuthoritativeLoyaltyField(effectiveExtendedLoyalty, 'crownAndAnchorPoints') && typeof syncedCrownAnchorPoints === 'number' && Number.isFinite(syncedCrownAnchorPoints)) {
               profileUpdates.loyaltyPoints = syncedCrownAnchorPoints;
               addLog(`  → Crown & Anchor points: ${syncedCrownAnchorPoints.toLocaleString()}`, 'info');
             }
 
             const cAndALevel = effectiveExtendedLoyalty?.crownAndAnchorTier;
-            if (cAndALevel && cAndALevel.trim().length > 0) {
+            if (hasAuthoritativeLoyaltyField(effectiveExtendedLoyalty, 'crownAndAnchorTier') && cAndALevel && cAndALevel.trim().length > 0) {
               profileUpdates.crownAnchorLevel = cAndALevel.trim();
               addLog(`  → Crown & Anchor level: ${cAndALevel.trim()}`, 'info');
+            }
+            if (hasAuthoritativeLoyaltyField(effectiveExtendedLoyalty, 'crownAndAnchorRelationshipPoints') && effectiveExtendedLoyalty?.crownAndAnchorRelationshipPointsFromApi !== undefined) {
+              profileUpdates.crownAnchorRelationshipPoints = effectiveExtendedLoyalty.crownAndAnchorRelationshipPointsFromApi;
+              addLog(`  → Crown & Anchor relationship points: ${effectiveExtendedLoyalty.crownAndAnchorRelationshipPointsFromApi.toLocaleString()}`, 'info');
+            }
+            if (!hasAuthoritativeCrownAndAnchor) {
+              addLog('  → Crown & Anchor lane remained incomplete; only individually authoritative C&A fields were updated and all others were preserved', 'warning');
             }
           }
 
@@ -3907,17 +5229,26 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           if (Object.keys(profileUpdates).length > 0) {
             addLog(`Syncing ${targetSlotLabel.toLowerCase()} profile from loyalty data...`, 'info');
             await updateUserProfile(targetProfile.id, profileUpdates as any);
-            addLog(`✅ ${targetSlotLabel} profile updated from sync`, 'success');
+            const usersStorageKey = getUserScopedKey(ALL_STORAGE_KEYS.USERS, authenticatedEmail);
+            const persistedUsersRaw = await AsyncStorage.getItem(usersStorageKey);
+            const persistedUsers = persistedUsersRaw ? JSON.parse(persistedUsersRaw) as Array<Record<string, unknown>> : [];
+            const persistedProfile = persistedUsers.find((candidate) => candidate.id === targetProfile.id);
+            const mismatches = Object.entries(profileUpdates).filter(([key, value]) => persistedProfile?.[key] !== value);
+            if (mismatches.length > 0) {
+              throw new Error(`Loyalty/profile readback mismatch for: ${mismatches.map(([key]) => key).join(', ')}`);
+            }
+            addLog(`✅ ${targetSlotLabel} profile updated and verified from storage`, 'success');
           } else {
             addLog('ℹ️ No passenger or loyalty profile fields found to update', 'info');
           }
         } catch (profileSyncError) {
           console.error('[RoyalCaribbeanSync] Error syncing user profile:', profileSyncError);
-          addLog(`⚠️ Could not sync user profile data: ${String(profileSyncError)}`, 'warning');
+          addLog(`❌ User profile loyalty transaction failed: ${String(profileSyncError)}`, 'error');
+          throw profileSyncError;
         }
       }
 
-      if (typeof coreDataContext.syncToBackend === 'function') {
+      if (syncSource !== 'carnival' && typeof coreDataContext.syncToBackend === 'function') {
         if (!isCloudBackupEnabled()) {
           addLog('Local-first mode: cloud backup skipped after Apply Sync', 'info');
         } else {
@@ -3933,80 +5264,98 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
         }
       }
 
-      if (cruiseLine === 'carnival' && carnivalUserDataRef.current) {
-        try {
+      if (cruiseLine === 'carnival') {
+        if (!selectedSections.loyalty) {
+          addLog('🛡️ Carnival loyalty/profile sync was not selected; existing VIFP and Players Club values were preserved', 'warning');
+        } else if (Object.keys(stagedCarnivalProfileUpdates).length > 0) {
           const carnivalData = carnivalUserDataRef.current;
-          addLog('Syncing Carnival VIFP / Players Club loyalty data to the selected user profile...', 'info');
-          console.log('[CarnivalSync] Writing Carnival loyalty to user profile:', carnivalData);
+          addLog('Syncing Carnival VIFP / Players Club loyalty data as a required part of the transactional apply...', 'info');
+          try {
+            if (!targetProfile?.id || !updateUserProfile) {
+              throw new Error('The staged Carnival profile transaction lost its selected target profile before commit');
+            }
+            await updateUserProfile(targetProfile.id, stagedCarnivalProfileUpdates as any);
 
-          const profileUpdates: Record<string, unknown> = { preferredBrand: 'carnival' };
-          const fullName = `${carnivalData.firstName || ''} ${carnivalData.lastName || ''}`.trim();
-          if (fullName && targetProfile && (!targetProfile.name || /^user|traveler|second user$/i.test(targetProfile.name))) {
-            profileUpdates.name = fullName;
-            profileUpdates.displayName = fullName;
+            const vifpSummary = carnivalData && (carnivalData.hasVifpData || carnivalData.vifpNumber)
+              ? `VIFP ${carnivalData.vifpTier || 'Unknown'} #${carnivalData.vifpNumber || 'N/A'} (${carnivalData.vifpPoints || 0} pts)`
+              : 'VIFP unchanged';
+            const playersSummary = carnivalData && (carnivalData.hasPlayersClubData || carnivalData.playersClubTier || carnivalData.playersClubPoints > 0)
+              ? `Players Club ${carnivalData.playersClubTier || 'Unknown'} (${carnivalData.playersClubPoints || 0} pts)`
+              : 'Players Club unchanged';
+            addLog(`✅ Carnival loyalty/profile transaction write succeeded: ${vifpSummary}; ${playersSummary}`, 'success');
+          } catch (carnivalLoyaltyError) {
+            throw new Error(`Carnival loyalty/profile persistence failed: ${carnivalLoyaltyError instanceof Error ? carnivalLoyaltyError.message : String(carnivalLoyaltyError)}`);
           }
-          if (carnivalData.hasVifpData || carnivalData.vifpNumber) {
-            if (carnivalData.vifpNumber) profileUpdates.carnivalVifpNumber = carnivalData.vifpNumber;
-            if (carnivalData.vifpTier) profileUpdates.carnivalVifpTier = carnivalData.vifpTier;
-            profileUpdates.carnivalVifpPoints = Number(carnivalData.vifpPoints || carnivalData.cruiseDayPoints || 0);
-            profileUpdates.carnivalCruiseDayPoints = Number(carnivalData.cruiseDayPoints || carnivalData.vifpPoints || 0);
-            profileUpdates.carnivalTotalCruises = Number(carnivalData.totalCruises || 0);
-          }
-          if (carnivalData.hasPlayersClubData || carnivalData.playersClubTier || carnivalData.playersClubPoints > 0) {
-            if (carnivalData.playersClubTier) profileUpdates.carnivalPlayersClubTier = carnivalData.playersClubTier;
-            profileUpdates.carnivalPlayersClubPoints = Number(carnivalData.playersClubPoints || 0);
-          }
+        } else {
+          addLog('ℹ️ Carnival did not expose new loyalty/profile values; the selected profile was left unchanged', 'info');
+        }
 
-          if (targetProfile && updateUserProfile) {
-            console.log('[CarnivalSync] Using UserProvider.updateUser for userId:', targetProfile.id, profileUpdates);
-            await updateUserProfile(targetProfile.id, profileUpdates as any);
-            console.log('[CarnivalSync] Carnival loyalty data saved via UserProvider');
+        if (!carnivalApplyJournal) {
+          throw new Error('Carnival transactional apply journal was not available at commit time');
+        }
+        carnivalApplyJournal = updateCarnivalApplyJournal(carnivalApplyJournal, 'committed');
+        await persistCarnivalJournal(carnivalApplyJournal);
+        carnivalApplyCommitted = true;
+        addLog(`✅ Carnival transactional Apply Sync committed (${carnivalApplyJournal.transactionId})`, 'success');
+
+        try {
+          await AsyncStorage.removeItem(getUserScopedKey(CARNIVAL_CHECKPOINT_STORAGE_KEY, authenticatedEmail));
+          await AsyncStorage.removeItem(getUserScopedKey(CARNIVAL_LEGACY_CHECKPOINT_STORAGE_KEY, authenticatedEmail));
+          addLog('🧹 Carnival account-bound resume checkpoint cleared after the full transaction committed', 'info');
+        } catch (checkpointCleanupError) {
+          addLog(`⚠️ Carnival transaction committed, but the resume checkpoint could not be cleared: ${String(checkpointCleanupError)}`, 'warning');
+        }
+
+        try {
+          await AsyncStorage.removeItem(carnivalApplyJournalKey);
+          carnivalApplyJournal = null;
+          addLog('🧹 Carnival recovery journal cleared after all required local and profile writes succeeded', 'info');
+        } catch (journalCleanupError) {
+          addLog(`⚠️ Carnival transaction committed, but its committed recovery journal could not be removed: ${String(journalCleanupError)}`, 'warning');
+        }
+
+        if (typeof coreDataContext.syncToBackend === 'function') {
+          if (!isCloudBackupEnabled()) {
+            addLog('Local-first mode: cloud backup skipped after committed Carnival Apply Sync', 'info');
           } else {
-            console.warn('[CarnivalSync] No selected profile available, falling back to direct AsyncStorage write');
-            const scopedUsersKey = getUserScopedKey(ALL_STORAGE_KEYS.USERS, authenticatedEmail);
-            const scopedCurrentUserKey = getUserScopedKey(ALL_STORAGE_KEYS.CURRENT_USER, authenticatedEmail);
-            const usersRaw = await AsyncStorage.getItem(scopedUsersKey);
-            const storedCurrentUserId = await AsyncStorage.getItem(scopedCurrentUserKey);
-            if (usersRaw && storedCurrentUserId) {
-              const parsedUsers = JSON.parse(usersRaw) as unknown;
-              if (Array.isArray(parsedUsers)) {
-                const updatedUsers = parsedUsers.map((u: any) =>
-                  u?.id === storedCurrentUserId
-                    ? { ...u, ...profileUpdates, updatedAt: new Date().toISOString() }
-                    : u
-                );
-                await AsyncStorage.setItem(scopedUsersKey, JSON.stringify(updatedUsers));
-                console.log('[CarnivalSync] Carnival loyalty data written to scoped user storage');
-              } else {
-                console.warn('[CarnivalSync] Scoped users payload is not an array, skipping fallback VIFP write');
-                addLog('⚠️ Stored user profile data was invalid, so VIFP data could not be saved automatically', 'warning');
-              }
-            } else {
-              console.warn('[CarnivalSync] No users found in scoped storage, cannot save VIFP data');
-              addLog('⚠️ No user profile found to save VIFP data', 'warning');
+            try {
+              const selectedDataHash = `${finalOffers.length}:${finalCruises.length}:${finalBookedCruises.length}:${selectedSections.offers}-${selectedSections.availableCruises}-${selectedSections.bookedCruises}-${selectedSections.completedCruises}-${selectedSections.loyalty}`;
+              addLog(`Flushing committed Carnival data to backend (datasetHash ${selectedDataHash})...`, 'info');
+              await coreDataContext.syncToBackend();
+              addLog('✅ Backend sync completed for committed Carnival data', 'success');
+            } catch (backendSyncError) {
+              addLog(`⚠️ Carnival local transaction committed, but cloud backup failed: ${String(backendSyncError)}`, 'warning');
             }
           }
-
-          const vifpSummary = carnivalData.hasVifpData || carnivalData.vifpNumber
-            ? `VIFP ${carnivalData.vifpTier || 'Unknown'} #${carnivalData.vifpNumber || 'N/A'} (${carnivalData.vifpPoints || carnivalData.cruiseDayPoints || 0} pts)`
-            : 'VIFP unchanged';
-          const playersSummary = carnivalData.hasPlayersClubData || carnivalData.playersClubTier || carnivalData.playersClubPoints > 0
-            ? `Players Club ${carnivalData.playersClubTier || 'Unknown'} (${carnivalData.playersClubPoints || 0} pts)`
-            : 'Players Club unchanged';
-          addLog(`✅ Carnival loyalty synced: ${vifpSummary}; ${playersSummary}`, 'success');
-        } catch (carnivalLoyaltyError) {
-          console.error('[CarnivalSync] Error syncing Carnival loyalty to profile:', carnivalLoyaltyError);
-          addLog(`⚠️ Warning: Failed to sync Carnival loyalty: ${String(carnivalLoyaltyError)}`, 'warning');
         }
       }
 
-      console.log('[RoyalCaribbeanSync] Setting status to complete...');
-      addLog('✅ Data synced successfully to app!', 'success');
+      let committedCarnivalManifest = carnivalManifestRef.current;
+      if (cruiseLine === 'carnival' && committedCarnivalManifest) {
+        const terminalStatus: CarnivalSyncTerminalStatus = committedCarnivalManifest.incompleteCodes.length > 0 || committedCarnivalManifest.failedCodes.length > 0
+          ? 'partial_resumable'
+          : 'complete';
+        committedCarnivalManifest = buildCarnivalSyncManifest({
+          ...committedCarnivalManifest,
+          terminalStatus,
+          appliedAt: new Date().toISOString(),
+        });
+        carnivalManifestRef.current = committedCarnivalManifest;
+        await AsyncStorage.setItem(getUserScopedKey(ALL_STORAGE_KEYS.CARNIVAL_SYNC_MANIFEST, authenticatedEmail), JSON.stringify(committedCarnivalManifest));
+        addLog(terminalStatus === 'complete'
+          ? '✅ Carnival manifest committed as complete with unique, explainable counts.'
+          : '⚠️ Carnival data was applied without deleting unresolved inventory; the manifest remains partial/resumable.', terminalStatus === 'complete' ? 'success' : 'warning');
+      }
+
+      console.log('[RoyalCaribbeanSync] Setting terminal sync status...');
+      addLog(committedCarnivalManifest?.terminalStatus === 'partial_resumable' ? '⚠️ Resolved Carnival data synced; unresolved codes remain resumable.' : '✅ Data synced successfully to app!', committedCarnivalManifest?.terminalStatus === 'partial_resumable' ? 'warning' : 'success');
       
       // Set complete status immediately - don't wait for refresh
       setState(prev => ({ 
         ...prev, 
-        status: 'complete',
+        status: committedCarnivalManifest?.terminalStatus === 'partial_resumable' ? 'partial' : 'complete',
+        carnivalManifest: committedCarnivalManifest,
+        carnivalCodeLedger: committedCarnivalManifest?.codeLedger ?? prev.carnivalCodeLedger,
         lastSyncTimestamp: new Date().toISOString(),
         syncCounts: {
           offerCount: prev.syncCounts?.offerCount ?? 0,
@@ -4039,6 +5388,33 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
       }
       
       const errorMessage = error instanceof Error ? error.message : String(error);
+      if (syncSource !== 'carnival' && royalCelebrityApplySnapshot && royalCelebrityApplyMutated) {
+        try {
+          await rollbackRoyalCelebrityApply(royalCelebrityApplySnapshot, errorMessage);
+        } catch (rollbackError) {
+          const rollbackMessage = rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
+          console.error('[RoyalCaribbeanSync] Royal/Celebrity rollback failed:', rollbackError);
+          addLog(`❌ Royal/Celebrity rollback could not finish: ${rollbackMessage}`, 'error');
+        }
+      }
+      if (syncSource === 'carnival' && carnivalApplyJournal && !carnivalApplyCommitted) {
+        try {
+          addLog(`↩️ Carnival Apply Sync failed before commit; rolling back transaction ${carnivalApplyJournal.transactionId}`, 'warning');
+          await rollbackCarnivalApply(carnivalApplyJournal, errorMessage);
+        } catch (rollbackError) {
+          const rollbackMessage = rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
+          console.error('[CarnivalSync] Transaction rollback failed:', rollbackError);
+          try {
+            if (carnivalApplyJournal) {
+              carnivalApplyJournal = updateCarnivalApplyJournal(carnivalApplyJournal, 'rolling_back', `${errorMessage}; rollback failed: ${rollbackMessage}`);
+              await AsyncStorage.setItem(carnivalApplyJournalKey, JSON.stringify(carnivalApplyJournal));
+            }
+          } catch (journalError) {
+            console.error('[CarnivalSync] Could not preserve failed rollback journal:', journalError);
+          }
+          addLog(`❌ Carnival rollback could not finish: ${rollbackMessage}. The recovery journal was retained for the next Apply Sync.`, 'error');
+        }
+      }
       console.log('[RoyalCaribbeanSync] Setting status to error...');
       setState(prev => ({ ...prev, status: 'error', error: errorMessage }));
       addLog(`❌ Sync failed: ${errorMessage}`, 'error');
@@ -4046,13 +5422,26 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     } finally {
       syncToAppInFlightRef.current = false;
     }
-  }, [state.extractedOffers, state.extractedBookedCruises, state.loyaltyData, extendedLoyaltyData, addLog, cruiseLine, authenticatedEmail, currentUser, users, updateUserProfile, normalizeBookedCruiseRows, normalizeOfferRows]);
+  }, [state.extractedOffers, state.extractedBookedCruises, state.loyaltyData, state.syncCounts, extendedLoyaltyData, addLog, cruiseLine, authenticatedEmail, currentUser, users, updateUserProfile, normalizeBookedCruiseRows, normalizeOfferRows]);
 
-  const cancelSync = useCallback(() => {
+  const cancelSync = useCallback((requestedReason?: unknown) => {
+    const reason = typeof requestedReason === 'string' && requestedReason.trim()
+      ? requestedReason.trim()
+      : 'Cancelled by user';
+    carnivalCancelReasonRef.current = reason;
+    navigationRequestIdRef.current += 1;
+    pendingNavigationTargetRef.current = null;
+    pendingNavigationLabelRef.current = '';
+    pageLoadResolver.current = null;
+    carnivalCatalogResolverRef.current = null;
+    carnivalSearchResolverRef.current = null;
+    carnivalProfileResolverRef.current = null;
+    carnivalAbortControllerRef.current?.abort();
     ingestionInFlightRef.current = false;
-    setState(prev => ({ ...prev, status: 'logged_in', syncCounts: null }));
-    addLog('Sync cancelled', 'warning');
-  }, [addLog]);
+    const nextStatus: SyncStatus = cruiseLine === 'carnival' ? 'cancelled' : 'logged_in';
+    setState(prev => ({ ...prev, status: nextStatus, currentStep: '', progress: null, syncCounts: null, error: reason }));
+    addLog(`${cruiseLine === 'carnival' ? 'Carnival ' : ''}sync cancelled: ${reason}`, 'warning');
+  }, [addLog, cruiseLine]);
 
   
 
@@ -4063,6 +5452,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     setCruiseLine,
     config,
     openLogin,
+    confirmCarnivalLogin,
     runIngestion,
     exportOffersCSV,
     exportBookedCruisesCSV,
@@ -4077,12 +5467,13 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
     staySignedIn,
     toggleStaySignedIn,
     webViewUrl,
+    onPageLoadStarted,
     onPageLoaded
   }), [
-    state, webViewRef, cruiseLine, setCruiseLine, config, openLogin, runIngestion,
+    state, webViewRef, cruiseLine, setCruiseLine, config, openLogin, confirmCarnivalLogin, runIngestion,
     exportOffersCSV, exportBookedCruisesCSV, exportLog, resetState, syncToApp,
     cancelSync, handleWebViewMessage, addLog, extendedLoyaltyData, setExtendedLoyalty,
-    staySignedIn, toggleStaySignedIn, webViewUrl, onPageLoaded
+    staySignedIn, toggleStaySignedIn, webViewUrl, onPageLoadStarted, onPageLoaded
   ]);
 });
 

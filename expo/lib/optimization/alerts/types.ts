@@ -1,0 +1,5 @@
+import type { OptimizationSnapshotBundle } from '../integration/types';
+export type PersonalOptimizationAlertType='points-above-average'|'personal-best-likely'|'incremental-ev-positive'|'incremental-ev-negative'|'optimal-stopping-point'|'bankroll-risk'|'downside-risk'|'fatigue-risk'|'pace-deterioration'|'data-stale';
+export type PersonalOptimizationAlertSeverity='info'|'opportunity'|'warning'|'critical';
+export interface PersonalOptimizationAlert{ id:string;fingerprint:string;ownerProfileId:string;cruiseId:string|null;createdAt:string;type:PersonalOptimizationAlertType;severity:PersonalOptimizationAlertSeverity;title:string;message:string;recommendationId:string|null;stateFingerprint:string|null;drillDownRoute:string;dedupeKey:string;pressureSensitive:boolean;acknowledged:boolean;dismissedAt:string|null;reasons:string[];warnings:string[];}
+export interface GenerateOptimizationAlertsInput{previousBundle:OptimizationSnapshotBundle|null;currentBundle:OptimizationSnapshotBundle;existingAlerts?:PersonalOptimizationAlert[];}

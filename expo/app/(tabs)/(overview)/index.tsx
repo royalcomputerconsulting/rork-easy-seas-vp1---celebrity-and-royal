@@ -1,5 +1,6 @@
 import { buildCruiseDetailsParams } from '@/lib/navigation/cruiseDetails';
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View,
   Text,
@@ -68,6 +69,9 @@ import { getBookedCruiseCasinoPoints, getBookedCruiseWinningsBroughtHome } from 
 
 import type { Cruise, BookedCruise, CasinoOffer } from '@/types/models';
 import { getCabinPriceFromEntity, getDoubleOccupancyRoomRetailValue, GUEST_COUNT_DEFAULT } from '@/lib/valueCalculator';
+import { ALL_STORAGE_KEYS, getUserScopedKey } from '@/lib/storage/storageKeys';
+import type { CarnivalSyncManifest } from '@/lib/carnival/carnivalDataRuntime';
+import { carnivalSailingCanonicalKey } from '@/lib/carnival/carnivalDataRuntime';
 
 const OFFERS_TITLE_LOGO_URL = 'https://r2-pub.rork.com/attachments/4hm4mwycibyktcoe3b7eo.png';
 import { formatCurrency } from '@/lib/format';
@@ -203,7 +207,7 @@ function OverviewScreenContent() {
   const { cruises, bookedCruises: allBookedCruises, casinoOffers, clubRoyaleProfile, updateCasinoOffer } = useCoreData();
   const { currentUser, users } = useUser();
   const { selectedProfileId, selectedBrand, selectedProgram } = useIntelligenceFilters();
-  const { logout, isAdmin } = useAuth();
+  const { logout, isAdmin, authenticatedEmail } = useAuth();
   const { sendMessage, setMode: setAgentMode } = useAgentX();
   const { summary } = useAlerts();
   
@@ -214,6 +218,7 @@ function OverviewScreenContent() {
   const [showAlertsModal, setShowAlertsModal] = useState(false);
   const [decodedOffer, setDecodedOffer] = useState<DecodedOffer | null>(null);
   const [heroSignatureFailed, setHeroSignatureFailed] = useState<boolean>(false);
+  const [carnivalManifest, setCarnivalManifest] = useState<CarnivalSyncManifest | null>(null);
   const { 
     certificates, 
     addCertificate, 
@@ -445,6 +450,57 @@ function OverviewScreenContent() {
     return cruisesData.length;
   }, [cruisesData]);
 
+  const carnivalOfferMetrics = useMemo(() => {
+    if (selectedBrand !== 'all' && selectedBrand !== 'carnival') {
+      return undefined;
+    }
+
+    if (carnivalManifest && carnivalManifest.appProfileId === (currentUser?.id || '')) {
+      return {
+        personalizedOffers: carnivalManifest.catalogCount,
+        offersWithSailings: carnivalManifest.rowBearingCodes.length,
+        eligibleSailings: carnivalManifest.uniqueSailingCount,
+      };
+    }
+
+    const visibleCodes = new Set<string>();
+    const rowBearingCodes = new Set<string>();
+    const uniqueSailings = new Set<string>();
+    const carnivalOffers = offersData.filter((offer: CasinoOffer) => inferRecordBrand(offer as any) === 'carnival');
+    const carnivalCruises = cruisesData.filter((cruise: Cruise) => inferRecordBrand(cruise as any) === 'carnival');
+
+    carnivalOffers.forEach((offer) => {
+      String(offer.catalogVisibleOfferCodes || '')
+        .split(',')
+        .map((code) => code.trim().toUpperCase())
+        .filter(Boolean)
+        .forEach((code) => visibleCodes.add(code));
+      String(offer.catalogRowBearingOfferCodes || '')
+        .split(',')
+        .map((code) => code.trim().toUpperCase())
+        .filter(Boolean)
+        .forEach((code) => rowBearingCodes.add(code));
+    });
+
+    if (visibleCodes.size === 0) {
+      carnivalOffers.forEach((offer) => {
+        const code = String(offer.offerCode || '').trim().toUpperCase();
+        if (code) visibleCodes.add(code);
+      });
+    }
+    carnivalCruises.forEach((cruise) => {
+      const code = String(cruise.offerCode || '').trim().toUpperCase();
+      if (code) rowBearingCodes.add(code);
+      uniqueSailings.add(carnivalSailingCanonicalKey(cruise));
+    });
+
+    return {
+      personalizedOffers: visibleCodes.size,
+      offersWithSailings: rowBearingCodes.size,
+      eligibleSailings: uniqueSailings.size,
+    };
+  }, [carnivalManifest, cruisesData, currentUser?.id, offersData, selectedBrand]);
+
   const certificateSummary = useMemo(() => {
     const fppCerts = getCertificatesByType('fpp').filter(c => c.status === 'available');
     const nextCruiseCerts = getCertificatesByType('nextCruise').filter(c => c.status === 'available');
@@ -607,19 +663,35 @@ function OverviewScreenContent() {
     return sorted;
   }, [groupedOffers, nonExpiredOffers, sortMode]);
 
+  const loadCarnivalManifest = useCallback(async () => {
+    try {
+      const stored = await AsyncStorage.getItem(getUserScopedKey(ALL_STORAGE_KEYS.CARNIVAL_SYNC_MANIFEST, authenticatedEmail));
+      if (!stored) {
+        setCarnivalManifest(null);
+        return;
+      }
+      const parsed = JSON.parse(stored) as CarnivalSyncManifest;
+      setCarnivalManifest(parsed?.version === 1 && parsed.appProfileId === (currentUser?.id || '') ? parsed : null);
+    } catch (error) {
+      console.warn('[Overview] Unable to load Carnival manifest:', error);
+      setCarnivalManifest(null);
+    }
+  }, [authenticatedEmail, currentUser?.id]);
+
   useFocusEffect(
     useCallback(() => {
       console.log('[Overview] Screen focused, offers count:', nonExpiredOffers.length);
-    }, [nonExpiredOffers.length])
+      void loadCarnivalManifest();
+    }, [loadCarnivalManifest, nonExpiredOffers.length])
   );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     console.log('[Overview] Refreshing offers...');
-    await new Promise(resolve => setTimeout(resolve, 800));
+    await Promise.all([new Promise(resolve => setTimeout(resolve, 800)), loadCarnivalManifest()]);
     setRefreshing(false);
     console.log('[Overview] Refresh complete');
-  }, []);
+  }, [loadCarnivalManifest]);
 
   const handleOfferPress = useCallback((offer: CasinoOfferCardData | Cruise) => {
     console.log('[Overview] Offer pressed:', offer.id);
@@ -738,6 +810,7 @@ function OverviewScreenContent() {
           availableCruises={availableCruisesCount}
           bookedCruises={activeBookedCruises.length}
           activeOffers={realActiveOffersCount}
+          carnivalOfferMetrics={carnivalOfferMetrics}
           onCruisesPress={handleCruisesPress}
           onBookedPress={handleBookedPress}
           onOffersPress={() => console.log('Active offers pressed')}

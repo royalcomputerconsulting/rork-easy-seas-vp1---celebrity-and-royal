@@ -1,3 +1,6 @@
+/** @deprecated Build 316: legacy Carnival extraction is compile-only and cannot be entered by the provider.
+ * The protected run-scoped engine lives in carnivalSafeSync.ts and related runtimes.
+ */
 export const CARNIVAL_OFFERS_SCRIPT = `
 (function() {
   var BATCH_SIZE = 150;

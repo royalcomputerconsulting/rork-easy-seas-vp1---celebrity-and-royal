@@ -1,0 +1,45 @@
+===== scripts/testV1076CasinoEnginesFunctional.js =====
+PASS testV1076CasinoEnginesFunctional
+===== scripts/testV1076NativeNoRevenueCatCasino.js =====
+PASS testV1076NativeNoRevenueCatCasino
+===== scripts/testV1077RemainingRecommendationChanges.js =====
+PASS testV1077RemainingRecommendationChanges
+===== scripts/testV1230LoyaltySyncRepair.js =====
+PASS testV1230LoyaltySyncRepair
+===== scripts/testV1231CasinoSectionWiring.js =====
+PASS testV1231CasinoSectionWiring
+===== scripts/testV1232RoyalOfferZeroRowPreservation.js =====
+PASS testV1232RoyalOfferZeroRowPreservation
+===== scripts/testV1233DynamicRoyalOfferCatalog.js =====
+PASS testV1233DynamicRoyalOfferCatalog
+===== scripts/testV1234SharedProfilesManualAdd.js =====
+PASS testV1234SharedProfilesManualAdd
+===== scripts/testV1235BookedCompletedSyncRules.js =====
+PASS testV1235BookedCompletedSyncRules
+===== scripts/testV1236AskMyDataOfferIntent.js =====
+PASS testV1236AskMyDataOfferIntent
+===== scripts/testV1237CertificateBankRobustDownload.js =====
+PASS testV1237CertificateBankRobustDownload
+===== scripts/testV1238CertificateOfferCodesChat.js =====
+PASS testV1238CertificateOfferCodesChat
+===== scripts/testV1239CertificateBatchCompactOffer.js =====
+PASS testV1239CertificateBatchCompactOffer
+===== scripts/testV1240CertificateDownloadLog.js =====
+PASS testV1240CertificateDownloadLog
+===== scripts/testV1241AppStoreVersionFix.js =====
+PASS testV1241AppStoreVersionFix
+===== scripts/testV1242AppStoreVersionHardlock.js =====
+PASS verifyAppStoreVersion: resolved iOS version 12.4.2 (314), stale 9.17.1 override defeated
+===== scripts/testV1242Build312CarnivalResumableSync.js =====
+PASS testV1242Build315CarnivalPriority4To8
+PASS testV1242Build312CarnivalResumableSync (carried forward in the Carnival-only rebuild)
+===== scripts/testV1242Build313CarnivalIntegrityStage1.js =====
+PASS testV1242Build313CarnivalIntegrityStage1
+===== scripts/testV1242Build314CarnivalAuthFalseNegativeFix.js =====
+PASS testV1242Build314CarnivalAuthFalseNegativeFix
+===== scripts/testV1242Build314CarnivalPriority1To3.js =====
+PASS testV1242Build314CarnivalPriority1To3
+===== scripts/testV1242Build315CarnivalPriority4To8.js =====
+PASS testV1242Build315CarnivalPriority4To8
+===== scripts/testV9160CarnivalAdminSync.js =====
+PASS testV9160CarnivalAdminSync (extension path formally retired)

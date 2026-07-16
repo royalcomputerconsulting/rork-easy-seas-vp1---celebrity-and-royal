@@ -1,0 +1,38 @@
+MODIFIED
+- EASYSEAS_PERSONAL_CERTIFICATE_OPTIMIZATION_ENGINE_TODO.md
+- lib/optimization/index.ts
+
+ADDED — CANONICAL HISTORY DOMAIN
+- lib/optimization/history/types.ts
+- lib/optimization/history/normalization.ts
+- lib/optimization/history/reconcileCasinoSessions.ts
+- lib/optimization/history/dataHealth.ts
+- lib/optimization/history/reconstructThresholdAttempts.ts
+- lib/optimization/history/canonicalizeCasinoCruiseOutcome.ts
+- lib/optimization/history/legacyHistoryMigration.ts
+- lib/optimization/history/buildCanonicalCasinoHistory.ts
+- lib/optimization/history/zodSchemas.ts
+- lib/optimization/history/index.ts
+
+ADDED — TESTS AND REVIEW FIXTURE
+- scripts/testOPT1CanonicalCasinoHistory.js
+- scripts/testOPT1HistoryArchitectureAndAuthority.js
+- scripts/fixtures/opt1LegacyCasinoHistoryMigration.review-required.json
+
+ADDED — CHECKPOINT EVIDENCE
+- OPT1_CANONICAL_PERSONAL_CASINO_HISTORY_QA.md
+- OPT1_ROLLBACK_NOTES.md
+- OPT1_STANDALONE_TYPECHECK_STATUS.txt
+- OPT1_FINAL_TEST_LOG.txt
+- OPT1_FINAL_TEST_SUMMARY.tsv
+- OPT1_PROTECTED_HASHES_BEFORE.sha256
+- OPT1_PROTECTED_HASHES_AFTER.sha256
+- OPT1_PROTECTED_HASH_COMPARISON.txt
+- OPT1_CHANGED_FILES.txt
+- OPT1_INDEPENDENT_RETEST_LOG.txt
+- OPT1_INDEPENDENT_RETEST_SUMMARY.tsv
+
+UNCHANGED
+- All application UI routes and components
+- All package, lock, Expo, React Native, Metro, Babel, TypeScript, native, server, workflow, and deployment configuration
+- Existing recommendation authority and feature-flag defaults

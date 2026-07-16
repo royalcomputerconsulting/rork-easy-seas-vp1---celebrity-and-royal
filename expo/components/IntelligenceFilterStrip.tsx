@@ -12,7 +12,7 @@ interface IntelligenceFilterStripProps {
   variant?: 'default' | 'bookedCruises';
 }
 
-const BRAND_OPTIONS: BrandFilterValue[] = ['all', 'royal', 'celebrity', 'silversea'];
+const BRAND_OPTIONS: BrandFilterValue[] = ['all', 'royal', 'celebrity', 'silversea', 'carnival'];
 
 function getBrandChipLabel(brand: BrandFilterValue): string {
   return brand === 'all' ? 'All' : getBrandLabel(brand);

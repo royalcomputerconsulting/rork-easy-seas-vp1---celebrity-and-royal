@@ -1,0 +1,37 @@
+EASY SEAS v12.4.2 BUILD 314 — CARNIVAL PRIORITY 1–3 VALIDATION
+================================================================
+
+Scope: Priority 1, Priority 2, Priority 3 only
+Priority 4: not started
+
+Version identifiers
+-------------------
+Marketing version: 12.4.2
+iOS build: 314
+Android versionCode: 120405
+
+Regression and behavioral QA
+----------------------------
+Build 313 baseline scripts: 19 passed, 0 failed
+Build 313 TS/TSX syntax files: 410 checked, 0 syntax errors
+Build 314 scripts: 20 passed, 0 failed
+Build 314 TS/TSX syntax files: 411 checked, 0 syntax errors
+Generated WebView JavaScript parse checks: passed
+App Store version hardlock: passed
+329-sailing pagination fixture: 329/329 captured and deduplicated
+Facet/pricing false-empty tests: passed
+Wrong-code and wrong-page rejection tests: passed
+Page/offset/cursor/next-link adapter tests: passed
+API next-link browser-path protection: passed
+Rate-code context isolation/TGO precedence tests: passed
+
+Project-wide tsc status
+-----------------------
+Not a valid pass/fail signal in this supplied archive. node_modules is absent and
+expo/tsconfig.base cannot be resolved, producing missing dependency/config errors.
+Independent TypeScript syntax transpilation completed with zero diagnostics.
+
+Live test status
+----------------
+Not executed. A live authenticated Carnival account and native iOS/Android WebView
+are unavailable in this environment.

@@ -118,20 +118,27 @@ export function UserProfileCard({
 
   const calculatedLevel = getLevelByNights(formData.loyaltyPoints);
   const calculatedLevelInfo = CROWN_ANCHOR_LEVELS[calculatedLevel];
-  const calculatedLevelProgress = getLevelProgress(currentValues.loyaltyPoints, getLevelByNights(currentValues.loyaltyPoints));
+  const displayedCrownAnchorLevel = currentValues.crownAnchorLevel || enrichmentData?.crownAndAnchorTier || calculatedLevel;
+  const displayedCrownAnchorLevelInfo = CROWN_ANCHOR_LEVELS[displayedCrownAnchorLevel] || calculatedLevelInfo;
+  // Calculate progress from the displayed authoritative tier, not a lower tier inferred from
+  // stale points. This prevents impossible cards such as current Diamond / next Diamond.
+  const calculatedLevelProgress = getLevelProgress(currentValues.loyaltyPoints, displayedCrownAnchorLevel);
   
   // currentValues.clubRoyalePoints is already the fully-resolved, authoritative number
   // (LoyaltyProvider prioritizes a manual Settings entry over a possibly-stale synced
   // value). Preferring `enrichmentData?.clubRoyalePointsFromApi` here instead undid that
   // priority and made this card silently fall back to an old synced total even after you
   // corrected it in Settings -- so currentValues must win first.
-  const authoritativeClubRoyalePoints = Number(currentValues.clubRoyalePoints || enrichmentData?.clubRoyalePointsFromApi || formData.clubRoyalePoints || 0);
+  const authoritativeClubRoyalePoints = Number(currentValues.clubRoyalePoints ?? enrichmentData?.clubRoyalePointsFromApi ?? formData.clubRoyalePoints ?? 0);
   const calculatedTier = getTierByPoints(authoritativeClubRoyalePoints);
   const displayedClubRoyaleTier = currentValues.clubRoyaleTier || enrichmentData?.clubRoyaleTierFromApi || calculatedTier;
   const displayedClubRoyaleTierInfo = CLUB_ROYALE_TIERS[displayedClubRoyaleTier] || CLUB_ROYALE_TIERS[calculatedTier];
   const calculatedTierInfo = CLUB_ROYALE_TIERS[calculatedTier];
   const calculatedTierProgress = getTierProgress(authoritativeClubRoyalePoints, calculatedTier);
   const nextClubRoyaleTierInfo = calculatedTierProgress.nextTier ? CLUB_ROYALE_TIERS[calculatedTierProgress.nextTier] : undefined;
+  const displayedTierRank = Object.keys(CLUB_ROYALE_TIERS).indexOf(displayedClubRoyaleTier);
+  const calculatedTierRank = Object.keys(CLUB_ROYALE_TIERS).indexOf(calculatedTier);
+  const isClubRoyaleRequalification = displayedTierRank > calculatedTierRank && calculatedTierProgress.nextTier === displayedClubRoyaleTier;
 
   const calculatedCelebrityLevel = getCelebrityCaptainsClubLevelByPoints(formData.celebrityCaptainsClubPoints || 0);
   const calculatedCelebrityLevelInfo = CELEBRITY_CAPTAINS_CLUB_LEVELS[calculatedCelebrityLevel];
@@ -144,8 +151,8 @@ export function UserProfileCard({
   const handleSave = async () => {
     await onSave({
       ...formData,
-      clubRoyaleTier: calculatedTier,
-      crownAnchorLevel: calculatedLevel,
+      clubRoyaleTier: displayedClubRoyaleTier,
+      crownAnchorLevel: displayedCrownAnchorLevel,
       celebrityBlueChipTier: calculatedCelebrityTier,
       celebrityCaptainsClubLevel: calculatedCelebrityLevel,
       preferredBrand: activeBrand,
@@ -273,15 +280,15 @@ export function UserProfileCard({
         {renderValueCard('Name', currentValues.name, undefined, true)}
         {renderValueCard('Email', currentValues.email, undefined, true)}
         {!!currentValues.birthdate && renderValueCard('Date of Birth', currentValues.birthdate, undefined, true)}
-        {renderValueCard('Crown & Anchor #', enrichmentData?.crownAndAnchorId || currentValues.crownAnchorNumber, undefined, true)}
-        {renderValueCard('C&A Level', enrichmentData?.crownAndAnchorTier || calculatedLevel, calculatedLevelInfo?.color, false, true)}
+        {renderValueCard('Crown & Anchor #', currentValues.crownAnchorNumber || enrichmentData?.crownAndAnchorId, undefined, true)}
+        {renderValueCard('C&A Level', displayedCrownAnchorLevel, displayedCrownAnchorLevelInfo?.color, false, true)}
         {renderValueCard('Loyalty Points', currentValues.loyaltyPoints, COLORS.loyalty)}
         {renderValueCard('Club Royale Tier', displayedClubRoyaleTier, displayedClubRoyaleTierInfo?.color, false, true)}
         {renderValueCard('Casino Points', authoritativeClubRoyalePoints, COLORS.points)}
         {calculatedLevelProgress.nextLevel && renderValueCard('Next C&A Level', calculatedLevelProgress.nextLevel, calculatedLevelInfo?.color, false, true)}
         {renderValueCard('Points to Next', calculatedLevelProgress.nightsToNext)}
-        {calculatedTierProgress.nextTier && renderValueCard('Next Club Royale Tier', calculatedTierProgress.nextTier, nextClubRoyaleTierInfo?.color, false, true)}
-        {renderValueCard('Casino Points to Next', calculatedTierProgress.pointsToNext, COLORS.points)}
+        {calculatedTierProgress.nextTier && renderValueCard(isClubRoyaleRequalification ? `Requalify ${displayedClubRoyaleTier}` : 'Next Club Royale Tier', calculatedTierProgress.nextTier, nextClubRoyaleTierInfo?.color, false, true)}
+        {renderValueCard(isClubRoyaleRequalification ? 'Casino Points to Requalify' : 'Casino Points to Next', calculatedTierProgress.pointsToNext, COLORS.points)}
       </View>
     );
   };

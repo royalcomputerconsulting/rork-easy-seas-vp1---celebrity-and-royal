@@ -51,6 +51,10 @@ export interface UserProfile {
   clubRoyaleId?: string;
   clubRoyalePoints?: number;
   clubRoyaleTier?: string;
+  clubRoyaleRelationshipPoints?: number;
+  clubRoyaleEvaluationPeriodStartDate?: string;
+  clubRoyaleEvaluationPeriodEndDate?: string;
+  crownAnchorRelationshipPoints?: number;
   crownAnchorLevel?: string;
   loyaltyPoints?: number;
   playingHours?: PlayingHours;
@@ -103,6 +107,10 @@ const DEFAULT_OWNER = {
   loyaltyPoints: 0,
   clubRoyalePoints: 0,
   clubRoyaleTier: '',
+  clubRoyaleRelationshipPoints: 0,
+  clubRoyaleEvaluationPeriodStartDate: '',
+  clubRoyaleEvaluationPeriodEndDate: '',
+  crownAnchorRelationshipPoints: 0,
   celebrityEmail: '',
   celebrityCaptainsClubNumber: '',
   celebrityCaptainsClubPoints: 0,
@@ -163,6 +171,10 @@ function createOwnerProfile(email: string | null): UserProfile {
     clubRoyaleId: '',
     clubRoyalePoints: DEFAULT_OWNER.clubRoyalePoints,
     clubRoyaleTier: DEFAULT_OWNER.clubRoyaleTier,
+    clubRoyaleRelationshipPoints: DEFAULT_OWNER.clubRoyaleRelationshipPoints,
+    clubRoyaleEvaluationPeriodStartDate: DEFAULT_OWNER.clubRoyaleEvaluationPeriodStartDate,
+    clubRoyaleEvaluationPeriodEndDate: DEFAULT_OWNER.clubRoyaleEvaluationPeriodEndDate,
+    crownAnchorRelationshipPoints: DEFAULT_OWNER.crownAnchorRelationshipPoints,
     crownAnchorLevel: DEFAULT_OWNER.crownAnchorLevel,
     loyaltyPoints: DEFAULT_OWNER.loyaltyPoints,
     celebrityEmail: DEFAULT_OWNER.celebrityEmail,
@@ -244,6 +256,10 @@ function sanitizeUserProfile(user: unknown, fallbackEmail: string | null, index:
     clubRoyaleId: typeof userRecord.clubRoyaleId === 'string' ? userRecord.clubRoyaleId : '',
     clubRoyalePoints: typeof userRecord.clubRoyalePoints === 'number' ? userRecord.clubRoyalePoints : DEFAULT_OWNER.clubRoyalePoints,
     clubRoyaleTier: typeof userRecord.clubRoyaleTier === 'string' ? userRecord.clubRoyaleTier : DEFAULT_OWNER.clubRoyaleTier,
+    clubRoyaleRelationshipPoints: typeof userRecord.clubRoyaleRelationshipPoints === 'number' ? userRecord.clubRoyaleRelationshipPoints : DEFAULT_OWNER.clubRoyaleRelationshipPoints,
+    clubRoyaleEvaluationPeriodStartDate: typeof userRecord.clubRoyaleEvaluationPeriodStartDate === 'string' ? userRecord.clubRoyaleEvaluationPeriodStartDate : DEFAULT_OWNER.clubRoyaleEvaluationPeriodStartDate,
+    clubRoyaleEvaluationPeriodEndDate: typeof userRecord.clubRoyaleEvaluationPeriodEndDate === 'string' ? userRecord.clubRoyaleEvaluationPeriodEndDate : DEFAULT_OWNER.clubRoyaleEvaluationPeriodEndDate,
+    crownAnchorRelationshipPoints: typeof userRecord.crownAnchorRelationshipPoints === 'number' ? userRecord.crownAnchorRelationshipPoints : DEFAULT_OWNER.crownAnchorRelationshipPoints,
     crownAnchorLevel: typeof userRecord.crownAnchorLevel === 'string' ? userRecord.crownAnchorLevel : DEFAULT_OWNER.crownAnchorLevel,
     loyaltyPoints: typeof userRecord.loyaltyPoints === 'number' ? userRecord.loyaltyPoints : DEFAULT_OWNER.loyaltyPoints,
     playingHours: sanitizePlayingHours(userRecord.playingHours),

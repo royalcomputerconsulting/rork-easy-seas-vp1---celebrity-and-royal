@@ -3,8 +3,8 @@ const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
 const EXPECTED_VERSION = '12.4.2';
-const EXPECTED_BUILD = '311';
-const EXPECTED_ANDROID = 120402;
+const EXPECTED_BUILD = '314';
+const EXPECTED_ANDROID = 120405;
 
 function fail(message) {
   console.error(`APP STORE VERSION CHECK FAILED: ${message}`);
@@ -36,8 +36,8 @@ if (resolved.android?.versionCode !== EXPECTED_ANDROID) fail(`resolved Android c
 const pluginPath = path.join(ROOT, 'plugins', 'withForcedIOSVersion.js');
 const pluginText = fs.readFileSync(pluginPath, 'utf8');
 if (!pluginText.includes("APP_STORE_VERSION = '12.4.2'")) fail('native config plugin has wrong marketing version');
-if (!pluginText.includes("IOS_BUILD_NUMBER = '311'")) fail('native config plugin has wrong build number');
+if (!pluginText.includes("IOS_BUILD_NUMBER = '314'")) fail('native config plugin has wrong build number');
 if (!pluginText.includes('CFBundleShortVersionString')) fail('native config plugin does not write Info.plist');
 if (!pluginText.includes('MARKETING_VERSION')) fail('native config plugin does not write Xcode marketing version');
 
-console.log('PASS verifyAppStoreVersion: resolved iOS version 12.4.2 (311), stale 9.17.1 override defeated');
+console.log('PASS verifyAppStoreVersion: resolved iOS version 12.4.2 (314), stale 9.17.1 override defeated');

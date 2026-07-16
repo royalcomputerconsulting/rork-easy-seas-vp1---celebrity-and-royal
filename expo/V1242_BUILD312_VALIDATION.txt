@@ -1,0 +1,5 @@
+Easy Seas App Store build validation
+Marketing version: 12.4.2
+iOS buildNumber: 312
+Android versionCode: 120403
+Repair: Carnival run isolation, abort, API-first paging, checkpoint/resume, completed classification, explicit brand scope and catalog metrics

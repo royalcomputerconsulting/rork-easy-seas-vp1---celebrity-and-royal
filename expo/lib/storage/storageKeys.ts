@@ -31,6 +31,7 @@ export const ALL_STORAGE_KEYS = {
   CALENDAR_EVENTS: 'easyseas_calendar_events',
   CASINO_SESSIONS: 'easyseas_casino_sessions',
   LAST_SYNC: 'easyseas_last_sync',
+  CARNIVAL_SYNC_MANIFEST: 'carnival_sync_manifest_v1',
   SETTINGS: 'easyseas_settings',
   LOCAL_DATA: 'easyseas_local_data',
   USER_POINTS: 'easyseas_user_points',

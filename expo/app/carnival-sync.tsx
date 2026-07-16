@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Pressable, Modal, Platform, Linking, ScrollView, useWindowDimensions, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Modal, Platform, Linking, ScrollView, useWindowDimensions, ActivityIndicator } from 'react-native';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Stack, useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
@@ -6,7 +6,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { CarnivalSyncProvider, useRoyalCaribbeanSync } from '@/state/RoyalCaribbeanSyncProvider';
 import { exportFile } from '@/lib/importExport';
 import { useLoyalty } from '@/state/LoyaltyProvider';
-import { ChevronDown, ChevronUp, LoaderCircle, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, Anchor, Star, Award, Cookie, Download, FileDown, FileText } from 'lucide-react-native';
+import { ChevronDown, ChevronUp, LoaderCircle, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, Anchor, Star, Award, Cookie, FileDown, FileText } from 'lucide-react-native';
 import { WebViewMessage } from '@/lib/royalCaribbean/types';
 import { AUTH_DETECTION_SCRIPT } from '@/lib/royalCaribbean/authDetection';
 import { useCoreData } from '@/state/CoreDataProvider';
@@ -16,7 +16,6 @@ import { LoyaltyPill } from '@/components/ui/LoyaltyPill';
 import { getCarnivalPlayersClubTierColor, getCarnivalVifpTierColor } from '@/constants/loyaltyTheme';
 import { useAuth } from '@/state/AuthProvider';
 import { trpc, isWebSyncAvailable } from '@/lib/trpc';
-import { downloadScraperExtension } from '@/lib/chromeExtension';
 const CARNIVAL_RED = '#CC2232';
 const CARNIVAL_GOLD = '#FFB400';
 const CARNIVAL_DARK = '#0c1520';
@@ -36,6 +35,7 @@ function CarnivalSyncScreen() {
     setCruiseLine: _setCruiseLine,
     config: _config,
     openLogin,
+    confirmCarnivalLogin,
     runIngestion,
     syncToApp,
     cancelSync,
@@ -43,6 +43,7 @@ function CarnivalSyncScreen() {
     addLog,
     extendedLoyaltyData,
     webViewUrl,
+    onPageLoadStarted,
     onPageLoaded,
   } = useRoyalCaribbeanSync();
 
@@ -52,7 +53,6 @@ function CarnivalSyncScreen() {
   const [webSyncError, setWebSyncError] = useState<string | null>(null);
   const [cookieSyncError, setCookieSyncError] = useState<string | null>(null);
   const [isExportingLog, setIsExportingLog] = useState(false);
-  const [isDownloadingExtension, setIsDownloadingExtension] = useState(false);
   const [isConfirmingSync, setIsConfirmingSync] = useState(false);
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
@@ -124,35 +124,6 @@ function CarnivalSyncScreen() {
     }
   };
 
-  const handleDownloadExtension = async () => {
-    console.log('[CarnivalSync] Starting browser extension download...');
-    setWebSyncError(null);
-    setCookieSyncError(null);
-    setIsDownloadingExtension(true);
-    addLog('Preparing Easy Seas browser sync extension...', 'info');
-
-    try {
-      const result = await downloadScraperExtension();
-      if (!result.success) {
-        const errorMessage = result.error || 'Unable to download Easy Seas browser extension';
-        setWebSyncError(errorMessage);
-        addLog(`Extension download failed: ${errorMessage}`, 'error');
-        return;
-      }
-
-      addLog(`Extension download started${result.filesAdded ? ` (${result.filesAdded} files)` : ''}`, 'success');
-      Alert.alert(
-        'Extension Ready',
-        '1. Unzip the download and install it in Chrome.\n2. Open Carnival and sign in.\n3. Run the Easy Seas overlay on carnival.com and download offers.csv and booked.csv.\n4. Import those CSV files from Settings in Easy Seas.\n\nCarnival imports now stay separate from Royal Caribbean and Celebrity data.'
-      );
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unable to download Easy Seas browser extension';
-      setWebSyncError(errorMessage);
-      addLog(`Extension download error: ${errorMessage}`, 'error');
-    } finally {
-      setIsDownloadingExtension(false);
-    }
-  };
 
   const onMessage = (event: any) => {
     const rawData = typeof event?.nativeEvent?.data === 'string' ? event.nativeEvent.data : '';
@@ -188,6 +159,8 @@ function CarnivalSyncScreen() {
       case 'awaiting_confirmation': return CARNIVAL_GOLD;
       case 'syncing': return CARNIVAL_RED;
       case 'complete': return '#22c55e';
+      case 'partial': return '#f59e0b';
+      case 'cancelled': return '#f59e0b';
       case 'login_expired': return CARNIVAL_GOLD;
       case 'error': return '#ef4444';
       default: return '#64748b';
@@ -210,6 +183,8 @@ function CarnivalSyncScreen() {
       case 'awaiting_confirmation': return 'Ready to Sync';
       case 'syncing': return 'Syncing to App...';
       case 'complete': return 'Complete';
+      case 'partial': return 'Partial — Resume Available';
+      case 'cancelled': return 'Cancelled — Ready to Resume';
       case 'login_expired': return 'Login Expired';
       case 'error': return 'Error';
       default: return 'Unknown';
@@ -225,6 +200,8 @@ function CarnivalSyncScreen() {
       case 'running_step_3':
       case 'syncing': return <LoaderCircle size={size} color={color} />;
       case 'complete': return <CheckCircle size={size} color={color} />;
+      case 'partial': return <AlertCircle size={size} color={color} />;
+      case 'cancelled': return <XCircle size={size} color={color} />;
       case 'awaiting_confirmation': return <Clock size={size} color={color} />;
       case 'login_expired':
       case 'error': return <AlertCircle size={size} color={color} />;
@@ -274,7 +251,7 @@ function CarnivalSyncScreen() {
     }
   };
 
-  const canRunIngestion = state.status === 'logged_in' || state.status === 'complete';
+  const canRunIngestion = state.status === 'logged_in' || state.status === 'complete' || state.status === 'partial' || state.status === 'cancelled';
   const isRunning = state.status.startsWith('running_') || state.status === 'syncing';
   const showConfirmation = state.status === 'awaiting_confirmation';
 
@@ -294,23 +271,18 @@ function CarnivalSyncScreen() {
     router.push('/settings');
   };
 
-  const forceMarkLoggedIn = () => {
-    console.log('[CarnivalSync] User manually confirmed login');
-    addLog('User manually confirmed login', 'success');
-    if (Platform.OS !== 'web' && webViewRef.current) {
-      webViewRef.current.injectJavaScript(`
-        (function() {
-          window.__easySeasForceLoggedIn = true;
-          try {
-            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'auth_status', loggedIn: true }));
-            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'log', message: 'Manual login confirmation applied', logType: 'success' }));
-          } catch(e) {}
-        })();
-        true;
-      `);
-    }
-    handleWebViewMessage({ type: 'auth_status', loggedIn: true } as any);
-  };
+  const handleConfirmCarnivalLogin = useCallback(() => {
+    if (isRunning) return;
+    addLog('Verifying the active Carnival account before sync...', 'info');
+    void confirmCarnivalLogin().then((verified) => {
+      if (!verified) {
+        addLog('Carnival login could not be verified. Sign in in the browser, then verify again.', 'warning');
+      }
+    }).catch((error) => {
+      const message = error instanceof Error ? error.message : 'Carnival login verification failed';
+      addLog(message, 'error');
+    });
+  }, [addLog, confirmCarnivalLogin, isRunning]);
 
   const handleConfirmSync = useCallback(() => {
     if (isConfirmingSync) {
@@ -450,32 +422,16 @@ function CarnivalSyncScreen() {
                 <View style={[styles.webWorkspace, isCompactWindow && styles.webWorkspaceCompact]} testID="carnival-web-workspace">
                   <View style={styles.webWorkspaceHero}>
                     <View style={styles.webWorkspaceBadge}>
-                      <Ship size={14} color={CARNIVAL_RED} />
-                      <Text style={styles.webWorkspaceBadgeText}>Carnival web sync uses a browser-assisted flow</Text>
+                      <AlertCircle size={14} color={CARNIVAL_GOLD} />
+                      <Text style={styles.webWorkspaceBadgeText}>Legacy Carnival extension sync is disabled</Text>
                     </View>
-                    <Text style={styles.webWorkspaceTitle}>Use Carnival on desktop without the old blocker screen</Text>
+                    <Text style={styles.webWorkspaceTitle}>Use the authenticated mobile browser for live Carnival sync</Text>
                     <Text style={styles.webWorkspaceText}>
-                      Download the Easy Seas extension, open carnival.com in a new tab, sign in there, run the sync overlay on the website, then import the downloaded offers.csv and booked.csv files into Easy Seas. This is the web-safe Carnival path instead of the embedded mobile browser flow.
+                      The older desktop Carnival scraper was intentionally retired because it could produce results that differed from the protected native sync engine. Existing Carnival CSV exports can still be imported from Settings.
                     </Text>
                   </View>
 
                   <View style={[styles.webWorkspaceButtonRow, isCompactWindow && styles.webWorkspaceButtonRowCompact]}>
-                    <Pressable
-                      style={[styles.webOpenButton, isDownloadingExtension && styles.buttonDisabled]}
-                      onPress={() => { void handleDownloadExtension(); }}
-                      disabled={isDownloadingExtension}
-                      testID="carnival-download-extension-button"
-                    >
-                      {isDownloadingExtension ? (
-                        <ActivityIndicator size="small" color="#fff" />
-                      ) : (
-                        <Download size={18} color="#fff" />
-                      )}
-                      <Text style={styles.webOpenButtonText}>
-                        {isDownloadingExtension ? 'Preparing Extension...' : 'Download Extension'}
-                      </Text>
-                    </Pressable>
-
                     <Pressable
                       style={styles.webSecondaryButton}
                       onPress={() => Linking.openURL(webViewUrl || 'https://www.carnival.com/')}
@@ -496,7 +452,7 @@ function CarnivalSyncScreen() {
                   </Pressable>
 
                   <Text style={styles.webWorkspaceFootnote}>
-                    Best results: use Chrome, keep the Carnival tab signed in, run the overlay after the page fully loads, then import the downloaded CSV files from Settings.
+                    Live Carnival extraction is available in the Easy Seas iOS and Android authenticated browser. Desktop users may import existing CSV exports from Settings.
                   </Text>
                 </View>
               ) : (
@@ -509,6 +465,7 @@ function CarnivalSyncScreen() {
                   source={{ uri: webViewUrl || 'https://www.carnival.com/profilemanagement/profiles/cruises' }}
                   style={styles.webView}
                   onMessage={onMessage}
+                  onLoadStart={onPageLoadStarted}
                   onLoadEnd={(e) => {
                     onPageLoaded(e);
                     const url = e.nativeEvent.url || '';
@@ -546,7 +503,7 @@ function CarnivalSyncScreen() {
                     console.error('[CarnivalSync] WebView content process terminated');
                     if (isRunning) {
                       addLog('⚠️ Carnival browser process restarted during sync. The sync was stopped safely; existing Carnival data was not changed.', 'warning');
-                      cancelSync();
+                      cancelSync('iOS WebView content process terminated');
                       setWebViewVisible(false);
                       setTimeout(() => setWebViewVisible(true), 800);
                     } else {
@@ -557,7 +514,7 @@ function CarnivalSyncScreen() {
                   onRenderProcessGone={() => {
                     console.error('[CarnivalSync] Android WebView render process exited');
                     addLog('⚠️ Carnival browser render process exited. Existing data was preserved and the browser will restart.', 'warning');
-                    if (isRunning) cancelSync();
+                    if (isRunning) cancelSync('Android WebView render process exited');
                     setWebViewVisible(false);
                     setTimeout(() => setWebViewVisible(true), 800);
                   }}
@@ -588,29 +545,14 @@ function CarnivalSyncScreen() {
 
                 <View style={styles.webSyncOptionsContainer}>
                   <View style={[styles.webSyncOptionCard, isCompactWindow && styles.webSyncOptionCardCompact]}>
-                    <View style={[styles.webSyncOptionIconContainer, { backgroundColor: `${CARNIVAL_RED}20` }]}>
-                      <Download size={24} color={CARNIVAL_RED} />
+                    <View style={[styles.webSyncOptionIconContainer, { backgroundColor: `${CARNIVAL_GOLD}20` }]}>
+                      <AlertCircle size={24} color={CARNIVAL_GOLD} />
                     </View>
                     <View style={styles.webSyncOptionContent}>
-                      <Text style={styles.webSyncOptionTitle}>Desktop Browser Sync</Text>
+                      <Text style={styles.webSyncOptionTitle}>Desktop Scraper Retired</Text>
                       <Text style={styles.webSyncOptionDesc}>
-                        Download the Easy Seas extension, run Carnival sync directly on carnival.com, then import the downloaded CSV files back into Easy Seas.
+                        The legacy Carnival extension is disabled until it can share the exact protected parser, request-correlation, checkpoint, and manifest engine used by the native app.
                       </Text>
-                      <Pressable
-                        style={[styles.webSyncButton, { marginTop: 12, backgroundColor: CARNIVAL_RED }, isDownloadingExtension && styles.buttonDisabled]}
-                        onPress={() => { void handleDownloadExtension(); }}
-                        disabled={isDownloadingExtension}
-                        testID="carnival-download-extension-card-button"
-                      >
-                        {isDownloadingExtension ? (
-                          <ActivityIndicator size="small" color="#fff" />
-                        ) : (
-                          <Download size={18} color="#fff" />
-                        )}
-                        <Text style={styles.webSyncButtonText}>
-                          {isDownloadingExtension ? 'Preparing Extension...' : 'Download Extension'}
-                        </Text>
-                      </Pressable>
                     </View>
                   </View>
 
@@ -641,7 +583,7 @@ function CarnivalSyncScreen() {
                     <View style={styles.webSyncOptionContent}>
                       <Text style={styles.webSyncOptionTitle}>Import Downloaded CSV Files</Text>
                       <Text style={styles.webSyncOptionDesc}>
-                        Once the extension downloads offers.csv and booked.csv, open Easy Seas Settings and import them here without overwriting your other cruise lines.
+                        Import previously downloaded Carnival offers.csv and booked.csv files without overwriting Royal Caribbean or Celebrity data.
                       </Text>
                       <Pressable
                         style={[styles.webSyncButton, { marginTop: 12, backgroundColor: '#0f766e' }]}
@@ -682,7 +624,7 @@ function CarnivalSyncScreen() {
                     <Text style={styles.loginHintTitle}>How to sync Carnival:</Text>
                     <Text style={styles.loginHintStep}>1. Press LOGIN below to open Carnival in the browser above</Text>
                     <Text style={styles.loginHintStep}>2. Sign in to your Carnival account</Text>
-                    <Text style={styles.loginHintStep}>{"3. Once logged in, press \"I'm Logged In\" to confirm"}</Text>
+                    <Text style={styles.loginHintStep}>{"3. Once logged in, press \"VERIFY LOGIN\""}</Text>
                     <Text style={styles.loginHintStep}>4. Press SYNC NOW to start syncing your data</Text>
                   </View>
                 )}
@@ -720,11 +662,16 @@ function CarnivalSyncScreen() {
                 {!isRunning && state.status !== 'complete' && (
                   <Pressable
                     style={styles.forceLoginButton}
-                    onPress={forceMarkLoggedIn}
+                    onPress={state.status === 'cancelled' || state.status === 'partial' ? handleRunIngestion : handleConfirmCarnivalLogin}
+                    testID="carnival-verify-login-button"
                   >
                     <CheckCircle size={18} color="#fff" />
                     <Text style={styles.forceLoginButtonText}>
-                      {state.status === 'logged_in' ? '✓ Logged In — Ready to Sync' : "I'm Logged In to Carnival — Start Sync"}
+                      {state.status === 'cancelled' || state.status === 'partial'
+                        ? 'Resume Carnival Sync'
+                        : state.status === 'logged_in'
+                          ? '✓ Carnival Login Verified'
+                          : 'VERIFY CARNIVAL LOGIN'}
                     </Text>
                   </Pressable>
                 )}
@@ -817,7 +764,7 @@ function CarnivalSyncScreen() {
                     <View style={styles.loyaltyCard}>
                       <Text style={styles.loyaltyTitle}>Loyalty Status</Text>
 
-                      {(state.loyaltyData?.carnivalVifpTier || state.loyaltyData?.crownAndAnchorLevel) && (
+                      {state.loyaltyData?.carnivalVifpTier && (
                         <View style={styles.loyaltySection}>
                           <View style={styles.loyaltySectionHeader}>
                             <Star size={16} color={CARNIVAL_RED} />
@@ -826,8 +773,8 @@ function CarnivalSyncScreen() {
                           <View style={styles.loyaltyRow}>
                             <Text style={styles.loyaltyLabel}>Tier:</Text>
                             <LoyaltyPill
-                              label={state.loyaltyData?.carnivalVifpTier || state.loyaltyData?.crownAndAnchorLevel || 'N/A'}
-                              color={getCarnivalVifpTierColor(state.loyaltyData?.carnivalVifpTier || state.loyaltyData?.crownAndAnchorLevel)}
+                              label={state.loyaltyData?.carnivalVifpTier || 'N/A'}
+                              color={getCarnivalVifpTierColor(state.loyaltyData?.carnivalVifpTier)}
                               size="small"
                             />
                           </View>
@@ -837,10 +784,10 @@ function CarnivalSyncScreen() {
                               <Text style={styles.loyaltyValue}>{state.loyaltyData.carnivalVifpNumber}</Text>
                             </View>
                           ) : null}
-                          {(state.loyaltyData?.carnivalVifpPoints || state.loyaltyData?.crownAndAnchorPoints) ? (
+                          {state.loyaltyData?.carnivalVifpPoints ? (
                             <View style={styles.loyaltyRow}>
                               <Text style={styles.loyaltyLabel}>VIFP Points:</Text>
-                              <Text style={styles.loyaltyValue}>{state.loyaltyData.carnivalVifpPoints || state.loyaltyData.crownAndAnchorPoints}</Text>
+                              <Text style={styles.loyaltyValue}>{state.loyaltyData.carnivalVifpPoints}</Text>
                             </View>
                           ) : null}
                           {state.loyaltyData?.carnivalTotalCruises ? (
@@ -852,7 +799,7 @@ function CarnivalSyncScreen() {
                         </View>
                       )}
 
-                      {(state.loyaltyData?.carnivalPlayersClubTier || state.loyaltyData?.clubRoyaleTier) && (
+                      {state.loyaltyData?.carnivalPlayersClubTier && (
                         <View style={styles.loyaltySection}>
                           <View style={styles.loyaltySectionHeader}>
                             <Award size={16} color={CARNIVAL_GOLD} />
@@ -861,8 +808,8 @@ function CarnivalSyncScreen() {
                           <View style={styles.loyaltyRow}>
                             <Text style={styles.loyaltyLabel}>Tier:</Text>
                             <LoyaltyPill
-                              label={state.loyaltyData.carnivalPlayersClubTier || state.loyaltyData.clubRoyaleTier || 'N/A'}
-                              color={getCarnivalPlayersClubTierColor(state.loyaltyData.carnivalPlayersClubTier || state.loyaltyData.clubRoyaleTier)}
+                              label={state.loyaltyData.carnivalPlayersClubTier || 'N/A'}
+                              color={getCarnivalPlayersClubTierColor(state.loyaltyData.carnivalPlayersClubTier)}
                               size="small"
                             />
                           </View>
@@ -874,6 +821,23 @@ function CarnivalSyncScreen() {
                           ) : null}
                         </View>
                       )}
+                    </View>
+                  )}
+
+                  {(state.carnivalCodeLedger?.length ?? 0) > 0 && (
+                    <View style={styles.loyaltyCard}>
+                      <Text style={styles.loyaltyTitle}>Per-Code Result Ledger</Text>
+                      {(state.carnivalCodeLedger ?? []).map((entry) => (
+                        <View key={entry.code} style={styles.loyaltyRow}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.loyaltyLabel}>{entry.code}</Text>
+                            {entry.message ? <Text style={styles.countDetail}>{entry.message}</Text> : null}
+                          </View>
+                          <Text style={[styles.loyaltyValue, { textTransform: 'capitalize' }]}>
+                            {entry.status.replace(/_/g, ' ')}{entry.rowCount ? ` · ${entry.rowCount}` : ''}
+                          </Text>
+                        </View>
+                      ))}
                     </View>
                   )}
 
@@ -904,14 +868,14 @@ function CarnivalSyncScreen() {
             </View>
           </Modal>
 
-          {state.status === 'complete' && state.lastSyncTimestamp && (
+          {(state.status === 'complete' || state.status === 'partial') && state.lastSyncTimestamp && (
             <View style={styles.successContainer}>
-              <CheckCircle size={24} color="#10b981" />
+              {state.status === 'partial' ? <AlertCircle size={24} color="#f59e0b" /> : <CheckCircle size={24} color="#10b981" />}
               <View style={styles.successContent}>
-                <Text style={styles.successTitle}>Sync Complete!</Text>
+                <Text style={styles.successTitle}>{state.status === 'partial' ? 'Partial Sync Saved' : 'Sync Complete!'}</Text>
                 <Text style={styles.successMessage}>
                   {state.syncCounts
-                    ? `Synced ${state.syncCounts.offerCount} deal${state.syncCounts.offerCount !== 1 ? 's' : ''} with ${state.syncCounts.offerRows} sailing${state.syncCounts.offerRows !== 1 ? 's' : ''} and ${state.syncCounts.upcomingCruises} booked cruise${state.syncCounts.upcomingCruises !== 1 ? 's' : ''}.`
+                    ? `${state.status === 'partial' ? 'Saved' : 'Synced'} ${state.syncCounts.offerCount} deal${state.syncCounts.offerCount !== 1 ? 's' : ''} with ${state.syncCounts.offerRows} unique sailing${state.syncCounts.offerRows !== 1 ? 's' : ''} and ${state.syncCounts.upcomingCruises} booked cruise${state.syncCounts.upcomingCruises !== 1 ? 's' : ''}.${state.status === 'partial' ? ' One or more offer codes remain resumable.' : ''}`
                     : 'Carnival data synced successfully.'
                   }
                 </Text>
@@ -929,7 +893,7 @@ function CarnivalSyncScreen() {
             </View>
           )}
 
-          {state.logs.length > 0 && state.status !== 'complete' && (
+          {state.logs.length > 0 && state.status !== 'complete' && state.status !== 'partial' && (
             <Pressable
               style={styles.exportLogFloatingButton}
               onPress={handleExportSyncLog}

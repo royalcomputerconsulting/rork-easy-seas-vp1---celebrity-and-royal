@@ -6,7 +6,7 @@ import zipfile
 from pathlib import Path
 
 EXPECTED_VERSION = "12.4.2"
-EXPECTED_BUILD = "311"
+EXPECTED_BUILD = "314"
 
 if len(sys.argv) != 2:
     print("Usage: python3 scripts/verifyIpaVersion.py /path/to/EasySeas.ipa", file=sys.stderr)

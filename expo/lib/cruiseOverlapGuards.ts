@@ -283,7 +283,14 @@ function normalizeCruiseKey(shipName?: string, sailDate?: string): string {
 }
 
 function getReservationKey(cruise: BookedCruise): string {
-  return String(cruise.reservationNumber ?? cruise.bookingId ?? cruise.bwoNumber ?? '').trim().toUpperCase();
+  const candidates = [cruise.reservationNumber, cruise.bookingId, cruise.bwoNumber];
+  for (const value of candidates) {
+    const candidate = String(value ?? '').trim().toUpperCase();
+    if (!candidate) continue;
+    if (/^(?:UNCONFIRMED:|BOOKING[_:-]?\d*|RC[_:-]?\d*|CRUISE[_:-]?\d*|ROW[_:-]?\d*|TEMP(?:ORARY)?[_:-]?\d*|UNKNOWN(?:[_:-].*)?)$/i.test(candidate)) continue;
+    return candidate;
+  }
+  return '';
 }
 
 const USER_CONFIRMED_MANIFEST_RESERVATIONS = new Set(
@@ -302,30 +309,47 @@ function isScottPinnaclePlanningData(cruises: BookedCruise[]): boolean {
 }
 
 function shouldApplyUserConfirmedManifest(cruises: BookedCruise[]): boolean {
+  // Activate the personal correction overlay only when the incoming collection
+  // contains an exact confirmed reservation or exact confirmed ship/date. A
+  // common guest name, ship family, or broad date range is never sufficient.
   return cruises.some((cruise) => {
     const reservation = getReservationKey(cruise);
     const sailing = normalizeCruiseKey(cruise.shipName, cruise.sailDate);
-    const ship = cruise.shipName?.toLowerCase().trim() ?? '';
-    const sailDate = normalizeDateOnly(cruise.sailDate);
-    const returnDate = normalizeDateOnly(cruise.returnDate);
-
-    return cruise.guestNames?.some((guest) => guest.toLowerCase().includes('scott')) === true
-      || USER_CONFIRMED_MANIFEST_RESERVATIONS.has(reservation)
+    return (reservation.length > 0 && USER_CONFIRMED_MANIFEST_RESERVATIONS.has(reservation))
       || USER_CONFIRMED_MANIFEST_SAILINGS.has(sailing)
-      || isSymphonyMay2026Replacement(cruise)
-      || (ship === 'allure of the seas' && sailDate === '2026-04-29' && (!returnDate || returnDate === '2026-05-02'))
-      || (ship === 'harmony of the seas' && sailDate >= '2026-09-05' && sailDate <= '2026-09-15')
-      || (ship === 'st of the seas' || ship === 'sg of the seas');
+      || isSymphonyMay2026Replacement(cruise);
   });
 }
 
 function mergeUserConfirmedCruise(existing: BookedCruise | undefined, confirmed: BookedCruise): BookedCruise {
-  return {
-    ...(existing ?? {}),
+  if (!existing) return { ...confirmed };
+
+  // The manifest may correct/enrich cabin, pricing, offer, itinerary, and other planning
+  // details, but the live source remains authoritative for record identity and lifecycle.
+  // Known date/ship replacements are handled earlier by applyKnownBookingCorrectionsToCruise.
+  const merged: BookedCruise = {
+    ...existing,
     ...confirmed,
-    id: confirmed.id,
-    reservationNumber: confirmed.reservationNumber,
+    id: existing.id || confirmed.id,
+    reservationNumber: existing.reservationNumber || confirmed.reservationNumber,
+    bookingId: existing.bookingId || confirmed.bookingId,
+    bwoNumber: existing.bwoNumber || confirmed.bwoNumber,
+    shipName: existing.shipName || confirmed.shipName,
+    sailDate: existing.sailDate || confirmed.sailDate,
+    returnDate: existing.returnDate || confirmed.returnDate,
+    status: existing.status || confirmed.status,
+    bookingStatus: existing.bookingStatus || confirmed.bookingStatus,
+    completionState: existing.completionState || confirmed.completionState,
+    cruiseSource: existing.cruiseSource || confirmed.cruiseSource,
+    offerSource: existing.offerSource || confirmed.offerSource,
+    brand: existing.brand || confirmed.brand,
+    ownerProfileId: existing.ownerProfileId || confirmed.ownerProfileId,
+    sourceEmail: existing.sourceEmail || confirmed.sourceEmail,
+    dataOwnerEmail: existing.dataOwnerEmail || confirmed.dataOwnerEmail,
+    dataOwnerScopeId: existing.dataOwnerScopeId || confirmed.dataOwnerScopeId,
+    createdAt: existing.createdAt || confirmed.createdAt,
   };
+  return merged;
 }
 
 function mergeConfirmedPlanCruise(existing: BookedCruise, confirmed: BookedCruise): BookedCruise {
@@ -434,29 +458,102 @@ export function applyKnownBookingCorrectionsToCruise(cruise: BookedCruise): Book
   };
 }
 
-/** Applies the user-confirmed booked-cruise manifest so stale imports cannot recreate duplicate or made-up sailings. */
-export function applyUserConfirmedBookedCruiseManifest(cruises: BookedCruise[]): BookedCruise[] {
+export type ConfirmedManifestLedgerAction = 'corrected' | 'enriched' | 'added' | 'unchanged' | 'rejected';
+
+export interface ConfirmedManifestLedgerEntry {
+  action: ConfirmedManifestLedgerAction;
+  manifestReservation: string;
+  manifestSailing: string;
+  matchedIdentity?: string;
+  reason: string;
+}
+
+export interface ConfirmedManifestOverlayResult {
+  cruises: BookedCruise[];
+  ledger: ConfirmedManifestLedgerEntry[];
+  activated: boolean;
+}
+
+/**
+ * Applies user-confirmed corrections as a non-destructive overlay. Every live
+ * record remains in the collection unless the ordinary identity deduper proves
+ * it is an exact duplicate. The manifest is never used as a replacement list.
+ */
+export function applyUserConfirmedBookedCruiseManifestWithLedger(cruises: BookedCruise[]): ConfirmedManifestOverlayResult {
   const correctedInput = cruises
     .filter((cruise) => !isKnownInvalidBookedCruise(cruise))
     .map(applyKnownBookingCorrectionsToCruise);
+  const activated = shouldApplyUserConfirmedManifest(correctedInput);
+  const ledger: ConfirmedManifestLedgerEntry[] = [];
 
-  if (!shouldApplyUserConfirmedManifest(cruises)) {
-    return dedupeBookedCruises(correctedInput, 'booked cruises without user-confirmed manifest');
+  if (!activated) {
+    return {
+      cruises: dedupeBookedCruises(correctedInput, 'booked cruises without user-confirmed manifest overlay'),
+      ledger,
+      activated: false,
+    };
   }
 
-  const exactManifest = USER_CONFIRMED_BOOKED_CRUISE_MANIFEST.map((confirmedCruise) => {
+  const result = [...correctedInput];
+  for (const confirmedCruise of USER_CONFIRMED_BOOKED_CRUISE_MANIFEST) {
     const confirmedReservation = getReservationKey(confirmedCruise);
     const confirmedSailingKey = normalizeCruiseKey(confirmedCruise.shipName, confirmedCruise.sailDate);
-    const existing = correctedInput.find((cruise) => {
-      const reservationMatches = confirmedReservation.length > 0 && getReservationKey(cruise) === confirmedReservation;
-      const sailingMatches = normalizeCruiseKey(cruise.shipName, cruise.sailDate) === confirmedSailingKey;
-      return reservationMatches || sailingMatches;
+    const reservationMatches = confirmedReservation
+      ? result.map((cruise, index) => ({ cruise, index })).filter(({ cruise }) => getReservationKey(cruise) === confirmedReservation)
+      : [];
+    const sailingMatches = result
+      .map((cruise, index) => ({ cruise, index }))
+      .filter(({ cruise }) => normalizeCruiseKey(cruise.shipName, cruise.sailDate) === confirmedSailingKey);
+    const matches = reservationMatches.length > 0 ? reservationMatches : sailingMatches;
+
+    if (matches.length > 1 && reservationMatches.length === 0) {
+      ledger.push({
+        action: 'rejected',
+        manifestReservation: confirmedReservation,
+        manifestSailing: confirmedSailingKey,
+        reason: 'Ambiguous ship/date fallback matched multiple live bookings; no correction applied',
+      });
+      continue;
+    }
+
+    if (matches.length === 1) {
+      const { cruise: existing, index } = matches[0];
+      const merged = mergeUserConfirmedCruise(existing, confirmedCruise);
+      result[index] = {
+        ...merged,
+        id: existing.id || confirmedCruise.id,
+        reservationNumber: existing.reservationNumber || confirmedCruise.reservationNumber,
+        bookingId: existing.bookingId || confirmedCruise.bookingId,
+      };
+      ledger.push({
+        action: JSON.stringify(existing) === JSON.stringify(result[index]) ? 'unchanged' : 'corrected',
+        manifestReservation: confirmedReservation,
+        manifestSailing: confirmedSailingKey,
+        matchedIdentity: getReservationKey(result[index]) || normalizeCruiseKey(result[index].shipName, result[index].sailDate),
+        reason: reservationMatches.length > 0 ? 'Matched by reservation/booking ID' : 'Matched by unique ship and sail date',
+      });
+      continue;
+    }
+
+    result.push({ ...confirmedCruise });
+    ledger.push({
+      action: 'added',
+      manifestReservation: confirmedReservation,
+      manifestSailing: confirmedSailingKey,
+      matchedIdentity: confirmedReservation || confirmedSailingKey,
+      reason: 'Confirmed manifest cruise was absent from live data and was added without removing live rows',
     });
+  }
 
-    return mergeUserConfirmedCruise(existing, confirmedCruise);
-  });
+  return {
+    cruises: dedupeBookedCruises(result, 'non-destructive user-confirmed booked cruise manifest overlay'),
+    ledger,
+    activated: true,
+  };
+}
 
-  return dedupeBookedCruises(exactManifest, 'user-confirmed booked cruise manifest');
+export function applyUserConfirmedBookedCruiseManifest(cruises: BookedCruise[]): BookedCruise[] {
+  return applyUserConfirmedBookedCruiseManifestWithLedger(cruises).cruises;
 }
 
 /** Applies known booking corrections to a list without mutating the input records. */

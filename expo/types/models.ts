@@ -362,6 +362,13 @@ export interface CasinoOffer extends SharedOwnershipFields {
   
   offerSource?: 'royal' | 'celebrity' | 'carnival';
   bookingLink?: string;
+  /** Authoritative personalized catalog metadata retained after sync/apply. */
+  catalogVisibleOfferCodes?: string;
+  catalogVisibleOfferCount?: number;
+  catalogZeroRowOfferCodes?: string;
+  catalogRowBearingOfferCodes?: string;
+  catalogIncompleteOfferCodes?: string;
+  eligibleSailingCount?: number;
   csvRowNumber?: number;
   createdAt?: string;
   updatedAt?: string;

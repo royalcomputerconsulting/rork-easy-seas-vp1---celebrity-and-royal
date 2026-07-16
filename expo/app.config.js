@@ -1,8 +1,8 @@
 const appJson = require('./app.json');
 
 const APP_STORE_VERSION = '12.4.2';
-const IOS_BUILD_NUMBER = '311';
-const ANDROID_VERSION_CODE = 120402;
+const IOS_BUILD_NUMBER = '314';
+const ANDROID_VERSION_CODE = 120405;
 const FORCE_VERSION_PLUGIN = './plugins/withForcedIOSVersion';
 
 /**

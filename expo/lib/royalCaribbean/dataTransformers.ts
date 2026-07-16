@@ -1,4 +1,5 @@
 import { OfferRow, BookedCruiseRow, LoyaltyData } from './types';
+import { isPlaceholderBookingIdentifier } from './bookedExtractionIdentity';
 import { CasinoOffer, BookedCruise, Cruise } from '@/types/models';
 import { getDoubleOccupancyRoomRetailValue } from '@/lib/valueCalculator';
 
@@ -428,6 +429,12 @@ export function transformOfferRowsToCruisesAndOffers(
         offerSource: source,
         ...brandFields,
         bookingLink: offer.bookingLink || undefined,
+        catalogVisibleOfferCodes: offer.catalogVisibleOfferCodes || undefined,
+        catalogVisibleOfferCount: offer.catalogVisibleOfferCount,
+        catalogZeroRowOfferCodes: offer.catalogZeroRowOfferCodes || undefined,
+        catalogRowBearingOfferCodes: offer.catalogRowBearingOfferCodes || undefined,
+        catalogIncompleteOfferCodes: offer.catalogIncompleteOfferCodes || undefined,
+        eligibleSailingCount: 0,
         ...ownershipFields,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -451,6 +458,11 @@ export function transformOfferRowsToCruisesAndOffers(
       if (!aggregatedOffer.bookingLink && offer.bookingLink) {
         aggregatedOffer.bookingLink = offer.bookingLink;
       }
+      aggregatedOffer.catalogVisibleOfferCodes = offer.catalogVisibleOfferCodes || aggregatedOffer.catalogVisibleOfferCodes;
+      aggregatedOffer.catalogVisibleOfferCount = offer.catalogVisibleOfferCount ?? aggregatedOffer.catalogVisibleOfferCount;
+      aggregatedOffer.catalogZeroRowOfferCodes = offer.catalogZeroRowOfferCodes || aggregatedOffer.catalogZeroRowOfferCodes;
+      aggregatedOffer.catalogRowBearingOfferCodes = offer.catalogRowBearingOfferCodes || aggregatedOffer.catalogRowBearingOfferCodes;
+      aggregatedOffer.catalogIncompleteOfferCodes = offer.catalogIncompleteOfferCodes || aggregatedOffer.catalogIncompleteOfferCodes;
 
       if (interiorPrice !== undefined) {
         aggregatedOffer.interiorPrice = getLowestPositivePrice([aggregatedOffer.interiorPrice, interiorPrice]);
@@ -490,6 +502,7 @@ export function transformOfferRowsToCruisesAndOffers(
     const cruiseIds = cruiseIdsByOfferKey.get(key) || [];
     offer.cruiseIds = cruiseIds;
     offer.cruiseId = cruiseIds[0];
+    offer.eligibleSailingCount = cruiseIds.length;
   });
 
   return {
@@ -585,6 +598,16 @@ export function transformBookedCruisesToAppFormat(
       suite: suitePrice,
     });
     const importedRoomCabinRetailValue = getDoubleOccupancyRoomRetailValue(importedPerPersonCabinRetailValue);
+    const passengerRows = Array.isArray(cruise.passengers) && cruise.passengers.length > 0
+      ? cruise.passengers
+      : (Array.isArray(cruise.passengersInStateroom) ? cruise.passengersInStateroom : []);
+    const guestNames = passengerRows
+      .map((passenger) => [passenger.firstName, passenger.lastName].filter(Boolean).join(' ').trim())
+      .filter((name) => name.length > 0);
+    const parsedGuestCount = Number.parseInt(String(cruise.numberOfGuests || ''), 10);
+    const guestCount = Number.isFinite(parsedGuestCount) && parsedGuestCount > 0
+      ? parsedGuestCount
+      : (guestNames.length > 0 ? guestNames.length : undefined);
 
     const bookedCruise: BookedCruise = {
       sourcePayload: (cruise as { rawBooking?: unknown }).rawBooking,
@@ -610,7 +633,7 @@ export function transformBookedCruisesToAppFormat(
       originalPrice: importedRoomCabinRetailValue,
       deckNumber: cruise.deckNumber,
       bookingId: cruise.bookingId,
-      reservationNumber: cruise.bookingId,
+      reservationNumber: isPlaceholderBookingIdentifier(cruise.bookingId) ? undefined : cruise.bookingId,
       status: isCompletedInput ? 'completed' : 'booked',
       completionState: isCompletedInput ? 'completed' : 'upcoming',
       isCourtesyHold,
@@ -625,6 +648,8 @@ export function transformBookedCruisesToAppFormat(
       stateroomCategoryCode: cruise.stateroomCategoryCode,
       stateroomType: cruise.stateroomType,
       musterStation: cruise.musterStation,
+      guestNames: guestNames.length > 0 ? guestNames : undefined,
+      guests: guestCount,
       cruiseSource: source,
       ...brandFields,
       ...ownershipFields,

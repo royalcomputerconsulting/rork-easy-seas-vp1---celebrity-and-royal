@@ -1,0 +1,9 @@
+import React from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import type { OptimizationChartSeries } from '@/lib/optimization';
+export function OptimizationMiniChart({ series }: { series: OptimizationChartSeries }) {
+  const max = Math.max(1, ...series.points.map(p => Math.abs(p.y)));
+  return <View accessible accessibilityLabel={`${series.title}. ${series.description}`} style={styles.card}><Text style={styles.title}>{series.title}</Text><Text style={styles.description}>{series.description}</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>{series.points.map(point => <View key={`${series.id}:${point.x}`} style={styles.column}><View style={styles.plot}><View accessibilityLabel={`${point.label}: ${point.y} ${series.unit}`} style={[styles.bar,{height:Math.max(4,Math.abs(point.y)/max*90)}]} /></View><Text style={styles.value}>{format(point.y,series.unit)}</Text><Text numberOfLines={1} style={styles.label}>{point.label}</Text></View>)}</ScrollView></View>;
+}
+function format(value:number,unit:OptimizationChartSeries['unit']){if(unit==='currency')return `$${Math.round(value).toLocaleString()}`;if(unit==='percent')return `${value.toFixed(0)}%`;return value.toLocaleString();}
+const styles=StyleSheet.create({card:{backgroundColor:'#FFF',borderRadius:16,borderWidth:1,borderColor:'#E2E8F0',padding:14,marginBottom:12},title:{fontWeight:'900',fontSize:16,color:'#0F2747'},description:{fontSize:12,color:'#64748B',marginTop:3,marginBottom:12},row:{gap:12,alignItems:'flex-end'},column:{width:70,alignItems:'center'},plot:{height:94,justifyContent:'flex-end'},bar:{width:28,borderRadius:7,backgroundColor:'#0F2747'},value:{fontSize:11,fontWeight:'800',color:'#334155',marginTop:5},label:{fontSize:10,color:'#64748B',width:68,textAlign:'center',marginTop:2}});

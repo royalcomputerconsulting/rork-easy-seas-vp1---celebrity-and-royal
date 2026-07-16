@@ -16,8 +16,8 @@ const codes = read('app/certificate-codes.tsx');
 const lookup = read('app/certificate-lookup.tsx');
 
 assert(app.expo.version === '12.4.2', 'App version must be 12.4.2');
-assert(app.expo.ios.buildNumber === '311', 'iOS build number must be 311');
-assert(app.expo.android.versionCode === 120402, 'Android version code must be 120402');
+assert(app.expo.ios.buildNumber === '314', 'iOS build number must be 314');
+assert(app.expo.android.versionCode === 120405, 'Android version code must be 120405');
 assert(pkg.version === '12.4.2', 'Package version must be 12.4.2');
 assert(logger.includes('v12.4.0-certificate-download-live-log-export'), 'Certificate log runtime marker missing');
 assert(logger.includes('getLogsAsText'), 'Certificate logger must support text export');

@@ -1,0 +1,13 @@
+{
+  "data": {
+    "cruiseSearch": {
+      "sailings": [],
+      "pagination": {
+        "totalResults": 0,
+        "pageNumber": 1,
+        "pageSize": 50,
+        "hasNextPage": false
+      }
+    }
+  }
+}

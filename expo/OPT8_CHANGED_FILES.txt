@@ -1,0 +1,16 @@
+MODIFIED
+- app/_layout.tsx
+- EASYSEAS_PERSONAL_CERTIFICATE_OPTIMIZATION_ENGINE_TODO.md
+- lib/optimization/index.ts
+
+ADDED
+- app/casino/personal-optimization-alerts.tsx
+- state/PersonalOptimizationAlertsProvider.tsx
+- lib/optimization/alerts/asyncStorageRepository.ts
+- lib/optimization/alerts/generateOptimizationAlerts.ts
+- lib/optimization/alerts/index.ts
+- lib/optimization/alerts/storage.ts
+- lib/optimization/alerts/types.ts
+- scripts/testOPT8AlertsArchitecture.js
+- scripts/testOPT8PersonalOptimizationAlerts.js
+- OPT8 checkpoint evidence files

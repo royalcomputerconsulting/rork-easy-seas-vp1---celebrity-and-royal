@@ -9,8 +9,8 @@ const appJson = JSON.parse(read('app.json'));
 const pkg = JSON.parse(read('package.json'));
 assert(pkg.version === '12.4.2', 'package version must be 12.4.2');
 assert(appJson.expo.version === '12.4.2', 'expo version must be 12.4.2');
-assert(appJson.expo.ios.buildNumber === '311', 'ios build must be 311');
-assert(appJson.expo.android.versionCode === 120402, 'android versionCode must be 120402');
+assert(appJson.expo.ios.buildNumber === '314', 'ios build must be 314');
+assert(appJson.expo.android.versionCode === 120405, 'android versionCode must be 120405');
 
 const codesScreen = read('app/certificate-codes.tsx');
 assert(codesScreen.includes('Certificate Codes'), 'Certificate Codes screen must exist');

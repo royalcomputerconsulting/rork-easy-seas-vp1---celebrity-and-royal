@@ -33,6 +33,8 @@ import {
 import { openCertificatePdf } from '@/lib/royalCaribbean/certificatePdf';
 import { downloadCertificateCatalogBatched } from '@/lib/certificates/certificateBatchDownload';
 import { useAgentX } from '@/state/AgentXProvider';
+import { usePersonalCertificateOptimizer } from '@/state/PersonalCertificateOptimizerProvider';
+import { evaluateOffersWithPersonalValue } from '@/lib/optimization';
 
 type MonthTarget = 'thisMonth' | 'nextMonth';
 
@@ -62,6 +64,7 @@ function getCatalogSummaryText(catalog: ExplorerCatalogEntry[], monthLabel: stri
 
 export default function CertificateCodesScreen() {
   const router = useRouter();
+  const { bundle: optimizationBundle } = usePersonalCertificateOptimizer();
   const params = useLocalSearchParams<{ chat?: string }>();
   const [monthTarget, setMonthTarget] = useState<MonthTarget>('thisMonth');
   const [certificateType, setCertificateType] = useState<CertificateType>('C');
@@ -186,14 +189,27 @@ export default function CertificateCodesScreen() {
       sailingsFound: item.sailingsFound ?? 0,
       pdfUrl: item.pdfUrl,
     }));
+    const personalEvaluations = optimizationBundle ? evaluateOffersWithPersonalValue(
+      promptCatalog.map((item) => ({
+        id: item.code,
+        offerCode: item.code,
+        certificateCode: item.code,
+        thresholdPoints: item.points,
+      })),
+      optimizationBundle,
+    ) : [];
     void sendMessage([
       `Act as my Casino Royale certificate advisor for ${monthLabel}.`,
       'Discuss all A and C certificate offers loaded or displayed on this screen.',
-      'Explain best certificate levels, guest/value tradeoffs, what to download next, and which certificates are most worth chasing.',
+      'Use expected realized certificate value and future-booking fit, not raw retail value alone.',
+      'Never override bankroll, hard-loss, profit-floor, fatigue, or data-quality safety gates.',
       'Use this certificate catalog context:',
-      JSON.stringify(promptCatalog).slice(0, 8000),
+      JSON.stringify(promptCatalog).slice(0, 6000),
+      'Use these personal value evaluations when available:',
+      JSON.stringify(personalEvaluations).slice(0, 4000),
+      optimizationBundle?.currentRecommendation ? `Current saved recommendation: ${optimizationBundle.currentRecommendation.actionLabel}.` : 'No saved personal recommendation is available.',
     ].join('\n'));
-  }, [catalogByCode, monthCode, monthLabel, sendMessage, setMode]);
+  }, [catalogByCode, monthCode, monthLabel, optimizationBundle, sendMessage, setMode]);
 
   useEffect(() => {
     if (params.chat === '1') {

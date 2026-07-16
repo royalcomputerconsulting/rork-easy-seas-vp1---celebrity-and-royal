@@ -1,0 +1,28 @@
+MODIFIED
+- EASYSEAS_PERSONAL_CERTIFICATE_OPTIMIZATION_ENGINE_TODO.md
+- lib/optimization/index.ts
+
+ADDED
+- OPT3_FULL_TEST_LOG.txt
+- OPT3_FULL_TEST_SUMMARY.tsv
+- OPT3_PROTECTED_HASHES_AFTER.sha256
+- OPT3_PROTECTED_HASHES_BASELINE.sha256
+- OPT3_PROTECTED_HASH_COMPARISON.txt
+- OPT3_STANDALONE_TYPECHECK_STATUS.txt
+- OPT3_SYNTAX_TRANSPILE_STATUS.txt
+- lib/optimization/models/buildPersonalGamblingProfile.ts
+- lib/optimization/models/buildThresholdStatistics.ts
+- lib/optimization/models/classifyPersonalTargets.ts
+- lib/optimization/models/estimateExpectedLoss.ts
+- lib/optimization/models/estimateSuccessProbability.ts
+- lib/optimization/models/index.ts
+- lib/optimization/models/selectComparableHistory.ts
+- lib/optimization/models/statistics.ts
+- lib/optimization/models/types.ts
+- lib/optimization/models/zodSchemas.ts
+- scripts/testOPT3ModelArchitectureAndSafety.js
+- scripts/testOPT3ProbabilityLossAndTargetModels.js
+
+REMOVED
+- OPT2_INDEPENDENT_RETEST_LOG.txt
+- OPT2_INDEPENDENT_RETEST_SUMMARY.tsv

@@ -311,7 +311,6 @@ export const USER_CONFIRMED_BOOKED_CRUISE_MANIFEST: BookedCruise[] = [
       itinerary: '7 NIGHT EASTERN CARIBBEAN & PERFECT DAY',
       stateroom: 'V4 10518',
       stateroomDescription: 'Interior Stateroom Obstructed View',
-      crownAndAnchorNumber: '305812247',
       specialServices: 'CR TARGETED OFFER(26TIER3)',
       diningWaitlist: '8:30 PM',
       totalCruiseFare: 5500,

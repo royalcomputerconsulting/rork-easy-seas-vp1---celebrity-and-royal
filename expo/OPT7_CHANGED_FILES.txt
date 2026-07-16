@@ -1,0 +1,20 @@
+MODIFIED
+- app/_layout.tsx
+- app/advisor.tsx
+- app/ask-my-data.tsx
+- app/certificate-codes.tsx
+- EASYSEAS_PERSONAL_CERTIFICATE_OPTIMIZATION_ENGINE_TODO.md
+- lib/optimization/index.ts
+
+ADDED
+- state/PersonalCertificateOptimizerProvider.tsx
+- lib/optimization/integration/asyncStorageRepository.ts
+- lib/optimization/integration/answerOptimizationQuestion.ts
+- lib/optimization/integration/buildOptimizationContext.ts
+- lib/optimization/integration/evaluateOffersWithPersonalValue.ts
+- lib/optimization/integration/index.ts
+- lib/optimization/integration/storage.ts
+- lib/optimization/integration/types.ts
+- scripts/testOPT7IntegrationArchitecture.js
+- scripts/testOPT7OptimizationIntegration.js
+- OPT7 checkpoint evidence files

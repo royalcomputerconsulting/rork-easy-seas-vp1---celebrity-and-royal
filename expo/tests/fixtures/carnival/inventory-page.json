@@ -1,0 +1,21 @@
+{
+  "data": {
+    "cruiseSearch": {
+      "sailings": [
+        {
+          "rateCode": "FBN",
+          "shipName": "Carnival Celebration",
+          "sailDate": "2026-10-01",
+          "itinerary": "Eastern Caribbean",
+          "departurePort": "Miami"
+        }
+      ],
+      "pagination": {
+        "totalResults": 1,
+        "pageNumber": 1,
+        "pageSize": 50,
+        "hasNextPage": false
+      }
+    }
+  }
+}

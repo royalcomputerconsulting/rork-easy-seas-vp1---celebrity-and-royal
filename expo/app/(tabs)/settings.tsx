@@ -374,6 +374,9 @@ export default function SettingsScreen() {
     name: profileDisplayUser?.name || '',
     email: profileDisplayUser?.email || authenticatedEmail || '',
     crownAnchorNumber: profileDisplayUser?.crownAnchorNumber || '',
+    // Primary-profile loyalty is rendered from LoyaltyProvider because that provider commits only
+    // after AsyncStorage/profile readback succeeds. This prevents a one-render UserProvider lag from
+    // showing the old pre-sync totals after Apply Sync. Secondary profiles remain profile-scoped.
     clubRoyalePoints: isPrimaryProfileSelected ? loyaltyClubRoyalePoints : (profileDisplayUser?.clubRoyalePoints ?? 0),
     clubRoyaleTier: isPrimaryProfileSelected ? loyaltyClubRoyaleTier : (profileDisplayUser?.clubRoyaleTier || ''),
     loyaltyPoints: isPrimaryProfileSelected ? loyaltyCrownAnchorPoints : (profileDisplayUser?.loyaltyPoints ?? 0),
@@ -2317,7 +2320,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
                 </View>
                 <View style={styles.dataOverviewTitleGroup}>
                   <Text style={styles.dataOverviewTitle}>Data Overview</Text>
-                  <Text style={styles.dataOverviewSubtitle}>{dataStats.cruises} cruises in system</Text>
+                  <Text style={styles.dataOverviewSubtitle}>{dataStats.cruises} canonical offer-sailing rows</Text>
                 </View>
               </View>
             </LinearGradient>
@@ -2326,7 +2329,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
                 <View style={styles.dataOverviewStatCard}>
                   <Anchor size={14} color="#0369A1" />
                   <Text style={styles.dataOverviewStatValue}>{dataStats.cruises}</Text>
-                  <Text style={styles.dataOverviewStatLabel}>Total Cruises</Text>
+                  <Text style={styles.dataOverviewStatLabel}>Offer Sailings</Text>
                 </View>
                 <View style={styles.dataOverviewStatCard}>
                   <View style={styles.dataOverviewUpcomingCompletedRow}>

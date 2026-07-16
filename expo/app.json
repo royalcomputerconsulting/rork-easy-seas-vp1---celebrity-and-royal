@@ -17,12 +17,7 @@
       "supportsTablet": false,
       "bundleIdentifier": "app.rork.easy-seas-vp1-celebrity-and-royal",
       "usesIcloudStorage": true,
-      "buildNumber": "311",
-      "infoPlist": {
-        "CFBundleShortVersionString": "12.4.2",
-        "CFBundleVersion": "311",
-        "ITSAppUsesNonExemptEncryption": false
-      }
+      "buildNumber": "314"
     },
     "android": {
       "adaptiveIcon": {
@@ -36,7 +31,7 @@
         "INTERNET",
         "android.permission.VIBRATE"
       ],
-      "versionCode": 120402
+      "versionCode": 120405
     },
     "web": {
       "favicon": "./assets/images/favicon.png"
@@ -60,14 +55,6 @@
     ],
     "experiments": {
       "typedRoutes": true
-    },
-    "extra": {
-      "router": {
-        "origin": "https://rork.com/"
-      },
-      "eas": {
-        "projectId": "ec1e9b5a-face-45ad-8dc2-b95c780654f7"
-      }
     }
   }
 }

@@ -17,7 +17,7 @@ ok(codes.includes('downloadCertificateCatalogBatched'), 'codes page must use bat
 ok(offer.includes('showOfferSummary'), 'offer summary must be collapsible');
 ok(offer.includes('Show offer summary'), 'compact header toggle missing');
 ok(app.expo.version === '12.4.2', 'app version must be 12.4.2');
-ok(app.expo.ios.buildNumber === '311', 'iOS build number must be 311');
-ok(app.expo.android.versionCode === 120402, 'Android versionCode must be 120402');
+ok(app.expo.ios.buildNumber === '314', 'iOS build number must be 314');
+ok(app.expo.android.versionCode === 120405, 'Android versionCode must be 120405');
 ok(pkg.version === '12.4.2', 'package version must be 12.4.2');
 console.log('PASS testV1239CertificateBatchCompactOffer');

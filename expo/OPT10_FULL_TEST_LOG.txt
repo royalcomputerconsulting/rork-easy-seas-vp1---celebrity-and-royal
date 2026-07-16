@@ -1,0 +1,199 @@
+=== scripts/testOPT0OptimizerArchitectureBoundaries.js ===
+PASS testOPT0OptimizerArchitectureBoundaries
+PASS scripts/testOPT0OptimizerArchitectureBoundaries.js
+=== scripts/testOPT0OptimizerBaselineContracts.js ===
+PASS testOPT0OptimizerBaselineContracts
+PASS scripts/testOPT0OptimizerBaselineContracts.js
+=== scripts/testOPT0OptimizerRollbackFlags.js ===
+PASS testOPT0OptimizerRollbackFlags
+PASS scripts/testOPT0OptimizerRollbackFlags.js
+=== scripts/testOPT10CompleteScenarioMatrix.js ===
+PASS OPT-10 complete optimizer scenario matrix
+PASS scripts/testOPT10CompleteScenarioMatrix.js
+=== scripts/testOPT10ReleaseArchitecturePrivacyAndAccessibility.js ===
+PASS OPT-10 release architecture, privacy, and accessibility
+PASS scripts/testOPT10ReleaseArchitecturePrivacyAndAccessibility.js
+=== scripts/testOPT10ReleaseGateAndAuthority.js ===
+PASS OPT-10 release gate and authority
+PASS scripts/testOPT10ReleaseGateAndAuthority.js
+=== scripts/testOPT1CanonicalCasinoHistory.js ===
+PASS OPT-1 canonical personal casino history
+PASS scripts/testOPT1CanonicalCasinoHistory.js
+=== scripts/testOPT1HistoryArchitectureAndAuthority.js ===
+PASS OPT-1 history architecture and authority
+PASS scripts/testOPT1HistoryArchitectureAndAuthority.js
+=== scripts/testOPT2PersonalCertificateValueModel.js ===
+PASS OPT-2 personal certificate value model
+PASS scripts/testOPT2PersonalCertificateValueModel.js
+=== scripts/testOPT2ValueArchitectureAndEvidence.js ===
+PASS OPT-2 value architecture and evidence
+PASS scripts/testOPT2ValueArchitectureAndEvidence.js
+=== scripts/testOPT3ModelArchitectureAndSafety.js ===
+PASS OPT-3 model architecture and safety
+PASS scripts/testOPT3ModelArchitectureAndSafety.js
+=== scripts/testOPT3ProbabilityLossAndTargetModels.js ===
+PASS OPT-3 probability, loss, and target models
+PASS scripts/testOPT3ProbabilityLossAndTargetModels.js
+=== scripts/testOPT4EngineArchitectureAndPrecedence.js ===
+PASS OPT-4 engine architecture and precedence
+PASS scripts/testOPT4EngineArchitectureAndPrecedence.js
+=== scripts/testOPT4MarginalEVAndOptimalStoppingEngine.js ===
+PASS OPT-4 marginal EV and optimal stopping engine
+PASS scripts/testOPT4MarginalEVAndOptimalStoppingEngine.js
+=== scripts/testOPT5LiveAdvisorArchitecture.js ===
+PASS OPT-5 live advisor architecture
+PASS scripts/testOPT5LiveAdvisorArchitecture.js
+=== scripts/testOPT5LiveCasinoAdvisor.js ===
+PASS OPT-5 live casino advisor
+PASS scripts/testOPT5LiveCasinoAdvisor.js
+=== scripts/testOPT6DashboardArchitecture.js ===
+PASS OPT-6 dashboard architecture
+PASS scripts/testOPT6DashboardArchitecture.js
+=== scripts/testOPT6PersonalDashboard.js ===
+PASS OPT-6 personal dashboard
+PASS scripts/testOPT6PersonalDashboard.js
+=== scripts/testOPT7IntegrationArchitecture.js ===
+PASS OPT-7 integration architecture
+PASS scripts/testOPT7IntegrationArchitecture.js
+=== scripts/testOPT7OptimizationIntegration.js ===
+PASS OPT-7 optimization integration
+PASS scripts/testOPT7OptimizationIntegration.js
+=== scripts/testOPT8AlertsArchitecture.js ===
+PASS OPT-8 alerts architecture
+PASS scripts/testOPT8AlertsArchitecture.js
+=== scripts/testOPT8PersonalOptimizationAlerts.js ===
+PASS OPT-8 personal optimization alerts
+PASS scripts/testOPT8PersonalOptimizationAlerts.js
+=== scripts/testOPT9LearningArchitecture.js ===
+PASS OPT-9 learning architecture
+PASS scripts/testOPT9LearningArchitecture.js
+=== scripts/testOPT9LearningBacktestAccuracy.js ===
+PASS OPT-9 learning backtest and accuracy
+PASS scripts/testOPT9LearningBacktestAccuracy.js
+=== scripts/testV1076CasinoEnginesFunctional.js ===
+PASS testV1076CasinoEnginesFunctional
+PASS scripts/testV1076CasinoEnginesFunctional.js
+=== scripts/testV1076NativeNoRevenueCatCasino.js ===
+PASS testV1076NativeNoRevenueCatCasino
+PASS scripts/testV1076NativeNoRevenueCatCasino.js
+=== scripts/testV1077RemainingRecommendationChanges.js ===
+PASS testV1077RemainingRecommendationChanges
+PASS scripts/testV1077RemainingRecommendationChanges.js
+=== scripts/testV1230LoyaltySyncRepair.js ===
+PASS testV1230LoyaltySyncRepair
+PASS scripts/testV1230LoyaltySyncRepair.js
+=== scripts/testV1231CasinoSectionWiring.js ===
+PASS testV1231CasinoSectionWiring
+PASS scripts/testV1231CasinoSectionWiring.js
+=== scripts/testV1232RoyalOfferZeroRowPreservation.js ===
+PASS testV1232RoyalOfferZeroRowPreservation
+PASS scripts/testV1232RoyalOfferZeroRowPreservation.js
+=== scripts/testV1233DynamicRoyalOfferCatalog.js ===
+PASS testV1233DynamicRoyalOfferCatalog
+PASS scripts/testV1233DynamicRoyalOfferCatalog.js
+=== scripts/testV1234SharedProfilesManualAdd.js ===
+PASS testV1234SharedProfilesManualAdd
+PASS scripts/testV1234SharedProfilesManualAdd.js
+=== scripts/testV1235BookedCompletedSyncRules.js ===
+PASS testV1235BookedCompletedSyncRules
+PASS scripts/testV1235BookedCompletedSyncRules.js
+=== scripts/testV1236AskMyDataOfferIntent.js ===
+PASS testV1236AskMyDataOfferIntent
+PASS scripts/testV1236AskMyDataOfferIntent.js
+=== scripts/testV1237CertificateBankRobustDownload.js ===
+PASS testV1237CertificateBankRobustDownload
+PASS scripts/testV1237CertificateBankRobustDownload.js
+=== scripts/testV1238CertificateOfferCodesChat.js ===
+PASS testV1238CertificateOfferCodesChat
+PASS scripts/testV1238CertificateOfferCodesChat.js
+=== scripts/testV1239CertificateBatchCompactOffer.js ===
+PASS testV1239CertificateBatchCompactOffer
+PASS scripts/testV1239CertificateBatchCompactOffer.js
+=== scripts/testV1240CertificateDownloadLog.js ===
+PASS testV1240CertificateDownloadLog
+PASS scripts/testV1240CertificateDownloadLog.js
+=== scripts/testV1241AppStoreVersionFix.js ===
+PASS testV1241AppStoreVersionFix
+PASS scripts/testV1241AppStoreVersionFix.js
+=== scripts/testV1242AppStoreVersionHardlock.js ===
+PASS verifyAppStoreVersion: resolved iOS version 12.4.2 (314), stale 9.17.1 override defeated
+PASS scripts/testV1242AppStoreVersionHardlock.js
+=== scripts/testV1242Build312CarnivalResumableSync.js ===
+PASS testV1242Build315CarnivalPriority4To8
+PASS testV1242Build312CarnivalResumableSync (carried forward in the Carnival-only rebuild)
+PASS scripts/testV1242Build312CarnivalResumableSync.js
+=== scripts/testV1242Build313CarnivalIntegrityStage1.js ===
+PASS testV1242Build313CarnivalIntegrityStage1
+PASS scripts/testV1242Build313CarnivalIntegrityStage1.js
+=== scripts/testV1242Build314CarnivalAuthFalseNegativeFix.js ===
+PASS testV1242Build314CarnivalAuthFalseNegativeFix
+PASS scripts/testV1242Build314CarnivalAuthFalseNegativeFix.js
+=== scripts/testV1242Build314CarnivalPriority1To3.js ===
+PASS testV1242Build314CarnivalPriority1To3
+PASS scripts/testV1242Build314CarnivalPriority1To3.js
+=== scripts/testV1242Build314ClubRoyaleApplySafety.js ===
+PASS testV1242Build314ClubRoyaleApplySafety
+PASS scripts/testV1242Build314ClubRoyaleApplySafety.js
+=== scripts/testV1242Build314ClubRoyaleCruiseCompleteness.js ===
+[DataIdentity] Deduped duplicate booked cruise: {
+  label: 'Club Royale cruise completeness fixture',
+  reason: 'exact_identity',
+  identityKey: 'reservation:royal|test-up-006',
+  idKey: 'duplicate-copy',
+  reservationKey: 'test-up-006',
+  sailingKey: 'sailing:royal|star of the seas|2026-10-06',
+  shipName: 'Star of the Seas',
+  sailDate: '2026-10-06'
+}
+[DataIdentity] Deduped duplicate booked cruise: {
+  label: 'identity-upgrade fixture',
+  reason: 'strict_sailing',
+  identityKey: 'reservation:royal|upgrade-001',
+  idKey: 'complete-upgrade-row',
+  reservationKey: 'upgrade-001',
+  sailingKey: 'sailing:royal|utopia of the seas|2026-12-01',
+  shipName: 'Utopia of the Seas',
+  sailDate: '2026-12-01'
+}
+[SyncLogic] After dedup: 2 unique cruises from 2 raw
+[parseDate] ISO date detected: 2027-02-01 -> 02-01-2027
+[parseDate] ISO date detected: 2027-02-08 -> 02-08-2027
+[DataTransformer] ✓ Calculated nights from dates for Wonder of the Seas: 7 nights (02-01-2027 to 02-08-2027)
+[DataTransformer] Final nights for Wonder of the Seas (02-01-2027 to 02-08-2027): 7 (method: dates)
+[parseDate] ISO date detected: 2027-02-01 -> 02-01-2027
+[parseDate] ISO date detected: 2027-02-08 -> 02-08-2027
+[DataTransformer] ✓ Calculated nights from dates for Wonder of the Seas: 7 nights (02-01-2027 to 02-08-2027)
+[DataTransformer] Final nights for Wonder of the Seas (02-01-2027 to 02-08-2027): 7 (method: dates)
+[SyncLogic] Transformed 0 cruise records from 0 offer rows
+[SyncLogic] calculateSyncCounts canonical incoming dataset: {
+  newCruises: 72,
+  updatedCruises: 0,
+  preservedExistingCruises: 5,
+  upcomingCruises: 12,
+  courtesyHolds: 0,
+  incomingCruises: 72
+}
+PASS testV1242Build314ClubRoyaleCruiseCompleteness
+PASS scripts/testV1242Build314ClubRoyaleCruiseCompleteness.js
+=== scripts/testV1242Build314ClubRoyaleEndToEndStateUI.js ===
+PASS testV1242Build314ClubRoyaleEndToEndStateUI
+PASS scripts/testV1242Build314ClubRoyaleEndToEndStateUI.js
+=== scripts/testV1242Build314ClubRoyaleExtractionIdentity.js ===
+PASS testV1242Build314ClubRoyaleExtractionIdentity
+PASS scripts/testV1242Build314ClubRoyaleExtractionIdentity.js
+=== scripts/testV1242Build314ClubRoyaleLoyaltyCompleteness.js ===
+PASS testV1242Build314ClubRoyaleLoyaltyCompleteness
+PASS scripts/testV1242Build314ClubRoyaleLoyaltyCompleteness.js
+=== scripts/testV1242Build314ClubRoyaleOfferAttachmentCompleteness.js ===
+PASS testV1242Build314ClubRoyaleOfferAttachmentCompleteness
+PASS scripts/testV1242Build314ClubRoyaleOfferAttachmentCompleteness.js
+=== scripts/testV1242Build314RoyalLoyaltyHeaderReplayAndPopulation.js ===
+PASS testV1242Build314RoyalLoyaltyHeaderReplayAndPopulation
+PASS scripts/testV1242Build314RoyalLoyaltyHeaderReplayAndPopulation.js
+=== scripts/testV1242Build315CarnivalPriority4To8.js ===
+PASS testV1242Build315CarnivalPriority4To8
+PASS scripts/testV1242Build315CarnivalPriority4To8.js
+=== scripts/testV9160CarnivalAdminSync.js ===
+PASS testV9160CarnivalAdminSync (extension path formally retired)
+PASS scripts/testV9160CarnivalAdminSync.js
+RESULT pass=53 fail=0

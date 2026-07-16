@@ -1,0 +1,26 @@
+MODIFIED
+- EASYSEAS_PERSONAL_CERTIFICATE_OPTIMIZATION_ENGINE_TODO.md
+- lib/optimization/index.ts
+
+ADDED
+- OPT4_FULL_TEST_LOG.txt
+- OPT4_FULL_TEST_SUMMARY.tsv
+- OPT4_PROTECTED_HASHES_AFTER.sha256
+- OPT4_PROTECTED_HASHES_BASELINE.sha256
+- OPT4_PROTECTED_HASH_COMPARISON.txt
+- OPT4_STANDALONE_TYPECHECK_STATUS.txt
+- OPT4_SYNTAX_TRANSPILE_STATUS.txt
+- lib/optimization/engine/assessSafetyModes.ts
+- lib/optimization/engine/buildOptimalStoppingRecommendation.ts
+- lib/optimization/engine/determineCurrentLockedCertificate.ts
+- lib/optimization/engine/evaluateCandidateTargets.ts
+- lib/optimization/engine/index.ts
+- lib/optimization/engine/legacyAdapter.ts
+- lib/optimization/engine/types.ts
+- lib/optimization/engine/zodSchemas.ts
+- scripts/testOPT4EngineArchitectureAndPrecedence.js
+- scripts/testOPT4MarginalEVAndOptimalStoppingEngine.js
+
+REMOVED
+- OPT3_INDEPENDENT_RETEST_LOG.txt
+- OPT3_INDEPENDENT_RETEST_SUMMARY.tsv

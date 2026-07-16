@@ -7,8 +7,8 @@ function assert(condition, message) { if (!condition) throw new Error(message); 
 const app = JSON.parse(read('app.json'));
 const pkg = JSON.parse(read('package.json'));
 assert(app.expo.version === '12.4.2', 'Expo app version must be 12.4.2');
-assert(app.expo.ios.buildNumber === '311', 'iOS build number must be 311');
-assert(app.expo.android.versionCode === 120402, 'Android versionCode must be 120402');
+assert(app.expo.ios.buildNumber === '314', 'iOS build number must remain 314');
+assert(app.expo.android.versionCode === 120405, 'Android versionCode must remain 120405');
 assert(pkg.version === '12.4.2', 'package version must be 12.4.2');
 
 const carnivalScreen = read('app/carnival-sync.tsx');
@@ -25,7 +25,7 @@ assert(settings.includes('{isAdmin && ('), 'Carnival Settings entry must be hidd
 
 const provider = read('state/RoyalCaribbeanSyncProvider.tsx');
 for (const marker of [
-  'v12.4.2-carnival-safe-isolated-sync active',
+  'v12.4.2-build313-carnival-integrity-stage1 active',
   'runCarnivalSafeIngestion',
   'await runCarnivalSafeIngestion();',
   'Carnival data is isolated from Royal Caribbean and Celebrity',
@@ -46,7 +46,8 @@ for (const marker of [
   'Carnival displayed price converted to total for 2 guests',
   "sourcePage: 'Completed'",
 ]) assert(safeSync.includes(marker), `Carnival safe-sync helper missing: ${marker}`);
-assert(provider.includes('while (pageNumber <= 100)'), 'Mobile Carnival sync must paginate every offer page');
+assert(provider.includes('const maxPages = 50') && provider.includes('while (pagesVisited < maxPages)'), 'Mobile Carnival sync must paginate offer pages with a bounded safety limit');
+assert(provider.includes('pageResult.totalResults'), 'Mobile Carnival sync must use authoritative result metadata');
 
 const syncLogic = read('lib/royalCaribbean/syncLogic.ts');
 assert(syncLogic.includes("syncSource === 'carnival'"), 'Sync logic must support Carnival source isolation');
@@ -66,17 +67,15 @@ assert(manifest.content_scripts[0].js.includes('carnival-sync.js'), 'Extension m
 assert(manifest.host_permissions.includes('https://*.carnival.com/*'), 'Extension must have Carnival host permission');
 const extensionCarnival = read('assets/easy-seas-extension/carnival-sync.js');
 const extensionContent = read('assets/easy-seas-extension/content.js');
-assert(extensionCarnival.includes("var VERSION = '12.4.2'"), 'Carnival extension helper must identify 12.4.2');
-assert(extensionCarnival.includes("sourcePage: 'Carnival Cruise History'"), 'Extension must label Carnival completed history explicitly');
-assert(extensionCarnival.includes('scrapeAllOffers'), 'Extension must enumerate all personalized Carnival offers');
-assert(extensionCarnival.includes('MAX_PAGES_PER_OFFER = 100'), 'Extension must paginate Carnival offers');
-assert(extensionContent.includes('Starting Carnival sync'), 'Extension Carnival orchestration is missing');
-assert(extensionContent.includes('Discovered '), 'Extension must log discovered Carnival rate codes');
-assert(extensionContent.includes('Carnival sync complete:'), 'Extension must emit final Carnival sync summary');
+assert(extensionCarnival.includes("version: '12.4.2-deprecated'"), 'Retired Carnival extension helper must identify its deprecated status');
+assert(extensionCarnival.includes('disabled: true'), 'Retired Carnival extension helper must be formally disabled');
+assert(extensionCarnival.includes('Legacy Carnival extension sync is disabled'), 'Retired extension must explain that the legacy path is disabled');
+assert(extensionCarnival.includes("code: 'EXTENSION_DISABLED'"), 'Retired extension must return a terminal disabled result instead of extracting');
+assert(extensionContent.includes('Legacy Carnival extension sync is disabled'), 'Extension orchestration must stop instead of producing divergent Carnival data');
 
 const userProvider = read('state/UserProvider.tsx');
 for (const marker of ['carnivalVifpNumber', 'carnivalVifpTier', 'carnivalVifpPoints', 'carnivalPlayersClubTier', 'carnivalPlayersClubPoints']) {
   assert(userProvider.includes(marker), `User profile model/storage missing Carnival field: ${marker}`);
 }
 
-console.log('PASS testV9160CarnivalAdminSync');
+console.log('PASS testV9160CarnivalAdminSync (extension path formally retired)');

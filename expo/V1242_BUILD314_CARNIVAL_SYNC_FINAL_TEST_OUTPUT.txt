@@ -1,0 +1,65 @@
+===== scripts/testV1076CasinoEnginesFunctional.js =====
+PASS testV1076CasinoEnginesFunctional
+PASS scripts/testV1076CasinoEnginesFunctional.js
+===== scripts/testV1076NativeNoRevenueCatCasino.js =====
+PASS testV1076NativeNoRevenueCatCasino
+PASS scripts/testV1076NativeNoRevenueCatCasino.js
+===== scripts/testV1077RemainingRecommendationChanges.js =====
+PASS testV1077RemainingRecommendationChanges
+PASS scripts/testV1077RemainingRecommendationChanges.js
+===== scripts/testV1230LoyaltySyncRepair.js =====
+PASS testV1230LoyaltySyncRepair
+PASS scripts/testV1230LoyaltySyncRepair.js
+===== scripts/testV1231CasinoSectionWiring.js =====
+PASS testV1231CasinoSectionWiring
+PASS scripts/testV1231CasinoSectionWiring.js
+===== scripts/testV1232RoyalOfferZeroRowPreservation.js =====
+PASS testV1232RoyalOfferZeroRowPreservation
+PASS scripts/testV1232RoyalOfferZeroRowPreservation.js
+===== scripts/testV1233DynamicRoyalOfferCatalog.js =====
+PASS testV1233DynamicRoyalOfferCatalog
+PASS scripts/testV1233DynamicRoyalOfferCatalog.js
+===== scripts/testV1234SharedProfilesManualAdd.js =====
+PASS testV1234SharedProfilesManualAdd
+PASS scripts/testV1234SharedProfilesManualAdd.js
+===== scripts/testV1235BookedCompletedSyncRules.js =====
+PASS testV1235BookedCompletedSyncRules
+PASS scripts/testV1235BookedCompletedSyncRules.js
+===== scripts/testV1236AskMyDataOfferIntent.js =====
+PASS testV1236AskMyDataOfferIntent
+PASS scripts/testV1236AskMyDataOfferIntent.js
+===== scripts/testV1237CertificateBankRobustDownload.js =====
+PASS testV1237CertificateBankRobustDownload
+PASS scripts/testV1237CertificateBankRobustDownload.js
+===== scripts/testV1238CertificateOfferCodesChat.js =====
+PASS testV1238CertificateOfferCodesChat
+PASS scripts/testV1238CertificateOfferCodesChat.js
+===== scripts/testV1239CertificateBatchCompactOffer.js =====
+PASS testV1239CertificateBatchCompactOffer
+PASS scripts/testV1239CertificateBatchCompactOffer.js
+===== scripts/testV1240CertificateDownloadLog.js =====
+PASS testV1240CertificateDownloadLog
+PASS scripts/testV1240CertificateDownloadLog.js
+===== scripts/testV1241AppStoreVersionFix.js =====
+PASS testV1241AppStoreVersionFix
+PASS scripts/testV1241AppStoreVersionFix.js
+===== scripts/testV1242AppStoreVersionHardlock.js =====
+PASS verifyAppStoreVersion: resolved iOS version 12.4.2 (314), stale 9.17.1 override defeated
+PASS scripts/testV1242AppStoreVersionHardlock.js
+===== scripts/testV1242Build312CarnivalResumableSync.js =====
+PASS testV1242Build315CarnivalPriority4To8
+PASS testV1242Build312CarnivalResumableSync (carried forward in the Carnival-only rebuild)
+PASS scripts/testV1242Build312CarnivalResumableSync.js
+===== scripts/testV1242Build313CarnivalIntegrityStage1.js =====
+PASS testV1242Build313CarnivalIntegrityStage1
+PASS scripts/testV1242Build313CarnivalIntegrityStage1.js
+===== scripts/testV1242Build314CarnivalPriority1To3.js =====
+PASS testV1242Build314CarnivalPriority1To3
+PASS scripts/testV1242Build314CarnivalPriority1To3.js
+===== scripts/testV1242Build315CarnivalPriority4To8.js =====
+PASS testV1242Build315CarnivalPriority4To8
+PASS scripts/testV1242Build315CarnivalPriority4To8.js
+===== scripts/testV9160CarnivalAdminSync.js =====
+PASS testV9160CarnivalAdminSync (extension path formally retired)
+PASS scripts/testV9160CarnivalAdminSync.js
+SUMMARY pass=21 fail=0

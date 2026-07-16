@@ -1,0 +1,20 @@
+MODIFIED
+- EASYSEAS_PERSONAL_CERTIFICATE_OPTIMIZATION_ENGINE_TODO.md
+- lib/optimization/index.ts
+
+ADDED
+- app/casino/optimization-accuracy.tsx
+- lib/optimization/learning/asyncStorageRepository.ts
+- lib/optimization/learning/calculateRecommendationAccuracy.ts
+- lib/optimization/learning/controls.ts
+- lib/optimization/learning/evaluateModelPromotion.ts
+- lib/optimization/learning/finalizeRecommendationOutcome.ts
+- lib/optimization/learning/index.ts
+- lib/optimization/learning/robustLearning.ts
+- lib/optimization/learning/runChronologicalBacktest.ts
+- lib/optimization/learning/stabilizeTargetLabels.ts
+- lib/optimization/learning/storage.ts
+- lib/optimization/learning/types.ts
+- scripts/testOPT9LearningArchitecture.js
+- scripts/testOPT9LearningBacktestAccuracy.js
+- OPT9 checkpoint evidence files

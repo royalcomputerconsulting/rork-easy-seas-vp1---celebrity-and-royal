@@ -1,0 +1,112 @@
+===== scripts/testOPT0OptimizerArchitectureBoundaries.js =====
+PASS testOPT0OptimizerArchitectureBoundaries
+===== scripts/testOPT0OptimizerBaselineContracts.js =====
+PASS testOPT0OptimizerBaselineContracts
+===== scripts/testOPT0OptimizerRollbackFlags.js =====
+PASS testOPT0OptimizerRollbackFlags
+===== scripts/testOPT1CanonicalCasinoHistory.js =====
+PASS OPT-1 canonical personal casino history
+===== scripts/testOPT1HistoryArchitectureAndAuthority.js =====
+PASS OPT-1 history architecture and authority
+===== scripts/testV1076CasinoEnginesFunctional.js =====
+PASS testV1076CasinoEnginesFunctional
+===== scripts/testV1076NativeNoRevenueCatCasino.js =====
+PASS testV1076NativeNoRevenueCatCasino
+===== scripts/testV1077RemainingRecommendationChanges.js =====
+PASS testV1077RemainingRecommendationChanges
+===== scripts/testV1230LoyaltySyncRepair.js =====
+PASS testV1230LoyaltySyncRepair
+===== scripts/testV1231CasinoSectionWiring.js =====
+PASS testV1231CasinoSectionWiring
+===== scripts/testV1232RoyalOfferZeroRowPreservation.js =====
+PASS testV1232RoyalOfferZeroRowPreservation
+===== scripts/testV1233DynamicRoyalOfferCatalog.js =====
+PASS testV1233DynamicRoyalOfferCatalog
+===== scripts/testV1234SharedProfilesManualAdd.js =====
+PASS testV1234SharedProfilesManualAdd
+===== scripts/testV1235BookedCompletedSyncRules.js =====
+PASS testV1235BookedCompletedSyncRules
+===== scripts/testV1236AskMyDataOfferIntent.js =====
+PASS testV1236AskMyDataOfferIntent
+===== scripts/testV1237CertificateBankRobustDownload.js =====
+PASS testV1237CertificateBankRobustDownload
+===== scripts/testV1238CertificateOfferCodesChat.js =====
+PASS testV1238CertificateOfferCodesChat
+===== scripts/testV1239CertificateBatchCompactOffer.js =====
+PASS testV1239CertificateBatchCompactOffer
+===== scripts/testV1240CertificateDownloadLog.js =====
+PASS testV1240CertificateDownloadLog
+===== scripts/testV1241AppStoreVersionFix.js =====
+PASS testV1241AppStoreVersionFix
+===== scripts/testV1242AppStoreVersionHardlock.js =====
+PASS verifyAppStoreVersion: resolved iOS version 12.4.2 (314), stale 9.17.1 override defeated
+===== scripts/testV1242Build312CarnivalResumableSync.js =====
+PASS testV1242Build315CarnivalPriority4To8
+PASS testV1242Build312CarnivalResumableSync (carried forward in the Carnival-only rebuild)
+===== scripts/testV1242Build313CarnivalIntegrityStage1.js =====
+PASS testV1242Build313CarnivalIntegrityStage1
+===== scripts/testV1242Build314CarnivalAuthFalseNegativeFix.js =====
+PASS testV1242Build314CarnivalAuthFalseNegativeFix
+===== scripts/testV1242Build314CarnivalPriority1To3.js =====
+PASS testV1242Build314CarnivalPriority1To3
+===== scripts/testV1242Build314ClubRoyaleApplySafety.js =====
+PASS testV1242Build314ClubRoyaleApplySafety
+===== scripts/testV1242Build314ClubRoyaleCruiseCompleteness.js =====
+[DataIdentity] Deduped duplicate booked cruise: {
+  label: 'Club Royale cruise completeness fixture',
+  reason: 'exact_identity',
+  identityKey: 'reservation:royal|test-up-006',
+  idKey: 'duplicate-copy',
+  reservationKey: 'test-up-006',
+  sailingKey: 'sailing:royal|star of the seas|2026-10-06',
+  shipName: 'Star of the Seas',
+  sailDate: '2026-10-06'
+}
+[DataIdentity] Deduped duplicate booked cruise: {
+  label: 'identity-upgrade fixture',
+  reason: 'strict_sailing',
+  identityKey: 'reservation:royal|upgrade-001',
+  idKey: 'complete-upgrade-row',
+  reservationKey: 'upgrade-001',
+  sailingKey: 'sailing:royal|utopia of the seas|2026-12-01',
+  shipName: 'Utopia of the Seas',
+  sailDate: '2026-12-01'
+}
+[SyncLogic] After dedup: 2 unique cruises from 2 raw
+[parseDate] ISO date detected: 2027-02-01 -> 02-01-2027
+[parseDate] ISO date detected: 2027-02-08 -> 02-08-2027
+[DataTransformer] ✓ Calculated nights from dates for Wonder of the Seas: 7 nights (02-01-2027 to 02-08-2027)
+[DataTransformer] Final nights for Wonder of the Seas (02-01-2027 to 02-08-2027): 7 (method: dates)
+[parseDate] ISO date detected: 2027-02-01 -> 02-01-2027
+[parseDate] ISO date detected: 2027-02-08 -> 02-08-2027
+[DataTransformer] ✓ Calculated nights from dates for Wonder of the Seas: 7 nights (02-01-2027 to 02-08-2027)
+[DataTransformer] Final nights for Wonder of the Seas (02-01-2027 to 02-08-2027): 7 (method: dates)
+[SyncLogic] Transformed 0 cruise records from 0 offer rows
+[SyncLogic] calculateSyncCounts canonical incoming dataset: {
+  newCruises: 72,
+  updatedCruises: 0,
+  preservedExistingCruises: 5,
+  upcomingCruises: 12,
+  courtesyHolds: 0,
+  incomingCruises: 72
+}
+PASS testV1242Build314ClubRoyaleCruiseCompleteness
+===== scripts/testV1242Build314ClubRoyaleEndToEndStateUI.js =====
+PASS testV1242Build314ClubRoyaleEndToEndStateUI
+===== scripts/testV1242Build314ClubRoyaleExtractionIdentity.js =====
+PASS testV1242Build314ClubRoyaleExtractionIdentity
+===== scripts/testV1242Build314ClubRoyaleLoyaltyCompleteness.js =====
+PASS testV1242Build314ClubRoyaleLoyaltyCompleteness
+===== scripts/testV1242Build314ClubRoyaleOfferAttachmentCompleteness.js =====
+PASS testV1242Build314ClubRoyaleOfferAttachmentCompleteness
+===== scripts/testV1242Build314RoyalLoyaltyHeaderReplayAndPopulation.js =====
+PASS testV1242Build314RoyalLoyaltyHeaderReplayAndPopulation
+===== scripts/testV1242Build315CarnivalPriority4To8.js =====
+PASS testV1242Build315CarnivalPriority4To8
+===== scripts/testV9160CarnivalAdminSync.js =====
+PASS testV9160CarnivalAdminSync (extension path formally retired)
+Scanned 426 TypeScript/TSX files.
+PASS TypeScript/TSX syntax transpilation
+PASS verifyAppStoreVersion: resolved iOS version 12.4.2 (314), stale 9.17.1 override defeated
+TOTAL	37
+FAILED	0

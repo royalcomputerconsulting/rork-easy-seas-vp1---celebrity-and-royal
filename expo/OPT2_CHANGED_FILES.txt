@@ -1,0 +1,28 @@
+MODIFIED
+- EASYSEAS_PERSONAL_CERTIFICATE_OPTIMIZATION_ENGINE_TODO.md
+- OPT1_CANONICAL_PERSONAL_CASINO_HISTORY_QA.md
+- OPT1_CHANGED_FILES.txt
+- lib/optimization/index.ts
+
+ADDED
+- OPT1_INDEPENDENT_RETEST_LOG.txt
+- OPT1_INDEPENDENT_RETEST_SUMMARY.tsv
+- OPT2_FULL_TEST_LOG.txt
+- OPT2_FULL_TEST_SUMMARY.tsv
+- OPT2_PROTECTED_HASHES_AFTER.sha256
+- OPT2_PROTECTED_HASHES_BASELINE.sha256
+- OPT2_PROTECTED_HASH_COMPARISON.txt
+- OPT2_STANDALONE_TYPECHECK_STATUS.txt
+- OPT2_SYNTAX_TRANSPILE_STATUS.txt
+- lib/optimization/value/backfillHistoricalCertificateValues.ts
+- lib/optimization/value/buildCertificateValueSnapshot.ts
+- lib/optimization/value/calculatePersonalRedeemability.ts
+- lib/optimization/value/index.ts
+- lib/optimization/value/statistics.ts
+- lib/optimization/value/types.ts
+- lib/optimization/value/valueCertificateSailing.ts
+- lib/optimization/value/zodSchemas.ts
+- scripts/testOPT2PersonalCertificateValueModel.js
+- scripts/testOPT2ValueArchitectureAndEvidence.js
+
+REMOVED

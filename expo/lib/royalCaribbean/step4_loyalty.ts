@@ -843,7 +843,7 @@ export const STEP4_LOYALTY_SCRIPT = `
         }
       }
       
-      // Club Royale membership number: "CLUB ROYALE # / 305812247"
+      // Club Royale membership number shown in the authenticated profile page
       var crNumberMatch = pageText.match(/Club\\s*Royale\\s*#[^\\d]{0,20}(\\d{4,12})/i);
       if (crNumberMatch && crNumberMatch[1]) {
         result.clubRoyaleNumber = crNumberMatch[1];

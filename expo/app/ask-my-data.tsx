@@ -12,6 +12,8 @@ import { useCoreData } from '@/state/CoreDataProvider';
 import { useCertificates } from '@/state/CertificatesProvider';
 import { useUser } from '@/state/UserProvider';
 import { useAgentX } from '@/state/AgentXProvider';
+import { usePersonalCertificateOptimizer } from '@/state/PersonalCertificateOptimizerProvider';
+import { answerPersonalOptimizationQuestion } from '@/lib/optimization';
 import { useIntelligenceFilters } from '@/state/IntelligenceFiltersProvider';
 import { useCasinoSessions } from '@/state/CasinoSessionProvider';
 import { useLoyalty } from '@/state/LoyaltyProvider';
@@ -59,6 +61,7 @@ function hasBookedCruiseOfferData(cruise: BookedCruise): boolean {
 
 export default function AskMyDataScreen() {
   const router = useRouter();
+  const { bundle: optimizationBundle } = usePersonalCertificateOptimizer();
   const { cruises, bookedCruises, casinoOffers, calendarEvents } = useCoreData();
   const { certificates } = useCertificates();
   const { users } = useUser();
@@ -122,6 +125,12 @@ export default function AskMyDataScreen() {
       overview: askMyDataOverview,
     });
   }, [askMyDataOverview, scopedBookedCruises, scopedCalendarEvents, scopedCertificates, scopedCruises, scopedOffers, submittedQuery]);
+
+  const optimizationAnswer = useMemo(() => {
+    const activeQuery = submittedQuery.trim();
+    if (!activeQuery || !optimizationBundle) return null;
+    return answerPersonalOptimizationQuestion(activeQuery, optimizationBundle);
+  }, [optimizationBundle, submittedQuery]);
 
   const bookedCruiseOfferCount = useMemo(() => (
     (scopedBookedCruises as BookedCruise[]).filter(hasBookedCruiseOfferData).length
@@ -326,6 +335,25 @@ export default function AskMyDataScreen() {
               </View>
             </View>
 
+            {optimizationAnswer ? (
+              <View style={styles.optimizationAnswerCard} testID="ask-my-data-optimization-answer">
+                <View style={styles.optimizationAnswerHeader}>
+                  <Wand2 size={16} color="#FDE68A" />
+                  <Text style={styles.optimizationAnswerEyebrow}>PERSONAL CERTIFICATE OPTIMIZER</Text>
+                </View>
+                <Text style={styles.optimizationAnswerTitle}>{optimizationAnswer.headline}</Text>
+                <Text style={styles.optimizationAnswerBody}>{optimizationAnswer.answer}</Text>
+                {optimizationAnswer.estimates.slice(0, 4).map((estimate) => (
+                  <View key={`${estimate.label}:${estimate.value}`} style={styles.optimizationAnswerRow}>
+                    <Text style={styles.optimizationAnswerLabel}>{estimate.label}</Text>
+                    <Text style={styles.optimizationAnswerValue}>{estimate.value}</Text>
+                  </View>
+                ))}
+                {optimizationAnswer.missingData.length > 0 ? <Text style={styles.optimizationMissing}>Missing: {optimizationAnswer.missingData.join(' • ')}</Text> : null}
+                {optimizationAnswer.safetyGateOverrideDenied ? <Text style={styles.optimizationSafety}>Safety gates were not changed.</Text> : null}
+              </View>
+            ) : null}
+
             {response ? (
               <View style={styles.resultsSection}>
                 <View style={styles.interpretationCard} testID="ask-my-data-interpreted-intent">
@@ -356,6 +384,23 @@ export default function AskMyDataScreen() {
 }
 
 const styles = StyleSheet.create({
+  optimizationAnswerCard: {
+    borderRadius: 22,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    backgroundColor: 'rgba(15, 39, 71, 0.96)',
+    borderWidth: 1,
+    borderColor: 'rgba(253,230,138,0.32)',
+  },
+  optimizationAnswerHeader: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 8 },
+  optimizationAnswerEyebrow: { color: '#FDE68A', fontSize: 10, fontWeight: '900' as const, letterSpacing: 1 },
+  optimizationAnswerTitle: { color: COLORS.white, fontSize: 19, fontWeight: '900' as const },
+  optimizationAnswerBody: { color: '#DCE8F5', fontSize: 13, lineHeight: 20, marginTop: 6, marginBottom: 10 },
+  optimizationAnswerRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, paddingVertical: 6, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)' },
+  optimizationAnswerLabel: { color: '#94A3B8', fontSize: 12, fontWeight: '700' as const },
+  optimizationAnswerValue: { color: COLORS.white, fontSize: 12, fontWeight: '900' as const, textAlign: 'right' },
+  optimizationMissing: { color: '#FDE68A', fontSize: 11, lineHeight: 17, marginTop: 8 },
+  optimizationSafety: { color: '#FCA5A5', fontSize: 12, fontWeight: '900' as const, marginTop: 8 },
   container: {
     flex: 1,
     backgroundColor: '#061826',

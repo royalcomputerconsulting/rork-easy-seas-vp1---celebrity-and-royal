@@ -3,6 +3,8 @@ import { createDateFromString } from '@/lib/date';
 import { OfferRow, BookedCruiseRow, LoyaltyData } from './types';
 import { transformOfferRowsToCruisesAndOffers, transformBookedCruisesToAppFormat, type SyncDataSource, type SyncOwnershipOptions } from './dataTransformers';
 import { isActiveBookedCruise, isCourtesyHoldCruise } from '@/lib/bookedCruiseStatus';
+import { dedupeBookedCruisesWithLedger } from '@/lib/dataIdentity';
+import { getExtractedBookedCruiseIdentity } from './bookedExtractionIdentity';
 
 const CELEBRITY_SHIP_NAMES = new Set([
   'ascent',
@@ -52,14 +54,9 @@ function normalizeIsoDateForSync(value: unknown): string {
 }
 
 function completedCanonicalKey(row: BookedCruiseRow): string {
-  const bookingId = String(row.bookingId || '').trim().toLowerCase();
-  if (bookingId && !/^booking_\d+$/i.test(bookingId)) return `booking:${bookingId}`;
-  const ship = String(row.shipName || '').trim().toLowerCase().replace(/\s+/g, ' ');
-  const sail = normalizeIsoDateForSync(row.sailingStartDate || (row as any).sailDate);
-  const end = normalizeIsoDateForSync(row.sailingEndDate || (row as any).returnDate);
-  const nights = String(row.numberOfNights || '').trim();
-  const itin = String((row as any).itineraryName || row.itinerary || '').trim().toLowerCase().replace(/\s+/g, ' ');
-  return `fallback:${ship}|${sail}|${end}|${nights}|${itin}`;
+  // Use the same reservation/cabin/guest/full-payload identity as the WebView extraction lane.
+  // Ship/date alone is never sufficient because multiple legitimate bookings can share it.
+  return getExtractedBookedCruiseIdentity(row);
 }
 
 function normalizeSyncSource(source: string | undefined): SyncDataSource | undefined {
@@ -651,13 +648,13 @@ function mergeBookedCruise(existing: BookedCruise, synced: BookedCruise): Booked
     ...existing,
     ...synced,
     id: existing.id,
-    earnedPoints: existing.earnedPoints,
-    casinoPoints: existing.casinoPoints,
-    actualSpend: existing.actualSpend,
-    winnings: existing.winnings,
-    financialRecordIds: existing.financialRecordIds,
+    earnedPoints: existing.earnedPoints ?? synced.earnedPoints,
+    casinoPoints: existing.casinoPoints ?? synced.casinoPoints,
+    actualSpend: existing.actualSpend ?? synced.actualSpend,
+    winnings: existing.winnings ?? synced.winnings,
+    financialRecordIds: Array.from(new Set([...(existing.financialRecordIds || []), ...(synced.financialRecordIds || [])])),
     updatedAt: new Date().toISOString(),
-    createdAt: existing.createdAt
+    createdAt: existing.createdAt || synced.createdAt
   };
 }
 
@@ -861,22 +858,25 @@ export function createSyncPreview(
 }
 
 export function calculateSyncCounts(preview: SyncPreview): SyncPreviewCounts {
-  const allBookedCruises = [
+  // Review counts describe the one canonical incoming sync dataset. Previously, unchanged
+  // historical app rows were added to these numbers, which made a 12-upcoming/60-completed
+  // extraction appear as 17/81 in review. Preserved existing rows are still reported in the
+  // explicit *Unchanged fields, but are not re-counted as newly reviewed input.
+  const incomingBookedCruises = [
     ...preview.bookedCruises.new,
     ...preview.bookedCruises.updates.map(u => u.updated),
-    ...preview.bookedCruises.unchanged,
   ];
 
-  const upcomingCruises = allBookedCruises.filter(c => isActiveBookedCruise(c)).length;
-  const courtesyHolds = allBookedCruises.filter(c => isCourtesyHoldCruise(c)).length;
+  const upcomingCruises = incomingBookedCruises.filter(c => isActiveBookedCruise(c)).length;
+  const courtesyHolds = incomingBookedCruises.filter(c => isCourtesyHoldCruise(c)).length;
   
-  console.log('[SyncLogic] calculateSyncCounts:', {
+  console.log('[SyncLogic] calculateSyncCounts canonical incoming dataset:', {
     newCruises: preview.bookedCruises.new.length,
     updatedCruises: preview.bookedCruises.updates.length,
-    unchangedCruises: preview.bookedCruises.unchanged.length,
+    preservedExistingCruises: preview.bookedCruises.unchanged.length,
     upcomingCruises,
     courtesyHolds,
-    newCruisesDetails: preview.bookedCruises.new.map(c => ({ ship: c.shipName, date: c.sailDate, isHold: c.isCourtesyHold })),
+    incomingCruises: incomingBookedCruises.length,
   });
 
   return {
@@ -891,9 +891,9 @@ export function calculateSyncCounts(preview: SyncPreview): SyncPreviewCounts {
     bookedCruisesUnchanged: preview.bookedCruises.unchanged.length,
     upcomingCruises,
     courtesyHolds,
-    totalOffers: preview.offers.new.length + preview.offers.updates.length + preview.offers.unchanged.length,
-    totalCruises: preview.cruises.new.length + preview.cruises.updates.length + preview.cruises.unchanged.length,
-    totalBookedCruises: preview.bookedCruises.new.length + preview.bookedCruises.updates.length + preview.bookedCruises.unchanged.length
+    totalOffers: preview.offers.new.length + preview.offers.updates.length,
+    totalCruises: preview.cruises.new.length + preview.cruises.updates.length,
+    totalBookedCruises: incomingBookedCruises.length,
   };
 }
 
@@ -956,23 +956,191 @@ function cruiseIdentityKey(cruise: Cruise): string {
 
 function bookedIdentityKey(cruise: BookedCruise): string {
   const source = resolveCruiseSource(cruise) || 'unknown';
-  const booking = String(cruise.bookingId || cruise.reservationNumber || '').trim().toLowerCase();
-  // v12.3.5: booked and completed cruises are shared travel inventory. Ignore ownerProfileId
-  // when deduping so the same reservation/history sailing cannot appear once under each profile.
+  const booking = String(cruise.bookingId || cruise.reservationNumber || cruise.bwoNumber || '').trim().toLowerCase();
+  // v12.3.5: booked and completed cruises are shared travel inventory. Ignore
+  // ownerProfileId when deduping the same reservation across profiles, but never collapse
+  // two real reservations.
   if (booking && !/^booking_\d+/i.test(booking)) return `${source}|booking:${booking}`;
-  return `${source}|${normalizeShipName(cruise.shipName)}|${normalizeSailDate(cruise.sailDate)}|${normalizeSailDate(cruise.returnDate)}|${normalizeCabinType(cruise.cabinType)}|${normalizeComparableText(cruise.itineraryName || cruise.destination || '')}`;
+
+  // When Royal omits a usable reservation number, cabin and guest signatures are part of
+  // the canonical identity. This preserves separate bookings on the same ship/date while
+  // still allowing exact duplicate payload rows to merge deterministically.
+  const cabinIdentity = normalizeComparableText(
+    cruise.cabinNumber ||
+    cruise.stateroomNumber ||
+    cruise.cabinCategory ||
+    cruise.stateroomCategoryCode ||
+    cruise.cabinType ||
+    ''
+  );
+  const guestIdentity = Array.isArray(cruise.guestNames)
+    ? cruise.guestNames.map(normalizeComparableText).filter(Boolean).sort().join('|')
+    : '';
+  return `${source}|${normalizeShipName(cruise.shipName)}|${normalizeSailDate(cruise.sailDate)}|${normalizeSailDate(cruise.returnDate)}|${cabinIdentity}|${guestIdentity}|${normalizeComparableText(cruise.itineraryName || cruise.destination || '')}`;
 }
 
-function dedupeByKey<T>(items: T[], keyFn: (item: T) => string, label: string): T[] {
+export interface SyncDedupeLedgerEntry {
+  label: string;
+  key: string;
+  action: 'kept' | 'merged';
+  reason: string;
+}
+
+export interface SyncDedupeResult<T> {
+  items: T[];
+  ledger: SyncDedupeLedgerEntry[];
+}
+
+function hasMeaningfulValue(value: unknown): boolean {
+  if (value === undefined || value === null) return false;
+  if (typeof value === 'string') return value.trim().length > 0;
+  if (Array.isArray(value)) return value.length > 0;
+  return true;
+}
+
+function mergeMeaningfulFields<T extends Record<string, any>>(existing: T, incoming: T): T {
+  const merged: Record<string, any> = { ...existing };
+  for (const [key, value] of Object.entries(incoming)) {
+    if (hasMeaningfulValue(value) || !hasMeaningfulValue(merged[key])) {
+      merged[key] = value;
+    }
+  }
+  return merged as T;
+}
+
+function mergeDuplicateOffer(existing: CasinoOffer, incoming: CasinoOffer): CasinoOffer {
+  const merged = mergeMeaningfulFields(existing, incoming);
+  const cruiseIds = Array.from(new Set([
+    ...(existing.cruiseIds || []),
+    ...(incoming.cruiseIds || []),
+    ...(existing.cruiseId ? [existing.cruiseId] : []),
+    ...(incoming.cruiseId ? [incoming.cruiseId] : []),
+  ].filter(Boolean)));
+  return {
+    ...merged,
+    id: existing.id,
+    createdAt: existing.createdAt || incoming.createdAt,
+    updatedAt: new Date().toISOString(),
+    cruiseIds,
+    cruiseId: cruiseIds[0],
+    eligibleSailingCount: cruiseIds.length,
+  };
+}
+
+function mergeDuplicateCruise(existing: Cruise, incoming: Cruise): Cruise {
+  const merged = mergeMeaningfulFields(existing, incoming);
+  return {
+    ...merged,
+    id: existing.id,
+    createdAt: existing.createdAt || incoming.createdAt,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function mergeDuplicateBookedCruise(existing: BookedCruise, incoming: BookedCruise): BookedCruise {
+  const merged = mergeMeaningfulFields(existing, incoming);
+  return {
+    ...merged,
+    id: existing.id,
+    createdAt: existing.createdAt || incoming.createdAt,
+    updatedAt: new Date().toISOString(),
+    earnedPoints: existing.earnedPoints ?? incoming.earnedPoints,
+    casinoPoints: existing.casinoPoints ?? incoming.casinoPoints,
+    actualSpend: existing.actualSpend ?? incoming.actualSpend,
+    winnings: existing.winnings ?? incoming.winnings,
+    financialRecordIds: Array.from(new Set([...(existing.financialRecordIds || []), ...(incoming.financialRecordIds || [])])),
+  };
+}
+
+export function dedupeByKeyWithLedger<T>(
+  items: T[],
+  keyFn: (item: T) => string,
+  label: string,
+  mergeFn: (existing: T, incoming: T) => T,
+): SyncDedupeResult<T> {
   const map = new Map<string, T>();
+  const ledger: SyncDedupeLedgerEntry[] = [];
   for (const item of items) {
     const key = keyFn(item);
-    if (!map.has(key)) map.set(key, item);
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, item);
+      ledger.push({ label, key, action: 'kept', reason: 'first canonical identity' });
+      continue;
+    }
+    map.set(key, mergeFn(existing, item));
+    ledger.push({ label, key, action: 'merged', reason: 'exact canonical identity duplicate; supplemental fields merged' });
   }
   if (map.size < items.length) {
-    console.log(`[SyncLogic] Final ${label} dedupe: ${items.length} -> ${map.size}`);
+    console.log(`[SyncLogic] Final ${label} dedupe: ${items.length} -> ${map.size}; merged ${items.length - map.size} exact duplicate row(s)`);
+    ledger.filter(entry => entry.action === 'merged').forEach(entry => {
+      console.log(`[SyncLogic] Dedupe ledger ${label}: ${entry.key} — ${entry.reason}`);
+    });
   }
-  return Array.from(map.values());
+  return { items: Array.from(map.values()), ledger };
+}
+
+export interface OfferAttachmentReconciliationAudit {
+  offerCount: number;
+  cruiseCount: number;
+  totalRelationships: number;
+  danglingIdsRemoved: number;
+  offersWithoutSailings: string[];
+}
+
+export function reconcileOfferCruiseAttachments(
+  offers: CasinoOffer[],
+  cruises: Cruise[],
+): { offers: CasinoOffer[]; audit: OfferAttachmentReconciliationAudit } {
+  const cruiseById = new Map(cruises.map(cruise => [cruise.id, cruise]));
+  let totalRelationships = 0;
+  let danglingIdsRemoved = 0;
+  const offersWithoutSailings: string[] = [];
+
+  const reconciledOffers = offers.map(offer => {
+    const source = resolveOfferSource(offer);
+    const code = String(offer.offerCode || '').trim().toUpperCase();
+    const expiry = getOfferExpiry(offer);
+    const priorIds = Array.from(new Set([...(offer.cruiseIds || []), ...(offer.cruiseId ? [offer.cruiseId] : [])].filter(Boolean)));
+    danglingIdsRemoved += priorIds.filter(id => !cruiseById.has(id)).length;
+
+    let matchedIds: string[];
+    if (code) {
+      matchedIds = cruises
+        .filter(cruise => {
+          if (resolveCruiseSource(cruise) !== source) return false;
+          if (String(cruise.offerCode || '').trim().toUpperCase() !== code) return false;
+          const cruiseExpiry = normalizeSailDate(cruise.offerExpiry);
+          return !(expiry && cruiseExpiry && expiry !== cruiseExpiry);
+        })
+        .map(cruise => cruise.id);
+    } else {
+      matchedIds = priorIds.filter(id => cruiseById.has(id));
+    }
+
+    matchedIds = Array.from(new Set(matchedIds));
+    totalRelationships += matchedIds.length;
+    if (matchedIds.length === 0) {
+      offersWithoutSailings.push(code || offer.offerName || offer.title || offer.id);
+    }
+    return {
+      ...offer,
+      cruiseIds: matchedIds,
+      cruiseId: matchedIds[0],
+      eligibleSailingCount: matchedIds.length,
+      updatedAt: new Date().toISOString(),
+    };
+  });
+
+  const audit: OfferAttachmentReconciliationAudit = {
+    offerCount: reconciledOffers.length,
+    cruiseCount: cruises.length,
+    totalRelationships,
+    danglingIdsRemoved,
+    offersWithoutSailings,
+  };
+  console.log('[SyncLogic] Offer-to-sailing attachment reconciliation:', audit);
+  return { offers: reconciledOffers, audit };
 }
 
 // SAFETY GUARDRAIL: a Sync Now run can fail midway (network blip, WebView navigation error,
@@ -1294,9 +1462,45 @@ export function applySyncPreview(
     managedCruisesDelta: finalCruises.filter(c => isManagedCruiseSource(c, syncSource, targetOwnerProfileId, includeUnownedRecords)).length - normalizedExistingCruises.filter(c => isManagedCruiseSource(c, syncSource, targetOwnerProfileId, includeUnownedRecords)).length,
   });
 
-  const dedupedFinalOffers = dedupeByKey(finalOffers, offerIdentityKey, 'offers');
-  const dedupedFinalCruises = dedupeByKey(finalCruises, cruiseIdentityKey, 'available cruises');
-  const dedupedFinalBookedCruises = dedupeByKey(finalBookedCruises, bookedIdentityKey, 'booked/completed cruises');
+  const offerDedupe = dedupeByKeyWithLedger(finalOffers, offerIdentityKey, 'offers', mergeDuplicateOffer);
+  const cruiseDedupe = dedupeByKeyWithLedger(finalCruises, cruiseIdentityKey, 'available cruises', mergeDuplicateCruise);
+  const bookedDedupeResult = dedupeBookedCruisesWithLedger(
+    finalBookedCruises,
+    'booked/completed cruises',
+    mergeDuplicateBookedCruise,
+  );
+  const bookedDedupe = {
+    items: bookedDedupeResult.cruises,
+    ledger: bookedDedupeResult.ledger.map((entry) => ({
+      label: 'booked/completed cruises',
+      key: entry.outputIdentity,
+      action: entry.action,
+      reason: entry.reason === 'new'
+        ? 'first canonical identity'
+        : `${entry.reason} duplicate; supplemental fields merged`,
+    })),
+  } satisfies SyncDedupeResult<BookedCruise>;
+  const attachmentReconciliation = reconcileOfferCruiseAttachments(offerDedupe.items, cruiseDedupe.items);
 
-  return { offers: dedupedFinalOffers, cruises: dedupedFinalCruises, bookedCruises: dedupedFinalBookedCruises };
+  console.log('[SyncLogic] Available sailing reconciliation ledger:', {
+    incomingOfferSailingRows: incomingCruiseRecords.length,
+    preDedupeStoredRows: finalCruises.length,
+    uniqueCanonicalSailings: cruiseDedupe.items.length,
+    mergedExactDuplicates: cruiseDedupe.ledger.filter(entry => entry.action === 'merged').length,
+    offerToSailingRelationships: attachmentReconciliation.audit.totalRelationships,
+    danglingOfferCruiseIdsRemoved: attachmentReconciliation.audit.danglingIdsRemoved,
+  });
+  console.log('[SyncLogic] Booked/completed reconciliation ledger:', {
+    incomingActive: incomingActiveCount,
+    incomingCompleted: incomingCompletedCount,
+    preDedupeRows: finalBookedCruises.length,
+    canonicalRows: bookedDedupe.items.length,
+    mergedExactDuplicates: bookedDedupe.ledger.filter(entry => entry.action === 'merged').length,
+  });
+
+  return {
+    offers: attachmentReconciliation.offers,
+    cruises: cruiseDedupe.items,
+    bookedCruises: bookedDedupe.items,
+  };
 }

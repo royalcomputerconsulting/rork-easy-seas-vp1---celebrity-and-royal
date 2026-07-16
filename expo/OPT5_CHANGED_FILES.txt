@@ -1,0 +1,24 @@
+MODIFIED
+- EASYSEAS_PERSONAL_CERTIFICATE_OPTIMIZATION_ENGINE_TODO.md
+- lib/optimization/index.ts
+
+ADDED
+- app/casino/live-certificate-advisor.tsx
+- lib/optimization/live/asyncStorageRepository.ts
+- lib/optimization/live/buildLiveCasinoAdvisorSnapshot.ts
+- lib/optimization/live/evaluateOneMoreSession.ts
+- lib/optimization/live/index.ts
+- lib/optimization/live/meaningfulStateChange.ts
+- lib/optimization/live/normalizeLiveCasinoState.ts
+- lib/optimization/live/projectEndOfCruisePoints.ts
+- lib/optimization/live/storage.ts
+- lib/optimization/live/types.ts
+- scripts/testOPT5LiveAdvisorArchitecture.js
+- scripts/testOPT5LiveCasinoAdvisor.js
+- OPT5_FULL_TEST_LOG.txt
+- OPT5_FULL_TEST_SUMMARY.tsv
+- OPT5_PROTECTED_HASHES_BASELINE.sha256
+- OPT5_PROTECTED_HASHES_AFTER.sha256
+- OPT5_PROTECTED_HASH_COMPARISON.txt
+- OPT5_LIVE_CASINO_ADVISOR_QA.md
+- OPT5_ROLLBACK_NOTES.md

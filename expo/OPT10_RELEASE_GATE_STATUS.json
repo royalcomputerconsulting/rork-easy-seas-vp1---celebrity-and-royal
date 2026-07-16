@@ -1,0 +1,32 @@
+{
+  "generatedAt": "2026-07-15T20:00:00-07:00",
+  "status": "blocked-data-prerequisites",
+  "productionEnableAllowed": false,
+  "effectiveFlags": {
+    "personalCertificateOptimizerEnabled": false,
+    "personalCertificateOptimizerLiveAdvisorEnabled": false,
+    "personalCertificateOptimizerLearningEnabled": false
+  },
+  "automatedValidation": {
+    "regression": "pass",
+    "scenarioMatrix": "pass",
+    "typescriptSyntax": "pass",
+    "accessibilityStaticAudit": "pass",
+    "protectedFiles": "pass",
+    "profileIsolation": "pass",
+    "deterministicReproducibility": "pass",
+    "rollback": "pass",
+    "privacyStaticAudit": "pass",
+    "archiveIntegrity": "pass"
+  },
+  "externalBlockers": {
+    "authoritativeCertificateLibrary": "not-validated",
+    "royalAuthenticatedNative": "not-run",
+    "carnivalAuthenticatedNative": "not-run",
+    "nativeIos": "not-run",
+    "nativeAndroid": "not-run",
+    "productionDataReadback": "not-run"
+  },
+  "authority": "legacy-static",
+  "releaseVersion": "opt10.0.0"
+}

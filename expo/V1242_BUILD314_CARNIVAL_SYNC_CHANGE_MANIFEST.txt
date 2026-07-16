@@ -1,0 +1,45 @@
+CHANGED FILES (18)
+app/(tabs)/(overview)/index.tsx
+app/carnival-sync.tsx
+assets/easy-seas-extension/carnival-sync.js
+assets/easy-seas-extension/content.js
+lib/carnival/carnivalApplyTransaction.ts
+lib/carnival/carnivalInventoryRuntime.ts
+lib/carnival/carnivalOffersExtraction.ts
+lib/carnival/carnivalSafeSync.ts
+lib/carnival/carnivalSyncRuntime.ts
+lib/chromeExtension.ts
+lib/royalCaribbean/authDetection.ts
+lib/royalCaribbean/types.ts
+lib/storage/storageKeys.ts
+scripts/testV1242Build312CarnivalResumableSync.js
+scripts/testV1242Build313CarnivalIntegrityStage1.js
+scripts/testV1242Build314CarnivalPriority1To3.js
+scripts/testV9160CarnivalAdminSync.js
+state/RoyalCaribbeanSyncProvider.tsx
+
+ADDED FILES (21)
+CARNIVAL_BUILD312_DEEP_QA_TODO_FOR_APPROVAL.md
+CARNIVAL_BUILD315_NATIVE_LIVE_TEST_PROTOCOL.md
+V1242_BUILD314_CARNIVAL_SYNC_CHANGE_MANIFEST.txt
+V1242_BUILD314_CARNIVAL_SYNC_FINAL_TEST_OUTPUT.txt
+V1242_BUILD314_CARNIVAL_SYNC_FULL_TODO_AUDIT.md
+V1242_BUILD314_CARNIVAL_SYNC_TYPESCRIPT_SYNTAX.json
+lib/carnival/carnivalDataRuntime.ts
+scripts/testV1242Build315CarnivalPriority4To8.js
+tests/fixtures/carnival/bookings-history.json
+tests/fixtures/carnival/catalog-page.json
+tests/fixtures/carnival/checkpoint-v1.json
+tests/fixtures/carnival/facets-payload.json
+tests/fixtures/carnival/inventory-329.json
+tests/fixtures/carnival/inventory-page.json
+tests/fixtures/carnival/manifest-ledger.json
+tests/fixtures/carnival/offer-cards.json
+tests/fixtures/carnival/pricing-payload.json
+tests/fixtures/carnival/profile-snapshots.json
+tests/fixtures/carnival/unknown-redesign.json
+tests/fixtures/carnival/webview-events.json
+tests/fixtures/carnival/zero-results.json
+
+REMOVED FILES (0)
+

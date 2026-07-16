@@ -20,11 +20,10 @@ import { isRoyalCaribbeanShip } from "@/constants/shipInfo";
 import { isActiveBookedCruise, isCompletedBookedCruise } from "@/lib/bookedCruiseStatus";
 import { ALL_STORAGE_KEYS, getUserScopedKey } from "@/lib/storage/storageKeys";
 import type { ExtendedLoyaltyData } from "@/lib/royalCaribbean/types";
-import { mergeExtendedLoyaltyData } from "@/lib/royalCaribbean/loyaltyConverter";
+import { hasAuthoritativeCrownAndAnchorData, hasAuthoritativeLoyaltyField, mergeExtendedLoyaltyData } from "@/lib/royalCaribbean/loyaltyConverter";
 import { dedupeBookedCruises } from "@/lib/dataIdentity";
 import { applyUserConfirmedBookedCruiseManifest } from "@/lib/cruiseOverlapGuards";
 import { filterRecordsForProfile, isPrimaryProfile, profileHasRoyalIdentity } from "@/lib/profileIsolation";
-import { CONFIRMED_CLUB_ROYALE_2025_POINTS, isKnownCasinoProfile } from "@/lib/knownProfileFallback";
 import {
   buildClubRoyaleDiscrepancy,
   getBookedCruiseCasinoPoints,
@@ -139,31 +138,10 @@ interface LoyaltyState {
 }
 
 
-// Last-resort placeholder ONLY for when there is truly zero real/manual Crown & Anchor data
-// recorded yet (see the `rawCrownAnchorPoints === 0` gate below). This must never override or
-// floor a real per-cruise total or a manual entry the user has actually saved in Settings --
-// that exact bug (a hardcoded number permanently winning over a lower real/manual value) has
-// already been found and fixed for Club Royale season/lifetime totals; this is the same class
-// of bug for Crown & Anchor loyalty points.
-const USER_CONFIRMED_CROWN_ANCHOR_BASELINE = 590;
-
 const DEFAULT_LOYALTY = {
   clubRoyalePoints: 0,
   crownAnchorPoints: 0,
 };
-
-const CONFIRMED_PINNACLE_PLAN_RESERVATIONS = new Set(['871437', '3820089', '5455777', '3879193', '6173746', '4097701', 'NAV-20260724', '2656334']);
-
-function hasConfirmedPinnacleBaseline(cruises: BookedCruise[]): boolean {
-  return cruises.some((cruise) => {
-    const reservation = String(cruise.reservationNumber ?? cruise.bookingId ?? cruise.bwoNumber ?? '').trim().toUpperCase();
-    const ship = cruise.shipName?.toLowerCase().trim() ?? '';
-    const sailDate = cruise.sailDate?.trim() ?? '';
-    return CONFIRMED_PINNACLE_PLAN_RESERVATIONS.has(reservation)
-      || (ship === 'icon of the seas' && sailDate === '2026-05-09')
-      || (ship === 'navigator of the seas' && sailDate === '2026-07-24');
-  });
-}
 
 function getTopTierStatusLabel(cruise: Pick<BookedCruise, 'shipName' | 'brand' | 'cruiseSource'>): string {
   const identity = `${cruise.brand ?? ''} ${cruise.cruiseSource ?? ''} ${cruise.shipName ?? ''}`.toLowerCase();
@@ -179,7 +157,7 @@ function getTopTierStatusLabel(cruise: Pick<BookedCruise, 'shipName' | 'brand' |
 export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState => {
   const { bookedCruises: storedBookedCruises, isLoading: cruisesLoading } = useCoreData();
   const { authenticatedEmail } = useAuth();
-  const { currentUser, users } = useUser();
+  const { currentUser, users, syncFromStorage: syncUserProfilesFromStorage } = useUser();
   const lastEmailRef = useRef<string | null>(null);
 
   const skRef = useRef({
@@ -351,9 +329,6 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
       console.log('[LoyaltyProvider] Points to save:', points);
       console.log('[LoyaltyProvider] Storage key:', skRef.current.MANUAL_CLUB_ROYALE_POINTS);
       
-      setManualClubRoyalePointsState(points);
-      console.log('[LoyaltyProvider] ✓ State updated with:', points);
-      
       const stringValue = points.toString();
       await AsyncStorage.setItem(skRef.current.MANUAL_CLUB_ROYALE_POINTS, stringValue);
       console.log('[LoyaltyProvider] ✓ Wrote to AsyncStorage:', stringValue);
@@ -366,8 +341,14 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
       if (verification !== stringValue) {
         console.error('[LoyaltyProvider] ✗ VERIFICATION FAILED! Expected:', stringValue, 'Got:', verification);
         await AsyncStorage.setItem(skRef.current.MANUAL_CLUB_ROYALE_POINTS, stringValue);
-        console.log('[LoyaltyProvider] ⚠ Retried save operation');
+        const retryVerification = await AsyncStorage.getItem(skRef.current.MANUAL_CLUB_ROYALE_POINTS);
+        if (retryVerification !== stringValue) {
+          throw new Error(`Club Royale points readback mismatch: expected ${stringValue}, got ${retryVerification}`);
+        }
+        console.log('[LoyaltyProvider] ⚠ Retried and verified save operation');
       }
+      setManualClubRoyalePointsState(points);
+      console.log('[LoyaltyProvider] ✓ State committed with:', points);
       
       console.log('[LoyaltyProvider] ==================== SAVE COMPLETE ====================');
     } catch (error) {
@@ -382,9 +363,6 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
       console.log('[LoyaltyProvider] Points to save:', points);
       console.log('[LoyaltyProvider] Storage key:', skRef.current.MANUAL_CROWN_ANCHOR_POINTS);
       
-      setManualCrownAnchorPointsState(points);
-      console.log('[LoyaltyProvider] ✓ State updated with:', points);
-      
       const stringValue = points.toString();
       await AsyncStorage.setItem(skRef.current.MANUAL_CROWN_ANCHOR_POINTS, stringValue);
       console.log('[LoyaltyProvider] ✓ Wrote to AsyncStorage:', stringValue);
@@ -397,8 +375,14 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
       if (verification !== stringValue) {
         console.error('[LoyaltyProvider] ✗ VERIFICATION FAILED! Expected:', stringValue, 'Got:', verification);
         await AsyncStorage.setItem(skRef.current.MANUAL_CROWN_ANCHOR_POINTS, stringValue);
-        console.log('[LoyaltyProvider] ⚠ Retried save operation');
+        const retryVerification = await AsyncStorage.getItem(skRef.current.MANUAL_CROWN_ANCHOR_POINTS);
+        if (retryVerification !== stringValue) {
+          throw new Error(`Crown & Anchor points readback mismatch: expected ${stringValue}, got ${retryVerification}`);
+        }
+        console.log('[LoyaltyProvider] ⚠ Retried and verified save operation');
       }
+      setManualCrownAnchorPointsState(points);
+      console.log('[LoyaltyProvider] ✓ State committed with:', points);
       
       console.log('[LoyaltyProvider] ==================== SAVE COMPLETE ====================');
     } catch (error) {
@@ -408,9 +392,32 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
   }, []);
 
   const setExtendedLoyaltyData = useCallback(async (data: ExtendedLoyaltyData) => {
+    const snapshot = {
+      extendedStorage: await AsyncStorage.getItem(skRef.current.EXTENDED_LOYALTY_DATA),
+      clubPointsStorage: await AsyncStorage.getItem(skRef.current.MANUAL_CLUB_ROYALE_POINTS),
+      crownAnchorPointsStorage: await AsyncStorage.getItem(skRef.current.MANUAL_CROWN_ANCHOR_POINTS),
+      usersStorage: await AsyncStorage.getItem(userStorageKeys.USERS),
+      extendedState: extendedLoyalty,
+      manualClubState: manualClubRoyalePoints,
+      manualCrownAnchorState: manualCrownAnchorPoints,
+    };
+
+    const restoreRawStorage = async (key: string, value: string | null) => {
+      if (value === null) await AsyncStorage.removeItem(key);
+      else await AsyncStorage.setItem(key, value);
+    };
+
     try {
       console.log('[LoyaltyProvider] ==================== SAVING EXTENDED LOYALTY DATA ====================');
-      console.log('[LoyaltyProvider] Incoming data to save:', data);
+      console.log('[LoyaltyProvider] Incoming authoritative-field summary:', {
+        hasClubRoyaleId: Boolean(data.clubRoyaleId),
+        clubRoyaleTier: data.clubRoyaleTierFromApi,
+        clubRoyalePoints: data.clubRoyalePointsFromApi,
+        clubRoyaleRelationshipPoints: data.clubRoyaleRelationshipPointsFromApi,
+        hasCrownAndAnchorId: Boolean(data.crownAndAnchorId),
+        crownAndAnchorTier: data.crownAndAnchorTier,
+        crownAndAnchorPoints: data.crownAndAnchorPointsFromApi,
+      });
 
       const mergedData = mergeExtendedLoyaltyData(extendedLoyalty, data);
       if (!mergedData) {
@@ -418,75 +425,143 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
         return;
       }
 
-      console.log('[LoyaltyProvider] Merged loyalty data:', mergedData);
-      setExtendedLoyaltyState(mergedData);
-
       const jsonValue = JSON.stringify(mergedData);
       await AsyncStorage.setItem(skRef.current.EXTENDED_LOYALTY_DATA, jsonValue);
-      console.log('[LoyaltyProvider] ✓ Extended loyalty data saved to storage');
+      const extendedReadback = await AsyncStorage.getItem(skRef.current.EXTENDED_LOYALTY_DATA);
+      if (extendedReadback !== jsonValue) {
+        throw new Error('Extended loyalty data readback mismatch');
+      }
+      console.log('[LoyaltyProvider] ✓ Extended loyalty data saved and verified in storage');
 
-      if (mergedData.clubRoyalePointsFromApi !== undefined) {
-        await setManualClubRoyalePoints(mergedData.clubRoyalePointsFromApi);
-        console.log('[LoyaltyProvider] ✓ Updated Club Royale points:', mergedData.clubRoyalePointsFromApi);
+      // Persist only fields that arrived in THIS sync transaction. `mergedData` also contains
+      // previously stored fields, and writing those back as if they were newly authoritative can
+      // resurrect stale C&A values during a Club Royale-only sync.
+      if (hasAuthoritativeLoyaltyField(data, 'clubRoyalePoints') && data.clubRoyalePointsFromApi !== undefined) {
+        await setManualClubRoyalePoints(data.clubRoyalePointsFromApi);
+        console.log('[LoyaltyProvider] ✓ Updated Club Royale points:', data.clubRoyalePointsFromApi);
       }
 
-      if (mergedData.crownAndAnchorPointsFromApi !== undefined) {
-        await setManualCrownAnchorPoints(mergedData.crownAndAnchorPointsFromApi);
-        console.log('[LoyaltyProvider] ✓ Updated Crown & Anchor points:', mergedData.crownAndAnchorPointsFromApi);
+      const incomingHasAuthoritativeCrownAndAnchor = hasAuthoritativeCrownAndAnchorData(data);
+      const incomingHasAuthoritativeCrownAndAnchorPoints = hasAuthoritativeLoyaltyField(data, 'crownAndAnchorPoints');
+      if (incomingHasAuthoritativeCrownAndAnchorPoints && data.crownAndAnchorPointsFromApi !== undefined) {
+        await setManualCrownAnchorPoints(data.crownAndAnchorPointsFromApi);
+        console.log('[LoyaltyProvider] ✓ Updated authoritative Crown & Anchor points:', data.crownAndAnchorPointsFromApi);
+      } else if (data.crownAndAnchorPointsFromApi !== undefined) {
+        console.warn('[LoyaltyProvider] Preserved Crown & Anchor points because this transaction did not contain an authoritative C&A points field');
       }
 
       const royalUpdates: Record<string, string | number> = {};
-      if (typeof mergedData.crownAndAnchorId === 'string' && mergedData.crownAndAnchorId.trim().length > 0) {
-        royalUpdates.crownAnchorNumber = mergedData.crownAndAnchorId.trim();
-        console.log('[LoyaltyProvider] ✓ Updated Crown & Anchor number:', mergedData.crownAndAnchorId.trim());
+      if (hasAuthoritativeLoyaltyField(data, 'clubRoyaleId') && typeof data.clubRoyaleId === 'string' && data.clubRoyaleId.trim().length > 0) {
+        royalUpdates.clubRoyaleId = data.clubRoyaleId.trim();
+        console.log('[LoyaltyProvider] ✓ Updated Club Royale ID: [redacted]');
       }
-      if (typeof mergedData.crownAndAnchorTier === 'string' && mergedData.crownAndAnchorTier.trim().length > 0) {
-        royalUpdates.crownAnchorLevel = mergedData.crownAndAnchorTier.trim();
-        console.log('[LoyaltyProvider] ✓ Updated Crown & Anchor level:', mergedData.crownAndAnchorTier.trim());
+      if (hasAuthoritativeLoyaltyField(data, 'clubRoyaleTier') && typeof data.clubRoyaleTierFromApi === 'string' && data.clubRoyaleTierFromApi.trim().length > 0) {
+        royalUpdates.clubRoyaleTier = data.clubRoyaleTierFromApi.trim();
+      }
+      if (hasAuthoritativeLoyaltyField(data, 'clubRoyalePoints') && data.clubRoyalePointsFromApi !== undefined) {
+        royalUpdates.clubRoyalePoints = data.clubRoyalePointsFromApi;
+      }
+      if (hasAuthoritativeLoyaltyField(data, 'clubRoyaleRelationshipPoints') && data.clubRoyaleRelationshipPointsFromApi !== undefined) {
+        royalUpdates.clubRoyaleRelationshipPoints = data.clubRoyaleRelationshipPointsFromApi;
+      }
+      if (hasAuthoritativeLoyaltyField(data, 'clubRoyaleEvaluationPeriodStartDate') && data.clubRoyaleEvaluationPeriodStartDate) {
+        royalUpdates.clubRoyaleEvaluationPeriodStartDate = data.clubRoyaleEvaluationPeriodStartDate;
+      }
+      if (hasAuthoritativeLoyaltyField(data, 'clubRoyaleEvaluationPeriodEndDate') && data.clubRoyaleEvaluationPeriodEndDate) {
+        royalUpdates.clubRoyaleEvaluationPeriodEndDate = data.clubRoyaleEvaluationPeriodEndDate;
+      }
+      // The casino endpoint can authoritatively identify the C&A membership number, but it does
+      // not establish C&A tier or points. Tier/points are written only from the dedicated C&A lane.
+      if (hasAuthoritativeLoyaltyField(data, 'crownAndAnchorId') && typeof data.crownAndAnchorId === 'string' && data.crownAndAnchorId.trim().length > 0) {
+        royalUpdates.crownAnchorNumber = data.crownAndAnchorId.trim();
+        royalUpdates.royalCaribbeanNumber = data.crownAndAnchorId.trim();
+        console.log('[LoyaltyProvider] ✓ Updated Crown & Anchor number: [redacted]');
+      }
+      if (hasAuthoritativeLoyaltyField(data, 'crownAndAnchorTier') && typeof data.crownAndAnchorTier === 'string' && data.crownAndAnchorTier.trim().length > 0) {
+        royalUpdates.crownAnchorLevel = data.crownAndAnchorTier.trim();
+        console.log('[LoyaltyProvider] ✓ Updated Crown & Anchor level:', data.crownAndAnchorTier.trim());
+      }
+      if (incomingHasAuthoritativeCrownAndAnchorPoints && data.crownAndAnchorPointsFromApi !== undefined) {
+        royalUpdates.loyaltyPoints = data.crownAndAnchorPointsFromApi;
+      }
+      if (hasAuthoritativeLoyaltyField(data, 'crownAndAnchorRelationshipPoints') && data.crownAndAnchorRelationshipPointsFromApi !== undefined) {
+        royalUpdates.crownAnchorRelationshipPoints = data.crownAndAnchorRelationshipPointsFromApi;
+      }
+      if (!incomingHasAuthoritativeCrownAndAnchor && (data.crownAndAnchorTier !== undefined || data.crownAndAnchorPointsFromApi !== undefined)) {
+        console.log('[LoyaltyProvider] Crown & Anchor lane is partially authoritative; persisted only individually authoritative fields and kept the lane open.');
       }
 
       const celebrityUpdates: Record<string, string | number> = {};
-      if (mergedData.celebrityBlueChipPoints !== undefined) {
-        celebrityUpdates.celebrityBlueChipPoints = mergedData.celebrityBlueChipPoints;
-        console.log('[LoyaltyProvider] ✓ Updated Celebrity Blue Chip points:', mergedData.celebrityBlueChipPoints);
+      if (data.celebrityBlueChipPoints !== undefined) {
+        celebrityUpdates.celebrityBlueChipPoints = data.celebrityBlueChipPoints;
+        console.log('[LoyaltyProvider] ✓ Updated Celebrity Blue Chip points:', data.celebrityBlueChipPoints);
       }
-      if (mergedData.captainsClubPoints !== undefined) {
-        celebrityUpdates.celebrityCaptainsClubPoints = mergedData.captainsClubPoints;
-        console.log('[LoyaltyProvider] ✓ Updated Celebrity Captains Club points:', mergedData.captainsClubPoints);
+      if (data.captainsClubPoints !== undefined) {
+        celebrityUpdates.celebrityCaptainsClubPoints = data.captainsClubPoints;
+        console.log('[LoyaltyProvider] ✓ Updated Celebrity Captains Club points:', data.captainsClubPoints);
       }
 
       const silverseaUpdates: Record<string, string | number> = {};
-      if (mergedData.venetianSocietyTier !== undefined && mergedData.venetianSocietyTier !== null) {
-        silverseaUpdates.silverseaVenetianTier = mergedData.venetianSocietyTier;
-        console.log('[LoyaltyProvider] ✓ Updated Silversea Venetian tier:', mergedData.venetianSocietyTier);
+      if (data.venetianSocietyTier !== undefined && data.venetianSocietyTier !== null) {
+        silverseaUpdates.silverseaVenetianTier = data.venetianSocietyTier;
+        console.log('[LoyaltyProvider] ✓ Updated Silversea Venetian tier:', data.venetianSocietyTier);
       }
 
       if (Object.keys(royalUpdates).length > 0 || Object.keys(celebrityUpdates).length > 0 || Object.keys(silverseaUpdates).length > 0) {
         const allUpdates = { ...royalUpdates, ...celebrityUpdates, ...silverseaUpdates };
-        console.log('[LoyaltyProvider] ✓ Updating user profile with all cruise line data:', allUpdates);
+        console.log('[LoyaltyProvider] ✓ Updating selected user profile with authoritative loyalty field names:', Object.keys(allUpdates));
 
         const usersData = await AsyncStorage.getItem(userStorageKeys.USERS);
-        if (usersData) {
-          const users = JSON.parse(usersData);
-          const currentUserId = await AsyncStorage.getItem(userStorageKeys.CURRENT_USER);
-          if (currentUserId) {
-            const updatedUsers = users.map((u: any) =>
-              u.id === currentUserId
-                ? { ...u, ...allUpdates, updatedAt: new Date().toISOString() }
-                : u
-            );
-            await AsyncStorage.setItem(userStorageKeys.USERS, JSON.stringify(updatedUsers));
-            console.log('[LoyaltyProvider] ✓ User profile updated in scoped storage with all cruise line loyalty data');
-          }
+        const storedCurrentUserId = await AsyncStorage.getItem(userStorageKeys.CURRENT_USER);
+        const targetUserId = storedCurrentUserId || currentUser?.id || null;
+        const storedUsers = usersData ? JSON.parse(usersData) : users;
+        if (!targetUserId) {
+          throw new Error('Cannot persist loyalty profile fields because no selected user profile is available');
         }
+        if (!Array.isArray(storedUsers) || !storedUsers.some((candidate: any) => candidate?.id === targetUserId)) {
+          throw new Error('Cannot persist loyalty profile fields because the selected user is missing from scoped storage');
+        }
+        const updatedUsers = storedUsers.map((u: any) =>
+          u.id === targetUserId
+            ? { ...u, ...allUpdates, updatedAt: new Date().toISOString() }
+            : u
+        );
+        const serializedUsers = JSON.stringify(updatedUsers);
+        await AsyncStorage.setItem(userStorageKeys.USERS, serializedUsers);
+        const usersReadbackRaw = await AsyncStorage.getItem(userStorageKeys.USERS);
+        const usersReadback = usersReadbackRaw ? JSON.parse(usersReadbackRaw) : [];
+        const updatedProfile = usersReadback.find((u: any) => u.id === targetUserId);
+        const mismatches = Object.entries(allUpdates).filter(([key, value]) => updatedProfile?.[key] !== value);
+        if (mismatches.length > 0) {
+          throw new Error(`User loyalty profile readback mismatch for ${mismatches.map(([key]) => key).join(', ')}`);
+        }
+        // Refresh UserProvider immediately so Settings/Profile renders the verified persisted values
+        // in the same session instead of waiting for an app restart.
+        await syncUserProfilesFromStorage();
+        console.log('[LoyaltyProvider] ✓ User profile updated, verified, and rehydrated from scoped storage');
       }
 
+      // State is committed only after every storage/profile readback succeeds.
+      setExtendedLoyaltyState(mergedData);
       console.log('[LoyaltyProvider] ==================== SAVE COMPLETE ====================');
     } catch (error) {
-      console.error('[LoyaltyProvider] ✗ Failed to save extended loyalty data:', error);
+      console.error('[LoyaltyProvider] ✗ Failed to save extended loyalty data; rolling back transaction:', error);
+      try {
+        await restoreRawStorage(skRef.current.EXTENDED_LOYALTY_DATA, snapshot.extendedStorage);
+        await restoreRawStorage(skRef.current.MANUAL_CLUB_ROYALE_POINTS, snapshot.clubPointsStorage);
+        await restoreRawStorage(skRef.current.MANUAL_CROWN_ANCHOR_POINTS, snapshot.crownAnchorPointsStorage);
+        await restoreRawStorage(userStorageKeys.USERS, snapshot.usersStorage);
+        setExtendedLoyaltyState(snapshot.extendedState);
+        setManualClubRoyalePointsState(snapshot.manualClubState);
+        setManualCrownAnchorPointsState(snapshot.manualCrownAnchorState);
+        await syncUserProfilesFromStorage();
+        console.log('[LoyaltyProvider] ↩️ Loyalty transaction rollback completed and user profile state was rehydrated');
+      } catch (rollbackError) {
+        console.error('[LoyaltyProvider] ✗ Loyalty rollback failed:', rollbackError);
+      }
       throw error;
     }
-  }, [extendedLoyalty, setManualClubRoyalePoints, setManualCrownAnchorPoints, userStorageKeys]);
+  }, [currentUser?.id, extendedLoyalty, manualClubRoyalePoints, manualCrownAnchorPoints, setManualClubRoyalePoints, setManualCrownAnchorPoints, syncUserProfilesFromStorage, userStorageKeys, users]);
 
   const calculatedData = useMemo(() => {
     let calculatedClubRoyalePoints = 0;
@@ -601,14 +676,9 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
 
     const activeProfileIsPrimary = isPrimaryProfile(currentUser);
     const activeProfileHasRoyalLoyalty = activeProfileIsPrimary || profileHasRoyalIdentity(currentUser);
-    const usesKnownCasinoProfile = activeProfileIsPrimary && isKnownCasinoProfile(authenticatedEmail);
-    // Real, currently-recorded cruise data (including any value you've manually corrected, on a cruise
-    // or via the manual Club Royale points entry) is always authoritative. The hardcoded "confirmed season
-    // snapshot" constants below must never override or floor a real/lower value -- they're a last-resort
-    // fallback ONLY for when there is truly zero real data recorded yet, never a floor above it.
-    const historicalClubRoyalePoints = calculatedClubRoyalePoints > 0
-      ? calculatedClubRoyalePoints
-      : (usesKnownCasinoProfile ? CONFIRMED_CLUB_ROYALE_2025_POINTS : 0);
+    // Live API/manual/profile data and the user's actual cruise records are the only production
+    // loyalty sources. Account-specific hardcoded totals must never repopulate Settings after sync.
+    const historicalClubRoyalePoints = calculatedClubRoyalePoints;
     const authoritativeCurrentYearClubRoyalePoints = currentYearClubRoyalePoints;
     const historicalClubRoyaleTier = getTierByPoints(historicalClubRoyalePoints) as ClubRoyaleTier;
     const liveClubRoyalePoints = extendedLoyalty?.clubRoyalePointsFromApi;
@@ -660,9 +730,12 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
 
     const currentClubRoyaleTier = getTierByPoints(effectiveClubRoyalePoints) as ClubRoyaleTier;
     const tierFromApi = extendedLoyalty?.clubRoyaleTierFromApi;
+    const tierFromProfile = currentUser?.clubRoyaleTier;
     const clubRoyaleTier = (tierFromApi && CLUB_ROYALE_TIERS[tierFromApi])
       ? tierFromApi as ClubRoyaleTier
-      : historicalClubRoyaleTier;
+      : (tierFromProfile && CLUB_ROYALE_TIERS[tierFromProfile])
+        ? tierFromProfile as ClubRoyaleTier
+        : historicalClubRoyaleTier;
 
     if (shouldForceSeasonResetBalance) {
       console.log('[LoyaltyProvider] Forcing Club Royale current-season balance to reset state', {
@@ -690,14 +763,19 @@ export const [LoyaltyProvider, useLoyalty] = createContextHook((): LoyaltyState 
           ? (manualCrownAnchorPoints as number)
           : (hasLiveCrownAnchorPoints ? liveCrownAnchorPoints : (profileCrownAnchorPoints || completedNights)))
       : 0;
-    // Only fall back to the hardcoded baseline when there is truly zero real/manual Crown & Anchor
-    // data recorded (rawCrownAnchorPoints === 0) -- never when the user has an actual manually-entered
-    // or synced value, even if that real value happens to be lower than the old baseline number.
-    const shouldUseConfirmedPinnacleBaseline = usesKnownCasinoProfile && hasConfirmedPinnacleBaseline(bookedCruises) && rawCrownAnchorPoints === 0;
+    // Do not invent a Crown & Anchor balance when the dedicated C&A lane did not return one.
+    // Preserve the selected profile/manual value or calculate from actual completed cruises only.
     const effectiveCrownAnchorPoints = activeProfileHasRoyalLoyalty
-      ? (shouldUseConfirmedPinnacleBaseline ? USER_CONFIRMED_CROWN_ANCHOR_BASELINE : Math.max(0, rawCrownAnchorPoints))
+      ? Math.max(0, rawCrownAnchorPoints)
       : 0;
-    const crownAnchorLevel = getLevelByNights(effectiveCrownAnchorPoints) as CrownAnchorLevel;
+    const calculatedCrownAnchorLevel = getLevelByNights(effectiveCrownAnchorPoints) as CrownAnchorLevel;
+    const crownAnchorTierFromApi = extendedLoyalty?.crownAndAnchorTier as CrownAnchorLevel | undefined;
+    const crownAnchorTierFromProfile = currentUser?.crownAnchorLevel as CrownAnchorLevel | undefined;
+    const crownAnchorLevel = crownAnchorTierFromApi && CROWN_ANCHOR_LEVELS[crownAnchorTierFromApi]
+      ? crownAnchorTierFromApi
+      : crownAnchorTierFromProfile && CROWN_ANCHOR_LEVELS[crownAnchorTierFromProfile]
+        ? crownAnchorTierFromProfile
+        : calculatedCrownAnchorLevel;
     
     const projectedCrownAnchorPoints = effectiveCrownAnchorPoints + projectedBookedPoints;
     const projectedCrownAnchorLevel = getLevelByNights(projectedCrownAnchorPoints) as CrownAnchorLevel;

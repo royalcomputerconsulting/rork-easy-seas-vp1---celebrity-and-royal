@@ -1,0 +1,18 @@
+MODIFIED
+- EASYSEAS_PERSONAL_CERTIFICATE_OPTIMIZATION_ENGINE_TODO.md
+- lib/optimization/index.ts
+
+ADDED
+- app/casino/personal-gambling-profile.tsx
+- app/casino/certificate-threshold-detail.tsx
+- components/optimization/OptimizationMiniChart.tsx
+- lib/optimization/dashboard/asyncStorageRepository.ts
+- lib/optimization/dashboard/buildOptimizationCharts.ts
+- lib/optimization/dashboard/buildPersonalGamblingDashboard.ts
+- lib/optimization/dashboard/buildThresholdDrillDown.ts
+- lib/optimization/dashboard/index.ts
+- lib/optimization/dashboard/storage.ts
+- lib/optimization/dashboard/types.ts
+- scripts/testOPT6DashboardArchitecture.js
+- scripts/testOPT6PersonalDashboard.js
+- OPT6 checkpoint evidence files

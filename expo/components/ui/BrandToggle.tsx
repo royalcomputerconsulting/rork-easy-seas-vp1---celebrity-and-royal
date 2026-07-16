@@ -12,6 +12,7 @@ interface BrandToggleProps {
   customFourthLabel?: string;
   customFourthActive?: boolean;
   onCustomFourthPress?: () => void;
+  noActiveSelection?: boolean;
 }
 
 export function BrandToggle({
@@ -22,6 +23,7 @@ export function BrandToggle({
   customFourthLabel,
   customFourthActive = false,
   onCustomFourthPress,
+  noActiveSelection = false,
 }: BrandToggleProps) {
   return (
     <View style={styles.container}>
@@ -30,7 +32,7 @@ export function BrandToggle({
           style={[
             styles.toggleButton,
             styles.leftButton,
-            !customFourthActive && activeBrand === 'royal' && styles.activeButton,
+            !noActiveSelection && !customFourthActive && activeBrand === 'royal' && styles.activeButton,
           ]}
           onPress={() => onToggle('royal')}
           activeOpacity={0.7}
@@ -38,7 +40,7 @@ export function BrandToggle({
           <Text
             style={[
               styles.toggleText,
-              !customFourthActive && activeBrand === 'royal' && styles.activeText,
+              !noActiveSelection && !customFourthActive && activeBrand === 'royal' && styles.activeText,
             ]}
             numberOfLines={1}
           >
@@ -50,7 +52,7 @@ export function BrandToggle({
           style={[
             styles.toggleButton,
             styles.middleButton,
-            !customFourthActive && activeBrand === 'celebrity' && styles.activeButton,
+            !noActiveSelection && !customFourthActive && activeBrand === 'celebrity' && styles.activeButton,
           ]}
           onPress={() => onToggle('celebrity')}
           activeOpacity={0.7}
@@ -58,7 +60,7 @@ export function BrandToggle({
           <Text
             style={[
               styles.toggleText,
-              !customFourthActive && activeBrand === 'celebrity' && styles.activeText,
+              !noActiveSelection && !customFourthActive && activeBrand === 'celebrity' && styles.activeText,
             ]}
             numberOfLines={1}
           >
@@ -71,7 +73,7 @@ export function BrandToggle({
             style={[
               styles.toggleButton,
               styles.middleButton,
-              !customFourthActive && activeBrand === 'silversea' && styles.activeButton,
+              !noActiveSelection && !customFourthActive && activeBrand === 'silversea' && styles.activeButton,
             ]}
             onPress={() => onToggle('silversea')}
             activeOpacity={0.7}
@@ -79,7 +81,7 @@ export function BrandToggle({
             <Text
               style={[
                 styles.toggleText,
-                !customFourthActive && activeBrand === 'silversea' && styles.activeText,
+                !noActiveSelection && !customFourthActive && activeBrand === 'silversea' && styles.activeText,
               ]}
               numberOfLines={1}
             >
@@ -113,7 +115,7 @@ export function BrandToggle({
             style={[
               styles.toggleButton,
               styles.rightButton,
-              activeBrand === 'carnival' && styles.carnivalActiveButton,
+              !noActiveSelection && activeBrand === 'carnival' && styles.carnivalActiveButton,
             ]}
             onPress={() => onToggle('carnival')}
             activeOpacity={0.7}
@@ -121,7 +123,7 @@ export function BrandToggle({
             <Text
               style={[
                 styles.toggleText,
-                activeBrand === 'carnival' && styles.activeText,
+                !noActiveSelection && activeBrand === 'carnival' && styles.activeText,
               ]}
               numberOfLines={1}
             >
