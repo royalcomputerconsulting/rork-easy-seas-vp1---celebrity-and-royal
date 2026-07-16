@@ -1192,12 +1192,12 @@ export function injectCarnivalProfileScrape(requestId: string, runId = ''): stri
   async function expandHistoryRows() {
     var clickedLabels = {};
     for (var round = 0; round < 14; round++) {
-      var controls = document.querySelectorAll('button,[role=\"button\"]');
+      var controls = document.querySelectorAll('button,[role=\"button\"],a');
       var clicked = false;
       for (var ci = 0; ci < controls.length; ci++) {
         var label = compact(controls[ci].textContent || controls[ci].getAttribute('aria-label') || '');
-        if (!/^(?:load more|show more|view more|more cruises|more history|cruise history|past cruises|booking history)$/i.test(label)) continue;
-        if (/^(?:cruise history|past cruises|booking history)$/i.test(label) && clickedLabels[label.toLowerCase()]) continue;
+        if (!/^(?:load more|show more|view more|more cruises|more history|cruise history|past cruises|booking history|view all|see all|expand|view details|show all cruises|see cruise history)$/i.test(label)) continue;
+        if (/^(?:cruise history|past cruises|booking history|view all|see all|see cruise history)$/i.test(label) && clickedLabels[label.toLowerCase()]) continue;
         var disabled = controls[ci].disabled || controls[ci].getAttribute('aria-disabled') === 'true';
         if (disabled) continue;
         try { controls[ci].scrollIntoView({ block: 'center' }); controls[ci].click(); clickedLabels[label.toLowerCase()] = true; clicked = true; break; } catch (e) {}
@@ -1205,6 +1205,17 @@ export function injectCarnivalProfileScrape(requestId: string, runId = ''): stri
       if (!clicked) break;
       await wait(900);
     }
+    try {
+      var lastHeight = -1;
+      for (var scrollRound = 0; scrollRound < 8; scrollRound++) {
+        window.scrollTo(0, document.body.scrollHeight);
+        await wait(500);
+        var height = document.body.scrollHeight;
+        if (height === lastHeight) break;
+        lastHeight = height;
+      }
+      window.scrollTo(0, 0);
+    } catch (e) {}
   }
   function normalizeShip(value) {
     var text = compact(value);
@@ -1464,10 +1475,10 @@ export function injectCarnivalProfileScrape(requestId: string, runId = ''): stri
   }
   function upcomingFromDom() {
     var rows = [];
-    var elements = document.querySelectorAll('[data-testid*="booking"],[data-testid*="cruise"],[class*="BookingCard"],[class*="booking-card"],[class*="CruiseCard"],[class*="cruise-card"]');
+    var elements = document.querySelectorAll('[data-testid*="booking"],[data-testid*="cruise"],[data-testid*="history" i],[data-testid*="voyage" i],[class*="BookingCard"],[class*="booking-card"],[class*="CruiseCard"],[class*="cruise-card"],[class*="history-card" i],[class*="HistoryCard"],[class*="history-row" i],[class*="past-cruise" i],[class*="PastCruise"]');
     for (var i = 0; i < elements.length && i < 200; i++) {
       var text = compact(elements[i].textContent);
-      if (!/(booking|manage|sail|departure|carnival)/i.test(text)) continue;
+      if (!/(booking|manage|sail|departure|carnival|cruise|history|vifp|points)/i.test(text)) continue;
       var structuredShip = compact(elements[i].getAttribute('data-ship-name') || elements[i].getAttribute('data-vessel-name') || '');
       var shipNode = elements[i].querySelector('[data-ship-name],[data-vessel-name],[itemprop="name"],[class*="ship-name" i],[class*="vessel" i],[data-testid*="ship" i]');
       if (!structuredShip && shipNode) structuredShip = compact(shipNode.getAttribute('data-ship-name') || shipNode.getAttribute('data-vessel-name') || shipNode.textContent || '');

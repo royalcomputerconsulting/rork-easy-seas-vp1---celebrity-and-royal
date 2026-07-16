@@ -137,6 +137,29 @@ export const AUTH_DETECTION_SCRIPT = `
     } catch (e) {}
   }
 
+  function summarizeCarnivalPayloadShape(data) {
+    try {
+      var found = null;
+      var visited = 0;
+      function walk(value, depth, path) {
+        if (found || !value || depth > 5 || visited++ > 4000) return;
+        if (Array.isArray(value)) {
+          if (value.length >= 2 && value[0] && typeof value[0] === 'object') {
+            found = { path: path || 'root', length: value.length, keys: Object.keys(value[0]).slice(0, 14) };
+            return;
+          }
+          for (var ai = 0; ai < value.length && ai < 5 && !found; ai++) walk(value[ai], depth + 1, path + '[' + ai + ']');
+          return;
+        }
+        if (typeof value !== 'object') return;
+        var keys = Object.keys(value);
+        for (var ki = 0; ki < keys.length && !found; ki++) walk(value[keys[ki]], depth + 1, path ? path + '.' + keys[ki] : keys[ki]);
+      }
+      walk(data, 0, '');
+      return found;
+    } catch (e) { return null; }
+  }
+
   function recordCarnivalProfilePayload(data, url, source) {
     try {
       if (!data || typeof data !== 'object') return;
@@ -161,6 +184,16 @@ export const AUTH_DETECTION_SCRIPT = `
       ledger.push({ url: absoluteUrl, source: String(source || 'network'), capturedAt: Date.now(), signature: signature, data: data });
       if (ledger.length > 30) ledger = ledger.slice(ledger.length - 30);
       window.capturedPayloads.carnivalProfilePayloads = ledger;
+      var shape = summarizeCarnivalPayloadShape(data);
+      if (shape && shape.length >= 2) {
+        try {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'log',
+            message: '\ud83d\udd0e Carnival payload shape @ ' + absoluteUrl + ' \u2014 array at "' + shape.path + '" len=' + shape.length + ' keys=[' + shape.keys.join(',') + ']',
+            logType: 'info'
+          }));
+        } catch (e5) {}
+      }
     } catch (e) {}
   }
 
