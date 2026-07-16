@@ -64,6 +64,7 @@ import { getBookedCruiseCasinoPoints } from '@/lib/casinoPointTruth';
 import { CONFIRMED_CLUB_ROYALE_2025_POINTS, isKnownCasinoProfile } from '@/lib/knownProfileFallback';
 import { applyKnownBookingCorrections, findOverlappingBookedCruises } from '@/lib/cruiseOverlapGuards';
 import { isActiveBookedCruise, isCompletedBookedCruise } from '@/lib/bookedCruiseStatus';
+import { resolveFullCruiseItinerary } from '@/lib/casinoAvailability';
 
 type FilterType = 'all' | 'upcoming' | 'completed' | 'celebrity';
 type SortType = 'next' | 'newest' | 'oldest' | 'ship' | 'nights';
@@ -334,7 +335,8 @@ export default function BookedScreen() {
       .filter((cruise) => isCruiseInsideForecastWindow(cruise, forecastWindowStart, forecastWindowEnd))
       .sort((a, b) => createDateFromString(a.sailDate).getTime() - createDateFromString(b.sailDate).getTime())[0];
 
-    return nextForecastCruise ? [nextForecastCruise] : [];
+    if (!nextForecastCruise) return [];
+    return [{ ...nextForecastCruise, itinerary: resolveFullCruiseItinerary(nextForecastCruise) }];
   }, [bookedCruises]);
 
   const nextCruise = useMemo(() => {

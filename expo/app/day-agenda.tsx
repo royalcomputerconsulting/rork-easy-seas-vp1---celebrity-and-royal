@@ -26,7 +26,7 @@ import { CasinoSessionTracker } from '@/components/CasinoSessionTracker';
 import { AddSessionModal } from '@/components/AddSessionModal';
 import type { PlayingHours } from '@/state/UserProvider';
 import { createDateFromString } from '@/lib/date';
-import { determineCasinoHoursWithContext, determineSeaDay, type CasinoDayContext } from '@/lib/casinoAvailability';
+import { determineCasinoHoursWithContext, determineSeaDay, resolveFullCruiseItinerary, type CasinoDayContext } from '@/lib/casinoAvailability';
 import type { CalendarEvent, BookedCruise, ItineraryDay } from '@/types/models';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { TimeZoneConverter } from '@/components/TimeZoneConverter';
@@ -349,7 +349,7 @@ export default function DayAgendaScreen() {
           itineraryName: cruise.itineraryName,
           departurePort: cruise.departurePort,
           nights: cruise.nights || 0,
-          itinerary: cruise.itinerary,
+          itinerary: resolveFullCruiseItinerary(cruise),
           bookings: [{
             reservationNumber: cruise.reservationNumber,
             cabinNumber: cruise.cabinNumber,
@@ -875,7 +875,7 @@ export default function DayAgendaScreen() {
         destination: c.destination,
         itineraryName: c.itineraryName,
         nights: c.nights,
-        itinerary: c.itinerary,
+        itinerary: resolveFullCruiseItinerary(c),
       }));
   }, [normalizedBookedCruises, mergedCruiseBookings, selectedDate]);
 
@@ -917,7 +917,7 @@ export default function DayAgendaScreen() {
         destination: cruise.destination,
         itineraryName: cruise.itineraryName,
         nights: cruise.nights || 0,
-        itinerary: cruise.itinerary,
+        itinerary: resolveFullCruiseItinerary(cruise),
       });
     });
 

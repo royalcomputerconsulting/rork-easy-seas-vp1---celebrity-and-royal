@@ -639,29 +639,12 @@ function expandItineraryToExpectedDays(
   return expandedSequential;
 }
 
-export function calculateCasinoAvailabilityForCruise(
-  cruise: Cruise | BookedCruise,
-  offers?: { offerCode?: string; portsAndTimes?: string; ports?: string[] }[]
-): CruiseCasinoSummary {
-  const dailyAvailability: CasinoAvailability[] = [];
-  if (isAvailableOfferCatalogCruise(cruise)) {
-    return {
-      totalDays: Number((cruise as any).nights || (cruise as any).numberOfNights || 0) || 0,
-      seaDays: 0,
-      portDays: 0,
-      overnightPorts: 0,
-      casinoOpenDays: 0,
-      casinoClosedDays: 0,
-      usPortDays: 0,
-      foreignPortDays: 0,
-      estimatedCasinoHours: 0,
-      dailyAvailability: [],
-      bestGamblingDays: [],
-      gamblingWindowsDescription: 'Available offer catalog row: casino availability calculated only when booked, watched, or opened in detail.',
-    };
-  }
-  
-  // Calculate accurate nights from sailDate and returnDate if available
+/**
+ * Calculates the accurate sailing length (days = nights + 1) for a cruise,
+ * preferring the real gap between sailDate/returnDate over the stored
+ * `nights` field when both are available and disagree.
+ */
+export function resolveAccurateCruiseNights(cruise: Cruise | BookedCruise): number {
   let accurateNights = cruise.nights || 7;
   if (cruise.sailDate && (cruise as BookedCruise).returnDate) {
     const sailDateObj = safeParseSailDate(cruise.sailDate);
@@ -669,12 +652,30 @@ export function calculateCasinoAvailabilityForCruise(
     const daysBetween = Math.round((returnDateObj.getTime() - sailDateObj.getTime()) / (1000 * 60 * 60 * 24));
     if (daysBetween > 0 && daysBetween < 365) {
       accurateNights = daysBetween;
-      console.log('[CasinoAvailability] Calculated accurate nights from dates:', accurateNights, 'from sailDate:', cruise.sailDate, 'to returnDate:', (cruise as BookedCruise).returnDate);
     }
   }
-  
+  return accurateNights;
+}
+
+/**
+ * Resolves the best available day-by-day itinerary (one entry per sailing
+ * day, sea days included) for a cruise from whichever source has real data:
+ * an explicit `itinerary` array, a matching mock/manifest record, parsed
+ * `portsAndTimes`/`itineraryRaw`/`ports` fields, or a linked offer's port
+ * data. The result is expanded/padded (with inferred sea days) to match the
+ * cruise's actual sailing length so every day - not just the days that had
+ * raw source data - gets a day number.
+ *
+ * This is the single source of truth for "what port is the ship at on day N"
+ * and is used by both casino availability and sailing weather so the two
+ * features never disagree about the ship's location on a given day.
+ */
+export function resolveFullCruiseItinerary(
+  cruise: Cruise | BookedCruise,
+  offers?: { offerCode?: string; portsAndTimes?: string; ports?: string[] }[]
+): ItineraryDay[] {
   let itineraryToUse: ItineraryDay[] = [];
-  
+
   if (cruise.itinerary && cruise.itinerary.length > 0) {
     itineraryToUse = cruise.itinerary.slice().sort((left, right) => left.day - right.day);
     console.log('[CasinoAvailability] Using cruise.itinerary:', itineraryToUse.length, 'days');
@@ -733,20 +734,52 @@ export function calculateCasinoAvailabilityForCruise(
       console.log('[CasinoAvailability] Using cruise.ports');
     }
   }
+
+  const expectedDays = resolveAccurateCruiseNights(cruise) + 1;
+
+  if (itineraryToUse.length === 0) {
+    return [];
+  }
+
+  const expandedItinerary = expandItineraryToExpectedDays(itineraryToUse, expectedDays, cruise);
+  if (expandedItinerary.length !== itineraryToUse.length) {
+    console.log('[CasinoAvailability] Expanded itinerary to match sailing length:', {
+      cruiseId: cruise.id,
+      originalDays: itineraryToUse.length,
+      expectedDays,
+      expandedDays: expandedItinerary.length,
+    });
+  }
+  return expandedItinerary;
+}
+
+export function calculateCasinoAvailabilityForCruise(
+  cruise: Cruise | BookedCruise,
+  offers?: { offerCode?: string; portsAndTimes?: string; ports?: string[] }[]
+): CruiseCasinoSummary {
+  const dailyAvailability: CasinoAvailability[] = [];
+  if (isAvailableOfferCatalogCruise(cruise)) {
+    return {
+      totalDays: Number((cruise as any).nights || (cruise as any).numberOfNights || 0) || 0,
+      seaDays: 0,
+      portDays: 0,
+      overnightPorts: 0,
+      casinoOpenDays: 0,
+      casinoClosedDays: 0,
+      usPortDays: 0,
+      foreignPortDays: 0,
+      estimatedCasinoHours: 0,
+      dailyAvailability: [],
+      bestGamblingDays: [],
+      gamblingWindowsDescription: 'Available offer catalog row: casino availability calculated only when booked, watched, or opened in detail.',
+    };
+  }
   
+  const accurateNights = resolveAccurateCruiseNights(cruise);
   const expectedDays = accurateNights + 1;
+  let itineraryToUse = resolveFullCruiseItinerary(cruise, offers);
   
   if (itineraryToUse.length > 0) {
-    const expandedItinerary = expandItineraryToExpectedDays(itineraryToUse, expectedDays, cruise);
-    if (expandedItinerary.length !== itineraryToUse.length) {
-      console.log('[CasinoAvailability] Expanded itinerary to match sailing length:', {
-        cruiseId: cruise.id,
-        originalDays: itineraryToUse.length,
-        expectedDays,
-        expandedDays: expandedItinerary.length,
-      });
-    }
-    itineraryToUse = expandedItinerary;
 
     itineraryToUse.forEach((day: ItineraryDay, index: number) => {
       const isSeaDay = day.isSeaDay || determineSeaDay(day.port);
