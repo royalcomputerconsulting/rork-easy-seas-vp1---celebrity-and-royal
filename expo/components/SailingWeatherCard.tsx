@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { ActivityIndicator, View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, CloudSun, MapPin, Waves, Wind } from 'lucide-react-native';
@@ -110,6 +110,7 @@ export function SailingWeatherCard({ cruise, selectedDate }: SailingWeatherCardP
 
   const forecast = weatherQuery.data ?? null;
   const sourceMeta = getSourceMeta(forecast);
+  const isBackgroundSyncing = weatherQuery.isFetching && !weatherQuery.isLoading;
   const primaryAlert = useMemo(() => {
     if (!forecast) return null;
     return forecast.advisories.find((advisory) => advisory.severity !== 'info') ?? forecast.advisories[0] ?? null;
@@ -182,6 +183,13 @@ export function SailingWeatherCard({ cruise, selectedDate }: SailingWeatherCardP
           <Text style={styles.statusText}>{sourceMeta.label}</Text>
         </View>
       </View>
+
+      {isBackgroundSyncing ? (
+        <View style={styles.syncingRow} testID={`sailing-weather-syncing-${cruise.id}`}>
+          <ActivityIndicator size="small" color="#8BE0FF" />
+          <Text style={styles.syncingText}>Checking for the latest marine forecast…</Text>
+        </View>
+      ) : null}
 
       <Text style={styles.shipLabel}>{cruise.shipName}</Text>
       <Text style={styles.headline}>{forecast.headline}</Text>
@@ -362,6 +370,21 @@ const styles = StyleSheet.create({
     color: '#E7F8FF',
     textTransform: 'uppercase',
     letterSpacing: 0.8,
+  },
+  syncingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: BORDER_RADIUS.md,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 6,
+    alignSelf: 'flex-start',
+  },
+  syncingText: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: 'rgba(231, 248, 255, 0.85)',
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   shipLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,

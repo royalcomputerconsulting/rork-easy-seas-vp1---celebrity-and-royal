@@ -1,6 +1,6 @@
 import { buildCruiseDetailsParams } from '@/lib/navigation/cruiseDetails';
 import React, { useMemo, useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { ActivityIndicator, View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { 
@@ -242,6 +242,7 @@ export default function DayAgendaScreen() {
   const coreData = useCoreData();
   const { bookedCruises: storedBookedCruises } = coreData;
   const { isHydrated: isWeatherHydrated, prefetchCruiseForecastWindow } = useSailingWeather();
+  const [isPrefetchingWeather, setIsPrefetchingWeather] = useState<boolean>(false);
 
   const normalizedBookedCruises = useMemo((): BookedCruise[] => {
     return storedBookedCruises
@@ -978,16 +979,23 @@ export default function DayAgendaScreen() {
         })),
       });
 
-      for (const cruise of allWeatherCruises) {
-        if (isCancelled) {
-          return;
-        }
+      setIsPrefetchingWeather(true);
+      try {
+        for (const cruise of allWeatherCruises) {
+          if (isCancelled) {
+            return;
+          }
 
-        await prefetchCruiseForecastWindow(cruise, {
-          anchorDate: mergedCruiseBookings.some((mergedCruise) => mergedCruise.id === cruise.id)
-            ? selectedDate
-            : createDateFromString(cruise.sailDate),
-        });
+          await prefetchCruiseForecastWindow(cruise, {
+            anchorDate: mergedCruiseBookings.some((mergedCruise) => mergedCruise.id === cruise.id)
+              ? selectedDate
+              : createDateFromString(cruise.sailDate),
+          });
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsPrefetchingWeather(false);
+        }
       }
     };
 
@@ -1599,7 +1607,15 @@ export default function DayAgendaScreen() {
             </View>
 
           <View style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>Sailing Weather</Text>
+            <View style={styles.sectionTitleRow}>
+              <Text style={styles.sectionTitle}>Sailing Weather</Text>
+              {isPrefetchingWeather ? (
+                <View style={styles.weatherSyncStatusPill} testID="agenda-weather-syncing-status">
+                  <ActivityIndicator size="small" color={COLORS.aquaAccent} />
+                  <Text style={styles.weatherSyncStatusText}>Syncing forecast…</Text>
+                </View>
+              ) : null}
+            </View>
             <Text style={styles.sectionDescription}>
               {mergedCruiseBookings.length > 0
                 ? 'Full-day weather, wind, and sea-state snapshots with offline saving for spotty-at-sea service.'
@@ -1850,6 +1866,27 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
     textTransform: 'uppercase',
     letterSpacing: 1,
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: SPACING.sm,
+  },
+  weatherSyncStatusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255, 255, 255, 0.10)',
+    marginBottom: SPACING.sm,
+  },
+  weatherSyncStatusText: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: 'rgba(255, 255, 255, 0.82)',
   },
   agendaList: {
     gap: SPACING.md,

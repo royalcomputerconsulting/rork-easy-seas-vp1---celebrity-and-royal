@@ -353,6 +353,7 @@ export function MarineAlertsPanel({
   const visibleAlerts = useMemo(() => alerts.slice(0, maxItems), [alerts, maxItems]);
   const strongestSeverity = alerts[0]?.severity ?? null;
   const panelColors = getPanelGradientColors(alerts.length > 0, strongestSeverity);
+  const isBackgroundSyncing = alertsQuery.isFetching && !alertsQuery.isLoading && !isSyncingNow;
 
   const handleSyncNow = useCallback(async () => {
     forceRefreshRef.current = true;
@@ -409,19 +410,27 @@ export function MarineAlertsPanel({
 
       <Text style={styles.description}>{description}</Text>
 
-      <Pressable
-        style={({ pressed }) => [styles.syncNowButton, pressed ? styles.syncNowButtonPressed : null]}
-        onPress={handleSyncNow}
-        disabled={isSyncingNow}
-        testID="marine-alerts-sync-now"
-      >
-        {isSyncingNow ? (
-          <ActivityIndicator size="small" color="#0B1B33" />
-        ) : (
-          <RefreshCw size={14} color="#0B1B33" />
-        )}
-        <Text style={styles.syncNowButtonText}>{isSyncingNow ? 'Syncing forecast…' : 'Sync now'}</Text>
-      </Pressable>
+      <View style={styles.syncRow}>
+        <Pressable
+          style={({ pressed }) => [styles.syncNowButton, pressed ? styles.syncNowButtonPressed : null]}
+          onPress={handleSyncNow}
+          disabled={isSyncingNow}
+          testID="marine-alerts-sync-now"
+        >
+          {isSyncingNow ? (
+            <ActivityIndicator size="small" color="#0B1B33" />
+          ) : (
+            <RefreshCw size={14} color="#0B1B33" />
+          )}
+          <Text style={styles.syncNowButtonText}>{isSyncingNow ? 'Syncing forecast…' : 'Sync now'}</Text>
+        </Pressable>
+        {isBackgroundSyncing ? (
+          <View style={styles.backgroundSyncPill} testID="marine-alerts-background-syncing">
+            <ActivityIndicator size="small" color="#E8F6FF" />
+            <Text style={styles.backgroundSyncText}>Checking for updates…</Text>
+          </View>
+        ) : null}
+      </View>
 
       {alertsQuery.isLoading ? (
         <View style={styles.emptyState}>
@@ -708,6 +717,26 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.fontWeightBold,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
+  },
+  syncRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+  },
+  backgroundSyncPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  backgroundSyncText: {
+    color: 'rgba(232, 246, 255, 0.85)',
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   tapHint: {
     flex: 1,

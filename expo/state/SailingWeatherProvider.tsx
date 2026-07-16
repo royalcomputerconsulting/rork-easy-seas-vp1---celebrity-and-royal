@@ -6,6 +6,7 @@ import { quotaSafeGetItem, quotaSafeSetJsonItem, quotaSafeRemoveItem } from '@/l
 import { useAuth } from './AuthProvider';
 
 const BASE_STORAGE_KEY = '@easy_seas_sailing_weather_cache_v1';
+const PORT_GEOCODE_CACHE_STORAGE_KEY = '@easy_seas_sailing_weather_port_geocode_cache_v1';
 const CACHE_REFRESH_MS = 1000 * 60 * 60 * 6;
 const CACHE_RETENTION_MS = 1000 * 60 * 60 * 24 * 10;
 const FORECAST_PREFETCH_HORIZON_DAYS = 15;
@@ -158,6 +159,8 @@ export interface SailingWeatherCruiseInput {
 
 interface SailingWeatherState {
   isHydrated: boolean;
+  isSyncing: boolean;
+  syncStatusMessage: string | null;
   getForecastForCruiseDay: (
     cruise: SailingWeatherCruiseInput,
     targetDate: Date,
@@ -737,11 +740,25 @@ async function fetchJson<T>(url: string, options?: { retries?: number; timeoutMs
 export const [SailingWeatherProvider, useSailingWeather] = createContextHook((): SailingWeatherState => {
   const { authenticatedEmail } = useAuth();
   const storageKeyRef = useRef<string>(getUserScopedKey(BASE_STORAGE_KEY, authenticatedEmail));
+  const portCacheStorageKeyRef = useRef<string>(getUserScopedKey(PORT_GEOCODE_CACHE_STORAGE_KEY, authenticatedEmail));
   const geocodeCacheRef = useRef<Map<string, PortCoordinates>>(new Map());
   const inFlightRef = useRef<Partial<Record<string, Promise<SailingWeatherForecast | null>>>>({});
   const [cache, setCache] = useState<Record<string, SailingWeatherForecast>>({});
   const [isHydrated, setIsHydrated] = useState<boolean>(false);
+  const [isPortCacheHydrated, setIsPortCacheHydrated] = useState<boolean>(false);
+  const [portCache, setPortCache] = useState<Record<string, PortCoordinates>>({});
   const cacheRef = useRef<Record<string, SailingWeatherForecast>>({});
+  const [activeSyncCount, setActiveSyncCount] = useState<number>(0);
+  const [lastSyncLabel, setLastSyncLabel] = useState<string | null>(null);
+
+  const beginSync = useCallback((label: string) => {
+    setLastSyncLabel(label);
+    setActiveSyncCount((count) => count + 1);
+  }, []);
+
+  const endSync = useCallback(() => {
+    setActiveSyncCount((count) => Math.max(0, count - 1));
+  }, []);
 
   useEffect(() => {
     cacheRef.current = cache;
@@ -803,6 +820,57 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
     void persistCache();
   }, [cache, isHydrated]);
 
+  /**
+   * Persists resolved port -> lat/lon lookups (from bundled data or geocoding)
+   * separately from the forecast cache. This lets the app resolve a cruise
+   * day's exact coordinates entirely offline once a port has been looked up
+   * at least once, instead of needing network access every session just to
+   * figure out WHERE to fetch marine data for.
+   */
+  useEffect(() => {
+    portCacheStorageKeyRef.current = getUserScopedKey(PORT_GEOCODE_CACHE_STORAGE_KEY, authenticatedEmail);
+    setIsPortCacheHydrated(false);
+
+    const loadPortCache = async () => {
+      try {
+        const stored = await quotaSafeGetItem(portCacheStorageKeyRef.current);
+        if (!stored) {
+          setPortCache({});
+          return;
+        }
+        const parsed = JSON.parse(stored) as Record<string, PortCoordinates>;
+        setPortCache(parsed);
+        geocodeCacheRef.current = new Map(Object.entries(parsed));
+        console.log('[SailingWeather] Loaded cached port coordinates:', Object.keys(parsed).length);
+      } catch (error) {
+        logSailingWeather('error', '[SailingWeather] Failed to load stored port coordinate cache', {
+          error: serializeError(error),
+        });
+        setPortCache({});
+      } finally {
+        setIsPortCacheHydrated(true);
+      }
+    };
+
+    void loadPortCache();
+  }, [authenticatedEmail]);
+
+  useEffect(() => {
+    if (!isPortCacheHydrated) return;
+
+    const persistPortCache = async () => {
+      try {
+        await quotaSafeSetJsonItem(portCacheStorageKeyRef.current, portCache);
+      } catch (error) {
+        logSailingWeather('error', '[SailingWeather] Failed to persist port coordinate cache', {
+          error: serializeError(error),
+        });
+      }
+    };
+
+    void persistPortCache();
+  }, [portCache, isPortCacheHydrated]);
+
   const resolvePortCoordinates = useCallback(async (rawPortName: string | undefined): Promise<PortCoordinates | null> => {
     const portName = rawPortName?.trim();
     if (!portName) return null;
@@ -825,6 +893,11 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
     const cached = geocodeCacheRef.current.get(normalized);
     if (cached) {
       return cached;
+    }
+
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      logSailingWeather('warn', '[SailingWeather] Skipping port geocoding while device appears offline', { portName });
+      return null;
     }
 
     const candidates = buildPortLookupCandidates(portName);
@@ -851,6 +924,7 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
           label: labelParts.join(', ') || portName,
         };
         geocodeCacheRef.current.set(normalized, resolved);
+        setPortCache((previous) => ({ ...previous, [normalized]: resolved }));
         console.log('[SailingWeather] Resolved port via geocoding', {
           portName,
           candidate,
@@ -1050,21 +1124,21 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
     };
   }, []);
 
-  const getForecastForCruiseDay = useCallback(async (
+  const findAnyCachedForecastForCruiseDay = useCallback((cruiseId: string, dateKey: string): SailingWeatherForecast | null => {
+    const matches = Object.values(cacheRef.current).filter(
+      (entry) => entry.cruiseId === cruiseId && entry.dateKey === dateKey,
+    );
+    if (matches.length === 0) return null;
+    matches.sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime());
+    return matches[0] ?? null;
+  }, []);
+
+  const getForecastForResolvedPoint = useCallback(async (
     cruise: SailingWeatherCruiseInput,
     targetDate: Date,
-    options?: { force?: boolean },
+    resolvedPoint: ResolvedCruiseWeatherPoint,
+    options: { force?: boolean } | undefined,
   ): Promise<SailingWeatherForecast | null> => {
-    const resolvedPoint = await resolveCruiseWeatherPoint(cruise, targetDate);
-    if (!resolvedPoint) {
-      console.log('[SailingWeather] Unable to resolve coordinates for cruise day', {
-        cruiseId: cruise.id,
-        shipName: cruise.shipName,
-        date: formatDateKey(targetDate),
-      });
-      return null;
-    }
-
     const dateKey = formatDateKey(targetDate);
     const cacheKey = createCacheKey(cruise.id, dateKey, resolvedPoint.latitude, resolvedPoint.longitude);
     const rawCached = cacheRef.current[cacheKey];
@@ -1122,9 +1196,10 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
           dateKey,
           error: serializeError(error),
         });
-        if (cached) {
+        const fallback = cached ?? findAnyCachedForecastForCruiseDay(cruise.id, dateKey);
+        if (fallback) {
           const staleForecast: SailingWeatherForecast = {
-            ...cached,
+            ...fallback,
             source: 'cache-stale',
             isStale: true,
           };
@@ -1138,7 +1213,48 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
 
     inFlightRef.current[cacheKey] = forecastPromise;
     return forecastPromise;
-  }, [fetchForecast, resolveCruiseWeatherPoint]);
+  }, [fetchForecast, findAnyCachedForecastForCruiseDay]);
+
+  const getForecastForCruiseDay = useCallback(async (
+    cruise: SailingWeatherCruiseInput,
+    targetDate: Date,
+    options?: { force?: boolean },
+  ): Promise<SailingWeatherForecast | null> => {
+    const dateKeyForSync = formatDateKey(targetDate);
+    const syncLabel = `${cruise.shipName} · ${dateKeyForSync}`;
+    beginSync(syncLabel);
+
+    try {
+      const resolvedPoint = await resolveCruiseWeatherPoint(cruise, targetDate);
+      if (!resolvedPoint) {
+        const offlineFallback = findAnyCachedForecastForCruiseDay(cruise.id, dateKeyForSync);
+        if (offlineFallback) {
+          logSailingWeather('warn', '[SailingWeather] Coordinates unresolved (likely offline); serving last saved forecast', {
+            cruiseId: cruise.id,
+            shipName: cruise.shipName,
+            date: dateKeyForSync,
+            savedAt: offlineFallback.updatedAt,
+          });
+          return {
+            ...offlineFallback,
+            source: 'cache-stale',
+            isStale: true,
+          };
+        }
+
+        console.log('[SailingWeather] Unable to resolve coordinates for cruise day', {
+          cruiseId: cruise.id,
+          shipName: cruise.shipName,
+          date: dateKeyForSync,
+        });
+        return null;
+      }
+
+      return await getForecastForResolvedPoint(cruise, targetDate, resolvedPoint, options);
+    } finally {
+      endSync();
+    }
+  }, [beginSync, endSync, resolveCruiseWeatherPoint, findAnyCachedForecastForCruiseDay, getForecastForResolvedPoint]);
 
   const prefetchCruiseForecastWindow = useCallback(async (
     cruise: SailingWeatherCruiseInput,
@@ -1178,9 +1294,14 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
   const clearWeatherCache = useCallback(async () => {
     setCache({});
     cacheRef.current = {};
+    setPortCache({});
+    geocodeCacheRef.current = new Map();
     try {
-      await quotaSafeRemoveItem(storageKeyRef.current);
-      console.log('[SailingWeather] Cleared all cached forecasts');
+      await Promise.all([
+        quotaSafeRemoveItem(storageKeyRef.current),
+        quotaSafeRemoveItem(portCacheStorageKeyRef.current),
+      ]);
+      console.log('[SailingWeather] Cleared all cached forecasts and saved port coordinates');
     } catch (error) {
       logSailingWeather('error', '[SailingWeather] Failed to clear weather cache', {
         error: serializeError(error),
@@ -1188,10 +1309,17 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
     }
   }, []);
 
+  const isSyncing = activeSyncCount > 0;
+  const syncStatusMessage = isSyncing
+    ? (lastSyncLabel ? `Syncing marine forecast — ${lastSyncLabel}…` : 'Syncing marine forecast…')
+    : null;
+
   return useMemo(() => ({
     isHydrated,
+    isSyncing,
+    syncStatusMessage,
     getForecastForCruiseDay,
     prefetchCruiseForecastWindow,
     clearWeatherCache,
-  }), [clearWeatherCache, getForecastForCruiseDay, isHydrated, prefetchCruiseForecastWindow]);
+  }), [clearWeatherCache, getForecastForCruiseDay, isHydrated, isSyncing, syncStatusMessage, prefetchCruiseForecastWindow]);
 });
