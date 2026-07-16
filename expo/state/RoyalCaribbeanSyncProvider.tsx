@@ -3046,7 +3046,7 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
               offerCode: entry.code,
               pageNumber: requestedPage,
               contextFingerprint: resolvedContext.contextFingerprint,
-              accountFingerprint: identity.fingerprint,
+              accountFingerprint: checkpointIdentity.fingerprint,
               expectedUrl: searchUrl,
               navigationSequenceId: navigationRequestIdRef.current + 1,
               vifpNumber: catalog.vifp,

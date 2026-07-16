@@ -2343,7 +2343,7 @@ export default function AnalyticsScreen() {
 
       <View style={styles.section} testID="casino-value-attribution-makeout-section">
         <View style={{ gap: SPACING.sm }}>
-          <OfferAttributionLedgerCard cruise={(bookedCruises.find((cruise) => Boolean(cruise.offerCode || cruise.instantCertificateOfferCode)) ?? bookedCruises[0] ?? {}) as Record<string, unknown>} />
+          <OfferAttributionLedgerCard cruise={(bookedCruises.find((cruise) => Boolean(cruise.offerCode || cruise.instantCertificateOfferCode)) ?? bookedCruises[0] ?? {}) as unknown as Record<string, unknown>} />
           <TrueMakeoutLedgerCard input={{
             retailValue: cruiseEconomicsSummary.totals.totalRetailValue,
             compValue: cruiseEconomicsSummary.totals.totalCruiseValueCaptured,

@@ -613,11 +613,11 @@ const styles = StyleSheet.create({
     fontWeight: '900' as const,
   },
   agentChatFrame: {
-    height: 540,
+    height: 720,
     backgroundColor: 'rgba(224, 242, 254, 0.96)',
   },
   agentChatFrameExpanded: {
-    height: 700,
+    height: 920,
   },
   lookupHeaderCard: {
     borderRadius: 18,

@@ -646,6 +646,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
           const currentTierIndex = CELEBRITY_TIER_ORDER.indexOf(celebrityTier);
           const nextTier = currentTierIndex < CELEBRITY_TIER_ORDER.length - 1 ? CELEBRITY_TIER_ORDER[currentTierIndex + 1] : null;
           const isRuby = celebrityTier === 'Ruby';
+          const percentComplete = isRuby ? 100 : 0;
           
           const _tierColor = CELEBRITY_BLUE_CHIP_TIERS[celebrityTier]?.color || '#F0EAD6';
           

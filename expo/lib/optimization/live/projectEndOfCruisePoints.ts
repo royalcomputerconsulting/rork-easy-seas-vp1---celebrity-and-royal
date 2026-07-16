@@ -30,7 +30,7 @@ export function projectEndOfCruisePoints(
   }
   assumptions.push('Projection uses personal observed points-per-hour pace and remaining casino hours.');
   assumptions.push('The conservative and optimistic bands are planning ranges, not guarantees.');
-  const fatigueFactor = state.fatigueRating !== null && state.fatigueRating >= 7 ? 0.75 : 1;
+  const fatigueFactor = state.fatigueRating != null && state.fatigueRating >= 7 ? 0.75 : 1;
   const expectedAdditional = Math.max(0, rate * state.remainingCasinoHours * fatigueFactor);
   return {
     generatedAt: state.asOf,

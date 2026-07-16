@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert } fr
 import { Stack, useRouter } from 'expo-router';
 import { buildCruiseDetailsParams } from '@/lib/navigation/cruiseDetails';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { CalendarDays, ChevronLeft, ChevronRight, Ship, Plane, User, Users, Plus, AlertTriangle, Ban, Gift, Award, MapPin, Clock } from 'lucide-react-native';
+import { CalendarDays, ChevronLeft, ChevronRight, Ship, Plane, User, Users, Plus, AlertTriangle, Ban, Gift, Award, MapPin, Clock, Sparkles } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { IMAGES } from '@/constants/images';
 import { useAppState } from '@/state/AppStateProvider';
@@ -25,6 +25,36 @@ import { deriveCruiseDayPlan } from '@/lib/cruisePlanningIntelligence';
 
 type ViewMode = 'events' | 'week' | 'month' | '90days' | 'passenger';
 type PassengerDayKind = 'sea' | 'port' | 'land' | 'gap' | 'expiration' | 'tier' | 'personal';
+
+/**
+ * Deterministic 1-9 "luck score" for a given calendar day. Seeded from the
+ * date itself so the same day always renders the same score/color for a
+ * user, without requiring a network call for every day in a month.
+ */
+function getLuckScoreForDate(date: Date): number {
+  const dateKey = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+  let hash = 0;
+  for (let i = 0; i < dateKey.length; i++) {
+    hash = (hash * 31 + dateKey.charCodeAt(i)) >>> 0;
+  }
+  return (hash % 9) + 1;
+}
+
+const LUCK_SCORE_COLORS: Record<number, string> = {
+  1: '#B91C1C',
+  2: '#DC2626',
+  3: '#EA580C',
+  4: '#D97706',
+  5: '#CA8A04',
+  6: '#65A30D',
+  7: '#16A34A',
+  8: '#059669',
+  9: '#0D9488',
+};
+
+function getLuckColor(score: number): string {
+  return LUCK_SCORE_COLORS[score] || LUCK_SCORE_COLORS[5];
+}
 
 interface DayData {
   date: Date;
@@ -73,6 +103,7 @@ export default function EventsScreen() {
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [refreshKey, setRefreshKey] = useState(0);
+  const [luckCalendarMode, setLuckCalendarMode] = useState(false);
 
   const intelligenceFilterSnapshot = useMemo(() => ({
     selectedProfileId,
@@ -392,8 +423,32 @@ export default function EventsScreen() {
 
   const renderDayCell = useCallback((day: DayData) => {
     const hasEvents = day.events.cruise > 0 || day.events.travel > 0 || day.events.personal > 0;
+
+    if (luckCalendarMode) {
+      const luckScore = getLuckScoreForDate(day.date);
+      const luckColor = getLuckColor(luckScore);
+      return (
+        <TouchableOpacity
+          key={day.date.toISOString()}
+          style={[
+            styles.dayCell,
+            { backgroundColor: luckColor, opacity: day.isCurrentMonth ? 1 : 0.35 },
+            day.isToday && styles.todayCell,
+          ]}
+          activeOpacity={0.7}
+          onPress={() => handleDayPress(day)}
+          testID={`luck-day-cell-${day.date.getDate()}`}
+        >
+          <Text style={[styles.dayNumber, styles.luckDayNumber, day.isToday && styles.todayNumber]}>
+            {day.dayNumber}
+          </Text>
+          <Text style={styles.luckScoreText}>{luckScore}</Text>
+        </TouchableOpacity>
+      );
+    }
+
     const bgColor = getDayBackgroundColor(day);
-    
+
     return (
       <TouchableOpacity
         key={day.date.toISOString()}
@@ -421,7 +476,7 @@ export default function EventsScreen() {
         )}
       </TouchableOpacity>
     );
-  }, [renderEventDots, handleDayPress, getDayBackgroundColor]);
+  }, [renderEventDots, handleDayPress, getDayBackgroundColor, luckCalendarMode]);
 
   const allEventItems = useMemo(() => {
     const allEvents: { event: CalendarEvent | BookedCruise; type: 'calendar' | 'cruise'; date: Date }[] = [];
@@ -773,6 +828,15 @@ export default function EventsScreen() {
               </TouchableOpacity>
 
               <TouchableOpacity
+                style={[styles.luckToggleButton, luckCalendarMode && styles.luckToggleButtonActive]}
+                onPress={() => setLuckCalendarMode((prev) => !prev)}
+                activeOpacity={0.7}
+                testID="luck-calendar-toggle-button"
+              >
+                <Sparkles size={18} color={luckCalendarMode ? COLORS.white : '#7C3AED'} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
                 style={styles.clearEventsButton}
                 onPress={handleClearEvents}
                 activeOpacity={0.7}
@@ -812,6 +876,17 @@ export default function EventsScreen() {
 
           {viewMode === 'month' && (
             <View style={styles.calendarContainer}>
+              {luckCalendarMode && (
+                <View style={styles.luckLegendRow} testID="luck-calendar-legend">
+                  <Text style={styles.luckLegendLabel}>Luck Calendar</Text>
+                  <View style={styles.luckLegendScale}>
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((score) => (
+                      <View key={score} style={[styles.luckLegendSwatch, { backgroundColor: getLuckColor(score) }]} />
+                    ))}
+                  </View>
+                  <Text style={styles.luckLegendMeta}>Low → High</Text>
+                </View>
+              )}
               <View style={styles.weekDaysHeader}>
                 {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
                   <Text key={day} style={styles.weekDayLabel}>{day}</Text>
@@ -1177,6 +1252,60 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: 'rgba(220, 38, 38, 0.3)',
     marginLeft: 6,
+  },
+  luckToggleButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(124, 58, 237, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(124, 58, 237, 0.3)',
+    marginLeft: 6,
+  },
+  luckToggleButtonActive: {
+    backgroundColor: '#7C3AED',
+    borderColor: '#7C3AED',
+  },
+  luckDayNumber: {
+    color: '#FFFFFF',
+  },
+  luckScoreText: {
+    marginTop: 2,
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: 'rgba(255,255,255,0.92)',
+  },
+  luckLegendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.xs,
+    paddingBottom: SPACING.sm,
+    marginBottom: SPACING.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 31, 63, 0.08)',
+  },
+  luckLegendLabel: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#7C3AED',
+    textTransform: 'uppercase',
+  },
+  luckLegendScale: {
+    flexDirection: 'row',
+    gap: 2,
+  },
+  luckLegendSwatch: {
+    width: 10,
+    height: 10,
+    borderRadius: 2,
+  },
+  luckLegendMeta: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: COLORS.navyDeep,
+    opacity: 0.6,
   },
   jumpBanner: {
     flexDirection: 'row',

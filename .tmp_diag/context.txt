@@ -1,0 +1,860 @@
+CARNIVAL CRUISE LINE - SYNC LOG
+Generated: 7/16/2026, 5:25:38 AM
+Status: partial
+Last Sync: 7/16/2026, 5:25:32 AM
+
+--- SYNC SUMMARY ---
+Offers: 20 unique deal(s)
+Sailings: 0 total sailing(s)
+Booked Cruises: 17
+Courtesy Holds: 1
+Completed Cruises: 83
+
+--- DETAILED LOG ---
+07/16/2026, 05:12:21 [OK] Parsing loyalty data
+07/16/2026, 05:12:21 [INFO] Reading loyalty data
+07/16/2026, 05:12:21 [OK] 🎰 Club Royale Status
+07/16/2026, 05:12:21 [OK] 📊 Tier: "Signature"
+07/16/2026, 05:12:21 [OK] 💎 Points: 20,941
+07/16/2026, 05:12:21 [OK] Reading loyalty data
+07/16/2026, 05:12:24 [OK] Opening offers
+07/16/2026, 05:12:24 [OK] Reading offers page
+07/16/2026, 05:12:26 [OK] Opening offers page for Club Royale
+07/16/2026, 05:12:27 [OK] Parsing loyalty data
+07/16/2026, 05:12:27 [INFO] Reading loyalty data
+07/16/2026, 05:12:27 [OK] 🎰 Club Royale Status
+07/16/2026, 05:12:27 [OK] 📊 Tier: "Signature"
+07/16/2026, 05:12:27 [OK] 💎 Points: 20,941
+07/16/2026, 05:12:27 [OK] Reading loyalty data
+07/16/2026, 05:12:27 [WARN] 🔎 Offer discovery pass 1: 0 offer(s), 0 View Sailings button(s)
+07/16/2026, 05:12:28 [OK] Reading loyalty data
+07/16/2026, 05:12:29 [WARN] 🔎 Offer discovery pass 2: 0 offer(s), 0 View Sailings button(s)
+07/16/2026, 05:12:30 [OK] Widget scrape: CA -/- | CR Signature/20941
+07/16/2026, 05:12:30 [OK] ✅ Merged DOM fallback loyalty fields without suppressing missing-field fallbacks
+07/16/2026, 05:12:30 [OK] 🎰 Club Royale tier: Signature
+07/16/2026, 05:12:30 [OK] 💎 Club Royale points: 20,941
+07/16/2026, 05:12:31 [OK] Found offer 26NPR503 — Limitless Luck
+07/16/2026, 05:12:31 [OK] Found offer 26SEP103 — September Shuffle
+07/16/2026, 05:12:31 [OK] Found offer 26MIX403 — Stacked Sailings
+07/16/2026, 05:12:31 [OK] Found offer 2607C06 — July Instant Cruise Reward
+07/16/2026, 05:12:31 [OK] DOM discovery: parsed 4 visible/linked offer card(s), found 4 View Sailings button(s)
+07/16/2026, 05:12:31 [OK] Opening offer 1/4: 26NPR503
+07/16/2026, 05:12:32 [OK] Scraping offer 26NPR503
+07/16/2026, 05:12:33 [OK] Widget scrape: CA -/- | CR Signature/20941
+07/16/2026, 05:12:33 [OK] ✅ Merged DOM fallback loyalty fields without suppressing missing-field fallbacks
+07/16/2026, 05:12:33 [OK] 🎰 Club Royale tier: Signature
+07/16/2026, 05:12:33 [OK] 💎 Club Royale points: 20,941
+07/16/2026, 05:12:37 [OK] Widget scrape: CA -/- | CR Signature/20941
+07/16/2026, 05:12:37 [OK] ✅ Merged DOM fallback loyalty fields without suppressing missing-field fallbacks
+07/16/2026, 05:12:37 [OK] 🎰 Club Royale tier: Signature
+07/16/2026, 05:12:37 [OK] 💎 Club Royale points: 20,941
+07/16/2026, 05:12:46 [OK] Finished offer 26NPR503: 65 sailing(s)
+07/16/2026, 05:12:46 [OK] Saved offer 26NPR503: 65 sailing(s), 65 total
+07/16/2026, 05:12:46 [OK] ✅ React Native handoff attempted for 26NPR503: 65 row(s)
+07/16/2026, 05:12:46 [OK] ACK offers_batch 26NPR503-checkpoint-1-1784203966523: received 44, accepted 44, app-side total 44
+07/16/2026, 05:12:46 [OK] ✅ Captured casino offer "Limitless Luck" (Code: 26NPR503)
+07/16/2026, 05:12:46 [OK] 📊 Captured 44 sailing(s) for this offer
+07/16/2026, 05:12:46 [OK] 🚢 Sailing 1: Enchantment of the Seas - 2026-09-05
+07/16/2026, 05:12:46 [OK] 🚢 Sailing 2: Enchantment of the Seas - 2026-09-19
+07/16/2026, 05:12:46 [OK] 🚢 Sailing 3: Enchantment of the Seas - 2026-09-26
+07/16/2026, 05:12:46 [OK] ➕ ...and 41 more sailing(s)
+07/16/2026, 05:12:46 [OK] ACK offers_batch 26NPR503-checkpoint-2-1784203966523: received 21, accepted 21, app-side total 65
+07/16/2026, 05:12:46 [OK] ✅ Captured casino offer "Limitless Luck" (Code: 26NPR503)
+07/16/2026, 05:12:46 [OK] 📊 Captured 21 sailing(s) for this offer
+07/16/2026, 05:12:46 [OK] 🚢 Sailing 1: Enchantment of the Seas - 2026-10-19
+07/16/2026, 05:12:46 [OK] 🚢 Sailing 2: Enchantment of the Seas - 2026-10-24
+07/16/2026, 05:12:46 [OK] 🚢 Sailing 3: Enchantment of the Seas - 2026-11-02
+07/16/2026, 05:12:46 [OK] ➕ ...and 18 more sailing(s)
+07/16/2026, 05:12:47 [OK] Opening offers page for Club Royale
+07/16/2026, 05:12:48 [OK] Reading loyalty data
+07/16/2026, 05:12:48 [WARN] 🔎 Offer discovery pass 1: 0 offer(s), 0 View Sailings button(s)
+07/16/2026, 05:12:49 [OK] Reading loyalty data
+07/16/2026, 05:12:50 [OK] Found offer 26NPR503 — Limitless Luck
+07/16/2026, 05:12:50 [OK] Found offer 26SEP103 — September Shuffle
+07/16/2026, 05:12:50 [OK] Found offer 26MIX403 — Stacked Sailings
+07/16/2026, 05:12:50 [OK] Found offer 2607C06 — July Instant Cruise Reward
+07/16/2026, 05:12:50 [OK] DOM discovery: parsed 4 visible/linked offer card(s), found 4 View Sailings button(s)
+07/16/2026, 05:12:50 [OK] Opening offer 2/4: 26SEP103
+07/16/2026, 05:12:52 [OK] Scraping offer 26SEP103
+07/16/2026, 05:13:03 [OK] Finished offer 26SEP103: 58 sailing(s)
+07/16/2026, 05:13:03 [OK] Saved offer 26SEP103: 58 sailing(s), 123 total
+07/16/2026, 05:13:03 [OK] ✅ React Native handoff attempted for 26SEP103: 58 row(s)
+07/16/2026, 05:13:03 [OK] ACK offers_batch 26SEP103-checkpoint-1-1784203983798: received 47, accepted 47, app-side total 112
+07/16/2026, 05:13:03 [OK] ✅ Captured casino offer "September Shuffle" (Code: 26SEP103)
+07/16/2026, 05:13:03 [OK] 📊 Captured 47 sailing(s) for this offer
+07/16/2026, 05:13:03 [OK] 🚢 Sailing 1: Harmony of the Seas - 2026-09-03
+07/16/2026, 05:13:03 [OK] 🚢 Sailing 2: Radiance of the Seas - 2026-09-03
+07/16/2026, 05:13:03 [OK] 🚢 Sailing 3: Radiance of the Seas - 2026-09-17
+07/16/2026, 05:13:03 [OK] ➕ ...and 44 more sailing(s)
+07/16/2026, 05:13:03 [OK] ACK offers_batch 26SEP103-checkpoint-2-1784203983798: received 11, accepted 11, app-side total 123
+07/16/2026, 05:13:03 [OK] ✅ Captured casino offer "September Shuffle" (Code: 26SEP103)
+07/16/2026, 05:13:03 [OK] 📊 Captured 11 sailing(s) for this offer
+07/16/2026, 05:13:03 [OK] 🚢 Sailing 1: Allure of the Seas - 2026-09-19
+07/16/2026, 05:13:03 [OK] 🚢 Sailing 2: Allure of the Seas - 2026-09-26
+07/16/2026, 05:13:03 [OK] 🚢 Sailing 3: Allure of the Seas - 2026-09-14
+07/16/2026, 05:13:03 [OK] ➕ ...and 8 more sailing(s)
+07/16/2026, 05:13:04 [OK] Opening offers page for Club Royale
+07/16/2026, 05:13:05 [OK] Reading loyalty data
+07/16/2026, 05:13:06 [WARN] 🔎 Offer discovery pass 1: 0 offer(s), 0 View Sailings button(s)
+07/16/2026, 05:13:06 [OK] Reading loyalty data
+07/16/2026, 05:13:07 [OK] Found offer 26NPR503 — Limitless Luck
+07/16/2026, 05:13:07 [OK] Found offer 26SEP103 — September Shuffle
+07/16/2026, 05:13:07 [OK] Found offer 26MIX403 — Stacked Sailings
+07/16/2026, 05:13:07 [OK] Found offer 2607C06 — July Instant Cruise Reward
+07/16/2026, 05:13:07 [OK] DOM discovery: parsed 4 visible/linked offer card(s), found 4 View Sailings button(s)
+07/16/2026, 05:13:07 [OK] Opening offer 3/4: 26MIX403
+07/16/2026, 05:13:08 [OK] Scraping offer 26MIX403
+07/16/2026, 05:13:29 [OK] Finished offer 26MIX403: 307 sailing(s)
+07/16/2026, 05:13:29 [OK] Saved offer 26MIX403: 307 sailing(s), 430 total
+07/16/2026, 05:13:29 [OK] ✅ React Native handoff attempted for 26MIX403: 307 row(s)
+07/16/2026, 05:13:29 [OK] ACK offers_batch 26MIX403-checkpoint-1-1784204009366: received 40, accepted 40, app-side total 163
+07/16/2026, 05:13:29 [OK] ✅ Captured casino offer "Stacked Sailings" (Code: 26MIX403)
+07/16/2026, 05:13:29 [OK] 📊 Captured 40 sailing(s) for this offer
+07/16/2026, 05:13:29 [OK] 🚢 Sailing 1: Harmony of the Seas - 2026-10-01
+07/16/2026, 05:13:29 [OK] 🚢 Sailing 2: Harmony of the Seas - 2026-10-29
+07/16/2026, 05:13:29 [OK] 🚢 Sailing 3: Harmony of the Seas - 2026-10-20
+07/16/2026, 05:13:29 [OK] ➕ ...and 37 more sailing(s)
+07/16/2026, 05:13:29 [OK] ACK offers_batch 26MIX403-checkpoint-2-1784204009366: received 39, accepted 39, app-side total 202
+07/16/2026, 05:13:29 [OK] ✅ Captured casino offer "Stacked Sailings" (Code: 26MIX403)
+07/16/2026, 05:13:29 [OK] 📊 Captured 39 sailing(s) for this offer
+07/16/2026, 05:13:29 [OK] 🚢 Sailing 1: Wonder of the Seas - 2026-12-02
+07/16/2026, 05:13:29 [OK] 🚢 Sailing 2: Wonder of the Seas - 2026-12-07
+07/16/2026, 05:13:29 [OK] 🚢 Sailing 3: Wonder of the Seas - 2026-02-15
+07/16/2026, 05:13:29 [OK] ➕ ...and 36 more sailing(s)
+07/16/2026, 05:13:29 [OK] ACK offers_batch 26MIX403-checkpoint-3-1784204009367: received 39, accepted 39, app-side total 241
+07/16/2026, 05:13:29 [OK] ✅ Captured casino offer "Stacked Sailings" (Code: 26MIX403)
+07/16/2026, 05:13:29 [OK] 📊 Captured 39 sailing(s) for this offer
+07/16/2026, 05:13:29 [OK] 🚢 Sailing 1: Utopia of the Seas - 2026-11-30
+07/16/2026, 05:13:29 [OK] 🚢 Sailing 2: Utopia of the Seas - 2026-11-20
+07/16/2026, 05:13:29 [OK] 🚢 Sailing 3: Utopia of the Seas - 2026-11-27
+07/16/2026, 05:13:29 [OK] ➕ ...and 36 more sailing(s)
+07/16/2026, 05:13:29 [OK] ACK offers_batch 26MIX403-checkpoint-4-1784204009367: received 39, accepted 39, app-side total 280
+07/16/2026, 05:13:29 [OK] ✅ Captured casino offer "Stacked Sailings" (Code: 26MIX403)
+07/16/2026, 05:13:29 [OK] 📊 Captured 39 sailing(s) for this offer
+07/16/2026, 05:13:29 [OK] 🚢 Sailing 1: Oasis of the Seas - 2026-02-12
+07/16/2026, 05:13:29 [OK] 🚢 Sailing 2: Oasis of the Seas - 2026-02-19
+07/16/2026, 05:13:29 [OK] 🚢 Sailing 3: Oasis of the Seas - 2027-12-18
+07/16/2026, 05:13:29 [OK] ➕ ...and 36 more sailing(s)
+07/16/2026, 05:13:29 [OK] ACK offers_batch 26MIX403-checkpoint-5-1784204009367: received 40, accepted 40, app-side total 320
+07/16/2026, 05:13:29 [OK] ✅ Captured casino offer "Stacked Sailings" (Code: 26MIX403)
+07/16/2026, 05:13:29 [OK] 📊 Captured 40 sailing(s) for this offer
+07/16/2026, 05:13:29 [OK] 🚢 Sailing 1: Jewel of the Seas - 2026-11-12
+07/16/2026, 05:13:29 [OK] 🚢 Sailing 2: Jewel of the Seas - 2026-12-16
+07/16/2026, 05:13:29 [OK] 🚢 Sailing 3: Jewel of the Seas - 2026-12-20
+07/16/2026, 05:13:29 [OK] ➕ ...and 37 more sailing(s)
+07/16/2026, 05:13:29 [OK] ACK offers_batch 26MIX403-checkpoint-6-1784204009368: received 41, accepted 41, app-side total 361
+07/16/2026, 05:13:29 [OK] ✅ Captured casino offer "Stacked Sailings" (Code: 26MIX403)
+07/16/2026, 05:13:29 [OK] 📊 Captured 41 sailing(s) for this offer
+07/16/2026, 05:13:29 [OK] 🚢 Sailing 1: Brilliance of the Seas - 2026-02-15
+07/16/2026, 05:13:29 [OK] 🚢 Sailing 2: Wonder of the Seas - 2026-11-20
+07/16/2026, 05:13:29 [OK] 🚢 Sailing 3: Adventure of the Seas - 2026-11-29
+07/16/2026, 05:13:29 [OK] ➕ ...and 38 more sailing(s)
+07/16/2026, 05:13:29 [OK] ACK offers_batch 26MIX403-checkpoint-7-1784204009368: received 69, accepted 69, app-side total 430
+07/16/2026, 05:13:29 [OK] ✅ Captured casino offer "Stacked Sailings" (Code: 26MIX403)
+07/16/2026, 05:13:29 [OK] 📊 Captured 69 sailing(s) for this offer
+07/16/2026, 05:13:29 [OK] 🚢 Sailing 1: Brilliance of the Seas - 2027-02-22
+07/16/2026, 05:13:29 [OK] 🚢 Sailing 2: Freedom of the Seas - 2026-10-03
+07/16/2026, 05:13:29 [OK] 🚢 Sailing 3: Freedom of the Seas - 2026-10-17
+07/16/2026, 05:13:29 [OK] ➕ ...and 66 more sailing(s)
+07/16/2026, 05:13:30 [OK] Opening offers page for Club Royale
+07/16/2026, 05:13:31 [OK] Reading loyalty data
+07/16/2026, 05:13:31 [WARN] 🔎 Offer discovery pass 1: 0 offer(s), 0 View Sailings button(s)
+07/16/2026, 05:13:32 [OK] Reading loyalty data
+07/16/2026, 05:13:33 [OK] Found offer 26NPR503 — Limitless Luck
+07/16/2026, 05:13:33 [OK] Found offer 26SEP103 — September Shuffle
+07/16/2026, 05:13:33 [OK] Found offer 26MIX403 — Stacked Sailings
+07/16/2026, 05:13:33 [OK] Found offer 2607C06 — July Instant Cruise Reward
+07/16/2026, 05:13:33 [OK] DOM discovery: parsed 4 visible/linked offer card(s), found 4 View Sailings button(s)
+07/16/2026, 05:13:33 [OK] Opening offer 4/4: 2607C06
+07/16/2026, 05:13:35 [OK] Scraping offer 2607C06
+07/16/2026, 05:14:53 [OK] Finished offer 2607C06: 1,037 sailing(s)
+07/16/2026, 05:14:53 [OK] Saved offer 2607C06: 1,037 sailing(s), 1,467 total
+07/16/2026, 05:14:53 [OK] ✅ React Native handoff attempted for 2607C06: 1037 row(s)
+07/16/2026, 05:14:53 [OK] Accepted full row: 26NPR503 | Enchantment of the Seas | 09/05/2026 | 7 Night Western Caribbean Cruise | Fort Lauderdale
+07/16/2026, 05:14:53 [OK] Accepted full row: 26NPR503 | Enchantment of the Seas | 09/19/2026 | 7 Night Western Caribbean Cruise | Fort Lauderdale
+07/16/2026, 05:14:53 [OK] Accepted full row: 26NPR503 | Enchantment of the Seas | 09/26/2026 | 7 Night Western Caribbean Cruise | Fort Lauderdale
+07/16/2026, 05:14:53 [OK] Accepted full row: 26NPR503 | Enchantment of the Seas | 10/03/2026 | 7 Night Western Caribbean Cruise | Fort Lauderdale
+07/16/2026, 05:14:53 [OK] Accepted full row: 26NPR503 | Enchantment of the Seas | 10/10/2026 | 7 Night Western Caribbean Cruise | Fort Lauderdale
+07/16/2026, 05:14:53 [OK] Accepted full row: 26NPR503 | Enchantment of the Seas | 10/17/2026 | 7 Night Western Caribbean Cruise | Fort Lauderdale
+07/16/2026, 05:14:53 [OK] Accepted full row: 26NPR503 | Enchantment of the Seas | 12/06/2026 | 7 Night Western Caribbean Cruise | Fort Lauderdale
+07/16/2026, 05:14:53 [OK] Accepted full row: 26NPR503 | Radiance of the Seas | 09/07/2026 | 5 Night Western Caribbean Cruise | Fort Lauderdale
+07/16/2026, 05:14:53 [OK] Accepted full row: 26NPR503 | Radiance of the Seas | 09/12/2026 | 5 Night Western Caribbean Cruise | Fort Lauderdale
+07/16/2026, 05:14:53 [OK] Accepted full row: 26NPR503 | Radiance of the Seas | 09/26/2026 | 5 Night Western Caribbean Cruise | Fort Lauderdale
+07/16/2026, 05:14:53 [OK] Accepted full row: 26NPR503 | Radiance of the Seas | 10/19/2026 | 5 Night Western Caribbean Cruise | Fort Lauderdale
+07/16/2026, 05:14:53 [OK] Accepted full row: 26NPR503 | Radiance of the Seas | 10/24/2026 | 5 Night Western Caribbean Cruise | Fort Lauderdale
+07/16/2026, 05:14:53 [OK] Accepted full row: 26NPR503 | Radiance of the Seas | 11/02/2026 | 5 Night Western Caribbean Cruise | Fort Lauderdale
+07/16/2026, 05:14:53 [OK] Accepted full row: 26NPR503 | Radiance of the Seas | 09/17/2026 | 4 Night Western Caribbean Cruise | Fort Lauderdale
+07/16/2026, 05:14:53 [OK] Accepted full row: 26NPR503 | Jewel of the Seas | 10/27/2026 | 6 Night Western Caribbean Cruise | Fort Lauderdale
+07/16/2026, 05:14:53 [OK] Accepted full row: 26NPR503 | Jewel of the Seas | 11/16/2026 | 6 Night Western Caribbean Cruise | Fort Lauderdale
+07/16/2026, 05:14:53 [OK] Accepted full row: 26NPR503 | Enchantment of the Seas | 10/31/2026 | 8 Night Western Caribbean Cruise | Fort Lauderdale
+07/16/2026, 05:14:53 [OK] Accepted full row: 26NPR503 | Jewel of the Seas | 11/02/2026 | 5 Night Western Caribbean Cruise | Fort Lauderdale
+07/16/2026, 05:14:53 [OK] Accepted full row: 26NPR503 | Jewel of the Seas | 11/07/2026 | 5 Night Western Caribbean Cruise | Fort Lauderdale
+07/16/2026, 05:14:53 [OK] Accepted full row: 26NPR503 | Jewel of the Seas | 11/27/2026 | 5 Night Western Caribbean Cruise | Fort Lauderdale
+07/16/2026, 05:14:53 [OK] Accepted full row: 26NPR503 | Jewel of the Seas | 12/02/2026 | 5 Night Western Caribbean Cruise | Fort Lauderdale
+07/16/2026, 05:14:53 [OK] Accepted full row: 26NPR503 | Radiance of the Seas | 11/07/2026 | 7 Night Western Caribbean Cruise | Fort Lauderdale
+07/16/2026, 05:14:53 [OK] Accepted full row: 26NPR503 | Jewel of the Seas | 11/12/2026 | 4 Night Western Caribbean Cruise | Fort Lauderdale
+07/16/2026, 05:14:53 [OK] Accepted full row: 26NPR503 | Jewel of the Seas | 12/16/2026 | 4 Night Western Caribbean Cruise | Fort Lauderdale
+07/16/2026, 05:14:53 [OK] Accepted full row: 26NPR503 | Radiance of the Seas | 11/14/2026 | 7 Night Western Caribbean Cruise | Fort Lauderdale
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06-checkpoint-1-1784204093532: received 36, accepted 36, app-side total 466
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 36 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Jewel of the Seas - 2026-07-20
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Jewel of the Seas - 2026-07-24
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Mariner of the Seas - 2026-07-25
+07/16/2026, 05:14:53 [OK] ➕ ...and 33 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06-checkpoint-2-1784204093532: received 38, accepted 38, app-side total 504
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 38 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Freedom of the Seas - 2026-08-03
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Quantum of the Seas - 2026-08-07
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Quantum of the Seas - 2026-08-14
+07/16/2026, 05:14:53 [OK] ➕ ...and 35 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06-checkpoint-3-1784204093532: received 39, accepted 39, app-side total 543
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 39 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Wonder of the Seas - 2026-12-11
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Adventure of the Seas - 2026-08-15
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Grandeur of the Seas - 2026-08-15
+07/16/2026, 05:14:53 [OK] ➕ ...and 36 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06-checkpoint-4-1784204093532: received 38, accepted 38, app-side total 581
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 38 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Freedom of the Seas - 2026-08-27
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Spectrum of the Seas - 2026-08-28
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Jewel of the Seas - 2026-08-28
+07/16/2026, 05:14:53 [OK] ➕ ...and 35 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06-checkpoint-5-1784204093532: received 38, accepted 38, app-side total 619
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 38 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Mariner of the Seas - 2026-09-10
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Voyager of the Seas - 2026-09-11
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Voyager of the Seas - 2026-09-18
+07/16/2026, 05:14:53 [OK] ➕ ...and 35 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06-checkpoint-6-1784204093532: received 38, accepted 38, app-side total 657
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 38 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Radiance of the Seas - 2026-09-21
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Radiance of the Seas - 2026-10-02
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Radiance of the Seas - 2026-10-07
+07/16/2026, 05:14:53 [OK] ➕ ...and 35 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06-checkpoint-7-1784204093532: received 38, accepted 38, app-side total 695
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 38 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Enchantment of the Seas - 2026-12-06
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Enchantment of the Seas - 2026-12-13
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Enchantment of the Seas - 2026-12-20
+07/16/2026, 05:14:53 [OK] ➕ ...and 35 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06-checkpoint-8-1784204093533: received 38, accepted 38, app-side total 733
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 38 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Ovation of the Seas - 2026-12-20
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Ovation of the Seas - 2026-12-27
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Ovation of the Seas - 2026-05-10
+07/16/2026, 05:14:53 [OK] ➕ ...and 35 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06-checkpoint-9-1784204093533: received 37, accepted 37, app-side total 770
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 37 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Vision of the Seas - 2026-11-07
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Vision of the Seas - 2026-03-28
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Mariner of the Seas - 2026-11-01
+07/16/2026, 05:14:53 [OK] ➕ ...and 34 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06-checkpoint-10-1784204093533: received 38, accepted 38, app-side total 808
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 38 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Oasis of the Seas - 2027-03-05
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Oasis of the Seas - 2027-04-02
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Oasis of the Seas - 2027-04-09
+07/16/2026, 05:14:53 [OK] ➕ ...and 35 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06-checkpoint-11-1784204093533: received 38, accepted 38, app-side total 846
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 38 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Grandeur of the Seas - 2026-11-14
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Mariner of the Seas - 2026-11-14
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Radiance of the Seas - 2026-11-14
+07/16/2026, 05:14:53 [OK] ➕ ...and 35 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06-checkpoint-12-1784204093533: received 36, accepted 36, app-side total 882
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 36 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Serenade of the Seas - 2026-01-28
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Serenade of the Seas - 2027-12-20
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Vision of the Seas - 2026-11-22
+07/16/2026, 05:14:53 [OK] ➕ ...and 33 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06-checkpoint-13-1784204093533: received 37, accepted 37, app-side total 919
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 37 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Oasis of the Seas - 2027-02-15
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Oasis of the Seas - 2027-02-22
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Oasis of the Seas - 2027-03-01
+07/16/2026, 05:14:53 [OK] ➕ ...and 34 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06-checkpoint-14-1784204093533: received 38, accepted 38, app-side total 957
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 38 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Allure of the Seas - 2026-12-06
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Spectrum of the Seas - 2026-12-06
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Symphony of the Seas - 2026-12-06
+07/16/2026, 05:14:53 [OK] ➕ ...and 35 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06-checkpoint-15-1784204093533: received 37, accepted 37, app-side total 994
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 37 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Independence of the Seas - 2027-01-03
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Serenade of the Seas - 2027-01-03
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Brilliance of the Seas - 2027-01-04
+07/16/2026, 05:14:53 [OK] ➕ ...and 34 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06-checkpoint-16-1784204093533: received 37, accepted 37, app-side total 1031
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 37 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Brilliance of the Seas - 2027-04-02
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Brilliance of the Seas - 2027-04-09
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Brilliance of the Seas - 2027-04-16
+07/16/2026, 05:14:53 [OK] ➕ ...and 34 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06-checkpoint-17-1784204093534: received 39, accepted 39, app-side total 1070
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 39 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Serenade of the Seas - 2027-04-22
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Brilliance of the Seas - 2027-01-15
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Jewel of the Seas - 2027-01-16
+07/16/2026, 05:14:53 [OK] ➕ ...and 36 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06-checkpoint-18-1784204093534: received 39, accepted 39, app-side total 1109
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 39 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Voyager of the Seas - 2027-02-15
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Freedom of the Seas - 2027-02-20
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Radiance of the Seas - 2027-02-20
+07/16/2026, 05:14:53 [OK] ➕ ...and 36 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06-checkpoint-19-1784204093534: received 59, accepted 59, app-side total 1168
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 59 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Navigator of the Seas - 2027-06-11
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Navigator of the Seas - 2027-06-18
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Navigator of the Seas - 2027-06-25
+07/16/2026, 05:14:53 [OK] ➕ ...and 56 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06-checkpoint-20-1784204093534: received 65, accepted 65, app-side total 1233
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 65 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Allure of the Seas - 2026-10-03
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Harmony of the Seas - 2026-09-05
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Harmony of the Seas - 2026-09-26
+07/16/2026, 05:14:53 [OK] ➕ ...and 62 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06-checkpoint-21-1784204093534: received 65, accepted 65, app-side total 1298
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 65 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Mariner of the Seas - 2026-12-20
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Mariner of the Seas - 2026-12-27
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Mariner of the Seas - 2026-02-13
+07/16/2026, 05:14:53 [OK] ➕ ...and 62 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06-checkpoint-22-1784204093534: received 58, accepted 58, app-side total 1356
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 58 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Wonder of the Seas - 2026-12-02
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Wonder of the Seas - 2026-12-07
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Wonder of the Seas - 2026-01-04
+07/16/2026, 05:14:53 [OK] ➕ ...and 55 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06-checkpoint-23-1784204093534: received 61, accepted 61, app-side total 1417
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 61 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Star of the Seas - 2026-09-20
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Freedom of the Seas - 2026-10-08
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Freedom of the Seas - 2026-11-05
+07/16/2026, 05:14:53 [OK] ➕ ...and 58 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06-checkpoint-24-1784204093534: received 50, accepted 50, app-side total 1467
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 50 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Vision of the Seas - 2026-03-14
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Brilliance of the Seas - 2026-12-21
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Explorer of the Seas - 2026-12-21
+07/16/2026, 05:14:53 [OK] ➕ ...and 47 more sailing(s)
+07/16/2026, 05:14:53 [OK] ✅ Final offer count 26NPR503: 65 cruise row(s)
+07/16/2026, 05:14:53 [OK] ✅ Final offer count 26SEP103: 58 cruise row(s)
+07/16/2026, 05:14:53 [OK] ✅ Final offer count 26MIX403: 307 cruise row(s)
+07/16/2026, 05:14:53 [OK] ✅ Final offer count 2607C06: 1037 cruise row(s)
+07/16/2026, 05:14:53 [OK] Offers complete: 4 offer(s), 1,467 sailing(s)
+07/16/2026, 05:14:53 [OK] Step 1 completed with 1467 items
+07/16/2026, 05:14:53 [OK] ACK offers_batch 26NPR503: received 38, accepted 38, app-side total 1467
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "Limitless Luck" (Code: 26NPR503)
+07/16/2026, 05:14:53 [OK] 📊 Captured 38 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Enchantment of the Seas - 2026-09-05
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Enchantment of the Seas - 2026-09-19
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Enchantment of the Seas - 2026-09-26
+07/16/2026, 05:14:53 [OK] ➕ ...and 35 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 26SEP103: received 38, accepted 38, app-side total 1467
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "September Shuffle" (Code: 26SEP103)
+07/16/2026, 05:14:53 [OK] 📊 Captured 38 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Enchantment of the Seas - 2026-09-05
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Enchantment of the Seas - 2026-09-19
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Enchantment of the Seas - 2026-09-26
+07/16/2026, 05:14:53 [OK] ➕ ...and 35 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 26MIX403: received 37, accepted 37, app-side total 1467
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "Stacked Sailings" (Code: 26MIX403)
+07/16/2026, 05:14:53 [OK] 📊 Captured 37 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Ovation of the Seas - 2027-12-11
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Wonder of the Seas - 2026-10-02
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Wonder of the Seas - 2026-10-16
+07/16/2026, 05:14:53 [OK] ➕ ...and 34 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 26MIX403: received 36, accepted 36, app-side total 1467
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "Stacked Sailings" (Code: 26MIX403)
+07/16/2026, 05:14:53 [OK] 📊 Captured 36 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Symphony of the Seas - 2026-02-21
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Symphony of the Seas - 2027-12-13
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Symphony of the Seas - 2027-01-31
+07/16/2026, 05:14:53 [OK] ➕ ...and 33 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 26MIX403: received 37, accepted 37, app-side total 1467
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "Stacked Sailings" (Code: 26MIX403)
+07/16/2026, 05:14:53 [OK] 📊 Captured 37 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Utopia of the Seas - 2027-02-01
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Utopia of the Seas - 2027-02-08
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Utopia of the Seas - 2027-02-22
+07/16/2026, 05:14:53 [OK] ➕ ...and 34 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 26MIX403: received 37, accepted 37, app-side total 1467
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "Stacked Sailings" (Code: 26MIX403)
+07/16/2026, 05:14:53 [OK] 📊 Captured 37 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Liberty of the Seas - 2026-11-09
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Liberty of the Seas - 2026-11-14
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Liberty of the Seas - 2026-11-28
+07/16/2026, 05:14:53 [OK] ➕ ...and 34 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 26MIX403: received 38, accepted 38, app-side total 1467
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "Stacked Sailings" (Code: 26MIX403)
+07/16/2026, 05:14:53 [OK] 📊 Captured 38 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Jewel of the Seas - 2027-12-16
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Jewel of the Seas - 2027-01-21
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Jewel of the Seas - 2027-02-04
+07/16/2026, 05:14:53 [OK] ➕ ...and 35 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 26MIX403: received 38, accepted 38, app-side total 1467
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "Stacked Sailings" (Code: 26MIX403)
+07/16/2026, 05:14:53 [OK] 📊 Captured 38 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Enchantment of the Seas - 2026-12-27
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Enchantment of the Seas - 2026-01-03
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Enchantment of the Seas - 2026-01-10
+07/16/2026, 05:14:53 [OK] ➕ ...and 35 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06: received 33, accepted 33, app-side total 1467
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 33 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Mariner of the Seas - 2026-07-25
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Mariner of the Seas - 2026-08-08
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Freedom of the Seas - 2026-07-30
+07/16/2026, 05:14:53 [OK] ➕ ...and 30 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06: received 36, accepted 36, app-side total 1467
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 36 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Jewel of the Seas - 2026-08-03
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Freedom of the Seas - 2026-08-03
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Quantum of the Seas - 2026-08-07
+07/16/2026, 05:14:53 [OK] ➕ ...and 33 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06: received 36, accepted 36, app-side total 1467
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 36 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Wonder of the Seas - 2026-10-16
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Wonder of the Seas - 2026-10-30
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Wonder of the Seas - 2026-11-27
+07/16/2026, 05:14:53 [OK] ➕ ...and 33 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06: received 36, accepted 36, app-side total 1467
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 36 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Symphony of the Seas - 2026-10-04
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Spectrum of the Seas - 2026-08-24
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Independence of the Seas - 2026-08-27
+07/16/2026, 05:14:53 [OK] ➕ ...and 33 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06: received 36, accepted 36, app-side total 1467
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 36 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Explorer of the Seas - 2026-10-03
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Rhapsody of the Seas - 2026-09-05
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Rhapsody of the Seas - 2026-11-21
+07/16/2026, 05:14:53 [OK] ➕ ...and 33 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06: received 36, accepted 36, app-side total 1467
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 36 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Radiance of the Seas - 2026-09-17
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Jewel of the Seas - 2026-09-18
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Liberty of the Seas - 2026-09-18
+07/16/2026, 05:14:53 [OK] ➕ ...and 33 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06: received 35, accepted 35, app-side total 1467
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 35 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Rhapsody of the Seas - 2026-01-02
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Rhapsody of the Seas - 2026-01-16
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Rhapsody of the Seas - 2026-01-30
+07/16/2026, 05:14:53 [OK] ➕ ...and 32 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06: received 36, accepted 36, app-side total 1467
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 36 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Ovation of the Seas - 2026-11-09
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Ovation of the Seas - 2026-11-16
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Ovation of the Seas - 2026-11-30
+07/16/2026, 05:14:53 [OK] ➕ ...and 33 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06: received 36, accepted 36, app-side total 1467
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 36 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Brilliance of the Seas - 2026-10-26
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Mariner of the Seas - 2026-10-26
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Ovation of the Seas - 2026-10-26
+07/16/2026, 05:14:53 [OK] ➕ ...and 33 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06: received 35, accepted 35, app-side total 1467
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 35 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Oasis of the Seas - 2026-11-27
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Oasis of the Seas - 2026-12-11
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Oasis of the Seas - 2026-12-20
+07/16/2026, 05:14:53 [OK] ➕ ...and 32 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06: received 37, accepted 37, app-side total 1467
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 37 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Navigator of the Seas - 2026-11-24
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Navigator of the Seas - 2026-12-07
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Navigator of the Seas - 2026-12-14
+07/16/2026, 05:14:53 [OK] ➕ ...and 34 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06: received 36, accepted 36, app-side total 1467
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 36 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Brilliance of the Seas - 2026-12-11
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Adventure of the Seas - 2026-11-21
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Adventure of the Seas - 2026-11-20
+07/16/2026, 05:14:53 [OK] ➕ ...and 33 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06: received 33, accepted 33, app-side total 1467
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 33 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Oasis of the Seas - 2026-01-04
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Oasis of the Seas - 2026-01-11
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Oasis of the Seas - 2026-01-18
+07/16/2026, 05:14:53 [OK] ➕ ...and 30 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06: received 36, accepted 36, app-side total 1467
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 36 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Brilliance of the Seas - 2026-12-18
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Jewel of the Seas - 2026-11-27
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Ovation of the Seas - 2026-11-27
+07/16/2026, 05:14:53 [OK] ➕ ...and 33 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06: received 35, accepted 35, app-side total 1467
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 35 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Jewel of the Seas - 2026-12-07
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Ovation of the Seas - 2026-12-11
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Odyssey of the Seas - 2026-12-13
+07/16/2026, 05:14:53 [OK] ➕ ...and 32 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06: received 35, accepted 35, app-side total 1467
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 35 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Liberty of the Seas - 2027-01-23
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Liberty of the Seas - 2027-02-01
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Liberty of the Seas - 2027-02-06
+07/16/2026, 05:14:53 [OK] ➕ ...and 32 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06: received 35, accepted 35, app-side total 1467
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 35 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Radiance of the Seas - 2027-02-06
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Rhapsody of the Seas - 2027-01-09
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Allure of the Seas - 2027-01-10
+07/16/2026, 05:14:53 [OK] ➕ ...and 32 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06: received 36, accepted 36, app-side total 1467
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 36 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Jewel of the Seas - 2027-02-13
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Jewel of the Seas - 2027-03-08
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Independence of the Seas - 2027-01-17
+07/16/2026, 05:14:53 [OK] ➕ ...and 33 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06: received 36, accepted 36, app-side total 1467
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 36 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Voyager of the Seas - 2027-02-15
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Freedom of the Seas - 2027-02-20
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Radiance of the Seas - 2027-02-20
+07/16/2026, 05:14:53 [OK] ➕ ...and 33 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06: received 59, accepted 59, app-side total 1467
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 59 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Ovation of the Seas - 2027-05-28
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Voyager of the Seas - 2027-05-07
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Voyager of the Seas - 2027-05-14
+07/16/2026, 05:14:53 [OK] ➕ ...and 56 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 26MIX403: received 60, accepted 60, app-side total 1467
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "Stacked Sailings" (Code: 26MIX403)
+07/16/2026, 05:14:53 [OK] 📊 Captured 60 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Independence of the Seas - 2026-12-06
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Voyager of the Seas - 2026-12-11
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Freedom of the Seas - 2026-12-12
+07/16/2026, 05:14:53 [OK] ➕ ...and 57 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06: received 57, accepted 57, app-side total 1467
+07/16/2026, 05:14:53 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:53 [OK] 📊 Captured 57 sailing(s) for this offer
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 1: Wonder of the Seas - 2026-03-22
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 2: Wonder of the Seas - 2026-03-29
+07/16/2026, 05:14:53 [OK] 🚢 Sailing 3: Wonder of the Seas - 2026-04-05
+07/16/2026, 05:14:53 [OK] ➕ ...and 54 more sailing(s)
+07/16/2026, 05:14:53 [OK] ACK offers_batch 2607C06: received 59, accepted 59, app-side total 1467
+07/16/2026, 05:14:54 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:54 [OK] 📊 Captured 59 sailing(s) for this offer
+07/16/2026, 05:14:54 [OK] 🚢 Sailing 1: Adventure of the Seas - 2026-10-24
+07/16/2026, 05:14:54 [OK] 🚢 Sailing 2: Enchantment of the Seas - 2026-10-24
+07/16/2026, 05:14:54 [OK] 🚢 Sailing 3: Enchantment of the Seas - 2026-11-08
+07/16/2026, 05:14:54 [OK] ➕ ...and 56 more sailing(s)
+07/16/2026, 05:14:54 [OK] ACK offers_batch 2607C06: received 57, accepted 57, app-side total 1467
+07/16/2026, 05:14:54 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:54 [OK] 📊 Captured 57 sailing(s) for this offer
+07/16/2026, 05:14:54 [OK] 🚢 Sailing 1: Serenade of the Seas - 2026-12-27
+07/16/2026, 05:14:54 [OK] 🚢 Sailing 2: Freedom of the Seas - 2027-01-04
+07/16/2026, 05:14:54 [OK] 🚢 Sailing 3: Adventure of the Seas - 2027-01-10
+07/16/2026, 05:14:54 [OK] ➕ ...and 54 more sailing(s)
+07/16/2026, 05:14:54 [OK] ACK offers_batch 2607C06: received 54, accepted 54, app-side total 1467
+07/16/2026, 05:14:54 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:54 [OK] 📊 Captured 54 sailing(s) for this offer
+07/16/2026, 05:14:54 [OK] 🚢 Sailing 1: Wonder of the Seas - 2026-02-22
+07/16/2026, 05:14:54 [OK] 🚢 Sailing 2: Wonder of the Seas - 2026-03-01
+07/16/2026, 05:14:54 [OK] 🚢 Sailing 3: Wonder of the Seas - 2026-03-08
+07/16/2026, 05:14:54 [OK] ➕ ...and 51 more sailing(s)
+07/16/2026, 05:14:54 [OK] ACK offers_batch 2607C06: received 56, accepted 56, app-side total 1467
+07/16/2026, 05:14:54 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:54 [OK] 📊 Captured 56 sailing(s) for this offer
+07/16/2026, 05:14:54 [OK] 🚢 Sailing 1: Freedom of the Seas - 2026-11-05
+07/16/2026, 05:14:54 [OK] 🚢 Sailing 2: Voyager of the Seas - 2026-10-08
+07/16/2026, 05:14:54 [OK] 🚢 Sailing 3: Adventure of the Seas - 2026-10-16
+07/16/2026, 05:14:54 [OK] ➕ ...and 53 more sailing(s)
+07/16/2026, 05:14:54 [OK] ACK offers_batch 2607C06: received 54, accepted 54, app-side total 1467
+07/16/2026, 05:14:54 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 05:14:54 [OK] 📊 Captured 54 sailing(s) for this offer
+07/16/2026, 05:14:54 [OK] 🚢 Sailing 1: Enchantment of the Seas - 2026-12-20
+07/16/2026, 05:14:54 [OK] 🚢 Sailing 2: Vision of the Seas - 2026-12-20
+07/16/2026, 05:14:54 [OK] 🚢 Sailing 3: Vision of the Seas - 2026-12-27
+07/16/2026, 05:14:54 [OK] ➕ ...and 51 more sailing(s)
+07/16/2026, 05:14:54 [OK] ACK offers_batch 26NPR503: received 31, accepted 31, app-side total 1467
+07/16/2026, 05:14:54 [OK] ✅ Captured casino offer "Limitless Luck" (Code: 26NPR503)
+07/16/2026, 05:14:54 [OK] 📊 Captured 31 sailing(s) for this offer
+07/16/2026, 05:14:54 [OK] 🚢 Sailing 1: Enchantment of the Seas - 2026-09-12
+07/16/2026, 05:14:54 [OK] 🚢 Sailing 2: Enchantment of the Seas - 2026-10-19
+07/16/2026, 05:14:54 [OK] 🚢 Sailing 3: Enchantment of the Seas - 2026-10-24
+07/16/2026, 05:14:54 [OK] ➕ ...and 28 more sailing(s)
+07/16/2026, 05:14:54 [OK] ACK offers_batch 26SEP103: received 7, accepted 7, app-side total 1467
+07/16/2026, 05:14:54 [OK] ✅ Captured casino offer "September Shuffle" (Code: 26SEP103)
+07/16/2026, 05:14:54 [OK] 📊 Captured 7 sailing(s) for this offer
+07/16/2026, 05:14:54 [OK] 🚢 Sailing 1: Allure of the Seas - 2026-09-10
+07/16/2026, 05:14:54 [OK] 🚢 Sailing 2: Allure of the Seas - 2026-09-11
+07/16/2026, 05:14:54 [OK] 🚢 Sailing 3: Allure of the Seas - 2026-09-12
+07/16/2026, 05:14:54 [OK] ➕ ...and 4 more sailing(s)
+07/16/2026, 05:14:54 [OK] ✅ Royal offer rows are staged for Apply Sync: 4 offer code(s), 1467 sailing row(s)
+07/16/2026, 05:14:54 [OK] ✅ STEP 1 COMPLETE: Captured 4 active casino offer(s) with 1467 total sailing(s)
+07/16/2026, 05:14:54 [OK] Opening loyalty and booked cruise pages
+07/16/2026, 05:14:54 [OK] Opening booked cruises page
+07/16/2026, 05:14:58 [INFO] Reading booked cruises
+07/16/2026, 05:14:58 [OK] ✅ Captured 13 booking(s) from Royal Caribbean API
+07/16/2026, 05:14:58 [OK] ✅ Captured booking: Navigator of the Seas - 20260717 - Balcony 6334 (7 nights) [Upcoming]
+07/16/2026, 05:14:58 [OK] ✅ Captured booking: Navigator of the Seas - 20260724 - Balcony 6666 (7 nights) [Upcoming]
+07/16/2026, 05:14:58 [OK] ✅ Captured booking: Icon of the Seas - 20260829 - GTY (7 nights) [Courtesy Hold]
+07/16/2026, 05:14:58 [OK] ✅ Captured booking: Harmony of the Seas - 20260910 - Balcony 7146 (5 nights) [Upcoming]
+07/16/2026, 05:14:58 [OK] ✅ Captured booking: Harmony of the Seas - 20260915 - Interior GTY (4 nights) [Upcoming]
+07/16/2026, 05:14:58 [OK] ✅ Captured booking: Harmony of the Seas - 20260919 - Ocean View 10506 (7 nights) [Upcoming]
+07/16/2026, 05:14:58 [OK] ✅ Captured booking: Anthem of the Seas - 20260929 - Ocean View GTY (12 nights) [Upcoming]
+07/16/2026, 05:14:58 [OK] ✅ Captured booking: Allure of the Seas - 20261017 - Ocean View 8510 (8 nights) [Upcoming]
+07/16/2026, 05:14:58 [OK] ✅ Captured booking: Allure of the Seas - 20261025 - Ocean View 3214 (7 nights) [Upcoming]
+07/16/2026, 05:14:58 [OK] ✅ Captured booking: Oasis of the Seas - 20261109 - Balcony GTY (4 nights) [Upcoming]
+07/16/2026, 05:14:58 [OK] ✅ Captured booking: Adventure of the Seas - 20261115 - Balcony GTY (6 nights) [Upcoming]
+07/16/2026, 05:14:58 [OK] ✅ Captured booking: Adventure of the Seas - 20261213 - Ocean View 1832 (6 nights) [Upcoming]
+07/16/2026, 05:14:58 [OK] 📦 Captured Bookings API payload with 0 bookings from
+07/16/2026, 05:14:58 [OK] ✅ Step 2 auto-completing with 13 bookings from network monitor
+07/16/2026, 05:14:58 [OK] ✅ Voyage enrichment data stored for merging with bookings
+07/16/2026, 05:14:58 [OK] 📦 Captured Voyage Enrichment data with 3 voyages from
+07/16/2026, 05:14:59 [OK] Opening booked cruises page
+07/16/2026, 05:14:59 [OK] ✅ All data sections captured!
+07/16/2026, 05:14:59 [OK] ✅ STEP 2 COMPLETE: Captured 13 cruise(s) (12 booked, 1 courtesy holds)
+07/16/2026, 05:14:59 [WARN] ⚠️ Dedicated loyalty route failed: Load failed
+07/16/2026, 05:14:59 [OK] Parsing loyalty data
+07/16/2026, 05:14:59 [INFO] Reading loyalty data
+07/16/2026, 05:14:59 [OK] Captured loyalty from /guestAccounts/loyalty/info (correct endpoint)
+07/16/2026, 05:14:59 [WARN] ⚠️ Loyalty payload did not include usable tier or point fields; keeping loyalty capture open
+07/16/2026, 05:14:59 [WARN] Reading loyalty data
+07/16/2026, 05:14:59 [WARN] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+07/16/2026, 05:15:00 [WARN] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+07/16/2026, 05:15:00 [WARN] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+07/16/2026, 05:15:00 [WARN] ⚠️ Dedicated loyalty route failed: Load failed
+07/16/2026, 05:15:00 [WARN] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+07/16/2026, 05:15:00 [WARN] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+07/16/2026, 05:15:00 [WARN] Page check [bookings]: loyalty_widgets @
+07/16/2026, 05:15:00 [WARN] Unexpected page content for this step - trying the next known route
+07/16/2026, 05:15:00 [WARN] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+07/16/2026, 05:15:01 [WARN] ⚠️ Dedicated loyalty route failed: Load failed
+07/16/2026, 05:15:01 [WARN] Reading loyalty data
+07/16/2026, 05:15:01 [WARN] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+07/16/2026, 05:15:01 [WARN] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+07/16/2026, 05:15:01 [WARN] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+07/16/2026, 05:15:02 [WARN] ⚠️ Dedicated loyalty route failed: Load failed
+07/16/2026, 05:15:02 [OK] Parsing loyalty data
+07/16/2026, 05:15:02 [INFO] Reading loyalty data
+07/16/2026, 05:15:02 [OK] ✅ Parsed 59 completed cruise sailing(s) from loyalty/history payload; added 59, reconciled 0 repeat(s)
+07/16/2026, 05:15:02 [WARN] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+07/16/2026, 05:15:02 [WARN] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+07/16/2026, 05:15:02 [WARN] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+07/16/2026, 05:15:03 [WARN] Page check [bookings]: loyalty_widgets @
+07/16/2026, 05:15:03 [WARN] Unexpected page content for this step - trying the next known route
+07/16/2026, 05:15:03 [WARN] ⚠️ Dedicated loyalty route failed: Load failed
+07/16/2026, 05:15:03 [WARN] Reading loyalty data
+07/16/2026, 05:15:03 [WARN] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+07/16/2026, 05:15:04 [WARN] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+07/16/2026, 05:15:04 [WARN] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+07/16/2026, 05:15:04 [WARN] ⚠️ Dedicated loyalty route failed: Load failed
+07/16/2026, 05:15:04 [WARN] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+07/16/2026, 05:15:04 [WARN] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+07/16/2026, 05:15:06 [WARN] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+07/16/2026, 05:15:07 [WARN] ⚠️ Dedicated loyalty route failed: Load failed
+07/16/2026, 05:15:07 [WARN] Reading loyalty data
+07/16/2026, 05:15:07 [WARN] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+07/16/2026, 05:15:08 [WARN] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+07/16/2026, 05:15:08 [WARN] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+07/16/2026, 05:15:08 [WARN] ⚠️ Dedicated loyalty route failed: Load failed
+07/16/2026, 05:15:08 [WARN] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+07/16/2026, 05:15:08 [WARN] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+07/16/2026, 05:15:09 [WARN] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+07/16/2026, 05:15:13 [WARN] ⚠️ Dedicated loyalty route failed: Load failed
+07/16/2026, 05:15:13 [WARN] Reading loyalty data
+07/16/2026, 05:15:13 [WARN] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+07/16/2026, 05:15:14 [WARN] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+07/16/2026, 05:15:14 [WARN] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+07/16/2026, 05:15:14 [WARN] ⚠️ Dedicated loyalty route failed: Load failed
+07/16/2026, 05:15:14 [WARN] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+07/16/2026, 05:15:15 [WARN] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+07/16/2026, 05:15:15 [WARN] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+07/16/2026, 05:15:21 [WARN] ⚠️ Dedicated loyalty route failed: Load failed
+07/16/2026, 05:15:21 [WARN] Reading loyalty data
+07/16/2026, 05:15:21 [WARN] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+07/16/2026, 05:15:22 [WARN] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+07/16/2026, 05:15:22 [WARN] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+07/16/2026, 05:15:22 [WARN] ⚠️ Dedicated loyalty route failed: Load failed
+07/16/2026, 05:15:22 [WARN] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+07/16/2026, 05:15:22 [WARN] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+07/16/2026, 05:15:23 [WARN] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+07/16/2026, 05:15:31 [WARN] ⚠️ Dedicated loyalty route failed: Load failed
+07/16/2026, 05:15:31 [WARN] Reading loyalty data
+07/16/2026, 05:15:31 [WARN] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+07/16/2026, 05:15:32 [WARN] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+07/16/2026, 05:15:32 [WARN] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+07/16/2026, 05:15:32 [WARN] ⚠️ Dedicated loyalty route failed: Load failed
+07/16/2026, 05:15:32 [WARN] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+07/16/2026, 05:15:32 [WARN] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+07/16/2026, 05:15:33 [WARN] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+07/16/2026, 05:15:39 [WARN] ⚠️ Dedicated Crown & Anchor capture timed out; preserving existing C&A fields rather than overwriting them
+07/16/2026, 05:16:04 [WARN] Step 3 reached max timeout (65s) - continuing with collected data
+07/16/2026, 05:16:04 [OK] 🎉 ====== ALL STEPS COMPLETE ======
+07/16/2026, 05:16:04 [OK] ✅ All data extracted successfully - ready to sync to your app!
+07/16/2026, 05:16:04 [OK] ✅ STEP 3 COMPLETE: Club Royale captured authoritatively; Crown & Anchor preserved/not captured
+07/16/2026, 05:16:04 [OK] Ready to review: 4 offer(s), 1,467 sailing(s)
+07/16/2026, 05:16:04 [OK] Ready to review: 12 upcoming, 59 completed/past cruise(s)
+07/16/2026, 05:16:04 [OK] 📊 SUMMARY: Loyalty status captured successfully
+07/16/2026, 05:16:22 [INFO] Applying selected sync data
+07/16/2026, 05:16:43 [OK] ✅ Offers persisted to storage
+07/16/2026, 05:16:43 [OK] ✅ Available cruises persisted to storage
+07/16/2026, 05:16:43 [OK] Opening completed cruise history
+07/16/2026, 05:16:44 [OK] ✅ Booked cruises persisted to storage
+07/16/2026, 05:16:44 [OK] Extended loyalty data synced successfully
+07/16/2026, 05:16:44 [WARN] → Crown & Anchor lane remained incomplete; only individually authoritative C&A fields were updated and all others were preserved
+07/16/2026, 05:16:45 [OK] ✅ Primary User profile updated and verified from storage
+07/16/2026, 05:16:45 [OK] ✅ Data synced successfully to app!
+07/16/2026, 05:16:45 [OK] Sync applied successfully
+07/16/2026, 05:17:06 [OK] Log exported successfully
+07/16/2026, 05:20:20 [INFO] Reading booked cruises
+07/16/2026, 05:20:20 [OK] ✅ Captured 1 booking(s) from Carnival API
+07/16/2026, 05:20:20 [OK] ✅ Captured booking: CARNIVAL PANORAMA - 2023-09-02T00:00:00Z - GTY (0 nights) [Completed]
+07/16/2026, 05:20:20 [OK] 📦 Captured Carnival bookings (1) from /profilemanagement/api/v1.0/Profiles
+07/16/2026, 05:20:23 [OK] Carnival authentication preflight passed via the protected profile API.
+07/16/2026, 05:20:31 [INFO] Reading booked cruises
+07/16/2026, 05:20:31 [OK] [k9rqocud] ✅ Captured 1 booking(s) from Carnival API
+07/16/2026, 05:20:31 [OK] [k9rqocud] ✅ Captured booking: CARNIVAL PANORAMA - 2023-09-02T00:00:00Z - GTY (0 nights) [Completed]
+07/16/2026, 05:20:31 [OK] [k9rqocud] 📦 Captured Carnival bookings (1) from /profilemanagement/api/v1.0/Profiles
+07/16/2026, 05:20:31 [OK] [k9rqocud] ✅ Carnival load end [nav 1]:
+07/16/2026, 05:20:36 [OK] [k9rqocud] ✅ Carnival load end [nav 2]:
+07/16/2026, 05:20:40 [OK] [k9rqocud] Carnival catalog discovery: 20 rate code(s) found for VIFP# 9013404591
+07/16/2026, 05:20:40 [OK] [k9rqocud] Found 20 Carnival rate code(s) on Cruise Deals
+07/16/2026, 05:20:41 [OK] [k9rqocud] Carnival run catalog locked with 20 personalized rate code(s): FBN, FMV, FNQ, FZV, GBI, HEK, HK8, O5O, O9R, OHS, OJX, ORF, PI0, QA3, QPR, PHY, O31, OJS, OS5, PZC
+07/16/2026, 05:20:41 [OK] [k9rqocud] Personalized Carnival search is linked to VIFP# 9013404591
+07/16/2026, 05:20:51 [OK] [k9rqocud] ✅ Carnival load end [nav 3]:
+07/16/2026, 05:20:52 [OK] [k9rqocud] Carnival catalog discovery: 15 rate code(s) found for VIFP# 9013404591
+07/16/2026, 05:20:52 [ERROR] [k9rqocud] ❌ FBN failed and remains resumable: Property 'identity' doesn't exist
+07/16/2026, 05:20:57 [OK] [k9rqocud] ✅ Carnival load end [nav 4]:
+07/16/2026, 05:21:03 [OK] [k9rqocud] Carnival catalog discovery: 15 rate code(s) found for VIFP# 9013404591
+07/16/2026, 05:21:03 [ERROR] [k9rqocud] ❌ FMV failed and remains resumable: Property 'identity' doesn't exist
+07/16/2026, 05:21:09 [OK] [k9rqocud] ✅ Carnival load end [nav 5]:
+07/16/2026, 05:21:14 [OK] [k9rqocud] Carnival catalog discovery: 15 rate code(s) found for VIFP# 9013404591
+07/16/2026, 05:21:14 [ERROR] [k9rqocud] ❌ FNQ failed and remains resumable: Property 'identity' doesn't exist
+07/16/2026, 05:21:19 [OK] [k9rqocud] ✅ Carnival load end [nav 6]:
+07/16/2026, 05:21:25 [OK] [k9rqocud] Carnival catalog discovery: 15 rate code(s) found for VIFP# 9013404591
+07/16/2026, 05:21:26 [ERROR] [k9rqocud] ❌ FZV failed and remains resumable: Property 'identity' doesn't exist
+07/16/2026, 05:21:31 [OK] [k9rqocud] ✅ Carnival load end [nav 7]:
+07/16/2026, 05:21:38 [OK] [k9rqocud] Carnival catalog discovery: 15 rate code(s) found for VIFP# 9013404591
+07/16/2026, 05:21:38 [ERROR] [k9rqocud] ❌ GBI failed and remains resumable: Property 'identity' doesn't exist
+07/16/2026, 05:21:43 [OK] [k9rqocud] ✅ Carnival load end [nav 8]:
+07/16/2026, 05:21:50 [OK] [k9rqocud] Carnival catalog discovery: 15 rate code(s) found for VIFP# 9013404591
+07/16/2026, 05:21:50 [ERROR] [k9rqocud] ❌ HEK failed and remains resumable: Property 'identity' doesn't exist
+07/16/2026, 05:21:55 [OK] [k9rqocud] ✅ Carnival load end [nav 9]:
+07/16/2026, 05:21:58 [OK] [k9rqocud] Carnival catalog discovery: 15 rate code(s) found for VIFP# 9013404591
+07/16/2026, 05:21:58 [ERROR] [k9rqocud] ❌ HK8 failed and remains resumable: Property 'identity' doesn't exist
+07/16/2026, 05:22:03 [OK] [k9rqocud] ✅ Carnival load end [nav 10]:
+07/16/2026, 05:22:05 [OK] [k9rqocud] Carnival catalog discovery: 15 rate code(s) found for VIFP# 9013404591
+07/16/2026, 05:22:05 [ERROR] [k9rqocud] ❌ O5O failed and remains resumable: Property 'identity' doesn't exist
+07/16/2026, 05:22:17 [OK] [k9rqocud] ✅ Carnival load end [nav 11]:
+07/16/2026, 05:22:17 [WARN] [k9rqocud] ⚠️ Carnival page load timeout [nav 11] for continuing with bounded page verification
+07/16/2026, 05:22:18 [OK] [k9rqocud] Carnival catalog discovery: 15 rate code(s) found for VIFP# 9013404591
+07/16/2026, 05:22:18 [ERROR] [k9rqocud] ❌ O9R failed and remains resumable: Property 'identity' doesn't exist
+07/16/2026, 05:22:23 [OK] [k9rqocud] ✅ Carnival load end [nav 12]:
+07/16/2026, 05:22:26 [OK] [k9rqocud] Carnival catalog discovery: 15 rate code(s) found for VIFP# 9013404591
+07/16/2026, 05:22:26 [ERROR] [k9rqocud] ❌ OHS failed and remains resumable: Property 'identity' doesn't exist
+07/16/2026, 05:22:38 [WARN] [k9rqocud] ⚠️ Carnival page load timeout [nav 13] for continuing with bounded page verification
+07/16/2026, 05:22:39 [OK] [k9rqocud] Carnival catalog discovery: 15 rate code(s) found for VIFP# 9013404591
+07/16/2026, 05:22:39 [ERROR] [k9rqocud] ❌ OJX failed and remains resumable: Property 'identity' doesn't exist
+07/16/2026, 05:22:43 [OK] [k9rqocud] ✅ Carnival load end [nav 14]:
+07/16/2026, 05:22:50 [OK] [k9rqocud] Carnival catalog discovery: 15 rate code(s) found for VIFP# 9013404591
+07/16/2026, 05:22:50 [ERROR] [k9rqocud] ❌ ORF failed and remains resumable: Property 'identity' doesn't exist
+07/16/2026, 05:23:02 [OK] [k9rqocud] ✅ Carnival load end [nav 15]:
+07/16/2026, 05:23:02 [WARN] [k9rqocud] ⚠️ Carnival page load timeout [nav 15] for continuing with bounded page verification
+07/16/2026, 05:23:03 [OK] [k9rqocud] Carnival catalog discovery: 15 rate code(s) found for VIFP# 9013404591
+07/16/2026, 05:23:03 [ERROR] [k9rqocud] ❌ PI0 failed and remains resumable: Property 'identity' doesn't exist
+07/16/2026, 05:23:08 [OK] [k9rqocud] ✅ Carnival load end [nav 16]:
+07/16/2026, 05:23:15 [OK] [k9rqocud] Carnival catalog discovery: 15 rate code(s) found for VIFP# 9013404591
+07/16/2026, 05:23:15 [ERROR] [k9rqocud] ❌ QA3 failed and remains resumable: Property 'identity' doesn't exist
+07/16/2026, 05:23:20 [OK] [k9rqocud] ✅ Carnival load end [nav 17]:
+07/16/2026, 05:23:27 [OK] [k9rqocud] Carnival catalog discovery: 15 rate code(s) found for VIFP# 9013404591
+07/16/2026, 05:23:27 [ERROR] [k9rqocud] ❌ QPR failed and remains resumable: Property 'identity' doesn't exist
+07/16/2026, 05:23:39 [OK] [k9rqocud] ✅ Carnival load end [nav 18]:
+07/16/2026, 05:23:39 [WARN] [k9rqocud] ⚠️ Carnival page load timeout [nav 18] for continuing with bounded page verification
+07/16/2026, 05:23:40 [OK] [k9rqocud] Carnival catalog discovery: 16 rate code(s) found for VIFP# 9013404591
+07/16/2026, 05:23:40 [ERROR] [k9rqocud] ❌ PHY failed and remains resumable: Property 'identity' doesn't exist
+07/16/2026, 05:23:45 [OK] [k9rqocud] ✅ Carnival load end [nav 19]:
+07/16/2026, 05:23:52 [OK] [k9rqocud] Carnival catalog discovery: 16 rate code(s) found for VIFP# 9013404591
+07/16/2026, 05:23:52 [ERROR] [k9rqocud] ❌ O31 failed and remains resumable: Property 'identity' doesn't exist
+07/16/2026, 05:23:57 [OK] [k9rqocud] ✅ Carnival load end [nav 20]:
+07/16/2026, 05:24:04 [OK] [k9rqocud] Carnival catalog discovery: 16 rate code(s) found for VIFP# 9013404591
+07/16/2026, 05:24:04 [ERROR] [k9rqocud] ❌ OJS failed and remains resumable: Property 'identity' doesn't exist
+07/16/2026, 05:24:16 [WARN] [k9rqocud] ⚠️ Carnival page load timeout [nav 21] for continuing with bounded page verification
+07/16/2026, 05:24:17 [OK] [k9rqocud] Carnival catalog discovery: 16 rate code(s) found for VIFP# 9013404591
+07/16/2026, 05:24:17 [ERROR] [k9rqocud] ❌ OS5 failed and remains resumable: Property 'identity' doesn't exist
+07/16/2026, 05:24:22 [OK] [k9rqocud] ✅ Carnival load end [nav 22]:
+07/16/2026, 05:24:29 [OK] [k9rqocud] Carnival catalog discovery: 16 rate code(s) found for VIFP# 9013404591
+07/16/2026, 05:24:30 [ERROR] [k9rqocud] ❌ PZC failed and remains resumable: Property 'identity' doesn't exist
+07/16/2026, 05:24:30 [WARN] [k9rqocud] 📊 Carnival reconciliation — discovered=20, completed=0, incomplete=20, offers=0, unique sailings=0; by code: FBN:0, FMV:0, FNQ:0, FZV:0, GBI:0, HEK:0, HK8:0, O5O:0, O9R:0, OHS:0, OJX:0, ORF:0, PI0:0, QA3:0, QPR:0, PHY:0, O31:0, OJS:0, OS5:0, PZC:0
+07/16/2026, 05:24:30 [WARN] [k9rqocud] ⚠️ STEP 1 PARTIAL: 0 successful, 0 authoritative empty, 20 incomplete/failed (FBN, FMV, FNQ, FZV, GBI, HEK, HK8, O5O, O9R, OHS, OJX, ORF, PI0, QA3, QPR, PHY, O31, OJS, OS5, PZC). Existing Carnival offer inventory cannot be removed until all codes resolve.
+07/16/2026, 05:24:40 [OK] [k9rqocud] 📦 Captured Carnival bookings (1) from /profilemanagement/api/v1.0/Profiles
+07/16/2026, 05:24:41 [OK] [k9rqocud] ✅ Carnival load end [nav 23]: Carnival profile/history page 1
+07/16/2026, 05:24:42 [OK] [k9rqocud] Carnival profile/history discovery: 6 protected payload(s), 2 additional page link(s)
+07/16/2026, 05:24:49 [OK] [k9rqocud] 📦 Captured Carnival bookings (1) from /profilemanagement/api/v1.0/Profiles
+07/16/2026, 05:24:49 [OK] [k9rqocud] ✅ Carnival load end [nav 24]: Carnival profile/history page 2
+07/16/2026, 05:24:51 [OK] [k9rqocud] Carnival profile/history discovery: 7 protected payload(s), 2 additional page link(s)
+07/16/2026, 05:24:57 [OK] [k9rqocud] ✅ Carnival load end [nav 25]: Carnival profile/history page 3
+07/16/2026, 05:24:59 [OK] [k9rqocud] Carnival profile/history discovery: 2 protected payload(s), 0 additional page link(s)
+07/16/2026, 05:25:03 [OK] [k9rqocud] ✅ Carnival load end [nav 26]: Carnival profile/history page 4
+07/16/2026, 05:25:07 [OK] [k9rqocud] 📦 Captured Carnival bookings (1) from /profilemanagement/api/v1.0/Profiles
+07/16/2026, 05:25:07 [OK] [k9rqocud] Carnival profile/history discovery: 6 protected payload(s), 2 additional page link(s)
+07/16/2026, 05:25:07 [WARN] [k9rqocud] ⚠️ Carnival active booking lane was not authoritative; existing Carnival booked/upcoming cruises will be preserved.
+07/16/2026, 05:25:07 [WARN] [k9rqocud] ⚠️ Carnival completed-history lane was incomplete (profile reports 7 total cruise(s), captured 1); existing Carnival completed cruises will be preserved.
+07/16/2026, 05:25:07 [OK] [k9rqocud] ✅ Carnival loyalty captured: VIFP Red #9013404591; Players Club Unknown (0 pts)
+07/16/2026, 05:25:07 [OK] [k9rqocud] ✅ STEP 2 COMPLETE: 0 booked/upcoming and 1 completed/history cruise(s) captured
+07/16/2026, 05:25:07 [OK] [k9rqocud] 🎉 ====== CARNIVAL EXTRACTION COMPLETE ======
+07/16/2026, 05:25:07 [OK] [k9rqocud] Ready to review: 20 Carnival offer(s), 0 available sailing(s)
+07/16/2026, 05:25:07 [OK] [k9rqocud] Ready to review: 0 booked/upcoming, 1 completed/history Carnival cruise(s)
+07/16/2026, 05:25:20 [WARN] ⚠️ No fully authoritative VIFP Club offer catalog was captured, so existing offers and available sailings will be preserved; unresolved Carnival code(s): FBN, FMV, FNQ, FZV, GBI, HEK, HK8, O5O, O9R, OHS, OJX, ORF, PI0, QA3, QPR, PHY, O31, OJS, OS5, PZC
+07/16/2026, 05:25:20 [WARN] ⚠️ No booked/completed cruise rows were captured for Carnival Cruise Line, so existing booked and completed cruises will be preserved
+07/16/2026, 05:25:20 [WARN] 🛡️ Preserving 27 existing offer record(s); no authoritative new offer payload was captured
+07/16/2026, 05:25:20 [WARN] 🛡️ Preserving 1246 existing available cruise record(s); no authoritative new sailing payload was captured
+07/16/2026, 05:25:20 [WARN] 🛡️ Preserving 101 existing booked/completed cruise record(s); no authoritative booking/history payload was captured
+07/16/2026, 05:25:27 [OK] ✅ Offers persisted to storage
+07/16/2026, 05:25:28 [OK] ✅ Available cruises persisted to storage
+07/16/2026, 05:25:29 [OK] ✅ Booked cruises persisted to storage
+07/16/2026, 05:25:29 [OK] ✅ Carnival loyalty/profile transaction write succeeded: VIFP Red #9013404591 (1 pts); Players Club unchanged
+07/16/2026, 05:25:32 [OK] ✅ Carnival transactional Apply Sync committed (carnival-apply-1784204720665-vfigrw)
+07/16/2026, 05:25:32 [WARN] ⚠️ Carnival data was applied without deleting unresolved inventory; the manifest remains partial/resumable.
+07/16/2026, 05:25:32 [WARN] ⚠️ Resolved Carnival data synced; unresolved codes remain resumable.
+
+--- END OF LOG ---

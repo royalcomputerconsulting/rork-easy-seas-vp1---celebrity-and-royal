@@ -158,6 +158,7 @@ export interface Cruise extends SharedOwnershipFields {
   received?: string;
   programCharter?: string;
   cruiseSource?: 'royal' | 'celebrity' | 'carnival';
+  totalRetailCost?: number;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -174,6 +175,8 @@ export interface ItineraryDay {
 
 export interface BookedCruise extends Cruise {
   sourcePayload?: unknown;
+  dataOwnerEmail?: string;
+  dataOwnerScopeId?: string;
   reservationNumber?: string;
   bookingId?: string;
   bwoNumber?: string;

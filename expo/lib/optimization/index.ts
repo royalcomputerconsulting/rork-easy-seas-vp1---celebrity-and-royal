@@ -12,6 +12,10 @@ export * from '@/lib/optimization/value';
 
 export * from '@/lib/optimization/models';
 
+// `models/statistics.ts` and `value/statistics.ts` both define clamp/mean/quantile;
+// explicitly re-export the `value` versions to resolve the star-export ambiguity.
+export { clamp, mean, quantile } from '@/lib/optimization/value';
+
 export * from '@/lib/optimization/engine';
 
 export * from '@/lib/optimization/live';

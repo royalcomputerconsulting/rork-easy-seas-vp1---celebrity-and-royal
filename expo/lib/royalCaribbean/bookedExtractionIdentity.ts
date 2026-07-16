@@ -212,7 +212,7 @@ function isMeaningful(value: unknown): boolean {
   return true;
 }
 
-function mergeRows<T extends any>(existing: T, incoming: T): T {
+function mergeRows<T extends Record<string, unknown>>(existing: T, incoming: T): T {
   const merged: any = { ...existing };
   for (const [key, value] of Object.entries(incoming || {})) {
     if (isMeaningful(value) || !isMeaningful(merged[key])) merged[key] = value;
@@ -243,7 +243,7 @@ export function mergeExtractedBookedCruiseRows<T extends any>(rows: T[]): Extrac
       ledger.push({ inputIndex, identity, action: 'added', outputIndex });
       return;
     }
-    output[existingIndex] = mergeRows(output[existingIndex], row);
+    output[existingIndex] = mergeRows(output[existingIndex] as Record<string, unknown>, row as Record<string, unknown>) as T;
     mergedCount += 1;
     ledger.push({ inputIndex, identity, action: 'merged', outputIndex: existingIndex });
   });

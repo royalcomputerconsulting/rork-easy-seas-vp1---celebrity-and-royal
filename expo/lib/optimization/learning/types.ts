@@ -1,4 +1,5 @@
 import type { CertificateRecommendationAction, CertificateRecommendationSnapshot } from '../engine/types';
+export type { ConfidenceBand } from '../history/types';
 import type { ConfidenceBand } from '../history/types';
 import type { PersonalTargetLabel } from '../models/types';
 
