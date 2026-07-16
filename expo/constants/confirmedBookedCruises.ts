@@ -1,4 +1,47 @@
-import type { BookedCruise } from '@/types/models';
+import type { BookedCruise, ItineraryDay } from '@/types/models';
+
+/**
+ * Real, confirmed per-day itinerary for Royal Caribbean's "7 Night Cabo
+ * Overnight & Ensenada" product sailing round-trip from Los Angeles on
+ * Navigator/Quantum-class ships. Confirmed against the live Royal Caribbean
+ * app for the 2026-07-17 Navigator of the Seas sailing (screenshot-verified):
+ * Cabo San Lucas, Mazatlan, and Puerto Vallarta — NOT Ensenada, despite the
+ * marketing product name. Reused for the other sailings of the same named
+ * itinerary since cruise lines repeat the exact same day-by-day routing
+ * across sailings that share a product itinerary name.
+ */
+function buildCaboMazatlanPuertoVallartaItinerary(options: { embarkPort: string; disembarkPort?: string; includeConfirmedTimes?: boolean } = { embarkPort: 'Los Angeles, California' }): ItineraryDay[] {
+  const embarkPort = options.embarkPort;
+  const disembarkPort = options.disembarkPort ?? embarkPort;
+  const includeTimes = options.includeConfirmedTimes ?? false;
+  return [
+    { day: 1, port: embarkPort, isSeaDay: false, notes: 'All aboard.' },
+    { day: 2, port: 'Cruising', isSeaDay: true },
+    {
+      day: 3,
+      port: 'Cabo San Lucas, Mexico',
+      isSeaDay: false,
+      ...(includeTimes ? { arrival: '1:00 PM', departure: '7:15 PM' } : {}),
+    },
+    {
+      day: 4,
+      port: 'Mazatlan, Mexico',
+      isSeaDay: false,
+      ...(includeTimes ? { arrival: '8:30 AM', departure: '3:30 PM' } : {}),
+    },
+    {
+      day: 5,
+      port: 'Puerto Vallarta, Mexico',
+      isSeaDay: false,
+      ...(includeTimes ? { arrival: '8:30 AM', departure: '5:30 PM' } : {}),
+    },
+    { day: 6, port: 'Cruising', isSeaDay: true },
+    { day: 7, port: 'Cruising', isSeaDay: true },
+    { day: 8, port: disembarkPort, isSeaDay: false, notes: 'Disembarkation.' },
+  ];
+}
+
+const CABO_MAZATLAN_PUERTO_VALLARTA_PORTS = ['Los Angeles, California', 'Cabo San Lucas, Mexico', 'Mazatlan, Mexico', 'Puerto Vallarta, Mexico', 'Los Angeles, California'];
 
 const DEFAULT_GUEST_NAMES = ['Scott Merlis'];
 
@@ -245,7 +288,8 @@ export const USER_CONFIRMED_BOOKED_CRUISE_MANIFEST: BookedCruise[] = [
     singleOccupancy: true,
     status: 'booked',
     completionState: 'upcoming',
-    ports: ['Los Angeles, California', 'Cabo San Lucas, Mexico', 'Cabo San Lucas, Mexico', 'Cabo San Lucas, Mexico', 'Ensenada, Mexico', 'Los Angeles, California'],
+    itinerary: buildCaboMazatlanPuertoVallartaItinerary(),
+    ports: CABO_MAZATLAN_PUERTO_VALLARTA_PORTS,
     taxes: 0,
     cruiseSource: 'royal',
     brand: 'royal',
@@ -343,7 +387,12 @@ export const USER_CONFIRMED_BOOKED_CRUISE_MANIFEST: BookedCruise[] = [
     singleOccupancy: true,
     status: 'booked',
     completionState: 'upcoming',
-    ports: ['Los Angeles, California', 'Cabo San Lucas, Mexico', 'Cabo San Lucas, Mexico', 'Ensenada, Mexico', 'Los Angeles, California'],
+    // Confirmed against the live Royal Caribbean app itinerary screen: real stops are
+    // Cabo San Lucas, Mazatlan, and Puerto Vallarta — NOT Ensenada (the product/marketing
+    // name is misleading; the actual routing differs). Feeds casino hours, day agenda,
+    // and marine weather everywhere this cruise is displayed.
+    itinerary: buildCaboMazatlanPuertoVallartaItinerary({ embarkPort: 'Los Angeles, California', includeConfirmedTimes: true }),
+    ports: CABO_MAZATLAN_PUERTO_VALLARTA_PORTS,
     taxes: 0,
     cruiseSource: 'royal',
     brand: 'royal',
@@ -368,7 +417,8 @@ export const USER_CONFIRMED_BOOKED_CRUISE_MANIFEST: BookedCruise[] = [
     singleOccupancy: true,
     status: 'booked',
     completionState: 'upcoming',
-    ports: ['Los Angeles, California', 'Cabo San Lucas, Mexico', 'Cabo San Lucas, Mexico', 'Ensenada, Mexico', 'Los Angeles, California'],
+    itinerary: buildCaboMazatlanPuertoVallartaItinerary(),
+    ports: CABO_MAZATLAN_PUERTO_VALLARTA_PORTS,
     taxes: 0,
     cruiseSource: 'royal',
     brand: 'royal',
@@ -419,7 +469,8 @@ export const USER_CONFIRMED_BOOKED_CRUISE_MANIFEST: BookedCruise[] = [
     singleOccupancy: true,
     status: 'booked',
     completionState: 'upcoming',
-    ports: ['Los Angeles, California', 'Cabo San Lucas, Mexico', 'Cabo San Lucas, Mexico', 'Ensenada, Mexico', 'Los Angeles, California'],
+    itinerary: buildCaboMazatlanPuertoVallartaItinerary(),
+    ports: CABO_MAZATLAN_PUERTO_VALLARTA_PORTS,
     taxes: 0,
     cruiseSource: 'royal',
     brand: 'royal',

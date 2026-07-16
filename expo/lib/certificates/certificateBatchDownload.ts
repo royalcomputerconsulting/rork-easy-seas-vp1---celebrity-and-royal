@@ -29,6 +29,20 @@ function chunk<T>(items: T[], size: number): T[][] {
   return result;
 }
 
+/**
+ * Periodically pings the download logger with an elapsed-time heartbeat while
+ * a slow request is in flight, so a long-running single-code retry never sits
+ * on a static, unchanging message that looks frozen.
+ */
+function withHeartbeat<T>(promise: Promise<T>, baseMessage: string, certificateCodes: string[]): Promise<T> {
+  const startedAt = Date.now();
+  const intervalId = setInterval(() => {
+    const elapsedSeconds = Math.round((Date.now() - startedAt) / 1000);
+    certificateDownloadLogger.setActivity(`${baseMessage} (${elapsedSeconds}s elapsed)`, certificateCodes);
+  }, 4000);
+  return promise.finally(() => clearInterval(intervalId));
+}
+
 function dedupeMatches(matches: any[]): any[] {
   const byKey = new Map<string, any>();
   for (const match of matches) {
@@ -88,13 +102,17 @@ export async function downloadCertificateCatalogBatched(input: {
     certificateDownloadLogger.setActivity(activity, codes);
     certificateDownloadLogger.log(activity, 'info', codes);
     try {
-      const result = await trpcClient.certificateExplorer.examine.mutate({
-        monthCode: input.monthCode,
-        shipQuery: input.shipQuery?.trim() || ROYAL_CERTIFICATE_BROAD_SHIP_QUERY,
-        includeA: group.some((entry) => entry.certificateType === 'A'),
-        includeC: group.some((entry) => entry.certificateType === 'C'),
-        certificateCodes: codes,
-      });
+      const result = await withHeartbeat(
+        trpcClient.certificateExplorer.examine.mutate({
+          monthCode: input.monthCode,
+          shipQuery: input.shipQuery?.trim() || ROYAL_CERTIFICATE_BROAD_SHIP_QUERY,
+          includeA: group.some((entry) => entry.certificateType === 'A'),
+          includeC: group.some((entry) => entry.certificateType === 'C'),
+          certificateCodes: codes,
+        }),
+        activity,
+        codes,
+      );
       const resultCatalog = Array.isArray((result as any)?.catalog) ? (result as any).catalog : [];
       const resultMatches = Array.isArray((result as any)?.matches) ? (result as any).matches : [];
       catalog.push(...resultCatalog);
@@ -117,19 +135,21 @@ export async function downloadCertificateCatalogBatched(input: {
       );
       console.warn('[CertificateBatchDownload] batch failed; retrying one code at a time', codes, error);
       for (const entry of group) {
-        certificateDownloadLogger.setActivity(
-          `Retrying ${entry.certificateCode} individually (${completedCodes + group.indexOf(entry) + 1} of ${entries.length}).`,
-          [entry.certificateCode],
-        );
+        const retryActivity = `Retrying ${entry.certificateCode} individually (${completedCodes + group.indexOf(entry) + 1} of ${entries.length}).`;
+        certificateDownloadLogger.setActivity(retryActivity, [entry.certificateCode]);
         certificateDownloadLogger.log(`Retrying ${entry.certificateCode} individually.`, 'info', [entry.certificateCode]);
         try {
-          const result = await trpcClient.certificateExplorer.examine.mutate({
-            monthCode: input.monthCode,
-            shipQuery: input.shipQuery?.trim() || ROYAL_CERTIFICATE_BROAD_SHIP_QUERY,
-            includeA: entry.certificateType === 'A',
-            includeC: entry.certificateType === 'C',
-            certificateCodes: [entry.certificateCode],
-          });
+          const result = await withHeartbeat(
+            trpcClient.certificateExplorer.examine.mutate({
+              monthCode: input.monthCode,
+              shipQuery: input.shipQuery?.trim() || ROYAL_CERTIFICATE_BROAD_SHIP_QUERY,
+              includeA: entry.certificateType === 'A',
+              includeC: entry.certificateType === 'C',
+              certificateCodes: [entry.certificateCode],
+            }),
+            retryActivity,
+            [entry.certificateCode],
+          );
           const resultCatalog = Array.isArray((result as any)?.catalog) ? (result as any).catalog : [];
           const resultMatches = Array.isArray((result as any)?.matches) ? (result as any).matches : [];
           catalog.push(...resultCatalog);

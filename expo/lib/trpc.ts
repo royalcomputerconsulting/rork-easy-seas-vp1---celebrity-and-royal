@@ -130,10 +130,13 @@ const getRequestTimeoutMs = (url: string, options?: RequestInit): number => {
   const lowerUrl = url.toLowerCase();
   const lowerBody = bodyText.toLowerCase();
   const isCertificateRequest = lowerUrl.includes("certificateexplorer") || lowerBody.includes("certificateexplorer");
-  // Certificate A/C bank scans can legitimately download and parse 20+ public Royal PDFs.
-  // The old 15s timeout could abort the tRPC response mid-stream and surface as
-  // "JSON Parse error: Unexpected end of input" on iOS.
-  return isCertificateRequest ? 180_000 : 15_000;
+  // The backend enforces its own 45s hard wall-clock budget on certificate scans
+  // and always returns valid JSON before that budget expires. A 180s client
+  // timeout let a single stuck request hang for 3 minutes with no feedback,
+  // which is what made the download screen look permanently "stuck" on one
+  // code. 60s gives ample buffer over the backend's 45s budget for network
+  // latency without leaving the user staring at a frozen screen for minutes.
+  return isCertificateRequest ? 60_000 : 15_000;
 };
 
 const fetchWithRetry = async (
@@ -145,7 +148,13 @@ const fetchWithRetry = async (
 
   const bodyTextForRetry = typeof options?.body === "string" ? options.body.toLowerCase() : "";
   const isCertificateRetryRequest = String(url).toLowerCase().includes("certificateexplorer") || bodyTextForRetry.includes("certificateexplorer");
-  const effectiveMaxRetries = isCertificateRetryRequest ? Math.max(maxRetries, 2) : maxRetries;
+  // Certificate requests already get their own group->single-code retry pass
+  // in certificateBatchDownload.ts. Stacking another 2 extra transport-level
+  // retries on top of that (at a 60s timeout each) could turn one failed code
+  // into several minutes of silent waiting. One extra retry is enough to
+  // absorb a transient network blip; anything more should fall through fast
+  // so the batch downloader can move on and retry that code individually.
+  const effectiveMaxRetries = isCertificateRetryRequest ? Math.max(maxRetries, 1) : maxRetries;
 
   for (let attempt = 0; attempt <= effectiveMaxRetries; attempt++) {
     try {
