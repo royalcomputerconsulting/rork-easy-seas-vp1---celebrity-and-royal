@@ -1,5 +1,6 @@
 import type { BookedCruiseRow, OfferRow } from '@/lib/royalCaribbean/types';
 import {
+  CARNIVAL_SHIP_CODE_MAP,
   CARNIVAL_VIFP_TIER_BY_CODE,
   decodeCarnivalVifpTier,
 } from './carnivalDataRuntime';
@@ -40,6 +41,7 @@ export interface CarnivalCatalogDiscovery {
   rateCodes: CarnivalRateCodeEntry[];
   actionCards?: CarnivalOfferAction[];
   noOffersConfirmed: boolean;
+  debugInfo?: string;
 }
 
 export interface CarnivalSearchPageResult {
@@ -113,6 +115,7 @@ export interface CarnivalProfileScrapeResult {
   discoveredProfileUrls?: string[];
   profilePayloadCount?: number;
   historyBounded?: boolean;
+  debugInfo?: string;
   error?: string;
 }
 
@@ -607,6 +610,14 @@ export function injectCarnivalCatalogDiscovery(runId = ''): string {
       }
     } catch (e) {}
     var noOffersConfirmed = authenticatedMyOffersPage && entries.length === 0 && visibleNoOffersState;
+    var catalogDebugInfo = '';
+    if (entries.length === 0) {
+      try {
+        var vifpPayloadForDebug = window.__carnivalVifpOffers || (window.capturedPayloads && window.capturedPayloads.carnivalVifpOffers);
+        var vifpItemCount = vifpPayloadForDebug && Array.isArray(vifpPayloadForDebug.Items) ? vifpPayloadForDebug.Items.length : 0;
+        catalogDebugInfo = 'onOffersPage=' + authenticatedMyOffersPage + ' links=' + links.length + ' actionCards=' + actionCards.length + ' vifpPayload=' + !!vifpPayloadForDebug + ' vifpItems=' + vifpItemCount + ' noOffersState=' + visibleNoOffersState + ' vifp=' + (state.vifp || 'none');
+      } catch (debugError) { catalogDebugInfo = 'debug-error: ' + String(debugError && debugError.message ? debugError.message : debugError); }
+    }
     post('carnival_catalog_discovered', {
       data: {
         sourceUrl: window.location.href || '',
@@ -620,11 +631,12 @@ export function injectCarnivalCatalogDiscovery(runId = ''): string {
         currency: state.currency || 'USD',
         rateCodes: entries,
         actionCards: actionCards,
-        noOffersConfirmed: noOffersConfirmed
+        noOffersConfirmed: noOffersConfirmed,
+        debugInfo: catalogDebugInfo
       }
     });
   } catch (error) {
-    post('carnival_catalog_discovered', { data: { sourceUrl: window.location.href || '', personalizedSearchUrl: '', tgo: '', vifp: '', tierCode: '', tierName: '', resident: '', locality: '1', currency: 'USD', rateCodes: [], actionCards: [], noOffersConfirmed: false }, error: String(error && error.message ? error.message : error) });
+    post('carnival_catalog_discovered', { data: { sourceUrl: window.location.href || '', personalizedSearchUrl: '', tgo: '', vifp: '', tierCode: '', tierName: '', resident: '', locality: '1', currency: 'USD', rateCodes: [], actionCards: [], noOffersConfirmed: false, debugInfo: 'top-level-exception: ' + String(error && error.message ? error.message : error) }, error: String(error && error.message ? error.message : error) });
   }
 })();
 true;
@@ -1422,10 +1434,16 @@ export function injectCarnivalProfileScrape(requestId: string, runId = ''): stri
     }
     return rows;
   }
+  var SHIP_CODE_MAP = ${JSON.stringify(CARNIVAL_SHIP_CODE_MAP)};
+  function isValidCalendarDate(value) {
+    var parts = dateParts(value);
+    return !!parts;
+  }
   function rowsFromCapturedPayload() {
     var rows = [];
     var payloads = capturedProfilePayloads();
-    function field(object, names) {
+    function fieldFrom(object, names) {
+      if (!object || typeof object !== 'object') return '';
       var keys = Object.keys(object);
       for (var ni = 0; ni < names.length; ni++) {
         var target = names[ni].toLowerCase();
@@ -1437,28 +1455,49 @@ export function injectCarnivalProfileScrape(requestId: string, runId = ''): stri
       }
       return '';
     }
+    var WRAPPER_KEYS = ['ship', 'vessel', 'cruise', 'sailing', 'voyage', 'reservation', 'booking', 'itinerarydetails'];
+    function field(object, names) {
+      var direct = fieldFrom(object, names);
+      if (direct !== '') return direct;
+      if (!object || typeof object !== 'object') return '';
+      var keys = Object.keys(object);
+      for (var wi = 0; wi < WRAPPER_KEYS.length; wi++) {
+        for (var ki = 0; ki < keys.length; ki++) {
+          if (keys[ki].toLowerCase() !== WRAPPER_KEYS[wi]) continue;
+          var nested = fieldFrom(object[keys[ki]], names);
+          if (nested !== '') return nested;
+        }
+      }
+      return '';
+    }
     function walk(value, depth) {
       if (!value || depth > 7 || rows.length > 1000) return;
       if (Array.isArray(value)) { for (var ai = 0; ai < value.length; ai++) walk(value[ai], depth + 1); return; }
       if (typeof value !== 'object') return;
-      var ship = compact(field(value, ['shipName', 'ship', 'vesselName', 'vessel']));
+      var ship = compact(field(value, ['shipName', 'ship', 'vesselName', 'vessel', 'name']));
+      var shipCodeValue = compact(field(value, ['shipCode', 'vesselCode', 'shipAbbreviation', 'code'])).toUpperCase();
       var sailDate = compact(field(value, ['sailDate', 'departureDate', 'startDate', 'sailingDate', 'sailingStartDate', 'embarkDate', 'embarkationDate', 'cruiseStartDate']));
-      if (ship && sailDate) {
+      var itineraryValue = compact(field(value, ['itinerary', 'destination', 'itineraryName']));
+      var cruiseTitleValue = compact(field(value, ['cruiseTitle', 'title']));
+      var bookingIdValue = compact(field(value, ['bookingId', 'confirmationNumber', 'reservationId', 'bookingNumber']));
+      var resolvedShip = ship || (shipCodeValue && SHIP_CODE_MAP[shipCodeValue]) || '';
+      var hasSecondaryIdentifier = !!(resolvedShip || shipCodeValue || itineraryValue || cruiseTitleValue || bookingIdValue);
+      if (sailDate && hasSecondaryIdentifier && isValidCalendarDate(sailDate)) {
         var endDate = compact(field(value, ['endDate', 'returnDate', 'sailingEndDate', 'debarkDate', 'debarkationDate', 'cruiseEndDate']));
         var statusText = compact(field(value, ['status', 'bookingStatus', 'reservationStatus', 'cruiseStatus']));
         var isCompleted = /completed|past|history/i.test(statusText) || isPastSailing(endDate || sailDate);
         if (!statusText) statusText = isCompleted ? 'Completed' : 'Upcoming';
         var passengers = field(value, ['passengers', 'guests', 'guestList']);
         var stateroomNumberValue = compact(field(value, ['stateroomNumber', 'cabinNumber', 'roomNumber']));
-        var itineraryValue = compact(field(value, ['itinerary', 'destination', 'itineraryName']));
+        var finalShipName = resolvedShip || (shipCodeValue ? shipCodeValue : 'Carnival Cruise Line');
         rows.push({
-          rawBooking: undefined, sourcePage: isCompleted ? 'Completed' : 'Upcoming', shipName: normalizeShip(ship), shipCode: compact(field(value, ['shipCode'])),
-          cruiseTitle: compact(field(value, ['cruiseTitle', 'title', 'itinerary'])) || 'Carnival Cruise', sailingStartDate: normalizeDate(sailDate),
+          rawBooking: undefined, sourcePage: isCompleted ? 'Completed' : 'Upcoming', shipName: normalizeShip(finalShipName), shipCode: shipCodeValue,
+          cruiseTitle: cruiseTitleValue || compact(field(value, ['itinerary'])) || 'Carnival Cruise', sailingStartDate: normalizeDate(sailDate),
           sailingEndDate: normalizeDate(endDate), sailingDates: normalizeDate(sailDate), itinerary: itineraryValue,
           departurePort: compact(field(value, ['departurePort', 'homePort'])), arrivalPort: compact(field(value, ['arrivalPort'])),
           cabinType: compact(field(value, ['stateroomType', 'cabinType'])), cabinCategory: compact(field(value, ['stateroomCategoryCode', 'categoryCode'])),
           cabinNumberOrGTY: stateroomNumberValue || 'GTY', deckNumber: compact(field(value, ['deckNumber'])),
-          bookingId: compact(field(value, ['bookingId', 'confirmationNumber', 'reservationId', 'bookingNumber'])) || syntheticBookingId({ shipName: normalizeShip(ship), sailingStartDate: normalizeDate(sailDate), sailingEndDate: normalizeDate(endDate), itinerary: itineraryValue, cabinNumberOrGTY: stateroomNumberValue || 'GTY', passengers: passengers || [] }),
+          bookingId: bookingIdValue || syntheticBookingId({ shipName: normalizeShip(finalShipName), sailingStartDate: normalizeDate(sailDate), sailingEndDate: normalizeDate(endDate), itinerary: itineraryValue, cabinNumberOrGTY: stateroomNumberValue || 'GTY', passengers: passengers || [] }),
           numberOfGuests: String(field(value, ['guestCount', 'numberOfGuests']) || ''), numberOfNights: Number(field(value, ['numberOfNights', 'duration', 'nights']) || 0) || undefined,
           daysToGo: '', status: isCompleted ? 'Completed' : 'Upcoming', loyaltyLevel: '', loyaltyPoints: '', paidInFull: field(value, ['paidInFull']) ? 'Yes' : '',
           balanceDue: compact(field(value, ['balanceDue', 'amountDue'])), musterStation: '', bookingStatus: compact(field(value, ['bookingStatus']) || statusText),
@@ -1471,6 +1510,42 @@ export function injectCarnivalProfileScrape(requestId: string, runId = ''): stri
       for (var ki = 0; ki < keys.length; ki++) walk(value[keys[ki]], depth + 1);
     }
     for (var pi = 0; pi < payloads.length; pi++) walk(payloads[pi], 0);
+    return rows;
+  }
+  function genericCardScan() {
+    var rows = [];
+    try {
+      var containers = document.querySelectorAll('div,li,article,section');
+      var dateRe = /(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\\.?\\s+\\d{1,2},?\\s+20\\d{2}|\\d{1,2}[\\/\\-]\\d{1,2}[\\/\\-]20\\d{2}|20\\d{2}[\\/\\-]\\d{1,2}[\\/\\-]\\d{1,2}/gi;
+      var shipRe = /\\b(Carnival\\s+[A-Za-z][A-Za-z0-9 '&.\\-]{2,35}|Mardi Gras)\\b/i;
+      for (var i = 0; i < containers.length && i < 3000 && rows.length < 150; i++) {
+        var el = containers[i];
+        var text = compact(el.textContent);
+        if (text.length < 15 || text.length > 900) continue;
+        if (!shipRe.test(text)) continue;
+        var dates = text.match(dateRe) || [];
+        if (!dates.length || !isValidCalendarDate(dates[0])) continue;
+        var childMatches = false;
+        var childEls = el.children || [];
+        for (var c = 0; c < childEls.length; c++) {
+          var childText = compact(childEls[c].textContent);
+          if (shipRe.test(childText) && dateRe.test(childText)) { childMatches = true; break; }
+        }
+        if (childMatches) continue;
+        var shipMatch = text.match(shipRe);
+        var bookingMatch = text.match(/(?:Booking|Confirmation|Reservation)\\s*#?[:\\s]+([A-Z0-9-]{4,20})/i);
+        var domCompleted = /completed|past|history/i.test(text) || isPastSailing(dates[1] || dates[0]);
+        rows.push({
+          sourcePage: domCompleted ? 'Completed' : 'Upcoming', shipName: normalizeShip(shipMatch[1]), shipCode: '', cruiseTitle: text.substring(0, 160),
+          sailingStartDate: normalizeDate(dates[0]), sailingEndDate: normalizeDate(dates[1] || ''), sailingDates: normalizeDate(dates[0]),
+          itinerary: '', departurePort: '', arrivalPort: '', cabinType: '', cabinCategory: '', cabinNumberOrGTY: 'GTY', deckNumber: '',
+          bookingId: bookingMatch ? bookingMatch[1] : syntheticBookingId({ shipName: normalizeShip(shipMatch[1]), sailingStartDate: normalizeDate(dates[0]), sailingEndDate: normalizeDate(dates[1] || ''), cruiseTitle: text.substring(0, 160), cabinNumberOrGTY: 'GTY' }),
+          numberOfGuests: '', numberOfNights: undefined, daysToGo: domCompleted ? '0' : '', status: domCompleted ? 'Completed' : 'Upcoming', loyaltyLevel: '', loyaltyPoints: '',
+          paidInFull: '', balanceDue: '', musterStation: '', bookingStatus: domCompleted ? 'COMPLETED' : 'BOOKED', packageCode: '', passengerStatus: '',
+          stateroomNumber: '', stateroomCategoryCode: '', stateroomType: ''
+        });
+      }
+    } catch (e) {}
     return rows;
   }
   function upcomingFromDom() {
@@ -1528,7 +1603,11 @@ export function injectCarnivalProfileScrape(requestId: string, runId = ''): stri
   try {
     await expandHistoryRows();
     var profile = profileSnapshot();
-    var rows = dedupe(rowsFromCapturedPayload().concat(upcomingFromDom(), completedFromTables())).map(enrichBookingRow);
+    var payloadRows = rowsFromCapturedPayload();
+    var domRows = upcomingFromDom();
+    var tableRows = completedFromTables();
+    var genericRows = (payloadRows.length + domRows.length + tableRows.length) === 0 ? genericCardScan() : [];
+    var rows = dedupe(payloadRows.concat(domRows, tableRows, genericRows)).map(enrichBookingRow);
     var chunkSize = 12;
     if (!rows.length) post('carnival_profile_bookings_chunk', { requestId: INPUT.requestId, runId: INPUT.runId, rows: [], chunkIndex: 1, totalChunks: 1 });
     else {
@@ -1575,9 +1654,22 @@ export function injectCarnivalProfileScrape(requestId: string, runId = ''): stri
     }
     var profilePayloadCount = capturedProfilePayloads().length;
     var historyBounded = !!historyEmptyConfirmed || (Number(profile.totalCruises || 0) > 0 && completedCount >= Number(profile.totalCruises || 0));
-    post('carnival_profile_scrape_complete', { requestId: INPUT.requestId, runId: INPUT.runId, profile: profile, rowCount: rows.length, upcomingCount: upcomingCount, completedCount: completedCount, upcomingEmptyConfirmed: upcomingEmptyConfirmed, historyEmptyConfirmed: historyEmptyConfirmed, discoveredProfileUrls: discoveredProfileUrls, profilePayloadCount: profilePayloadCount, historyBounded: historyBounded, pageUrl: pageUrl, pageKind: pageKind, authenticatedPage: authenticatedPage, url: pageUrl });
+    var debugInfo = '';
+    if (rows.length === 0 && (profilePayloadCount > 0 || Number(profile.totalCruises || 0) > 0)) {
+      try {
+        var payloadsForDebug = capturedProfilePayloads();
+        var payloadKeySamples = payloadsForDebug.slice(0, 3).map(function(p) {
+          if (p === null || p === undefined) return 'null';
+          if (Array.isArray(p)) return 'array[' + p.length + ']';
+          if (typeof p !== 'object') return typeof p;
+          return Object.keys(p).slice(0, 14).join(',');
+        });
+        debugInfo = 'payloads=' + payloadsForDebug.length + ' keys=[' + payloadKeySamples.join(' | ') + '] tables=' + document.querySelectorAll('table').length + ' totalCruisesOnProfile=' + (profile.totalCruises || 0);
+      } catch (debugError) { debugInfo = 'debug-error: ' + String(debugError && debugError.message ? debugError.message : debugError); }
+    }
+    post('carnival_profile_scrape_complete', { requestId: INPUT.requestId, runId: INPUT.runId, profile: profile, rowCount: rows.length, upcomingCount: upcomingCount, completedCount: completedCount, upcomingEmptyConfirmed: upcomingEmptyConfirmed, historyEmptyConfirmed: historyEmptyConfirmed, discoveredProfileUrls: discoveredProfileUrls, profilePayloadCount: profilePayloadCount, historyBounded: historyBounded, pageUrl: pageUrl, pageKind: pageKind, authenticatedPage: authenticatedPage, debugInfo: debugInfo, url: pageUrl });
   } catch (error) {
-    post('carnival_profile_scrape_complete', { requestId: INPUT.requestId, runId: INPUT.runId, profile: { firstName: '', lastName: '', vifpNumber: '', vifpTier: '', vifpTierSource: 'unknown', vifpPoints: 0, cruiseDayPoints: 0, totalCruises: 0, playersClubTier: '', playersClubPoints: 0, hasVifpData: false, hasPlayersClubData: false, authoritativeFields: [] }, rowCount: 0, upcomingCount: 0, completedCount: 0, upcomingEmptyConfirmed: false, historyEmptyConfirmed: false, error: String(error && error.message ? error.message : error), url: window.location.href || '' });
+    post('carnival_profile_scrape_complete', { requestId: INPUT.requestId, runId: INPUT.runId, profile: { firstName: '', lastName: '', vifpNumber: '', vifpTier: '', vifpTierSource: 'unknown', vifpPoints: 0, cruiseDayPoints: 0, totalCruises: 0, playersClubTier: '', playersClubPoints: 0, hasVifpData: false, hasPlayersClubData: false, authoritativeFields: [] }, rowCount: 0, upcomingCount: 0, completedCount: 0, upcomingEmptyConfirmed: false, historyEmptyConfirmed: false, debugInfo: 'top-level-exception: ' + String(error && error.message ? error.message : error), error: String(error && error.message ? error.message : error), url: window.location.href || '' });
   }
 })();
 true;

@@ -2053,8 +2053,12 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
                 .slice(0, 60)
             : [],
           noOffersConfirmed: Boolean(discovered.noOffersConfirmed),
+          debugInfo: discovered.debugInfo ? String(discovered.debugInfo) : undefined,
         };
         addLog(`Carnival catalog discovery: ${normalizedCatalog.rateCodes.length} rate code(s) found${normalizedCatalog.vifp ? ` for VIFP# ${normalizedCatalog.vifp}` : ''}`, normalizedCatalog.rateCodes.length ? 'success' : 'info');
+        if (normalizedCatalog.debugInfo) {
+          addLog(`🔍 Carnival offer catalog diagnostics: ${normalizedCatalog.debugInfo}`, 'info');
+        }
         if (carnivalCatalogResolverRef.current === catalogResolver) {
           carnivalCatalogResolverRef.current = null;
           catalogResolver.resolve(normalizedCatalog);
@@ -2220,8 +2224,12 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           discoveredProfileUrls: Array.isArray(msg.discoveredProfileUrls) ? msg.discoveredProfileUrls.map((value: unknown) => String(value || '')).filter(Boolean) : [],
           profilePayloadCount: Number(msg.profilePayloadCount || 0),
           historyBounded: Boolean(msg.authenticatedPage && msg.historyBounded),
+          debugInfo: msg.debugInfo ? String(msg.debugInfo) : undefined,
           error: msg.error ? String(msg.error) : undefined,
         };
+        if (result.debugInfo) {
+          addLog(`🔍 Carnival history capture diagnostics (${result.pageKind}): ${result.debugInfo}`, 'info');
+        }
         carnivalProfileResolverRef.current = null;
         resolver.resolve(result);
         break;

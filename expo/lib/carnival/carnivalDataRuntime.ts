@@ -194,6 +194,17 @@ export function formatCarnivalDate(value: unknown): string {
   return `${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}/${date.getFullYear()}`;
 }
 
+export const CARNIVAL_SHIP_CODE_MAP: Readonly<Record<string, string>> = Object.freeze({
+  BL: 'Carnival Breeze', BZ: 'Carnival Horizon', CN: 'Carnival Conquest', DR: 'Carnival Dream',
+  EL: 'Carnival Elation', FA: 'Carnival Fascination', FR: 'Carnival Freedom', FS: 'Carnival Firenze',
+  GL: 'Carnival Glory', HZ: 'Carnival Horizon', JB: 'Carnival Jubilee', LE: 'Carnival Legend',
+  LI: 'Carnival Liberty', LU: 'Carnival Luminosa', MG: 'Carnival Magic', 'MG2': 'Mardi Gras',
+  MI: 'Carnival Miracle', PO: 'Carnival Panorama', PA: 'Carnival Paradise', PR: 'Carnival Pride',
+  RA: 'Carnival Radiance', SN: 'Carnival Sensation', SP: 'Carnival Spirit', SL: 'Carnival Splendor',
+  SR: 'Carnival Sunrise', SS: 'Carnival Sunshine', VL: 'Carnival Valor', VE: 'Carnival Venice',
+  VI: 'Carnival Vista',
+});
+
 export const CARNIVAL_VIFP_TIER_BY_CODE: Readonly<Record<string, string>> = Object.freeze({
   '00': 'Blue',
   '0': 'Blue',
