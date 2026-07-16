@@ -453,6 +453,39 @@ function normalizeShipNameFromSailing(sailing: any): string {
   );
 }
 
+/**
+ * Last-resort scan for a date-shaped field when none of the explicitly-named
+ * candidates above match. The loyalty/history ledger's "sailings" rows don't
+ * always use the same field naming as the offer/booking payloads (e.g. a plain
+ * `sailingDate` instead of `sailingStartDate`), which silently produced
+ * completed-cruise cards with a real ship name but no date at all. This walks
+ * the row's own keys (and one level into common nested containers) looking for
+ * anything that reads as a start/end date by key name, so a real cruise date
+ * present under an unanticipated key still gets picked up instead of dropped.
+ */
+function scanForDateLikeField(source: any, includePattern: RegExp, excludePattern: RegExp, depth = 0): string {
+  if (!source || typeof source !== 'object' || Array.isArray(source) || depth > 2) return '';
+  for (const key of Object.keys(source)) {
+    if (excludePattern.test(key) || !includePattern.test(key)) continue;
+    const value = (source as Record<string, unknown>)[key];
+    if (typeof value === 'string' && value.trim()) return value.trim();
+    if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  }
+  for (const key of ['voyage', 'cruise', 'sailing', 'sailingInfo', 'itinerary', 'trip', 'booking']) {
+    const nested = (source as Record<string, unknown>)[key];
+    if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
+      const found = scanForDateLikeField(nested, includePattern, excludePattern, depth + 1);
+      if (found) return found;
+    }
+  }
+  return '';
+}
+
+const SAIL_DATE_KEY_PATTERN = /(sail|depart|embark|voyage.?start|cruise.?start|trip.?start).*date|date.*(sail|depart|embark)/i;
+const SAIL_DATE_EXCLUDE_PATTERN = /(end|return|debark|disembark|arriv|expir|hold|balance|due|cancel|book(ed|ing)?date|creat(e|ion)|updated)/i;
+const RETURN_DATE_KEY_PATTERN = /(return|end|debark|disembark|arriv).*date|date.*(return|end|debark|disembark|arriv)/i;
+const RETURN_DATE_EXCLUDE_PATTERN = /(sail|depart|embark|start|begin|expir|hold|balance|due|cancel|book(ed|ing)?date|creat(e|ion)|updated)/i;
+
 function parseCompletedSailingsPayload(data: any, cruiseLine: CruiseLine): BookedCruiseRow[] {
   const payload = data?.payload ?? data?.data ?? data;
   const possible = [
@@ -465,19 +498,36 @@ function parseCompletedSailingsPayload(data: any, cruiseLine: CruiseLine): Booke
   const sailings = possible.find(Array.isArray) as any[] | undefined;
   if (!sailings || !sailings.length) return [];
   let skippedNoData = 0;
+  let dateRecoveredByScan = 0;
   const rows = sailings.map((sailing) => {
-    const sailDate = normalizeSyncDate(firstString(
+    let sailDate = normalizeSyncDate(firstString(
       sailing?.sailDate, sailing?.sailingStartDate, sailing?.startDate, sailing?.departureDate, sailing?.date,
       sailing?.embarkDate, sailing?.embarkationDate, sailing?.cruiseStartDate, sailing?.voyageStartDate,
-      sailing?.voyage?.sailDate, sailing?.voyage?.startDate, sailing?.voyage?.departureDate,
-      sailing?.cruise?.sailDate, sailing?.cruise?.startDate, sailing?.sailingInfo?.sailDate, sailing?.sailingInfo?.startDate
+      sailing?.sailingDate, sailing?.tripStartDate, sailing?.cruiseDate,
+      sailing?.voyage?.sailDate, sailing?.voyage?.startDate, sailing?.voyage?.departureDate, sailing?.voyage?.sailingDate,
+      sailing?.cruise?.sailDate, sailing?.cruise?.startDate, sailing?.cruise?.sailingDate,
+      sailing?.sailingInfo?.sailDate, sailing?.sailingInfo?.startDate, sailing?.sailingInfo?.sailingDate
     ));
-    const returnDate = normalizeSyncDate(firstString(
+    let returnDate = normalizeSyncDate(firstString(
       sailing?.returnDate, sailing?.sailingEndDate, sailing?.endDate, sailing?.arrivalDate,
       sailing?.debarkDate, sailing?.disembarkationDate, sailing?.cruiseEndDate, sailing?.voyageEndDate,
       sailing?.voyage?.returnDate, sailing?.voyage?.endDate, sailing?.cruise?.returnDate, sailing?.cruise?.endDate,
       sailing?.sailingInfo?.returnDate, sailing?.sailingInfo?.endDate
     ));
+
+    if (!sailDate) {
+      const scannedSailDate = scanForDateLikeField(sailing, SAIL_DATE_KEY_PATTERN, SAIL_DATE_EXCLUDE_PATTERN);
+      if (scannedSailDate) {
+        sailDate = normalizeSyncDate(scannedSailDate);
+        if (sailDate) dateRecoveredByScan += 1;
+      }
+    }
+    if (!returnDate) {
+      const scannedReturnDate = scanForDateLikeField(sailing, RETURN_DATE_KEY_PATTERN, RETURN_DATE_EXCLUDE_PATTERN);
+      if (scannedReturnDate) {
+        returnDate = normalizeSyncDate(scannedReturnDate);
+      }
+    }
     const nights = firstString(sailing?.numberOfNights, sailing?.nights, sailing?.duration, sailing?.voyage?.nights);
     const parsedNights = nights ? Number.parseInt(nights, 10) : 0;
     const resolvedNights = parsedNights > 0 ? parsedNights : deriveCruiseNightsFromDates(sailDate, returnDate);
@@ -535,6 +585,9 @@ function parseCompletedSailingsPayload(data: any, cruiseLine: CruiseLine): Booke
   }).filter((row): row is BookedCruiseRow => row !== null);
   if (skippedNoData > 0) {
     console.log(`[RoyalCaribbeanSync] Skipped ${skippedNoData} loyalty/history sailing(s) with no ship name or sail date (would have rendered as an empty placeholder)`);
+  }
+  if (dateRecoveredByScan > 0) {
+    console.log(`[RoyalCaribbeanSync] Recovered sail date via fallback field scan for ${dateRecoveredByScan} completed sailing(s) whose date lived under an unexpected key name`);
   }
   return rows;
 }

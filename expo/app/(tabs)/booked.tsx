@@ -339,7 +339,23 @@ export default function BookedScreen() {
       .sort((a, b) => createDateFromString(a.sailDate).getTime() - createDateFromString(b.sailDate).getTime())[0];
 
     if (!nextForecastCruise) return [];
-    return [{ ...nextForecastCruise, itinerary: resolveFullCruiseItinerary(nextForecastCruise) }];
+
+    // The marine alerts panel needs a real returnDate to build its day-by-day forecast
+    // window. Many booked cruises only carry sailDate + nights (returnDate is derived
+    // elsewhere on demand), so backfill it here the same way the rest of this screen
+    // already estimates a forecast end date - otherwise the panel silently requests zero
+    // forecast days and shows "Forecast not loaded yet" even though the itinerary/ports
+    // resolve just fine.
+    const sailStart = startOfLocalDay(createDateFromString(nextForecastCruise.sailDate));
+    const normalizedReturnDate = nextForecastCruise.returnDate?.trim()
+      ? nextForecastCruise.returnDate
+      : getCruiseForecastEndDate(nextForecastCruise, sailStart).toISOString().slice(0, 10);
+
+    return [{
+      ...nextForecastCruise,
+      returnDate: normalizedReturnDate,
+      itinerary: resolveFullCruiseItinerary(nextForecastCruise),
+    }];
   }, [bookedCruises]);
 
   const nextCruise = useMemo(() => {
