@@ -394,12 +394,34 @@ export function MarineAlertsPanel({
           <AlertTriangle size={14} color="#FFD59E" />
           <Text style={styles.headerBadgeText}>{title}</Text>
         </View>
-        <View style={styles.countPill}>
-          <Text style={styles.countPillText}>{forecasts.length > 0 ? `${forecasts.length}D` : alerts.length}</Text>
+        <View style={styles.headerRightGroup}>
+          {liveStatusLabel ? (
+            <View style={styles.liveStatusPill} testID="marine-alerts-live-status">
+              <View style={[styles.liveStatusDot, { backgroundColor: panelData.liveCount > 0 ? '#4ADE80' : '#FCD34D' }]} />
+              <Text style={styles.liveStatusText}>{liveStatusLabel}</Text>
+            </View>
+          ) : null}
+          <View style={styles.countPill}>
+            <Text style={styles.countPillText}>{forecasts.length > 0 ? `${forecasts.length}D` : alerts.length}</Text>
+          </View>
         </View>
       </View>
 
       <Text style={styles.description}>{description}</Text>
+
+      <Pressable
+        style={({ pressed }) => [styles.syncNowButton, pressed ? styles.syncNowButtonPressed : null]}
+        onPress={handleSyncNow}
+        disabled={isSyncingNow}
+        testID="marine-alerts-sync-now"
+      >
+        {isSyncingNow ? (
+          <ActivityIndicator size="small" color="#0B1B33" />
+        ) : (
+          <RefreshCw size={14} color="#0B1B33" />
+        )}
+        <Text style={styles.syncNowButtonText}>{isSyncingNow ? 'Syncing forecast…' : 'Sync now'}</Text>
+      </Pressable>
 
       {alertsQuery.isLoading ? (
         <View style={styles.emptyState}>
@@ -434,11 +456,17 @@ export function MarineAlertsPanel({
           <View style={styles.sectionHeaderRow}>
             <CloudSun size={14} color="#B4EBFF" />
             <Text style={styles.sectionTitle}>Detailed {Math.max(1, daysAhead + 1)}-day forecast</Text>
+            <Text style={styles.tapHint}>Tap for details</Text>
           </View>
           {forecasts.map((forecast) => {
             const severityMeta = forecast.strongestSeverity ? getSeverityMeta(forecast.strongestSeverity) : null;
             return (
-              <View key={forecast.id} style={styles.forecastCard} testID={`marine-forecast-item-${forecast.cruiseId}-${forecast.dateKey}`}>
+              <Pressable
+                key={forecast.id}
+                style={({ pressed }) => [styles.forecastCard, pressed ? styles.forecastCardPressed : null]}
+                onPress={() => setSelectedForecastId(forecast.id)}
+                testID={`marine-forecast-item-${forecast.cruiseId}-${forecast.dateKey}`}
+              >
                 <View style={styles.forecastTopRow}>
                   <View style={styles.forecastTitleWrap}>
                     <Text style={styles.forecastDate}>{forecast.dayLabel}</Text>
@@ -470,7 +498,11 @@ export function MarineAlertsPanel({
                     <Text style={styles.forecastMetricValue}>{formatMetricValue(forecast.precipitationChance, '%')}</Text>
                   </View>
                 </View>
-              </View>
+                <View style={styles.forecastTapRow}>
+                  <MapPin size={11} color="rgba(232, 246, 255, 0.6)" />
+                  <Text style={styles.forecastTapText}>View full marine forecast</Text>
+                </View>
+              </Pressable>
             );
           })}
         </View>
@@ -531,6 +563,65 @@ export function MarineAlertsPanel({
           })}
         </View>
       ) : null}
+
+      <Modal visible={Boolean(selectedForecast)} transparent animationType="slide" onRequestClose={() => setSelectedForecastId(null)}>
+        <SafeAreaView style={styles.modalOverlay} edges={['bottom']}>
+          <Pressable style={styles.modalBackdrop} onPress={() => setSelectedForecastId(null)} />
+          <View style={styles.modalSheet} testID="marine-forecast-detail-modal">
+            <LinearGradient colors={['rgba(9, 24, 52, 0.99)', 'rgba(14, 54, 103, 0.98)', 'rgba(6, 111, 147, 0.97)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.modalGradient}>
+              <View style={styles.modalHeaderRow}>
+                <View style={styles.modalHeaderBadge}>
+                  <Ship size={13} color="#8BE0FF" />
+                  <Text style={styles.modalHeaderBadgeText}>{selectedForecast?.shipName}</Text>
+                </View>
+                <Pressable style={styles.modalCloseButton} onPress={() => setSelectedForecastId(null)} testID="marine-forecast-detail-close">
+                  <X size={16} color="#E7F8FF" />
+                </Pressable>
+              </View>
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalScrollContent}>
+                <Text style={styles.modalDayLabel}>{selectedForecast?.dayLabel}</Text>
+                <Text style={styles.modalHeadline}>{selectedForecast?.headline}</Text>
+                <View style={styles.modalLocationRow}>
+                  <MapPin size={13} color="#D9F3FF" />
+                  <Text style={styles.modalLocationText}>{selectedForecast?.zoneLabel}</Text>
+                </View>
+                <Text style={styles.modalSummary}>{selectedForecast?.summary}</Text>
+                <View style={styles.modalMetricGrid}>
+                  <View style={styles.modalMetricCard}>
+                    <Text style={styles.modalMetricLabel}>Temp Range</Text>
+                    <Text style={styles.modalMetricValue}>{formatTempRange(selectedForecast?.lowTempF ?? null, selectedForecast?.highTempF ?? null)}</Text>
+                  </View>
+                  <View style={styles.modalMetricCard}>
+                    <View style={styles.modalMetricHeaderInline}><Wind size={13} color="#B4EBFF" /><Text style={styles.modalMetricLabel}>Wind / Gusts</Text></View>
+                    <Text style={styles.modalMetricValue}>{formatMetricValue(selectedForecast?.windMph ?? null, ' mph')} · {formatMetricValue(selectedForecast?.windGustMph ?? null, ' mph')}</Text>
+                  </View>
+                  <View style={styles.modalMetricCard}>
+                    <View style={styles.modalMetricHeaderInline}><Waves size={13} color="#B4EBFF" /><Text style={styles.modalMetricLabel}>Sea / Waves</Text></View>
+                    <Text style={styles.modalMetricValue}>{formatMetricValue(selectedForecast?.waveHeightFt ?? null, ' ft', 1)}</Text>
+                  </View>
+                  <View style={styles.modalMetricCard}>
+                    <Text style={styles.modalMetricLabel}>Rain Risk</Text>
+                    <Text style={styles.modalMetricValue}>{formatMetricValue(selectedForecast?.precipitationChance ?? null, '%')}</Text>
+                  </View>
+                </View>
+                <View style={styles.modalConditionRow}>
+                  <CloudSun size={14} color="#B4EBFF" />
+                  <Text style={styles.modalConditionText}>{selectedForecast?.conditionLabel}</Text>
+                  <Text style={styles.modalConditionDot}>•</Text>
+                  <Text style={styles.modalConditionText}>{selectedForecast?.sourceLabel}</Text>
+                </View>
+                {selectedForecast && selectedForecast.advisoryCount > 0 ? (
+                  <View style={styles.modalAdvisoryNote}>
+                    <AlertTriangle size={13} color="#FCD34D" />
+                    <Text style={styles.modalAdvisoryNoteText}>{selectedForecast.advisoryCount} marine watchout{selectedForecast.advisoryCount === 1 ? '' : 's'} for this day — see the list below for details.</Text>
+                  </View>
+                ) : null}
+                <Text style={styles.modalFootnote}>This is the live marine forecast (wind, seas, and swell) for this ship's location on this exact day, pulled fresh each time you sync.</Text>
+              </ScrollView>
+            </LinearGradient>
+          </View>
+        </SafeAreaView>
+      </Modal>
     </LinearGradient>
   );
 }
@@ -569,6 +660,60 @@ const styles = StyleSheet.create({
     letterSpacing: 0.9,
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  headerRightGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  liveStatusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  liveStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  liveStatusText: {
+    color: '#E8F6FF',
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+  },
+  syncNowButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    alignSelf: 'flex-start',
+    backgroundColor: '#E8F6FF',
+    borderRadius: 999,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 9,
+  },
+  syncNowButtonPressed: {
+    opacity: 0.75,
+    transform: [{ scale: 0.97 }],
+  },
+  syncNowButtonText: {
+    color: '#0B1B33',
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  tapHint: {
+    flex: 1,
+    textAlign: 'right',
+    color: 'rgba(232, 246, 255, 0.56)',
+    fontSize: TYPOGRAPHY.fontSizeXS,
   },
   countPill: {
     minWidth: 28,
@@ -632,6 +777,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.md,
     gap: 8,
+  },
+  forecastCardPressed: {
+    opacity: 0.8,
+    transform: [{ scale: 0.99 }],
+  },
+  forecastTapRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 2,
+  },
+  forecastTapText: {
+    color: 'rgba(232, 246, 255, 0.62)',
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontStyle: 'italic',
   },
   forecastTopRow: {
     flexDirection: 'row',
@@ -787,5 +947,153 @@ const styles = StyleSheet.create({
     color: '#E8F6FF',
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(3, 10, 22, 0.55)',
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  modalSheet: {
+    maxHeight: '82%',
+    borderTopLeftRadius: BORDER_RADIUS.xl,
+    borderTopRightRadius: BORDER_RADIUS.xl,
+    overflow: 'hidden',
+  },
+  modalGradient: {
+    paddingTop: SPACING.lg,
+    paddingHorizontal: SPACING.lg,
+    paddingBottom: SPACING.lg,
+  },
+  modalHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.sm,
+  },
+  modalHeaderBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    borderRadius: 999,
+  },
+  modalHeaderBadgeText: {
+    color: '#E7F8FF',
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.7,
+  },
+  modalCloseButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.10)',
+  },
+  modalScrollContent: {
+    gap: SPACING.sm,
+    paddingBottom: SPACING.lg,
+  },
+  modalDayLabel: {
+    color: '#BDEBFF',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  modalHeadline: {
+    color: COLORS.white,
+    fontSize: TYPOGRAPHY.fontSizeXL,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  modalLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  modalLocationText: {
+    flex: 1,
+    color: '#D9F3FF',
+    fontSize: TYPOGRAPHY.fontSizeSM,
+  },
+  modalSummary: {
+    color: 'rgba(237, 248, 255, 0.88)',
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    lineHeight: 20,
+  },
+  modalMetricGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+    marginTop: SPACING.xs,
+  },
+  modalMetricCard: {
+    width: '47%',
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    borderRadius: BORDER_RADIUS.lg,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+    gap: 4,
+  },
+  modalMetricHeaderInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  modalMetricLabel: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: 'rgba(231, 248, 255, 0.72)',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  modalMetricValue: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.white,
+  },
+  modalConditionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: SPACING.xs,
+  },
+  modalConditionText: {
+    color: '#D9F3FF',
+    fontSize: TYPOGRAPHY.fontSizeSM,
+  },
+  modalConditionDot: {
+    color: 'rgba(214, 238, 255, 0.56)',
+  },
+  modalAdvisoryNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: 'rgba(245, 158, 11, 0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(252, 211, 77, 0.28)',
+    borderRadius: BORDER_RADIUS.lg,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+  },
+  modalAdvisoryNoteText: {
+    flex: 1,
+    color: 'rgba(237, 248, 255, 0.9)',
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    lineHeight: 19,
+  },
+  modalFootnote: {
+    color: 'rgba(232, 246, 255, 0.6)',
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    lineHeight: 17,
+    marginTop: SPACING.xs,
   },
 });

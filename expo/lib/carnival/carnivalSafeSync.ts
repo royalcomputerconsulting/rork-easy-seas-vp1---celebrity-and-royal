@@ -1414,30 +1414,45 @@ export function injectCarnivalProfileScrape(requestId: string, runId = ''): stri
   function rowsFromCapturedPayload() {
     var rows = [];
     var payloads = capturedProfilePayloads();
+    function field(object, names) {
+      var keys = Object.keys(object);
+      for (var ni = 0; ni < names.length; ni++) {
+        var target = names[ni].toLowerCase();
+        for (var ki = 0; ki < keys.length; ki++) {
+          if (keys[ki].toLowerCase().replace(/[_-]/g, '') !== target) continue;
+          var raw = object[keys[ki]];
+          if (raw !== null && raw !== undefined && raw !== '') return raw;
+        }
+      }
+      return '';
+    }
     function walk(value, depth) {
       if (!value || depth > 7 || rows.length > 1000) return;
       if (Array.isArray(value)) { for (var ai = 0; ai < value.length; ai++) walk(value[ai], depth + 1); return; }
       if (typeof value !== 'object') return;
-      var ship = compact(value.shipName || value.ship || value.vesselName || '');
-      var sailDate = compact(value.sailDate || value.departureDate || value.startDate || '');
+      var ship = compact(field(value, ['shipName', 'ship', 'vesselName', 'vessel']));
+      var sailDate = compact(field(value, ['sailDate', 'departureDate', 'startDate', 'sailingDate', 'sailingStartDate', 'embarkDate', 'embarkationDate', 'cruiseStartDate']));
       if (ship && sailDate) {
-        var endDate = compact(value.endDate || value.returnDate || '');
-        var statusText = compact(value.status || value.bookingStatus || '');
+        var endDate = compact(field(value, ['endDate', 'returnDate', 'sailingEndDate', 'debarkDate', 'debarkationDate', 'cruiseEndDate']));
+        var statusText = compact(field(value, ['status', 'bookingStatus', 'reservationStatus', 'cruiseStatus']));
         var isCompleted = /completed|past|history/i.test(statusText) || isPastSailing(endDate || sailDate);
         if (!statusText) statusText = isCompleted ? 'Completed' : 'Upcoming';
+        var passengers = field(value, ['passengers', 'guests', 'guestList']);
+        var stateroomNumberValue = compact(field(value, ['stateroomNumber', 'cabinNumber', 'roomNumber']));
+        var itineraryValue = compact(field(value, ['itinerary', 'destination', 'itineraryName']));
         rows.push({
-          rawBooking: undefined, sourcePage: isCompleted ? 'Completed' : 'Upcoming', shipName: normalizeShip(ship), shipCode: compact(value.shipCode || ''),
-          cruiseTitle: compact(value.cruiseTitle || value.title || value.itinerary || 'Carnival Cruise'), sailingStartDate: normalizeDate(sailDate),
-          sailingEndDate: normalizeDate(endDate), sailingDates: normalizeDate(sailDate), itinerary: compact(value.itinerary || value.destination || ''),
-          departurePort: compact(value.departurePort || value.homePort || ''), arrivalPort: compact(value.arrivalPort || ''),
-          cabinType: compact(value.stateroomType || value.cabinType || ''), cabinCategory: compact(value.stateroomCategoryCode || value.categoryCode || ''),
-          cabinNumberOrGTY: compact(value.stateroomNumber || value.cabinNumber || 'GTY'), deckNumber: compact(value.deckNumber || ''),
-          bookingId: compact(value.bookingId || value.confirmationNumber || value.reservationId || syntheticBookingId({ shipName: normalizeShip(ship), sailingStartDate: normalizeDate(sailDate), sailingEndDate: normalizeDate(endDate), itinerary: compact(value.itinerary || value.destination || ''), cabinNumberOrGTY: compact(value.stateroomNumber || value.cabinNumber || 'GTY'), passengers: value.passengers || value.guests || [] })),
-          numberOfGuests: String(value.guestCount || value.numberOfGuests || ''), numberOfNights: Number(value.numberOfNights || value.duration || 0) || undefined,
-          daysToGo: '', status: isCompleted ? 'Completed' : 'Upcoming', loyaltyLevel: '', loyaltyPoints: '', paidInFull: value.paidInFull ? 'Yes' : '',
-          balanceDue: compact(value.balanceDue || value.amountDue || ''), musterStation: '', bookingStatus: compact(value.bookingStatus || statusText),
-          packageCode: compact(value.packageCode || value.rateCode || ''), passengerStatus: '', stateroomNumber: compact(value.stateroomNumber || value.cabinNumber || ''),
-          stateroomCategoryCode: compact(value.stateroomCategoryCode || value.categoryCode || ''), stateroomType: compact(value.stateroomType || value.cabinType || '')
+          rawBooking: undefined, sourcePage: isCompleted ? 'Completed' : 'Upcoming', shipName: normalizeShip(ship), shipCode: compact(field(value, ['shipCode'])),
+          cruiseTitle: compact(field(value, ['cruiseTitle', 'title', 'itinerary'])) || 'Carnival Cruise', sailingStartDate: normalizeDate(sailDate),
+          sailingEndDate: normalizeDate(endDate), sailingDates: normalizeDate(sailDate), itinerary: itineraryValue,
+          departurePort: compact(field(value, ['departurePort', 'homePort'])), arrivalPort: compact(field(value, ['arrivalPort'])),
+          cabinType: compact(field(value, ['stateroomType', 'cabinType'])), cabinCategory: compact(field(value, ['stateroomCategoryCode', 'categoryCode'])),
+          cabinNumberOrGTY: stateroomNumberValue || 'GTY', deckNumber: compact(field(value, ['deckNumber'])),
+          bookingId: compact(field(value, ['bookingId', 'confirmationNumber', 'reservationId', 'bookingNumber'])) || syntheticBookingId({ shipName: normalizeShip(ship), sailingStartDate: normalizeDate(sailDate), sailingEndDate: normalizeDate(endDate), itinerary: itineraryValue, cabinNumberOrGTY: stateroomNumberValue || 'GTY', passengers: passengers || [] }),
+          numberOfGuests: String(field(value, ['guestCount', 'numberOfGuests']) || ''), numberOfNights: Number(field(value, ['numberOfNights', 'duration', 'nights']) || 0) || undefined,
+          daysToGo: '', status: isCompleted ? 'Completed' : 'Upcoming', loyaltyLevel: '', loyaltyPoints: '', paidInFull: field(value, ['paidInFull']) ? 'Yes' : '',
+          balanceDue: compact(field(value, ['balanceDue', 'amountDue'])), musterStation: '', bookingStatus: compact(field(value, ['bookingStatus']) || statusText),
+          packageCode: compact(field(value, ['packageCode', 'rateCode'])), passengerStatus: '', stateroomNumber: stateroomNumberValue,
+          stateroomCategoryCode: compact(field(value, ['stateroomCategoryCode', 'categoryCode'])), stateroomType: compact(field(value, ['stateroomType', 'cabinType']))
         });
         return;
       }
