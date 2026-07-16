@@ -1,8 +1,9 @@
-import React, { useMemo } from 'react';
-import { ActivityIndicator, View, Text, StyleSheet } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { ActivityIndicator, Modal, Pressable, ScrollView, View, Text, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, CloudSun, MapPin, Waves, Wind } from 'lucide-react-native';
+import { AlertTriangle, ChevronRight, CloudSun, MapPin, Waves, Wind, X } from 'lucide-react-native';
 import { BORDER_RADIUS, COLORS, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import { useSailingWeather, type SailingWeatherCruiseInput, type SailingWeatherForecast } from '@/state/SailingWeatherProvider';
 
@@ -96,6 +97,7 @@ function getAdvisoryMeta(severity: 'info' | 'watch' | 'warning'): { accent: stri
 export function SailingWeatherCard({ cruise, selectedDate }: SailingWeatherCardProps) {
   const { isHydrated, getForecastForCruiseDay } = useSailingWeather();
   const dateKey = useMemo(() => formatDateKey(selectedDate), [selectedDate]);
+  const [isDetailVisible, setIsDetailVisible] = useState<boolean>(false);
 
   const weatherQuery = useQuery({
     queryKey: ['sailing-weather', cruise.id, dateKey],
@@ -167,6 +169,12 @@ export function SailingWeatherCard({ cruise, selectedDate }: SailingWeatherCardP
   }
 
   return (
+    <>
+    <Pressable
+      onPress={() => setIsDetailVisible(true)}
+      style={({ pressed }) => [pressed ? styles.cardPressed : null]}
+      testID={`sailing-weather-card-press-${cruise.id}`}
+    >
     <LinearGradient
       colors={['rgba(9, 24, 52, 0.98)', 'rgba(14, 54, 103, 0.95)', 'rgba(6, 111, 147, 0.92)']}
       start={{ x: 0, y: 0 }}
@@ -328,7 +336,145 @@ export function SailingWeatherCard({ cruise, selectedDate }: SailingWeatherCardP
       <Text style={styles.offlineHint}>
         Saved locally for this sailing day, so you can still read the forecast when service gets patchy offshore.
       </Text>
+
+      <View style={styles.detailTapRow}>
+        <MapPin size={12} color="rgba(232, 246, 255, 0.65)" />
+        <Text style={styles.detailTapText}>Tap for the full hour-by-hour marine forecast</Text>
+        <ChevronRight size={14} color="rgba(232, 246, 255, 0.65)" />
+      </View>
     </LinearGradient>
+    </Pressable>
+
+    <Modal
+      visible={isDetailVisible}
+      transparent
+      animationType="slide"
+      onRequestClose={() => setIsDetailVisible(false)}
+    >
+      <SafeAreaView style={styles.modalOverlay} edges={['bottom']}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setIsDetailVisible(false)} />
+        <View style={styles.modalSheet} testID={`sailing-weather-detail-modal-${cruise.id}`}>
+          <LinearGradient
+            colors={['rgba(9, 24, 52, 0.99)', 'rgba(14, 54, 103, 0.98)', 'rgba(6, 111, 147, 0.97)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.modalGradient}
+          >
+            <View style={styles.modalHeaderRow}>
+              <View style={styles.modalHeaderBadge}>
+                <CloudSun size={13} color="#8BE0FF" />
+                <Text style={styles.modalHeaderBadgeText} numberOfLines={1}>{cruise.shipName} · Full Marine Forecast</Text>
+              </View>
+              <Pressable style={styles.modalCloseButton} onPress={() => setIsDetailVisible(false)} testID={`sailing-weather-detail-close-${cruise.id}`}>
+                <X size={16} color="#E7F8FF" />
+              </Pressable>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalScrollContent}>
+              <Text style={styles.modalHeadline}>{forecast.headline}</Text>
+              <View style={styles.modalLocationRow}>
+                <MapPin size={13} color="#D9F3FF" />
+                <Text style={styles.modalLocationText}>{forecast.zoneLabel}</Text>
+              </View>
+              <Text style={styles.summary}>{forecast.summary}</Text>
+
+              <View style={styles.metricGrid}>
+                <View style={styles.metricCard}>
+                  <Text style={styles.metricLabel}>Temp</Text>
+                  <Text style={styles.metricValue}>
+                    {forecast.metrics.lowTempF !== null && forecast.metrics.highTempF !== null
+                      ? `${Math.round(forecast.metrics.lowTempF)}°–${Math.round(forecast.metrics.highTempF)}°`
+                      : '—'}
+                  </Text>
+                </View>
+                <View style={styles.metricCard}>
+                  <View style={styles.metricHeaderInline}>
+                    <Wind size={13} color="#B4EBFF" />
+                    <Text style={styles.metricLabel}>Wind / Gust</Text>
+                  </View>
+                  <Text style={styles.metricValue}>
+                    {formatMetricValue(forecast.metrics.maxWindMph, ' mph')} / {formatMetricValue(forecast.metrics.maxWindGustMph, ' mph')}
+                  </Text>
+                </View>
+                <View style={styles.metricCard}>
+                  <View style={styles.metricHeaderInline}>
+                    <Waves size={13} color="#B4EBFF" />
+                    <Text style={styles.metricLabel}>Seas / Swell</Text>
+                  </View>
+                  <Text style={styles.metricValue}>
+                    {formatMetricValue(forecast.metrics.maxWaveHeightFt, ' ft', 1)} / {formatMetricValue(forecast.metrics.maxSwellHeightFt, ' ft', 1)}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.detailGrid}>
+                <View style={styles.detailChip}>
+                  <Text style={styles.detailChipLabel}>Wind Dir</Text>
+                  <Text style={styles.detailChipValue}>{formatDirectionLabel(forecast.metrics.dominantWindDirectionDegrees)}</Text>
+                </View>
+                <View style={styles.detailChip}>
+                  <Text style={styles.detailChipLabel}>Swell Dir</Text>
+                  <Text style={styles.detailChipValue}>{formatDirectionLabel(forecast.metrics.dominantSwellDirectionDegrees)}</Text>
+                </View>
+                <View style={styles.detailChip}>
+                  <Text style={styles.detailChipLabel}>Wave Period</Text>
+                  <Text style={styles.detailChipValue}>{formatMetricValue(forecast.metrics.maxWavePeriodSeconds, 's')}</Text>
+                </View>
+                <View style={styles.detailChip}>
+                  <Text style={styles.detailChipLabel}>Rain Risk</Text>
+                  <Text style={styles.detailChipValue}>{formatMetricValue(forecast.metrics.precipitationChance, '%')}</Text>
+                </View>
+              </View>
+
+              {forecast.advisories.length > 0 ? (
+                <View style={styles.advisoriesSection}>
+                  <Text style={styles.modalSectionTitle}>Marine watchouts</Text>
+                  {forecast.advisories.map((advisory) => {
+                    const advisoryMeta = getAdvisoryMeta(advisory.severity);
+                    return (
+                      <View
+                        key={advisory.id}
+                        style={[
+                          styles.advisoryCard,
+                          { backgroundColor: advisoryMeta.backgroundColor, borderColor: advisoryMeta.borderColor },
+                        ]}
+                      >
+                        <View style={[styles.advisoryIconBadge, { backgroundColor: `${advisoryMeta.accent}22` }]}>
+                          <AlertTriangle size={13} color={advisoryMeta.accent} />
+                        </View>
+                        <View style={styles.advisoryTextWrap}>
+                          <Text style={[styles.advisoryTitle, { color: advisoryMeta.accent }]}>{advisory.title}</Text>
+                          <Text style={styles.advisoryDetail}>{advisory.detail}</Text>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              ) : null}
+
+              {forecast.hourly.length > 0 ? (
+                <View style={styles.advisoriesSection}>
+                  <Text style={styles.modalSectionTitle}>Hour-by-hour</Text>
+                  {forecast.hourly.map((point) => (
+                    <View key={point.isoTime} style={styles.hourlyRow} testID={`sailing-weather-hourly-${cruise.id}-${point.isoTime}`}>
+                      <Text style={styles.hourlyTime}>{point.label}</Text>
+                      <Text style={styles.hourlyMetric}>{formatMetricValue(point.temperatureF, '°')}</Text>
+                      <Text style={styles.hourlyMetric}>{formatMetricValue(point.windMph, ' mph')}</Text>
+                      <Text style={styles.hourlyMetric}>{formatMetricValue(point.waveHeightFt, ' ft', 1)}</Text>
+                      <Text style={styles.hourlyMetric}>{formatMetricValue(point.precipitationProbability, '%')}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+
+              <Text style={styles.footerText}>
+                Updated {formatUpdatedTime(forecast.updatedAt)} · {forecast.timezone} · {sourceMeta.label}
+              </Text>
+            </ScrollView>
+          </LinearGradient>
+        </View>
+      </SafeAreaView>
+    </Modal>
+    </>
   );
 }
 
@@ -624,5 +770,121 @@ const styles = StyleSheet.create({
   },
   statusPending: {
     backgroundColor: 'rgba(255, 255, 255, 0.18)',
+  },
+  cardPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.99 }],
+  },
+  detailTapRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 2,
+  },
+  detailTapText: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontStyle: 'italic',
+    color: 'rgba(232, 246, 255, 0.65)',
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(3, 10, 22, 0.55)',
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  modalSheet: {
+    maxHeight: '85%',
+    borderTopLeftRadius: BORDER_RADIUS.xl,
+    borderTopRightRadius: BORDER_RADIUS.xl,
+    overflow: 'hidden',
+  },
+  modalGradient: {
+    paddingTop: SPACING.lg,
+    paddingHorizontal: SPACING.lg,
+    paddingBottom: SPACING.lg,
+  },
+  modalHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.sm,
+  },
+  modalHeaderBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    borderRadius: 999,
+    flex: 1,
+  },
+  modalHeaderBadgeText: {
+    color: '#E7F8FF',
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.7,
+  },
+  modalCloseButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.10)',
+  },
+  modalScrollContent: {
+    gap: SPACING.sm,
+    paddingBottom: SPACING.lg,
+  },
+  modalHeadline: {
+    color: COLORS.white,
+    fontSize: TYPOGRAPHY.fontSizeXL,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  modalLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  modalLocationText: {
+    flex: 1,
+    color: '#D9F3FF',
+    fontSize: TYPOGRAPHY.fontSizeSM,
+  },
+  modalSectionTitle: {
+    color: '#E7F8FF',
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginTop: SPACING.sm,
+  },
+  hourlyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: BORDER_RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  hourlyTime: {
+    width: 56,
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#BDEBFF',
+  },
+  hourlyMetric: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: 'rgba(231, 248, 255, 0.85)',
+    textAlign: 'center',
   },
 });

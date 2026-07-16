@@ -22,6 +22,7 @@ type MarineAlertSeverity = 'info' | 'watch' | 'warning';
 interface MarineAlertItem {
   id: string;
   cruiseId: string;
+  forecastId: string;
   shipName: string;
   dateKey: string;
   severity: MarineAlertSeverity;
@@ -307,6 +308,7 @@ export function MarineAlertsPanel({
           nextAlerts.push({
             id: `${cruise.id}:${forecast.dateKey}:${advisory.id}`,
             cruiseId: cruise.id,
+            forecastId: forecast.cacheKey,
             shipName: cruise.shipName,
             dateKey: forecast.dateKey,
             severity: advisory.severity,
@@ -526,14 +528,16 @@ export function MarineAlertsPanel({
           {visibleAlerts.map((alert) => {
             const severityMeta = getSeverityMeta(alert.severity);
             return (
-              <View
+              <Pressable
                 key={alert.id}
-                style={[
+                onPress={() => setSelectedForecastId(alert.forecastId)}
+                style={({ pressed }) => [
                   styles.alertCard,
                   {
                     backgroundColor: severityMeta.backgroundColor,
                     borderColor: severityMeta.borderColor,
                   },
+                  pressed ? styles.forecastCardPressed : null,
                 ]}
                 testID={`marine-alert-item-${alert.cruiseId}-${alert.dateKey}`}
               >
@@ -567,7 +571,11 @@ export function MarineAlertsPanel({
                     <Text style={styles.metricChipText}>{formatMetricValue(alert.waveHeightFt, ' ft', 1)}</Text>
                   </View>
                 </View>
-              </View>
+                <View style={styles.forecastTapRow}>
+                  <MapPin size={11} color="rgba(232, 246, 255, 0.6)" />
+                  <Text style={styles.forecastTapText}>Tap for the full marine forecast</Text>
+                </View>
+              </Pressable>
             );
           })}
         </View>
