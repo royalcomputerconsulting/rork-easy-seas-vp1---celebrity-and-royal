@@ -4,6 +4,7 @@ import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { LogBox } from "react-native";
 import { StyleSheet, View, Text, ActivityIndicator, Platform, useWindowDimensions } from "react-native";
 import { CoreDataProvider, useCoreData } from "@/state/CoreDataProvider";
 import { clearAllAppData } from "@/lib/dataManager";
@@ -53,6 +54,19 @@ try {
   void SplashScreen.preventAutoHideAsync();
 } catch {
 }
+
+// These certificate/network messages are already caught, retried, surfaced in
+// an in-app log panel, and shown via a friendly Alert — they are handled,
+// non-fatal outcomes, not crashes. Without this, React Native's dev LogBox
+// still pops a disruptive full-screen "Console Error"/"Console Warning"
+// overlay for them that looks like the app crashed.
+LogBox.ignoreLogs([
+  /Certificate Download (ERROR|WARNING)/i,
+  /CertificateExplorerModal\] Certificate examination failed/i,
+  /JSON Parse error/i,
+  /Unexpected character:\s*N/i,
+  /Unexpected end of input/i,
+]);
 
 // Diagnostics intentionally do NOT auto-initialize here.
 

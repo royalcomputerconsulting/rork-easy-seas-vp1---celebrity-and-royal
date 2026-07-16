@@ -244,7 +244,11 @@ export function CertificateExplorerModal({ visible, onClose }: CertificateExplor
         includeC,
       });
     } catch (error) {
-      console.error('[CertificateExplorerModal] Certificate examination failed:', error);
+      // Intentionally console.warn (not console.error): this failure is fully
+      // caught, retried upstream, logged in the in-app log panel below, and
+      // shown via the friendly Alert right after — a raw console.error would
+      // trigger a disruptive full-screen dev overlay that looks like a crash.
+      console.warn('[CertificateExplorerModal] Certificate examination failed:', error);
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       const isNetworkError = errorMsg.includes('fetch') || errorMsg.includes('Failed') || errorMsg.includes('network') || errorMsg.includes('timeout');
       const userMessage = isNetworkError

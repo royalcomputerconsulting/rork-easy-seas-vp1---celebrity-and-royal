@@ -13,15 +13,35 @@ function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, '');
 }
 
+// The legacy standalone Render service (easy-seas-backend-v2) is no longer
+// deployed and now returns a bare 404 for every route, including "/". This
+// broke certificate downloads, Carnival sync, and anything else that talks to
+// trpcClient. This project's own backend/hono.ts is auto-hosted by Rork at
+// EXPO_PUBLIC_RORK_API_BASE_URL and is always live, so prefer it whenever it
+// is present; only fall back to the legacy Render URL if Rork hasn't set one
+// (e.g. an older/offline build) or the app explicitly overrides it.
+const RORK_HOSTED_API_BASE_URL = trimTrailingSlash(
+  process.env.EXPO_PUBLIC_RORK_API_BASE_URL?.trim() || ''
+);
+
 export const RENDER_BACKEND_URL = trimTrailingSlash(
   process.env.EXPO_PUBLIC_RENDER_BACKEND_URL?.trim() || DEFAULT_RENDER_URL
 );
+
+const USE_RORK_HOSTED_BACKEND = RORK_HOSTED_API_BASE_URL.length > 0
+  && !process.env.EXPO_PUBLIC_RENDER_BACKEND_URL?.trim();
+
+// Base URL used for non-tRPC helper endpoints (calendar feed, SeaPass shell
+// proxy) that expect an "/api" prefixed root rather than the tRPC path.
+export const BACKEND_API_ROOT_URL = USE_RORK_HOSTED_BACKEND
+  ? (RORK_HOSTED_API_BASE_URL.endsWith('/api') ? RORK_HOSTED_API_BASE_URL : `${RORK_HOSTED_API_BASE_URL}/api`)
+  : RENDER_BACKEND_URL;
 
 export const isCloudBackupEnabled = (): boolean => isCloudBackupEnabledByEnv();
 
 export const isRenderBackendAvailable = () => isCloudBackupEnabled();
 
-const getBackendUrl = (): string => RENDER_BACKEND_URL;
+const getBackendUrl = (): string => (USE_RORK_HOSTED_BACKEND ? BACKEND_API_ROOT_URL : RENDER_BACKEND_URL);
 
 let _backendReachable: boolean | null = null;
 let _lastHealthCheck = 0;
@@ -229,12 +249,13 @@ const fetchWithRetry = async (
 export const getTrpcClient = () => {
   if (!_trpcClient) {
     const backendUrl = getBackendUrl();
-    console.log("[tRPC] Initializing client - Render backend:", backendUrl);
+    const trpcUrl = `${backendUrl}/trpc`;
+    console.log("[tRPC] Initializing client -", USE_RORK_HOSTED_BACKEND ? "Rork-hosted backend:" : "Render backend:", backendUrl);
 
     _trpcClient = trpc.createClient({
       links: [
         httpLink({
-          url: `${backendUrl}/trpc`,
+          url: trpcUrl,
           transformer: superjson,
           fetch: async (url, options) => {
             try {

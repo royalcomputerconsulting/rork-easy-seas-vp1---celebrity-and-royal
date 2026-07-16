@@ -64,7 +64,7 @@ interface MarinePanelData {
   offlineCount: number;
 }
 
-const EMPTY_PANEL_DATA: MarinePanelData = { alerts: [], forecasts: [] };
+const EMPTY_PANEL_DATA: MarinePanelData = { alerts: [], forecasts: [], liveCount: 0, cacheCount: 0, offlineCount: 0 };
 
 function startOfDay(date: Date): Date {
   const normalized = new Date(date);
