@@ -257,8 +257,8 @@ export function MarineAlertsPanel({
   startDate = new Date(),
   daysAhead = 7,
   maxItems = 3,
-  title = 'Rough seas / weather alerts',
-  description = 'Upcoming marine alerts for your sailing window.',
+  title = 'Rough seas / big-wave alerts',
+  description = 'Advance notice of big waves and rough seas before you sail, plus a day-by-day outlook while you\'re on board.',
   testID,
 }: MarineAlertsPanelProps) {
   const { isHydrated, getForecastForCruiseDay } = useSailingWeather();

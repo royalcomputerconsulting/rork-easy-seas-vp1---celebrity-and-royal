@@ -70,7 +70,10 @@ type FilterType = 'all' | 'upcoming' | 'completed' | 'celebrity';
 type SortType = 'next' | 'newest' | 'oldest' | 'ship' | 'nights';
 type ViewMode = 'list' | 'timeline' | 'points';
 
-const BOOKED_MARINE_ALERT_FORECAST_DAYS = 10;
+// Matches the marine/weather model's maximum forecast horizon (Open-Meteo: 16 days),
+// so the next upcoming cruise's rough-seas / big-wave outlook surfaces as far in
+// advance of sailing as real forecast data is available — not just once it's imminent.
+const BOOKED_MARINE_ALERT_FORECAST_DAYS = 16;
 const BOOKED_MARINE_ALERT_DAYS_AHEAD = BOOKED_MARINE_ALERT_FORECAST_DAYS - 1;
 
 function isCruiseCompleted(cruise: BookedCruise): boolean {
@@ -593,8 +596,8 @@ export default function BookedScreen() {
           startDate={new Date()}
           daysAhead={BOOKED_MARINE_ALERT_DAYS_AHEAD}
           maxItems={3}
-          title="Rough seas / weather alerts"
-          description="10-day outlook focused on the next sailing you are on, with rough-seas, squall, and bad-weather watchouts before and during the cruise."
+          title="Rough seas / big-wave alerts"
+          description="Up to 16-day advance outlook for your next sailing, with big-wave, rough-seas, squall, and bad-weather watchouts before you even leave the dock and every day you're at sea."
           testID="booked-marine-alerts-panel"
         />
       </View>

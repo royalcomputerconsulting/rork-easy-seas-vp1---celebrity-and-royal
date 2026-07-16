@@ -9,10 +9,21 @@ const BASE_STORAGE_KEY = '@easy_seas_sailing_weather_cache_v1';
 const PORT_GEOCODE_CACHE_STORAGE_KEY = '@easy_seas_sailing_weather_port_geocode_cache_v1';
 const CACHE_REFRESH_MS = 1000 * 60 * 60 * 6;
 const CACHE_RETENTION_MS = 1000 * 60 * 60 * 24 * 10;
-const FORECAST_PREFETCH_HORIZON_DAYS = 15;
+/**
+ * Open-Meteo's weather + marine forecast models are only valid up to 16 days
+ * out. We prefetch right up to that ceiling so guests get the earliest
+ * possible advance notice of building seas/big waves before their cruise
+ * even starts, not just once they're a few days from sailing.
+ */
+const FORECAST_MODEL_MAX_HORIZON_DAYS = 16;
+const FORECAST_PREFETCH_HORIZON_DAYS = FORECAST_MODEL_MAX_HORIZON_DAYS;
 const FORECAST_PREFETCH_START_SOON_DAYS = 3;
 const FORECAST_PREFETCH_WINDOW_DAYS = 2;
 const FORECAST_PREFETCH_MAX_CRUISE_DAYS = 8;
+/** Wave-height tiers (feet) used to classify how big the seas are expected to be. */
+const BIG_WAVE_WARNING_FT = 12;
+const ROUGH_SEAS_WATCH_FT = 8;
+const BUILDING_SEAS_INFO_FT = 6;
 
 const PORT_COORDINATES: Record<string, { latitude: number; longitude: number; label: string }> = {
   miami: { latitude: 25.7781, longitude: -80.1794, label: 'Miami' },
@@ -557,6 +568,25 @@ function buildSummary(metrics: SailingWeatherForecast['metrics'], isSeaDay: bool
   };
 }
 
+/**
+ * Classifies forecast wave height into a rider-facing severity tier so "big
+ * wave" notice is driven purely by sea state, independent of wind — a long-
+ * period swell can build big waves with little local wind to show for it.
+ */
+function classifyWaveTier(maxWaveHeightFt: number | null): { severity: SailingWeatherAdvisory['severity']; title: string } | null {
+  if (!isNumber(maxWaveHeightFt)) return null;
+  if (maxWaveHeightFt >= BIG_WAVE_WARNING_FT) {
+    return { severity: 'warning', title: 'Big wave warning' };
+  }
+  if (maxWaveHeightFt >= ROUGH_SEAS_WATCH_FT) {
+    return { severity: 'watch', title: 'Rough seas expected' };
+  }
+  if (maxWaveHeightFt >= BUILDING_SEAS_INFO_FT) {
+    return { severity: 'info', title: 'Building seas' };
+  }
+  return null;
+}
+
 function buildMarineAdvisories(
   cruise: SailingWeatherCruiseInput,
   resolvedPoint: ResolvedCruiseWeatherPoint,
@@ -570,13 +600,13 @@ function buildMarineAdvisories(
   const inBajaZone = withinRange(resolvedPoint.latitude, 22, 32.6) && withinRange(resolvedPoint.longitude, -118.8, -105);
   const inTehuantepecZone = withinRange(resolvedPoint.latitude, 13.2, 17.6) && withinRange(resolvedPoint.longitude, -97.8, -91.8);
   const severeWind = Math.max(metrics.maxWindMph ?? 0, metrics.maxWindGustMph ?? 0) >= 28;
-  const severeSeas = (metrics.maxWaveHeightFt ?? 0) >= 8;
+  const waveTier = classifyWaveTier(metrics.maxWaveHeightFt);
   const stormRisk = metrics.conditionLabel === 'Storm risk' || (metrics.precipitationChance ?? 0) >= 70;
 
   if (inTehuantepecZone || normalizedContext.includes('tehuantepec') || normalizedContext.includes('huatulco') || normalizedContext.includes('puerto chiapas')) {
     advisories.push({
       id: 'tehuantepec-gap-wind',
-      severity: severeWind || severeSeas ? 'warning' : 'watch',
+      severity: severeWind || (waveTier?.severity === 'warning') ? 'warning' : 'watch',
       title: 'Gulf of Tehuantepec watch',
       detail: 'Gap-wind events here can ramp quickly and build steep seas. Recheck the latest forecast before sailaway and tender operations.',
     });
@@ -591,12 +621,27 @@ function buildMarineAdvisories(
     });
   }
 
-  if (severeWind || severeSeas) {
+  if (waveTier) {
+    const waveHeightLabel = `${roundNumber(metrics.maxWaveHeightFt ?? 0, 1)} ft`;
+    const detail = waveTier.severity === 'warning'
+      ? `Model guidance is showing seas up to ${waveHeightLabel} on this cruise day — expect a noticeably rougher ride. Secure loose items in your stateroom and consider motion-sickness remedies ahead of time.`
+      : waveTier.severity === 'watch'
+        ? `Seas are trending up to ${waveHeightLabel} on this cruise day. Not extreme, but you may feel the ship's motion more than usual.`
+        : `Seas are building toward ${waveHeightLabel} on this cruise day — worth a recheck as it gets closer.`;
     advisories.push({
-      id: 'rougher-marine-window',
-      severity: severeWind && severeSeas ? 'warning' : 'watch',
-      title: 'Rougher marine window',
-      detail: `Model guidance is showing up to ${Math.round(metrics.maxWindGustMph ?? metrics.maxWindMph ?? 0)} mph wind and ${roundNumber(metrics.maxWaveHeightFt ?? 0, 1)} ft seas for this cruise day.`,
+      id: 'big-wave-tier',
+      severity: waveTier.severity,
+      title: waveTier.title,
+      detail,
+    });
+  }
+
+  if (severeWind) {
+    advisories.push({
+      id: 'high-wind-advisory',
+      severity: 'watch',
+      title: 'High wind advisory',
+      detail: `Model guidance is showing wind gusts up to ${Math.round(metrics.maxWindGustMph ?? metrics.maxWindMph ?? 0)} mph for this cruise day, which can add chop on top of the base swell.`,
     });
   }
 
@@ -609,7 +654,10 @@ function buildMarineAdvisories(
     });
   }
 
-  return advisories.slice(0, 3);
+  const severityOrder: Record<SailingWeatherAdvisory['severity'], number> = { warning: 3, watch: 2, info: 1 };
+  return advisories
+    .sort((left, right) => severityOrder[right.severity] - severityOrder[left.severity])
+    .slice(0, 4);
 }
 
 function sleep(ms: number): Promise<void> {
