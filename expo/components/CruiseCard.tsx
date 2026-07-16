@@ -122,6 +122,11 @@ export const CruiseCard = React.memo(function CruiseCard({
   }, [cruise, showRetailValue]);
 
   const formatDateRange = (sailDate: string, returnDate?: string, nights?: number) => {
+    if (!sailDate?.trim()) {
+      // Never fabricate a "today" date for a cruise with no known sail date - that produces
+      // a misleading, real-looking date on what is actually missing/incomplete data.
+      return 'Date unavailable';
+    }
     const start = createDateFromString(sailDate);
     const startMonth = start.toLocaleDateString('en-US', { month: 'short' });
     const startDay = start.getDate();

@@ -464,31 +464,50 @@ function parseCompletedSailingsPayload(data: any, cruiseLine: CruiseLine): Booke
   ];
   const sailings = possible.find(Array.isArray) as any[] | undefined;
   if (!sailings || !sailings.length) return [];
-  return sailings.map((sailing) => {
+  let skippedNoData = 0;
+  const rows = sailings.map((sailing) => {
     const sailDate = normalizeSyncDate(firstString(
       sailing?.sailDate, sailing?.sailingStartDate, sailing?.startDate, sailing?.departureDate, sailing?.date,
-      sailing?.voyage?.sailDate, sailing?.cruise?.sailDate
+      sailing?.embarkDate, sailing?.embarkationDate, sailing?.cruiseStartDate, sailing?.voyageStartDate,
+      sailing?.voyage?.sailDate, sailing?.voyage?.startDate, sailing?.voyage?.departureDate,
+      sailing?.cruise?.sailDate, sailing?.cruise?.startDate, sailing?.sailingInfo?.sailDate, sailing?.sailingInfo?.startDate
     ));
     const returnDate = normalizeSyncDate(firstString(
       sailing?.returnDate, sailing?.sailingEndDate, sailing?.endDate, sailing?.arrivalDate,
-      sailing?.voyage?.returnDate, sailing?.cruise?.returnDate
+      sailing?.debarkDate, sailing?.disembarkationDate, sailing?.cruiseEndDate, sailing?.voyageEndDate,
+      sailing?.voyage?.returnDate, sailing?.voyage?.endDate, sailing?.cruise?.returnDate, sailing?.cruise?.endDate,
+      sailing?.sailingInfo?.returnDate, sailing?.sailingInfo?.endDate
     ));
     const nights = firstString(sailing?.numberOfNights, sailing?.nights, sailing?.duration, sailing?.voyage?.nights);
     const parsedNights = nights ? Number.parseInt(nights, 10) : 0;
     const resolvedNights = parsedNights > 0 ? parsedNights : deriveCruiseNightsFromDates(sailDate, returnDate);
-    const shipName = normalizeShipNameFromSailing(sailing) || firstString(sailing?.shipCode) || 'Unknown Ship';
+    const shipName = normalizeShipNameFromSailing(sailing) || firstString(sailing?.shipCode) || '';
+    const itineraryName = firstString(sailing?.itineraryName, sailing?.itinerary, sailing?.cruiseName, sailing?.voyage?.itineraryName);
+    const departurePort = firstString(sailing?.departurePort, sailing?.embarkPort, sailing?.portName);
     const bookingId = firstString(sailing?.bookingId, sailing?.bookingNumber, sailing?.reservationId, sailing?.reservationNumber, sailing?.confirmationNumber);
+
+    // v13.0: The loyalty/history ledger occasionally returns a row where none of
+    // ship/date/itinerary/port can be resolved (only opaque internal IDs). Rendering that
+    // as a "completed cruise" card produces a fabricated-looking placeholder - an empty
+    // sail date falls back to "today" in the UI and empty itinerary/port show "Unknown".
+    // Real history rows always carry at least a ship name or a sail date; skip rows with
+    // neither instead of manufacturing a card with no real information.
+    if (!sailDate && !shipName) {
+      skippedNoData += 1;
+      return null;
+    }
+
     const completedRow: BookedCruiseRow = {
       rawBooking: sailing,
       sourcePage: 'Completed Cruises',
-      shipName,
+      shipName: shipName || 'Unknown Ship',
       shipCode: firstString(sailing?.shipCode, sailing?.voyage?.shipCode),
       sailingStartDate: sailDate,
       sailingEndDate: returnDate,
-      itineraryName: firstString(sailing?.itineraryName, sailing?.itinerary, sailing?.cruiseName, sailing?.voyage?.itineraryName),
-      itinerary: firstString(sailing?.itineraryName, sailing?.itinerary, sailing?.cruiseName, sailing?.voyage?.itineraryName),
+      itineraryName,
+      itinerary: itineraryName,
       sailingDates: sailDate && returnDate ? `${sailDate} - ${returnDate}` : sailDate,
-      departurePort: firstString(sailing?.departurePort, sailing?.embarkPort, sailing?.portName),
+      departurePort,
       cabinType: firstString(sailing?.cabinType, sailing?.stateroomType, sailing?.roomType),
       cabinNumberOrGTY: firstString(sailing?.cabinNumber, sailing?.stateroomNumber, sailing?.roomNumber) || 'GTY',
       bookingId,
@@ -513,7 +532,11 @@ function parseCompletedSailingsPayload(data: any, cruiseLine: CruiseLine): Booke
     } as BookedCruiseRow;
     completedRow.bookingId = bookingId || buildUnconfirmedBookingIdentifier(completedRow);
     return completedRow;
-  });
+  }).filter((row): row is BookedCruiseRow => row !== null);
+  if (skippedNoData > 0) {
+    console.log(`[RoyalCaribbeanSync] Skipped ${skippedNoData} loyalty/history sailing(s) with no ship name or sail date (would have rendered as an empty placeholder)`);
+  }
+  return rows;
 }
 
 const InitialCruiseLineContext = createContext<CruiseLine>('royal_caribbean');
@@ -3202,15 +3225,23 @@ export const [RoyalCaribbeanSyncProvider, useRoyalCaribbeanSync] = createContext
           } else {
             codeStatus = 'incomplete';
             const incompleteReason = codeError || 'No authoritative completion or empty-result proof was captured';
+            // v13.0: Do NOT set isInProgress here. That flag is reserved for genuinely
+            // pending/earning reward offers (see isInProgressOffer), and setting it on every
+            // sailing-search-incomplete Carnival code caused ALL 20 discovered offers to be
+            // silently dropped from the sync preview - even though the offer identity itself
+            // (name/code/price/expiry) was captured fine and only per-code sailing search timed
+            // out. The offerStatus marker below is sufficient to flag "still resolving" without
+            // triggering the in-progress filter, so the offer catalog still updates while its
+            // eligible-sailing count stays honestly at 0 until a future resync fills it in.
             if (!offerRows.length) {
               offerRows = [{
                 sourcePage: 'Carnival Offers', offerName, offerCode: entry.code, offerExpirationDate: offerExpiry,
                 offerType: 'Carnival Players Club', shipName: '', sailingDate: '', itinerary: '', departurePort: '',
                 cabinType: '', numberOfGuests: '2', perks: entry.perks || '', bookingLink: entry.bookingLink || buildCarnivalOfferSearchUrl(offerCatalog, entry.code, 1, pageSize),
-                offerStatus: 'Fallback Extraction Incomplete', isInProgress: true,
+                offerStatus: 'Fallback Extraction Incomplete',
               } as OfferRow];
             } else {
-              offerRows = offerRows.map((row) => ({ ...row, offerStatus: 'Fallback Extraction Incomplete', isInProgress: true }));
+              offerRows = offerRows.map((row) => ({ ...row, offerStatus: 'Fallback Extraction Incomplete' }));
             }
             codeError = incompleteReason;
             addLog(`⚠️ ${entry.code} remains incomplete and will be retried on resume: ${incompleteReason}`, 'warning');

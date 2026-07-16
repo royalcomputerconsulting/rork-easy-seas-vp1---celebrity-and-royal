@@ -1,0 +1,491 @@
+CARNIVAL CRUISE LINE - SYNC LOG
+Generated: 7/16/2026, 6:34:38 AM
+Status: partial
+Last Sync: 7/16/2026, 6:34:34 AM
+
+--- SYNC SUMMARY ---
+Offers: 20 unique deal(s)
+Sailings: 0 total sailing(s)
+Booked Cruises: 17
+Courtesy Holds: 1
+Completed Cruises: 83
+
+--- DETAILED LOG ---
+07/16/2026, 06:21:34 [OK] Parsing loyalty data
+07/16/2026, 06:21:34 [INFO] Reading loyalty data
+07/16/2026, 06:21:34 [OK] 🎰 Club Royale Status
+07/16/2026, 06:21:34 [OK] 📊 Tier: "Signature"
+07/16/2026, 06:21:34 [OK] 💎 Points: 20,941
+07/16/2026, 06:21:34 [OK] Reading loyalty data
+07/16/2026, 06:21:37 [OK] Opening offers
+07/16/2026, 06:21:37 [OK] Reading offers page
+07/16/2026, 06:21:38 [OK] Opening offers page for Club Royale
+07/16/2026, 06:21:39 [OK] Parsing loyalty data
+07/16/2026, 06:21:39 [INFO] Reading loyalty data
+07/16/2026, 06:21:39 [OK] 🎰 Club Royale Status
+07/16/2026, 06:21:39 [OK] 📊 Tier: "Signature"
+07/16/2026, 06:21:39 [OK] 💎 Points: 20,941
+07/16/2026, 06:21:39 [OK] Reading loyalty data
+07/16/2026, 06:21:39 [WARN] 🔎 Offer discovery pass 1: 0 offer(s), 0 View Sailings button(s)
+07/16/2026, 06:21:40 [OK] Reading loyalty data
+07/16/2026, 06:21:41 [OK] Found offer 26NPR503 — Limitless Luck
+07/16/2026, 06:21:41 [OK] Found offer 26SEP103 — September Shuffle
+07/16/2026, 06:21:41 [OK] Found offer 26MIX403 — Stacked Sailings
+07/16/2026, 06:21:41 [OK] Found offer 2607C06 — July Instant Cruise Reward
+07/16/2026, 06:21:41 [OK] Found offer 26VAR403 — Island Advantage
+07/16/2026, 06:21:41 [OK] DOM discovery: parsed 5 visible/linked offer card(s), found 5 View Sailings button(s)
+07/16/2026, 06:21:41 [OK] Opening offer 1/5: 26NPR503
+07/16/2026, 06:21:42 [OK] Widget scrape: CA -/- | CR Signature/20941
+07/16/2026, 06:21:42 [OK] ✅ Merged DOM fallback loyalty fields without suppressing missing-field fallbacks
+07/16/2026, 06:21:42 [OK] 🎰 Club Royale tier: Signature
+07/16/2026, 06:21:42 [OK] 💎 Club Royale points: 20,941
+07/16/2026, 06:21:43 [OK] Scraping offer 26NPR503
+07/16/2026, 06:21:45 [OK] Widget scrape: CA -/- | CR Signature/20941
+07/16/2026, 06:21:45 [OK] ✅ Merged DOM fallback loyalty fields without suppressing missing-field fallbacks
+07/16/2026, 06:21:45 [OK] 🎰 Club Royale tier: Signature
+07/16/2026, 06:21:45 [OK] 💎 Club Royale points: 20,941
+07/16/2026, 06:21:49 [OK] Widget scrape: CA -/- | CR Signature/20941
+07/16/2026, 06:21:49 [OK] ✅ Merged DOM fallback loyalty fields without suppressing missing-field fallbacks
+07/16/2026, 06:21:49 [OK] 🎰 Club Royale tier: Signature
+07/16/2026, 06:21:49 [OK] 💎 Club Royale points: 20,941
+07/16/2026, 06:21:50 [OK] Finished offer 26NPR503: 6 sailing(s)
+07/16/2026, 06:21:50 [OK] Saved offer 26NPR503: 6 sailing(s), 6 total
+07/16/2026, 06:21:50 [OK] ✅ React Native handoff attempted for 26NPR503: 6 row(s)
+07/16/2026, 06:21:50 [OK] ACK offers_batch 26NPR503-checkpoint-1-1784208110263: received 6, accepted 6, app-side total 6
+07/16/2026, 06:21:50 [OK] ✅ Captured casino offer "Limitless Luck" (Code: 26NPR503)
+07/16/2026, 06:21:50 [OK] 📊 Captured 6 sailing(s) for this offer
+07/16/2026, 06:21:50 [OK] 🚢 Sailing 1: Jewel of the Seas - 2026-12-07
+07/16/2026, 06:21:50 [OK] 🚢 Sailing 2: Jewel of the Seas - 2026-12-19
+07/16/2026, 06:21:50 [OK] 🚢 Sailing 3: Jewel of the Seas - 2026-12-20
+07/16/2026, 06:21:50 [OK] ➕ ...and 3 more sailing(s)
+07/16/2026, 06:21:50 [OK] Opening offers page for Club Royale
+07/16/2026, 06:21:52 [OK] Reading loyalty data
+07/16/2026, 06:21:52 [WARN] 🔎 Offer discovery pass 1: 0 offer(s), 0 View Sailings button(s)
+07/16/2026, 06:21:53 [OK] Reading loyalty data
+07/16/2026, 06:21:54 [WARN] 🔎 Offer discovery pass 2: 0 offer(s), 0 View Sailings button(s)
+07/16/2026, 06:21:55 [OK] Found offer 26NPR503 — Limitless Luck
+07/16/2026, 06:21:55 [OK] Found offer 26SEP103 — September Shuffle
+07/16/2026, 06:21:55 [OK] Found offer 26MIX403 — Stacked Sailings
+07/16/2026, 06:21:55 [OK] Found offer 2607C06 — July Instant Cruise Reward
+07/16/2026, 06:21:55 [OK] Found offer 26VAR403 — Island Advantage
+07/16/2026, 06:21:55 [OK] DOM discovery: parsed 5 visible/linked offer card(s), found 5 View Sailings button(s)
+07/16/2026, 06:21:55 [OK] Opening offer 2/5: 26SEP103
+07/16/2026, 06:21:56 [OK] Scraping offer 26SEP103
+07/16/2026, 06:22:02 [OK] Finished offer 26SEP103: 49 sailing(s)
+07/16/2026, 06:22:02 [OK] Saved offer 26SEP103: 49 sailing(s), 55 total
+07/16/2026, 06:22:02 [OK] ✅ React Native handoff attempted for 26SEP103: 49 row(s)
+07/16/2026, 06:22:02 [OK] ACK offers_batch 26SEP103-checkpoint-1-1784208122692: received 49, accepted 49, app-side total 55
+07/16/2026, 06:22:02 [OK] ✅ Captured casino offer "September Shuffle" (Code: 26SEP103)
+07/16/2026, 06:22:02 [OK] 📊 Captured 49 sailing(s) for this offer
+07/16/2026, 06:22:02 [OK] 🚢 Sailing 1: Harmony of the Seas - 2026-09-03
+07/16/2026, 06:22:02 [OK] 🚢 Sailing 2: Radiance of the Seas - 2026-09-03
+07/16/2026, 06:22:02 [OK] 🚢 Sailing 3: Jewel of the Seas - 2026-09-04
+07/16/2026, 06:22:02 [OK] ➕ ...and 46 more sailing(s)
+07/16/2026, 06:22:03 [OK] Opening offers page for Club Royale
+07/16/2026, 06:22:04 [OK] Reading loyalty data
+07/16/2026, 06:22:04 [WARN] 🔎 Offer discovery pass 1: 0 offer(s), 0 View Sailings button(s)
+07/16/2026, 06:22:05 [OK] Reading loyalty data
+07/16/2026, 06:22:06 [OK] Found offer 26NPR503 — Limitless Luck
+07/16/2026, 06:22:06 [OK] Found offer 26SEP103 — September Shuffle
+07/16/2026, 06:22:06 [OK] Found offer 26MIX403 — Stacked Sailings
+07/16/2026, 06:22:06 [OK] Found offer 2607C06 — July Instant Cruise Reward
+07/16/2026, 06:22:06 [OK] Found offer 26VAR403 — Island Advantage
+07/16/2026, 06:22:06 [OK] DOM discovery: parsed 5 visible/linked offer card(s), found 5 View Sailings button(s)
+07/16/2026, 06:22:06 [OK] Opening offer 3/5: 26MIX403
+07/16/2026, 06:22:08 [OK] Scraping offer 26MIX403
+07/16/2026, 06:22:20 [OK] Finished offer 26MIX403: 58 sailing(s)
+07/16/2026, 06:22:20 [OK] Saved offer 26MIX403: 58 sailing(s), 113 total
+07/16/2026, 06:22:20 [OK] ✅ React Native handoff attempted for 26MIX403: 58 row(s)
+07/16/2026, 06:22:20 [OK] ACK offers_batch 26MIX403-checkpoint-1-1784208140708: received 44, accepted 44, app-side total 99
+07/16/2026, 06:22:20 [OK] ✅ Captured casino offer "Stacked Sailings" (Code: 26MIX403)
+07/16/2026, 06:22:20 [OK] 📊 Captured 44 sailing(s) for this offer
+07/16/2026, 06:22:20 [OK] 🚢 Sailing 1: Brilliance of the Seas - 2026-12-02
+07/16/2026, 06:22:20 [OK] 🚢 Sailing 2: Brilliance of the Seas - 2026-12-07
+07/16/2026, 06:22:20 [OK] 🚢 Sailing 3: Brilliance of the Seas - 2026-01-11
+07/16/2026, 06:22:20 [OK] ➕ ...and 41 more sailing(s)
+07/16/2026, 06:22:20 [OK] ACK offers_batch 26MIX403-checkpoint-2-1784208140708: received 14, accepted 14, app-side total 113
+07/16/2026, 06:22:20 [OK] ✅ Captured casino offer "Stacked Sailings" (Code: 26MIX403)
+07/16/2026, 06:22:20 [OK] 📊 Captured 14 sailing(s) for this offer
+07/16/2026, 06:22:20 [OK] 🚢 Sailing 1: Adventure of the Seas - 2026-01-09
+07/16/2026, 06:22:20 [OK] 🚢 Sailing 2: Adventure of the Seas - 2026-12-13
+07/16/2026, 06:22:20 [OK] 🚢 Sailing 3: Adventure of the Seas - 2026-02-07
+07/16/2026, 06:22:20 [OK] ➕ ...and 11 more sailing(s)
+07/16/2026, 06:22:21 [OK] Opening offers page for Club Royale
+07/16/2026, 06:22:22 [OK] Reading loyalty data
+07/16/2026, 06:22:22 [WARN] 🔎 Offer discovery pass 1: 0 offer(s), 0 View Sailings button(s)
+07/16/2026, 06:22:23 [OK] Reading loyalty data
+07/16/2026, 06:22:24 [OK] Found offer 26NPR503 — Limitless Luck
+07/16/2026, 06:22:24 [OK] DOM discovery: parsed 1 visible/linked offer card(s), found 1 View Sailings button(s)
+07/16/2026, 06:22:24 [OK] Opening offer 4/5: 2607C06
+07/16/2026, 06:22:25 [OK] Scraping offer 2607C06
+07/16/2026, 06:22:31 [OK] Finished offer 2607C06: 6 sailing(s)
+07/16/2026, 06:22:31 [OK] Saved offer 2607C06: 6 sailing(s), 119 total
+07/16/2026, 06:22:31 [OK] ✅ React Native handoff attempted for 2607C06: 6 row(s)
+07/16/2026, 06:22:31 [OK] ACK offers_batch 2607C06-checkpoint-1-1784208151427: received 6, accepted 6, app-side total 119
+07/16/2026, 06:22:31 [OK] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+07/16/2026, 06:22:31 [OK] 📊 Captured 6 sailing(s) for this offer
+07/16/2026, 06:22:31 [OK] 🚢 Sailing 1: Jewel of the Seas - 2026-12-07
+07/16/2026, 06:22:31 [OK] 🚢 Sailing 2: Jewel of the Seas - 2026-12-19
+07/16/2026, 06:22:31 [OK] 🚢 Sailing 3: Jewel of the Seas - 2026-12-20
+07/16/2026, 06:22:31 [OK] ➕ ...and 3 more sailing(s)
+07/16/2026, 06:22:31 [OK] Opening offers page for Club Royale
+07/16/2026, 06:22:33 [OK] Reading loyalty data
+07/16/2026, 06:22:33 [WARN] 🔎 Offer discovery pass 1: 0 offer(s), 0 View Sailings button(s)
+07/16/2026, 06:22:34 [OK] Reading loyalty data
+07/16/2026, 06:22:35 [OK] Found offer 26NPR503 — Limitless Luck
+07/16/2026, 06:22:35 [OK] Found offer 26SEP103 — September Shuffle
+07/16/2026, 06:22:35 [OK] Found offer 26MIX403 — Stacked Sailings
+07/16/2026, 06:22:35 [OK] Found offer 2607C06 — July Instant Cruise Reward
+07/16/2026, 06:22:35 [OK] Found offer 26VAR403 — Island Advantage
+07/16/2026, 06:22:35 [OK] DOM discovery: parsed 5 visible/linked offer card(s), found 5 View Sailings button(s)
+07/16/2026, 06:22:35 [OK] Opening offer 5/5: 26VAR403
+07/16/2026, 06:22:36 [OK] Scraping offer 26VAR403
+07/16/2026, 06:22:41 [OK] Finished offer 26VAR403: 2 sailing(s)
+07/16/2026, 06:22:42 [OK] Saved offer 26VAR403: 2 sailing(s), 121 total
+07/16/2026, 06:22:42 [OK] ✅ React Native handoff attempted for 26VAR403: 2 row(s)
+07/16/2026, 06:22:42 [OK] Accepted full row: 26NPR503 | Jewel of the Seas | 12/07/2026 | 9 Night Eastern Caribbean Cruise | Fort Lauderdale
+07/16/2026, 06:22:42 [OK] Accepted full row: 26NPR503 | Jewel of the Seas | 12/19/2026 | 9 Night Eastern Caribbean Cruise | Fort Lauderdale
+07/16/2026, 06:22:42 [OK] Accepted full row: 26NPR503 | Jewel of the Seas | 12/20/2026 | 9 Night Eastern Caribbean Cruise | Fort Lauderdale
+07/16/2026, 06:22:42 [OK] Accepted full row: 26NPR503 | Jewel of the Seas | 12/20/2026 | 8 Night Western Caribbean Holiday Cruise | Fort Lauderdale
+07/16/2026, 06:22:42 [OK] Accepted full row: 26MIX403 | Brilliance of the Seas | 12/02/2026 | 4 Night Bahamas & Perfect Day Cruise | Fort Lauderdale
+07/16/2026, 06:22:42 [OK] Accepted full row: 26MIX403 | Brilliance of the Seas | 12/07/2026 | 4 Night Bahamas & Perfect Day Cruise | Fort Lauderdale
+07/16/2026, 06:22:42 [OK] Accepted full row: 26MIX403 | Brilliance of the Seas | 01/11/2026 | 4 Night Bahamas & Perfect Day Cruise | Fort Lauderdale
+07/16/2026, 06:22:42 [OK] Accepted full row: 26MIX403 | Brilliance of the Seas | 01/18/2026 | 4 Night Bahamas & Perfect Day Cruise | Fort Lauderdale
+07/16/2026, 06:22:42 [OK] Accepted full row: 26MIX403 | Brilliance of the Seas | 02/01/2026 | 4 Night Bahamas & Perfect Day Cruise | Fort Lauderdale
+07/16/2026, 06:22:42 [OK] Accepted full row: 26MIX403 | Adventure of the Seas | 12/13/2026 | 6 Night Western Caribbean Cruise | Fort Lauderdale
+07/16/2026, 06:22:42 [OK] Accepted full row: 26MIX403 | Adventure of the Seas | 12/20/2026 | 6 Night Western Caribbean Cruise | Fort Lauderdale
+07/16/2026, 06:22:42 [OK] Accepted full row: 26MIX403 | Adventure of the Seas | 12/27/2026 | 6 Night Western Caribbean Cruise | Fort Lauderdale
+07/16/2026, 06:22:42 [OK] Accepted full row: 26MIX403 | Adventure of the Seas | 02/07/2026 | 6 Night Western Caribbean Cruise | Fort Lauderdale
+07/16/2026, 06:22:42 [OK] Accepted full row: 26MIX403 | Independence of the Seas | 01/03/2027 | 7 Night Western Caribbean Cruise | Fort Lauderdale
+07/16/2026, 06:22:42 [OK] Accepted full row: 26MIX403 | Brilliance of the Seas | 01/04/2027 | 4 Night Bahamas & Perfect Day Cruise | Fort Lauderdale
+07/16/2026, 06:22:42 [OK] Accepted full row: 26MIX403 | Enchantment of the Seas | 01/17/2027 | 7 Night Western Caribbean Cruise | Fort Lauderdale
+07/16/2026, 06:22:42 [OK] Accepted full row: 26MIX403 | Independence of the Seas | 01/17/2027 | 7 Night Western Caribbean Cruise | Fort Lauderdale
+07/16/2026, 06:22:42 [OK] Accepted full row: 26MIX403 | Adventure of the Seas | 01/24/2027 | 6 Night Western Caribbean Cruise | Fort Lauderdale
+07/16/2026, 06:22:42 [OK] Accepted full row: 26MIX403 | Adventure of the Seas | 02/21/2027 | 6 Night Western Caribbean Cruise | Fort Lauderdale
+07/16/2026, 06:22:42 [OK] Accepted full row: 26MIX403 | Enchantment of the Seas | 01/24/2027 | 7 Night Western Caribbean Cruise | Fort Lauderdale
+07/16/2026, 06:22:42 [OK] Accepted full row: 26MIX403 | Independence of the Seas | 01/24/2027 | 7 Night Eastern Caribbean Cruise | Fort Lauderdale
+07/16/2026, 06:22:42 [OK] Accepted full row: 26MIX403 | Brilliance of the Seas | 01/25/2027 | 4 Night Key West & Bahamas Cruise | Key West
+07/16/2026, 06:22:42 [OK] Accepted full row: 26MIX403 | Brilliance of the Seas | 02/08/2027 | 4 Night Bahamas & Perfect Day Cruise | Fort Lauderdale
+07/16/2026, 06:22:42 [OK] Accepted full row: 26MIX403 | Mariner of the Seas | 02/13/2027 | 7 Night Western Caribbean Cruise | Fort Lauderdale
+07/16/2026, 06:22:42 [OK] Accepted full row: 26MIX403 | Brilliance of the Seas | 02/22/2027 | 4 Night Key West & Perfect Day Cruise | Key West
+07/16/2026, 06:22:42 [OK] ✅ Final offer count 26NPR503: 6 cruise row(s)
+07/16/2026, 06:22:42 [OK] ✅ Final offer count 26SEP103: 49 cruise row(s)
+07/16/2026, 06:22:42 [OK] ✅ Final offer count 26MIX403: 58 cruise row(s)
+07/16/2026, 06:22:42 [OK] ✅ Final offer count 2607C06: 6 cruise row(s)
+07/16/2026, 06:22:42 [OK] ✅ Final offer count 26VAR403: 2 cruise row(s)
+07/16/2026, 06:22:42 [OK] Offers complete: 5 offer(s), 121 sailing(s)
+07/16/2026, 06:22:42 [OK] Step 1 completed with 121 items
+07/16/2026, 06:22:42 [OK] ACK offers_batch 26VAR403-checkpoint-1-1784208161984: received 2, accepted 2, app-side total 121
+07/16/2026, 06:22:42 [OK] ✅ Captured casino offer "Island Advantage" (Code: 26VAR403)
+07/16/2026, 06:22:42 [OK] 📊 Captured 2 sailing(s) for this offer
+07/16/2026, 06:22:42 [OK] 🚢 Sailing 1: Serenade of the Seas - 2026-12-13
+07/16/2026, 06:22:42 [OK] 🚢 Sailing 2: Serenade of the Seas - 2026-12-13
+07/16/2026, 06:22:42 [OK] ACK offers_batch 26NPR503: received 42, accepted 42, app-side total 121
+07/16/2026, 06:22:42 [OK] ✅ Captured casino offer "Limitless Luck" (Code: 26NPR503)
+07/16/2026, 06:22:42 [OK] 📊 Captured 42 sailing(s) for this offer
+07/16/2026, 06:22:42 [OK] 🚢 Sailing 1: Jewel of the Seas - 2026-12-07
+07/16/2026, 06:22:42 [OK] 🚢 Sailing 2: Jewel of the Seas - 2026-12-19
+07/16/2026, 06:22:42 [OK] 🚢 Sailing 3: Jewel of the Seas - 2026-12-20
+07/16/2026, 06:22:42 [OK] ➕ ...and 39 more sailing(s)
+07/16/2026, 06:22:42 [OK] ACK offers_batch 26MIX403: received 40, accepted 40, app-side total 121
+07/16/2026, 06:22:42 [OK] ✅ Captured casino offer "Stacked Sailings" (Code: 26MIX403)
+07/16/2026, 06:22:42 [OK] 📊 Captured 40 sailing(s) for this offer
+07/16/2026, 06:22:42 [OK] 🚢 Sailing 1: Freedom of the Seas - 2026-01-09
+07/16/2026, 06:22:42 [OK] 🚢 Sailing 2: Adventure of the Seas - 2027-01-10
+07/16/2026, 06:22:42 [OK] 🚢 Sailing 3: Independence of the Seas - 2027-01-31
+07/16/2026, 06:22:42 [OK] ➕ ...and 37 more sailing(s)
+07/16/2026, 06:22:42 [OK] ACK offers_batch 26SEP103: received 39, accepted 39, app-side total 121
+07/16/2026, 06:22:42 [OK] ✅ Captured casino offer "September Shuffle" (Code: 26SEP103)
+07/16/2026, 06:22:42 [OK] 📊 Captured 39 sailing(s) for this offer
+07/16/2026, 06:22:42 [OK] 🚢 Sailing 1: Jewel of the Seas - 2026-09-11
+07/16/2026, 06:22:42 [OK] 🚢 Sailing 2: Navigator of the Seas - 2026-09-11
+07/16/2026, 06:22:42 [OK] 🚢 Sailing 3: Quantum of the Seas - 2026-09-11
+07/16/2026, 06:22:42 [OK] ➕ ...and 36 more sailing(s)
+07/16/2026, 06:22:42 [OK] ✅ Royal offer rows are staged for Apply Sync: 5 offer code(s), 121 sailing row(s)
+07/16/2026, 06:22:42 [OK] ✅ STEP 1 COMPLETE: Captured 5 active casino offer(s) with 121 total sailing(s)
+07/16/2026, 06:22:42 [OK] Opening loyalty and booked cruise pages
+07/16/2026, 06:22:42 [OK] Opening booked cruises page
+07/16/2026, 06:22:46 [INFO] Reading booked cruises
+07/16/2026, 06:22:46 [OK] ✅ Captured 13 booking(s) from Royal Caribbean API
+07/16/2026, 06:22:46 [OK] ✅ Captured booking: Navigator of the Seas - 20260717 - Balcony 6334 (7 nights) [Upcoming]
+07/16/2026, 06:22:46 [OK] ✅ Captured booking: Navigator of the Seas - 20260724 - Balcony 6666 (7 nights) [Upcoming]
+07/16/2026, 06:22:46 [OK] ✅ Captured booking: Icon of the Seas - 20260829 - GTY (7 nights) [Courtesy Hold]
+07/16/2026, 06:22:46 [OK] ✅ Captured booking: Harmony of the Seas - 20260910 - Balcony 7146 (5 nights) [Upcoming]
+07/16/2026, 06:22:46 [OK] ✅ Captured booking: Harmony of the Seas - 20260915 - Interior GTY (4 nights) [Upcoming]
+07/16/2026, 06:22:46 [OK] ✅ Captured booking: Harmony of the Seas - 20260919 - Ocean View 10506 (7 nights) [Upcoming]
+07/16/2026, 06:22:46 [OK] ✅ Captured booking: Anthem of the Seas - 20260929 - Ocean View GTY (12 nights) [Upcoming]
+07/16/2026, 06:22:46 [OK] ✅ Captured booking: Allure of the Seas - 20261017 - Ocean View 8510 (8 nights) [Upcoming]
+07/16/2026, 06:22:46 [OK] ✅ Captured booking: Allure of the Seas - 20261025 - Ocean View 3214 (7 nights) [Upcoming]
+07/16/2026, 06:22:46 [OK] ✅ Captured booking: Oasis of the Seas - 20261109 - Balcony GTY (4 nights) [Upcoming]
+07/16/2026, 06:22:46 [OK] ✅ Captured booking: Adventure of the Seas - 20261115 - Balcony GTY (6 nights) [Upcoming]
+07/16/2026, 06:22:46 [OK] ✅ Captured booking: Adventure of the Seas - 20261213 - Ocean View 1832 (6 nights) [Upcoming]
+07/16/2026, 06:22:46 [OK] 📦 Captured Bookings API payload with 0 bookings from
+07/16/2026, 06:22:46 [OK] ✅ Step 2 auto-completing with 13 bookings from network monitor
+07/16/2026, 06:22:46 [OK] ✅ Voyage enrichment data stored for merging with bookings
+07/16/2026, 06:22:46 [OK] 📦 Captured Voyage Enrichment data with 3 voyages from
+07/16/2026, 06:22:46 [OK] Opening booked cruises page
+07/16/2026, 06:22:46 [OK] ✅ All data sections captured!
+07/16/2026, 06:22:46 [OK] ✅ STEP 2 COMPLETE: Captured 13 cruise(s) (12 booked, 1 courtesy holds)
+07/16/2026, 06:22:46 [WARN] ⚠️ Dedicated loyalty route failed: Load failed
+07/16/2026, 06:22:47 [OK] Parsing loyalty data
+07/16/2026, 06:22:47 [INFO] Reading loyalty data
+07/16/2026, 06:22:47 [OK] Captured loyalty from /guestAccounts/loyalty/info (correct endpoint)
+07/16/2026, 06:22:47 [WARN] ⚠️ Loyalty payload did not include usable tier or point fields; keeping loyalty capture open
+07/16/2026, 06:22:47 [WARN] Reading loyalty data
+07/16/2026, 06:22:47 [WARN] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+07/16/2026, 06:22:47 [OK] Parsing loyalty data
+07/16/2026, 06:22:47 [INFO] Reading loyalty data
+07/16/2026, 06:22:47 [OK] ✅ Parsed 59 completed cruise sailing(s) from loyalty/history payload; added 59, reconciled 0 repeat(s)
+07/16/2026, 06:22:47 [OK] Reading loyalty data
+07/16/2026, 06:22:47 [WARN] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+07/16/2026, 06:22:47 [WARN] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+07/16/2026, 06:22:47 [WARN] ⚠️ Dedicated loyalty route failed: Load failed
+07/16/2026, 06:22:47 [WARN] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+07/16/2026, 06:22:47 [WARN] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+07/16/2026, 06:22:47 [WARN] Page check [bookings]: loyalty_widgets @
+07/16/2026, 06:22:47 [WARN] Unexpected page content for this step - trying the next known route
+07/16/2026, 06:22:47 [WARN] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+07/16/2026, 06:22:48 [WARN] ⚠️ Dedicated loyalty route failed: Load failed
+07/16/2026, 06:22:48 [WARN] Reading loyalty data
+07/16/2026, 06:22:48 [WARN] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+07/16/2026, 06:22:48 [WARN] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+07/16/2026, 06:22:49 [WARN] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+07/16/2026, 06:22:49 [WARN] ⚠️ Dedicated loyalty route failed: Load failed
+07/16/2026, 06:22:49 [WARN] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+07/16/2026, 06:22:49 [WARN] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+07/16/2026, 06:22:49 [WARN] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+07/16/2026, 06:22:51 [WARN] Page check [bookings]: loyalty_widgets @
+07/16/2026, 06:22:51 [WARN] Unexpected page content for this step - trying the next known route
+07/16/2026, 06:22:51 [WARN] ⚠️ Dedicated loyalty route failed: Load failed
+07/16/2026, 06:22:51 [WARN] Reading loyalty data
+07/16/2026, 06:22:51 [WARN] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+07/16/2026, 06:22:51 [WARN] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+07/16/2026, 06:22:51 [WARN] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+07/16/2026, 06:22:51 [WARN] ⚠️ Dedicated loyalty route failed: Load failed
+07/16/2026, 06:22:51 [WARN] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+07/16/2026, 06:22:51 [WARN] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+07/16/2026, 06:22:52 [WARN] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+07/16/2026, 06:22:54 [WARN] ⚠️ Dedicated loyalty route failed: Load failed
+07/16/2026, 06:22:54 [WARN] Reading loyalty data
+07/16/2026, 06:22:54 [WARN] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+07/16/2026, 06:22:55 [WARN] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+07/16/2026, 06:22:55 [WARN] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+07/16/2026, 06:22:55 [WARN] ⚠️ Dedicated loyalty route failed: Load failed
+07/16/2026, 06:22:55 [WARN] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+07/16/2026, 06:22:55 [WARN] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+07/16/2026, 06:22:56 [WARN] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+07/16/2026, 06:23:00 [WARN] ⚠️ Dedicated loyalty route failed: Load failed
+07/16/2026, 06:23:00 [WARN] Reading loyalty data
+07/16/2026, 06:23:00 [WARN] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+07/16/2026, 06:23:01 [WARN] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+07/16/2026, 06:23:01 [WARN] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+07/16/2026, 06:23:01 [WARN] ⚠️ Dedicated loyalty route failed: Load failed
+07/16/2026, 06:23:01 [WARN] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+07/16/2026, 06:23:01 [WARN] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+07/16/2026, 06:23:02 [WARN] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+07/16/2026, 06:23:08 [WARN] ⚠️ Dedicated loyalty route failed: Load failed
+07/16/2026, 06:23:08 [WARN] Reading loyalty data
+07/16/2026, 06:23:08 [WARN] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+07/16/2026, 06:23:08 [WARN] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+07/16/2026, 06:23:09 [WARN] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+07/16/2026, 06:23:09 [WARN] ⚠️ Dedicated loyalty route failed: Load failed
+07/16/2026, 06:23:09 [WARN] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+07/16/2026, 06:23:09 [WARN] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+07/16/2026, 06:23:09 [WARN] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+07/16/2026, 06:23:18 [WARN] ⚠️ Dedicated loyalty route failed: Load failed
+07/16/2026, 06:23:18 [WARN] Reading loyalty data
+07/16/2026, 06:23:18 [WARN] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+07/16/2026, 06:23:19 [WARN] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+07/16/2026, 06:23:19 [WARN] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+07/16/2026, 06:23:19 [WARN] ⚠️ Dedicated loyalty route failed: Load failed
+07/16/2026, 06:23:19 [WARN] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+07/16/2026, 06:23:20 [WARN] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+07/16/2026, 06:23:20 [WARN] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+07/16/2026, 06:23:26 [WARN] ⚠️ Dedicated Crown & Anchor capture timed out; preserving existing C&A fields rather than overwriting them
+07/16/2026, 06:23:51 [WARN] Step 3 reached max timeout (65s) - continuing with collected data
+07/16/2026, 06:23:51 [OK] 🎉 ====== ALL STEPS COMPLETE ======
+07/16/2026, 06:23:51 [OK] ✅ All data extracted successfully - ready to sync to your app!
+07/16/2026, 06:23:51 [OK] ✅ STEP 3 COMPLETE: Club Royale captured authoritatively; Crown & Anchor preserved/not captured
+07/16/2026, 06:23:51 [OK] Ready to review: 5 offer(s), 121 sailing(s)
+07/16/2026, 06:23:51 [OK] Ready to review: 12 upcoming, 59 completed/past cruise(s)
+07/16/2026, 06:23:51 [OK] 📊 SUMMARY: Loyalty status captured successfully
+07/16/2026, 06:24:01 [INFO] Applying selected sync data
+07/16/2026, 06:24:08 [OK] ✅ Offers persisted to storage
+07/16/2026, 06:24:08 [OK] ✅ Available cruises persisted to storage
+07/16/2026, 06:24:08 [OK] Opening completed cruise history
+07/16/2026, 06:24:09 [OK] ✅ Booked cruises persisted to storage
+07/16/2026, 06:24:11 [OK] Extended loyalty data synced successfully
+07/16/2026, 06:24:11 [WARN] → Crown & Anchor lane remained incomplete; only individually authoritative C&A fields were updated and all others were preserved
+07/16/2026, 06:24:11 [OK] ✅ Primary User profile updated and verified from storage
+07/16/2026, 06:24:11 [OK] ✅ Data synced successfully to app!
+07/16/2026, 06:24:11 [OK] Sync applied successfully
+07/16/2026, 06:24:28 [OK] Log exported successfully
+07/16/2026, 06:26:39 [INFO] Reading booked cruises
+07/16/2026, 06:26:39 [OK] ✅ Captured 1 booking(s) from Carnival API
+07/16/2026, 06:26:39 [OK] ✅ Captured booking: CARNIVAL PANORAMA - 2023-09-02T00:00:00Z - GTY (0 nights) [Completed]
+07/16/2026, 06:26:39 [OK] 📦 Captured Carnival bookings (1) from /profilemanagement/api/v1.0/Profiles
+07/16/2026, 06:26:40 [OK] Carnival authentication preflight passed via the protected profile API.
+07/16/2026, 06:26:44 [INFO] Reading booked cruises
+07/16/2026, 06:26:44 [OK] [hfi8o2w1] ✅ Captured 1 booking(s) from Carnival API
+07/16/2026, 06:26:44 [OK] [hfi8o2w1] ✅ Captured booking: CARNIVAL PANORAMA - 2023-09-02T00:00:00Z - GTY (0 nights) [Completed]
+07/16/2026, 06:26:44 [OK] [hfi8o2w1] 📦 Captured Carnival bookings (1) from /profilemanagement/api/v1.0/Profiles
+07/16/2026, 06:26:44 [OK] [hfi8o2w1] ✅ Carnival load end [nav 1]:
+07/16/2026, 06:26:48 [OK] [hfi8o2w1] ✅ Carnival load end [nav 2]:
+07/16/2026, 06:26:51 [OK] [hfi8o2w1] Carnival catalog discovery: 20 rate code(s) found for VIFP# 9013404591
+07/16/2026, 06:26:51 [OK] [hfi8o2w1] Found 20 Carnival rate code(s) on Cruise Deals
+07/16/2026, 06:26:51 [OK] [hfi8o2w1] Carnival run catalog locked with 20 personalized rate code(s): FBN, FMV, FNQ, FZV, GBI, HEK, HK8, O5O, O9R, OHS, OJX, ORF, PI0, QA3, QPR, PHY, O31, OJS, OS5, PZC
+07/16/2026, 06:26:51 [OK] [hfi8o2w1] Personalized Carnival search is linked to VIFP# 9013404591
+07/16/2026, 06:26:55 [OK] [hfi8o2w1] ✅ Carnival load end [nav 3]:
+07/16/2026, 06:26:58 [OK] [hfi8o2w1] Carnival catalog discovery: 15 rate code(s) found for VIFP# 9013404591
+07/16/2026, 06:27:03 [OK] [hfi8o2w1] ✅ Carnival load end [nav 4]: FBN page 1
+07/16/2026, 06:27:05 [WARN] [hfi8o2w1] FBN page 1 was incomplete; making one short, request-scoped retry
+07/16/2026, 06:27:06 [OK] [hfi8o2w1] ✅ Carnival load end [nav 5]: FBN page 1 retry
+07/16/2026, 06:27:08 [WARN] [hfi8o2w1] ⚠️ FBN remains incomplete and will be retried on resume: No verified API or settled rendered-page next-page proof was available
+07/16/2026, 06:27:16 [OK] [hfi8o2w1] ✅ Carnival load end [nav 6]:
+07/16/2026, 06:27:17 [OK] [hfi8o2w1] Carnival catalog discovery: 15 rate code(s) found for VIFP# 9013404591
+07/16/2026, 06:27:21 [OK] [hfi8o2w1] ✅ Carnival load end [nav 7]: FMV page 1
+07/16/2026, 06:27:24 [WARN] [hfi8o2w1] FMV page 1 was incomplete; making one short, request-scoped retry
+07/16/2026, 06:27:24 [OK] [hfi8o2w1] ✅ Carnival load end [nav 8]: FMV page 1 retry
+07/16/2026, 06:27:28 [WARN] [hfi8o2w1] ⚠️ FMV remains incomplete and will be retried on resume: No verified API or settled rendered-page next-page proof was available
+07/16/2026, 06:27:35 [OK] [hfi8o2w1] ✅ Carnival load end [nav 9]:
+07/16/2026, 06:27:37 [OK] [hfi8o2w1] Carnival catalog discovery: 15 rate code(s) found for VIFP# 9013404591
+07/16/2026, 06:27:42 [OK] [hfi8o2w1] ✅ Carnival load end [nav 10]: FNQ page 1
+07/16/2026, 06:27:45 [WARN] [hfi8o2w1] FNQ page 1 was incomplete; making one short, request-scoped retry
+07/16/2026, 06:27:45 [OK] [hfi8o2w1] ✅ Carnival load end [nav 11]: FNQ page 1 retry
+07/16/2026, 06:27:48 [WARN] [hfi8o2w1] ⚠️ FNQ remains incomplete and will be retried on resume: No verified API or settled rendered-page next-page proof was available
+07/16/2026, 06:27:55 [OK] [hfi8o2w1] ✅ Carnival load end [nav 12]:
+07/16/2026, 06:27:56 [OK] [hfi8o2w1] Carnival catalog discovery: 15 rate code(s) found for VIFP# 9013404591
+07/16/2026, 06:28:01 [OK] [hfi8o2w1] ✅ Carnival load end [nav 13]: FZV page 1
+07/16/2026, 06:28:04 [WARN] [hfi8o2w1] FZV page 1 was incomplete; making one short, request-scoped retry
+07/16/2026, 06:28:04 [OK] [hfi8o2w1] ✅ Carnival load end [nav 14]: FZV page 1 retry
+07/16/2026, 06:28:07 [WARN] [hfi8o2w1] ⚠️ FZV remains incomplete and will be retried on resume: No verified API or settled rendered-page next-page proof was available
+07/16/2026, 06:28:14 [OK] [hfi8o2w1] ✅ Carnival load end [nav 15]:
+07/16/2026, 06:28:16 [OK] [hfi8o2w1] Carnival catalog discovery: 15 rate code(s) found for VIFP# 9013404591
+07/16/2026, 06:28:20 [OK] [hfi8o2w1] ✅ Carnival load end [nav 16]: GBI page 1
+07/16/2026, 06:28:22 [WARN] [hfi8o2w1] GBI page 1 was incomplete; making one short, request-scoped retry
+07/16/2026, 06:28:25 [OK] [hfi8o2w1] ✅ Carnival load end [nav 17]: GBI page 1 retry
+07/16/2026, 06:28:27 [WARN] [hfi8o2w1] ⚠️ GBI remains incomplete and will be retried on resume: No verified API or settled rendered-page next-page proof was available
+07/16/2026, 06:28:35 [OK] [hfi8o2w1] ✅ Carnival load end [nav 18]:
+07/16/2026, 06:28:36 [OK] [hfi8o2w1] Carnival catalog discovery: 15 rate code(s) found for VIFP# 9013404591
+07/16/2026, 06:28:40 [OK] [hfi8o2w1] ✅ Carnival load end [nav 19]: HEK page 1
+07/16/2026, 06:28:42 [WARN] [hfi8o2w1] HEK page 1 was incomplete; making one short, request-scoped retry
+07/16/2026, 06:28:43 [OK] [hfi8o2w1] ✅ Carnival load end [nav 20]: HEK page 1 retry
+07/16/2026, 06:28:46 [WARN] [hfi8o2w1] ⚠️ HEK remains incomplete and will be retried on resume: No verified API or settled rendered-page next-page proof was available
+07/16/2026, 06:28:53 [OK] [hfi8o2w1] ✅ Carnival load end [nav 21]:
+07/16/2026, 06:28:54 [OK] [hfi8o2w1] Carnival catalog discovery: 15 rate code(s) found for VIFP# 9013404591
+07/16/2026, 06:28:59 [OK] [hfi8o2w1] ✅ Carnival load end [nav 22]: HK8 page 1
+07/16/2026, 06:29:02 [WARN] [hfi8o2w1] HK8 page 1 was incomplete; making one short, request-scoped retry
+07/16/2026, 06:29:03 [OK] [hfi8o2w1] ✅ Carnival load end [nav 23]: HK8 page 1 retry
+07/16/2026, 06:29:05 [WARN] [hfi8o2w1] ⚠️ HK8 remains incomplete and will be retried on resume: No verified API or settled rendered-page next-page proof was available
+07/16/2026, 06:29:10 [OK] [hfi8o2w1] ✅ Carnival load end [nav 24]:
+07/16/2026, 06:29:12 [OK] [hfi8o2w1] Carnival catalog discovery: 15 rate code(s) found for VIFP# 9013404591
+07/16/2026, 06:29:17 [OK] [hfi8o2w1] ✅ Carnival load end [nav 25]: O5O page 1
+07/16/2026, 06:29:19 [WARN] [hfi8o2w1] O5O page 1 was incomplete; making one short, request-scoped retry
+07/16/2026, 06:29:20 [OK] [hfi8o2w1] ✅ Carnival load end [nav 26]: O5O page 1 retry
+07/16/2026, 06:29:23 [WARN] [hfi8o2w1] ⚠️ O5O remains incomplete and will be retried on resume: No verified API or settled rendered-page next-page proof was available
+07/16/2026, 06:29:28 [OK] [hfi8o2w1] ✅ Carnival load end [nav 27]:
+07/16/2026, 06:29:30 [OK] [hfi8o2w1] Carnival catalog discovery: 15 rate code(s) found for VIFP# 9013404591
+07/16/2026, 06:29:38 [OK] [hfi8o2w1] ✅ Carnival load end [nav 28]: O9R page 1
+07/16/2026, 06:29:40 [WARN] [hfi8o2w1] O9R page 1 was incomplete; making one short, request-scoped retry
+07/16/2026, 06:29:41 [OK] [hfi8o2w1] ✅ Carnival load end [nav 29]: O9R page 1 retry
+07/16/2026, 06:29:44 [WARN] [hfi8o2w1] ⚠️ O9R remains incomplete and will be retried on resume: No verified API or settled rendered-page next-page proof was available
+07/16/2026, 06:29:49 [OK] [hfi8o2w1] ✅ Carnival load end [nav 30]:
+07/16/2026, 06:29:50 [OK] [hfi8o2w1] Carnival catalog discovery: 15 rate code(s) found for VIFP# 9013404591
+07/16/2026, 06:29:55 [OK] [hfi8o2w1] ✅ Carnival load end [nav 31]: OHS page 1
+07/16/2026, 06:29:58 [WARN] [hfi8o2w1] OHS page 1 was incomplete; making one short, request-scoped retry
+07/16/2026, 06:29:58 [OK] [hfi8o2w1] ✅ Carnival load end [nav 32]: OHS page 1 retry
+07/16/2026, 06:30:02 [WARN] [hfi8o2w1] ⚠️ OHS remains incomplete and will be retried on resume: No verified API or settled rendered-page next-page proof was available
+07/16/2026, 06:30:07 [OK] [hfi8o2w1] ✅ Carnival load end [nav 33]:
+07/16/2026, 06:30:09 [OK] [hfi8o2w1] Carnival catalog discovery: 15 rate code(s) found for VIFP# 9013404591
+07/16/2026, 06:30:16 [OK] [hfi8o2w1] ✅ Carnival load end [nav 34]: OJX page 1
+07/16/2026, 06:30:18 [WARN] [hfi8o2w1] OJX page 1 was incomplete; making one short, request-scoped retry
+07/16/2026, 06:30:21 [OK] [hfi8o2w1] ✅ Carnival load end [nav 35]: OJX page 1 retry
+07/16/2026, 06:30:24 [WARN] [hfi8o2w1] ⚠️ OJX remains incomplete and will be retried on resume: No verified API or settled rendered-page next-page proof was available
+07/16/2026, 06:30:28 [OK] [hfi8o2w1] ✅ Carnival load end [nav 36]:
+07/16/2026, 06:30:30 [OK] [hfi8o2w1] Carnival catalog discovery: 15 rate code(s) found for VIFP# 9013404591
+07/16/2026, 06:30:35 [OK] [hfi8o2w1] ✅ Carnival load end [nav 37]: ORF page 1
+07/16/2026, 06:30:46 [WARN] [hfi8o2w1] ORF page 1 was incomplete; making one short, request-scoped retry
+07/16/2026, 06:30:47 [OK] [hfi8o2w1] ✅ Carnival load end [nav 38]: ORF page 1 retry
+07/16/2026, 06:30:57 [WARN] [hfi8o2w1] ⚠️ ORF remains incomplete and will be retried on resume: No verified API or settled rendered-page next-page proof was available
+07/16/2026, 06:31:00 [OK] [hfi8o2w1] ✅ Carnival load end [nav 39]:
+07/16/2026, 06:31:02 [OK] [hfi8o2w1] Carnival catalog discovery: 15 rate code(s) found for VIFP# 9013404591
+07/16/2026, 06:31:04 [OK] [hfi8o2w1] ✅ Carnival load end [nav 40]: PI0 page 1
+07/16/2026, 06:31:09 [WARN] [hfi8o2w1] PI0 page 1 was incomplete; making one short, request-scoped retry
+07/16/2026, 06:31:10 [OK] [hfi8o2w1] ✅ Carnival load end [nav 41]: PI0 page 1 retry
+07/16/2026, 06:31:13 [WARN] [hfi8o2w1] ⚠️ PI0 remains incomplete and will be retried on resume: No verified API or settled rendered-page next-page proof was available
+07/16/2026, 06:31:20 [OK] [hfi8o2w1] ✅ Carnival load end [nav 42]:
+07/16/2026, 06:31:21 [OK] [hfi8o2w1] Carnival catalog discovery: 15 rate code(s) found for VIFP# 9013404591
+07/16/2026, 06:31:26 [OK] [hfi8o2w1] ✅ Carnival load end [nav 43]: QA3 page 1
+07/16/2026, 06:31:29 [WARN] [hfi8o2w1] QA3 page 1 was incomplete; making one short, request-scoped retry
+07/16/2026, 06:31:30 [OK] [hfi8o2w1] ✅ Carnival load end [nav 44]: QA3 page 1 retry
+07/16/2026, 06:31:32 [WARN] [hfi8o2w1] ⚠️ QA3 remains incomplete and will be retried on resume: No verified API or settled rendered-page next-page proof was available
+07/16/2026, 06:31:37 [OK] [hfi8o2w1] ✅ Carnival load end [nav 45]:
+07/16/2026, 06:31:40 [OK] [hfi8o2w1] Carnival catalog discovery: 15 rate code(s) found for VIFP# 9013404591
+07/16/2026, 06:31:47 [OK] [hfi8o2w1] ✅ Carnival load end [nav 46]: QPR page 1
+07/16/2026, 06:31:49 [WARN] [hfi8o2w1] QPR page 1 was incomplete; making one short, request-scoped retry
+07/16/2026, 06:31:50 [OK] [hfi8o2w1] ✅ Carnival load end [nav 47]: QPR page 1 retry
+07/16/2026, 06:31:53 [WARN] [hfi8o2w1] ⚠️ QPR remains incomplete and will be retried on resume: No verified API or settled rendered-page next-page proof was available
+07/16/2026, 06:31:58 [OK] [hfi8o2w1] ✅ Carnival load end [nav 48]:
+07/16/2026, 06:32:00 [OK] [hfi8o2w1] Carnival catalog discovery: 16 rate code(s) found for VIFP# 9013404591
+07/16/2026, 06:32:05 [OK] [hfi8o2w1] ✅ Carnival load end [nav 49]: PHY page 1
+07/16/2026, 06:32:16 [WARN] [hfi8o2w1] PHY page 1 was incomplete; making one short, request-scoped retry
+07/16/2026, 06:32:17 [OK] [hfi8o2w1] ✅ Carnival load end [nav 50]: PHY page 1 retry
+07/16/2026, 06:32:28 [WARN] [hfi8o2w1] ⚠️ PHY remains incomplete and will be retried on resume: No verified API or settled rendered-page next-page proof was available
+07/16/2026, 06:32:31 [OK] [hfi8o2w1] ✅ Carnival load end [nav 51]:
+07/16/2026, 06:32:33 [OK] [hfi8o2w1] Carnival catalog discovery: 16 rate code(s) found for VIFP# 9013404591
+07/16/2026, 06:32:41 [OK] [hfi8o2w1] ✅ Carnival load end [nav 52]: O31 page 1
+07/16/2026, 06:32:43 [WARN] [hfi8o2w1] O31 page 1 was incomplete; making one short, request-scoped retry
+07/16/2026, 06:32:44 [OK] [hfi8o2w1] ✅ Carnival load end [nav 53]: O31 page 1 retry
+07/16/2026, 06:32:46 [WARN] [hfi8o2w1] ⚠️ O31 remains incomplete and will be retried on resume: No verified API or settled rendered-page next-page proof was available
+07/16/2026, 06:32:51 [OK] [hfi8o2w1] ✅ Carnival load end [nav 54]:
+07/16/2026, 06:32:53 [OK] [hfi8o2w1] Carnival catalog discovery: 16 rate code(s) found for VIFP# 9013404591
+07/16/2026, 06:32:57 [OK] [hfi8o2w1] ✅ Carnival load end [nav 55]: OJS page 1
+07/16/2026, 06:33:00 [WARN] [hfi8o2w1] OJS page 1 was incomplete; making one short, request-scoped retry
+07/16/2026, 06:33:01 [OK] [hfi8o2w1] ✅ Carnival load end [nav 56]: OJS page 1 retry
+07/16/2026, 06:33:03 [WARN] [hfi8o2w1] ⚠️ OJS remains incomplete and will be retried on resume: No verified API or settled rendered-page next-page proof was available
+07/16/2026, 06:33:08 [OK] [hfi8o2w1] ✅ Carnival load end [nav 57]:
+07/16/2026, 06:33:11 [OK] [hfi8o2w1] Carnival catalog discovery: 16 rate code(s) found for VIFP# 9013404591
+07/16/2026, 06:33:18 [OK] [hfi8o2w1] ✅ Carnival load end [nav 58]: OS5 page 1
+07/16/2026, 06:33:20 [WARN] [hfi8o2w1] OS5 page 1 was incomplete; making one short, request-scoped retry
+07/16/2026, 06:33:20 [OK] [hfi8o2w1] ✅ Carnival load end [nav 59]: OS5 page 1 retry
+07/16/2026, 06:33:23 [WARN] [hfi8o2w1] ⚠️ OS5 remains incomplete and will be retried on resume: No verified API or settled rendered-page next-page proof was available
+07/16/2026, 06:33:28 [OK] [hfi8o2w1] ✅ Carnival load end [nav 60]:
+07/16/2026, 06:33:30 [OK] [hfi8o2w1] Carnival catalog discovery: 16 rate code(s) found for VIFP# 9013404591
+07/16/2026, 06:33:35 [OK] [hfi8o2w1] ✅ Carnival load end [nav 61]: PZC page 1
+07/16/2026, 06:33:38 [WARN] [hfi8o2w1] PZC page 1 was incomplete; making one short, request-scoped retry
+07/16/2026, 06:33:39 [OK] [hfi8o2w1] ✅ Carnival load end [nav 62]: PZC page 1 retry
+07/16/2026, 06:33:43 [WARN] [hfi8o2w1] ⚠️ PZC remains incomplete and will be retried on resume: No verified API or settled rendered-page next-page proof was available
+07/16/2026, 06:33:43 [WARN] [hfi8o2w1] 📊 Carnival reconciliation — discovered=20, completed=0, incomplete=20, offers=20, unique sailings=0; by code: FBN:0, FMV:0, FNQ:0, FZV:0, GBI:0, HEK:0, HK8:0, O5O:0, O9R:0, OHS:0, OJX:0, ORF:0, PI0:0, QA3:0, QPR:0, PHY:0, O31:0, OJS:0, OS5:0, PZC:0
+07/16/2026, 06:33:43 [WARN] [hfi8o2w1] ⚠️ STEP 1 PARTIAL: 0 successful, 0 authoritative empty, 20 incomplete/failed (FBN, FMV, FNQ, FZV, GBI, HEK, HK8, O5O, O9R, OHS, OJX, ORF, PI0, QA3, QPR, PHY, O31, OJS, OS5, PZC). Existing Carnival offer inventory cannot be removed until all codes resolve.
+07/16/2026, 06:33:49 [OK] [hfi8o2w1] 📦 Captured Carnival bookings (1) from /profilemanagement/api/v1.0/Profiles
+07/16/2026, 06:33:49 [OK] [hfi8o2w1] ✅ Carnival load end [nav 63]: Carnival profile/history page 1
+07/16/2026, 06:33:50 [OK] [hfi8o2w1] Carnival profile/history discovery: 6 protected payload(s), 2 additional page link(s)
+07/16/2026, 06:33:56 [OK] [hfi8o2w1] 📦 Captured Carnival bookings (1) from /profilemanagement/api/v1.0/Profiles
+07/16/2026, 06:33:56 [OK] [hfi8o2w1] ✅ Carnival load end [nav 64]: Carnival profile/history page 2
+07/16/2026, 06:33:57 [OK] [hfi8o2w1] Carnival profile/history discovery: 7 protected payload(s), 2 additional page link(s)
+07/16/2026, 06:34:03 [OK] [hfi8o2w1] ✅ Carnival load end [nav 65]: Carnival profile/history page 3
+07/16/2026, 06:34:04 [OK] [hfi8o2w1] Carnival profile/history discovery: 2 protected payload(s), 0 additional page link(s)
+07/16/2026, 06:34:11 [OK] [hfi8o2w1] 📦 Captured Carnival bookings (1) from /profilemanagement/api/v1.0/Profiles
+07/16/2026, 06:34:11 [OK] [hfi8o2w1] ✅ Carnival load end [nav 66]: Carnival profile/history page 4
+07/16/2026, 06:34:12 [OK] [hfi8o2w1] Carnival profile/history discovery: 6 protected payload(s), 1 additional page link(s)
+07/16/2026, 06:34:12 [WARN] [hfi8o2w1] ⚠️ Carnival active booking lane was not authoritative; existing Carnival booked/upcoming cruises will be preserved.
+07/16/2026, 06:34:12 [WARN] [hfi8o2w1] ⚠️ Carnival completed-history lane was incomplete (profile reports 7 total cruise(s), captured 1); existing Carnival completed cruises will be preserved.
+07/16/2026, 06:34:12 [OK] [hfi8o2w1] ✅ Carnival loyalty captured: VIFP Red #9013404591; Players Club Unknown (0 pts)
+07/16/2026, 06:34:12 [OK] [hfi8o2w1] ✅ STEP 2 COMPLETE: 0 booked/upcoming and 1 completed/history cruise(s) captured
+07/16/2026, 06:34:12 [OK] [hfi8o2w1] 🎉 ====== CARNIVAL EXTRACTION COMPLETE ======
+07/16/2026, 06:34:12 [OK] [hfi8o2w1] Ready to review: 20 Carnival offer(s), 0 available sailing(s)
+07/16/2026, 06:34:12 [OK] [hfi8o2w1] Ready to review: 0 booked/upcoming, 1 completed/history Carnival cruise(s)
+07/16/2026, 06:34:25 [WARN] ⚠️ No fully authoritative VIFP Club offer catalog was captured, so existing offers and available sailings will be preserved; unresolved Carnival code(s): FBN, FMV, FNQ, FZV, GBI, HEK, HK8, O5O, O9R, OHS, OJX, ORF, PI0, QA3, QPR, PHY, O31, OJS, OS5, PZC
+07/16/2026, 06:34:25 [WARN] ⚠️ No booked/completed cruise rows were captured for Carnival Cruise Line, so existing booked and completed cruises will be preserved
+07/16/2026, 06:34:25 [WARN] 🛡️ Preserving 5 existing offer record(s); no authoritative new offer payload was captured
+07/16/2026, 06:34:25 [WARN] 🛡️ Preserving 111 existing available cruise record(s); no authoritative new sailing payload was captured
+07/16/2026, 06:34:25 [WARN] 🛡️ Preserving 101 existing booked/completed cruise record(s); no authoritative booking/history payload was captured
+07/16/2026, 06:34:29 [OK] ✅ Offers persisted to storage
+07/16/2026, 06:34:29 [OK] ✅ Available cruises persisted to storage
+07/16/2026, 06:34:31 [OK] ✅ Booked cruises persisted to storage
+07/16/2026, 06:34:32 [OK] ✅ Carnival loyalty/profile transaction write succeeded: VIFP Red #9013404591 (1 pts); Players Club unchanged
+07/16/2026, 06:34:34 [OK] ✅ Carnival transactional Apply Sync committed (carnival-apply-1784208865339-7lt4y9)
+07/16/2026, 06:34:34 [WARN] ⚠️ Carnival data was applied without deleting unresolved inventory; the manifest remains partial/resumable.
+07/16/2026, 06:34:34 [WARN] ⚠️ Resolved Carnival data synced; unresolved codes remain resumable.
+
+--- END OF LOG ---

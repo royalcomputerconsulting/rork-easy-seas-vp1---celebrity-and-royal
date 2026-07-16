@@ -1,0 +1,663 @@
+[07/16/2026, 06:21:34] Parsing loyalty data
+[07/16/2026, 06:21:34] Reading loyalty data
+[07/16/2026, 06:21:34] 🎰 Club Royale Status
+[07/16/2026, 06:21:34] 📊 Tier: "Signature"
+[07/16/2026, 06:21:34] 💎 Points: 20,941
+[07/16/2026, 06:21:34] Reading loyalty data
+[07/16/2026, 06:21:37] Opening offers
+[07/16/2026, 06:21:37] Reading offers page
+[07/16/2026, 06:21:38] Opening offers page for Club Royale
+[07/16/2026, 06:21:39] Parsing loyalty data
+[07/16/2026, 06:21:39] Reading loyalty data
+[07/16/2026, 06:21:39] 🎰 Club Royale Status
+[07/16/2026, 06:21:39] 📊 Tier: "Signature"
+[07/16/2026, 06:21:39] 💎 Points: 20,941
+[07/16/2026, 06:21:39] Reading loyalty data
+[07/16/2026, 06:21:39] 🔎 Offer discovery pass 1: 0 offer(s), 0 View Sailings button(s)
+[07/16/2026, 06:21:40] Reading loyalty data
+[07/16/2026, 06:21:41] Found offer 26NPR503 — Limitless Luck
+[07/16/2026, 06:21:41] Found offer 26SEP103 — September Shuffle
+[07/16/2026, 06:21:41] Found offer 26MIX403 — Stacked Sailings
+[07/16/2026, 06:21:41] Found offer 2607C06 — July Instant Cruise Reward
+[07/16/2026, 06:21:41] Found offer 26VAR403 — Island Advantage
+[07/16/2026, 06:21:41] DOM discovery: parsed 5 visible/linked offer card(s), found 5 View Sailings button(s)
+[07/16/2026, 06:21:41] Opening offer 1/5: 26NPR503
+[07/16/2026, 06:21:42] Widget scrape: CA -/- | CR Signature/20941
+[07/16/2026, 06:21:42] ✅ Merged DOM fallback loyalty fields without suppressing missing-field fallbacks
+[07/16/2026, 06:21:42] 🎰 Club Royale tier: Signature
+[07/16/2026, 06:21:42] 💎 Club Royale points: 20,941
+[07/16/2026, 06:21:43] Scraping offer 26NPR503
+[07/16/2026, 06:21:45] Widget scrape: CA -/- | CR Signature/20941
+[07/16/2026, 06:21:45] ✅ Merged DOM fallback loyalty fields without suppressing missing-field fallbacks
+[07/16/2026, 06:21:45] 🎰 Club Royale tier: Signature
+[07/16/2026, 06:21:45] 💎 Club Royale points: 20,941
+[07/16/2026, 06:21:49] Widget scrape: CA -/- | CR Signature/20941
+[07/16/2026, 06:21:49] ✅ Merged DOM fallback loyalty fields without suppressing missing-field fallbacks
+[07/16/2026, 06:21:49] 🎰 Club Royale tier: Signature
+[07/16/2026, 06:21:49] 💎 Club Royale points: 20,941
+[07/16/2026, 06:21:50] Finished offer 26NPR503: 6 sailing(s)
+[07/16/2026, 06:21:50] Saved offer 26NPR503: 6 sailing(s), 6 total
+[07/16/2026, 06:21:50] ✅ React Native handoff attempted for 26NPR503: 6 row(s)
+[07/16/2026, 06:21:50] ACK offers_batch 26NPR503-checkpoint-1-1784208110263: received 6, accepted 6, app-side total 6
+[07/16/2026, 06:21:50] ✅ Captured casino offer "Limitless Luck" (Code: 26NPR503)
+[07/16/2026, 06:21:50] 📊 Captured 6 sailing(s) for this offer
+[07/16/2026, 06:21:50] 🚢 Sailing 1: Jewel of the Seas - 2026-12-07
+[07/16/2026, 06:21:50] 🚢 Sailing 2: Jewel of the Seas - 2026-12-19
+[07/16/2026, 06:21:50] 🚢 Sailing 3: Jewel of the Seas - 2026-12-20
+[07/16/2026, 06:21:50] ➕ ...and 3 more sailing(s)
+[07/16/2026, 06:21:50] Opening offers page for Club Royale
+[07/16/2026, 06:21:52] Reading loyalty data
+[07/16/2026, 06:21:52] 🔎 Offer discovery pass 1: 0 offer(s), 0 View Sailings button(s)
+[07/16/2026, 06:21:53] Reading loyalty data
+[07/16/2026, 06:21:54] 🔎 Offer discovery pass 2: 0 offer(s), 0 View Sailings button(s)
+[07/16/2026, 06:21:55] Found offer 26NPR503 — Limitless Luck
+[07/16/2026, 06:21:55] Found offer 26SEP103 — September Shuffle
+[07/16/2026, 06:21:55] Found offer 26MIX403 — Stacked Sailings
+[07/16/2026, 06:21:55] Found offer 2607C06 — July Instant Cruise Reward
+[07/16/2026, 06:21:55] Found offer 26VAR403 — Island Advantage
+[07/16/2026, 06:21:55] DOM discovery: parsed 5 visible/linked offer card(s), found 5 View Sailings button(s)
+[07/16/2026, 06:21:55] Opening offer 2/5: 26SEP103
+[07/16/2026, 06:21:56] Scraping offer 26SEP103
+[07/16/2026, 06:22:02] Finished offer 26SEP103: 49 sailing(s)
+[07/16/2026, 06:22:02] Saved offer 26SEP103: 49 sailing(s), 55 total
+[07/16/2026, 06:22:02] ✅ React Native handoff attempted for 26SEP103: 49 row(s)
+[07/16/2026, 06:22:02] ACK offers_batch 26SEP103-checkpoint-1-1784208122692: received 49, accepted 49, app-side total 55
+[07/16/2026, 06:22:02] ✅ Captured casino offer "September Shuffle" (Code: 26SEP103)
+[07/16/2026, 06:22:02] 📊 Captured 49 sailing(s) for this offer
+[07/16/2026, 06:22:02] 🚢 Sailing 1: Harmony of the Seas - 2026-09-03
+[07/16/2026, 06:22:02] 🚢 Sailing 2: Radiance of the Seas - 2026-09-03
+[07/16/2026, 06:22:02] 🚢 Sailing 3: Jewel of the Seas - 2026-09-04
+[07/16/2026, 06:22:02] ➕ ...and 46 more sailing(s)
+[07/16/2026, 06:22:03] Opening offers page for Club Royale
+[07/16/2026, 06:22:04] Reading loyalty data
+[07/16/2026, 06:22:04] 🔎 Offer discovery pass 1: 0 offer(s), 0 View Sailings button(s)
+[07/16/2026, 06:22:05] Reading loyalty data
+[07/16/2026, 06:22:06] Found offer 26NPR503 — Limitless Luck
+[07/16/2026, 06:22:06] Found offer 26SEP103 — September Shuffle
+[07/16/2026, 06:22:06] Found offer 26MIX403 — Stacked Sailings
+[07/16/2026, 06:22:06] Found offer 2607C06 — July Instant Cruise Reward
+[07/16/2026, 06:22:06] Found offer 26VAR403 — Island Advantage
+[07/16/2026, 06:22:06] DOM discovery: parsed 5 visible/linked offer card(s), found 5 View Sailings button(s)
+[07/16/2026, 06:22:06] Opening offer 3/5: 26MIX403
+[07/16/2026, 06:22:08] Scraping offer 26MIX403
+[07/16/2026, 06:22:20] Finished offer 26MIX403: 58 sailing(s)
+[07/16/2026, 06:22:20] Saved offer 26MIX403: 58 sailing(s), 113 total
+[07/16/2026, 06:22:20] ✅ React Native handoff attempted for 26MIX403: 58 row(s)
+[07/16/2026, 06:22:20] ACK offers_batch 26MIX403-checkpoint-1-1784208140708: received 44, accepted 44, app-side total 99
+[07/16/2026, 06:22:20] ✅ Captured casino offer "Stacked Sailings" (Code: 26MIX403)
+[07/16/2026, 06:22:20] 📊 Captured 44 sailing(s) for this offer
+[07/16/2026, 06:22:20] 🚢 Sailing 1: Brilliance of the Seas - 2026-12-02
+[07/16/2026, 06:22:20] 🚢 Sailing 2: Brilliance of the Seas - 2026-12-07
+[07/16/2026, 06:22:20] 🚢 Sailing 3: Brilliance of the Seas - 2026-01-11
+[07/16/2026, 06:22:20] ➕ ...and 41 more sailing(s)
+[07/16/2026, 06:22:20] ACK offers_batch 26MIX403-checkpoint-2-1784208140708: received 14, accepted 14, app-side total 113
+[07/16/2026, 06:22:20] ✅ Captured casino offer "Stacked Sailings" (Code: 26MIX403)
+[07/16/2026, 06:22:20] 📊 Captured 14 sailing(s) for this offer
+[07/16/2026, 06:22:20] 🚢 Sailing 1: Adventure of the Seas - 2026-01-09
+[07/16/2026, 06:22:20] 🚢 Sailing 2: Adventure of the Seas - 2026-12-13
+[07/16/2026, 06:22:20] 🚢 Sailing 3: Adventure of the Seas - 2026-02-07
+[07/16/2026, 06:22:20] ➕ ...and 11 more sailing(s)
+[07/16/2026, 06:22:21] Opening offers page for Club Royale
+[07/16/2026, 06:22:22] Reading loyalty data
+[07/16/2026, 06:22:22] 🔎 Offer discovery pass 1: 0 offer(s), 0 View Sailings button(s)
+[07/16/2026, 06:22:23] Reading loyalty data
+[07/16/2026, 06:22:24] Found offer 26NPR503 — Limitless Luck
+[07/16/2026, 06:22:24] DOM discovery: parsed 1 visible/linked offer card(s), found 1 View Sailings button(s)
+[07/16/2026, 06:22:24] Opening offer 4/5: 2607C06
+[07/16/2026, 06:22:25] Scraping offer 2607C06
+[07/16/2026, 06:22:31] Finished offer 2607C06: 6 sailing(s)
+[07/16/2026, 06:22:31] Saved offer 2607C06: 6 sailing(s), 119 total
+[07/16/2026, 06:22:31] ✅ React Native handoff attempted for 2607C06: 6 row(s)
+[07/16/2026, 06:22:31] ACK offers_batch 2607C06-checkpoint-1-1784208151427: received 6, accepted 6, app-side total 119
+[07/16/2026, 06:22:31] ✅ Captured casino offer "July Instant Cruise Reward" (Code: 2607C06)
+[07/16/2026, 06:22:31] 📊 Captured 6 sailing(s) for this offer
+[07/16/2026, 06:22:31] 🚢 Sailing 1: Jewel of the Seas - 2026-12-07
+[07/16/2026, 06:22:31] 🚢 Sailing 2: Jewel of the Seas - 2026-12-19
+[07/16/2026, 06:22:31] 🚢 Sailing 3: Jewel of the Seas - 2026-12-20
+[07/16/2026, 06:22:31] ➕ ...and 3 more sailing(s)
+[07/16/2026, 06:22:31] Opening offers page for Club Royale
+[07/16/2026, 06:22:33] Reading loyalty data
+[07/16/2026, 06:22:33] 🔎 Offer discovery pass 1: 0 offer(s), 0 View Sailings button(s)
+[07/16/2026, 06:22:34] Reading loyalty data
+[07/16/2026, 06:22:35] Found offer 26NPR503 — Limitless Luck
+[07/16/2026, 06:22:35] Found offer 26SEP103 — September Shuffle
+[07/16/2026, 06:22:35] Found offer 26MIX403 — Stacked Sailings
+[07/16/2026, 06:22:35] Found offer 2607C06 — July Instant Cruise Reward
+[07/16/2026, 06:22:35] Found offer 26VAR403 — Island Advantage
+[07/16/2026, 06:22:35] DOM discovery: parsed 5 visible/linked offer card(s), found 5 View Sailings button(s)
+[07/16/2026, 06:22:35] Opening offer 5/5: 26VAR403
+[07/16/2026, 06:22:36] Scraping offer 26VAR403
+[07/16/2026, 06:22:41] Finished offer 26VAR403: 2 sailing(s)
+[07/16/2026, 06:22:42] Saved offer 26VAR403: 2 sailing(s), 121 total
+[07/16/2026, 06:22:42] ✅ React Native handoff attempted for 26VAR403: 2 row(s)
+[07/16/2026, 06:22:42] Accepted full row: 26NPR503 | Jewel of the Seas | 12/07/2026 | 9 Night Eastern Caribbean Cruise | Fort Lauderdale
+[07/16/2026, 06:22:42] Accepted full row: 26NPR503 | Jewel of the Seas | 12/19/2026 | 9 Night Eastern Caribbean Cruise | Fort Lauderdale
+[07/16/2026, 06:22:42] Accepted full row: 26NPR503 | Jewel of the Seas | 12/20/2026 | 9 Night Eastern Caribbean Cruise | Fort Lauderdale
+[07/16/2026, 06:22:42] Accepted full row: 26NPR503 | Jewel of the Seas | 12/20/2026 | 8 Night Western Caribbean Holiday Cruise | Fort Lauderdale
+[07/16/2026, 06:22:42] Accepted full row: 26MIX403 | Brilliance of the Seas | 12/02/2026 | 4 Night Bahamas & Perfect Day Cruise | Fort Lauderdale
+[07/16/2026, 06:22:42] Accepted full row: 26MIX403 | Brilliance of the Seas | 12/07/2026 | 4 Night Bahamas & Perfect Day Cruise | Fort Lauderdale
+[07/16/2026, 06:22:42] Accepted full row: 26MIX403 | Brilliance of the Seas | 01/11/2026 | 4 Night Bahamas & Perfect Day Cruise | Fort Lauderdale
+[07/16/2026, 06:22:42] Accepted full row: 26MIX403 | Brilliance of the Seas | 01/18/2026 | 4 Night Bahamas & Perfect Day Cruise | Fort Lauderdale
+[07/16/2026, 06:22:42] Accepted full row: 26MIX403 | Brilliance of the Seas | 02/01/2026 | 4 Night Bahamas & Perfect Day Cruise | Fort Lauderdale
+[07/16/2026, 06:22:42] Accepted full row: 26MIX403 | Adventure of the Seas | 12/13/2026 | 6 Night Western Caribbean Cruise | Fort Lauderdale
+[07/16/2026, 06:22:42] Accepted full row: 26MIX403 | Adventure of the Seas | 12/20/2026 | 6 Night Western Caribbean Cruise | Fort Lauderdale
+[07/16/2026, 06:22:42] Accepted full row: 26MIX403 | Adventure of the Seas | 12/27/2026 | 6 Night Western Caribbean Cruise | Fort Lauderdale
+[07/16/2026, 06:22:42] Accepted full row: 26MIX403 | Adventure of the Seas | 02/07/2026 | 6 Night Western Caribbean Cruise | Fort Lauderdale
+[07/16/2026, 06:22:42] Accepted full row: 26MIX403 | Independence of the Seas | 01/03/2027 | 7 Night Western Caribbean Cruise | Fort Lauderdale
+[07/16/2026, 06:22:42] Accepted full row: 26MIX403 | Brilliance of the Seas | 01/04/2027 | 4 Night Bahamas & Perfect Day Cruise | Fort Lauderdale
+[07/16/2026, 06:22:42] Accepted full row: 26MIX403 | Enchantment of the Seas | 01/17/2027 | 7 Night Western Caribbean Cruise | Fort Lauderdale
+[07/16/2026, 06:22:42] Accepted full row: 26MIX403 | Independence of the Seas | 01/17/2027 | 7 Night Western Caribbean Cruise | Fort Lauderdale
+[07/16/2026, 06:22:42] Accepted full row: 26MIX403 | Adventure of the Seas | 01/24/2027 | 6 Night Western Caribbean Cruise | Fort Lauderdale
+[07/16/2026, 06:22:42] Accepted full row: 26MIX403 | Adventure of the Seas | 02/21/2027 | 6 Night Western Caribbean Cruise | Fort Lauderdale
+[07/16/2026, 06:22:42] Accepted full row: 26MIX403 | Enchantment of the Seas | 01/24/2027 | 7 Night Western Caribbean Cruise | Fort Lauderdale
+[07/16/2026, 06:22:42] Accepted full row: 26MIX403 | Independence of the Seas | 01/24/2027 | 7 Night Eastern Caribbean Cruise | Fort Lauderdale
+[07/16/2026, 06:22:42] Accepted full row: 26MIX403 | Brilliance of the Seas | 01/25/2027 | 4 Night Key West & Bahamas Cruise | Key West
+[07/16/2026, 06:22:42] Accepted full row: 26MIX403 | Brilliance of the Seas | 02/08/2027 | 4 Night Bahamas & Perfect Day Cruise | Fort Lauderdale
+[07/16/2026, 06:22:42] Accepted full row: 26MIX403 | Mariner of the Seas | 02/13/2027 | 7 Night Western Caribbean Cruise | Fort Lauderdale
+[07/16/2026, 06:22:42] Accepted full row: 26MIX403 | Brilliance of the Seas | 02/22/2027 | 4 Night Key West & Perfect Day Cruise | Key West
+[07/16/2026, 06:22:42] ✅ Final offer count 26NPR503: 6 cruise row(s)
+[07/16/2026, 06:22:42] ✅ Final offer count 26SEP103: 49 cruise row(s)
+[07/16/2026, 06:22:42] ✅ Final offer count 26MIX403: 58 cruise row(s)
+[07/16/2026, 06:22:42] ✅ Final offer count 2607C06: 6 cruise row(s)
+[07/16/2026, 06:22:42] ✅ Final offer count 26VAR403: 2 cruise row(s)
+[07/16/2026, 06:22:42] Offers complete: 5 offer(s), 121 sailing(s)
+[07/16/2026, 06:22:42] Step 1 completed with 121 items
+[07/16/2026, 06:22:42] ACK offers_batch 26VAR403-checkpoint-1-1784208161984: received 2, accepted 2, app-side total 121
+[07/16/2026, 06:22:42] ✅ Captured casino offer "Island Advantage" (Code: 26VAR403)
+[07/16/2026, 06:22:42] 📊 Captured 2 sailing(s) for this offer
+[07/16/2026, 06:22:42] 🚢 Sailing 1: Serenade of the Seas - 2026-12-13
+[07/16/2026, 06:22:42] 🚢 Sailing 2: Serenade of the Seas - 2026-12-13
+[07/16/2026, 06:22:42] ACK offers_batch 26NPR503: received 42, accepted 42, app-side total 121
+[07/16/2026, 06:22:42] ✅ Captured casino offer "Limitless Luck" (Code: 26NPR503)
+[07/16/2026, 06:22:42] 📊 Captured 42 sailing(s) for this offer
+[07/16/2026, 06:22:42] 🚢 Sailing 1: Jewel of the Seas - 2026-12-07
+[07/16/2026, 06:22:42] 🚢 Sailing 2: Jewel of the Seas - 2026-12-19
+[07/16/2026, 06:22:42] 🚢 Sailing 3: Jewel of the Seas - 2026-12-20
+[07/16/2026, 06:22:42] ➕ ...and 39 more sailing(s)
+[07/16/2026, 06:22:42] ACK offers_batch 26MIX403: received 40, accepted 40, app-side total 121
+[07/16/2026, 06:22:42] ✅ Captured casino offer "Stacked Sailings" (Code: 26MIX403)
+[07/16/2026, 06:22:42] 📊 Captured 40 sailing(s) for this offer
+[07/16/2026, 06:22:42] 🚢 Sailing 1: Freedom of the Seas - 2026-01-09
+[07/16/2026, 06:22:42] 🚢 Sailing 2: Adventure of the Seas - 2027-01-10
+[07/16/2026, 06:22:42] 🚢 Sailing 3: Independence of the Seas - 2027-01-31
+[07/16/2026, 06:22:42] ➕ ...and 37 more sailing(s)
+[07/16/2026, 06:22:42] ACK offers_batch 26SEP103: received 39, accepted 39, app-side total 121
+[07/16/2026, 06:22:42] ✅ Captured casino offer "September Shuffle" (Code: 26SEP103)
+[07/16/2026, 06:22:42] 📊 Captured 39 sailing(s) for this offer
+[07/16/2026, 06:22:42] 🚢 Sailing 1: Jewel of the Seas - 2026-09-11
+[07/16/2026, 06:22:42] 🚢 Sailing 2: Navigator of the Seas - 2026-09-11
+[07/16/2026, 06:22:42] 🚢 Sailing 3: Quantum of the Seas - 2026-09-11
+[07/16/2026, 06:22:42] ➕ ...and 36 more sailing(s)
+[07/16/2026, 06:22:42] ✅ Royal offer rows are staged for Apply Sync: 5 offer code(s), 121 sailing row(s)
+[07/16/2026, 06:22:42] ✅ STEP 1 COMPLETE: Captured 5 active casino offer(s) with 121 total sailing(s)
+[07/16/2026, 06:22:42] Opening loyalty and booked cruise pages
+[07/16/2026, 06:22:42] Opening booked cruises page
+[07/16/2026, 06:22:46] Reading booked cruises
+[07/16/2026, 06:22:46] ✅ Captured 13 booking(s) from Royal Caribbean API
+[07/16/2026, 06:22:46] ✅ Captured booking: Navigator of the Seas - 20260717 - Balcony 6334 (7 nights) [Upcoming]
+[07/16/2026, 06:22:46] ✅ Captured booking: Navigator of the Seas - 20260724 - Balcony 6666 (7 nights) [Upcoming]
+[07/16/2026, 06:22:46] ✅ Captured booking: Icon of the Seas - 20260829 - GTY (7 nights) [Courtesy Hold]
+[07/16/2026, 06:22:46] ✅ Captured booking: Harmony of the Seas - 20260910 - Balcony 7146 (5 nights) [Upcoming]
+[07/16/2026, 06:22:46] ✅ Captured booking: Harmony of the Seas - 20260915 - Interior GTY (4 nights) [Upcoming]
+[07/16/2026, 06:22:46] ✅ Captured booking: Harmony of the Seas - 20260919 - Ocean View 10506 (7 nights) [Upcoming]
+[07/16/2026, 06:22:46] ✅ Captured booking: Anthem of the Seas - 20260929 - Ocean View GTY (12 nights) [Upcoming]
+[07/16/2026, 06:22:46] ✅ Captured booking: Allure of the Seas - 20261017 - Ocean View 8510 (8 nights) [Upcoming]
+[07/16/2026, 06:22:46] ✅ Captured booking: Allure of the Seas - 20261025 - Ocean View 3214 (7 nights) [Upcoming]
+[07/16/2026, 06:22:46] ✅ Captured booking: Oasis of the Seas - 20261109 - Balcony GTY (4 nights) [Upcoming]
+[07/16/2026, 06:22:46] ✅ Captured booking: Adventure of the Seas - 20261115 - Balcony GTY (6 nights) [Upcoming]
+[07/16/2026, 06:22:46] ✅ Captured booking: Adventure of the Seas - 20261213 - Ocean View 1832 (6 nights) [Upcoming]
+[07/16/2026, 06:22:46] 📦 Captured Bookings API payload with 0 bookings from
+[07/16/2026, 06:22:46] ✅ Step 2 auto-completing with 13 bookings from network monitor
+[07/16/2026, 06:22:46] ✅ Voyage enrichment data stored for merging with bookings
+[07/16/2026, 06:22:46] 📦 Captured Voyage Enrichment data with 3 voyages from
+[07/16/2026, 06:22:46] Opening booked cruises page
+[07/16/2026, 06:22:46] ✅ All data sections captured!
+[07/16/2026, 06:22:46] ✅ STEP 2 COMPLETE: Captured 13 cruise(s) (12 booked, 1 courtesy holds)
+[07/16/2026, 06:22:46] ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 06:22:47] Parsing loyalty data
+[07/16/2026, 06:22:47] Reading loyalty data
+[07/16/2026, 06:22:47] Captured loyalty from /guestAccounts/loyalty/info (correct endpoint)
+[07/16/2026, 06:22:47] ⚠️ Loyalty payload did not include usable tier or point fields; keeping loyalty capture open
+[07/16/2026, 06:22:47] Reading loyalty data
+[07/16/2026, 06:22:47] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 06:22:47] Parsing loyalty data
+[07/16/2026, 06:22:47] Reading loyalty data
+[07/16/2026, 06:22:47] ✅ Parsed 59 completed cruise sailing(s) from loyalty/history payload; added 59, reconciled 0 repeat(s)
+[07/16/2026, 06:22:47] Reading loyalty data
+[07/16/2026, 06:22:47] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 06:22:47] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 06:22:47] ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 06:22:47] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 06:22:47] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 06:22:47] Page check [bookings]: loyalty_widgets @
+[07/16/2026, 06:22:47] Unexpected page content for this step - trying the next known route
+[07/16/2026, 06:22:47] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 06:22:48] ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 06:22:48] Reading loyalty data
+[07/16/2026, 06:22:48] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 06:22:48] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 06:22:49] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 06:22:49] ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 06:22:49] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 06:22:49] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 06:22:49] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 06:22:51] Page check [bookings]: loyalty_widgets @
+[07/16/2026, 06:22:51] Unexpected page content for this step - trying the next known route
+[07/16/2026, 06:22:51] ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 06:22:51] Reading loyalty data
+[07/16/2026, 06:22:51] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 06:22:51] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 06:22:51] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 06:22:51] ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 06:22:51] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 06:22:51] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 06:22:52] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 06:22:54] ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 06:22:54] Reading loyalty data
+[07/16/2026, 06:22:54] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 06:22:55] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 06:22:55] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 06:22:55] ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 06:22:55] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 06:22:55] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 06:22:56] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 06:23:00] ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 06:23:00] Reading loyalty data
+[07/16/2026, 06:23:00] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 06:23:01] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 06:23:01] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 06:23:01] ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 06:23:01] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 06:23:01] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 06:23:02] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 06:23:08] ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 06:23:08] Reading loyalty data
+[07/16/2026, 06:23:08] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 06:23:08] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 06:23:09] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 06:23:09] ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 06:23:09] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 06:23:09] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 06:23:09] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 06:23:18] ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 06:23:18] Reading loyalty data
+[07/16/2026, 06:23:18] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 06:23:19] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 06:23:19] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 06:23:19] ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 06:23:19] ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 06:23:20] ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 06:23:20] ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 06:23:26] ⚠️ Dedicated Crown & Anchor capture timed out; preserving existing C&A fields rather than overwriting them
+[07/16/2026, 06:23:51] Step 3 reached max timeout (65s) - continuing with collected data
+[07/16/2026, 06:23:51] 🎉 ====== ALL STEPS COMPLETE ======
+[07/16/2026, 06:23:51] ✅ All data extracted successfully - ready to sync to your app!
+[07/16/2026, 06:23:51] ✅ STEP 3 COMPLETE: Club Royale captured authoritatively; Crown & Anchor preserved/not captured
+[07/16/2026, 06:23:51] Ready to review: 5 offer(s), 121 sailing(s)
+[07/16/2026, 06:23:51] Ready to review: 12 upcoming, 59 completed/past cruise(s)
+[07/16/2026, 06:23:51] 📊 SUMMARY: Loyalty status captured successfully
+[07/16/2026, 06:24:01] Applying selected sync data
+[07/16/2026, 06:24:08] ✅ Offers persisted to storage
+[07/16/2026, 06:24:08] ✅ Available cruises persisted to storage
+[07/16/2026, 06:24:08] Opening completed cruise history
+[07/16/2026, 06:24:09] ✅ Booked cruises persisted to storage
+[07/16/2026, 06:24:11] Extended loyalty data synced successfully
+[07/16/2026, 06:24:11] → Crown & Anchor lane remained incomplete; only individually authoritative C&A fields were updated and all others were preserved
+[07/16/2026, 06:24:11] ✅ Primary User profile updated and verified from storage
+[07/16/2026, 06:24:11] ✅ Data synced successfully to app!
+[07/16/2026, 06:24:11] Sync applied successfully
+
+--- NOTES ---
+[07/16/2026, 06:21:15] (INFO) 🌐 Network monitoring active - will capture all API payloads
+[07/16/2026, 06:21:16] (INFO) User logged in successfully
+[07/16/2026, 06:21:16] (INFO) Authentication detected - logged in successfully
+[07/16/2026, 06:21:18] (INFO) Auth check #10: LOGGED IN (token: false, signals: 0 account, 5 content, cookies: true)
+[07/16/2026, 06:21:34] (INFO) Processing captured Loyalty API payload...
+[07/16/2026, 06:21:34] (INFO) Loyalty captured from: https://www.royalcaribbean.com/api/casino/v1/loyalty-data
+[07/16/2026, 06:21:34] (INFO) Loyalty payload keys: casinoLoyaltyId, cruiseLoyaltyId, consumerId, lastName, tier, individualPoints, relationshipPoints, evaluationPeriodStartDateForPoints, evaluationPeriodEndDateForPoints, address, status, message, multipleCasinoProfiles
+[07/16/2026, 06:21:34] (INFO) Loyalty field authority (https://www.royalcaribbean.com/api/casino/v1/loyalty-data): clubRoyaleId:casino_api/authoritative, clubRoyaleTier:casino_api/authoritative, clubRoyalePoints:casino_api/authoritative, clubRoyaleRelationshipPoints:casino_api/authoritative, clubRoyaleEvaluationPeriodStartDate:casino_api/authoritative, clubRoyaleEvaluationPeriodEndDate:casino_api/authoritative, crownAndAnchorId:casino_api/authoritative
+[07/16/2026, 06:21:34] (INFO) Auth check #20: LOGGED IN (token: false, signals: 0 account, 5 content, cookies: true)
+[07/16/2026, 06:21:37] (INFO) Starting ingestion process...
+[07/16/2026, 06:21:37] (INFO) 🚀 ====== STEP 1: CLUB ROYALE OFFERS ======
+[07/16/2026, 06:21:37] (INFO) 📍 Loading Club Royale offers page...
+[07/16/2026, 06:21:37] (INFO) ⏱️ This may take several minutes - extracting all offers and sailings...
+[07/16/2026, 06:21:37] (INFO) 📍 Navigating to offers page...
+[07/16/2026, 06:21:37] (INFO) 🌐 Navigating [nav 1] to https://www.royalcaribbean.com/club-royale/offers
+[07/16/2026, 06:21:37] (INFO) 🌐 Network monitoring active - will capture all API payloads
+[07/16/2026, 06:21:38] (INFO) 🔁 Re-arming offer worker after WebView navigation: https://www.royalcaribbean.com/club-royale/offers
+[07/16/2026, 06:21:38] (INFO) 🔁 Re-arming offer worker after WebView navigation: https://www.royalcaribbean.com/club-royale/offers
+[07/16/2026, 06:21:38] (INFO) Easy Seas Sync Now rebuild engine v12.3.3-dynamic-visible-offer-catalog active for Royal Caribbean / Club Royale
+[07/16/2026, 06:21:38] (INFO) Mode: WebView-first browser workflow; saved offer list -> detail URL continuation -> pending-block rejection -> checkpoint ACK -> review before commit
+[07/16/2026, 06:21:38] (INFO) Authentication detected - logged in successfully
+[07/16/2026, 06:21:39] (INFO) Processing captured Loyalty API payload...
+[07/16/2026, 06:21:39] (INFO) Loyalty captured from: https://www.royalcaribbean.com/api/casino/v1/loyalty-data
+[07/16/2026, 06:21:39] (INFO) Loyalty payload keys: casinoLoyaltyId, cruiseLoyaltyId, consumerId, lastName, tier, individualPoints, relationshipPoints, evaluationPeriodStartDateForPoints, evaluationPeriodEndDateForPoints, address, status, message, multipleCasinoProfiles
+[07/16/2026, 06:21:39] (INFO) Loyalty field authority (https://www.royalcaribbean.com/api/casino/v1/loyalty-data): clubRoyaleId:casino_api/authoritative, clubRoyaleTier:casino_api/authoritative, clubRoyalePoints:casino_api/authoritative, clubRoyaleRelationshipPoints:casino_api/authoritative, clubRoyaleEvaluationPeriodStartDate:casino_api/authoritative, clubRoyaleEvaluationPeriodEndDate:casino_api/authoritative, crownAndAnchorId:casino_api/authoritative
+[07/16/2026, 06:21:39] (WARNING) 🔎 Offer discovery pass 1: 0 offer(s), 0 View Sailings button(s)
+[07/16/2026, 06:21:40] (INFO) Auth check #10: LOGGED IN (token: false, signals: 0 account, 6 content, cookies: true)
+[07/16/2026, 06:21:41] (INFO) 🔎 Offer discovery pass 2: 5 offer(s), 5 View Sailings button(s)
+[07/16/2026, 06:21:41] (INFO) 🔗 Fallback offer detail href staged for 26NPR503: https://www.royalcaribbean.com/club-royale/offers/26NPR503?playerOfferId=0d648ba4-13f2-4230-9ee0-362a822b679f
+[07/16/2026, 06:21:42] (INFO) 🔁 Re-arming offer worker after WebView navigation: https://www.royalcaribbean.com/club-royale/offers/26NPR503?playerOfferId=0d648ba4-13f2-4230-9ee0-362a822b679f
+[07/16/2026, 06:21:42] (INFO) Loyalty field authority (DOM fallback): clubRoyaleId:casino_api/authoritative, clubRoyaleTier:casino_api/authoritative, clubRoyalePoints:casino_api/authoritative, clubRoyaleRelationshipPoints:casino_api/authoritative, clubRoyaleEvaluationPeriodStartDate:casino_api/authoritative, clubRoyaleEvaluationPeriodEndDate:casino_api/authoritative, crownAndAnchorId:casino_api/authoritative
+[07/16/2026, 06:21:44] (INFO) 🧭 WebView-first scrape for 26NPR503: using authenticated detail page DOM/download with passive network enrichment only
+[07/16/2026, 06:21:44] (INFO) ⬇️ Download list/export control found for 26NPR503
+[07/16/2026, 06:21:45] (INFO) Loyalty field authority (DOM fallback): clubRoyaleId:casino_api/authoritative, clubRoyaleTier:casino_api/authoritative, clubRoyalePoints:casino_api/authoritative, clubRoyaleRelationshipPoints:casino_api/authoritative, clubRoyaleEvaluationPeriodStartDate:casino_api/authoritative, clubRoyaleEvaluationPeriodEndDate:casino_api/authoritative, crownAndAnchorId:casino_api/authoritative
+[07/16/2026, 06:21:47] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 9 Night Eastern Caribbean Cruise
+[07/16/2026, 06:21:48] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 8 Night Western Caribbean Holiday Cruise
+[07/16/2026, 06:21:49] (INFO) Loyalty field authority (DOM fallback): clubRoyaleId:casino_api/authoritative, clubRoyaleTier:casino_api/authoritative, clubRoyalePoints:casino_api/authoritative, clubRoyaleRelationshipPoints:casino_api/authoritative, clubRoyaleEvaluationPeriodStartDate:casino_api/authoritative, clubRoyaleEvaluationPeriodEndDate:casino_api/authoritative, crownAndAnchorId:casino_api/authoritative
+[07/16/2026, 06:21:50] (INFO) 📤 Sent checkpoint 26NPR503 chunk 1 with 6 row(s) (total 6/6)
+[07/16/2026, 06:21:50] (INFO) ➡️ Continuing to next saved offer 2/5: 26SEP103
+[07/16/2026, 06:21:50] (INFO) ↩️ Returning to live My Offers list to open 26SEP103 with its current View Sailings button
+[07/16/2026, 06:21:50] (INFO) 🌐 Network monitoring active - will capture all API payloads
+[07/16/2026, 06:21:50] (INFO) 🔁 Re-arming offer worker after WebView navigation: https://www.royalcaribbean.com/club-royale/offers
+[07/16/2026, 06:21:50] (INFO) Easy Seas Sync Now rebuild engine v12.3.3-dynamic-visible-offer-catalog active for Royal Caribbean / Club Royale
+[07/16/2026, 06:21:50] (INFO) Mode: WebView-first browser workflow; saved offer list -> detail URL continuation -> pending-block rejection -> checkpoint ACK -> review before commit
+[07/16/2026, 06:21:50] (INFO) 🔁 Re-arming offer worker after WebView navigation: https://www.royalcaribbean.com/club-royale/offers
+[07/16/2026, 06:21:51] (INFO) Authentication detected - logged in successfully
+[07/16/2026, 06:21:52] (INFO) 🔁 Resuming offer crawler from My Offers page at offer index 2
+[07/16/2026, 06:21:52] (WARNING) 🔎 Offer discovery pass 1: 0 offer(s), 0 View Sailings button(s)
+[07/16/2026, 06:21:53] (INFO) Auth check #10: LOGGED IN (token: false, signals: 0 account, 6 content, cookies: true)
+[07/16/2026, 06:21:54] (WARNING) 🔎 Offer discovery pass 2: 0 offer(s), 0 View Sailings button(s)
+[07/16/2026, 06:21:55] (INFO) 🔎 Offer discovery pass 3: 5 offer(s), 5 View Sailings button(s)
+[07/16/2026, 06:21:55] (INFO) 🔗 Fallback offer detail href staged for 26SEP103: https://www.royalcaribbean.com/club-royale/offers/26SEP103?playerOfferId=b555187d-b25b-49b9-a1a0-9ba1247afb0f
+[07/16/2026, 06:21:56] (INFO) 🔁 Re-arming offer worker after WebView navigation: https://www.royalcaribbean.com/club-royale/offers/26SEP103?playerOfferId=b555187d-b25b-49b9-a1a0-9ba1247afb0f
+[07/16/2026, 06:21:58] (INFO) 🧭 WebView-first scrape for 26SEP103: using authenticated detail page DOM/download with passive network enrichment only
+[07/16/2026, 06:21:58] (INFO) ⬇️ Download list/export control found for 26SEP103
+[07/16/2026, 06:22:02] (INFO) 📤 Sent checkpoint 26SEP103 chunk 1 with 49 row(s) (total 49/49)
+[07/16/2026, 06:22:02] (INFO) ➡️ Continuing to next saved offer 3/5: 26MIX403
+[07/16/2026, 06:22:02] (INFO) ↩️ Returning to live My Offers list to open 26MIX403 with its current View Sailings button
+[07/16/2026, 06:22:02] (INFO) Auth check #20: LOGGED IN (token: false, signals: 0 account, 5 content, cookies: true)
+[07/16/2026, 06:22:03] (INFO) 🌐 Network monitoring active - will capture all API payloads
+[07/16/2026, 06:22:03] (INFO) 🔁 Re-arming offer worker after WebView navigation: https://www.royalcaribbean.com/club-royale/offers
+[07/16/2026, 06:22:03] (INFO) 🔁 Re-arming offer worker after WebView navigation: https://www.royalcaribbean.com/club-royale/offers
+[07/16/2026, 06:22:03] (INFO) Easy Seas Sync Now rebuild engine v12.3.3-dynamic-visible-offer-catalog active for Royal Caribbean / Club Royale
+[07/16/2026, 06:22:03] (INFO) Mode: WebView-first browser workflow; saved offer list -> detail URL continuation -> pending-block rejection -> checkpoint ACK -> review before commit
+[07/16/2026, 06:22:03] (INFO) Authentication detected - logged in successfully
+[07/16/2026, 06:22:04] (INFO) 🔁 Resuming offer crawler from My Offers page at offer index 3
+[07/16/2026, 06:22:04] (WARNING) 🔎 Offer discovery pass 1: 0 offer(s), 0 View Sailings button(s)
+[07/16/2026, 06:22:05] (INFO) Auth check #10: LOGGED IN (token: false, signals: 0 account, 6 content, cookies: true)
+[07/16/2026, 06:22:06] (INFO) 🔎 Offer discovery pass 2: 5 offer(s), 5 View Sailings button(s)
+[07/16/2026, 06:22:06] (INFO) 🔗 Fallback offer detail href staged for 26MIX403: https://www.royalcaribbean.com/club-royale/offers/26MIX403?playerOfferId=a9bb1c4e-e002-44c6-8341-b902405877ba
+[07/16/2026, 06:22:06] (INFO) 🔁 Re-arming offer worker after WebView navigation: https://www.royalcaribbean.com/club-royale/offers/26MIX403?playerOfferId=a9bb1c4e-e002-44c6-8341-b902405877ba
+[07/16/2026, 06:22:09] (INFO) 🧭 WebView-first scrape for 26MIX403: using authenticated detail page DOM/download with passive network enrichment only
+[07/16/2026, 06:22:09] (INFO) ⬇️ Download list/export control found for 26MIX403
+[07/16/2026, 06:22:12] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 06:22:13] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 6 Night Western Caribbean Cruise
+[07/16/2026, 06:22:13] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 06:22:14] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 06:22:14] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 06:22:15] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 06:22:15] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 6 Night Western Caribbean Cruise
+[07/16/2026, 06:22:16] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 06:22:16] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Eastern Caribbean Cruise
+[07/16/2026, 06:22:17] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Key West & Bahamas Cruise
+[07/16/2026, 06:22:17] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Bahamas & Perfect Day Cruise
+[07/16/2026, 06:22:18] (INFO) Auth check #20: LOGGED IN (token: false, signals: 0 account, 5 content, cookies: true)
+[07/16/2026, 06:22:18] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 7 Night Western Caribbean Cruise
+[07/16/2026, 06:22:18] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 4 Night Key West & Perfect Day Cruise
+[07/16/2026, 06:22:20] (INFO) 📤 Sent checkpoint 26MIX403 chunk 1 with 44 row(s) (total 44/58)
+[07/16/2026, 06:22:20] (INFO) 📤 Sent checkpoint 26MIX403 chunk 2 with 14 row(s) (total 58/58)
+[07/16/2026, 06:22:20] (INFO) ➡️ Continuing to next saved offer 4/5: 2607C06
+[07/16/2026, 06:22:20] (INFO) ↩️ Returning to live My Offers list to open 2607C06 with its current View Sailings button
+[07/16/2026, 06:22:21] (INFO) 🌐 Network monitoring active - will capture all API payloads
+[07/16/2026, 06:22:21] (INFO) 🔁 Re-arming offer worker after WebView navigation: https://www.royalcaribbean.com/club-royale/offers
+[07/16/2026, 06:22:21] (INFO) 🔁 Re-arming offer worker after WebView navigation: https://www.royalcaribbean.com/club-royale/offers
+[07/16/2026, 06:22:21] (INFO) Easy Seas Sync Now rebuild engine v12.3.3-dynamic-visible-offer-catalog active for Royal Caribbean / Club Royale
+[07/16/2026, 06:22:21] (INFO) Mode: WebView-first browser workflow; saved offer list -> detail URL continuation -> pending-block rejection -> checkpoint ACK -> review before commit
+[07/16/2026, 06:22:21] (INFO) Authentication detected - logged in successfully
+[07/16/2026, 06:22:22] (INFO) 🔁 Resuming offer crawler from My Offers page at offer index 4
+[07/16/2026, 06:22:22] (WARNING) 🔎 Offer discovery pass 1: 0 offer(s), 0 View Sailings button(s)
+[07/16/2026, 06:22:23] (INFO) Auth check #10: LOGGED IN (token: false, signals: 0 account, 6 content, cookies: true)
+[07/16/2026, 06:22:24] (INFO) 🔎 Offer discovery pass 2: 1 offer(s), 1 View Sailings button(s)
+[07/16/2026, 06:22:24] (INFO) 🔗 Fallback offer detail href staged for 2607C06: https://www.royalcaribbean.com/club-royale/offers/26NPR503?playerOfferId=0d648ba4-13f2-4230-9ee0-362a822b679f
+[07/16/2026, 06:22:25] (INFO) 🔁 Re-arming offer worker after WebView navigation: https://www.royalcaribbean.com/club-royale/offers/26NPR503?playerOfferId=0d648ba4-13f2-4230-9ee0-362a822b679f
+[07/16/2026, 06:22:26] (INFO) 🧭 WebView-first scrape for 2607C06: using authenticated detail page DOM/download with passive network enrichment only
+[07/16/2026, 06:22:26] (INFO) ⬇️ Download list/export control found for 2607C06
+[07/16/2026, 06:22:29] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 9 Night Eastern Caribbean Cruise
+[07/16/2026, 06:22:30] (INFO) 🔗 Opening/fetching ship or itinerary link for pricing/ports: 8 Night Western Caribbean Holiday Cruise
+[07/16/2026, 06:22:31] (INFO) 📤 Sent checkpoint 2607C06 chunk 1 with 6 row(s) (total 6/6)
+[07/16/2026, 06:22:31] (INFO) ➡️ Continuing to next saved offer 5/5: 26VAR403
+[07/16/2026, 06:22:31] (INFO) ↩️ Returning to live My Offers list to open 26VAR403 with its current View Sailings button
+[07/16/2026, 06:22:31] (INFO) 🌐 Network monitoring active - will capture all API payloads
+[07/16/2026, 06:22:31] (INFO) 🔁 Re-arming offer worker after WebView navigation: https://www.royalcaribbean.com/club-royale/offers
+[07/16/2026, 06:22:31] (INFO) 🔁 Re-arming offer worker after WebView navigation: https://www.royalcaribbean.com/club-royale/offers
+[07/16/2026, 06:22:31] (INFO) Easy Seas Sync Now rebuild engine v12.3.3-dynamic-visible-offer-catalog active for Royal Caribbean / Club Royale
+[07/16/2026, 06:22:31] (INFO) Mode: WebView-first browser workflow; saved offer list -> detail URL continuation -> pending-block rejection -> checkpoint ACK -> review before commit
+[07/16/2026, 06:22:32] (INFO) Authentication detected - logged in successfully
+[07/16/2026, 06:22:33] (INFO) 🔁 Resuming offer crawler from My Offers page at offer index 5
+[07/16/2026, 06:22:33] (WARNING) 🔎 Offer discovery pass 1: 0 offer(s), 0 View Sailings button(s)
+[07/16/2026, 06:22:34] (INFO) Auth check #10: LOGGED IN (token: false, signals: 0 account, 6 content, cookies: true)
+[07/16/2026, 06:22:35] (INFO) 🔎 Offer discovery pass 2: 5 offer(s), 5 View Sailings button(s)
+[07/16/2026, 06:22:35] (INFO) 🔗 Fallback offer detail href staged for 26VAR403: https://www.royalcaribbean.com/club-royale/offers/26VAR403?playerOfferId=8d6c5ba8-719e-489d-a24e-8ae93b40fcb9
+[07/16/2026, 06:22:35] (INFO) 🔁 Re-arming offer worker after WebView navigation: https://www.royalcaribbean.com/club-royale/offers/26VAR403?playerOfferId=8d6c5ba8-719e-489d-a24e-8ae93b40fcb9
+[07/16/2026, 06:22:37] (INFO) 🧭 WebView-first scrape for 26VAR403: using authenticated detail page DOM/download with passive network enrichment only
+[07/16/2026, 06:22:37] (INFO) ⬇️ Download list/export control found for 26VAR403
+[07/16/2026, 06:22:42] (INFO) 📤 Sent checkpoint 26VAR403 chunk 1 with 2 row(s) (total 2/2)
+[07/16/2026, 06:22:42] (INFO) 📤 Sent Sync Now v970 batch 1 with 42 row(s) (total 42/121)
+[07/16/2026, 06:22:42] (INFO) 📤 Sent Sync Now v970 batch 2 with 40 row(s) (total 82/121)
+[07/16/2026, 06:22:42] (INFO) 📤 Sent Sync Now v970 batch 3 with 39 row(s) (total 121/121)
+[07/16/2026, 06:22:42] (INFO) Step 1 dynamic catalog metadata: 5 visible offer(s), 121 sailing row(s)
+[07/16/2026, 06:22:42] (INFO) ℹ️ Dynamic Club Royale catalog accepted: 5 visible offer(s), 5 row-bearing offer code(s), 121 sailing row(s).
+[07/16/2026, 06:22:42] (INFO) 🚀 ====== STEP 2: BOOKINGS & LOYALTY ======
+[07/16/2026, 06:22:42] (INFO) 📡 Visiting account pages to capture API data...
+[07/16/2026, 06:22:42] (INFO) 📍 Visiting Upcoming / My Trips (https://www.royalcaribbean.com/myaccount/my-trips)...
+[07/16/2026, 06:22:42] (INFO) 🌐 Navigating [nav 2] to https://www.royalcaribbean.com/myaccount/my-trips
+[07/16/2026, 06:22:43] (INFO) 🌐 Network monitoring active - will capture all API payloads
+[07/16/2026, 06:22:44] (INFO) Authentication detected - logged in successfully
+[07/16/2026, 06:22:46] (INFO) 📦 Processing captured upcomingCruises API payload...
+[07/16/2026, 06:22:46] (INFO) 📦 Data keys: status, errors, payload
+[07/16/2026, 06:22:46] (INFO) 📦 Processing 13 booking(s) from API response...
+[07/16/2026, 06:22:46] (INFO) 📦 Processing captured Voyage Enrichment data...
+[07/16/2026, 06:22:46] (INFO) 🚀 ====== STEP 3: LOYALTY DIRECT FETCH ======
+[07/16/2026, 06:22:46] (INFO) 📡 Attempting direct loyalty API call as fallback...
+[07/16/2026, 06:22:46] (INFO) 📡 Connecting to Royal Caribbean loyalty API...
+[07/16/2026, 06:22:46] (INFO) ⏳ Retrieving Crown & Anchor and Club Royale status...
+[07/16/2026, 06:22:46] (INFO) ⏳ Waiting for loyalty data capture...
+[07/16/2026, 06:22:46] (INFO) 🧭 Keeping the current authenticated page alive while resolving Crown & Anchor...
+[07/16/2026, 06:22:46] (INFO) 🔁 Initial attempt: requesting dedicated loyalty data from current page using account-id, appkey, x-api-key
+[07/16/2026, 06:22:46] (WARNING) ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 06:22:46] (INFO) ✅ Loyalty account page primed inside the authenticated session
+[07/16/2026, 06:22:46] (INFO) Auth check #10: LOGGED IN (token: false, signals: 0 account, 2 content, cookies: true)
+[07/16/2026, 06:22:47] (INFO) Processing captured Loyalty API payload...
+[07/16/2026, 06:22:47] (INFO) Loyalty payload keys: message
+[07/16/2026, 06:22:47] (WARNING) ⚠️ Loyalty payload did not include usable tier or point fields; keeping loyalty capture open
+[07/16/2026, 06:22:47] (WARNING) 📦 Captured Loyalty API payload (403) from https://www.royalcaribbean.com/api/guestAccounts/loyalty/info
+[07/16/2026, 06:22:47] (WARNING) ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 06:22:47] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:22:47] (INFO) Processing captured Loyalty API payload...
+[07/16/2026, 06:22:47] (INFO) Loyalty captured from: https://aws-prd.api.rccl.com/en/royal/web/v1/guestAccounts/loyalty/history/G0992031?loyaltyNumber=305812247
+[07/16/2026, 06:22:47] (INFO) Loyalty payload keys: sailings
+[07/16/2026, 06:22:47] (INFO) ℹ️ Loyalty/history payload contained completed sailings but no Crown & Anchor / Club Royale tier-point values; keeping loyalty capture open
+[07/16/2026, 06:22:47] (WARNING) ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 06:22:47] (WARNING) ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 06:22:47] (INFO) 🔁 Initial attempt: requesting dedicated loyalty data from loyalty account page using account-id, appkey, x-api-key
+[07/16/2026, 06:22:47] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:22:47] (WARNING) ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 06:22:47] (WARNING) ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 06:22:47] (WARNING) ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 06:22:47] (WARNING) Page check [bookings]: loyalty_widgets @ https://www.royalcaribbean.com/myaccount/my-trips
+[07/16/2026, 06:22:47] (WARNING)    Unexpected page content for this step - trying the next known route
+[07/16/2026, 06:22:47] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:22:47] (WARNING) ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 06:22:48] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:22:48] (INFO) 🔁 Retry 4: requesting dedicated loyalty data from current page using account-id, appkey, x-api-key
+[07/16/2026, 06:22:48] (WARNING) ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 06:22:48] (WARNING) 📦 Captured Loyalty API payload (403) from https://www.royalcaribbean.com/api/guestAccounts/loyalty/info
+[07/16/2026, 06:22:48] (WARNING) ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 06:22:48] (WARNING) ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 06:22:48] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:22:49] (WARNING) ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 06:22:49] (INFO) 🔁 Retry 4: requesting dedicated loyalty data from loyalty account page using account-id, appkey, x-api-key
+[07/16/2026, 06:22:49] (WARNING) ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 06:22:49] (WARNING) ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 06:22:49] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:22:49] (WARNING) ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 06:22:49] (WARNING) ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 06:22:51] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:22:51] (WARNING) Page check [bookings]: loyalty_widgets @ https://www.royalcaribbean.com/myaccount/my-trips
+[07/16/2026, 06:22:51] (WARNING)    Unexpected page content for this step - trying the next known route
+[07/16/2026, 06:22:51] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:22:51] (INFO) 🔁 Retry 8: requesting dedicated loyalty data from current page using account-id, appkey, x-api-key
+[07/16/2026, 06:22:51] (WARNING) ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 06:22:51] (WARNING) 📦 Captured Loyalty API payload (403) from https://www.royalcaribbean.com/api/guestAccounts/loyalty/info
+[07/16/2026, 06:22:51] (WARNING) ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 06:22:51] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:22:51] (WARNING) ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 06:22:51] (WARNING) ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 06:22:51] (INFO) 🔁 Retry 8: requesting dedicated loyalty data from loyalty account page using account-id, appkey, x-api-key
+[07/16/2026, 06:22:51] (WARNING) ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 06:22:51] (WARNING) ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 06:22:51] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:22:51] (WARNING) ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 06:22:51] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:22:52] (WARNING) ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 06:22:52] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:22:52] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:22:53] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:22:53] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:22:54] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:22:54] (INFO) 🔁 Retry 16: requesting dedicated loyalty data from current page using account-id, appkey, x-api-key
+[07/16/2026, 06:22:54] (WARNING) ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 06:22:54] (WARNING) 📦 Captured Loyalty API payload (403) from https://www.royalcaribbean.com/api/guestAccounts/loyalty/info
+[07/16/2026, 06:22:54] (WARNING) ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 06:22:54] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:22:55] (WARNING) ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 06:22:55] (WARNING) ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 06:22:55] (INFO) 🔁 Retry 16: requesting dedicated loyalty data from loyalty account page using account-id, appkey, x-api-key
+[07/16/2026, 06:22:55] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:22:55] (WARNING) ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 06:22:55] (WARNING) ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 06:22:55] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:22:55] (WARNING) ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 06:22:56] (WARNING) ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 06:22:56] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:22:56] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:22:57] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:22:57] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:22:58] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:22:58] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:22:59] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:22:59] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:00] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:00] (INFO) 🔁 Retry 28: requesting dedicated loyalty data from current page using account-id, appkey, x-api-key
+[07/16/2026, 06:23:00] (WARNING) ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 06:23:00] (WARNING) 📦 Captured Loyalty API payload (403) from https://www.royalcaribbean.com/api/guestAccounts/loyalty/info
+[07/16/2026, 06:23:00] (WARNING) ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 06:23:00] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:01] (WARNING) ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 06:23:01] (WARNING) ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 06:23:01] (INFO) 🔁 Retry 28: requesting dedicated loyalty data from loyalty account page using account-id, appkey, x-api-key
+[07/16/2026, 06:23:01] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:01] (WARNING) ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 06:23:01] (WARNING) ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 06:23:01] (WARNING) ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 06:23:01] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:02] (WARNING) ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 06:23:02] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:02] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:03] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:03] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:04] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:04] (INFO) Auth check #20: LOGGED IN (token: false, signals: 1 account, 3 content, cookies: true)
+[07/16/2026, 06:23:05] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:05] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:06] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:06] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:07] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:07] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:08] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:08] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:08] (INFO) 🔁 Retry 44: requesting dedicated loyalty data from current page using account-id, appkey, x-api-key
+[07/16/2026, 06:23:08] (WARNING) ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 06:23:08] (WARNING) 📦 Captured Loyalty API payload (403) from https://www.royalcaribbean.com/api/guestAccounts/loyalty/info
+[07/16/2026, 06:23:08] (WARNING) ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 06:23:08] (WARNING) ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 06:23:09] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:09] (WARNING) ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 06:23:09] (INFO) 🔁 Retry 44: requesting dedicated loyalty data from loyalty account page using account-id, appkey, x-api-key
+[07/16/2026, 06:23:09] (WARNING) ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 06:23:09] (WARNING) ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 06:23:09] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:09] (WARNING) ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 06:23:09] (WARNING) ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 06:23:10] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:10] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:11] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:11] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:12] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:12] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:13] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:13] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:14] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:14] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:15] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:15] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:16] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:16] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:17] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:17] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:18] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:18] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:18] (INFO) 🔁 Retry 64: requesting dedicated loyalty data from current page using account-id, appkey, x-api-key
+[07/16/2026, 06:23:18] (WARNING) ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 06:23:18] (WARNING) 📦 Captured Loyalty API payload (403) from https://www.royalcaribbean.com/api/guestAccounts/loyalty/info
+[07/16/2026, 06:23:18] (WARNING) ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 06:23:19] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:19] (WARNING) ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 06:23:19] (WARNING) ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 06:23:19] (INFO) 🔁 Retry 64: requesting dedicated loyalty data from loyalty account page using account-id, appkey, x-api-key
+[07/16/2026, 06:23:19] (WARNING) ⚠️ Dedicated loyalty route failed: Load failed
+[07/16/2026, 06:23:19] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:19] (WARNING) ⚠️ Dedicated loyalty endpoint 2 returned HTTP 403
+[07/16/2026, 06:23:20] (WARNING) ⚠️ Dedicated loyalty endpoint 3 returned HTTP 403
+[07/16/2026, 06:23:20] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:20] (WARNING) ⚠️ Dedicated loyalty endpoint 4 returned HTTP 403
+[07/16/2026, 06:23:20] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:21] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:21] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:22] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:22] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:23] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:23] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:24] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:24] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:25] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:25] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:26] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:26] (INFO) ℹ️ Existing loyalty payload is partial (casino/history only); continuing to fetch dedicated loyalty/info
+[07/16/2026, 06:23:26] (WARNING) ⚠️ Dedicated Crown & Anchor capture timed out; preserving existing C&A fields rather than overwriting them
+[07/16/2026, 06:23:26] (INFO) ℹ️ Ignored a premature loyalty step-complete signal because only Club Royale or partial loyalty data was captured; continuing the dedicated Crown & Anchor lane
+[07/16/2026, 06:23:34] (INFO) Auth check #30: LOGGED IN (token: false, signals: 1 account, 3 content, cookies: true)
+[07/16/2026, 06:23:51] (WARNING) Step 3 reached max timeout (65s) - continuing with collected data
+[07/16/2026, 06:23:51] (INFO) ⏳ Please review and confirm to sync this data to your app
+[07/16/2026, 06:24:01] (INFO) APPLY_SYNC_STARTED: user confirmed unified sync review
+[07/16/2026, 06:24:01] (INFO) 🚀 Starting sync to app...
+[07/16/2026, 06:24:01] (INFO) Sync target: Primary User (SCOTT MERLIS)
+[07/16/2026, 06:24:01] (INFO) Travel inventory is shared: offers, available sailings, booked cruises, and completed cruises will be visible to both Main User and Second User. Loyalty IDs/points remain profile-specific.
+[07/16/2026, 06:24:01] (INFO) Selected sections: offers=yes, available=yes, booked=yes, completed=yes, loyalty=yes
+[07/16/2026, 06:24:01] (INFO) ⏳ Waiting briefly for Royal Caribbean loyalty/history completed cruises before building review...
+[07/16/2026, 06:24:06] (INFO) Creating sync preview...
+[07/16/2026, 06:24:06] (INFO) Completed sync source breakdown: reported past=59, live=0, stored/history=59, existing=31, canonical candidates=59
+[07/16/2026, 06:24:07] (INFO) Preview: 4 new offers, 1 updated offers
+[07/16/2026, 06:24:07] (INFO) Preview: 121 new available cruises, 0 updated available cruises
+[07/16/2026, 06:24:07] (INFO) Preview: 57 new booked cruises, 15 updated booked cruises
+[07/16/2026, 06:24:07] (INFO) Preview canonical input: 12 upcoming, 1 holds
+[07/16/2026, 06:24:07] (INFO) Preview canonical input: 59 completed/past cruise(s) staged; 29 existing row(s) preserved separately
+[07/16/2026, 06:24:07] (INFO) Dynamic offer catalog metadata for Apply Sync: 5 visible offer(s), 0 zero-row visible offer(s)
+[07/16/2026, 06:24:07] (INFO) Booked/completed lane authority: active=authoritative (13), completed=authoritative (59)
+[07/16/2026, 06:24:07] (INFO) Applying sync...
+[07/16/2026, 06:24:07] (INFO) Setting 5 total offers in app
+[07/16/2026, 06:24:08] (INFO) Setting 121 total available cruises in app
+[07/16/2026, 06:24:08] (INFO) Setting 14 active booked cruise(s) and 59 completed cruise(s) in app (74 total including history)
+[07/16/2026, 06:24:09] (INFO) Updating Club Royale points: 19363 → 20941
+[07/16/2026, 06:24:10] (INFO) Syncing extended loyalty data...
+[07/16/2026, 06:24:10] (INFO)   → Club Royale: Signature - 20,941 points
+[07/16/2026, 06:24:11] (INFO)   → Name: SCOTT MERLIS
+[07/16/2026, 06:24:11] (INFO)   → Club Royale points: 20,941
+[07/16/2026, 06:24:11] (INFO)   → Club Royale tier: Signature
+[07/16/2026, 06:24:11] (INFO)   → Club Royale ID: [redacted]
+[07/16/2026, 06:24:11] (INFO)   → Club Royale relationship points: 20,941
+[07/16/2026, 06:24:11] (INFO)   → Crown & Anchor #: [redacted]
+[07/16/2026, 06:24:11] (WARNING)   → Crown & Anchor lane remained incomplete; only individually authoritative C&A fields were updated and all others were preserved
+[07/16/2026, 06:24:11] (INFO) Syncing primary user profile from loyalty data...
+[07/16/2026, 06:24:11] (INFO) Local-first mode: cloud backup skipped after Apply Sync

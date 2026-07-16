@@ -616,7 +616,10 @@ export function transformBookedCruisesToAppFormat(
       sailDate: startDate,
       returnDate: finalEndDate,
       departurePort: cruise.departurePort,
-      destination: cruise.itinerary || cruise.cruiseTitle || 'Unknown',
+      // v13.0: Never fabricate the literal word "Unknown" as real-looking destination text.
+      // Leave it blank when we truly have nothing so the UI's own fallback (e.g. "Cruise")
+      // renders instead of a misleading placeholder.
+      destination: cruise.itinerary || cruise.cruiseTitle || '',
       nights,
       cabinType: cruise.cabinType,
       cabinNumber: cruise.cabinNumberOrGTY && cruise.cabinNumberOrGTY !== 'GTY' ? cruise.cabinNumberOrGTY : undefined,
