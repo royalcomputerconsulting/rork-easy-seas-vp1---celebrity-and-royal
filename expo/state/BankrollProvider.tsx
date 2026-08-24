@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { quotaSafeGetJsonItem, quotaSafeSetJsonItem } from "@/lib/storage/quotaSafeStorage";
 import createContextHook from "@nkzw/create-context-hook";
 import { useCasinoSessions } from './CasinoSessionProvider';
 import { useAuth } from './AuthProvider';
@@ -134,7 +134,7 @@ export const [BankrollProvider, useBankroll] = createContextHook((): BankrollSta
 
   const persistLimits = useCallback(async (newLimits: BankrollLimit[]) => {
     try {
-      await AsyncStorage.setItem(limitsKeyRef.current, JSON.stringify(newLimits));
+      await quotaSafeSetJsonItem(limitsKeyRef.current, newLimits);
       console.log('[BankrollProvider] Persisted limits:', newLimits.length);
     } catch (error) {
       console.error('[BankrollProvider] Failed to persist limits:', error);
@@ -143,7 +143,7 @@ export const [BankrollProvider, useBankroll] = createContextHook((): BankrollSta
 
   const persistAlerts = useCallback(async (newAlerts: BankrollAlert[]) => {
     try {
-      await AsyncStorage.setItem(alertsKeyRef.current, JSON.stringify(newAlerts));
+      await quotaSafeSetJsonItem(alertsKeyRef.current, newAlerts);
       console.log('[BankrollProvider] Persisted alerts:', newAlerts.length);
     } catch (error) {
       console.error('[BankrollProvider] Failed to persist alerts:', error);
@@ -155,14 +155,13 @@ export const [BankrollProvider, useBankroll] = createContextHook((): BankrollSta
       setIsLoading(true);
       
       const [storedLimits, storedAlerts] = await Promise.all([
-        AsyncStorage.getItem(limitsKeyRef.current),
-        AsyncStorage.getItem(alertsKeyRef.current),
+        quotaSafeGetJsonItem<BankrollLimit[]>(limitsKeyRef.current, [], Array.isArray),
+        quotaSafeGetJsonItem<BankrollAlert[]>(alertsKeyRef.current, [], Array.isArray),
       ]);
       
-      if (storedLimits) {
-        const parsed = JSON.parse(storedLimits) as BankrollLimit[];
-        setLimits(parsed);
-        console.log('[BankrollProvider] Loaded limits:', parsed.length);
+      if (storedLimits.length > 0) {
+        setLimits(storedLimits);
+        console.log('[BankrollProvider] Loaded limits:', storedLimits.length);
       } else {
         const defaultLimits = DEFAULT_LIMITS.map((limit, index) => ({
           ...limit,
@@ -172,14 +171,8 @@ export const [BankrollProvider, useBankroll] = createContextHook((): BankrollSta
         await persistLimits(defaultLimits);
       }
       
-      if (storedAlerts) {
-        const parsed = JSON.parse(storedAlerts) as BankrollAlert[];
-        setAlerts(parsed);
-        console.log('[BankrollProvider] Loaded alerts:', parsed.length);
-      } else {
-        setAlerts([]);
-        console.log('[BankrollProvider] No scoped alerts found, using empty state');
-      }
+      setAlerts(storedAlerts);
+      console.log('[BankrollProvider] Loaded alerts:', storedAlerts.length);
     } catch (error) {
       console.error('[BankrollProvider] Failed to load data:', error);
     } finally {

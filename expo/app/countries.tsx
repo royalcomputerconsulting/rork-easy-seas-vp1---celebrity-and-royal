@@ -8,10 +8,6 @@ import Svg, { Circle, Ellipse, G, Line, Path, Rect, Text as SvgText } from 'reac
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { ResponsiveContainer } from '@/components/ResponsiveContainer';
 import { useCoreData } from '@/state/CoreDataProvider';
-import { ADMIN_EMAILS, useAuth } from '@/state/AuthProvider';
-import { BOOKED_CRUISES_DATA } from '@/mocks/bookedCruises';
-import { COMPLETED_CRUISES_DATA } from '@/mocks/completedCruises';
-import { CRUISE_HISTORY_SUPPLEMENT_DATA } from '@/mocks/cruiseHistorySupplement';
 import { buildCountryVisits, summarizeVisitsByYear, type CountryVisit, type CruiseCountryFilter } from '@/lib/cruiseCountries';
 import { createDateFromString } from '@/lib/date';
 import type { BookedCruise } from '@/types/models';
@@ -429,8 +425,7 @@ function mergeCruiseData(primaryCruises: BookedCruise[], fallbackCruises: Booked
 export default function CountriesScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ filter?: string }>();
-  const { bookedCruises, cruises } = useCoreData();
-  const { authenticatedEmail } = useAuth();
+  const { bookedCruises } = useCoreData();
   const [filter, setFilter] = useState<CruiseCountryFilter>(() => getInitialFilter(params.filter));
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [showYearFilter, setShowYearFilter] = useState<boolean>(false);
@@ -438,21 +433,13 @@ export default function CountriesScreen() {
   const [expandedDestinationKey, setExpandedDestinationKey] = useState<string | null>(null);
 
   const sourceCruises = useMemo(() => {
-    const normalizedEmail = authenticatedEmail?.toLowerCase().trim() ?? null;
-    const shouldIncludeKnownAdminCruises = !!normalizedEmail && ADMIN_EMAILS.includes(normalizedEmail as typeof ADMIN_EMAILS[number]);
-    const knownAdminCruises = shouldIncludeKnownAdminCruises ? [...COMPLETED_CRUISES_DATA, ...BOOKED_CRUISES_DATA, ...CRUISE_HISTORY_SUPPLEMENT_DATA] : [];
-    const bookedLikeCruises = cruises.filter((cruise) => cruise.status === 'booked' || cruise.status === 'completed' || Boolean((cruise as BookedCruise).reservationNumber || (cruise as BookedCruise).bookingId));
-    const storedCruises = mergeCruiseData(bookedCruises, bookedLikeCruises);
-    const mergedCruises = mergeCruiseData(storedCruises, knownAdminCruises);
+    const storedCruises = mergeCruiseData(bookedCruises, []);
     console.log('[Countries] Resolved country cruise source:', {
-      authenticatedEmail: normalizedEmail,
       storedBookedCruises: bookedCruises.length,
-      storedBookedLikeCruises: bookedLikeCruises.length,
-      knownAdminCruises: knownAdminCruises.length,
-      mergedCruises: mergedCruises.length,
+      mergedCruises: storedCruises.length,
     });
-    return mergedCruises;
-  }, [authenticatedEmail, bookedCruises, cruises]);
+    return storedCruises;
+  }, [bookedCruises]);
 
   const visits = useMemo(() => {
     const builtVisits = buildCountryVisits(sourceCruises, filter);

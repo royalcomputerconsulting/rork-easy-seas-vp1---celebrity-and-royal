@@ -44,7 +44,7 @@ export function nextCruiseCertificateToWalletItem(cert: NextCruiseCertificate): 
 export function futureCruiseCreditToWalletItem(fcc: FutureCruiseCredit, today = todayDateOnly()): FutureValueWalletItem {
   const fccStatus = getFutureCruiseCreditStatus(fcc, today);
   const walletStatus: FutureValueWalletItem['status'] =
-    fccStatus === 'available' || fccStatus === 'partially-used' ? 'available' : fccStatus === 'unknown' ? 'unknown' : fccStatus;
+    fccStatus === 'available' || fccStatus === 'partially-used' ? 'available' : fccStatus === 'unknown' || !fccStatus ? 'unknown' : fccStatus;
   return {
     id: fcc.id,
     type: 'fcc',

@@ -1,25 +1,45 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, Dimensions, ScrollView, KeyboardAvoidingView, Platform, Modal } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, View, Text, TextInput, TouchableOpacity, StyleSheet, Image, Dimensions, ScrollView, KeyboardAvoidingView, Platform, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import { IMAGES } from '@/constants/images';
 
-import { ADMIN_EMAILS, useAuth } from '@/state/AuthProvider';
+import { useAuth } from '@/state/AuthProvider';
+import type { DeviceCredentialMode } from '@/lib/auth/deviceCredential';
 
 const { width, height } = Dimensions.get('window');
 
 export function LoginScreen() {
   const [email, setEmail] = useState<string>('');
-  const [password, setPassword] = useState<string>('');
+  const [devicePin, setDevicePin] = useState<string>('');
+  const [confirmPin, setConfirmPin] = useState<string>('');
+  const [credentialMode, setCredentialMode] = useState<DeviceCredentialMode>('create');
+  const [isCheckingCredential, setIsCheckingCredential] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string>('');
   const [showAboutModal, setShowAboutModal] = useState<boolean>(false);
-  const [logoError, setLogoError] = useState<boolean>(false);
-  const [signatureError, setSignatureError] = useState<boolean>(false);
-  const { login } = useAuth();
+  const [heroImageError, setHeroImageError] = useState<boolean>(false);
+  const { authenticatedEmail, getCredentialMode, login, unlockWithBiometrics } = useAuth();
 
-  
-  
-  const isAdminEmail = ADMIN_EMAILS.includes(email.toLowerCase().trim() as typeof ADMIN_EMAILS[number]);
+  useEffect(() => {
+    if (!email && authenticatedEmail) setEmail(authenticatedEmail);
+  }, [authenticatedEmail, email]);
+
+  useEffect(() => {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail.includes('@')) {
+      setCredentialMode('create');
+      setIsCheckingCredential(false);
+      return undefined;
+    }
+    setIsCheckingCredential(true);
+    const timer = setTimeout(() => {
+      void getCredentialMode(normalizedEmail)
+        .then(setCredentialMode)
+        .finally(() => setIsCheckingCredential(false));
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [email, getCredentialMode]);
 
   const handleLogin = async () => {
     setError('');
@@ -34,18 +54,40 @@ export function LoginScreen() {
       return;
     }
     
-    if (isAdminEmail && !password) {
-      setError('Please enter the admin password.');
+    if (!/^\d{6}$/.test(devicePin)) {
+      setError('Enter your six-digit Easy Seas device PIN.');
       return;
     }
-    
-    const success = await login(email, password || undefined);
-    if (!success) {
-      if (isAdminEmail) {
-        setError('Incorrect admin password.');
-      } else {
-        setError('Unable to log in. Please check your email.');
+    if (credentialMode === 'create' && devicePin !== confirmPin) {
+      setError('The two PIN entries do not match.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const success = await login(email, devicePin);
+      if (!success) {
+        setError(credentialMode === 'create'
+          ? 'Secure access could not be created. Verify the PIN and try again.'
+          : 'That PIN was not accepted. Repeated attempts temporarily lock access.');
       }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleBiometricUnlock = async () => {
+    setError('');
+    if (!email.trim().includes('@')) {
+      setError('Enter the email for this Easy Seas account first.');
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      const success = await unlockWithBiometrics(email);
+      if (!success) setError('Face ID, Touch ID, or device authentication was unavailable or cancelled. Use your Easy Seas PIN instead.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -65,42 +107,27 @@ export function LoginScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.content}>
-          <View style={styles.logoContainer}>
-            {!logoError ? (
+          <View style={styles.heroImageContainer}>
+            {!heroImageError ? (
               <Image
-                source={{ uri: IMAGES.logo }}
-                style={styles.logoImage}
-                resizeMode="contain"
+                source={{ uri: IMAGES.loginHero }}
+                style={styles.heroImage}
+                resizeMode="cover"
                 onError={() => {
-                  console.warn('[LoginScreen] Logo image failed to load, using local fallback');
-                  setLogoError(true);
+                  console.warn('[LoginScreen] Login hero image failed to load, using local fallback');
+                  setHeroImageError(true);
                 }}
-                testID="login-logo-image"
+                testID="login-hero-image"
               />
             ) : (
               <Image
-                source={require('../assets/images/icon.png')}
-                style={styles.logoImage}
+                source={require('@/assets/images/icon.png')}
+                style={styles.heroFallbackImage}
                 resizeMode="contain"
-                testID="login-logo-fallback-image"
+                testID="login-hero-fallback-image"
               />
             )}
           </View>
-          {!signatureError ? (
-            <Image
-              source={{ uri: IMAGES.signature }}
-              style={styles.signatureImage}
-              resizeMode="contain"
-              onError={() => {
-                console.warn('[LoginScreen] Signature image failed to load, hiding signature');
-                setSignatureError(true);
-              }}
-              testID="login-signature-image"
-            />
-          ) : null}
-
-          <Text style={styles.brandTitle}>EASY SEAS™</Text>
-          <Text style={styles.brandTagline}>Manage your Nautical Lifestyle</Text>
 
           <View style={styles.disclaimerSection}>
             <Text style={styles.trademarkText}>
@@ -127,39 +154,80 @@ export function LoginScreen() {
               autoCapitalize="none"
               autoCorrect={false}
               autoComplete="email"
-              onSubmitEditing={isAdminEmail ? undefined : handleLogin}
+              onSubmitEditing={undefined}
             />
 
-            {isAdminEmail && (
-              <>
-                <Text style={styles.passwordLabel}>Admin Password</Text>
-                <TextInput
-                  style={[styles.input, error ? styles.inputError : null]}
-                  value={password}
-                  onChangeText={(text) => {
-                    setPassword(text);
-                    setError('');
-                  }}
-                  placeholder="Enter admin password"
-                  placeholderTextColor={COLORS.textSecondary}
-                  secureTextEntry
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  onSubmitEditing={handleLogin}
-                />
-              </>
-            )}
+            <Text style={styles.passwordLabel}>{credentialMode === 'create' ? 'Create Device PIN' : 'Device PIN'}</Text>
+            <Text style={styles.securityHelper}>
+              {isCheckingCredential
+                ? 'Checking secure access on this device…'
+                : credentialMode === 'create'
+                  ? 'Create a six-digit PIN for this account. It is protected by this device’s Keychain or Keystore.'
+                  : 'Enter the six-digit PIN created for this Easy Seas account.'}
+            </Text>
+            <TextInput
+              style={[styles.input, error ? styles.inputError : null]}
+              value={devicePin}
+              onChangeText={(text) => {
+                setDevicePin(text.replace(/\D/g, '').slice(0, 6));
+                setError('');
+              }}
+              placeholder="Six-digit PIN"
+              placeholderTextColor={COLORS.textSecondary}
+              secureTextEntry
+              keyboardType="number-pad"
+              textContentType="oneTimeCode"
+              maxLength={6}
+              autoCorrect={false}
+              onSubmitEditing={credentialMode === 'unlock' ? handleLogin : undefined}
+              testID="easyseas-device-pin"
+            />
+
+            {credentialMode === 'create' ? (
+              <TextInput
+                style={[styles.input, error ? styles.inputError : null]}
+                value={confirmPin}
+                onChangeText={(text) => {
+                  setConfirmPin(text.replace(/\D/g, '').slice(0, 6));
+                  setError('');
+                }}
+                placeholder="Confirm six-digit PIN"
+                placeholderTextColor={COLORS.textSecondary}
+                secureTextEntry
+                keyboardType="number-pad"
+                textContentType="oneTimeCode"
+                maxLength={6}
+                autoCorrect={false}
+                onSubmitEditing={handleLogin}
+                testID="easyseas-device-pin-confirm"
+              />
+            ) : null}
 
             {error ? (
               <Text style={styles.errorText}>{error}</Text>
             ) : null}
 
             <TouchableOpacity 
-              style={styles.loginButton}
+              style={[styles.loginButton, (isSubmitting || isCheckingCredential) && styles.loginButtonDisabled]}
               onPress={handleLogin}
+              disabled={isSubmitting || isCheckingCredential}
+              testID="easyseas-secure-login"
             >
-              <Text style={styles.loginButtonText}>Login</Text>
+              {isSubmitting ? <ActivityIndicator color={COLORS.white} /> : (
+                <Text style={styles.loginButtonText}>{credentialMode === 'create' ? 'Create Secure Access' : 'Unlock Easy Seas'}</Text>
+              )}
             </TouchableOpacity>
+
+            {credentialMode === 'unlock' && Platform.OS !== 'web' ? (
+              <TouchableOpacity
+                style={styles.biometricButton}
+                onPress={handleBiometricUnlock}
+                disabled={isSubmitting}
+                testID="easyseas-biometric-unlock"
+              >
+                <Text style={styles.biometricButtonText}>Use Face ID, Touch ID, or Device Passcode</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
 
           <TouchableOpacity 
@@ -519,34 +587,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.xxl,
   },
-  logoContainer: {
-    width: width * 0.7,
-    height: height * 0.35,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: SPACING.md,
+  heroImageContainer: {
+    width: Math.min(width * 0.86, 520),
+    aspectRatio: 1138 / 756,
+    borderRadius: 22,
+    overflow: 'hidden',
+    backgroundColor: '#001F54',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 216, 107, 0.55)',
+    marginBottom: SPACING.lg,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.28,
+    shadowRadius: 20,
+    elevation: 10,
   },
-  logoImage: {
+  heroImage: {
     width: '100%',
     height: '100%',
   },
-  logoFallback: {
+  heroFallbackImage: {
     width: '100%',
     height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  logoFallbackText: {
-    fontSize: 48,
-    fontWeight: '800' as const,
-    color: COLORS.white,
-    textAlign: 'center',
-  },
-  signatureImage: {
-    width: 130,
-    height: 130,
-    marginBottom: SPACING.sm,
-    opacity: 0.8,
+    backgroundColor: COLORS.white,
   },
   card: {
     backgroundColor: COLORS.white,
@@ -611,6 +674,12 @@ const styles = StyleSheet.create({
     marginTop: SPACING.md,
     letterSpacing: 0.5,
   },
+  securityHelper: {
+    color: COLORS.textSecondary,
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    lineHeight: 17,
+    marginBottom: SPACING.sm,
+  },
   input: {
     backgroundColor: '#F5F5F5',
     borderRadius: 8,
@@ -640,10 +709,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: SPACING.sm,
   },
+  loginButtonDisabled: {
+    opacity: 0.58,
+  },
   loginButtonText: {
     color: COLORS.white,
     fontSize: TYPOGRAPHY.fontSizeMD,
     fontWeight: TYPOGRAPHY.fontWeightSemiBold as any,
+  },
+  biometricButton: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#0F766E',
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.md,
+    alignItems: 'center',
+    marginTop: SPACING.sm,
+    backgroundColor: '#ECFDF5',
+  },
+  biometricButtonText: {
+    color: '#065F46',
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold as any,
+    textAlign: 'center',
   },
   aboutButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.2)',

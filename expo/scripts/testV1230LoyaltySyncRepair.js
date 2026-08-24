@@ -5,10 +5,10 @@ const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 function assert(condition, message) { if (!condition) throw new Error(message); }
 const appJson = JSON.parse(read('app.json'));
 const pkg = JSON.parse(read('package.json'));
-assert(appJson.expo.version === '12.4.2', 'app.json expo.version must be 12.4.2');
-assert(appJson.expo.ios.buildNumber === '314', 'iOS buildNumber must be 314');
-assert(appJson.expo.android.versionCode === 120405, 'Android versionCode must be 120405');
-assert(pkg.version === '12.4.2', 'package.json version must be 12.4.2');
+assert(appJson.expo.version === '12.4.4', 'app.json expo.version must be 12.4.4');
+assert(appJson.expo.ios.buildNumber === '319', 'iOS buildNumber must be 314');
+assert(appJson.expo.android.versionCode === 120410, 'Android versionCode must be 120410');
+assert(pkg.version === '12.4.4', 'package.json version must be 12.4.4');
 const provider = read('state/RoyalCaribbeanSyncProvider.tsx');
 assert(provider.includes('hasMeaningfulExtendedLoyaltyData'), 'Provider must validate meaningful loyalty values.');
 assert(provider.includes('isHistoryOnlyLoyaltyPayload'), 'Provider must detect loyalty/history-only payloads.');

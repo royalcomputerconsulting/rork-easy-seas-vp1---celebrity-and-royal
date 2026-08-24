@@ -19,12 +19,10 @@ import type { CasinoOpenHoursData } from '@/components/ui/CasinoOpenHoursCard';
 import type { RecognitionEntryWithCrew, Sailing } from '@/types/crew-recognition';
 import { ALL_STORAGE_KEYS, GLOBAL_KEYS, getUserScopedKey, type AppSettings } from '../storage/storageKeys';
 import { quotaSafeGetItem, quotaSafeSetItem, quotaSafeSetJsonItem } from '../storage/quotaSafeStorage';
-import { applyKnownRetailValuesToBooked } from '../dataEnrichment/retailValueEnrichment';
 import {
   dedupeBookedCruises,
   dedupeCalendarEvents,
   dedupeCasinoOffers,
-  dedupeCruises,
   dedupeByIdentity,
 } from '../dataIdentity';
 import { generateCruiseCalendarEvents } from '../calendar/cruiseEvents';
@@ -33,6 +31,8 @@ import { isKnownCasinoProfile } from '../knownProfileFallback';
 import { normalizeCruisesWithCasinoEconomics } from '../casinoCruiseEconomics';
 import { getBookedCruiseCasinoPoints, normalizeCruiseCasinoPerformance } from '../casinoPointTruth';
 import { buildAskMyDataOverview, type AskMyDataOverview } from '../askMyDataOverview';
+import { cruiseInventoryRepository } from '../cruiseInventory/CruiseInventoryRepository';
+import { getCruiseInventoryOwnerScope } from '../cruiseInventory/cruiseCanonicalIdentity';
 
 const CURRENT_MACHINE_ENCYCLOPEDIA_KEY = 'easyseas_machine_encyclopedia_v2_262_only';
 const CURRENT_MY_SLOT_ATLAS_KEY = 'easyseas_my_slot_atlas_v2_262_only';
@@ -375,6 +375,18 @@ export async function getAllStoredData(email?: string | null, profileGate?: Data
   };
 
   try {
+    const inventoryOwnerScope = getCruiseInventoryOwnerScope(email);
+    const sqliteCruises: Cruise[] = [];
+    try {
+      const inventoryCounts = await cruiseInventoryRepository.getCounts(inventoryOwnerScope);
+      if (inventoryCounts.total > 0) {
+        await cruiseInventoryRepository.exportAllSourceRows((batch) => {
+          sqliteCruises.push(...batch);
+        }, 500, inventoryOwnerScope);
+      }
+    } catch (inventoryError) {
+      console.warn('[DataBundle] SQLite catalog export unavailable; using retained legacy catalog:', inventoryError);
+    }
     const scopedUsersKey = email
       ? getUserScopedKey(ALL_STORAGE_KEYS.USERS, email.toLowerCase().trim())
       : ALL_STORAGE_KEYS.USERS;
@@ -407,7 +419,7 @@ export async function getAllStoredData(email?: string | null, profileGate?: Data
       compItemsData,
       w2gRecordsData,
     ] = await Promise.all([
-      quotaSafeGetItem(sk(ALL_STORAGE_KEYS.CRUISES)),
+      sqliteCruises.length > 0 ? Promise.resolve(null) : quotaSafeGetItem(sk(ALL_STORAGE_KEYS.CRUISES)),
       quotaSafeGetItem(sk(ALL_STORAGE_KEYS.BOOKED_CRUISES)),
       quotaSafeGetItem(sk(ALL_STORAGE_KEYS.CASINO_OFFERS)),
       quotaSafeGetItem(sk(ALL_STORAGE_KEYS.CALENDAR_EVENTS)),
@@ -459,7 +471,7 @@ export async function getAllStoredData(email?: string | null, profileGate?: Data
     let casinoOpenHours: Record<string, CasinoOpenHoursData> = {};
     
     try {
-      cruises = cruisesData ? JSON.parse(cruisesData) : [];
+      cruises = sqliteCruises.length > 0 ? sqliteCruises : (cruisesData ? JSON.parse(cruisesData) : []);
       if (!Array.isArray(cruises)) cruises = [];
     } catch (e) {
       console.error('[DataBundle] Error parsing cruises:', e);
@@ -590,7 +602,10 @@ export async function getAllStoredData(email?: string | null, profileGate?: Data
       console.error('[DataBundle] Error parsing extended loyalty data:', e);
     }
 
-    cruises = dedupeCruises(filterRecordsForProfileGate(cruises, 'export cruises', resolvedGate, true), 'export cruises');
+    // Available-cruise exports are deliberately lossless. Multiple rows may
+    // describe the same physical sailing under different playerOfferId,
+    // cabin, guest, or category eligibility and must survive backup/restore.
+    cruises = filterRecordsForProfileGate(cruises, 'export cruises', resolvedGate, true);
     bookedCruises = normalizeCruisesWithCasinoEconomics(
       dedupeBookedCruises(filterRecordsForProfileGate(bookedCruises, 'export booked cruises', resolvedGate, true), 'export booked cruises').map(normalizeCruiseCasinoPerformance),
       { includeKnownAnnualFacts: isKnownCasinoProfile(email) },
@@ -622,8 +637,10 @@ export async function getAllStoredData(email?: string | null, profileGate?: Data
     machineEncyclopedia = filterRecordsForProfileGate(machineEncyclopedia, 'export machine encyclopedia', resolvedGate, true);
     userSlotMachines = filterRecordsForProfileGate(userSlotMachines, 'export user slot machines', resolvedGate, true);
     deckPlanLocations = filterRecordsForProfileGate(deckPlanLocations, 'export deck plan locations', resolvedGate, true);
-    crewEntries = filterRecordsForProfileGate(crewEntries, 'export crew entries', resolvedGate, true);
-    crewSailings = filterRecordsForProfileGate(crewSailings, 'export crew sailings', resolvedGate, true);
+    // Crew recognition is already isolated by the authenticated account's
+    // scoped storage key. A selected Royal/Celebrity profile is not ownership
+    // evidence for a crew member, so applying the cruise profile gate here
+    // incorrectly removed the complete registry from Save All.
     bankrollLimits = filterRecordsForProfileGate(bankrollLimits, 'export bankroll limits', resolvedGate, true);
     bankrollAlerts = filterRecordsForProfileGate(bankrollAlerts, 'export bankroll alerts', resolvedGate, true);
     compItems = filterRecordsForProfileGate(compItems, 'export comp items', resolvedGate, true);
@@ -776,11 +793,30 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
         fallbackSourceEmail: activeProfileFallbackEmail,
         markUnassigned: true,
       });
-      const dedupedCruises = dedupeCruises(foundationCruises, 'backup cruises');
-      const mergedCruises = await mergeWithExistingOutsideProfileGate(sk(ALL_STORAGE_KEYS.CRUISES), dedupedCruises, resolvedGate, 'backup cruises');
-      await quotaSafeSetJsonItem(sk(ALL_STORAGE_KEYS.CRUISES), mergedCruises);
+      const inventoryOwnerScope = getCruiseInventoryOwnerScope(email);
+      const existingInventoryRows: Cruise[] = [];
+      if (resolvedGate.hasGate) {
+        await cruiseInventoryRepository.exportAllSourceRows((batch) => {
+          existingInventoryRows.push(...batch);
+        }, 500, inventoryOwnerScope);
+      }
+      const preservedOutsideActiveProfile = resolvedGate.hasGate
+        ? existingInventoryRows.filter((record) => !recordMatchesProfileGate(record, resolvedGate, true))
+        : [];
+      const replacementRows = [...preservedOutsideActiveProfile, ...foundationCruises];
+      await cruiseInventoryRepository.replaceCatalog(replacementRows, {
+        ownerScopeId: inventoryOwnerScope,
+        runId: `backup-import-${importTimestamp}`,
+        batchSize: 500,
+        yieldBetweenBatches: true,
+      });
+      await cruiseInventoryRepository.setMetadata(`legacy_catalog_retained:${inventoryOwnerScope}`, JSON.stringify({
+        retainedForRollbackOnly: true,
+        authoritativeStore: 'sqlite',
+        importedAt: importTimestamp,
+      }));
       await quotaSafeSetItem(sk(ALL_STORAGE_KEYS.HAS_IMPORTED_DATA), 'true');
-      imported.cruises = dedupedCruises.length;
+      imported.cruises = foundationCruises.length;
       console.log('[DataBundle] Imported cruises:', imported.cruises);
     }
   } catch (error) {
@@ -798,7 +834,7 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
       });
       const dedupedBooked = dedupeBookedCruises(foundationBooked, 'backup booked cruises');
       const enrichedBooked = normalizeCruisesWithCasinoEconomics(
-        applyKnownRetailValuesToBooked(dedupedBooked).map(normalizeCruiseCasinoPerformance),
+        dedupedBooked.map(normalizeCruiseCasinoPerformance),
         { includeKnownAnnualFacts: isKnownCasinoProfile(email) },
       );
       const mergedBooked = await mergeWithExistingOutsideProfileGate(sk(ALL_STORAGE_KEYS.BOOKED_CRUISES), enrichedBooked, resolvedGate, 'backup booked cruises');
@@ -864,7 +900,7 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
       const adoptedSessions = adoptBackupRecordsForActiveAccount(gatedSessions, email, resolvedGate);
       const dedupedSessions = dedupeByIdOrPayload(adoptedSessions, 'casinoSessions');
       const mergedSessions = await mergeWithExistingOutsideProfileGate(sk(ALL_STORAGE_KEYS.CASINO_SESSIONS), dedupedSessions, resolvedGate, 'casinoSessions');
-      await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CASINO_SESSIONS), JSON.stringify(mergedSessions));
+      await quotaSafeSetJsonItem(sk(ALL_STORAGE_KEYS.CASINO_SESSIONS), mergedSessions);
       imported.casinoSessions = dedupedSessions.length;
       console.log('[DataBundle] Imported casino sessions:', imported.casinoSessions);
     }
@@ -878,7 +914,7 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
       const adoptedCertificates = adoptBackupRecordsForActiveAccount(gatedCertificates, email, resolvedGate);
       const dedupedCertificates = dedupeByIdOrPayload(adoptedCertificates, 'certificates');
       const mergedCertificates = await mergeWithExistingOutsideProfileGate(sk(ALL_STORAGE_KEYS.CERTIFICATES), dedupedCertificates, resolvedGate, 'certificates');
-      await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CERTIFICATES), JSON.stringify(mergedCertificates));
+      await quotaSafeSetJsonItem(sk(ALL_STORAGE_KEYS.CERTIFICATES), mergedCertificates);
       imported.certificates = dedupedCertificates.length;
       console.log('[DataBundle] Imported certificates:', imported.certificates);
     }
@@ -888,7 +924,7 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
 
   try {
     if (bundle.clubRoyaleProfile) {
-      await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CLUB_PROFILE), JSON.stringify(bundle.clubRoyaleProfile));
+      await quotaSafeSetJsonItem(sk(ALL_STORAGE_KEYS.CLUB_PROFILE), bundle.clubRoyaleProfile);
       console.log('[DataBundle] Imported club profile');
     }
   } catch (error) {
@@ -897,7 +933,7 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
 
   try {
     if (bundle.settings) {
-      await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.SETTINGS), JSON.stringify(bundle.settings));
+      await quotaSafeSetJsonItem(sk(ALL_STORAGE_KEYS.SETTINGS), bundle.settings);
       console.log('[DataBundle] Imported settings');
     }
   } catch (error) {
@@ -1004,7 +1040,7 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
         : [];
       const mergedUsers = [...preservedUsers, ...usersToImport];
 
-      await AsyncStorage.setItem(scopedUsersKey, JSON.stringify(mergedUsers));
+      await quotaSafeSetJsonItem(scopedUsersKey, mergedUsers);
       console.log('[DataBundle] Successfully imported', usersToImport.length, 'active-profile users to scoped storage key:', scopedUsersKey);
       console.log('[DataBundle] Imported users:', JSON.stringify(usersToImport.map(u => ({ id: u.id, name: u.name, email: u.email, crownAnchorNumber: u.crownAnchorNumber, birthdate: u.birthdate, hasPlayingHours: !!u.playingHours }))));
       
@@ -1026,15 +1062,15 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
         const adoptedMachineEntries = adoptBackupRecordsForActiveAccount(gatedMachineEntries, email, resolvedGate);
         const dedupedMachineEntries = dedupeByIdOrPayload(adoptedMachineEntries, 'machineEncyclopedia');
         const mergedMachineEntries = await mergeWithExistingOutsideProfileGate(sk(ALL_STORAGE_KEYS.MACHINE_ENCYCLOPEDIA), dedupedMachineEntries, resolvedGate, 'machineEncyclopedia');
-        await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.MACHINE_ENCYCLOPEDIA), JSON.stringify(mergedMachineEntries));
-        await AsyncStorage.setItem(getUserScopedKey(CURRENT_MACHINE_ENCYCLOPEDIA_KEY, email ?? null), JSON.stringify(mergedMachineEntries));
+        await quotaSafeSetJsonItem(sk(ALL_STORAGE_KEYS.MACHINE_ENCYCLOPEDIA), mergedMachineEntries);
+        await quotaSafeSetJsonItem(getUserScopedKey(CURRENT_MACHINE_ENCYCLOPEDIA_KEY, email ?? null), mergedMachineEntries);
         imported.machines = dedupedMachineEntries.length;
         console.log('[DataBundle] Imported machine encyclopedia:', dedupedMachineEntries.length);
       }
       if (bundle.machines.atlasIds && Array.isArray(bundle.machines.atlasIds)) {
         const dedupedAtlasIds = Array.from(new Set(bundle.machines.atlasIds.filter((id): id is string => typeof id === 'string' && id.trim().length > 0)));
-        await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.MY_SLOT_ATLAS), JSON.stringify(dedupedAtlasIds));
-        await AsyncStorage.setItem(getUserScopedKey(CURRENT_MY_SLOT_ATLAS_KEY, email ?? null), JSON.stringify(dedupedAtlasIds));
+        await quotaSafeSetJsonItem(sk(ALL_STORAGE_KEYS.MY_SLOT_ATLAS), dedupedAtlasIds);
+        await quotaSafeSetJsonItem(getUserScopedKey(CURRENT_MY_SLOT_ATLAS_KEY, email ?? null), dedupedAtlasIds);
         imported.machines = imported.machines || dedupedAtlasIds.length;
         console.log('[DataBundle] Imported slot atlas:', dedupedAtlasIds.length, 'machines');
       }
@@ -1043,7 +1079,7 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
         const adoptedUserMachines = adoptBackupRecordsForActiveAccount(gatedUserMachines, email, resolvedGate);
         const dedupedUserMachines = dedupeByIdOrPayload(adoptedUserMachines, 'userSlotMachines');
         const mergedUserMachines = await mergeWithExistingOutsideProfileGate(sk(ALL_STORAGE_KEYS.USER_SLOT_MACHINES), dedupedUserMachines, resolvedGate, 'userSlotMachines');
-        await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.USER_SLOT_MACHINES), JSON.stringify(mergedUserMachines));
+        await quotaSafeSetJsonItem(sk(ALL_STORAGE_KEYS.USER_SLOT_MACHINES), mergedUserMachines);
         console.log('[DataBundle] Imported user slot machines:', dedupedUserMachines.length);
       }
       if (bundle.machines.deckLocations && Array.isArray(bundle.machines.deckLocations)) {
@@ -1051,7 +1087,7 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
         const adoptedDeckLocations = adoptBackupRecordsForActiveAccount(gatedDeckLocations, email, resolvedGate);
         const dedupedDeckLocations = dedupeByIdOrPayload(adoptedDeckLocations, 'deckPlanLocations');
         const mergedDeckLocations = await mergeWithExistingOutsideProfileGate(sk(ALL_STORAGE_KEYS.DECK_PLAN_LOCATIONS), dedupedDeckLocations, resolvedGate, 'deckPlanLocations');
-        await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.DECK_PLAN_LOCATIONS), JSON.stringify(mergedDeckLocations));
+        await quotaSafeSetJsonItem(sk(ALL_STORAGE_KEYS.DECK_PLAN_LOCATIONS), mergedDeckLocations);
         console.log('[DataBundle] Imported deck plan locations:', dedupedDeckLocations.length);
       }
     }
@@ -1063,20 +1099,18 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
   try {
     if (bundle.crewRecognition) {
       if (bundle.crewRecognition.entries && Array.isArray(bundle.crewRecognition.entries)) {
-        const gatedCrewEntries = filterRecordsForProfileGate(bundle.crewRecognition.entries, 'crewRecognitionEntries', resolvedGate, true);
-        const adoptedCrewEntries = adoptBackupRecordsForActiveAccount(gatedCrewEntries, email, resolvedGate);
+        const adoptedCrewEntries = bundle.crewRecognition.entries;
         const dedupedCrewEntries = dedupeByIdOrPayload(adoptedCrewEntries, 'crewRecognitionEntries');
         const mergedCrewEntries = await mergeWithExistingOutsideProfileGate(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_ENTRIES), dedupedCrewEntries, resolvedGate, 'crewRecognitionEntries');
-        await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_ENTRIES), JSON.stringify(mergedCrewEntries));
+        await quotaSafeSetJsonItem(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_ENTRIES), mergedCrewEntries);
         imported.crewRecognitionEntries = dedupedCrewEntries.length;
         console.log('[DataBundle] Imported crew recognition entries:', dedupedCrewEntries.length);
       }
       if (bundle.crewRecognition.sailings && Array.isArray(bundle.crewRecognition.sailings)) {
-        const gatedCrewSailings = filterRecordsForProfileGate(bundle.crewRecognition.sailings, 'crewRecognitionSailings', resolvedGate, true);
-        const adoptedCrewSailings = adoptBackupRecordsForActiveAccount(gatedCrewSailings, email, resolvedGate);
+        const adoptedCrewSailings = bundle.crewRecognition.sailings;
         const dedupedCrewSailings = dedupeByIdOrPayload(adoptedCrewSailings, 'crewRecognitionSailings');
         const mergedCrewSailings = await mergeWithExistingOutsideProfileGate(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_SAILINGS), dedupedCrewSailings, resolvedGate, 'crewRecognitionSailings');
-        await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_SAILINGS), JSON.stringify(mergedCrewSailings));
+        await quotaSafeSetJsonItem(sk(ALL_STORAGE_KEYS.CREW_RECOGNITION_SAILINGS), mergedCrewSailings);
         console.log('[DataBundle] Imported crew recognition sailings:', dedupedCrewSailings.length);
       }
     }
@@ -1092,7 +1126,7 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
         const adoptedBankrollLimits = adoptBackupRecordsForActiveAccount(gatedBankrollLimits, email, resolvedGate);
         const dedupedBankrollLimits = dedupeByIdOrPayload(adoptedBankrollLimits, 'bankrollLimits');
         const mergedBankrollLimits = await mergeWithExistingOutsideProfileGate(sk(ALL_STORAGE_KEYS.BANKROLL_LIMITS), dedupedBankrollLimits, resolvedGate, 'bankrollLimits');
-        await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.BANKROLL_LIMITS), JSON.stringify(mergedBankrollLimits));
+        await quotaSafeSetJsonItem(sk(ALL_STORAGE_KEYS.BANKROLL_LIMITS), mergedBankrollLimits);
         imported.bankrollLimits = dedupedBankrollLimits.length;
         console.log('[DataBundle] Imported bankroll limits:', imported.bankrollLimits);
       }
@@ -1102,7 +1136,7 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
         const adoptedBankrollAlerts = adoptBackupRecordsForActiveAccount(gatedBankrollAlerts, email, resolvedGate);
         const dedupedBankrollAlerts = dedupeByIdOrPayload(adoptedBankrollAlerts, 'bankrollAlerts');
         const mergedBankrollAlerts = await mergeWithExistingOutsideProfileGate(sk(ALL_STORAGE_KEYS.BANKROLL_ALERTS), dedupedBankrollAlerts, resolvedGate, 'bankrollAlerts');
-        await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.BANKROLL_ALERTS), JSON.stringify(mergedBankrollAlerts));
+        await quotaSafeSetJsonItem(sk(ALL_STORAGE_KEYS.BANKROLL_ALERTS), mergedBankrollAlerts);
         console.log('[DataBundle] Imported bankroll alerts:', dedupedBankrollAlerts.length);
       }
 
@@ -1111,7 +1145,7 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
         const adoptedCompItems = adoptBackupRecordsForActiveAccount(gatedCompItems, email, resolvedGate);
         const dedupedCompItems = dedupeByIdOrPayload(adoptedCompItems, 'compItems');
         const mergedCompItems = await mergeWithExistingOutsideProfileGate(sk(ALL_STORAGE_KEYS.COMP_ITEMS), dedupedCompItems, resolvedGate, 'compItems');
-        await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.COMP_ITEMS), JSON.stringify(mergedCompItems));
+        await quotaSafeSetJsonItem(sk(ALL_STORAGE_KEYS.COMP_ITEMS), mergedCompItems);
         imported.compItems = dedupedCompItems.length;
         console.log('[DataBundle] Imported comp items:', imported.compItems);
       }
@@ -1121,7 +1155,7 @@ export async function importAllData(bundle: FullAppDataBundle, email?: string | 
         const adoptedW2GRecords = adoptBackupRecordsForActiveAccount(gatedW2GRecords, email, resolvedGate);
         const dedupedW2GRecords = dedupeByIdOrPayload(adoptedW2GRecords, 'w2gRecords');
         const mergedW2GRecords = await mergeWithExistingOutsideProfileGate(sk(ALL_STORAGE_KEYS.W2G_RECORDS), dedupedW2GRecords, resolvedGate, 'w2gRecords');
-        await AsyncStorage.setItem(sk(ALL_STORAGE_KEYS.W2G_RECORDS), JSON.stringify(mergedW2GRecords));
+        await quotaSafeSetJsonItem(sk(ALL_STORAGE_KEYS.W2G_RECORDS), mergedW2GRecords);
         imported.w2gRecords = dedupedW2GRecords.length;
         console.log('[DataBundle] Imported W-2G records:', imported.w2gRecords);
       }

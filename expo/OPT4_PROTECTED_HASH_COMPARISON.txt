@@ -1,1 +1,0 @@
-PASS: protected files unchanged

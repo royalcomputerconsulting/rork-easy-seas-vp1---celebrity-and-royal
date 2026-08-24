@@ -1,5 +1,4 @@
 import { isRoyalCaribbeanShip } from '@/constants/shipInfo';
-import { KNOWN_RETAIL_VALUES } from '@/constants/knownRetailValues';
 import { createDateFromString } from '@/lib/date';
 import { calculateCruiseValue, type ValueBreakdown } from '@/lib/valueCalculator';
 import type { BookedCruise } from '@/types/models';
@@ -13,6 +12,10 @@ import {
   isClubRoyaleCasinoCruise,
   normalizeCruiseCasinoPerformance,
 } from '@/lib/casinoPointTruth';
+import { ANNUAL_CASINO_REPORT_FACTS, type AnnualCasinoHistoricalFact } from '@/lib/casinoAnnualReportFacts';
+import { applyOwnerScopedCasinoHistoryToCruises, SCOTT_CONFIRMED_CASINO_HISTORY_IMPORT_ID } from '@/lib/casino/ownerScopedCasinoHistory';
+
+export { ANNUAL_CASINO_REPORT_FACTS } from '@/lib/casinoAnnualReportFacts';
 
 export type CruiseEconomicsStatus = 'actual' | 'estimated' | 'mixed';
 
@@ -136,7 +139,6 @@ const DEFAULT_POINT_DOLLAR_VALUE = 0.01;
 const CONFIRMED_CLUB_ROYALE_2025_RETAIL_VALUE_FLOOR = 47774;
 const CONFIRMED_CLUB_ROYALE_2025_PAID = 4238.41;
 const DEFAULT_PORT_FEE_PER_PERSON_FOR_7_NIGHTS = 162;
-const DEFAULT_DOUBLE_OCCUPANCY_GUESTS = 2;
 const KNOWN_STAR_2026_SAIL_DATE = '2026-07-05';
 const KNOWN_STAR_2026_RETAIL_VALUE = 5500;
 const KNOWN_STAR_2026_NET_EFFECTIVE_PAID = 150.92;
@@ -149,58 +151,15 @@ interface TaxesFeesEstimateInfo {
   note: string | null;
 }
 
-interface AnnualCasinoHistoricalFact {
-  ship: string;
-  sailDate: string;
-  returnDate: string;
-  nights: number;
-  retailValue: number;
-  amountPaid: number;
-  winningsBroughtHome: number;
-  pointsEarned: number;
-  calculationConfidence: CruiseEconomicsStatus;
-  notes?: string;
-}
-
-export const ANNUAL_CASINO_REPORT_FACTS: AnnualCasinoHistoricalFact[] = [
-  { ship: 'Harmony of the Seas', sailDate: '2025-04-20', returnDate: '2025-04-27', nights: 7, retailValue: 4650, amountPaid: 175.25, winningsBroughtHome: 8000, pointsEarned: 2030, calculationConfidence: 'actual', notes: 'Annual total reconciles to the confirmed 58,680 Club Royale points with an aggregate point adjustment for unallocated point transactions.' },
-  { ship: 'Ovation of the Seas', sailDate: '2025-07-29', returnDate: '2025-08-01', nights: 3, retailValue: 1588, amountPaid: 149.10, winningsBroughtHome: 0, pointsEarned: 317, calculationConfidence: 'actual' },
-  { ship: 'Navigator of the Seas', sailDate: '2025-08-01', returnDate: '2025-08-04', nights: 3, retailValue: 1326, amountPaid: 133, winningsBroughtHome: 300, pointsEarned: 650, calculationConfidence: 'mixed', notes: 'Winnings use the confirmed 3-night estimated baseline.' },
-  { ship: 'Navigator of the Seas', sailDate: '2025-08-22', returnDate: '2025-08-25', nights: 3, retailValue: 1326, amountPaid: 133, winningsBroughtHome: 300, pointsEarned: 650, calculationConfidence: 'mixed', notes: 'Winnings use the confirmed 3-night estimated baseline.' },
-  { ship: 'Star of the Seas', sailDate: '2025-08-27', returnDate: '2025-08-31', nights: 4, retailValue: 6500, amountPaid: 162.37, winningsBroughtHome: 700, pointsEarned: 4581, calculationConfidence: 'actual' },
-  { ship: 'Navigator of the Seas', sailDate: '2025-09-08', returnDate: '2025-09-12', nights: 4, retailValue: 999, amountPaid: 136.58, winningsBroughtHome: 189, pointsEarned: 976, calculationConfidence: 'actual' },
-  { ship: 'Navigator of the Seas', sailDate: '2025-09-15', returnDate: '2025-09-19', nights: 4, retailValue: 1050, amountPaid: 132.50, winningsBroughtHome: 100, pointsEarned: 817, calculationConfidence: 'actual' },
-  { ship: 'Radiance of the Seas', sailDate: '2025-09-26', returnDate: '2025-10-04', nights: 8, retailValue: 2400, amountPaid: 600, winningsBroughtHome: 780, pointsEarned: 1009, calculationConfidence: 'actual' },
-  { ship: 'Liberty of the Seas', sailDate: '2025-10-16', returnDate: '2025-10-25', nights: 9, retailValue: 3500, amountPaid: 800, winningsBroughtHome: 1488, pointsEarned: 7482, calculationConfidence: 'actual' },
-  { ship: 'Quantum of the Seas', sailDate: '2025-11-10', returnDate: '2025-11-14', nights: 4, retailValue: 1528, amountPaid: 137, winningsBroughtHome: 700, pointsEarned: 925, calculationConfidence: 'mixed', notes: 'Winnings use the confirmed default estimated baseline.' },
-  { ship: 'Quantum of the Seas', sailDate: '2025-11-17', returnDate: '2025-11-21', nights: 4, retailValue: 1528, amountPaid: 137, winningsBroughtHome: 700, pointsEarned: 925, calculationConfidence: 'mixed', notes: 'Winnings use the confirmed default estimated baseline.' },
-  { ship: 'Quantum of the Seas', sailDate: '2025-12-01', returnDate: '2025-12-05', nights: 4, retailValue: 1528, amountPaid: 137, winningsBroughtHome: 700, pointsEarned: 925, calculationConfidence: 'mixed', notes: 'Winnings use the confirmed default estimated baseline.' },
-  { ship: 'Quantum of the Seas', sailDate: '2025-12-05', returnDate: '2025-12-10', nights: 5, retailValue: 1446, amountPaid: 221, winningsBroughtHome: 700, pointsEarned: 1250, calculationConfidence: 'mixed', notes: 'Winnings use the confirmed default estimated baseline.' },
-  { ship: 'Quantum of the Seas', sailDate: '2025-12-10', returnDate: '2025-12-15', nights: 5, retailValue: 1446, amountPaid: 221, winningsBroughtHome: 700, pointsEarned: 1250, calculationConfidence: 'mixed', notes: 'Winnings use the confirmed default estimated baseline.' },
-  { ship: 'Quantum of the Seas', sailDate: '2026-01-07', returnDate: '2026-01-13', nights: 6, retailValue: 1206, amountPaid: 25.97, winningsBroughtHome: 700, pointsEarned: 1500, calculationConfidence: 'mixed', notes: 'Winnings use the confirmed default estimated baseline.' },
-  { ship: 'Quantum of the Seas', sailDate: '2026-01-13', returnDate: '2026-01-16', nights: 3, retailValue: 740, amountPaid: 127, winningsBroughtHome: 300, pointsEarned: 700, calculationConfidence: 'mixed', notes: 'Winnings use the confirmed 3-night estimated baseline.' },
-  { ship: 'Quantum of the Seas', sailDate: '2026-01-16', returnDate: '2026-01-21', nights: 5, retailValue: 1446, amountPaid: 220.95, winningsBroughtHome: 700, pointsEarned: 1250, calculationConfidence: 'mixed', notes: 'Winnings use the confirmed default estimated baseline.' },
-  { ship: 'Harmony of the Seas', sailDate: '2026-02-22', returnDate: '2026-03-01', nights: 7, retailValue: 4650, amountPaid: 151, winningsBroughtHome: 700, pointsEarned: 1800, calculationConfidence: 'mixed', notes: 'Winnings use the confirmed default estimated baseline.' },
-  { ship: 'Harmony of the Seas', sailDate: '2026-03-01', returnDate: '2026-03-08', nights: 7, retailValue: 4650, amountPaid: 151, winningsBroughtHome: 700, pointsEarned: 1800, calculationConfidence: 'mixed', notes: 'Winnings use the confirmed default estimated baseline.' },
-  { ship: 'Navigator of the Seas', sailDate: '2026-03-09', returnDate: '2026-03-16', nights: 7, retailValue: 3242, amountPaid: 154.69, winningsBroughtHome: 700, pointsEarned: 1700, calculationConfidence: 'mixed', notes: 'Winnings use the confirmed default estimated baseline.' },
-  { ship: 'Navigator of the Seas', sailDate: '2026-03-16', returnDate: '2026-03-20', nights: 4, retailValue: 1025, amountPaid: 133, winningsBroughtHome: 300, pointsEarned: 900, calculationConfidence: 'mixed', notes: 'Winnings use the confirmed 4-night weak-row estimated baseline.' },
-];
-
 function getAnnualFactKey(ship: string | undefined, sailDate: string | undefined): string {
   return `${(ship ?? '').trim().toLowerCase()}|${(sailDate ?? '').trim()}`;
 }
 
 function getKnownRetailValueForCruise(cruise: Pick<BookedCruise, 'id' | 'bookingId' | 'reservationNumber' | 'shipName' | 'sailDate'>): number | null {
-  const normalizedShip = (cruise.shipName ?? '').toLowerCase().trim();
-  const knownValue = KNOWN_RETAIL_VALUES.find((value) => {
-    if (value.cruiseId === cruise.id || value.cruiseId === cruise.bookingId || value.cruiseId === cruise.reservationNumber) return true;
-
-    const normalizedKnownShip = value.ship.toLowerCase().trim();
-    const shipMatches = normalizedShip === normalizedKnownShip || normalizedShip.includes(normalizedKnownShip) || normalizedKnownShip.includes(normalizedShip);
-    return shipMatches && value.departureDate === cruise.sailDate;
-  });
-
-  return knownValue?.retailCabinValue ?? null;
+  const fact = ANNUAL_CASINO_REPORT_FACTS_BY_KEY.get(getAnnualFactKey(cruise.shipName, cruise.sailDate));
+  if (fact) return fact.retailValue;
+  if (isKnownStar2026CasinoBooking(cruise)) return KNOWN_STAR_2026_RETAIL_VALUE;
+  return null;
 }
 
 function applyKnownRetailValueToCruise(cruise: BookedCruise): BookedCruise {
@@ -317,18 +276,13 @@ function inAnnualScope(cruise: BookedCruise, today: Date): boolean {
 }
 
 function isKnownStar2026CasinoBooking(cruise: Pick<BookedCruise, 'shipName' | 'sailDate' | 'reservationNumber' | 'bookingId'>): boolean {
-  const shipName = (cruise.shipName ?? '').trim().toLowerCase();
-  const reservationId = String(cruise.reservationNumber ?? cruise.bookingId ?? '').trim();
-  return (shipName === 'star of the seas' && cruise.sailDate === KNOWN_STAR_2026_SAIL_DATE) || reservationId === '2656334';
+  return (cruise.shipName ?? '').trim().toLowerCase() === 'star of the seas'
+    && (cruise.sailDate ?? '').slice(0, 10) === KNOWN_STAR_2026_SAIL_DATE;
 }
 
 function applyRetailOverrides(ship: string, sailDate: string, retailValue: number | null): number | null {
-  const annualFact = ANNUAL_CASINO_REPORT_FACTS_BY_KEY.get(getAnnualFactKey(ship, sailDate));
-  const starOverride = ship.trim().toLowerCase() === 'star of the seas' && sailDate === KNOWN_STAR_2026_SAIL_DATE
-    ? KNOWN_STAR_2026_RETAIL_VALUE
-    : null;
-
-  return getHighestPositiveNumber(retailValue, annualFact?.retailValue, starOverride);
+  const fact = ANNUAL_CASINO_REPORT_FACTS_BY_KEY.get(getAnnualFactKey(ship, sailDate));
+  return fact?.retailValue ?? retailValue;
 }
 
 function getAnnualCasinoFact(cruise: BookedCruise): AnnualCasinoHistoricalFact | undefined {
@@ -357,18 +311,18 @@ function buildCruiseFromAnnualFact(fact: AnnualCasinoHistoricalFact): BookedCrui
 function applyAnnualCruiseOverrides(cruise: BookedCruise): BookedCruise {
   const matchedFact = getAnnualCasinoFact(cruise);
 
-  if (!matchedFact) {
+  if (!matchedFact || cruise.casinoHistoryImportId !== SCOTT_CONFIRMED_CASINO_HISTORY_IMPORT_ID) {
     return cruise;
   }
 
-  const netEffectivePaid = round2(matchedFact.amountPaid);
-  const winningsBroughtHome = round2(matchedFact.winningsBroughtHome);
-  const retailValue = round2(matchedFact.retailValue);
+  const netEffectivePaid = round2(getFirstNumber(cruise.netEffectivePaid, cruise.amountPaid, cruise.pricePaid, matchedFact.amountPaid) ?? matchedFact.amountPaid);
+  const winningsBroughtHome = round2(getFirstNumber(cruise.winningsBroughtHome, cruise.winnings, cruise.totalWinnings, matchedFact.winningsBroughtHome) ?? matchedFact.winningsBroughtHome);
+  const retailValue = round2(getFirstNumber(cruise.retailValue, cruise.totalRetailCost, cruise.originalPrice, matchedFact.retailValue) ?? matchedFact.retailValue);
   const cruiseValueCaptured = calcCruiseValueCaptured(retailValue, netEffectivePaid);
   const cashResult = calcCashResult(winningsBroughtHome, netEffectivePaid);
   const totalEconomicValue = calcTotalEconomicValue(retailValue, winningsBroughtHome, netEffectivePaid);
-  const pointsEarned = Math.round(matchedFact.pointsEarned);
-  const coinIn = round2(pointsEarned * DOLLARS_PER_POINT);
+  const pointsEarned = Math.round(getFirstNumber(cruise.pointsEarned, cruise.earnedPoints, cruise.casinoPoints, matchedFact.pointsEarned) ?? matchedFact.pointsEarned);
+  const coinIn = round2(getFirstNumber(cruise.coinIn, pointsEarned * DOLLARS_PER_POINT) ?? pointsEarned * DOLLARS_PER_POINT);
   const houseEdge = getFirstNumber(cruise.houseEdge, DEFAULT_HOUSE_EDGE) ?? DEFAULT_HOUSE_EDGE;
   const pointDollarValue = getFirstNumber(cruise.pointDollarValue, DEFAULT_POINT_DOLLAR_VALUE) ?? DEFAULT_POINT_DOLLAR_VALUE;
   const theoreticalLoss = calcTheoreticalLoss(coinIn, houseEdge);
@@ -418,18 +372,13 @@ export function normalizeCruisesWithCasinoEconomics(
   cruises: BookedCruise[],
   options?: { includeKnownAnnualFacts?: boolean },
 ): BookedCruise[] {
-  const normalizedCruises = cruises.map((cruise) => applyAnnualCruiseOverrides(normalizeCruiseCasinoPerformance(applyKnownRetailValueToCruise(cruise))));
-
-  if (!options?.includeKnownAnnualFacts) {
-    return normalizedCruises;
-  }
-
-  const existingAnnualKeys = new Set(normalizedCruises.map((cruise) => getAnnualFactKey(cruise.shipName, cruise.sailDate)));
-  const missingAnnualCruises = ANNUAL_CASINO_REPORT_FACTS
-    .filter((fact) => !existingAnnualKeys.has(getAnnualFactKey(fact.ship, fact.sailDate)))
-    .map(buildCruiseFromAnnualFact);
-
-  return [...normalizedCruises, ...missingAnnualCruises];
+  return applyOwnerScopedCasinoHistoryToCruises(cruises).map((cruise) => {
+    const normalized = normalizeCruiseCasinoPerformance(cruise);
+    // Never fill a user's booking from another person's historical report.
+    // Verified receipt/import data remains intact; annual overrides require an
+    // explicit, owner-scoped request from the caller.
+    return options?.includeKnownAnnualFacts ? applyAnnualCruiseOverrides(normalized) : normalized;
+  });
 }
 
 export function calcCruiseValueCaptured(retailValue: number, netEffectivePaid: number): number {
@@ -482,15 +431,15 @@ export function calcValuePerHour(totalEconomicValue: number, hoursPlayed: number
 
 function getEconomicsGuestCount(cruise: BookedCruise): number {
   if (isNumber(cruise.guests) && cruise.guests > 0) {
-    return Math.max(DEFAULT_DOUBLE_OCCUPANCY_GUESTS, Math.round(cruise.guests));
+    return Math.round(cruise.guests);
   }
 
-  return DEFAULT_DOUBLE_OCCUPANCY_GUESTS;
+  return 0;
 }
 
-function estimateBookingTaxesFees(nights: number): number {
-  const normalizedNights = nights > 0 ? nights : 7;
-  return round2((DEFAULT_PORT_FEE_PER_PERSON_FOR_7_NIGHTS / 7) * normalizedNights * DEFAULT_DOUBLE_OCCUPANCY_GUESTS);
+function estimateBookingTaxesFees(nights: number, guests: number): number | null {
+  if (nights <= 0 || guests <= 0) return null;
+  return round2((DEFAULT_PORT_FEE_PER_PERSON_FOR_7_NIGHTS / 7) * nights * guests);
 }
 
 function getTaxesFeesEstimate(
@@ -514,7 +463,16 @@ function getTaxesFeesEstimate(
     };
   }
 
-  const estimatedTaxesFees = estimateBookingTaxesFees(cruise.nights || 0);
+  const estimatedTaxesFees = estimateBookingTaxesFees(cruise.nights || 0, getEconomicsGuestCount(cruise));
+  if (estimatedTaxesFees === null) {
+    return {
+      value: 0,
+      rawValue: null,
+      isEstimated: false,
+      wasNormalized: false,
+      note: 'Taxes/fees are unavailable because the cruise duration or guest count is not evidenced.',
+    };
+  }
   return {
     value: estimatedTaxesFees,
     rawValue: null,
@@ -568,7 +526,7 @@ function getNetEffectivePaid(cruise: BookedCruise, taxesFeesEstimate: number): {
     value: round2(netPaid),
     isActual: false,
     nextCruiseOffsetApplied: cruise.nextCruiseOffsetApplied ?? cruise.usedNextCruiseCertificate ?? (taxesFeesEstimate > 0 ? true : null),
-    note: taxesFeesEstimate > 0 ? 'Net paid estimated from taxes/fees with 90% Next Cruise offset.' : 'No paid amount available; defaulted to $0.',
+    note: taxesFeesEstimate > 0 ? 'Net paid estimated from taxes/fees with 90% Next Cruise offset.' : 'No paid amount is available; no cash value was inferred.',
   };
 }
 
@@ -599,7 +557,15 @@ function getEstimatedWinnings(cruise: BookedCruise, isClubRoyaleEligible: boolea
     };
   }
 
-  const estimatedWinnings = (cruise.nights || 0) <= 3 ? 300 : 700;
+  const knownNights = isNumber(cruise.nights) && cruise.nights > 0 ? cruise.nights : 0;
+  if (knownNights === 0) {
+    return {
+      value: 0,
+      isActual: false,
+      note: 'No winnings are inferred because the completed cruise duration is not evidenced.',
+    };
+  }
+  const estimatedWinnings = knownNights <= 3 ? 300 : 700;
 
   return {
     value: estimatedWinnings,
@@ -637,7 +603,15 @@ function getEstimatedPoints(cruise: BookedCruise, isClubRoyaleEligible: boolean)
     };
   }
 
-  const estimatedPoints = Math.round((cruise.nights || 0) * 300);
+  const knownNights = isNumber(cruise.nights) && cruise.nights > 0 ? cruise.nights : 0;
+  if (knownNights === 0) {
+    return {
+      value: 0,
+      isActual: false,
+      note: 'No Club Royale points are inferred because the completed cruise duration is not evidenced.',
+    };
+  }
+  const estimatedPoints = Math.round(knownNights * 300);
 
   return {
     value: estimatedPoints,
@@ -728,8 +702,14 @@ function buildCruiseEconomicsRow(cruise: BookedCruise): CruiseEconomicsRow {
   const netEffectivePaid = paidInfo.value;
   const winningsBroughtHome = winningsInfo.value;
   const cruiseValueCaptured = calcCruiseValueCaptured(retailForCalc, netEffectivePaid);
-  const cashResult = calcCashResult(winningsBroughtHome, netEffectivePaid);
-  const totalEconomicValue = calcTotalEconomicValue(retailForCalc, winningsBroughtHome, netEffectivePaid);
+  // A saved closeout is already the gaming-only result. Subtracting cruise
+  // fare from it again made Ship Intelligence disagree with Trips and Host
+  // Report. The historical winnings-minus-paid formula is only a fallback.
+  const explicitGamingResult = getFirstNumber(cruiseForEconomics.cashResult, cruiseForEconomics.netResult);
+  const cashResult = isNumber(explicitGamingResult)
+    ? round2(explicitGamingResult)
+    : calcCashResult(winningsBroughtHome, netEffectivePaid);
+  const totalEconomicValue = round2(cruiseValueCaptured + cashResult);
   const coinInPerHour = isNumber(hoursPlayed) ? calcCoinInPerHour(coinIn, hoursPlayed) : null;
   const pointsPerHour = isNumber(hoursPlayed) ? calcPointsPerHour(pointsInfo.value, hoursPlayed) : null;
   const valuePerHour = isNumber(hoursPlayed) ? calcValuePerHour(totalEconomicValue, hoursPlayed) : null;
@@ -758,6 +738,7 @@ function buildCruiseEconomicsRow(cruise: BookedCruise): CruiseEconomicsRow {
     pointsInfo.note,
     coinInWasEstimated ? 'Coin-in derived from points at $5 coin-in per point.' : null,
     hoursWereEstimated ? `Hours played estimated from points at ${DEFAULT_ESTIMATED_POINTS_PER_PLAY_HOUR} points/hour.` : null,
+    isNumber(explicitGamingResult) ? 'Gaming cash result uses the saved cruise closeout and never subtracts cruise fare a second time.' : null,
     !isNumber(hoursPlayed) ? 'Hours played not available for this row.' : null,
     matchedAnnualFact?.notes ?? null,
     isKnownStar2026Booking ? 'Star of the Seas 2026 value is locked to the user-updated $5,500 retail value and $150.92 net effective paid casino booking data.' : null,
@@ -997,7 +978,7 @@ export function buildCruiseEconomicsSummary(
   const footnotes = totals.hasEstimates
     ? [
         options?.pointsAdjustmentNote,
-        options?.useKnownAnnualReportFacts ? 'Known annual casino totals are reconciled to the confirmed 2025 Royal Caribbean season: $47,774 minimum retail floor, $4,238.41 paid, $19,457 winnings home, 58,680 points, and $293,400 coin-in. Imported receipts and higher known retail values can raise retail value; Coin-In remains gaming volume only.' : null,
+        options?.useKnownAnnualReportFacts ? 'Known annual casino totals are reconciled to the confirmed 2025 Royal Caribbean season: $47,774 minimum retail floor, $4,238.41 paid, $19,457 winnings home, 58,680 points, and $293,400 coin-in. The supplied cruise rows allocate 34,537 points; the remaining 24,143 are retained as an explicit annual reconciliation amount until cruise-level evidence assigns them. Coin-In remains gaming volume only.' : null,
         'Annual totals include estimated values where paid amount, winnings, points, coin-in, or hours were missing. Coin-In is gaming volume only and is excluded from Cash Result and Total Economic Value.',
       ].filter((note): note is string => Boolean(note))
     : [];

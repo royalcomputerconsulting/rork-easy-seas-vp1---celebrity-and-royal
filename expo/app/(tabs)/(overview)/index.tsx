@@ -1,6 +1,4 @@
-import { buildCruiseDetailsParams } from '@/lib/navigation/cruiseDetails';
-import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { useState, useMemo, useCallback, useDeferredValue, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -37,14 +35,16 @@ import {
   Clock,
   BookOpen,
   DatabaseZap,
+  Compass,
 } from 'lucide-react-native';
 
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
-import { IMAGES, LOCAL_IMAGES } from '@/constants/images';
+import { withAlpha } from '@/constants/loyaltyColors';
+import { createLoyaltyCardTheme, getClubRoyaleTierColor } from '@/constants/loyaltyTheme';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { useUser } from '@/state/UserProvider';
+import { useLoyalty } from '@/state/LoyaltyProvider';
 import { useAuth } from '@/state/AuthProvider';
-import { useAgentX } from '@/state/AgentXProvider';
 import { usePriceTrackingSync } from '@/lib/usePriceTrackingSync';
 import { useAlerts } from '@/state/AlertsProvider';
 import { CompactDashboardHeader } from '@/components/CompactDashboardHeader';
@@ -61,19 +61,18 @@ import { createDateFromString, getDaysUntil, isDateInPast, formatDate } from '@/
 import { isActiveBookedCruise } from '@/lib/bookedCruiseStatus';
 import { MachineStrategyCard } from '@/components/MachineStrategyCard';
 import { ShipMachinesExplorer } from '@/components/ShipMachinesExplorer';
-
+import { CertificateExplorerModal } from '@/components/CertificateExplorerModal';
 import { IntelligenceFilterStrip } from '@/components/IntelligenceFilterStrip';
 import { useIntelligenceFilters } from '@/state/IntelligenceFiltersProvider';
-import { filterRecordsByIntelligence, inferRecordBrand } from '@/lib/intelligenceFilters';
+import { filterRecordsByIntelligence } from '@/lib/intelligenceFilters';
 import { getBookedCruiseCasinoPoints, getBookedCruiseWinningsBroughtHome } from '@/lib/casinoPointTruth';
 
 import type { Cruise, BookedCruise, CasinoOffer } from '@/types/models';
-import { getCabinPriceFromEntity, getDoubleOccupancyRoomRetailValue, GUEST_COUNT_DEFAULT } from '@/lib/valueCalculator';
-import { ALL_STORAGE_KEYS, getUserScopedKey } from '@/lib/storage/storageKeys';
-import type { CarnivalSyncManifest } from '@/lib/carnival/carnivalDataRuntime';
-import { carnivalSailingCanonicalKey } from '@/lib/carnival/carnivalDataRuntime';
+import { getCabinPriceFromEntity, getDoubleOccupancyRoomRetailValue } from '@/lib/valueCalculator';
+import { knownGuestCount, knownNightCount } from '@/lib/cruiseRecordIntegrity';
+import { useCruiseInventory } from '@/hooks/useCruiseInventory';
 
-const OFFERS_TITLE_LOGO_URL = 'https://r2-pub.rork.com/attachments/4hm4mwycibyktcoe3b7eo.png';
+const OFFERS_HERO_IMAGE = require('../../../assets/images/easyseas-scott-astin-logo.jpeg');
 import { formatCurrency } from '@/lib/format';
 import {
   buildCommandCenterBuckets,
@@ -169,12 +168,24 @@ interface CasinoOfferCardData {
   cruises: Cruise[];
 }
 
+const EMPTY_CRUISES: Cruise[] = [];
+const EMPTY_BOOKED_CRUISES: BookedCruise[] = [];
+const EMPTY_CASINO_OFFERS: CasinoOffer[] = [];
+
 function normalizeOfferKey(value: string | undefined): string {
   return value?.trim().toUpperCase() ?? '';
 }
 
 function getOfferLookupKey(offer: CasinoOffer): string {
-  return normalizeOfferKey(offer.offerCode || offer.id);
+  const instanceId = String(offer.playerOfferId || offer.offerInstanceId || offer.carnivalOfferId || '').trim().toLowerCase();
+  return instanceId ? `instance:${instanceId}` : `id:${String(offer.id || '').trim().toLowerCase()}`;
+}
+
+function getCruiseOfferLookupKey(cruise: Cruise | BookedCruise): string {
+  const instanceId = String(cruise.playerOfferId || cruise.offerInstanceId || '').trim().toLowerCase();
+  if (instanceId) return `instance:${instanceId}`;
+  const code = normalizeOfferKey(cruise.offerCode);
+  return code ? `code:${code}` : '';
 }
 
 function getOfferExpiryDate(offer: CasinoOffer): string | undefined {
@@ -204,21 +215,22 @@ function isOfferLinkedCruiseInProgress(cruise: BookedCruise, today: Date): boole
 
 function OverviewScreenContent() {
   const router = useRouter();
-  const { cruises, bookedCruises: allBookedCruises, casinoOffers, clubRoyaleProfile, updateCasinoOffer } = useCoreData();
+  const { cruises, cruiseInventoryCount, bookedCruises: allBookedCruises, casinoOffers, clubRoyaleProfile, updateCasinoOffer } = useCoreData();
+  const { queryCruises, totalCruises, totalSourceCruises, isInventoryReady } = useCruiseInventory();
   const { currentUser, users } = useUser();
+  const { clubRoyaleTier: effectiveClubRoyaleTier } = useLoyalty();
   const { selectedProfileId, selectedBrand, selectedProgram } = useIntelligenceFilters();
-  const { logout, isAdmin, authenticatedEmail } = useAuth();
-  const { sendMessage, setMode: setAgentMode } = useAgentX();
+  const { logout } = useAuth();
   const { summary } = useAlerts();
   
   usePriceTrackingSync();
   
   const [refreshing, setRefreshing] = useState(false);
   const [showCertificateModal, setShowCertificateModal] = useState(false);
+  const [showCertificateExplorerModal, setShowCertificateExplorerModal] = useState(false);
   const [showAlertsModal, setShowAlertsModal] = useState(false);
   const [decodedOffer, setDecodedOffer] = useState<DecodedOffer | null>(null);
-  const [heroSignatureFailed, setHeroSignatureFailed] = useState<boolean>(false);
-  const [carnivalManifest, setCarnivalManifest] = useState<CarnivalSyncManifest | null>(null);
+  const [catalogPreviewRows, setCatalogPreviewRows] = useState<Cruise[]>([]);
   const { 
     certificates, 
     addCertificate, 
@@ -233,9 +245,31 @@ function OverviewScreenContent() {
     selectedProgram,
   }), [selectedBrand, selectedProfileId, selectedProgram]);
 
-  const cruisesData = useMemo(() => filterRecordsByIntelligence(cruises, intelligenceFilterSnapshot, users), [cruises, intelligenceFilterSnapshot, users]);
+  // A CoreData hydration/sync can publish several thousand cruise records at
+  // once. Keep tab presses urgent and let React prepare the expensive offer
+  // grouping/list model as deferred work after the visible navigation commit.
+  const deferredCruises = useDeferredValue(cruises, EMPTY_CRUISES);
+  const deferredBookedCruises = useDeferredValue(allBookedCruises, EMPTY_BOOKED_CRUISES);
+  const deferredCasinoOffers = useDeferredValue(casinoOffers, EMPTY_CASINO_OFFERS);
 
-  const offersData = useMemo(() => filterRecordsByIntelligence(casinoOffers, intelligenceFilterSnapshot, users), [casinoOffers, intelligenceFilterSnapshot, users]);
+  useEffect(() => {
+    if (!isInventoryReady || totalCruises === 0 || cruises.length > 0) return;
+    let cancelled = false;
+    void queryCruises({ limit: 200 }).then((page) => {
+      if (!cancelled) setCatalogPreviewRows(page.rows);
+    }).catch((error) => {
+      console.warn('[Overview] Bounded catalog preview failed without blocking offers:', error);
+    });
+    return () => { cancelled = true; };
+  }, [cruises.length, isInventoryReady, queryCruises, totalCruises]);
+
+  const cruisesData = useMemo(() => filterRecordsByIntelligence(
+    deferredCruises.length > 0 ? deferredCruises : catalogPreviewRows,
+    intelligenceFilterSnapshot,
+    users,
+  ), [catalogPreviewRows, deferredCruises, intelligenceFilterSnapshot, users]);
+
+  const offersData = useMemo(() => filterRecordsByIntelligence(deferredCasinoOffers, intelligenceFilterSnapshot, users), [deferredCasinoOffers, intelligenceFilterSnapshot, users]);
 
   const offerNameByCode = useMemo(() => {
     const map = new Map<string, string>();
@@ -260,11 +294,11 @@ function OverviewScreenContent() {
       }
     });
 
-    console.log('[Overview] offerNameByCode map size:', map.size);
+    if (__DEV__) console.log('[Overview] offerNameByCode map size:', map.size);
     return map;
   }, [offersData]);
 
-  const bookedCruises = useMemo(() => filterRecordsByIntelligence(allBookedCruises, intelligenceFilterSnapshot, users), [allBookedCruises, intelligenceFilterSnapshot, users]);
+  const bookedCruises = useMemo(() => filterRecordsByIntelligence(deferredBookedCruises, intelligenceFilterSnapshot, users), [deferredBookedCruises, intelligenceFilterSnapshot, users]);
 
   const activeBookedCruises = useMemo(() => {
     return bookedCruises.filter((cruise: BookedCruise) => isActiveBookedCruise(cruise));
@@ -280,7 +314,7 @@ function OverviewScreenContent() {
 
     const keys = new Set<string>();
     bookedCruises.forEach((cruise: BookedCruise) => {
-      const offerKey = normalizeOfferKey(cruise.offerCode);
+      const offerKey = getCruiseOfferLookupKey(cruise);
       if (!offerKey) {
         return;
       }
@@ -290,7 +324,7 @@ function OverviewScreenContent() {
       }
     });
 
-    console.log('[Overview] In-progress offer keys:', Array.from(keys));
+    if (__DEV__) console.log('[Overview] In-progress offer keys:', Array.from(keys));
     return keys;
   }, [bookedCruises]);
 
@@ -306,14 +340,17 @@ function OverviewScreenContent() {
       const normalizedStatus = offer.status?.trim().toLowerCase();
       const normalizedArchiveStatus = offer.archiveStatus?.trim().toLowerCase();
       const hasBlockedStatus = normalizedStatus === 'used' || normalizedStatus === 'booked' || normalizedStatus === 'expired' || normalizedStatus === 'archived' || normalizedStatus === 'replaced' || normalizedStatus === 'skipped' || normalizedArchiveStatus === 'archived' || normalizedArchiveStatus === 'replaced';
-      const isLinkedToInProgressCruise = !!offer.offerCode && inProgressOfferKeys.has(normalizeOfferKey(offer.offerCode));
+      const instanceKey = getOfferLookupKey(offer);
+      const legacyCodeKey = offer.offerCode ? `code:${normalizeOfferKey(offer.offerCode)}` : '';
+      const isLinkedToInProgressCruise = inProgressOfferKeys.has(instanceKey)
+        || (!String(offer.playerOfferId || offer.offerInstanceId || offer.carnivalOfferId || '').trim() && Boolean(legacyCodeKey) && inProgressOfferKeys.has(legacyCodeKey));
 
       if (hasBlockedStatus || isLinkedToInProgressCruise) {
         keys.add(lookupKey);
       }
     });
 
-    console.log('[Overview] Blocked offer keys:', Array.from(keys));
+    if (__DEV__) console.log('[Overview] Blocked offer keys:', Array.from(keys));
     return keys;
   }, [offersData, inProgressOfferKeys]);
 
@@ -334,7 +371,7 @@ function OverviewScreenContent() {
       activeKeys.add(lookupKey);
     });
 
-    console.log('[Overview] Real active offers count:', {
+    if (__DEV__) console.log('[Overview] Real active offers count:', {
       totalOffers: offersData.length,
       blockedOffers: blockedOfferKeys.size,
       realActiveOffers: activeKeys.size,
@@ -357,7 +394,7 @@ function OverviewScreenContent() {
         return;
       }
 
-      const key = offer.offerCode || offer.id;
+      const key = lookupKey;
       const existing = offersMap.get(key);
 
       const rawName = (offer.offerName || offer.title || '').trim();
@@ -412,22 +449,39 @@ function OverviewScreenContent() {
       }
     });
 
+    const offerKeyByCruiseId = new Map<string, string>();
+    const offerKeyByInstance = new Map<string, string>();
+    const offerKeysByCode = new Map<string, string[]>();
+    offersMap.forEach((card, key) => {
+      const representative = card.representativeOffer;
+      if (!representative) return;
+      [representative.cruiseId, ...(representative.cruiseIds ?? [])]
+        .filter((id): id is string => Boolean(id))
+        .forEach((id) => offerKeyByCruiseId.set(id, key));
+      const instanceId = String(representative.playerOfferId || representative.offerInstanceId || representative.carnivalOfferId || '').trim().toLowerCase();
+      if (instanceId) offerKeyByInstance.set(`instance:${instanceId}`, key);
+      const code = normalizeOfferKey(representative.offerCode);
+      if (code) offerKeysByCode.set(code, [...(offerKeysByCode.get(code) ?? []), key]);
+    });
+
     cruisesData.forEach((cruise: Cruise) => {
       if (cruise.sailDate && isDateInPast(cruise.sailDate)) {
         return;
       }
-      
-      const offerCode = cruise.offerCode;
-      if (offerCode && offersMap.has(offerCode)) {
-        const offerCard = offersMap.get(offerCode);
-        if (offerCard) {
-          offerCard.cruises.push(cruise);
-        }
+
+      const instanceKey = getCruiseOfferLookupKey(cruise);
+      const codeCandidates = cruise.offerCode ? offerKeysByCode.get(normalizeOfferKey(cruise.offerCode)) ?? [] : [];
+      const targetOfferKey = offerKeyByCruiseId.get(cruise.id)
+        || (instanceKey.startsWith('instance:') ? offerKeyByInstance.get(instanceKey) : undefined)
+        || (codeCandidates.length === 1 ? codeCandidates[0] : undefined);
+      const offerCard = targetOfferKey ? offersMap.get(targetOfferKey) : undefined;
+      if (offerCard && !offerCard.cruises.some((linkedCruise) => linkedCruise.id === cruise.id)) {
+        offerCard.cruises.push(cruise);
       }
     });
 
     const grouped = Array.from(offersMap.values());
-    console.log('[Overview] Grouped active offers:', {
+    if (__DEV__) console.log('[Overview] Grouped active offers:', {
       groupedOffers: grouped.length,
       realActiveOffers: realActiveOffersCount,
     });
@@ -447,59 +501,8 @@ function OverviewScreenContent() {
   }, [groupedOffers, cruisesData]);
 
   const availableCruisesCount = useMemo(() => {
-    return cruisesData.length;
-  }, [cruisesData]);
-
-  const carnivalOfferMetrics = useMemo(() => {
-    if (selectedBrand !== 'all' && selectedBrand !== 'carnival') {
-      return undefined;
-    }
-
-    if (carnivalManifest && carnivalManifest.appProfileId === (currentUser?.id || '')) {
-      return {
-        personalizedOffers: carnivalManifest.catalogCount,
-        offersWithSailings: carnivalManifest.rowBearingCodes.length,
-        eligibleSailings: carnivalManifest.uniqueSailingCount,
-      };
-    }
-
-    const visibleCodes = new Set<string>();
-    const rowBearingCodes = new Set<string>();
-    const uniqueSailings = new Set<string>();
-    const carnivalOffers = offersData.filter((offer: CasinoOffer) => inferRecordBrand(offer as any) === 'carnival');
-    const carnivalCruises = cruisesData.filter((cruise: Cruise) => inferRecordBrand(cruise as any) === 'carnival');
-
-    carnivalOffers.forEach((offer) => {
-      String(offer.catalogVisibleOfferCodes || '')
-        .split(',')
-        .map((code) => code.trim().toUpperCase())
-        .filter(Boolean)
-        .forEach((code) => visibleCodes.add(code));
-      String(offer.catalogRowBearingOfferCodes || '')
-        .split(',')
-        .map((code) => code.trim().toUpperCase())
-        .filter(Boolean)
-        .forEach((code) => rowBearingCodes.add(code));
-    });
-
-    if (visibleCodes.size === 0) {
-      carnivalOffers.forEach((offer) => {
-        const code = String(offer.offerCode || '').trim().toUpperCase();
-        if (code) visibleCodes.add(code);
-      });
-    }
-    carnivalCruises.forEach((cruise) => {
-      const code = String(cruise.offerCode || '').trim().toUpperCase();
-      if (code) rowBearingCodes.add(code);
-      uniqueSailings.add(carnivalSailingCanonicalKey(cruise));
-    });
-
-    return {
-      personalizedOffers: visibleCodes.size,
-      offersWithSailings: rowBearingCodes.size,
-      eligibleSailings: uniqueSailings.size,
-    };
-  }, [carnivalManifest, cruisesData, currentUser?.id, offersData, selectedBrand]);
+    return cruiseInventoryCount || totalCruises || cruisesData.length;
+  }, [cruiseInventoryCount, cruisesData.length, totalCruises]);
 
   const certificateSummary = useMemo(() => {
     const fppCerts = getCertificatesByType('fpp').filter(c => c.status === 'available');
@@ -524,7 +527,6 @@ function OverviewScreenContent() {
       clubRoyaleId: currentUser.clubRoyaleId,
       celebrityCaptainsClubNumber: currentUser.celebrityCaptainsClubNumber,
       blueChipId: currentUser.blueChipId,
-      carnivalVifpNumber: currentUser.carnivalVifpNumber,
       active: currentUser.active,
       defaultProfile: currentUser.defaultProfile,
       createdAt: currentUser.createdAt,
@@ -561,6 +563,10 @@ function OverviewScreenContent() {
     return commandCenterBuckets.filter((bucket) => bucket.offers.length > 0).slice(0, 3);
   }, [commandCenterBuckets]);
 
+  const clubRoyaleTier = effectiveClubRoyaleTier || clubRoyaleProfile?.tier || 'Choice';
+  const clubRoyaleAccent = getClubRoyaleTierColor(clubRoyaleTier);
+  const commandCenterTheme = useMemo(() => createLoyaltyCardTheme(clubRoyaleAccent), [clubRoyaleAccent]);
+
   const [sortMode, setSortMode] = useState<'soonest' | 'highestValue'>('soonest');
 
   const offerSummary = useMemo(() => {
@@ -592,20 +598,21 @@ function OverviewScreenContent() {
         let cabinPrice = getCabinPriceFromEntity(cruise, roomType) ?? getDoubleOccupancyRoomRetailValue(cruise.price) ?? 0;
         
         // Estimate cabin price if not available
-        if (cabinPrice === 0 && cruise.nights > 0) {
+        const nights = knownNightCount(cruise.nights);
+        const guestCount = knownGuestCount(cruise.guests);
+        if (cabinPrice === 0 && nights) {
           const typeKey = Object.keys(baseRates).find(key => 
             roomType.toLowerCase().includes(key.toLowerCase())
           ) || 'Balcony';
-          cabinPrice = (baseRates[typeKey] || 180) * (cruise.nights || 7);
+          cabinPrice = (baseRates[typeKey] || 180) * nights;
         }
         
-        const guestCount = cruise.guests || GUEST_COUNT_DEFAULT;
         const cabinValueForTwo = cabinPrice;
         
         // Estimate taxes if not provided (~$30/night per guest)
         let taxesFees = cruise.taxes || 0;
-        if (taxesFees === 0 && cruise.nights > 0) {
-          taxesFees = Math.round((cruise.nights || 7) * 30 * guestCount);
+        if (taxesFees === 0 && nights && guestCount) {
+          taxesFees = Math.round(nights * 30 * guestCount);
         }
         
         const freePlayValue = cruise.freePlay || 0;
@@ -617,7 +624,7 @@ function OverviewScreenContent() {
       });
     });
     
-    console.log('[Overview] Offer summary calculated:', { totalValue, totalCruises, totalOffers: groupedOffers.length });
+    if (__DEV__) console.log('[Overview] Offer summary calculated:', { totalValue, totalCruises, totalOffers: groupedOffers.length });
     
     return {
       totalValue,
@@ -627,10 +634,8 @@ function OverviewScreenContent() {
   }, [groupedOffers]);
 
   const cruisesWithCasinoData = useMemo(() => {
-    // Keep dashboard tab switches responsive after large offer imports.
-    // Available offer rows can exceed 1,000 records and are already represented in the offer cards;
-    // this history strip should summarize booked/completed gaming activity only.
-    return bookedCruises.filter((cruise: BookedCruise) => {
+    const allCruises = [...bookedCruises, ...cruisesData];
+    return allCruises.filter((cruise: BookedCruise) => {
       const winnings = getBookedCruiseWinningsBroughtHome(cruise);
       const points = getBookedCruiseCasinoPoints(cruise);
       return winnings !== 0 || points > 0;
@@ -638,8 +643,8 @@ function OverviewScreenContent() {
       const dateA = new Date(a.sailDate).getTime();
       const dateB = new Date(b.sailDate).getTime();
       return dateB - dateA;
-    }).slice(0, 25);
-  }, [bookedCruises]);
+    });
+  }, [bookedCruises, cruisesData]);
 
   const sortedOffers = useMemo(() => {
     if (groupedOffers.length === 0) return nonExpiredOffers;
@@ -663,46 +668,26 @@ function OverviewScreenContent() {
     return sorted;
   }, [groupedOffers, nonExpiredOffers, sortMode]);
 
-  const loadCarnivalManifest = useCallback(async () => {
-    try {
-      const stored = await AsyncStorage.getItem(getUserScopedKey(ALL_STORAGE_KEYS.CARNIVAL_SYNC_MANIFEST, authenticatedEmail));
-      if (!stored) {
-        setCarnivalManifest(null);
-        return;
-      }
-      const parsed = JSON.parse(stored) as CarnivalSyncManifest;
-      setCarnivalManifest(parsed?.version === 1 && parsed.appProfileId === (currentUser?.id || '') ? parsed : null);
-    } catch (error) {
-      console.warn('[Overview] Unable to load Carnival manifest:', error);
-      setCarnivalManifest(null);
-    }
-  }, [authenticatedEmail, currentUser?.id]);
-
   useFocusEffect(
     useCallback(() => {
       console.log('[Overview] Screen focused, offers count:', nonExpiredOffers.length);
-      void loadCarnivalManifest();
-    }, [loadCarnivalManifest, nonExpiredOffers.length])
+    }, [nonExpiredOffers.length])
   );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     console.log('[Overview] Refreshing offers...');
-    await Promise.all([new Promise(resolve => setTimeout(resolve, 800)), loadCarnivalManifest()]);
+    await new Promise(resolve => setTimeout(resolve, 800));
     setRefreshing(false);
     console.log('[Overview] Refresh complete');
-  }, [loadCarnivalManifest]);
+  }, []);
 
   const handleOfferPress = useCallback((offer: CasinoOfferCardData | Cruise) => {
     console.log('[Overview] Offer pressed:', offer.id);
     if ('cruises' in offer) {
-      const source = inferRecordBrand((offer.representativeOffer || offer.cruises[0] || {}) as any);
-      router.push(`/offer-details?offerCode=${encodeURIComponent(offer.offerCode)}&offerSource=${encodeURIComponent(source)}` as any);
+      router.push(`/offer-details?offerId=${encodeURIComponent(offer.id)}&offerCode=${encodeURIComponent(offer.offerCode)}` as any);
     } else {
-      router.push({
-        pathname: '/cruise-details' as any,
-        params: buildCruiseDetailsParams(offer, { source: 'available' }),
-      });
+      router.push(`/cruise-details?id=${offer.id}` as any);
     }
   }, [router]);
 
@@ -715,8 +700,7 @@ function OverviewScreenContent() {
     const offerCodeForLog = getOfferDisplayCode(item.offer);
     console.log('[Overview] Command Center action:', { action, offerCode: offerCodeForLog });
     if (action === 'view') {
-      const source = inferRecordBrand(item.offer as any);
-      router.push(`/offer-details?offerCode=${encodeURIComponent(getOfferDisplayCode(item.offer))}&offerSource=${encodeURIComponent(source)}` as any);
+      router.push(`/offer-details?offerId=${encodeURIComponent(item.offer.id)}&offerCode=${encodeURIComponent(getOfferDisplayCode(item.offer))}` as any);
       return;
     }
     if (action === 'decode') {
@@ -724,9 +708,10 @@ function OverviewScreenContent() {
       return;
     }
     if (action === 'compare') {
-      setAgentMode('travelAgent');
-      router.push('/ask-my-data' as any);
-      void sendMessage(`Compare offer ${getOfferDisplayCode(item.offer)} against my other active offers using score, expiration, casino-paid value, certificate fit, and profile ownership.`);
+      router.push({
+        pathname: '/ask-my-data',
+        params: { prompt: `Compare offer ${getOfferDisplayCode(item.offer)} against my other active offers using score, expiration, casino-paid value, certificate fit, and profile ownership.` },
+      } as any);
       return;
     }
     if (action === 'archive') {
@@ -734,16 +719,12 @@ function OverviewScreenContent() {
       return;
     }
     updateCasinoOffer(item.offer.id, { status: 'skipped' });
-  }, [handleDecodeOffer, router, sendMessage, setAgentMode, updateCasinoOffer]);
+  }, [handleDecodeOffer, router, updateCasinoOffer]);
 
   const handleCruiseItemPress = useCallback((cruiseId: string) => {
     console.log('[Overview] Cruise item pressed:', cruiseId);
-    const cruise = cruisesData.find((item) => item.id === cruiseId) as any;
-    router.push({
-      pathname: '/cruise-details' as any,
-      params: buildCruiseDetailsParams(cruise, { id: cruiseId, source: 'overview' }),
-    });
-  }, [router, cruisesData]);
+    router.push(`/cruise-details?id=${cruiseId}` as any);
+  }, [router]);
 
   const handleSettingsPress = useCallback(() => {
     router.push('/settings' as any);
@@ -766,10 +747,6 @@ function OverviewScreenContent() {
     router.push('/events' as any);
   }, [router]);
 
-  const handleAskEasySeasPress = useCallback(() => {
-    router.push('/ask-my-data' as any);
-  }, [router]);
-
   const handleAddCrewmemberPress = useCallback(() => {
     console.log('[Overview] Add Crewmember pressed');
     router.push('/events' as any);
@@ -790,13 +767,13 @@ function OverviewScreenContent() {
   const renderHeader = () => (
     <ResponsiveContainer>
       <View style={styles.headerContent}>
-        <View style={styles.titleLogoCard} testID="offers-brand-logo-card">
+        <View style={styles.offersHeroImageCard}>
           <Image
-            source={require('../../../assets/images/easyseas-scott-astin-logo.jpeg')}
-            style={styles.titleLogoImage}
+            source={OFFERS_HERO_IMAGE}
+            style={styles.offersHeroImage}
             resizeMode="cover"
-            accessibilityLabel="Easy Seas Scott Astin nautical lifestyle brand logo"
-            testID="offers-title-logo-card-image"
+            accessibilityLabel="Easy Seas nautical lifestyle banner"
+            testID="offers-hero-banner-image"
           />
         </View>
 
@@ -808,9 +785,9 @@ function OverviewScreenContent() {
           onLogoutPress={handleLogoutPress}
           alertCount={summary.totalActive}
           availableCruises={availableCruisesCount}
+          availableCruiseOptions={totalSourceCruises || availableCruisesCount}
           bookedCruises={activeBookedCruises.length}
           activeOffers={realActiveOffersCount}
-          carnivalOfferMetrics={carnivalOfferMetrics}
           onCruisesPress={handleCruisesPress}
           onBookedPress={handleBookedPress}
           onOffersPress={() => console.log('Active offers pressed')}
@@ -831,36 +808,19 @@ function OverviewScreenContent() {
             </View>
             <View style={styles.learnSystemCopy}>
               <Text style={styles.learnSystemTitle}>Ask My Data</Text>
-              <Text style={styles.learnSystemSubtitle}>Standalone natural-language search for scoped offers, cruises, certificates, and calendar records.</Text>
+              <Text style={styles.learnSystemSubtitle}>Offers, cruises, certificates, loyalty, calendar, and saved evidence.</Text>
             </View>
             <Text style={styles.learnSystemAction}>Open</Text>
           </LinearGradient>
         </TouchableOpacity>
 
-        <View style={styles.advisorGrid} testID="dashboard-advisor-grid">
-          <TouchableOpacity
-            style={[styles.advisorTile, !isAdmin && styles.advisorTileFull]}
-            onPress={() => router.push('/advisor' as any)}
-            activeOpacity={0.85}
-            testID="dashboard-casino-cruise-advisor"
-          >
-            <Gauge size={18} color={COLORS.navyDeep} />
-            <Text style={styles.advisorTileTitle}>Best Offer Right Now</Text>
-            <Text style={styles.advisorTileText}>Rank offers by value, conflict risk, casino time, and upgrade math.</Text>
-          </TouchableOpacity>
-          {isAdmin && (
-            <TouchableOpacity
-              style={styles.advisorTile}
-              onPress={() => router.push('/data-health' as any)}
-              activeOpacity={0.85}
-              testID="dashboard-data-health"
-            >
-              <DatabaseZap size={18} color={COLORS.navyDeep} />
-              <Text style={styles.advisorTileTitle}>Data Health</Text>
-              <Text style={styles.advisorTileText}>Check duplicates, brand scopes, completed cruises, and inflated counts.</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        <TouchableOpacity style={styles.learnSystemCard} onPress={() => router.push('/easy-seas-home' as any)} activeOpacity={0.85} testID="dashboard-lifecycle-home">
+          <LinearGradient colors={['#102B45', '#173A5B', '#0F766E']} style={styles.learnSystemGradient}>
+            <View style={styles.learnSystemIcon}><Compass size={20} color="#FDE68A" /></View>
+            <View style={styles.learnSystemCopy}><Text style={styles.learnSystemTitle}>Mode-Aware Home</Text><Text style={styles.learnSystemSubtitle}>Pre-cruise, onboard, casino-session, and post-cruise actions.</Text></View>
+            <Text style={styles.learnSystemAction}>Open</Text>
+          </LinearGradient>
+        </TouchableOpacity>
 
         {offerSummary && (
           <OfferSummaryCard
@@ -893,46 +853,55 @@ function OverviewScreenContent() {
     return (
       <View style={styles.commandCenterCard} testID="offer-expiration-command-center">
         <LinearGradient
-          colors={['#172554', '#0F766E']}
+          colors={commandCenterTheme.gradientColors}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={styles.commandCenterGradient}
+          style={[styles.commandCenterGradient, { borderColor: commandCenterTheme.borderColor }]}
         >
+          <View style={styles.commandCenterRoyalBand}>
+            <View style={[styles.commandCenterRoyalLine, { backgroundColor: commandCenterTheme.accentColor }]} />
+            <Text style={[styles.commandCenterRoyalText, { color: commandCenterTheme.secondaryTextColor }]}>Club Royale watchlist</Text>
+          </View>
+
           <View style={styles.commandCenterHeader}>
             <View style={styles.commandCenterTitleRow}>
-              <Clock size={18} color="#FDE68A" />
-              <Text style={styles.commandCenterTitle}>Expiration Command Center</Text>
+              <View style={[styles.commandCenterIconBadge, { backgroundColor: commandCenterTheme.surfaceColor, borderColor: commandCenterTheme.borderColor }]}> 
+                <Clock size={18} color={commandCenterTheme.accentColor} />
+              </View>
+              <View style={styles.commandCenterHeadingCopy}>
+                <Text style={[styles.commandCenterTitle, { color: commandCenterTheme.topTextColor }]}>Expiration Command Center</Text>
+                <Text style={[styles.commandCenterSubtitle, { color: commandCenterTheme.secondaryTextColor }]}>Royal Caribbean offers that need a decision window.</Text>
+              </View>
             </View>
-            <View style={styles.commandCenterCountPill}>
+            <View style={[styles.commandCenterCountPill, { backgroundColor: commandCenterTheme.accentColor }]}> 
               <Text style={styles.commandCenterCountText}>{commandCenterBucketCounts.urgentExpiring}</Text>
               <Text style={styles.commandCenterCountLabel}>expiring</Text>
             </View>
           </View>
-          <Text style={styles.commandCenterSubtitle}>
-            Urgent expiring offers are now counted in one place: {commandCenterBucketCounts.urgentExpiring} total, with {commandCenterBucketCounts.expires7} expiring in 0-7 days and {commandCenterBucketCounts.expires14} expiring in 8-14 days. {commandCenterTotalCount} total timing item{commandCenterTotalCount === 1 ? '' : 's'} need attention.
-          </Text>
+
           <View style={styles.commandCenterSummaryRow} testID="command-center-expiring-summary">
-            <View style={styles.commandCenterUrgentChip}>
-              <AlertTriangle size={13} color="#172554" />
-              <Text style={styles.commandCenterUrgentChipText}>Urgent: {commandCenterBucketCounts.urgentExpiring} total</Text>
+            <View style={[styles.commandCenterUrgentChip, { backgroundColor: withAlpha(commandCenterTheme.accentColor, 0.16), borderColor: commandCenterTheme.borderColor }]}> 
+              <AlertTriangle size={13} color={commandCenterTheme.accentColor} />
+              <Text style={[styles.commandCenterUrgentChipText, { color: commandCenterTheme.topTextColor }]}>Urgent: {commandCenterBucketCounts.urgentExpiring}</Text>
             </View>
-            <View style={styles.commandCenterMiniChip}>
-              <Text style={styles.commandCenterMiniChipValue}>{commandCenterBucketCounts.expires7}</Text>
-              <Text style={styles.commandCenterMiniChipLabel}>expire in 0-7 days</Text>
+            <View style={[styles.commandCenterMiniChip, { backgroundColor: commandCenterTheme.surfaceColor, borderColor: commandCenterTheme.borderColor }]}> 
+              <Text style={[styles.commandCenterMiniChipValue, { color: commandCenterTheme.topTextColor }]}>{commandCenterBucketCounts.expires7}</Text>
+              <Text style={[styles.commandCenterMiniChipLabel, { color: commandCenterTheme.secondaryTextColor }]}>0-7 days</Text>
             </View>
-            <View style={styles.commandCenterMiniChip}>
-              <Text style={styles.commandCenterMiniChipValue}>{commandCenterBucketCounts.expires14}</Text>
-              <Text style={styles.commandCenterMiniChipLabel}>expire in 8-14 days</Text>
+            <View style={[styles.commandCenterMiniChip, { backgroundColor: commandCenterTheme.surfaceColor, borderColor: commandCenterTheme.borderColor }]}> 
+              <Text style={[styles.commandCenterMiniChipValue, { color: commandCenterTheme.topTextColor }]}>{commandCenterBucketCounts.expires14}</Text>
+              <Text style={[styles.commandCenterMiniChipLabel, { color: commandCenterTheme.secondaryTextColor }]}>8-14 days</Text>
             </View>
             {commandCenterBucketCounts.expires30 > 0 && (
-              <View style={styles.commandCenterMiniChipMuted}>
-                <Text style={styles.commandCenterMiniChipMutedValue}>{commandCenterBucketCounts.expires30}</Text>
-                <Text style={styles.commandCenterMiniChipMutedLabel}>15-30 days</Text>
+              <View style={[styles.commandCenterMiniChipMuted, { backgroundColor: commandCenterTheme.surfaceColorMuted, borderColor: commandCenterTheme.borderColor }]}> 
+                <Text style={[styles.commandCenterMiniChipMutedValue, { color: commandCenterTheme.topTextColor }]}>{commandCenterBucketCounts.expires30}</Text>
+                <Text style={[styles.commandCenterMiniChipMutedLabel, { color: commandCenterTheme.secondaryTextColor }]}>15-30 days</Text>
               </View>
             )}
           </View>
+
           <TouchableOpacity
-            style={styles.commandCenterOpenButton}
+            style={[styles.commandCenterOpenButton, { backgroundColor: commandCenterTheme.accentColor }]}
             onPress={() => router.push('/command-center' as any)}
             activeOpacity={0.82}
             testID="open-full-command-center"
@@ -941,53 +910,54 @@ function OverviewScreenContent() {
           </TouchableOpacity>
 
           {topCommandCenterBuckets.map((bucket) => (
-            <View key={bucket.id} style={styles.commandCenterBucket}>
+            <View key={bucket.id} style={[styles.commandCenterBucket, { backgroundColor: commandCenterTheme.surfaceColor, borderColor: commandCenterTheme.borderColor }]}> 
               <View style={styles.commandCenterBucketHeader}>
-                <Text style={styles.commandCenterBucketTitle}>{bucket.title}</Text>
-                <Text style={styles.commandCenterBucketSubtitle}>{bucket.offers.length} item{bucket.offers.length === 1 ? '' : 's'}</Text>
+                <Text style={[styles.commandCenterBucketTitle, { color: commandCenterTheme.topTextColor }]}>{bucket.title}</Text>
+                <Text style={[styles.commandCenterBucketSubtitle, { color: commandCenterTheme.secondaryTextColor }]}>{bucket.offers.length} item{bucket.offers.length === 1 ? '' : 's'}</Text>
               </View>
               {bucket.offers.slice(0, 2).map((item) => (
-                <View key={item.offer.id} style={styles.commandCenterOfferRow}>
-                  <View style={styles.commandCenterScoreBubble}>
-                    <Gauge size={14} color="#A7F3D0" />
-                    <Text style={styles.commandCenterScoreText}>{item.intelligence.score}</Text>
+                <View key={item.offer.id} style={[styles.commandCenterOfferRow, { backgroundColor: commandCenterTheme.surfaceColorMuted, borderColor: withAlpha(commandCenterTheme.accentColor, 0.18) }]}> 
+                  <View style={[styles.commandCenterScoreBubble, { backgroundColor: withAlpha(commandCenterTheme.accentColor, 0.14) }]}> 
+                    <Gauge size={14} color={commandCenterTheme.accentColor} />
+                    <Text style={[styles.commandCenterScoreText, { color: commandCenterTheme.topTextColor }]}>{item.intelligence.score}</Text>
                   </View>
                   <View style={styles.commandCenterOfferCopy}>
-                    <Text style={styles.commandCenterOfferTitle} numberOfLines={1}>{item.offer.offerName || item.offer.title || item.offer.offerCode || 'Casino Offer'}</Text>
-                    <Text style={styles.commandCenterOfferMeta} numberOfLines={1}>{item.intelligence.rating} · {item.intelligence.daysUntilExpiration === null ? 'No expiry found' : `${item.intelligence.daysUntilExpiration} days`} · {formatCurrency(item.intelligence.casinoPaysFor.casinoCoveredValue)}</Text>
+                    <Text style={[styles.commandCenterOfferTitle, { color: commandCenterTheme.topTextColor }]} numberOfLines={1}>{item.offer.offerName || item.offer.title || item.offer.offerCode || 'Casino Offer'}</Text>
+                    <Text style={[styles.commandCenterOfferMeta, { color: commandCenterTheme.secondaryTextColor }]} numberOfLines={1}>{item.intelligence.rating} · {item.intelligence.daysUntilExpiration === null ? 'No expiry found' : `${item.intelligence.daysUntilExpiration} days`} · {formatCurrency(item.intelligence.casinoPaysFor.casinoCoveredValue)}</Text>
                   </View>
                   <View style={styles.commandCenterActions}>
-                    <TouchableOpacity style={styles.commandCenterAction} onPress={() => handleCommandCenterAction('view', item)} testID="command-center-view">
+                    <TouchableOpacity style={[styles.commandCenterAction, { backgroundColor: commandCenterTheme.accentColor }]} onPress={() => handleCommandCenterAction('view', item)} testID="command-center-view">
                       <Text style={styles.commandCenterActionText}>View</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.commandCenterAction} onPress={() => handleCommandCenterAction('decode', item)} testID="command-center-decode">
+                    <TouchableOpacity style={[styles.commandCenterAction, { backgroundColor: COLORS.navyDeep }]} onPress={() => handleCommandCenterAction('decode', item)} testID="command-center-decode">
                       <Text style={styles.commandCenterActionText}>Decode</Text>
                     </TouchableOpacity>
                   </View>
                   <View style={styles.commandCenterActionsWide}>
-                    <TouchableOpacity style={styles.commandCenterActionMuted} onPress={() => handleCommandCenterAction('compare', item)} testID="command-center-compare">
-                      <Calculator size={12} color="#CBD5E1" />
-                      <Text style={styles.commandCenterActionMutedText}>Compare</Text>
+                    <TouchableOpacity style={[styles.commandCenterActionMuted, { borderColor: commandCenterTheme.borderColor, backgroundColor: commandCenterTheme.surfaceColor }]} onPress={() => handleCommandCenterAction('compare', item)} testID="command-center-compare">
+                      <Calculator size={12} color={commandCenterTheme.accentColor} />
+                      <Text style={[styles.commandCenterActionMutedText, { color: commandCenterTheme.secondaryTextColor }]}>Compare</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.commandCenterActionMuted} onPress={() => handleCommandCenterAction('archive', item)} testID="command-center-archive">
-                      <Archive size={12} color="#CBD5E1" />
-                      <Text style={styles.commandCenterActionMutedText}>Archive</Text>
+                    <TouchableOpacity style={[styles.commandCenterActionMuted, { borderColor: commandCenterTheme.borderColor, backgroundColor: commandCenterTheme.surfaceColor }]} onPress={() => handleCommandCenterAction('archive', item)} testID="command-center-archive">
+                      <Archive size={12} color={commandCenterTheme.accentColor} />
+                      <Text style={[styles.commandCenterActionMutedText, { color: commandCenterTheme.secondaryTextColor }]}>Archive</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.commandCenterActionMuted} onPress={() => handleCommandCenterAction('skip', item)} testID="command-center-skip">
-                      <CheckCircle size={12} color="#CBD5E1" />
-                      <Text style={styles.commandCenterActionMutedText}>Mark skipped</Text>
+                    <TouchableOpacity style={[styles.commandCenterActionMuted, { borderColor: commandCenterTheme.borderColor, backgroundColor: commandCenterTheme.surfaceColor }]} onPress={() => handleCommandCenterAction('skip', item)} testID="command-center-skip">
+                      <CheckCircle size={12} color={commandCenterTheme.accentColor} />
+                      <Text style={[styles.commandCenterActionMutedText, { color: commandCenterTheme.secondaryTextColor }]}>Mark skipped</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={styles.commandCenterActionMuted}
+                      style={[styles.commandCenterActionMuted, { borderColor: commandCenterTheme.borderColor, backgroundColor: commandCenterTheme.surfaceColor }]}
                       onPress={() => {
-                        setAgentMode('casinoHost');
-                        router.push('/ask-my-data' as any);
-                        void sendMessage(`Advise me on offer ${getOfferDisplayCode(item.offer)} using the current profile and filters.`);
+                        router.push({
+                          pathname: '/ask-my-data',
+                          params: { prompt: `Advise me on offer ${getOfferDisplayCode(item.offer)} using the current profile and filters.` },
+                        } as any);
                       }}
-                      testID="command-center-ask-agentx"
+                      testID="command-center-ask-my-data"
                     >
-                      <Bot size={12} color="#CBD5E1" />
-                      <Text style={styles.commandCenterActionMutedText}>Ask</Text>
+                      <Bot size={12} color={commandCenterTheme.accentColor} />
+                      <Text style={[styles.commandCenterActionMutedText, { color: commandCenterTheme.secondaryTextColor }]}>Ask</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -1015,7 +985,7 @@ function OverviewScreenContent() {
             availableCruises={availableCruisesCount}
             onManagePress={() => setShowCertificateModal(true)}
             onViewOffersPress={() => router.push('/certificate-codes' as any)}
-            onExaminePress={() => router.push('/certificate-codes?chat=1' as any)}
+            onExaminePress={() => router.push('/certificate-lookup' as any)}
           />
         </CollapsibleSection>
 
@@ -1125,12 +1095,13 @@ function OverviewScreenContent() {
   const renderOfferCard = useCallback(({ item, index }: { item: CasinoOfferCardData | Cruise; index: number }) => {
     if ('cruises' in item) {
       const intelligence = item.representativeOffer
-        ? calculateOfferIntelligenceScore(item.representativeOffer, cruisesData, certificates, currentTravelerProfile)
+        ? calculateOfferIntelligenceScore(item.representativeOffer, item.cruises, certificates, currentTravelerProfile)
         : undefined;
 
       return (
         <ResponsiveContainer>
           <CasinoOfferCard
+          offerId={item.representativeOffer?.id}
           offerCode={item.offerCode}
           offerName={item.offerName}
           expiryDate={item.expiryDate}
@@ -1152,6 +1123,14 @@ function OverviewScreenContent() {
     }
 
     const offerNameOverride = item.offerCode ? offerNameByCode.get(item.offerCode) : undefined;
+    if (item.offerCode) {
+      if (__DEV__) console.log('[Overview] OfferCard name resolution:', {
+        cruiseId: item.id,
+        offerCode: item.offerCode,
+        cruiseOfferName: item.offerName,
+        offerNameOverride,
+      });
+    }
 
     return (
       <ResponsiveContainer>
@@ -1167,7 +1146,7 @@ function OverviewScreenContent() {
     );
   }, [handleOfferPress, handleCruiseItemPress, bookedCruiseIds, cruisesData, offerNameByCode, certificates, currentTravelerProfile, handleDecodeOffer]);
 
-  const keyExtractor = useCallback((item: CasinoOfferCardData | Cruise) => item.id, []);
+  const keyExtractor = useCallback((item: CasinoOfferCardData | Cruise, index: number) => `${item.id?.trim() || 'overview-item'}-${'offerCode' in item ? item.offerCode || 'offer' : item.shipName || 'ship'}-${'sailDate' in item ? item.sailDate || 'date' : item.expiryDate || 'expiry'}-${index}`, []);
 
   return (
     <View style={styles.container}>
@@ -1180,6 +1159,11 @@ function OverviewScreenContent() {
         onDeleteCertificate={deleteCertificate}
       />
 
+      <CertificateExplorerModal
+        visible={showCertificateExplorerModal}
+        onClose={() => setShowCertificateExplorerModal(false)}
+      />
+      
       <AlertsManagerModal
         visible={showAlertsModal}
         onClose={() => setShowAlertsModal(false)}
@@ -1217,7 +1201,9 @@ function OverviewScreenContent() {
       
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <QuickActionsFAB
-          onAskEasySeas={handleAskEasySeasPress}
+          onBrowseCruises={handleCruisesPress}
+          onImportData={handleSettingsPress}
+          onViewCalendar={handleCalendarPress}
           onAddCrewmember={handleAddCrewmemberPress}
           onAddSession={handleAddSessionPress}
         />
@@ -1264,15 +1250,9 @@ export default function OverviewScreen() {
     console.log('[OverviewScreen] Loading state changed:', coreLoading);
   }, [coreLoading]);
 
-  if (coreLoading) {
-    return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.navyDeep} />
-        <Text style={styles.loadingText}>Loading your data...</Text>
-      </SafeAreaView>
-    );
-  }
-
+  // Never hard-block the Offers tab on hydration. CoreDataProvider updates the
+  // screen as persisted records arrive; a stalled storage/network read must not
+  // trap the user on an indefinite full-screen spinner.
   return <OverviewScreenContent />;
 }
 
@@ -1309,63 +1289,23 @@ const styles = StyleSheet.create({
   headerContent: {
     marginBottom: SPACING.md,
   },
-  titleLogoCard: {
+  offersHeroImageCard: {
     marginTop: SPACING.sm,
     marginBottom: SPACING.md,
+    height: 220,
     borderRadius: BORDER_RADIUS.xl,
     backgroundColor: '#FFFFFF',
     overflow: 'hidden',
     borderWidth: 2,
     borderColor: '#D4AF37',
-    height: 270,
-    alignItems: 'center',
-    justifyContent: 'center',
     ...SHADOW.card,
   },
-  titleLogoImage: {
+  offersHeroImage: {
     width: '100%',
     height: '100%',
   },
   footerContent: {
     marginTop: SPACING.md,
-  },
-
-  heroCard: {
-    marginBottom: SPACING.sm,
-    marginTop: SPACING.sm,
-    borderRadius: BORDER_RADIUS.xl,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 200,
-  },
-
-  heroOverlay: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: SPACING.xl,
-    paddingHorizontal: SPACING.lg,
-  },
-  heroTitle: {
-    fontSize: 32,
-    fontWeight: '800' as const,
-    color: '#1A1A1A',
-    letterSpacing: 1,
-    textAlign: 'center',
-  },
-  heroSubtitle: {
-    fontSize: 15,
-    fontWeight: '500' as const,
-    color: 'rgba(0,0,0,0.65)',
-    marginTop: 6,
-    letterSpacing: 0.3,
-    textAlign: 'center',
-  },
-  heroSignature: {
-    width: 240,
-    height: 100,
-    marginTop: 14,
-    opacity: 0.8,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -1661,51 +1601,81 @@ const styles = StyleSheet.create({
   },
   commandCenterGradient: {
     padding: SPACING.md,
+    borderWidth: 1,
+    borderRadius: BORDER_RADIUS.xl,
+  },
+  commandCenterRoyalBand: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    marginBottom: SPACING.sm,
+  },
+  commandCenterRoyalLine: {
+    width: 34,
+    height: 3,
+    borderRadius: 2,
+  },
+  commandCenterRoyalText: {
+    fontSize: 10,
+    fontWeight: '900' as const,
+    letterSpacing: 1,
+    textTransform: 'uppercase' as const,
   },
   commandCenterHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    marginBottom: 6,
+    gap: SPACING.sm,
+    marginBottom: SPACING.sm,
   },
   commandCenterTitleRow: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.sm,
   },
+  commandCenterIconBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  commandCenterHeadingCopy: {
+    flex: 1,
+  },
   commandCenterTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '900' as const,
-    color: '#FFFFFF',
+    letterSpacing: -0.2,
   },
   commandCenterCountPill: {
-    minWidth: 72,
-    minHeight: 32,
-    borderRadius: 16,
-    backgroundColor: '#FDE68A',
+    minWidth: 58,
+    minHeight: 44,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: SPACING.sm,
-    paddingVertical: 4,
+    paddingVertical: 5,
   },
   commandCenterCountText: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '900' as const,
-    color: '#172554',
-    lineHeight: 17,
+    color: '#FFFFFF',
+    lineHeight: 18,
   },
   commandCenterCountLabel: {
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: '900' as const,
-    color: '#172554',
+    color: 'rgba(255,255,255,0.88)',
     letterSpacing: 0.4,
     textTransform: 'uppercase' as const,
   },
   commandCenterSubtitle: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.78)',
-    lineHeight: 17,
-    marginBottom: SPACING.sm,
+    fontSize: 11,
+    lineHeight: 15,
+    marginTop: 2,
   },
   commandCenterSummaryRow: {
     flexDirection: 'row',
@@ -1717,7 +1687,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: '#FDE68A',
+    borderWidth: 1,
     borderRadius: BORDER_RADIUS.round,
     paddingHorizontal: SPACING.sm,
     paddingVertical: 7,
@@ -1725,15 +1695,12 @@ const styles = StyleSheet.create({
   commandCenterUrgentChipText: {
     fontSize: 12,
     fontWeight: '900' as const,
-    color: '#172554',
   },
   commandCenterMiniChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: 'rgba(186, 230, 253, 0.18)',
     borderWidth: 1,
-    borderColor: 'rgba(186, 230, 253, 0.3)',
     borderRadius: BORDER_RADIUS.round,
     paddingHorizontal: SPACING.sm,
     paddingVertical: 7,
@@ -1741,20 +1708,16 @@ const styles = StyleSheet.create({
   commandCenterMiniChipValue: {
     fontSize: 12,
     fontWeight: '900' as const,
-    color: '#FFFFFF',
   },
   commandCenterMiniChipLabel: {
     fontSize: 11,
     fontWeight: '800' as const,
-    color: '#BAE6FD',
   },
   commandCenterMiniChipMuted: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: 'rgba(255,255,255,0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
     borderRadius: BORDER_RADIUS.round,
     paddingHorizontal: SPACING.sm,
     paddingVertical: 7,
@@ -1762,30 +1725,25 @@ const styles = StyleSheet.create({
   commandCenterMiniChipMutedValue: {
     fontSize: 12,
     fontWeight: '900' as const,
-    color: '#FFFFFF',
   },
   commandCenterMiniChipMutedLabel: {
     fontSize: 11,
     fontWeight: '800' as const,
-    color: 'rgba(255,255,255,0.68)',
   },
   commandCenterOpenButton: {
     alignSelf: 'flex-start',
-    backgroundColor: '#FDE68A',
     borderRadius: BORDER_RADIUS.round,
     paddingHorizontal: SPACING.md,
     paddingVertical: 8,
     marginBottom: SPACING.sm,
   },
   commandCenterOpenButtonText: {
-    color: '#172554',
+    color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '900' as const,
   },
   commandCenterBucket: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.sm,
     marginTop: SPACING.sm,
@@ -1798,15 +1756,14 @@ const styles = StyleSheet.create({
   },
   commandCenterBucketTitle: {
     fontSize: 13,
-    fontWeight: '800' as const,
-    color: '#FFFFFF',
+    fontWeight: '900' as const,
   },
   commandCenterBucketSubtitle: {
     fontSize: 11,
-    color: 'rgba(255,255,255,0.68)',
+    fontWeight: '700' as const,
   },
   commandCenterOfferRow: {
-    backgroundColor: 'rgba(15, 23, 42, 0.28)',
+    borderWidth: 1,
     borderRadius: BORDER_RADIUS.sm,
     padding: SPACING.sm,
     marginTop: SPACING.xs,
@@ -1818,14 +1775,12 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   commandCenterScoreText: {
     fontSize: 13,
     fontWeight: '900' as const,
-    color: '#FFFFFF',
   },
   commandCenterOfferCopy: {
     marginLeft: 52,
@@ -1834,12 +1789,10 @@ const styles = StyleSheet.create({
   },
   commandCenterOfferTitle: {
     fontSize: 13,
-    fontWeight: '800' as const,
-    color: '#FFFFFF',
+    fontWeight: '900' as const,
   },
   commandCenterOfferMeta: {
     fontSize: 11,
-    color: '#BAE6FD',
     marginTop: 2,
   },
   commandCenterActions: {
@@ -1855,29 +1808,27 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xs,
   },
   commandCenterAction: {
-    backgroundColor: '#FFFFFF',
     borderRadius: BORDER_RADIUS.sm,
     paddingHorizontal: SPACING.md,
     paddingVertical: 6,
   },
   commandCenterActionText: {
     fontSize: 12,
-    fontWeight: '800' as const,
-    color: COLORS.navyDeep,
+    fontWeight: '900' as const,
+    color: '#FFFFFF',
   },
   commandCenterActionMuted: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
     borderRadius: BORDER_RADIUS.sm,
     paddingHorizontal: SPACING.sm,
     paddingVertical: 5,
   },
   commandCenterActionMutedText: {
     fontSize: 11,
-    fontWeight: '700' as const,
-    color: '#CBD5E1',
+    fontWeight: '800' as const,
   },
   decodeOverlay: {
     flex: 1,
@@ -2050,36 +2001,4 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeXS,
     color: '#94A3B8',
   },
-  advisorGrid: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: SPACING.md,
-  },
-  advisorTile: {
-    flex: 1,
-    backgroundColor: COLORS.white,
-    borderRadius: BORDER_RADIUS.lg,
-    padding: SPACING.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-    ...SHADOW.sm,
-  },
-  advisorTileFull: {
-    flex: undefined,
-    width: '100%',
-  },
-  advisorTileTitle: {
-    color: COLORS.navyDeep,
-    fontSize: 13,
-    fontWeight: '900',
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  advisorTileText: {
-    color: COLORS.textDarkGrey,
-    fontSize: 11,
-    lineHeight: 15,
-    fontWeight: '600',
-  },
-
 });

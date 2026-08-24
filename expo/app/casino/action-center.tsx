@@ -9,7 +9,7 @@ import { useRouter } from 'expo-router';
 export default function ActionCenterRoute() {
   const router = useRouter();
   useEffect(() => {
-    router.replace({ pathname: '/(tabs)/analytics', params: { tab: 'action' } } as any);
+    router.replace({ pathname: '/(tabs)/analytics', params: { tab: 'tools' } } as any);
   }, [router]);
   return null;
 }

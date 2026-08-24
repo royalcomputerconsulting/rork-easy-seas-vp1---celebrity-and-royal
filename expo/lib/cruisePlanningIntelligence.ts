@@ -1,6 +1,7 @@
 import type { CasinoOffer, Cruise, TravelerProfile } from '@/types/models';
 import { createDateFromString, getDaysUntil } from '@/lib/date';
 import { calculateCasinoAvailabilityForCruise } from '@/lib/casinoAvailability';
+import { knownNightCount } from '@/lib/cruiseRecordIntegrity';
 
 export type ShipFamiliarityRating = 'New Ship' | 'Familiar' | 'Very Familiar' | 'Home Ship';
 
@@ -73,57 +74,6 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-function normalizeStatus(value: unknown): string {
-  return normalizeLower(value);
-}
-
-function hasBookingIdentity(record: Cruise): boolean {
-  const anyRecord = record as any;
-  return Boolean(
-    normalizeText(anyRecord.bookingId) ||
-    normalizeText(anyRecord.reservationNumber) ||
-    normalizeText(anyRecord.bwoNumber)
-  );
-}
-
-function isCompletedTrip(record: Cruise): boolean {
-  const anyRecord = record as any;
-  const status = normalizeStatus(anyRecord.status);
-  const completionState = normalizeStatus(anyRecord.completionState);
-  return status === 'completed' || completionState === 'completed' || normalizeStatus(anyRecord.tripStatus) === 'completed';
-}
-
-function isBookedOrUpcomingTrip(record: Cruise): boolean {
-  const anyRecord = record as any;
-  const status = normalizeStatus(anyRecord.status);
-  const completionState = normalizeStatus(anyRecord.completionState);
-  if (isCompletedTrip(record)) return true;
-  if (hasBookingIdentity(record)) return true;
-  return status === 'booked' || status === 'upcoming' || completionState === 'upcoming' || normalizeStatus(anyRecord.sourceType) === 'booking';
-}
-
-function isOfferCatalogRow(record: Cruise): boolean {
-  const anyRecord = record as any;
-  const status = normalizeStatus(anyRecord.status);
-  const completionState = normalizeStatus(anyRecord.completionState);
-  if (status === 'booked' || status === 'upcoming' || completionState === 'upcoming') return false;
-  const sourceType = normalizeStatus(anyRecord.sourceType);
-  const source = normalizeStatus(anyRecord.source || anyRecord.cruiseSource || anyRecord.dataSource);
-  if (hasBookingIdentity(record) || isCompletedTrip(record)) return false;
-  return (
-    status === 'available' ||
-    status === 'active' ||
-    sourceType === 'offer' ||
-    source.includes('offer') ||
-    Boolean(normalizeText(anyRecord.offerCode))
-  );
-}
-
-function getPlanningHistoryCruises(cruises: Cruise[], profile?: Partial<TravelerProfile> | null): Cruise[] {
-  return cruises.filter((cruise) => profileMatches(cruise, profile) && isBookedOrUpcomingTrip(cruise) && !isOfferCatalogRow(cruise));
-}
-
-
 function dateOnly(value: string | undefined): string {
   if (!value) return '';
   const parsed = createDateFromString(value);
@@ -194,30 +144,8 @@ export function deriveCruiseDayPlan(cruise: Cruise): CruiseDayPlan[] {
   }));
 }
 
-function isLargeCatalogOfferCruise(cruise: Cruise): boolean {
-  const status = String((cruise as any).status || '').toLowerCase();
-  const hasExactItinerary = Array.isArray((cruise as any).itinerary) && (cruise as any).itinerary.length > 0;
-  const hasPortsAndTimes = typeof (cruise as any).portsAndTimes === 'string' && (cruise as any).portsAndTimes.trim().length > 0;
-  const hasPorts = Array.isArray((cruise as any).ports) && (cruise as any).ports.length > 0;
-  return (status === 'available' || status === 'active' || Boolean((cruise as any).offerCode)) && !hasExactItinerary && !hasPortsAndTimes && !hasPorts;
-}
-
 export function calculateSeaDayDensityScore(cruise: Cruise): SeaDayDensityResult {
-  if (isLargeCatalogOfferCruise(cruise)) {
-    const sailingLength = Math.max(1, cruise.nights || 0);
-    return {
-      seaDays: 0,
-      portDays: 0,
-      overnightPorts: 0,
-      embarkationValue: 0,
-      disembarkationValue: 0,
-      sailingLength,
-      likelyCasinoOpenDays: 0,
-      casinoOpportunityScore: 0,
-      explanation: 'Casino availability is calculated when exact day-by-day itinerary data is available or when this cruise is opened.'
-    };
-  }
-  const casinoSummary = calculateCasinoAvailabilityForCruise(cruise);
+  const casinoSummary = calculateCasinoAvailabilityForCruise(cruise, undefined, { quiet: true });
   const sailingLength = Math.max(1, cruise.nights || Math.max(casinoSummary.totalDays - 1, 1));
   const seaDays = casinoSummary.seaDays;
   const portDays = casinoSummary.portDays;
@@ -228,16 +156,6 @@ export function calculateSeaDayDensityScore(cruise: Cruise): SeaDayDensityResult
   const maxCasinoHours = Math.max(1, sailingLength * 16);
   const casinoOpportunityScore = clamp(Math.round((casinoSummary.estimatedCasinoHours / maxCasinoHours) * 100), 0, 100);
   const explanation = `${seaDays} sea day${seaDays === 1 ? '' : 's'}, ${portDays} port day${portDays === 1 ? '' : 's'}, ${overnightPorts} overnight port${overnightPorts === 1 ? '' : 's'}; casino is open on ${likelyCasinoOpenDays}/${casinoSummary.totalDays} calendar days for ~${casinoSummary.estimatedCasinoHours} estimated hours.`;
-
-  if ((globalThis as any).__EASYSEAS_VERBOSE_CRUISE_PLANNING) console.log('[CruisePlanning] Sea-day density calculated:', {
-    cruiseId: cruise.id,
-    shipName: cruise.shipName,
-    seaDays,
-    portDays,
-    overnightPorts,
-    likelyCasinoOpenDays,
-    casinoOpportunityScore,
-  });
 
   return {
     seaDays,
@@ -259,7 +177,7 @@ function getPortCountry(port: string): string | null {
 }
 
 export function buildPortTracker(cruises: Cruise[], targetCruise?: Cruise, profile?: Partial<TravelerProfile> | null): PortTrackerResult {
-  const scopedCruises = getPlanningHistoryCruises(cruises, profile);
+  const scopedCruises = cruises.filter((cruise) => profileMatches(cruise, profile));
   const targetPorts = targetCruise ? deriveCruiseDayPlan(targetCruise).filter((day) => !day.isSeaDay).map((day) => day.port) : [];
   const targetPortSet = new Set(targetPorts.map(normalizeLower));
   const portCounts = new Map<string, { port: string; count: number }>();
@@ -290,15 +208,6 @@ export function buildPortTracker(cruises: Cruise[], targetCruise?: Cruise, profi
   const itineraryNoveltyScore = targetCruise && targetPorts.length > 0 ? clamp(Math.round((newPorts.length / targetPorts.length) * 100), 0, 100) : 0;
   const unknownHistory = scopedCruises.length === 0 || visitedPorts.length === 0 || (targetCruise ? knownTargetPorts === 0 && newPorts.length === 0 : false);
 
-  if ((globalThis as any).__EASYSEAS_VERBOSE_CRUISE_PLANNING) console.log('[CruisePlanning] Port tracker built:', {
-    scopedCruises: scopedCruises.length,
-    visitedPorts: visitedPorts.length,
-    newPorts: newPorts.length,
-    repeatedItineraries: repeatedItineraries.length,
-    itineraryNoveltyScore,
-    unknownHistory,
-  });
-
   return {
     visitedPorts,
     embarkationPorts: Array.from(embarkationPorts).sort(),
@@ -315,7 +224,7 @@ export function calculateShipFamiliarityScore(shipName: string, cruises: Cruise[
   const normalizedShip = normalizeLower(shipName);
   const now = new Date();
   now.setHours(0, 0, 0, 0);
-  const matchingCruises = getPlanningHistoryCruises(cruises, profile).filter((cruise) => normalizeLower(cruise.shipName) === normalizedShip);
+  const matchingCruises = cruises.filter((cruise) => normalizeLower(cruise.shipName) === normalizedShip && profileMatches(cruise, profile));
   const pastBookings = matchingCruises.filter((cruise) => {
     const returnDate = createDateFromString(cruise.returnDate || cruise.sailDate);
     return !Number.isNaN(returnDate.getTime()) && returnDate < now;
@@ -328,8 +237,6 @@ export function calculateShipFamiliarityScore(shipName: string, cruises: Cruise[
   const score = clamp(Math.round(timesSailed * 18 + nightsOnboard * 1.2 + upcomingBookings * 6 + offersAvailable * 4), 0, 100);
   const rating: ShipFamiliarityRating = score >= 80 ? 'Home Ship' : score >= 55 ? 'Very Familiar' : score >= 25 ? 'Familiar' : 'New Ship';
   const explanation = `${rating}: ${timesSailed} sailing${timesSailed === 1 ? '' : 's'}, ${nightsOnboard} night${nightsOnboard === 1 ? '' : 's'} onboard, ${upcomingBookings} upcoming booking${upcomingBookings === 1 ? '' : 's'}, ${offersAvailable} available offer${offersAvailable === 1 ? '' : 's'}.`;
-
-  if ((globalThis as any).__EASYSEAS_VERBOSE_CRUISE_PLANNING) console.log('[CruisePlanning] Ship familiarity calculated:', { shipName, timesSailed, nightsOnboard, upcomingBookings, pastBookings, offersAvailable, rating, score });
 
   return {
     shipName,
@@ -364,16 +271,6 @@ function isUsableReplacementCruise(cruise: Cruise, profile?: Partial<TravelerPro
   return !['booked', 'completed', 'cancelled', 'archived'].includes(status);
 }
 
-function findOfferForCruise(cruise: Cruise, offers: CasinoOffer[], profile?: Partial<TravelerProfile> | null): CasinoOffer | undefined {
-  return offers.find((offer) => {
-    if (!isUsableReplacementOffer(offer, profile)) return false;
-    if (offer.cruiseId === cruise.id) return true;
-    if (offer.cruiseIds?.includes(cruise.id)) return true;
-    if (offer.offerCode && cruise.offerCode && offer.offerCode === cruise.offerCode) return true;
-    return normalizeLower(offer.shipName) === normalizeLower(cruise.shipName) && dateOnly(offer.sailingDate) === dateOnly(cruise.sailDate);
-  });
-}
-
 type ReplacementSource = {
   cruise: Cruise;
   offer: CasinoOffer;
@@ -385,7 +282,8 @@ function isReplacementSource(source: { cruise: Cruise; offer?: CasinoOffer }, pr
 }
 
 function estimateOutOfPocket(cruise: Cruise, offer?: CasinoOffer): number {
-  const taxes = cruise.taxes ?? offer?.taxesFees ?? offer?.portCharges ?? Math.round((cruise.nights || offer?.nights || 7) * 60);
+  const nights = knownNightCount(cruise.nights) ?? knownNightCount(offer?.nights);
+  const taxes = cruise.taxes ?? offer?.taxesFees ?? offer?.portCharges ?? (nights ? Math.round(nights * 60) : 0);
   const cabin = cruise.price ?? cruise.totalPrice ?? 0;
   return Math.max(0, taxes + cabin);
 }
@@ -405,21 +303,78 @@ function estimateOfferScore(cruise: Cruise, offer?: CasinoOffer): number {
 }
 
 export function findCruiseReplacementCandidates(currentCruise: Cruise, alternatives: Cruise[], offers: CasinoOffer[] = [], history: Cruise[] = [], profile?: Partial<TravelerProfile> | null): ReplacementCandidate[] {
+  const addToIndex = <T>(index: Map<string, T[]>, key: string, value: T) => {
+    if (!key) return;
+    const existing = index.get(key);
+    if (existing) existing.push(value);
+    else index.set(key, [value]);
+  };
+
+  const usableOffers = offers.filter((offer) => isUsableReplacementOffer(offer, profile));
+  const offersByCruiseId = new Map<string, CasinoOffer[]>();
+  const offersByCode = new Map<string, CasinoOffer[]>();
+  const offersBySailing = new Map<string, CasinoOffer[]>();
+  usableOffers.forEach((offer) => {
+    addToIndex(offersByCruiseId, normalizeLower(offer.cruiseId), offer);
+    (offer.cruiseIds ?? []).forEach((cruiseId) => addToIndex(offersByCruiseId, normalizeLower(cruiseId), offer));
+    addToIndex(offersByCode, normalizeLower(offer.offerCode), offer);
+    addToIndex(offersBySailing, `${normalizeLower(offer.shipName)}|${dateOnly(offer.sailingDate)}`, offer);
+  });
+
+  const resolveIndexedOffer = (cruise: Cruise): CasinoOffer | undefined => {
+    const cruiseIdMatches = offersByCruiseId.get(normalizeLower(cruise.id)) ?? [];
+    if (cruiseIdMatches.length > 0) return cruiseIdMatches[0];
+
+    const sailingKey = `${normalizeLower(cruise.shipName)}|${dateOnly(cruise.sailDate)}`;
+    const codeMatches = offersByCode.get(normalizeLower(cruise.offerCode)) ?? [];
+    if (codeMatches.length === 1) return codeMatches[0];
+    if (codeMatches.length > 1) {
+      const materialCodeMatch = codeMatches.find((offer) => `${normalizeLower(offer.shipName)}|${dateOnly(offer.sailingDate)}` === sailingKey);
+      if (materialCodeMatch) return materialCodeMatch;
+    }
+
+    return (offersBySailing.get(sailingKey) ?? [])[0];
+  };
+
+  const historyPortTracker = buildPortTracker(history, undefined, profile);
+  const visitedPortSet = new Set(historyPortTracker.visitedPorts.map(normalizeLower));
+  const getNovelty = (cruise: Cruise): { newPorts: string[]; itineraryNoveltyScore: number } => {
+    const targetPorts = deriveCruiseDayPlan(cruise)
+      .filter((day) => !day.isSeaDay && !day.isEmbarkation && !day.isDisembarkation)
+      .map((day) => day.port)
+      .filter(Boolean);
+    const newPorts = targetPorts.filter((port) => !visitedPortSet.has(normalizeLower(port)));
+    return {
+      newPorts,
+      itineraryNoveltyScore: targetPorts.length > 0 ? clamp(Math.round((newPorts.length / targetPorts.length) * 100), 0, 100) : 0,
+    };
+  };
+
+  const shipFamiliarityCache = new Map<string, ShipFamiliarityResult>();
+  const getShipFamiliarity = (shipName: string): ShipFamiliarityResult => {
+    const key = normalizeLower(shipName);
+    const cached = shipFamiliarityCache.get(key);
+    if (cached) return cached;
+    const calculated = calculateShipFamiliarityScore(shipName, history, usableOffers, profile);
+    shipFamiliarityCache.set(key, calculated);
+    return calculated;
+  };
+
   const currentSea = calculateSeaDayDensityScore(currentCruise);
-  const currentOutOfPocket = estimateOutOfPocket(currentCruise, findOfferForCruise(currentCruise, offers, profile));
-  const currentPorts = buildPortTracker(history, currentCruise, profile);
-  const currentShip = calculateShipFamiliarityScore(currentCruise.shipName, history, offers, profile);
+  const currentOutOfPocket = estimateOutOfPocket(currentCruise, resolveIndexedOffer(currentCruise));
+  const currentPorts = getNovelty(currentCruise);
+  const currentShip = getShipFamiliarity(currentCruise.shipName);
 
   const candidates = alternatives
-    .map((cruise) => ({ cruise, offer: findOfferForCruise(cruise, offers, profile) }))
+    .map((cruise) => ({ cruise, offer: resolveIndexedOffer(cruise) }))
     .filter((source): source is ReplacementSource => {
       const sailDate = createDateFromString(source.cruise.sailDate);
       return source.cruise.id !== currentCruise.id && !Number.isNaN(sailDate.getTime()) && getDaysUntil(source.cruise.sailDate) >= 0 && isReplacementSource(source, profile);
     })
     .map(({ cruise, offer }) => {
       const sea = calculateSeaDayDensityScore(cruise);
-      const ports = buildPortTracker(history, cruise, profile);
-      const ship = calculateShipFamiliarityScore(cruise.shipName, history, offers, profile);
+      const ports = getNovelty(cruise);
+      const ship = getShipFamiliarity(cruise.shipName);
       const offerScore = estimateOfferScore(cruise, offer);
       const outOfPocket = estimateOutOfPocket(cruise, offer);
       const betterSeaDays = sea.casinoOpportunityScore - currentSea.casinoOpportunityScore;
@@ -452,6 +407,12 @@ export function findCruiseReplacementCandidates(currentCruise: Cruise, alternati
     .sort((left, right) => right.rankScore - left.rankScore)
     .slice(0, 6);
 
-  if ((globalThis as any).__EASYSEAS_VERBOSE_CRUISE_PLANNING) console.log('[CruisePlanning] Replacement candidates built:', { currentCruiseId: currentCruise.id, candidates: candidates.length, source: 'usable-offer-records' });
+  console.log('[CruisePlanning] Replacement candidates built:', {
+    currentCruiseId: currentCruise.id,
+    alternatives: alternatives.length,
+    usableOffers: usableOffers.length,
+    candidates: candidates.length,
+    source: 'indexed-usable-offer-records',
+  });
   return candidates;
 }

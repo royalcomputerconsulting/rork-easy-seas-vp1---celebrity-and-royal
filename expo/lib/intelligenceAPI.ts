@@ -13,6 +13,7 @@ import { calculateCabinRetailValue, getCabinValueByType } from '@/mocks/bookedCr
 import { ROYAL_CARIBBEAN_SHIPS, type ShipInfo } from '@/constants/shipInfo';
 import { getBookedCruiseCasinoPoints, getBookedCruiseWinningsBroughtHome } from '@/lib/casinoPointTruth';
 import { createDateFromString, getDaysUntil, formatDate } from '@/lib/date';
+import { knownGuestCount } from '@/lib/cruiseRecordIntegrity';
 
 export interface PlayerContext {
   profile: {
@@ -376,7 +377,7 @@ export function getOfferContext(
     offerName: offer.offerName || offer.title,
     offerType: offer.offerType,
     cabinType: offer.roomType,
-    guestCount: offer.guests || 2,
+    guestCount: knownGuestCount(offer.guests) ?? 0,
     value: {
       freePlay,
       obc,

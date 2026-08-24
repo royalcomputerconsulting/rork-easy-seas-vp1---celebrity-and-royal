@@ -84,6 +84,100 @@ export const CELEBRITY_CAPTAINS_CLUB_LEVELS: Record<string, CelebrityCaptainsClu
 
 export const CELEBRITY_LEVEL_ORDER = ['Preview', 'Classic', 'Select', 'Elite', 'Elite Plus', 'Zenith'];
 
+/**
+ * Royal Caribbean Group's one-for-one Crown & Anchor → Captain's Club
+ * status-match matrix. Captain's Club points remain independent; this mapping
+ * determines the effective benefit tier when the Royal status is higher.
+ */
+export const CROWN_ANCHOR_TO_CAPTAINS_CLUB_STATUS: Record<string, string> = {
+  Gold: 'Classic',
+  Platinum: 'Select',
+  Emerald: 'Select',
+  Diamond: 'Elite',
+  'Diamond Plus': 'Elite Plus',
+  Pinnacle: 'Zenith',
+};
+
+function normalizeCrownAnchorLevel(level: string | null | undefined): string | null {
+  const normalized = String(level ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ');
+  if (!normalized) return null;
+  if (normalized === 'pinnacle club') return 'Pinnacle';
+  return Object.keys(CROWN_ANCHOR_TO_CAPTAINS_CLUB_STATUS)
+    .find((candidate) => candidate.toLowerCase() === normalized) ?? null;
+}
+
+function normalizeCelebrityLevel(level: string | null | undefined): string | null {
+  const normalized = String(level ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ');
+  if (!normalized) return null;
+  return CELEBRITY_LEVEL_ORDER.find((candidate) => candidate.toLowerCase() === normalized) ?? null;
+}
+
+export function getCelebrityStatusMatchForCrownAnchor(
+  crownAnchorLevel: string | null | undefined,
+): string | null {
+  const normalized = normalizeCrownAnchorLevel(crownAnchorLevel);
+  return normalized ? CROWN_ANCHOR_TO_CAPTAINS_CLUB_STATUS[normalized] ?? null : null;
+}
+
+export function getHigherCelebrityLevel(...levels: Array<string | null | undefined>): string {
+  let highestLevel = 'Preview';
+  let highestIndex = 0;
+  for (const candidate of levels) {
+    const normalized = normalizeCelebrityLevel(candidate);
+    const index = normalized ? CELEBRITY_LEVEL_ORDER.indexOf(normalized) : -1;
+    if (index > highestIndex) {
+      highestLevel = normalized!;
+      highestIndex = index;
+    }
+  }
+  return highestLevel;
+}
+
+export interface CelebrityCaptainsClubStatus {
+  earnedLevel: string;
+  statusMatchLevel: string | null;
+  reportedLevel: string | null;
+  effectiveLevel: string;
+  isStatusMatched: boolean;
+}
+
+export function getCelebrityCaptainsClubStatus(
+  points: number,
+  crownAnchorLevel?: string | null,
+  reportedLevel?: string | null,
+): CelebrityCaptainsClubStatus {
+  const earnedLevel = getCelebrityCaptainsClubLevelByPoints(points);
+  const statusMatchLevel = getCelebrityStatusMatchForCrownAnchor(crownAnchorLevel);
+  const normalizedReportedLevel = normalizeCelebrityLevel(reportedLevel);
+  const effectiveLevel = getHigherCelebrityLevel(earnedLevel, statusMatchLevel, normalizedReportedLevel);
+  return {
+    earnedLevel,
+    statusMatchLevel,
+    reportedLevel: normalizedReportedLevel,
+    effectiveLevel,
+    isStatusMatched: Boolean(
+      statusMatchLevel &&
+      CELEBRITY_LEVEL_ORDER.indexOf(statusMatchLevel) > CELEBRITY_LEVEL_ORDER.indexOf(earnedLevel)
+    ),
+  };
+}
+
+export function getEffectiveCelebrityCaptainsClubLevel(
+  points: number,
+  crownAnchorLevel?: string | null,
+  reportedLevel?: string | null,
+): string {
+  return getCelebrityCaptainsClubStatus(points, crownAnchorLevel, reportedLevel).effectiveLevel;
+}
+
 export function getNextCelebrityLevel(currentLevel: string): string | null {
   const currentIndex = CELEBRITY_LEVEL_ORDER.indexOf(currentLevel);
   if (currentIndex === -1 || currentIndex === CELEBRITY_LEVEL_ORDER.length - 1) {

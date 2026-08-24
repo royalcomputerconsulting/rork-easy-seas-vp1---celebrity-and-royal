@@ -1,6 +1,10 @@
 import { useCoreData } from "./CoreDataProvider";
+import { recordProviderRender } from '@/lib/performance/performanceDiagnostics';
+
+const EMPTY_TRIPIT: never[] = [];
 
 export const useAppState = () => {
+  recordProviderRender('AppStateAdapter');
   const coreData = useCoreData();
   
   return {
@@ -11,7 +15,7 @@ export const useAppState = () => {
       booked: coreData.bookedCruises,
       offers: coreData.casinoOffers,
       calendar: coreData.calendarEvents,
-      tripit: [] as never[],
+      tripit: EMPTY_TRIPIT,
       lastImport: coreData.lastSyncDate,
       clubRoyaleProfile: coreData.clubRoyaleProfile,
     },

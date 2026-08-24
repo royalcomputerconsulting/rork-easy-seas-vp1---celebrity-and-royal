@@ -8,26 +8,21 @@ export interface IntelligenceFilterStateSnapshot {
   selectedProgram: ProgramFilterValue;
 }
 
-type FilterableRecord = {
+export type FilterableRecord = {
+  id?: string;
+  label?: string;
+  type?: string;
+  expiryDate?: string;
   ownerProfileId?: string;
   sourceEmail?: string;
   brand?: TravelBrand | string;
   casinoProgram?: CasinoProgram | string;
-  program?: string;
   cruiseSource?: string;
   offerSource?: string;
   shipName?: string;
   cruiseLines?: string[];
-  offerCode?: string;
-  offerName?: string;
-  sailingDate?: string;
-  sailDate?: string;
-  reservationNumber?: string;
-  bookingId?: string;
-  status?: string;
-  completionState?: string;
-  importStatus?: ImportReviewStatus;
-  reconciliationStatus?: ImportReviewStatus;
+  importStatus?: ImportReviewStatus | string;
+  reconciliationStatus?: ImportReviewStatus | string;
 };
 
 const BRAND_LABELS: Record<string, string> = {
@@ -56,22 +51,6 @@ function normalizeEmail(value: unknown): string | null {
   return normalized.includes('@') ? normalized : null;
 }
 
-function isSharedCruiseOrOfferRecord(record: FilterableRecord): boolean {
-  const source = normalize(record.cruiseSource || record.offerSource || record.brand);
-  const status = normalize(record.status || record.completionState);
-  const hasCruiseIdentity = Boolean(
-    normalize(record.shipName) ||
-    normalize(record.sailDate) ||
-    normalize(record.sailingDate) ||
-    normalize(record.reservationNumber) ||
-    normalize(record.bookingId)
-  );
-  const hasOfferIdentity = Boolean(normalize(record.offerCode) || normalize(record.offerName) || normalize(record.offerSource));
-  const isTravelBrand = ['royal', 'celebrity', 'carnival', 'silversea'].some((brand) => source.includes(brand)) || hasCruiseIdentity || hasOfferIdentity;
-  const isExplicitPersonalOnly = status.includes('session') || status.includes('personal');
-  return isTravelBrand && !isExplicitPersonalOnly;
-}
-
 export function getProfileDisplayName(profile: UserProfile | undefined): string {
   if (!profile) return 'Unknown profile';
   return profile.displayName || profile.name || profile.email || 'Traveler';
@@ -88,10 +67,9 @@ export function getProgramLabel(program: ProgramFilterValue | string): string {
 }
 
 export function getProfileScopeLabel(profileId: ProfileFilterValue, profiles: UserProfile[]): string {
-  if (profileId === 'all') return 'All Profiles';
+  if (profileId === 'all') return 'Household';
   if (profileId === 'unassigned') {
-    const fallbackProfile = getSecondProfileForUnassignedRecords(profiles);
-    return fallbackProfile ? getProfileDisplayName(fallbackProfile) : 'Unassigned Imports';
+    return 'Unassigned Imports';
   }
   return getProfileDisplayName(profiles.find((profile) => profile.id === profileId));
 }
@@ -103,11 +81,9 @@ export function buildIntelligenceScopeLabel(filters: IntelligenceFilterStateSnap
 export function getBrandProgramSystemLabel(brand: BrandFilterValue | string, program: ProgramFilterValue | string): string {
   const brandLabel = getBrandLabel(brand);
   const programLabel = getProgramLabel(program);
-  if (brand === 'all' && program === 'all') return 'All cruise-line casino programs';
+  if (brand === 'all' && program === 'all') return 'Royal/Celebrity casino programs';
   if (brand === 'royal' || program === 'clubRoyale') return 'Royal Caribbean / Club Royale';
   if (brand === 'celebrity' || program === 'blueChip') return 'Celebrity / Blue Chip';
-  if (brand === 'carnival' || program === 'playersClub') return 'Carnival / Players Club / VIFP';
-  if (brand === 'silversea' || program === 'venetianSociety') return 'Silversea / Venetian Society';
   return `${brandLabel} / ${programLabel}`;
 }
 
@@ -129,11 +105,11 @@ export function inferRecordBrand(record: FilterableRecord): TravelBrand | 'unkno
 }
 
 export function inferRecordProgram(record: FilterableRecord): CasinoProgram {
-  const explicitProgram = normalize(record.casinoProgram || record.program);
-  if (explicitProgram.includes('club royale') || explicitProgram.includes('club-royale') || explicitProgram === 'clubroyale') return 'clubRoyale';
-  if (explicitProgram.includes('blue chip') || explicitProgram.includes('blue-chip') || explicitProgram === 'bluechip') return 'blueChip';
-  if (explicitProgram.includes('players club') || explicitProgram.includes('players-club') || explicitProgram === 'playersclub') return 'playersClub';
-  if (explicitProgram.includes('venetian')) return 'venetianSociety';
+  const explicitProgram = normalize(record.casinoProgram).replace(/[\s_-]+/g, '');
+  if (explicitProgram === 'clubroyale') return 'clubRoyale';
+  if (explicitProgram === 'bluechip') return 'blueChip';
+  if (explicitProgram === 'playersclub') return 'playersClub';
+  if (explicitProgram === 'venetiansociety') return 'venetianSociety';
   if (explicitProgram === 'none') return 'none';
   const brand = inferRecordBrand(record);
   if (brand === 'celebrity') return 'blueChip';
@@ -150,27 +126,10 @@ function getProfileEmails(profile: UserProfile): string[] {
 }
 
 /**
- * Legacy unassigned records must not be auto-assigned to a second traveler.
- * Older builds treated unowned rows as the second user, which leaked the primary user's cruises/status.
+ * Returns the linked second traveler profile used as the owner for records that were previously surfaced as Unassigned.
  */
-export function getSecondProfileForUnassignedRecords(_profiles: UserProfile[]): UserProfile | undefined {
-  return undefined;
-}
-
-/**
- * Identifies the app's single managed "second traveler" profile slot, if one exists.
- * Unlike getSecondProfileForUnassignedRecords (which must stay disabled so ownerless
- * records never get auto-attributed to a second traveler), this is used only for UI
- * concerns: showing/switching to the second profile in Settings, and preventing the
- * app from creating more than one "Second User" profile. If more than one non-owner
- * profile exists (e.g. from an old duplicate-creation bug), the earliest-created one
- * is treated as the canonical second profile.
- */
-export function getManagedSecondProfile(profiles: UserProfile[]): UserProfile | undefined {
-  const nonOwnerProfiles = profiles
-    .filter((profile) => profile.active !== false && !profile.isOwner && !profile.defaultProfile)
-    .sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
-  return nonOwnerProfiles[0];
+export function getSecondProfileForUnassignedRecords(profiles: UserProfile[]): UserProfile | undefined {
+  return profiles.filter((profile) => profile.active !== false)[1];
 }
 
 function getMatchedProfile(record: FilterableRecord, profiles: UserProfile[]): UserProfile | undefined {
@@ -204,6 +163,7 @@ function recordMatchesProfile(record: FilterableRecord, selectedProfileId: Profi
   if (selectedProfileId === 'all') return true;
 
   const matchedProfile = getMatchedProfile(record, profiles);
+  const unassignedFallbackProfile = getSecondProfileForUnassignedRecords(profiles);
 
   if (selectedProfileId === 'unassigned') {
     return !matchedProfile;
@@ -212,15 +172,8 @@ function recordMatchesProfile(record: FilterableRecord, selectedProfileId: Profi
   const selectedProfile = profiles.find((profile) => profile.id === selectedProfileId);
   if (!selectedProfile) return true;
 
-  if (isSharedCruiseOrOfferRecord(record)) {
-    // Cruises, offer catalogs, booked trips, completed trips, and available sailings are shared household data.
-    // Main User and Second User each keep their own Crown & Anchor / Club Royale identity, but travel inventory
-    // remains visible to both profiles even if an older sync stamped ownerProfileId on the rows.
-    return true;
-  }
-
   if (matchedProfile) return matchedProfile.id === selectedProfile.id;
-  return selectedProfile.isOwner === true || selectedProfile.defaultProfile === true;
+  return unassignedFallbackProfile?.id === selectedProfile.id;
 }
 
 export function recordMatchesIntelligenceFilters(record: FilterableRecord, filters: IntelligenceFilterStateSnapshot, profiles: UserProfile[]): boolean {
@@ -230,8 +183,15 @@ export function recordMatchesIntelligenceFilters(record: FilterableRecord, filte
   return profileMatches && brandMatches && programMatches;
 }
 
-export function filterRecordsByIntelligence<T extends FilterableRecord>(records: T[], filters: IntelligenceFilterStateSnapshot, profiles: UserProfile[]): T[] {
-  const filtered = records.filter((record) => recordMatchesIntelligenceFilters(record, filters, profiles));
+export function filterRecordsByIntelligence<T>(records: T[], filters: IntelligenceFilterStateSnapshot, profiles: UserProfile[]): T[] {
+  if (records.length === 0) return records;
+  if (filters.selectedProfileId === 'all' && filters.selectedBrand === 'all' && filters.selectedProgram === 'all') {
+    // The default scope includes every record. Returning the authoritative
+    // array avoids a full scan and duplicate 2,500–5,000 element array in each
+    // mounted tab and app-wide assistant provider.
+    return records;
+  }
+  const filtered = records.filter((record) => recordMatchesIntelligenceFilters(record as FilterableRecord, filters, profiles));
   console.log('[IntelligenceFilters] Filtered records:', {
     input: records.length,
     output: filtered.length,

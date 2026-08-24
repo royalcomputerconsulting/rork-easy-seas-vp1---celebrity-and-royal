@@ -1,19 +1,10 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { AppState, type AppStateStatus } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import createContextHook from "@nkzw/create-context-hook";
-import { trpc, isBackendAvailable, isCloudBackupEnabled } from "@/lib/trpc";
+import { InteractionManager } from "react-native";
+import { trpc, isBackendAvailable } from "@/lib/trpc";
 import { useAuth } from "@/state/AuthProvider";
-import { useUserDataSync } from "@/state/UserDataSyncProvider";
-import { useUser } from "@/state/UserProvider";
 import type { Cruise, BookedCruise, CasinoOffer, CalendarEvent, ClubRoyaleProfile, CruiseFilter } from "@/types/models";
 import { SAMPLE_CLUB_ROYALE_PROFILE } from "@/types/models";
-import {
-  applyKnownRetailValues,
-  enrichCruisesWithReceiptData,
-  enrichCruisesWithMockItineraries,
-  applyFreeplayOBCData,
-} from "./coreData/dataEnrichment";
 import { DEFAULT_FILTERS } from "./coreData/filterLogic";
 import { DEFAULT_SETTINGS, getScopedStorageKeys, type AppSettings } from "./coreData/storageConfig";
 import {
@@ -22,20 +13,30 @@ import {
   processBookedCruises,
   processCalendarEvents,
   processMetadata,
+  parseJsonArray,
+  parseJsonObject,
+  subscribeToLateStorageReads,
 } from "./coreData/storageLoaders";
-import { clearUserSpecificData } from "@/lib/storage/storageOperations";
 import { quotaSafeGetItem, quotaSafeSetItem, quotaSafeSetJsonItem, quotaSafeRemoveItem } from "@/lib/storage/quotaSafeStorage";
+import type { PersistenceCommitResult } from "@/lib/storage/persistenceCoordinator";
+import { appendDiagnosticJournal } from "@/lib/storage/diagnosticJournal";
 import { ALL_STORAGE_KEYS, getUserScopedKey } from "@/lib/storage/storageKeys";
 import { buildOwnerScopeId, getInstallationId } from "@/lib/storage/installationId";
 import { containsKnownForeignPersonalData, filterRecordsForOwner, isOwnerScopeForEmail, stampRecordsForOwner } from "@/lib/storage/dataOwnership";
 import { updateAllCruiseLifecycles } from "@/lib/lifecycleManager";
-import { dedupeBookedCruises, dedupeBookedCruisesWithLedger, dedupeCalendarEvents, dedupeCasinoOffers, dedupeCruises, getBookedCruiseIdentityKey, getCruiseIdentityKey, getOfferIdentityKey } from "@/lib/dataIdentity";
+import { dedupeBookedCruises, dedupeCalendarEvents, dedupeCasinoOffers, dedupeCruises, getCruiseIdentityKey } from "@/lib/dataIdentity";
+import { canonicalizeDataRecord, canonicalizeDataRecords } from "@/lib/dataAuthority";
 import { generateCruiseCalendarEvents } from "@/lib/calendar/cruiseEvents";
-import { annotateOverlappingCruises, applyKnownBookingCorrectionsToCruise, applyUserConfirmedBookedCruiseManifestWithLedger, isKnownInvalidBookedCruise } from "@/lib/cruiseOverlapGuards";
+import { annotateOverlappingCruises, applyKnownBookingCorrectionsToCruise, applyUserConfirmedBookedCruiseManifest, isKnownInvalidBookedCruise } from "@/lib/cruiseOverlapGuards";
 import { isKnownCasinoProfile } from "@/lib/knownProfileFallback";
 import { normalizeCruisesWithCasinoEconomics } from "@/lib/casinoCruiseEconomics";
 import { getBookedCruiseCasinoPoints, normalizeCruiseCasinoPerformance } from "@/lib/casinoPointTruth";
-import { stampRecordForProfile, stampRecordsForProfile } from "@/lib/profileIsolation";
+import { notifyCruiseRecordChanged } from "@/lib/cruiseRecordChangeEvents";
+import { isDateInPast, toLocalCalendarDateOnly } from "@/lib/date";
+import { beginPerformanceSpan, recordPerformanceCount, recordProviderRender } from "@/lib/performance/performanceDiagnostics";
+import { cruiseInventoryRepository } from '@/lib/cruiseInventory/CruiseInventoryRepository';
+import type { CruiseInventoryIntegrity, CruiseInventoryPage, CruiseInventoryProgress, CruiseInventoryQuery } from '@/lib/cruiseInventory/CruiseInventoryRepository';
+import { getCruiseInventoryOwnerScope } from '@/lib/cruiseInventory/cruiseCanonicalIdentity';
 
 const getMockCruises = (): { BOOKED_CRUISES_DATA: BookedCruise[]; COMPLETED_CRUISES_DATA: BookedCruise[] } => {
   try {
@@ -100,57 +101,6 @@ function parseStoredTimestamp(value: string | null | undefined): number | null {
   return Number.isNaN(parsedValue) ? null : parsedValue;
 }
 
-
-const LARGE_AVAILABLE_CRUISE_THRESHOLD = 300;
-const BACKEND_AVAILABLE_CRUISE_SKIP_THRESHOLD = 500;
-
-function normalizeDateForCatalog(value: unknown): string {
-  if (typeof value !== 'string' || !value.trim()) return '';
-  const raw = value.trim();
-  let m = raw.match(/^(20\d{2})[-\/](\d{1,2})[-\/](\d{1,2})/);
-  if (m) return `${m[1]}-${String(m[2]).padStart(2, '0')}-${String(m[3]).padStart(2, '0')}`;
-  m = raw.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](20\d{2})/);
-  if (m) return `${m[3]}-${String(m[1]).padStart(2, '0')}-${String(m[2]).padStart(2, '0')}`;
-  return raw;
-}
-
-function normalizeAvailableCruiseCatalogRow(cruise: Cruise): Cruise {
-  const row = cruise as Cruise & Record<string, unknown>;
-  const normalized: Record<string, unknown> = {
-    ...row,
-    sailDate: normalizeDateForCatalog(row.sailDate) || row.sailDate,
-    sailingDate: normalizeDateForCatalog(row.sailingDate) || row.sailingDate,
-    returnDate: normalizeDateForCatalog(row.returnDate) || row.returnDate,
-    startDate: normalizeDateForCatalog(row.startDate) || row.startDate,
-    endDate: normalizeDateForCatalog(row.endDate) || row.endDate,
-  };
-
-  // Drop very heavy/raw fields from in-memory state. Full data remains persisted in storage;
-  // the app should hydrate/show exact details only for selected rows or future database views.
-  delete normalized.rawPayload;
-  delete normalized.rawResponse;
-  delete normalized.rawTextSnippet;
-  delete normalized.rawExpandedText;
-  delete normalized.rawRowText;
-  delete normalized.dayByDayItineraryJson;
-  delete normalized.itineraryRaw;
-  if (Array.isArray(normalized.itinerary) && normalized.itinerary.length > 20) delete normalized.itinerary;
-  return normalized as unknown as Cruise;
-}
-
-function normalizeAvailableCruiseCatalogRows(rows: Cruise[]): Cruise[] {
-  if (rows.length <= LARGE_AVAILABLE_CRUISE_THRESHOLD) {
-    return rows.map(normalizeAvailableCruiseCatalogRow);
-  }
-  const started = Date.now();
-  const normalized = rows.map(normalizeAvailableCruiseCatalogRow);
-  console.log('[CoreData] Large available-cruise catalog loaded in lightweight mode:', {
-    rows: rows.length,
-    elapsedMs: Date.now() - started,
-  });
-  return normalized;
-}
-
 function getStoredItemCount(rawValue: string | null): number {
   if (!rawValue) {
     return 0;
@@ -173,7 +123,49 @@ function getStoredItemCount(rawValue: string | null): number {
 }
 
 function prepareOwnedRecords<T extends object>(records: T[], ownerScopeId: string | null, email: string | null, label: string): T[] {
-  return stampRecordsForOwner(filterRecordsForOwner(records, ownerScopeId, email, label), ownerScopeId, email);
+  const owned = stampRecordsForOwner(filterRecordsForOwner(records, ownerScopeId, email, label), ownerScopeId, email);
+  return canonicalizeDataRecords(owned as Array<T & Record<string, unknown>>) as T[];
+}
+
+async function prepareOwnedRecordsCooperatively<T extends object>(
+  records: T[],
+  ownerScopeId: string | null,
+  email: string | null,
+  label: string,
+  shouldAbort?: () => boolean,
+): Promise<T[]> {
+  if (records.length < 500) return prepareOwnedRecords(records, ownerScopeId, email, label);
+
+  const prepared: T[] = [];
+  const chunkSize = 250;
+  for (let index = 0; index < records.length; index += chunkSize) {
+    if (shouldAbort?.()) throw new Error('CATALOG_WRITE_CANCELLED');
+    prepared.push(...prepareOwnedRecords(records.slice(index, index + chunkSize), ownerScopeId, email, label));
+    // Hermes JSON parsing is synchronous, but the remaining ownership and
+    // canonicalization work can yield between bounded chunks so a tab press is
+    // never queued behind all 2,500–5,000 cruise records.
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  }
+  return prepared;
+}
+
+async function dedupeCruisesCooperatively(records: Cruise[], label: string, shouldAbort?: () => boolean): Promise<Cruise[]> {
+  if (records.length < 500) return dedupeCruises(records, label);
+  const keyed = new Map<string, Cruise>();
+  let duplicateCount = 0;
+  for (let index = 0; index < records.length; index += 250) {
+    if (shouldAbort?.()) throw new Error('CATALOG_WRITE_CANCELLED');
+    records.slice(index, index + 250).forEach((record) => {
+      const key = getCruiseIdentityKey(record);
+      if (keyed.has(key)) duplicateCount += 1;
+      keyed.set(key, record);
+    });
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  }
+  if (duplicateCount > 0) {
+    console.log('[CoreData] Cooperatively deduped available cruises:', { label, duplicateCount });
+  }
+  return Array.from(keyed.values());
 }
 
 function sanitizeForeignValue<T>(value: T, email: string | null, label: string): T | undefined {
@@ -197,7 +189,7 @@ const getFirstTimeUserSampleData = (): { sampleCruises: BookedCruise[]; sampleOf
   const pastReturnDate = new Date(pastDate);
   pastReturnDate.setDate(pastDate.getDate() + 4);
 
-  const formatDate = (d: Date) => d.toISOString().split('T')[0];
+  const formatDate = (d: Date) => toLocalCalendarDateOnly(d) ?? '';
 
   const sampleCruises: BookedCruise[] = [
     {
@@ -321,8 +313,25 @@ const getFirstTimeUserSampleData = (): { sampleCruises: BookedCruise[]; sampleOf
 
 
 
+interface CoreDataCommitOptions {
+  updateLastSync?: boolean;
+  markImportedData?: boolean;
+  syncTimestamp?: string;
+  runId?: string;
+  onCruiseInventoryProgress?: (progress: CruiseInventoryProgress) => void;
+  shouldAbort?: () => boolean;
+}
+
+interface BackgroundPersistenceRequest {
+  key: string;
+  data: unknown;
+  updateLastSync: boolean;
+  syncTimestamp?: string;
+}
+
 interface CoreDataState {
   cruises: Cruise[];
+  cruiseInventoryCount: number;
   bookedCruises: BookedCruise[];
   completedCruises: BookedCruise[];
   casinoOffers: CasinoOffer[];
@@ -339,17 +348,20 @@ interface CoreDataState {
   clubRoyaleProfile: ClubRoyaleProfile;
   hasLocalData: boolean;
   
-  setCruises: (cruises: Cruise[]) => Promise<void>;
+  setCruises: (cruises: Cruise[], options?: CoreDataCommitOptions) => Promise<void>;
+  queryCruises: (query?: CruiseInventoryQuery) => Promise<CruiseInventoryPage>;
+  getAllCruises: () => Promise<Cruise[]>;
+  getCruiseInventoryIntegrity: () => Promise<CruiseInventoryIntegrity>;
   addCruise: (cruise: Cruise) => void;
   updateCruise: (id: string, updates: Partial<Cruise>) => void;
   removeCruise: (id: string) => void;
   
-  setBookedCruises: (cruises: BookedCruise[]) => Promise<void>;
+  setBookedCruises: (cruises: BookedCruise[], options?: CoreDataCommitOptions) => Promise<void>;
   addBookedCruise: (cruise: BookedCruise) => void;
   updateBookedCruise: (id: string, updates: Partial<BookedCruise>) => void;
   removeBookedCruise: (id: string) => void;
   
-  setCasinoOffers: (offers: CasinoOffer[]) => Promise<void>;
+  setCasinoOffers: (offers: CasinoOffer[], options?: CoreDataCommitOptions) => Promise<void>;
   addCasinoOffer: (offer: CasinoOffer) => void;
   updateCasinoOffer: (id: string, updates: Partial<CasinoOffer>) => void;
   removeCasinoOffer: (id: string) => void;
@@ -368,6 +380,7 @@ interface CoreDataState {
   setUserPoints: (points: number) => void;
   setClubRoyaleProfile: (profile: ClubRoyaleProfile) => void;
   syncToBackend: () => Promise<void>;
+  finalizeLocalSyncMetadata: (timestamp?: string) => Promise<void>;
   
   clearAllData: () => Promise<void>;
   refreshData: () => Promise<void>;
@@ -390,10 +403,9 @@ interface CoreDataState {
 
 export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataState => {
 
-  const { authenticatedEmail, isAuthenticated } = useAuth();
-  const { currentUser } = useUser();
-  const { initialCheckComplete, hasCloudData } = useUserDataSync();
+  recordProviderRender('CoreDataProvider');
 
+  const { authenticatedEmail, isAuthenticated } = useAuth();
   const skRef = useRef(getScopedStorageKeys(authenticatedEmail));
   useEffect(() => {
     skRef.current = getScopedStorageKeys(authenticatedEmail);
@@ -401,15 +413,16 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   }, [authenticatedEmail]);
 
   const [cruises, setCruisesState] = useState<Cruise[]>([]);
+  const [cruiseInventoryCount, setCruiseInventoryCount] = useState(0);
   const [bookedCruises, setBookedCruisesState] = useState<BookedCruise[]>([]);
   const [casinoOffers, setCasinoOffersState] = useState<CasinoOffer[]>([]);
   const [calendarEvents, setCalendarEventsState] = useState<CalendarEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const loadAttemptedRef = useRef(false);
   const loadFromStorageRef = useRef<(force?: boolean) => Promise<void>>(async () => undefined);
+  const lateStorageReloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastCloudRestoreReloadRef = useRef(0);
   const lastAuthEmailRef = useRef<string | null>(null);
-  const accountSwitchClearingRef = useRef<Promise<void> | null>(null);
 
   const [lastSyncDate, setLastSyncDate] = useState<string | null>(null);
   const [ownerScopeId, setOwnerScopeId] = useState<string | null>(null);
@@ -421,10 +434,11 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   const isSyncingRef = useRef(false);
   const pendingBackendSyncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInitialLoadRef = useRef(true);
-  const foregroundRefreshAttemptRef = useRef(0);
-  const backendRestoreGraceUntilRef = useRef<number>(0);
+  const backgroundPersistenceRequestsRef = useRef<Map<string, BackgroundPersistenceRequest>>(new Map());
+  const backgroundPersistenceTaskRef = useRef<ReturnType<typeof InteractionManager.runAfterInteractions> | null>(null);
+  const backgroundPersistenceDrainingRef = useRef(false);
 
-  const hasLocalData = cruises.length > 0 || bookedCruises.length > 0 || casinoOffers.length > 0 || calendarEvents.length > 0;
+  const hasLocalData = cruiseInventoryCount > 0 || cruises.length > 0 || bookedCruises.length > 0 || casinoOffers.length > 0 || calendarEvents.length > 0;
 
   useEffect(() => {
     let isMounted = true;
@@ -433,6 +447,9 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       setOwnerScopeId(null);
       return;
     }
+
+    const fallbackOwnerScopeId = buildOwnerScopeId(authenticatedEmail, 'local');
+    setOwnerScopeId(fallbackOwnerScopeId);
 
     void getInstallationId()
       .then((installationId) => {
@@ -493,39 +510,101 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   const persistData = useCallback(async <T,>(
     key: string,
     data: T,
-    options?: { updateLastSync?: boolean; syncTimestamp?: string }
-  ) => {
+    options?: { updateLastSync?: boolean; syncTimestamp?: string; runId?: string }
+  ): Promise<PersistenceCommitResult> => {
+    appendDiagnosticJournal('CORE_DATA_COMMIT_STARTED', { key, runId: options?.runId });
     try {
-      await quotaSafeSetJsonItem(key, data);
+      const result = await quotaSafeSetJsonItem(key, data, { runId: options?.runId });
       if (options?.updateLastSync ?? true) {
         await persistLastSyncDate(options?.syncTimestamp);
       }
-      console.log(`[CoreData] Persisted ${key}`);
+      console.log(`[CoreData] Persisted ${key}`, result);
+      appendDiagnosticJournal('CORE_DATA_COMMIT_COMPLETE', { key, runId: result.runId, bytes: result.bytes, hash: result.hash });
+      return result;
     } catch (error) {
       console.error(`[CoreData] Failed to persist ${key}:`, error);
+      appendDiagnosticJournal('CORE_DATA_COMMIT_FAILED', { key, error: error instanceof Error ? error.message : String(error) });
+      throw error;
     }
   }, [persistLastSyncDate]);
 
-  const markLocalDataAuthoritative = useCallback((reason: string) => {
-    const gracePeriodMs = 2 * 60 * 1000;
-    backendRestoreGraceUntilRef.current = Date.now() + gracePeriodMs;
-    console.log('[CoreData] Marked local data as authoritative', {
-      reason,
-      gracePeriodMs,
-      until: new Date(backendRestoreGraceUntilRef.current).toISOString(),
-    });
-  }, []);
-
-  const syncToBackend = useCallback(async () => {
-    if (!isCloudBackupEnabled()) {
-      if (pendingBackendSyncTimeoutRef.current) {
-        clearTimeout(pendingBackendSyncTimeoutRef.current);
-        pendingBackendSyncTimeoutRef.current = null;
-      }
-      console.log('[CoreData] Local-first mode: backend sync skipped');
+  const drainBackgroundPersistence = useCallback(async () => {
+    if (backgroundPersistenceDrainingRef.current) {
       return;
     }
 
+    backgroundPersistenceDrainingRef.current = true;
+    let shouldUpdateLastSync = false;
+    let latestSyncTimestamp: string | undefined;
+
+    try {
+      // Drain sequentially so two large local datasets never compete for the JS
+      // thread. New edits made while a write is active replace the queued
+      // snapshot for that key and are picked up by the next pass.
+      while (true) {
+        while (backgroundPersistenceRequestsRef.current.size > 0) {
+          const requests = Array.from(backgroundPersistenceRequestsRef.current.values());
+          backgroundPersistenceRequestsRef.current.clear();
+
+          for (const request of requests) {
+            try {
+              await persistData(request.key, request.data, { updateLastSync: false });
+              if (request.updateLastSync) {
+                shouldUpdateLastSync = true;
+                latestSyncTimestamp = request.syncTimestamp ?? latestSyncTimestamp;
+              }
+            } catch (error) {
+              // A background write must never freeze navigation or create an
+              // unhandled rejection. persistData retains details in diagnostics.
+              console.error('[CoreData] Background persistence failed:', request.key, error);
+            }
+          }
+        }
+
+        if (shouldUpdateLastSync) {
+          await persistLastSyncDate(latestSyncTimestamp);
+          shouldUpdateLastSync = false;
+          latestSyncTimestamp = undefined;
+        }
+
+        // A request can arrive while the metadata write above is awaiting
+        // native storage. Loop again instead of stranding that latest snapshot.
+        if (backgroundPersistenceRequestsRef.current.size === 0) {
+          break;
+        }
+      }
+    } finally {
+      backgroundPersistenceDrainingRef.current = false;
+    }
+  }, [persistData, persistLastSyncDate]);
+
+  const scheduleBackgroundPersist = useCallback((
+    key: string,
+    data: unknown,
+    options?: { updateLastSync?: boolean; syncTimestamp?: string },
+  ) => {
+    backgroundPersistenceRequestsRef.current.set(key, {
+      key,
+      data,
+      updateLastSync: options?.updateLastSync ?? true,
+      syncTimestamp: options?.syncTimestamp,
+    });
+
+    if (backgroundPersistenceTaskRef.current || backgroundPersistenceDrainingRef.current) {
+      return;
+    }
+
+    // Let the tap/navigation animation commit first. quotaSafeSetJsonItem then
+    // performs transactional, cooperative serialization in the background.
+    backgroundPersistenceTaskRef.current = InteractionManager.runAfterInteractions(() => {
+      backgroundPersistenceTaskRef.current = null;
+      setTimeout(() => {
+        void drainBackgroundPersistence();
+      }, 0);
+    });
+  }, [drainBackgroundPersistence]);
+
+  const syncToBackend = useCallback(async () => {
     if (pendingBackendSyncTimeoutRef.current) {
       clearTimeout(pendingBackendSyncTimeoutRef.current);
       pendingBackendSyncTimeoutRef.current = null;
@@ -538,14 +617,6 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
 
     if (!isBackendAvailable()) {
       console.log('[CoreData] Backend health cache says unavailable, attempting sync anyway to avoid stale cloud data');
-    }
-
-    if (cruises.length > BACKEND_AVAILABLE_CRUISE_SKIP_THRESHOLD) {
-      console.log('[CoreData] Backend sync skipped for large available-cruise catalog to keep app responsive:', {
-        availableCruises: cruises.length,
-        threshold: BACKEND_AVAILABLE_CRUISE_SKIP_THRESHOLD,
-      });
-      return;
     }
     
     try {
@@ -571,17 +642,32 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         quotaSafeGetItem(scopedLoyaltyKeys.MANUAL_CROWN_ANCHOR_POINTS),
       ]);
       
-      const parsedCruises = dedupeCruises(prepareOwnedRecords<Cruise>(cruisesData ? JSON.parse(cruisesData) as Cruise[] : [], ownerScopeId, authenticatedEmail, 'backend-sync available cruises'), 'backend-sync available cruises');
+      const parsedCruises = dedupeCruises(
+        prepareOwnedRecords<Cruise>(parseJsonArray<Cruise>(cruisesData, 'backend-sync available cruises'), ownerScopeId, authenticatedEmail, 'backend-sync available cruises'),
+        'backend-sync available cruises',
+      );
       const parsedBooked = normalizeCruisesWithCasinoEconomics(
-        annotateOverlappingCruises(dedupeBookedCruises(prepareOwnedRecords<BookedCruise>(bookedData ? JSON.parse(bookedData) as BookedCruise[] : [], ownerScopeId, authenticatedEmail, 'backend-sync booked cruises'), 'backend-sync booked cruises')),
+        annotateOverlappingCruises(dedupeBookedCruises(
+          prepareOwnedRecords<BookedCruise>(parseJsonArray<BookedCruise>(bookedData, 'backend-sync booked cruises'), ownerScopeId, authenticatedEmail, 'backend-sync booked cruises'),
+          'backend-sync booked cruises',
+        )),
         { includeKnownAnnualFacts: isKnownCasinoProfile(authenticatedEmail) },
       );
-      const parsedOffers = dedupeCasinoOffers(prepareOwnedRecords<CasinoOffer>(offersData ? JSON.parse(offersData) as CasinoOffer[] : [], ownerScopeId, authenticatedEmail, 'backend-sync casino offers'), 'backend-sync casino offers');
-      const parsedEvents = dedupeCalendarEvents(prepareOwnedRecords<CalendarEvent>(eventsData ? JSON.parse(eventsData) as CalendarEvent[] : [], ownerScopeId, authenticatedEmail, 'backend-sync calendar events'), 'backend-sync calendar events');
-      const parsedSessions = sessionsData ? (JSON.parse(sessionsData) as unknown[]).filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)) : [];
-      const parsedSettings = settingsData ? sanitizeForeignValue(JSON.parse(settingsData) as Record<string, unknown>, authenticatedEmail, 'backend-sync settings') : undefined;
+      const parsedOffers = dedupeCasinoOffers(
+        prepareOwnedRecords<CasinoOffer>(parseJsonArray<CasinoOffer>(offersData, 'backend-sync casino offers'), ownerScopeId, authenticatedEmail, 'backend-sync casino offers'),
+        'backend-sync casino offers',
+      );
+      const parsedEvents = dedupeCalendarEvents(
+        prepareOwnedRecords<CalendarEvent>(parseJsonArray<CalendarEvent>(eventsData, 'backend-sync calendar events'), ownerScopeId, authenticatedEmail, 'backend-sync calendar events'),
+        'backend-sync calendar events',
+      );
+      const parsedSessions = parseJsonArray<Record<string, unknown>>(sessionsData, 'backend-sync casino sessions');
+      const parsedSettingsObject = parseJsonObject(settingsData, 'backend-sync settings');
+      const parsedSettings = parsedSettingsObject
+        ? sanitizeForeignValue(parsedSettingsObject, authenticatedEmail, 'backend-sync settings')
+        : undefined;
       const parsedUsers = prepareOwnedRecords<Record<string, unknown>>(
-        usersData ? (JSON.parse(usersData) as unknown[]).filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)) : [],
+        parseJsonArray<Record<string, unknown>>(usersData, 'backend-sync user profiles'),
         ownerScopeId,
         authenticatedEmail,
         'backend-sync user profiles'
@@ -596,10 +682,14 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         syncableSettings.__easySeasCurrentUserId = parsedCurrentUserId;
       }
       const parsedPoints = pointsData ? parseInt(pointsData, 10) : undefined;
-      const parsedProfile = profileData ? sanitizeForeignValue(JSON.parse(profileData), authenticatedEmail, 'backend-sync club profile') : undefined;
-      const parsedExtendedLoyalty = extendedLoyaltyDataRaw
+      const parsedProfileObject = parseJsonObject(profileData, 'backend-sync club profile');
+      const parsedProfile = parsedProfileObject
+        ? sanitizeForeignValue(parsedProfileObject, authenticatedEmail, 'backend-sync club profile')
+        : undefined;
+      const parsedExtendedLoyaltyObject = parseJsonObject(extendedLoyaltyDataRaw, 'backend-sync extended loyalty data');
+      const parsedExtendedLoyalty = parsedExtendedLoyaltyObject
         ? sanitizeForeignValue({
-            extendedLoyaltyData: JSON.parse(extendedLoyaltyDataRaw),
+            extendedLoyaltyData: parsedExtendedLoyaltyObject,
             manualClubRoyalePoints: parseOptionalStoredNumber(manualClubRoyalePointsRaw),
             manualCrownAnchorPoints: parseOptionalStoredNumber(manualCrownAnchorPointsRaw),
           }, authenticatedEmail, 'backend-sync loyalty data')
@@ -654,47 +744,9 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         console.log('[CoreData] Backend sync failed (non-critical):', errorMessage);
       }
     }
-  }, [saveAllUserDataMutateAsync, authenticatedEmail, ownerScopeId, cruises.length]);
-
-  const scheduleSyncToBackend = useCallback((reason: string) => {
-    if (!authenticatedEmail) {
-      console.log('[CoreData] Skipping scheduled backend sync - no authenticated email', { reason });
-      return;
-    }
-
-    if (reason === 'setCruises' && cruises.length > BACKEND_AVAILABLE_CRUISE_SKIP_THRESHOLD) {
-      console.log('[CoreData] Scheduled backend sync skipped for large available-cruise catalog', { reason, availableCruises: cruises.length });
-      return;
-    }
-
-    if (pendingBackendSyncTimeoutRef.current) {
-      clearTimeout(pendingBackendSyncTimeoutRef.current);
-    }
-
-    pendingBackendSyncTimeoutRef.current = setTimeout(() => {
-      pendingBackendSyncTimeoutRef.current = null;
-
-      if (isSyncingRef.current) {
-        console.log('[CoreData] Scheduled backend sync skipped because another sync is already running', { reason });
-        return;
-      }
-
-      isSyncingRef.current = true;
-      console.log('[CoreData] Executing scheduled backend sync', { reason });
-      void syncToBackend().finally(() => {
-        isSyncingRef.current = false;
-      });
-    }, 400);
-
-    console.log('[CoreData] Scheduled backend sync', { reason });
-  }, [authenticatedEmail, syncToBackend, cruises.length]);
+  }, [saveAllUserDataMutateAsync, authenticatedEmail, ownerScopeId]);
 
   const loadFromBackend = useCallback(async () => {
-    if (!isCloudBackupEnabled()) {
-      console.log('[CoreData] Local-first mode: backend restore skipped');
-      return false;
-    }
-
     if (!isBackendAvailable() || !authenticatedEmail || !ownerScopeId) {
       console.log('[CoreData] Backend load skipped - not authenticated, owner scope missing, or backend unavailable');
       return false;
@@ -707,17 +759,6 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       calendarEvents: calendarEvents.length,
     };
     const hasInMemoryData = Object.values(inMemorySummary).some((count) => count > 0);
-    const isGracePeriodActive = backendRestoreGraceUntilRef.current > Date.now();
-
-    if (isGracePeriodActive) {
-      console.log('[CoreData] Backend restore skipped because fresh local data is authoritative', {
-        email: authenticatedEmail,
-        inMemorySummary,
-        hasInMemoryData,
-        graceUntil: new Date(backendRestoreGraceUntilRef.current).toISOString(),
-      });
-      return false;
-    }
     
     try {
       console.log('[CoreData] 🔄 Loading data from backend for:', authenticatedEmail);
@@ -810,7 +851,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
           return false;
         }
         
-        const savePromises: Promise<void>[] = [];
+        const savePromises: Promise<unknown>[] = [];
         if (userData.cruises) {
           savePromises.push(quotaSafeSetJsonItem(scopedKeys.CRUISES, ownedBackendCruises));
         }
@@ -898,6 +939,13 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
 
   const loadFromStorage = useCallback(async (force = false) => {
     console.log('[CoreData] === START LOADING FROM STORAGE ===', { force, alreadyAttempted: loadAttemptedRef.current });
+    const finishHydrationDiagnostic = beginPerformanceSpan('CoreDataProvider.startupHydration', { force });
+    const hydrationStartedAt = Date.now();
+    let storageReadCompletedAt = hydrationStartedAt;
+    const postHydrationWrites: Array<{ label: string; run: () => Promise<unknown> }> = [];
+    const queuePostHydrationWrite = (label: string, run: () => Promise<unknown>) => {
+      postHydrationWrites.push({ label, run });
+    };
     if (loadAttemptedRef.current && !force) {
       console.log('[CoreData] Load already attempted, skipping');
       return;
@@ -911,55 +959,104 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     }
     
     try {
-      if (authenticatedEmail && isCloudBackupEnabled()) {
-        const hasBackendData = await loadFromBackend();
-        if (hasBackendData) {
-          console.log('[CoreData] Loaded user data from backend, will refresh from storage');
-        }
+      // Local storage is the startup authority. Backend restore is manual only.
+      const inventoryOwnerScope = getCruiseInventoryOwnerScope(authenticatedEmail);
+      let activeInventoryRows = 0;
+      try {
+        await cruiseInventoryRepository.initialize();
+        activeInventoryRows = (await cruiseInventoryRepository.getCounts(inventoryOwnerScope)).total;
+        setCruiseInventoryCount(activeInventoryRows);
+      } catch (error) {
+        console.warn('[CoreData] SQLite inventory unavailable; retaining quota-safe legacy hydration:', error);
       }
-
-      const snapshot = await readAllStorageKeys(authenticatedEmail);
-      const status = determineUserStatus(snapshot, initialCheckComplete, hasCloudData);
+      const snapshot = await readAllStorageKeys(authenticatedEmail, {
+        includeAvailableCruises: activeInventoryRows === 0,
+      });
+      if (activeInventoryRows > 0) {
+        queuePostHydrationWrite('prune retired cruise catalog generations', async () => {
+          await cruiseInventoryRepository.pruneRetiredGenerations(inventoryOwnerScope, 2);
+        });
+      }
+      storageReadCompletedAt = Date.now();
+      recordPerformanceCount('CoreDataProvider.cruisesLoadedIntoJS', snapshot.parsedCruisesData.length, {
+        phase: 'legacy-storage-read',
+      });
+      const status = determineUserStatus(snapshot, true, false);
       const ownedStatus = {
         ...status,
         parsedBookedData: prepareOwnedRecords<BookedCruise>(status.parsedBookedData, ownerScopeId, authenticatedEmail, 'local booked cruises'),
         parsedOffersData: prepareOwnedRecords<CasinoOffer>(status.parsedOffersData, ownerScopeId, authenticatedEmail, 'local casino offers'),
       };
 
-      console.log('[CoreData] Parsed offers:', ownedStatus.parsedOffersData.length);
-      setCasinoOffersState(ownedStatus.parsedOffersData);
-
-      if (snapshot.cruisesData) {
-        const parsedCruises = dedupeCruises(prepareOwnedRecords<Cruise>(JSON.parse(snapshot.cruisesData) as Cruise[], ownerScopeId, authenticatedEmail, 'local available cruises'), 'local available cruises');
-        setCruisesState(normalizeAvailableCruiseCatalogRows(parsedCruises));
+      const preparedCruises = await prepareOwnedRecordsCooperatively<Cruise>(
+        snapshot.parsedCruisesData as unknown as Cruise[],
+        ownerScopeId,
+        authenticatedEmail,
+        'local available cruises',
+      );
+      const parsedCruises = await dedupeCruisesCooperatively(
+        preparedCruises,
+        'local available cruises',
+      );
+      recordPerformanceCount('CoreDataProvider.cruisesPublishedToContext', parsedCruises.length, {
+        phase: 'legacy-global-hydration',
+      });
+      if (activeInventoryRows === 0 && parsedCruises.length > 0) {
+        queuePostHydrationWrite('migrate available cruise catalog to SQLite', async () => {
+          const migration = await cruiseInventoryRepository.migrateLegacyCatalog(
+            parsedCruises,
+            'available-cruises-v1',
+            inventoryOwnerScope,
+          );
+          const counts = await cruiseInventoryRepository.getCounts(inventoryOwnerScope);
+          setCruiseInventoryCount(counts.total);
+          appendDiagnosticJournal('CRUISE_INVENTORY_MIGRATION_COMPLETE', {
+            sourceRows: parsedCruises.length,
+            canonicalRows: counts.total,
+            generationsPromoted: migration.length,
+            byProvider: counts.byProvider,
+          });
+        });
       }
-
-      const bookedResult = await processBookedCruises(ownedStatus, snapshot, getMockCruises, getFirstTimeUserSampleData, authenticatedEmail);
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      const bookedResult = await processBookedCruises(ownedStatus, snapshot);
       const ownedBookedCruises = normalizeCruisesWithCasinoEconomics(
         annotateOverlappingCruises(dedupeBookedCruises(prepareOwnedRecords<BookedCruise>(bookedResult.bookedCruises, ownerScopeId, authenticatedEmail, 'processed booked cruises'), 'processed booked cruises')),
         { includeKnownAnnualFacts: isKnownCasinoProfile(authenticatedEmail) },
       );
+      const casinoHistoryWasEnriched = ownedBookedCruises.some((cruise, index) =>
+        cruise.casinoHistoryImportId && cruise.casinoHistoryImportId !== bookedResult.bookedCruises[index]?.casinoHistoryImportId,
+      );
       const ownedOffersOverride = bookedResult.offersOverride
         ? prepareOwnedRecords<CasinoOffer>(bookedResult.offersOverride, ownerScopeId, authenticatedEmail, 'processed casino offers')
         : undefined;
-      setBookedCruisesState(ownedBookedCruises);
-
-      if (ownedOffersOverride) {
-        setCasinoOffersState(ownedOffersOverride);
-      }
+      const hydratedOffers = ownedOffersOverride ?? ownedStatus.parsedOffersData;
 
       if (bookedResult.shouldPersistMergedCruises) {
-        await persistData(skRef.current.BOOKED_CRUISES, ownedBookedCruises);
-        console.log('[CoreData] Persisted merged cruise data with', ownedBookedCruises.length, 'cruises');
+        queuePostHydrationWrite('persist merged booked cruises', async () => {
+          await persistData(skRef.current.BOOKED_CRUISES, ownedBookedCruises);
+          console.log('[CoreData] Persisted merged cruise data with', ownedBookedCruises.length, 'cruises');
+        });
+      }
+
+      if (casinoHistoryWasEnriched && !bookedResult.shouldPersistMergedCruises && !bookedResult.shouldPersistFirstTimeData) {
+        queuePostHydrationWrite('persist owner-scoped casino history enrichment', async () => {
+          await persistData(skRef.current.BOOKED_CRUISES, ownedBookedCruises, { updateLastSync: false });
+          appendDiagnosticJournal('CASINO_HISTORY_OWNER_SCOPED_MIGRATION_COMPLETE', {
+            enrichedCruises: ownedBookedCruises.filter((cruise) => Boolean(cruise.casinoHistoryImportId)).length,
+          });
+        });
       }
 
       if (bookedResult.shouldPersistFirstTimeData) {
-        await quotaSafeSetJsonItem(skRef.current.BOOKED_CRUISES, ownedBookedCruises);
-        if (ownedOffersOverride) {
-          await quotaSafeSetJsonItem(skRef.current.CASINO_OFFERS, ownedOffersOverride);
-        }
-        await quotaSafeSetItem(skRef.current.HAS_IMPORTED_DATA, 'true');
-        console.log('[CoreData] First-time user data persisted');
+        queuePostHydrationWrite('persist first-time local data', async () => {
+          await quotaSafeSetJsonItem(skRef.current.BOOKED_CRUISES, ownedBookedCruises);
+          if (ownedOffersOverride) {
+            await quotaSafeSetJsonItem(skRef.current.CASINO_OFFERS, ownedOffersOverride);
+          }
+          await quotaSafeSetItem(skRef.current.HAS_IMPORTED_DATA, 'true');
+          console.log('[CoreData] First-time user data persisted');
+        });
       }
 
       const eventsResult = bookedResult.shouldPersistMergedCruises
@@ -970,60 +1067,120 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         : processCalendarEvents(snapshot, ownedStatus, bookedResult.finalBookedCount);
       const ownedEvents = dedupeCalendarEvents(prepareOwnedRecords<CalendarEvent>(eventsResult.events, ownerScopeId, authenticatedEmail, 'local calendar events'), 'local calendar events');
       if (eventsResult.shouldPersist) {
-        await persistData(skRef.current.CALENDAR_EVENTS, ownedEvents);
+        queuePostHydrationWrite('persist regenerated calendar events', () => persistData(skRef.current.CALENDAR_EVENTS, ownedEvents));
       }
-      setCalendarEventsState(ownedEvents);
-
-      if (snapshot.lastSync) setLastSyncDate(snapshot.lastSync);
-
       const metadata = processMetadata(snapshot, ownedStatus.isFirstTimeUser, authenticatedEmail);
+
+      // Publish one coherent hydration snapshot. React can batch these state
+      // updates into one provider notification instead of making every nested
+      // feature provider recompute once per dataset.
+      setCasinoOffersState(hydratedOffers);
+      setCruisesState(parsedCruises);
+      setBookedCruisesState(ownedBookedCruises);
+      setCalendarEventsState(ownedEvents);
+      if (snapshot.lastSync) setLastSyncDate(snapshot.lastSync);
       if (metadata.settings) setSettings(metadata.settings);
       if (metadata.userPoints !== null) setUserPointsState(metadata.userPoints);
       if (metadata.clubRoyaleProfile) setClubRoyaleProfileState(metadata.clubRoyaleProfile);
 
+      appendDiagnosticJournal('CORE_DATA_HYDRATION_TIMING', {
+        force,
+        storageReadMs: storageReadCompletedAt - hydrationStartedAt,
+        normalizeAndPublishMs: Date.now() - storageReadCompletedAt,
+        totalMs: Date.now() - hydrationStartedAt,
+        cruises: parsedCruises.length,
+        bookedCruises: ownedBookedCruises.length,
+        offers: hydratedOffers.length,
+        calendarEvents: ownedEvents.length,
+      });
+      finishHydrationDiagnostic({
+        storageReadMs: storageReadCompletedAt - hydrationStartedAt,
+        cruisesLoadedIntoJS: parsedCruises.length,
+        bookedCruises: ownedBookedCruises.length,
+        offers: hydratedOffers.length,
+        calendarEvents: ownedEvents.length,
+        success: true,
+      });
+
       console.log('[CoreData] === LOAD COMPLETE ===');
       console.log('[CoreData] Loaded data summary:', {
-        cruises: snapshot.cruisesData ? JSON.parse(snapshot.cruisesData).length : 0,
+        cruises: parsedCruises.length,
         booked: bookedResult.finalBookedCount,
         offers: ownedStatus.parsedOffersData.length,
         events: ownedEvents.length,
         hasImportedData: ownedStatus.hasImported,
       });
 
-      if (authenticatedEmail && isCloudBackupEnabled() && !isSyncingRef.current) {
-        isSyncingRef.current = true;
-        void syncToBackend().finally(() => {
-          isSyncingRef.current = false;
-        });
-      }
-
       isInitialLoadRef.current = false;
     } catch (error) {
+      appendDiagnosticJournal('CORE_DATA_HYDRATION_FAILED', {
+        force,
+        totalMs: Date.now() - hydrationStartedAt,
+        error: error instanceof Error ? error.message : String(error),
+      });
       console.error('[CoreData] === LOAD FAILED ===');
       console.error('[CoreData] Error details:', error);
       console.error('[CoreData] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
       
-      setCruisesState([]);
-      setBookedCruisesState([]);
-      setCasinoOffersState([]);
-      setCalendarEventsState([]);
+      // Fail closed without destroying the last known-good in-memory snapshot.
+      // A transient storage/cloud error must not make the app appear empty or
+      // overwrite valid saved data on the next persistence cycle.
+      console.warn('[CoreData] Preserving the current in-memory data after load failure.');
+      finishHydrationDiagnostic({
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
     
     console.log('[CoreData] === SETTING isLoading to FALSE ===');
-    setTimeout(() => {
-      setIsLoading(false);
-      console.log('[CoreData] === isLoading set to FALSE ===');
-    }, 0);
-  }, [loadFromBackend, initialCheckComplete, hasCloudData, authenticatedEmail, ownerScopeId, syncToBackend, persistData]);
+    setIsLoading(false);
+    console.log('[CoreData] === isLoading set to FALSE ===');
+
+    if (postHydrationWrites.length > 0) {
+      InteractionManager.runAfterInteractions(() => {
+        setTimeout(() => {
+          void Promise.allSettled(postHydrationWrites.map(async ({ label, run }) => {
+            try {
+              await run();
+            } catch (error) {
+              console.error(`[CoreData] Deferred local repair failed: ${label}`, error);
+            }
+          })).then(() => {
+            console.log('[CoreData] Deferred post-hydration persistence complete:', postHydrationWrites.length);
+          });
+        }, 500);
+      });
+    }
+  }, [authenticatedEmail, ownerScopeId, persistData]);
 
   useEffect(() => {
     loadFromStorageRef.current = loadFromStorage;
   }, [loadFromStorage]);
 
   useEffect(() => {
+    if (!isAuthenticated) return undefined;
+    return subscribeToLateStorageReads((key, label) => {
+      appendDiagnosticJournal('LOCAL_STORAGE_LATE_READ_RECOVERED', { key, label });
+      if (lateStorageReloadTimerRef.current) clearTimeout(lateStorageReloadTimerRef.current);
+      lateStorageReloadTimerRef.current = setTimeout(() => {
+        InteractionManager.runAfterInteractions(() => {
+          void loadFromStorageRef.current(true).catch((error) => {
+            console.warn('[CoreData] Late local-data refresh failed:', error);
+          });
+        });
+      }, 100);
+    });
+  }, [authenticatedEmail, isAuthenticated]);
+
+  useEffect(() => () => {
+    if (lateStorageReloadTimerRef.current) clearTimeout(lateStorageReloadTimerRef.current);
+  }, []);
+
+  useEffect(() => {
     if (!isAuthenticated) {
       console.log('[CoreData] User not authenticated, clearing data');
       setCruisesState([]);
+      setCruiseInventoryCount(0);
       setBookedCruisesState([]);
       setCasinoOffersState([]);
       setCalendarEventsState([]);
@@ -1040,6 +1197,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       isInitialLoadRef.current = true;
       isSyncingRef.current = false;
       setCruisesState([]);
+      setCruiseInventoryCount(0);
       setBookedCruisesState([]);
       setCasinoOffersState([]);
       setCalendarEventsState([]);
@@ -1049,128 +1207,31 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       setLastSyncDate(null);
 
       if (previousEmail !== null) {
-        console.log('[CoreData] Account switch detected - clearing AsyncStorage user data to prevent data leakage');
-        accountSwitchClearingRef.current = clearUserSpecificData().then(() => {
-          console.log('[CoreData] AsyncStorage user data cleared for account switch');
-        }).catch((err) => {
-          console.error('[CoreData] Failed to clear AsyncStorage on account switch:', err);
-        }).finally(() => {
-          accountSwitchClearingRef.current = null;
-        });
+        console.log('[CoreData] Account switch detected - preserving all scoped local data and loading the selected account only');
       }
     }
 
-    console.log('[CoreData] === MOUNT: Starting initial load ===');
+    console.log('[CoreData] === MOUNT: Starting local-first load ===');
     let isMounted = true;
-    
-    const loadTimeout = setTimeout(() => {
-      console.warn('[CoreData] === TIMEOUT: Forcing load to complete after 1s ===');
-      if (isMounted) {
-        setIsLoading(false);
-        console.log('[CoreData] === TIMEOUT: isLoading forced to FALSE ===');
-      }
-    }, 1000);
-    
+
     const doLoad = async () => {
-      let didStartStorageLoad = false;
-
       try {
-        if (accountSwitchClearingRef.current) {
-          console.log('[CoreData] === Waiting for account switch data clear to complete ===');
-          await accountSwitchClearingRef.current;
-          console.log('[CoreData] === Account switch data clear completed ===');
-        }
-
-        if (!initialCheckComplete) {
-          console.log('[CoreData] === Waiting for cloud sync check to complete ===');
-          if (isMounted) {
-            setIsLoading(false);
-          }
-          return;
-        }
-
-        if (authenticatedEmail && !ownerScopeId) {
-          console.log('[CoreData] === Waiting for owner data scope before loading user data ===');
-          if (isMounted) {
-            setIsLoading(false);
-          }
-          return;
-        }
-        
-        console.log('[CoreData] === Calling loadFromStorage ===');
-        didStartStorageLoad = true;
         await loadFromStorageRef.current();
-        console.log('[CoreData] === loadFromStorage completed ===');
       } catch (error) {
-        console.error('[CoreData] === ERROR during load ===', error);
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      } finally {
-        if (isMounted && didStartStorageLoad) {
-          clearTimeout(loadTimeout);
-        }
+        console.error('[CoreData] Local-first load failed:', error);
+        if (isMounted) setIsLoading(false);
       }
     };
-    
+
     void doLoad();
-    
+
     return () => {
-      console.log('[CoreData] === Cleanup: clearing timeout ===');
       isMounted = false;
-      clearTimeout(loadTimeout);
     };
-  }, [isAuthenticated, authenticatedEmail, ownerScopeId, initialCheckComplete]);
+  }, [isAuthenticated, authenticatedEmail, ownerScopeId]);
 
-  useEffect(() => {
-    if (!isAuthenticated || !authenticatedEmail || !ownerScopeId || !initialCheckComplete) {
-      return;
-    }
-
-    const handleAppStateChange = (nextAppState: AppStateStatus) => {
-      if (nextAppState !== 'active') {
-        return;
-      }
-
-      const now = Date.now();
-      if (now - foregroundRefreshAttemptRef.current < 30000) {
-        console.log('[CoreData] Foreground refresh skipped because the last refresh was too recent');
-        return;
-      }
-
-      foregroundRefreshAttemptRef.current = now;
-      console.log('[CoreData] App became active - forcing backend/local refresh to pick up latest data');
-      void loadFromStorageRef.current(true);
-    };
-
-    const subscription = AppState.addEventListener('change', handleAppStateChange);
-
-    return () => {
-      subscription.remove();
-    };
-  }, [isAuthenticated, authenticatedEmail, ownerScopeId, initialCheckComplete]);
-
-  // Auto-sync to backend when data changes (debounced)
-  useEffect(() => {
-    // Skip auto-sync during initial load or if already syncing
-    if (!isAuthenticated || !authenticatedEmail || isInitialLoadRef.current || isSyncingRef.current) return;
-    if (cruises.length > BACKEND_AVAILABLE_CRUISE_SKIP_THRESHOLD) {
-      console.log('[CoreData] Auto backend sync suppressed for large available-cruise catalog:', cruises.length);
-      return;
-    }
-    
-    const syncTimeout = setTimeout(() => {
-      if (!isSyncingRef.current) {
-        console.log('[CoreData] Auto-syncing to backend...');
-        isSyncingRef.current = true;
-        void syncToBackend().finally(() => {
-          isSyncingRef.current = false;
-        });
-      }
-    }, 5000); // Debounce 5 seconds to reduce request frequency
-    
-    return () => clearTimeout(syncTimeout);
-  }, [cruises, bookedCruises, casinoOffers, calendarEvents, settings, userPoints, clubRoyaleProfile, isAuthenticated, authenticatedEmail, syncToBackend]);
+  // Foregrounding does not trigger a full reload or any backend work.
+  // Feature screens refresh their own local/network data explicitly.
 
   useEffect(() => {
     const handleSessionPointsUpdate = (event: any) => {
@@ -1200,7 +1261,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
           return cruise;
         });
         
-        void persistData(skRef.current.BOOKED_CRUISES, updated);
+        scheduleBackgroundPersist(skRef.current.BOOKED_CRUISES, updated);
         return updated;
       });
     };
@@ -1237,233 +1298,149 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     } catch (error) {
       console.log('[CoreDataProvider] Could not set up event listener (not on web):', error);
     }
-  }, [persistData, currentUser]);
+  }, [scheduleBackgroundPersist]);
 
-  const setCruises = useCallback(async (newCruises: Cruise[]) => {
-    markLocalDataAuthoritative('setCruises');
-    const storageKey = skRef.current.CRUISES;
-    const previousRaw = await quotaSafeGetItem(storageKey).catch(() => null);
-    const previousCruises = (() => {
-      try {
-        return previousRaw
-          ? normalizeAvailableCruiseCatalogRows(dedupeCruises(JSON.parse(previousRaw) as Cruise[], 'previous available cruises rollback'))
-          : [];
-      } catch {
-        return [];
-      }
-    })();
-
-    try {
-      const ownedInput = stampRecordsForProfile(
-        prepareOwnedRecords<Cruise>(newCruises, ownerScopeId, authenticatedEmail, 'set available cruises'),
-        currentUser,
-      );
-      const canonicalCruises = dedupeCruises(ownedInput, 'set available cruises');
-      const canonicalIdentitySet = new Set(canonicalCruises.map(getCruiseIdentityKey));
-      const lightweightStateRows = normalizeAvailableCruiseCatalogRows(canonicalCruises);
-      if (lightweightStateRows.length !== canonicalCruises.length) {
-        throw new Error(`Available sailing state normalization count mismatch: canonical ${canonicalCruises.length}, state ${lightweightStateRows.length}`);
-      }
-
-      await quotaSafeSetJsonItem(storageKey, canonicalCruises);
-      await persistLastSyncDate();
-      const readbackRaw = await quotaSafeGetItem(storageKey);
-      const readbackCruises = readbackRaw
-        ? dedupeCruises(JSON.parse(readbackRaw) as Cruise[], 'available sailing storage readback')
-        : [];
-      const readbackIdentitySet = new Set(readbackCruises.map(getCruiseIdentityKey));
-      const missingIdentities = Array.from(canonicalIdentitySet).filter((identity) => !readbackIdentitySet.has(identity));
-      if (readbackCruises.length !== canonicalCruises.length || missingIdentities.length > 0) {
-        throw new Error(`Available sailing storage readback mismatch: wrote ${canonicalCruises.length}, read ${readbackCruises.length}, missing ${missingIdentities.length}`);
-      }
-
-      const readbackStateRows = normalizeAvailableCruiseCatalogRows(readbackCruises);
-      setCruisesState(readbackStateRows);
-      await quotaSafeSetItem(skRef.current.HAS_IMPORTED_DATA, 'true');
-      console.log('[CoreData] Available sailing reconciliation audit:', {
-        inputOfferSailingRows: newCruises.length,
-        ownershipStampedRows: ownedInput.length,
-        canonicalRows: canonicalCruises.length,
-        persistedRows: readbackCruises.length,
-        inMemoryRows: readbackStateRows.length,
-        exactDuplicatesMerged: ownedInput.length - canonicalCruises.length,
-      });
-      if (canonicalCruises.length > BACKEND_AVAILABLE_CRUISE_SKIP_THRESHOLD) {
-        console.log('[CoreData] Deferred backend sync for large available-cruise catalog; local storage is authoritative:', canonicalCruises.length);
-      } else {
-        scheduleSyncToBackend('setCruises');
-      }
-    } catch (error) {
-      console.error('[CoreData] Available sailing transaction failed; restoring prior storage:', error);
-      if (previousRaw !== null) await quotaSafeSetItem(storageKey, previousRaw);
-      else await quotaSafeRemoveItem(storageKey);
-      setCruisesState(previousCruises);
-      throw error;
+  const setCruises = useCallback(async (newCruises: Cruise[], options?: CoreDataCommitOptions) => {
+    const finishCommitDiagnostic = beginPerformanceSpan('CoreDataProvider.setCruises', {
+      inputRows: newCruises.length,
+      runId: options?.runId,
+    });
+    const preparedCruises = await prepareOwnedRecordsCooperatively<Cruise>(newCruises, ownerScopeId, authenticatedEmail, 'set available cruises', options?.shouldAbort);
+    const ownedCruises = await dedupeCruisesCooperatively(preparedCruises, 'set available cruises', options?.shouldAbort);
+    const reconciliation = await cruiseInventoryRepository.replaceCatalog(ownedCruises, {
+      ownerScopeId: getCruiseInventoryOwnerScope(authenticatedEmail),
+      runId: options?.runId,
+      batchSize: 500,
+      shouldAbort: options?.shouldAbort,
+      onProgress: (progress) => {
+        options?.onCruiseInventoryProgress?.(progress);
+        if (progress.processedRows === progress.totalRows || progress.processedRows % 2_500 === 0) {
+          appendDiagnosticJournal('CRUISE_INVENTORY_COMMIT_PROGRESS', { ...progress });
+        }
+      },
+    });
+    const canonicalRows = reconciliation.reduce((sum, entry) => sum + entry.canonicalRows, 0);
+    const activeInventoryCounts = await cruiseInventoryRepository.getCounts(getCruiseInventoryOwnerScope(authenticatedEmail));
+    setCruiseInventoryCount(activeInventoryCounts.total);
+    appendDiagnosticJournal('CRUISE_INVENTORY_COMMIT_RECONCILED', {
+      runId: options?.runId,
+      inputRows: ownedCruises.length,
+      canonicalRows,
+      duplicatesMerged: reconciliation.reduce((sum, entry) => sum + entry.duplicatesMerged, 0),
+      rejectedRows: reconciliation.reduce((sum, entry) => sum + entry.rejectedRows, 0),
+      readbackRows: reconciliation.reduce((sum, entry) => sum + entry.readbackRows, 0),
+    });
+    // The pre-migration quota-safe artifact is intentionally left untouched as
+    // a rollback/import source. Rewriting all 40K+ rows after every sync would
+    // duplicate the SQLite transaction and was the largest persistence stall.
+    // Explicit export/cloud operations stream from SQLite instead.
+    await cruiseInventoryRepository.setMetadata(`legacy_catalog_retained:${getCruiseInventoryOwnerScope(authenticatedEmail)}`, JSON.stringify({
+      retainedAt: new Date().toISOString(),
+      activeAuthority: 'sqlite',
+      runId: options?.runId ?? null,
+      sourceRows: ownedCruises.length,
+    }));
+    setCruisesState([]);
+    if (options?.markImportedData ?? true) {
+      await quotaSafeSetItem(skRef.current.HAS_IMPORTED_DATA, 'true').catch(console.error);
     }
-  }, [markLocalDataAuthoritative, persistLastSyncDate, scheduleSyncToBackend, ownerScopeId, authenticatedEmail, currentUser]);
+    console.log('[CoreData] Cruises state updated and persisted:', ownedCruises.length);
+    finishCommitDiagnostic({ canonicalRows, publishedRows: 0 });
+  }, [persistData, ownerScopeId, authenticatedEmail]);
+
+  const queryCruises = useCallback(async (query: CruiseInventoryQuery = {}) => {
+    return cruiseInventoryRepository.query({
+      ...query,
+      ownerScopeId: getCruiseInventoryOwnerScope(authenticatedEmail),
+    });
+  }, [authenticatedEmail]);
+
+  const getAllCruises = useCallback(async () => {
+    const rows: Cruise[] = [];
+    const exported = await cruiseInventoryRepository.exportAllSourceRows(
+      (batch) => { rows.push(...batch); },
+      500,
+      getCruiseInventoryOwnerScope(authenticatedEmail),
+    );
+    if (exported > 0) return rows;
+    return cruises;
+  }, [authenticatedEmail, cruises]);
+
+  const getCruiseInventoryIntegrity = useCallback(async () => {
+    return cruiseInventoryRepository.getActiveIntegrity(getCruiseInventoryOwnerScope(authenticatedEmail));
+  }, [authenticatedEmail]);
 
   const addCruise = useCallback((cruise: Cruise) => {
-    setCruisesState(prev => {
-      const updated = [...prev, stampRecordForProfile(cruise, currentUser)];
-      void persistData(skRef.current.CRUISES, updated);
-      return updated;
-    });
-  }, [persistData, currentUser]);
+    void getAllCruises().then((current) => setCruises([
+      ...current,
+      canonicalizeDataRecord(cruise as Cruise & Record<string, unknown>) as Cruise,
+    ])).catch((error) => console.error('[CoreData] Failed to add cruise to inventory:', error));
+  }, [getAllCruises, setCruises]);
 
   const updateCruise = useCallback((id: string, updates: Partial<Cruise>) => {
-    setCruisesState(prev => {
-      const updated = prev.map(c => c.id === id ? { ...c, ...updates } : c);
-      void persistData(skRef.current.CRUISES, updated);
-      return updated;
-    });
-  }, [persistData, currentUser]);
+    void getAllCruises().then((current) => setCruises(current.map(c => c.id === id
+        ? canonicalizeDataRecord({ ...c, ...updates } as Cruise & Record<string, unknown>) as Cruise
+        : c))).catch((error) => console.error('[CoreData] Failed to update cruise inventory:', error));
+  }, [getAllCruises, setCruises]);
 
   const removeCruise = useCallback((id: string) => {
-    setCruisesState(prev => {
-      const updated = prev.filter(c => c.id !== id);
-      void persistData(skRef.current.CRUISES, updated);
-      return updated;
+    void getAllCruises().then((current) => setCruises(current.filter(c => c.id !== id)))
+      .catch((error) => console.error('[CoreData] Failed to remove cruise from inventory:', error));
+  }, [getAllCruises, setCruises]);
+
+  const setBookedCruises = useCallback(async (newCruises: BookedCruise[], options?: CoreDataCommitOptions) => {
+    const ownedInputCruises = prepareOwnedRecords<BookedCruise>(newCruises, ownerScopeId, authenticatedEmail, 'set booked cruises');
+    const booked = ownedInputCruises.filter(c => c.status !== 'available');
+    
+    // Filter out mock/demo cruises when setting real data
+    const nonMockCruises = booked.filter(cruise => 
+      !cruise.id?.includes('demo-') && 
+      !cruise.id?.includes('booked-virtual') &&
+      cruise.reservationNumber !== 'DEMO123' &&
+      cruise.reservationNumber !== 'DEMO456' &&
+      cruise.shipName !== 'Virtually a Ship of the Seas' &&
+      !isKnownInvalidBookedCruise(cruise)
+    );
+    
+    console.log('[CoreData] Setting booked cruises:', { 
+      total: booked.length, 
+      nonMock: nonMockCruises.length 
     });
-  }, [persistData]);
-
-  const setBookedCruises = useCallback(async (newCruises: BookedCruise[]) => {
-    markLocalDataAuthoritative('setBookedCruises');
-    const storageKey = skRef.current.BOOKED_CRUISES;
-    const previousRaw = await quotaSafeGetItem(storageKey).catch(() => null);
-    const previousCruises = (() => {
-      try { return previousRaw ? JSON.parse(previousRaw) as BookedCruise[] : []; } catch { return []; }
-    })();
-
-    try {
-      const audit: Record<string, number> = { input: newCruises.length };
-      const ownedInputCruises = stampRecordsForProfile(
-        prepareOwnedRecords<BookedCruise>(newCruises, ownerScopeId, authenticatedEmail, 'set booked cruises'),
-        currentUser,
-      );
-      audit.ownershipStamped = ownedInputCruises.length;
-      const booked = ownedInputCruises.filter((cruise) => cruise.status !== 'available');
-      audit.afterAvailableFilter = booked.length;
-      const nonMockCruises = booked.filter((cruise) =>
-        !cruise.id?.includes('demo-') &&
-        !cruise.id?.includes('booked-virtual') &&
-        cruise.reservationNumber !== 'DEMO123' &&
-        cruise.reservationNumber !== 'DEMO456' &&
-        cruise.shipName !== 'Virtually a Ship of the Seas' &&
-        !isKnownInvalidBookedCruise(cruise)
-      );
-      audit.afterMockInvalidFilter = nonMockCruises.length;
-
-      const correctedCruises = nonMockCruises.map(applyKnownBookingCorrectionsToCruise);
-      audit.afterKnownCorrections = correctedCruises.length;
-      const manifestResult = applyUserConfirmedBookedCruiseManifestWithLedger(correctedCruises);
-      audit.afterManifestOverlay = manifestResult.cruises.length;
-      const withItineraries = enrichCruisesWithMockItineraries(manifestResult.cruises);
-      audit.afterItineraryEnrichment = withItineraries.length;
-      const withKnownRetail = applyKnownRetailValues(withItineraries);
-      audit.afterRetailEnrichment = withKnownRetail.length;
-      const withFreeplayOBC = applyFreeplayOBCData(withKnownRetail);
-      audit.afterFreeplayOBC = withFreeplayOBC.length;
-      const enrichedCruises = enrichCruisesWithReceiptData(withFreeplayOBC);
-      audit.afterReceiptEnrichment = enrichedCruises.length;
-      const lifecycleResult = updateAllCruiseLifecycles(enrichedCruises);
-      audit.afterLifecycleNormalization = lifecycleResult.updatedCruises.length;
-
-      const preDedupeCruises = stampRecordsForProfile(
-        prepareOwnedRecords<BookedCruise>(
-          lifecycleResult.updatedCruises.map(normalizeCruiseCasinoPerformance),
-          ownerScopeId,
-          authenticatedEmail,
-          'normalized booked cruises',
-        ),
-        currentUser,
-      );
-      audit.beforeDedupe = preDedupeCruises.length;
-      const dedupeResult = dedupeBookedCruisesWithLedger(preDedupeCruises, 'normalized booked cruises');
-      const normalizedCruises = annotateOverlappingCruises(dedupeResult.cruises);
-      audit.afterDedupe = normalizedCruises.length;
-      audit.dedupeMerged = dedupeResult.ledger.filter((entry) => entry.action === 'merged').length;
-
-      // Every input row must map to a real final row. Identity upgrades are allowed—for example,
-      // a partial ship/date/cabin row may gain a reservation number from a more complete duplicate.
-      // The old raw identity-set comparison incorrectly treated that safe upgrade as deletion.
-      const invalidLedgerEntries = dedupeResult.ledger.filter((entry) =>
-        entry.inputIndex < 0 ||
-        entry.inputIndex >= preDedupeCruises.length ||
-        entry.outputIndex < 0 ||
-        entry.outputIndex >= normalizedCruises.length ||
-        !entry.outputIdentity
-      );
-      if (dedupeResult.ledger.length !== preDedupeCruises.length || invalidLedgerEntries.length > 0) {
-        throw new Error(`Booked cruise normalization ledger mismatch: inputs ${preDedupeCruises.length}, ledger ${dedupeResult.ledger.length}, invalid ${invalidLedgerEntries.length}`);
-      }
-
-      // Two different reservation numbers are never allowed to collapse into one canonical row.
-      const outputReservations = new Map<number, Set<string>>();
-      dedupeResult.ledger.forEach((entry) => {
-        const reservation = String(entry.reservationNumber || '').trim().toUpperCase();
-        if (!reservation) return;
-        const reservations = outputReservations.get(entry.outputIndex) ?? new Set<string>();
-        reservations.add(reservation);
-        outputReservations.set(entry.outputIndex, reservations);
-      });
-      const conflictingReservationOutputs = Array.from(outputReservations.entries())
-        .filter(([, reservations]) => reservations.size > 1);
-      if (conflictingReservationOutputs.length > 0) {
-        throw new Error(`Booked cruise normalization merged distinct reservation numbers into ${conflictingReservationOutputs.length} row(s)`);
-      }
-
-      const finalIdentitySet = new Set(normalizedCruises.map(getBookedCruiseIdentityKey));
-      console.log('[CoreData] Booked cruise reconciliation audit:', {
-        ...audit,
-        lifecycle: lifecycleResult.report,
-        manifestActivated: manifestResult.activated,
-        manifestLedger: manifestResult.ledger,
-        dedupeLedger: dedupeResult.ledger,
-      });
-
-      await quotaSafeSetJsonItem(storageKey, normalizedCruises);
-      await persistLastSyncDate();
-      const readbackRaw = await quotaSafeGetItem(storageKey);
-      const readbackCruises = readbackRaw ? JSON.parse(readbackRaw) as BookedCruise[] : [];
-      audit.persisted = normalizedCruises.length;
-      audit.readback = readbackCruises.length;
-      const readbackIdentitySet = new Set(readbackCruises.map(getBookedCruiseIdentityKey));
-      const missingAfterPersist = Array.from(finalIdentitySet).filter((key) => !readbackIdentitySet.has(key));
-      if (readbackCruises.length !== normalizedCruises.length || missingAfterPersist.length > 0) {
-        throw new Error(`Booked cruise storage readback mismatch: wrote ${normalizedCruises.length}, read ${readbackCruises.length}, missing ${missingAfterPersist.length}`);
-      }
-
-      const lifecycleCounts = readbackCruises.reduce((counts, cruise) => {
-        const status = `${cruise.completionState || ''} ${cruise.status || ''}`.toLowerCase();
-        if (status.includes('completed') || status.includes('past')) counts.completed += 1;
-        else if (status.includes('progress')) counts.inProgress += 1;
-        else counts.upcoming += 1;
-        return counts;
-      }, { upcoming: 0, inProgress: 0, completed: 0 });
-      console.log('[CoreData] Booked cruise persisted/readback audit complete:', { ...audit, lifecycleCounts });
-
-      setBookedCruisesState(readbackCruises);
-      await quotaSafeSetItem(skRef.current.HAS_IMPORTED_DATA, 'true');
-
-      const newCalendarEvents: CalendarEvent[] = dedupeCalendarEvents(
-        stampRecordsForProfile(
-          prepareOwnedRecords<CalendarEvent>(generateCruiseCalendarEvents(readbackCruises), ownerScopeId, authenticatedEmail, 'booked cruise calendar events'),
-          currentUser,
-        ),
-        'booked cruise calendar events',
-      );
-      setCalendarEventsState(newCalendarEvents);
-      await persistData(skRef.current.CALENDAR_EVENTS, newCalendarEvents);
-      console.log('[CoreData] Booked cruises state updated and verified:', readbackCruises.length);
-      scheduleSyncToBackend('setBookedCruises');
-    } catch (error) {
-      console.error('[CoreData] Booked cruise transaction failed; restoring prior storage:', error);
-      if (previousRaw !== null) await quotaSafeSetItem(storageKey, previousRaw);
-      else await quotaSafeRemoveItem(storageKey);
-      setBookedCruisesState(previousCruises);
-      throw error;
+    
+    const importedCruises = applyUserConfirmedBookedCruiseManifest(nonMockCruises.map(applyKnownBookingCorrectionsToCruise));
+    const lifecycleResult = updateAllCruiseLifecycles(importedCruises);
+    const normalizedCruises = annotateOverlappingCruises(dedupeBookedCruises(prepareOwnedRecords<BookedCruise>(lifecycleResult.updatedCruises.map(normalizeCruiseCasinoPerformance), ownerScopeId, authenticatedEmail, 'normalized booked cruises'), 'normalized booked cruises'));
+    console.log('[CoreData] Normalized booked cruise lifecycle before persist:', {
+      total: normalizedCruises.length,
+      upcoming: lifecycleResult.report.upcomingCount,
+      inProgress: lifecycleResult.report.inProgressCount,
+      completed: lifecycleResult.report.completedCount,
+    });
+    await persistData(skRef.current.BOOKED_CRUISES, normalizedCruises, options);
+    setBookedCruisesState(normalizedCruises);
+    normalizedCruises.forEach((cruise) => notifyCruiseRecordChanged({ cruiseId: cruise.id, kind: 'replaced' }));
+    if (options?.markImportedData ?? true) {
+      await quotaSafeSetItem(skRef.current.HAS_IMPORTED_DATA, 'true').catch(console.error);
     }
-  }, [markLocalDataAuthoritative, persistData, persistLastSyncDate, scheduleSyncToBackend, ownerScopeId, authenticatedEmail, currentUser]);
+
+    // Calendar generation is derived and must never block authoritative booking persistence.
+    setTimeout(() => {
+      void (async () => {
+        try {
+          const newCalendarEvents: CalendarEvent[] = dedupeCalendarEvents(
+            prepareOwnedRecords<CalendarEvent>(generateCruiseCalendarEvents(normalizedCruises), ownerScopeId, authenticatedEmail, 'booked cruise calendar events'),
+            'booked cruise calendar events'
+          );
+          await persistData(skRef.current.CALENDAR_EVENTS, newCalendarEvents, { updateLastSync: false });
+          setCalendarEventsState(newCalendarEvents);
+          appendDiagnosticJournal('DERIVED_CALENDAR_REBUILT', { count: newCalendarEvents.length });
+        } catch (error) {
+          console.warn('[CoreData] Deferred calendar rebuild failed without blocking bookings:', error);
+        }
+      })();
+    }, 0);
+    console.log('[CoreData] Booked cruises state updated and durably persisted:', normalizedCruises.length);
+  }, [persistData, ownerScopeId, authenticatedEmail]);
 
   const buildCalendarEventFromCruise = useCallback((cruise: BookedCruise): CalendarEvent => ({
     id: `cruise-${cruise.id}`,
@@ -1478,26 +1455,30 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   }), []);
 
   const addBookedCruise = useCallback((cruise: BookedCruise) => {
-    const correctedCruise = stampRecordForProfile(normalizeCruiseCasinoPerformance(applyKnownBookingCorrectionsToCruise(cruise)), currentUser);
+    const canonicalCruise = canonicalizeDataRecord(cruise as BookedCruise & Record<string, unknown>) as BookedCruise;
+    const correctedCruise = normalizeCruiseCasinoPerformance(applyKnownBookingCorrectionsToCruise(canonicalCruise));
     setBookedCruisesState(prev => {
       const updated = annotateOverlappingCruises([...prev, correctedCruise]);
-      void persistData(skRef.current.BOOKED_CRUISES, updated);
+      scheduleBackgroundPersist(skRef.current.BOOKED_CRUISES, updated);
       return updated;
     });
     const calEvent = buildCalendarEventFromCruise(correctedCruise);
+    notifyCruiseRecordChanged({ cruiseId: correctedCruise.id, kind: 'created' });
     setCalendarEventsState(prev => {
       const filtered = prev.filter(e => e.id !== calEvent.id);
       const updated = [...filtered, calEvent];
-      void persistData(skRef.current.CALENDAR_EVENTS, updated);
+      scheduleBackgroundPersist(skRef.current.CALENDAR_EVENTS, updated);
       console.log('[CoreData] Auto-added calendar event for cruise:', cruise.id, cruise.shipName);
       return updated;
     });
-  }, [persistData, buildCalendarEventFromCruise, currentUser]);
+  }, [scheduleBackgroundPersist, buildCalendarEventFromCruise]);
 
   const updateBookedCruise = useCallback((id: string, updates: Partial<BookedCruise>) => {
     setBookedCruisesState(prev => {
-      const updated = annotateOverlappingCruises(prev.map(c => c.id === id ? normalizeCruiseCasinoPerformance(applyKnownBookingCorrectionsToCruise({ ...c, ...updates })) : c));
-      void persistData(skRef.current.BOOKED_CRUISES, updated);
+      const updated = annotateOverlappingCruises(prev.map(c => c.id === id
+        ? normalizeCruiseCasinoPerformance(applyKnownBookingCorrectionsToCruise(canonicalizeDataRecord({ ...c, ...updates } as BookedCruise & Record<string, unknown>) as BookedCruise))
+        : c));
+      scheduleBackgroundPersist(skRef.current.BOOKED_CRUISES, updated);
       
       if (updates.earnedPoints !== undefined) {
         console.log('[CoreDataProvider] Cruise points updated via updateBookedCruise:', {
@@ -1515,7 +1496,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
             const updatedEvents = prevEvents.map(e => e.id === calEvent.id ? calEvent : e);
             const exists = prevEvents.some(e => e.id === calEvent.id);
             const finalEvents = exists ? updatedEvents : [...prevEvents, calEvent];
-            void persistData(skRef.current.CALENDAR_EVENTS, finalEvents);
+            scheduleBackgroundPersist(skRef.current.CALENDAR_EVENTS, finalEvents);
             console.log('[CoreData] Auto-updated calendar event for cruise:', id);
             return finalEvents;
           });
@@ -1524,167 +1505,116 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       
       return updated;
     });
-  }, [persistData, buildCalendarEventFromCruise, currentUser]);
+    notifyCruiseRecordChanged({ cruiseId: id, kind: 'updated', changedFields: Object.keys(updates) });
+  }, [scheduleBackgroundPersist, buildCalendarEventFromCruise]);
 
   const removeBookedCruise = useCallback((id: string) => {
     setBookedCruisesState(prev => {
-      const { BOOKED_CRUISES_DATA, COMPLETED_CRUISES_DATA } = getMockCruises();
-      const allMockCruises = [
-        ...COMPLETED_CRUISES_DATA,
-        ...BOOKED_CRUISES_DATA
-      ];
-      const isMockCruise = allMockCruises.some(mc => mc.id === id);
-      
-      if (isMockCruise) {
-        void quotaSafeGetItem(skRef.current.REMOVED_MOCK_CRUISES)
-          .then(data => {
-            const existing = data ? new Set<string>(JSON.parse(data)) : new Set<string>();
-            existing.add(id);
-            return quotaSafeSetJsonItem(skRef.current.REMOVED_MOCK_CRUISES, [...existing]);
-          })
-          .then(() => {
-            console.log('[CoreData] Marked mock cruise as removed:', id);
-          })
-          .catch(console.error);
-      }
-      
       const updated = prev.filter(c => c.id !== id);
-      void persistData(skRef.current.BOOKED_CRUISES, updated);
+      scheduleBackgroundPersist(skRef.current.BOOKED_CRUISES, updated);
       return updated;
     });
     const calEventId = `cruise-${id}`;
     setCalendarEventsState(prev => {
       const updated = prev.filter(e => e.id !== calEventId && e.cruiseId !== id);
-      void persistData(skRef.current.CALENDAR_EVENTS, updated);
+      scheduleBackgroundPersist(skRef.current.CALENDAR_EVENTS, updated);
       console.log('[CoreData] Auto-removed calendar event for cruise:', id);
       return updated;
     });
-  }, [persistData]);
+    notifyCruiseRecordChanged({ cruiseId: id, kind: 'removed' });
+  }, [scheduleBackgroundPersist]);
 
-  const setCasinoOffers = useCallback(async (newOffers: CasinoOffer[]) => {
-    markLocalDataAuthoritative('setCasinoOffers');
-    const storageKey = skRef.current.CASINO_OFFERS;
-    const previousRaw = await quotaSafeGetItem(storageKey).catch(() => null);
-    const previousOffers = (() => {
-      try { return previousRaw ? dedupeCasinoOffers(JSON.parse(previousRaw) as CasinoOffer[], 'previous casino offers rollback') : []; }
-      catch { return []; }
-    })();
-
-    try {
-      const ownedInput = stampRecordsForProfile(
-        prepareOwnedRecords<CasinoOffer>(newOffers, ownerScopeId, authenticatedEmail, 'set casino offers'),
-        currentUser,
-      );
-      const ownedOffers = dedupeCasinoOffers(ownedInput, 'set casino offers');
-      const nonMockOffers = ownedOffers.filter((offer) =>
-        !offer.id?.includes('demo-') && offer.offerCode !== 'NOWHERE2025'
-      );
-      const canonicalIdentitySet = new Set(nonMockOffers.map(getOfferIdentityKey));
-      const expectedRelationshipCounts = new Map(nonMockOffers.map((offer) => [
-        getOfferIdentityKey(offer),
-        new Set([...(offer.cruiseIds || []), ...(offer.cruiseId ? [offer.cruiseId] : [])].filter(Boolean)).size,
-      ]));
-
-      await quotaSafeSetJsonItem(storageKey, nonMockOffers);
-      await persistLastSyncDate();
-      const readbackRaw = await quotaSafeGetItem(storageKey);
-      const readbackOffers = readbackRaw
-        ? dedupeCasinoOffers(JSON.parse(readbackRaw) as CasinoOffer[], 'casino offer storage readback')
-        : [];
-      const readbackIdentitySet = new Set(readbackOffers.map(getOfferIdentityKey));
-      const missingIdentities = Array.from(canonicalIdentitySet).filter((identity) => !readbackIdentitySet.has(identity));
-      const relationshipMismatches = readbackOffers.filter((offer) => {
-        const identity = getOfferIdentityKey(offer);
-        const actual = new Set([...(offer.cruiseIds || []), ...(offer.cruiseId ? [offer.cruiseId] : [])].filter(Boolean)).size;
-        return expectedRelationshipCounts.get(identity) !== actual;
-      });
-      if (readbackOffers.length !== nonMockOffers.length || missingIdentities.length > 0 || relationshipMismatches.length > 0) {
-        throw new Error(`Casino offer storage readback mismatch: wrote ${nonMockOffers.length}, read ${readbackOffers.length}, missing ${missingIdentities.length}, relationship mismatches ${relationshipMismatches.length}`);
-      }
-
-      setCasinoOffersState(readbackOffers);
-      await quotaSafeSetItem(skRef.current.HAS_IMPORTED_DATA, 'true');
-      console.log('[CoreData] Casino offer reconciliation audit:', {
-        inputOffers: newOffers.length,
-        ownershipStampedOffers: ownedInput.length,
-        canonicalOffers: nonMockOffers.length,
-        persistedOffers: readbackOffers.length,
-        offerToSailingRelationships: readbackOffers.reduce((sum, offer) => sum + new Set([...(offer.cruiseIds || []), ...(offer.cruiseId ? [offer.cruiseId] : [])].filter(Boolean)).size, 0),
-      });
-      scheduleSyncToBackend('setCasinoOffers');
-    } catch (error) {
-      console.error('[CoreData] Casino offer transaction failed; restoring prior storage:', error);
-      if (previousRaw !== null) await quotaSafeSetItem(storageKey, previousRaw);
-      else await quotaSafeRemoveItem(storageKey);
-      setCasinoOffersState(previousOffers);
-      throw error;
+  const setCasinoOffers = useCallback(async (newOffers: CasinoOffer[], options?: CoreDataCommitOptions) => {
+    const ownedOffers = dedupeCasinoOffers(prepareOwnedRecords<CasinoOffer>(newOffers, ownerScopeId, authenticatedEmail, 'set casino offers'), 'set casino offers');
+    const nonMockOffers = ownedOffers.filter(offer => 
+      !offer.id?.includes('demo-') &&
+      offer.offerCode !== 'NOWHERE2025'
+    );
+    
+    console.log('[CoreData] Setting casino offers:', { 
+      total: newOffers.length, 
+      owned: ownedOffers.length,
+      nonMock: nonMockOffers.length 
+    });
+    
+    await persistData(skRef.current.CASINO_OFFERS, nonMockOffers, options);
+    setCasinoOffersState(nonMockOffers);
+    if (options?.markImportedData ?? true) {
+      await quotaSafeSetItem(skRef.current.HAS_IMPORTED_DATA, 'true').catch(console.error);
     }
-  }, [markLocalDataAuthoritative, persistLastSyncDate, scheduleSyncToBackend, ownerScopeId, authenticatedEmail, currentUser]);
+    console.log('[CoreData] Casino offers state updated and persisted:', nonMockOffers.length);
+  }, [persistData, ownerScopeId, authenticatedEmail]);
+
+  const finalizeLocalSyncMetadata = useCallback(async (timestamp?: string) => {
+    const nextTimestamp = timestamp ?? new Date().toISOString();
+    await Promise.all([
+      quotaSafeSetItem(skRef.current.LAST_SYNC, nextTimestamp, { runId: `local-sync-metadata-${nextTimestamp}` }),
+      quotaSafeSetItem(skRef.current.HAS_IMPORTED_DATA, 'true', { runId: `local-sync-imported-${nextTimestamp}` }),
+    ]);
+    setLastSyncDate(nextTimestamp);
+    appendDiagnosticJournal('CORE_DATA_SYNC_METADATA_COMMITTED', { timestamp: nextTimestamp });
+  }, []);
 
   const addCasinoOffer = useCallback((offer: CasinoOffer) => {
     setCasinoOffersState(prev => {
-      const updated = [...prev, stampRecordForProfile(offer, currentUser)];
-      void persistData(skRef.current.CASINO_OFFERS, updated);
+      const updated = [...prev, canonicalizeDataRecord(offer as CasinoOffer & Record<string, unknown>) as CasinoOffer];
+      scheduleBackgroundPersist(skRef.current.CASINO_OFFERS, updated);
       return updated;
     });
-  }, [persistData, currentUser]);
+  }, [scheduleBackgroundPersist]);
 
   const updateCasinoOffer = useCallback((id: string, updates: Partial<CasinoOffer>) => {
     setCasinoOffersState(prev => {
-      const updated = prev.map(o => o.id === id ? { ...o, ...updates } : o);
-      void persistData(skRef.current.CASINO_OFFERS, updated);
+      const updated = prev.map(o => o.id === id
+        ? canonicalizeDataRecord({ ...o, ...updates } as CasinoOffer & Record<string, unknown>) as CasinoOffer
+        : o);
+      scheduleBackgroundPersist(skRef.current.CASINO_OFFERS, updated);
       return updated;
     });
-  }, [persistData]);
+  }, [scheduleBackgroundPersist]);
 
   const removeCasinoOffer = useCallback((id: string) => {
     setCasinoOffersState(prev => {
       const updated = prev.filter(o => o.id !== id);
-      void persistData(skRef.current.CASINO_OFFERS, updated);
+      scheduleBackgroundPersist(skRef.current.CASINO_OFFERS, updated);
       return updated;
     });
-  }, [persistData]);
+  }, [scheduleBackgroundPersist]);
 
   const setCalendarEvents = useCallback(async (newEvents: CalendarEvent[]) => {
-    markLocalDataAuthoritative('setCalendarEvents');
-    const ownedEvents = dedupeCalendarEvents(stampRecordsForProfile(prepareOwnedRecords<CalendarEvent>(newEvents, ownerScopeId, authenticatedEmail, 'set calendar events'), currentUser), 'set calendar events');
+    const ownedEvents = dedupeCalendarEvents(prepareOwnedRecords<CalendarEvent>(newEvents, ownerScopeId, authenticatedEmail, 'set calendar events'), 'set calendar events');
     console.log('[CoreData] Setting calendar events:', ownedEvents.length);
     setCalendarEventsState(ownedEvents);
     await persistData(skRef.current.CALENDAR_EVENTS, ownedEvents);
     await quotaSafeSetItem(skRef.current.HAS_IMPORTED_DATA, 'true').catch(console.error);
-    scheduleSyncToBackend('setCalendarEvents');
-  }, [markLocalDataAuthoritative, persistData, scheduleSyncToBackend, ownerScopeId, authenticatedEmail, currentUser]);
+  }, [persistData, ownerScopeId, authenticatedEmail]);
 
   const addCalendarEvent = useCallback((event: CalendarEvent) => {
     setCalendarEventsState(prev => {
-      const updated = [...prev, stampRecordForProfile(event, currentUser)];
-      void persistData(skRef.current.CALENDAR_EVENTS, updated);
+      const updated = [...prev, canonicalizeDataRecord(event as CalendarEvent & Record<string, unknown>) as CalendarEvent];
+      scheduleBackgroundPersist(skRef.current.CALENDAR_EVENTS, updated);
       return updated;
     });
-    
-    if (!isSyncingRef.current) {
-      isSyncingRef.current = true;
-      void syncToBackend().finally(() => {
-        isSyncingRef.current = false;
-      });
-    }
-  }, [persistData, syncToBackend, currentUser]);
+
+  }, [scheduleBackgroundPersist]);
 
   const updateCalendarEvent = useCallback((id: string, updates: Partial<CalendarEvent>) => {
     setCalendarEventsState(prev => {
-      const updated = prev.map(e => e.id === id ? { ...e, ...updates } : e);
-      void persistData(skRef.current.CALENDAR_EVENTS, updated);
+      const updated = prev.map(e => e.id === id
+        ? canonicalizeDataRecord({ ...e, ...updates } as CalendarEvent & Record<string, unknown>) as CalendarEvent
+        : e);
+      scheduleBackgroundPersist(skRef.current.CALENDAR_EVENTS, updated);
       return updated;
     });
-  }, [persistData]);
+  }, [scheduleBackgroundPersist]);
 
   const removeCalendarEvent = useCallback((id: string) => {
     setCalendarEventsState(prev => {
       const updated = prev.filter(e => e.id !== id);
-      void persistData(skRef.current.CALENDAR_EVENTS, updated);
+      scheduleBackgroundPersist(skRef.current.CALENDAR_EVENTS, updated);
       return updated;
     });
-  }, [persistData]);
+  }, [scheduleBackgroundPersist]);
 
   const setFilter = useCallback(<K extends keyof CruiseFilter>(key: K, value: CruiseFilter[K]) => {
     setFiltersState(prev => ({ ...prev, [key]: value }));
@@ -1731,7 +1661,6 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
 
   const clearAllData = useCallback(async () => {
     try {
-      backendRestoreGraceUntilRef.current = 0;
       console.log('[CoreData] Clearing all data and preventing mock data from loading...');
       await Promise.all([
         quotaSafeRemoveItem(skRef.current.CRUISES),
@@ -1741,8 +1670,10 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
         quotaSafeRemoveItem(skRef.current.LAST_SYNC),
         quotaSafeRemoveItem(skRef.current.REMOVED_MOCK_CRUISES),
         quotaSafeSetItem(skRef.current.HAS_IMPORTED_DATA, 'true'),
+        cruiseInventoryRepository.clear(getCruiseInventoryOwnerScope(authenticatedEmail)),
       ]);
       setCruisesState([]);
+      setCruiseInventoryCount(0);
       setBookedCruisesState([]);
       setCasinoOffersState([]);
       setCalendarEventsState([]);
@@ -1752,7 +1683,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
       console.error('[CoreData] Failed to clear data:', error);
       throw error;
     }
-  }, []);
+  }, [authenticatedEmail, ownerScopeId]);
 
   const refreshData = useCallback(async () => {
     console.log('[CoreData] === REFRESH DATA CALLED (FORCE RELOAD) ===');
@@ -1760,40 +1691,14 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
   }, []);
 
   const restoreMockData = useCallback(async () => {
-    try {
-      console.log('[CoreData] Restoring mock data to AsyncStorage...');
-      const { BOOKED_CRUISES_DATA, COMPLETED_CRUISES_DATA } = getMockCruises();
-      const allMockCruises = [
-        ...COMPLETED_CRUISES_DATA,
-        ...BOOKED_CRUISES_DATA
-      ];
-      
-      const withItineraries = enrichCruisesWithMockItineraries(allMockCruises);
-      const withKnownRetail = applyKnownRetailValues(withItineraries);
-      const withFreeplayOBC = applyFreeplayOBCData(withKnownRetail);
-      const enrichedCruises = enrichCruisesWithReceiptData(withFreeplayOBC);
-      
-      await Promise.all([
-        quotaSafeSetJsonItem(skRef.current.BOOKED_CRUISES, enrichedCruises),
-        quotaSafeRemoveItem(skRef.current.HAS_IMPORTED_DATA),
-        quotaSafeRemoveItem(skRef.current.REMOVED_MOCK_CRUISES),
-      ]);
-      
-      setBookedCruisesState(enrichedCruises);
-      console.log('[CoreData] Mock data restored successfully:', enrichedCruises.length, 'cruises');
-    } catch (error) {
-      console.error('[CoreData] Failed to restore mock data:', error);
-      throw error;
-    }
+    console.warn('[CoreData] Demo cruise restoration is disabled in production data paths.');
   }, []);
 
   const completedCruises = useMemo(() => {
     return bookedCruises.filter(cruise => {
       const isCompleted = cruise.completionState === 'completed' || cruise.status === 'completed';
       if (cruise.returnDate) {
-        const returnDate = new Date(cruise.returnDate);
-        const today = new Date();
-        return isCompleted || returnDate < today;
+        return isCompleted || isDateInPast(cruise.returnDate);
       }
       return isCompleted;
     });
@@ -1801,6 +1706,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
 
   return useMemo(() => ({
     cruises,
+    cruiseInventoryCount,
     bookedCruises,
     completedCruises,
     casinoOffers,
@@ -1815,6 +1721,9 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     clubRoyaleProfile,
     hasLocalData,
     setCruises,
+    queryCruises,
+    getAllCruises,
+    getCruiseInventoryIntegrity,
     addCruise,
     updateCruise,
     removeCruise,
@@ -1838,11 +1747,13 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     setUserPoints,
     setClubRoyaleProfile,
     syncToBackend,
+    finalizeLocalSyncMetadata,
     clearAllData,
     refreshData,
     restoreMockData,
   }), [
     cruises,
+    cruiseInventoryCount,
     bookedCruises,
     completedCruises,
     casinoOffers,
@@ -1857,6 +1768,9 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     clubRoyaleProfile,
     hasLocalData,
     setCruises,
+    queryCruises,
+    getAllCruises,
+    getCruiseInventoryIntegrity,
     addCruise,
     updateCruise,
     removeCruise,
@@ -1880,6 +1794,7 @@ export const [CoreDataProvider, useCoreData] = createContextHook((): CoreDataSta
     setUserPoints,
     setClubRoyaleProfile,
     syncToBackend,
+    finalizeLocalSyncMetadata,
     clearAllData,
     refreshData,
     restoreMockData,

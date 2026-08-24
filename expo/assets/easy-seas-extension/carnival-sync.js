@@ -15,7 +15,7 @@
   }
 
   global.EasySeasCarnivalSync = {
-    version: '12.4.2-deprecated',
+    version: '12.4.4-deprecated',
     disabled: true,
     deprecationReason: REASON,
     getOfferItems: getOfferItems,

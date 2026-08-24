@@ -9,7 +9,6 @@ import { dailyLuckRouter } from "./routes/daily-luck";
 import { certificateExplorerRouter } from "./routes/certificate-explorer";
 import { accessRouter } from "./routes/access";
 import { machineLibraryRouter } from "./routes/machine-library";
-import { certificateOptimizationRouter } from "./routes/certificate-optimization";
 
 export const appRouter = createTRPCRouter({
   example: exampleRouter,
@@ -22,7 +21,6 @@ export const appRouter = createTRPCRouter({
   certificateExplorer: certificateExplorerRouter,
   access: accessRouter,
   machineLibrary: machineLibraryRouter,
-  certificateOptimization: certificateOptimizationRouter,
 });
 
 export type AppRouter = typeof appRouter;

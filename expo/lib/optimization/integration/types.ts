@@ -36,7 +36,7 @@ export interface StructuredOptimizationContext {
   sourceFreshness: string | null;
 }
 
-export type OptimizationQuestionIntent = 'current-target' | 'expected-cost' | 'success-probability' | 'why' | 'history' | 'profile' | 'safety-override' | 'general';
+export type OptimizationQuestionIntent = 'current-target' | 'expected-cost' | 'expected-value' | 'bankroll' | 'what-if' | 'success-probability' | 'why' | 'history' | 'profile' | 'safety-override' | 'general';
 
 export interface OptimizationQuestionAnswer {
   intent: OptimizationQuestionIntent;

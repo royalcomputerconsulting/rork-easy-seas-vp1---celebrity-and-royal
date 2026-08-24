@@ -16,14 +16,14 @@ const SECTIONS: { heading: string; entries: FormulaEntry[] }[] = [
     heading: 'Points & Coin-In',
     entries: [
       { title: 'Casino Points', formula: 'Sum of Club Royale points earned per completed casino cruise', notes: 'Only Royal Caribbean sailings count toward Club Royale. Celebrity, Virgin, and charter sailings are excluded.' },
-      { title: 'Coin-In', formula: 'Coin-In = Casino Points \u00d7 $5', notes: "Royal Caribbean's published slot coin-in rule. A large gap between recorded coin-in and this formula is flagged by the data-health checker." },
+      { title: 'Coin-In', formula: 'Club Royale eligible slot estimate = points \u00d7 $5', notes: 'Use explicit coin-in whenever available. This estimate is not applied to Blue Chip, Carnival, table play, poker, or any record without a documented earning rule.' },
       { title: 'Current Season Points', formula: 'Sum of casino points earned April 1 \u2013 March 31 (current Club Royale year)', notes: 'Excludes Crown & Anchor loyalty points and anything outside the current casino year.' },
     ],
   },
   {
     heading: 'Tiers & Goals',
     entries: [
-      { title: 'Signature Retain Gap', formula: 'max(25,000 \u2212 current season points, 0)', notes: 'Coin-in still needed = points needed \u00d7 $5.' },
+      { title: 'Signature Retain Gap', formula: 'max(25,000 \u2212 current season points, 0)', notes: 'Any coin-in scenario must use the documented game-specific earning rule; Club Royale slot estimates use points needed \u00d7 $5.' },
       { title: 'Masters Threshold', formula: 'Masters tier requires the season point threshold defined in Club Royale tiers', notes: 'Historical tier uses lifetime points; current tier uses current-season points.' },
       { title: 'Avg Points / Night', formula: 'Current season points \u00f7 completed casino nights this season', notes: 'An alternate points-per-casino-open-day figure is shown when casino-open-day data exists.' },
     ],

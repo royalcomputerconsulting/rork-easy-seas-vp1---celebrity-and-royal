@@ -1,7 +1,8 @@
 import { OfferRow, BookedCruiseRow, LoyaltyData } from './types';
-import { isPlaceholderBookingIdentifier } from './bookedExtractionIdentity';
 import { CasinoOffer, BookedCruise, Cruise } from '@/types/models';
 import { getDoubleOccupancyRoomRetailValue } from '@/lib/valueCalculator';
+import { addCalendarDateDays, formatDateMDY, toCalendarDateOnly } from '@/lib/date';
+import { createRoyalBookedCruiseIdentity, createRoyalOfferSailingIdentity, getProviderRecordId } from './syncIntegrity';
 
 export type SyncDataSource = NonNullable<Cruise['cruiseSource']>;
 
@@ -9,38 +10,29 @@ export interface SyncOwnershipOptions {
   ownerProfileId?: string;
   sourceEmail?: string;
   includeUnownedRecords?: boolean;
+  syncRunId?: string;
+  sourceEndpoint?: string;
+  sourceRetrievedAt?: string;
 }
 
-function getOwnershipFields(options?: SyncOwnershipOptions) {
+function getOwnershipFields(options: SyncOwnershipOptions | undefined, source: SyncDataSource) {
   const ownerProfileId = options?.ownerProfileId?.trim();
   const sourceEmail = options?.sourceEmail?.trim();
 
   return {
     ...(ownerProfileId ? { ownerProfileId, importStatus: 'assigned' as const, reconciliationStatus: 'matched' as const } : {}),
     ...(sourceEmail ? { sourceEmail } : {}),
+    sourceProvider: source === 'carnival' ? 'carnivalSync' : source === 'celebrity' ? 'celebritySync' : 'royalCaribbeanSync',
+    sourceAuthority: 'provider' as const,
+    sourceEndpoint: options?.sourceEndpoint,
+    sourceRetrievedAt: options?.sourceRetrievedAt,
+    parserVersion: 'royal-sync-v2',
+    syncRunId: options?.syncRunId,
+    dataConfidence: 'verified' as const,
+    isFallback: false,
+    isStale: false,
+    validationStatus: 'valid' as const,
   };
-}
-
-
-function getBrandFields(source: SyncDataSource) {
-  if (source === 'celebrity') {
-    return { brand: 'celebrity' as const, casinoProgram: 'blueChip' as const };
-  }
-  if (source === 'carnival') {
-    return { brand: 'carnival' as const, casinoProgram: 'playersClub' as const };
-  }
-  return { brand: 'royal' as const, casinoProgram: 'clubRoyale' as const };
-}
-
-function canonicalCelebrityOfferCode(code: string | undefined, source: SyncDataSource): string {
-  const normalized = String(code || '').trim().toUpperCase();
-  if (source !== 'celebrity') return normalized;
-  // Celebrity's Blue Chip page can expose the same Major Wagers detail URL twice as
-  // 26TOC208 and 26TOC208C even though there is only one View Sailings button. Treat
-  // the trailing-C variant as the same offer identity so the app does not double the
-  // same 47 sailings into 94 rows.
-  if (/^26TOC\d{3}C$/.test(normalized)) return normalized.slice(0, -1);
-  return normalized;
 }
 
 function getBrandOfferFallback(source: SyncDataSource): string {
@@ -54,117 +46,13 @@ function getBrandOfferFallback(source: SyncDataSource): string {
 }
 
 function parseDate(dateStr: string): string {
-  if (!dateStr) return '';
-
-  const trimmed = dateStr.trim();
-
-  try {
-    const compactIsoMatchEarly = trimmed.match(/^(\d{4})(\d{2})(\d{2})$/);
-    if (compactIsoMatchEarly) {
-      const year = compactIsoMatchEarly[1];
-      const month = compactIsoMatchEarly[2];
-      const day = compactIsoMatchEarly[3];
-      return `${month}-${day}-${year}`;
-    }
-
-    const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (isoMatch) {
-      const year = isoMatch[1];
-      const month = isoMatch[2];
-      const day = isoMatch[3];
-      console.log(`[parseDate] ISO date detected: ${trimmed} -> ${month}-${day}-${year}`);
-      return `${month}-${day}-${year}`;
-    }
-
-    const compactIsoMatch = trimmed.match(/^(\d{4})(\d{2})(\d{2})$/);
-    if (compactIsoMatch) {
-      const year = compactIsoMatch[1];
-      const month = compactIsoMatch[2];
-      const day = compactIsoMatch[3];
-      return `${month}-${day}-${year}`;
-    }
-
-    const mmddyyyyDash = trimmed.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
-    if (mmddyyyyDash) {
-      const month = mmddyyyyDash[1].padStart(2, '0');
-      const day = mmddyyyyDash[2].padStart(2, '0');
-      const year = mmddyyyyDash[3];
-      return `${month}-${day}-${year}`;
-    }
-
-    const mmddyyyySlash = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
-    if (mmddyyyySlash) {
-      const month = mmddyyyySlash[1].padStart(2, '0');
-      const day = mmddyyyySlash[2].padStart(2, '0');
-      const year = mmddyyyySlash[3].length === 2 ? `20${mmddyyyySlash[3]}` : mmddyyyySlash[3];
-      return `${month}-${day}-${year}`;
-    }
-
-    const monthNameMatch = trimmed.match(/(\w{3})\s+(\d{1,2}),?\s*(\d{4})/);
-    if (monthNameMatch) {
-      const monthNames: Record<string, number> = {
-        jan: 0,
-        feb: 1,
-        mar: 2,
-        apr: 3,
-        may: 4,
-        jun: 5,
-        jul: 6,
-        aug: 7,
-        sep: 8,
-        oct: 9,
-        nov: 10,
-        dec: 11,
-      };
-      const month = monthNames[monthNameMatch[1].toLowerCase()];
-      const day = parseInt(monthNameMatch[2], 10);
-      const year = parseInt(monthNameMatch[3], 10);
-      if (month !== undefined && !Number.isNaN(day) && !Number.isNaN(year)) {
-        const monthStr = String(month + 1).padStart(2, '0');
-        const dayStr = String(day).padStart(2, '0');
-        return `${monthStr}-${dayStr}-${year}`;
-      }
-    }
-
-    const fullMonthMatch = trimmed.match(/(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),?\s*(\d{4})/i);
-    if (fullMonthMatch) {
-      const fullMonthNames: Record<string, number> = {
-        january: 0,
-        february: 1,
-        march: 2,
-        april: 3,
-        may: 4,
-        june: 5,
-        july: 6,
-        august: 7,
-        september: 8,
-        october: 9,
-        november: 10,
-        december: 11,
-      };
-      const month = fullMonthNames[fullMonthMatch[1].toLowerCase()];
-      const day = parseInt(fullMonthMatch[2], 10);
-      const year = parseInt(fullMonthMatch[3], 10);
-      if (month !== undefined && !Number.isNaN(day) && !Number.isNaN(year)) {
-        const monthStr = String(month + 1).padStart(2, '0');
-        const dayStr = String(day).padStart(2, '0');
-        return `${monthStr}-${dayStr}-${year}`;
-      }
-    }
-
-    const date = new Date(trimmed + (trimmed.includes('T') ? '' : 'T12:00:00'));
-    if (!Number.isNaN(date.getTime())) {
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      const year = String(date.getFullYear());
-      console.log(`[parseDate] Fallback Date parse: ${trimmed} -> ${month}-${day}-${year}`);
-      return `${month}-${day}-${year}`;
-    }
-  } catch {
-    console.warn('[parseDate] Failed to parse date:', dateStr);
+  const calendarDate = toCalendarDateOnly(dateStr);
+  if (!calendarDate) {
+    console.warn('[parseDate] Invalid calendar date:', dateStr);
+    return '';
   }
-
-  return dateStr;
+  const [year, month, day] = calendarDate.split('-');
+  return `${month}-${day}-${year}`;
 }
 
 function generateId(): string {
@@ -172,16 +60,10 @@ function generateId(): string {
 }
 
 function parseDateString(dateStr: string): Date | null {
-  if (!dateStr) return null;
-
-  const parts = dateStr.match(/(\d{1,2})-(\d{1,2})-(\d{4})/);
-  if (parts) {
-    const [, month, day, year] = parts;
-    return new Date(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10));
-  }
-
-  const date = new Date(dateStr);
-  return Number.isNaN(date.getTime()) ? null : date;
+  const calendarDate = toCalendarDateOnly(dateStr);
+  if (!calendarDate) return null;
+  const [year, month, day] = calendarDate.split('-').map(Number);
+  return new Date(year, month - 1, day);
 }
 
 function calculateNightsFromDates(startDate: string, endDate: string): number | null {
@@ -193,8 +75,8 @@ function calculateNightsFromDates(startDate: string, endDate: string): number | 
 
     if (!start || !end) return null;
 
-    const diffTime = Math.abs(end.getTime() - start.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const diffTime = end.getTime() - start.getTime();
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
     return diffDays > 0 && diffDays <= 365 ? diffDays : null;
   } catch {
     return null;
@@ -216,33 +98,17 @@ function extractNightsFromText(text: string): number | null {
 }
 
 function calculateReturnDate(startDate: string, nights: number): string {
-  if (!startDate) return '';
-
-  try {
-    const parts = startDate.match(/(\d{1,2})-(\d{1,2})-(\d{4})/);
-    let date: Date;
-
-    if (parts) {
-      const [, month, day, year] = parts;
-      date = new Date(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10));
-    } else {
-      date = new Date(startDate);
-    }
-
-    if (Number.isNaN(date.getTime())) {
-      console.warn('[calculateReturnDate] Invalid start date:', startDate);
-      return '';
-    }
-
-    date.setDate(date.getDate() + nights);
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const year = String(date.getFullYear());
-    return `${month}-${day}-${year}`;
-  } catch (error) {
-    console.warn('[calculateReturnDate] Error calculating return date:', error);
+  if (!startDate || !Number.isFinite(nights) || nights <= 0) return '';
+  const returnDate = addCalendarDateDays(startDate, nights);
+  if (!returnDate) {
+    console.warn('[calculateReturnDate] Invalid start date:', startDate);
     return '';
   }
+  return formatDateMDY(returnDate, '-');
+}
+
+function getKnownNights(...values: Array<number | null | undefined>): number | undefined {
+  return values.find((value): value is number => typeof value === 'number' && Number.isFinite(value) && value > 0 && value <= 365);
 }
 
 function parseMoneyValue(value: string | undefined): number | undefined {
@@ -270,7 +136,106 @@ function getBookedCabinRetailPrice(
   if (normalized.includes('ocean') || normalized.includes('outside') || normalized.includes('view')) return prices.oceanview;
   if (normalized.includes('balcony') || normalized.includes('verand')) return prices.balcony;
   if (normalized.includes('suite')) return prices.suite;
-  return prices.balcony || prices.oceanview || prices.interior || prices.suite;
+  return undefined;
+}
+
+type UnknownRecord = Record<string, unknown>;
+
+function asRecord(value: unknown): UnknownRecord {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : {};
+}
+
+function firstMeaningfulText(...values: unknown[]): string {
+  for (const value of values) {
+    const text = String(value ?? '').trim();
+    if (text && !/^(?:unknown|tbd|n\/?a|null|undefined)$/i.test(text)) {
+      return text;
+    }
+  }
+  return '';
+}
+
+function firstPositiveInteger(...values: unknown[]): number | undefined {
+  for (const value of values) {
+    const parsed = typeof value === 'number' ? value : Number.parseInt(String(value ?? ''), 10);
+    if (Number.isFinite(parsed) && parsed > 0 && parsed <= 365) {
+      return parsed;
+    }
+  }
+  return undefined;
+}
+
+function getRawPassengers(rawBooking: UnknownRecord): UnknownRecord[] {
+  const candidates = [rawBooking.passengersInStateroom, rawBooking.passengers];
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      const passengers = candidate.map(asRecord).filter((passenger) => Object.keys(passenger).length > 0);
+      if (passengers.length > 0) return passengers;
+    }
+  }
+  return [];
+}
+
+function titleCaseNamePart(value: unknown): string {
+  return String(value ?? '').trim().toLowerCase().replace(/(^|[-'\s])\p{L}/gu, (letter) => letter.toUpperCase());
+}
+
+function getRawGuestNames(passengers: UnknownRecord[]): string[] {
+  const seen = new Set<string>();
+  const names: string[] = [];
+  passengers.forEach((passenger) => {
+    const firstName = titleCaseNamePart(passenger.firstName ?? passenger.givenName);
+    const lastName = titleCaseNamePart(passenger.lastName ?? passenger.surname);
+    const name = [firstName, lastName].filter(Boolean).join(' ').trim();
+    const key = name.toLowerCase();
+    if (name && !seen.has(key)) {
+      seen.add(key);
+      names.push(name);
+    }
+  });
+  return names;
+}
+
+function getRoyalCabinLabel(value: unknown): string {
+  const normalized = String(value ?? '').trim().toUpperCase();
+  if (normalized === 'I' || normalized.includes('INTERIOR') || normalized.includes('INSIDE')) return 'Interior';
+  if (normalized === 'O' || normalized.includes('OCEAN') || normalized.includes('OUTSIDE')) return 'Ocean View';
+  if (normalized === 'B' || normalized.includes('BALCONY') || normalized.includes('VERAND')) return 'Balcony';
+  if (normalized === 'S' || normalized.includes('SUITE')) return 'Suite';
+  return '';
+}
+
+function getProviderCabinDetails(cruise: BookedCruiseRow, rawBooking: UnknownRecord, passengers: UnknownRecord[]) {
+  const leadPassenger = passengers[0] ?? {};
+  const rawStateroomType = firstMeaningfulText(
+    rawBooking.stateroomType,
+    leadPassenger.stateroomType,
+    cruise.stateroomType,
+  );
+  const cabinNumberOrGty = firstMeaningfulText(
+    rawBooking.stateroomNumber,
+    leadPassenger.stateroomNumber,
+    cruise.stateroomNumber,
+    cruise.cabinNumberOrGTY,
+  );
+  const isGty = /^GTY$/i.test(cabinNumberOrGty);
+  const providerCabinLabel = getRoyalCabinLabel(rawStateroomType);
+  const rowCabinLabel = getRoyalCabinLabel(cruise.cabinType);
+  const baseCabinLabel = providerCabinLabel || rowCabinLabel || firstMeaningfulText(cruise.cabinType);
+
+  return {
+    cabinType: baseCabinLabel ? `${baseCabinLabel}${isGty ? ' GTY' : ''}` : undefined,
+    cabinNumberOrGty,
+    cabinNumber: cabinNumberOrGty && !isGty ? cabinNumberOrGty : undefined,
+    category: firstMeaningfulText(
+      rawBooking.stateroomCategoryCode,
+      leadPassenger.stateroomCategoryCode,
+      cruise.stateroomCategoryCode,
+      cruise.cabinCategory,
+    ) || undefined,
+    deckNumber: firstMeaningfulText(rawBooking.deckNumber, cruise.deckNumber) || undefined,
+    stateroomType: rawStateroomType || undefined,
+  };
 }
 
 function parsePortList(portList: string | undefined): string[] | undefined {
@@ -304,10 +269,10 @@ export function transformOfferRowsToCruisesAndOffers(
   ownershipOptions?: SyncOwnershipOptions
 ): { cruises: Cruise[]; offers: CasinoOffer[] } {
   const cruises: Cruise[] = [];
-  const ownershipFields = getOwnershipFields(ownershipOptions);
-  const brandFields = getBrandFields(source);
+  const ownershipFields = getOwnershipFields(ownershipOptions, source);
   const offerMap = new Map<string, CasinoOffer>();
   const cruiseIdsByOfferKey = new Map<string, string[]>();
+  const offerRowCountByKey = new Map<string, number>();
 
   for (const offer of offerRows) {
     const isOfferLevelOnly = !offer.shipName?.trim() && !offer.sailingDate?.trim();
@@ -320,7 +285,7 @@ export function transformOfferRowsToCruisesAndOffers(
     const explicitNights = typeof offer.totalNights === 'number' && Number.isFinite(offer.totalNights) && offer.totalNights > 0
       ? offer.totalNights
       : null;
-    const nights = explicitNights ?? itineraryNights ?? 7;
+    const nights = getKnownNights(explicitNights, itineraryNights) ?? 0;
     const returnDate = isOfferLevelOnly ? '' : calculateReturnDate(sailDate, nights);
     const interiorPrice = parseMoneyValue(offer.interiorPrice);
     const oceanviewPrice = parseMoneyValue(offer.oceanviewPrice);
@@ -351,8 +316,10 @@ export function transformOfferRowsToCruisesAndOffers(
       suitePrice,
       taxes,
       totalPrice: typeof lowestRoomPrice === 'number' ? lowestRoomPrice + (taxes ?? 0) : undefined,
-      cabinType: offer.cabinType || 'Balcony',
-      offerCode: canonicalCelebrityOfferCode(offer.offerCode, source) || offer.offerCode,
+      cabinType: offer.cabinType || undefined,
+      offerCode: offer.offerCode,
+      playerOfferId: offer.playerOfferId,
+      offerInstanceId: offer.offerInstanceId || offer.carnivalOfferId,
       offerName: offer.offerName,
       offerExpiry: offerExpiryDate,
       itineraryName: offer.itinerary,
@@ -366,24 +333,41 @@ export function transformOfferRowsToCruisesAndOffers(
       tradeInValue: extractTradeInValue(safePerks),
       perks: safePerks ? [safePerks] : [],
       cruiseSource: source,
-      ...brandFields,
       ...ownershipFields,
+      sourceRecordId: `${source}|${createRoyalOfferSailingIdentity({ ...offer, sailingDate: sailDate })}`,
+      sourceEvidence: {
+        rawCategory: 'offer_sailing',
+        sourcePage: offer.sourcePage,
+        sourceRecordId: createRoyalOfferSailingIdentity({ ...offer, sailingDate: sailDate }),
+        capturedAt: ownershipFields.sourceRetrievedAt,
+        authority: 'provider',
+      },
+      validationStatus: nights > 0 ? 'valid' : 'partial',
+      dataConfidence: nights > 0 ? ownershipFields.dataConfidence : 'partial',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
-    if (!isOfferLevelOnly) {
+    if (!isOfferLevelOnly || source === 'carnival') {
       cruises.push(cruise);
     }
 
-    const offerCodeKey = canonicalCelebrityOfferCode(offer.offerCode, source);
+    const offerCodeKey = (offer.offerCode || '').trim().toUpperCase();
+    const offerInstanceKey = (offer.playerOfferId || offer.carnivalOfferId || offer.offerInstanceId || '').trim().toLowerCase();
     const offerNameKey = (offer.offerName || '').trim().toLowerCase().replace(/\s+/g, ' ');
     const offerExpiryKey = (offerExpiryDate || offer.offerExpirationDate || '').trim();
-    const offerKey = [
-      source,
-      offerCodeKey || offerNameKey || `${offer.shipName || 'unknown'}|${sailDate || 'unknown'}|${offer.itinerary || 'unknown'}`,
+    // A CasinoOffer represents one provider offer instance and owns all of its
+    // eligible sailings. Do not create one offer per sailing, and never combine
+    // separate playerOfferIds merely because their public offer code matches.
+    // This is required for codes such as 26TOR403, where Royal issued three
+    // distinct offers carrying the same code.
+    const fallbackOfferIdentity = [
+      offerCodeKey || offerNameKey || 'unidentified-offer',
+      offerNameKey,
       offerExpiryKey,
     ].join('|');
+    const offerKey = `${source}|${offerInstanceKey ? `instance:${offerInstanceKey}` : `material:${fallbackOfferIdentity}`}`;
+    offerRowCountByKey.set(offerKey, (offerRowCountByKey.get(offerKey) ?? 0) + 1);
 
     if (!offerMap.has(offerKey)) {
       const displayName = offer.offerName && offer.offerName.trim() && offer.offerName !== offer.offerCode
@@ -392,9 +376,11 @@ export function transformOfferRowsToCruisesAndOffers(
 
       const casinoOffer: CasinoOffer = {
         id: `offer_${offerKey.replace(/\s+/g, '_')}_${Date.now()}`,
-        cruiseId: isOfferLevelOnly ? undefined : cruiseId,
+        cruiseId: isOfferLevelOnly && source !== 'carnival' ? undefined : cruiseId,
         cruiseIds: [],
-        offerCode: canonicalCelebrityOfferCode(offer.offerCode, source) || offer.offerCode || '',
+        offerCode: offer.offerCode || '',
+        playerOfferId: offer.playerOfferId,
+        offerInstanceId: offer.offerInstanceId || offer.carnivalOfferId,
         offerName: displayName,
         offerType: determineOfferType(safePerks),
         title: displayName,
@@ -427,15 +413,18 @@ export function transformOfferRowsToCruisesAndOffers(
         offerExpiryDate: offerExpiryDate,
         status: 'active',
         offerSource: source,
-        ...brandFields,
         bookingLink: offer.bookingLink || undefined,
-        catalogVisibleOfferCodes: offer.catalogVisibleOfferCodes || undefined,
-        catalogVisibleOfferCount: offer.catalogVisibleOfferCount,
-        catalogZeroRowOfferCodes: offer.catalogZeroRowOfferCodes || undefined,
-        catalogRowBearingOfferCodes: offer.catalogRowBearingOfferCodes || undefined,
-        catalogIncompleteOfferCodes: offer.catalogIncompleteOfferCodes || undefined,
-        eligibleSailingCount: 0,
         ...ownershipFields,
+        sourceRecordId: [source, offerInstanceKey, offer.offerCode || displayName, offerExpiryDate].filter(Boolean).join('|'),
+        sourceEvidence: {
+          rawCategory: 'offer',
+          sourcePage: offer.sourcePage,
+          sourceRecordId: [offerInstanceKey, offer.offerCode || displayName, offerExpiryDate].filter(Boolean).join('|'),
+          capturedAt: ownershipFields.sourceRetrievedAt,
+          authority: 'provider',
+        },
+        validationStatus: nights > 0 || isOfferLevelOnly ? 'valid' : 'partial',
+        dataConfidence: nights > 0 || isOfferLevelOnly ? ownershipFields.dataConfidence : 'partial',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -458,11 +447,6 @@ export function transformOfferRowsToCruisesAndOffers(
       if (!aggregatedOffer.bookingLink && offer.bookingLink) {
         aggregatedOffer.bookingLink = offer.bookingLink;
       }
-      aggregatedOffer.catalogVisibleOfferCodes = offer.catalogVisibleOfferCodes || aggregatedOffer.catalogVisibleOfferCodes;
-      aggregatedOffer.catalogVisibleOfferCount = offer.catalogVisibleOfferCount ?? aggregatedOffer.catalogVisibleOfferCount;
-      aggregatedOffer.catalogZeroRowOfferCodes = offer.catalogZeroRowOfferCodes || aggregatedOffer.catalogZeroRowOfferCodes;
-      aggregatedOffer.catalogRowBearingOfferCodes = offer.catalogRowBearingOfferCodes || aggregatedOffer.catalogRowBearingOfferCodes;
-      aggregatedOffer.catalogIncompleteOfferCodes = offer.catalogIncompleteOfferCodes || aggregatedOffer.catalogIncompleteOfferCodes;
 
       if (interiorPrice !== undefined) {
         aggregatedOffer.interiorPrice = getLowestPositivePrice([aggregatedOffer.interiorPrice, interiorPrice]);
@@ -493,7 +477,7 @@ export function transformOfferRowsToCruisesAndOffers(
       aggregatedOffer.updatedAt = new Date().toISOString();
     }
 
-    if (!isOfferLevelOnly) {
+    if (!isOfferLevelOnly || source === 'carnival') {
       cruiseIdsByOfferKey.get(offerKey)?.push(cruiseId);
     }
   }
@@ -502,7 +486,18 @@ export function transformOfferRowsToCruisesAndOffers(
     const cruiseIds = cruiseIdsByOfferKey.get(key) || [];
     offer.cruiseIds = cruiseIds;
     offer.cruiseId = cruiseIds[0];
-    offer.eligibleSailingCount = cruiseIds.length;
+  });
+
+  console.log('[DataTransformer] Offer-instance aggregation complete', {
+    inputRows: offerRows.length,
+    offerInstances: offerMap.size,
+    exportedSailings: cruises.length,
+    instancesSharingCodes: Array.from(offerMap.values()).reduce<Record<string, number>>((counts, offer) => {
+      const code = String(offer.offerCode || '').trim().toUpperCase();
+      if (code) counts[code] = (counts[code] ?? 0) + 1;
+      return counts;
+    }, {}),
+    rowsPerInstance: Array.from(offerRowCountByKey.entries()).slice(0, 25),
   });
 
   return {
@@ -527,17 +522,41 @@ export function transformBookedCruisesToAppFormat(
   source: SyncDataSource = 'royal',
   ownershipOptions?: SyncOwnershipOptions
 ): BookedCruise[] {
-  const ownershipFields = getOwnershipFields(ownershipOptions);
-  const brandFields = getBrandFields(source);
+  const ownershipFields = getOwnershipFields(ownershipOptions, source);
 
   return cruises.map((cruise) => {
-    const startDate = parseDate(cruise.sailingStartDate);
-    const endDate = parseDate(cruise.sailingEndDate);
+    const rawBooking = asRecord(cruise.rawBooking);
+    const rawPassengers = getRawPassengers(rawBooking);
+    const rawGuestNames = getRawGuestNames(rawPassengers);
+    const rawSailDate = firstMeaningfulText(rawBooking.sailDate, rawBooking.sailingStartDate, rawBooking.startDate);
+    const startDate = parseDate(rawSailDate || cruise.sailingStartDate);
+    const rowEndDate = parseDate(cruise.sailingEndDate);
+    const rawApiNights = firstPositiveInteger(rawBooking.numberOfNights, rawBooking.nights);
+    // Royal's booking payload supplies sailDate + numberOfNights even when the
+    // display layer has a stale or tentative date range. Reconstructing the end
+    // date from those provider fields avoids the observed 4-night Oasis ->
+    // 3-night corruption.
+    const providerEndDate = startDate && rawApiNights ? calculateReturnDate(startDate, rawApiNights) : '';
+    const endDate = providerEndDate || rowEndDate;
+    const providerCabin = getProviderCabinDetails(cruise, rawBooking, rawPassengers);
 
-    let nights: number = 7;
-    let calculationMethod = 'default';
+    let nights: number | undefined;
+    let calculationMethod = 'unknown';
+    const rawNights = rawApiNights ?? cruise.numberOfNights;
+    const apiNights = rawNights === undefined || rawNights === null
+      ? undefined
+      : typeof rawNights === 'number'
+        ? rawNights
+        : parseInt(String(rawNights), 10);
+    const hasValidApiNights = apiNights !== undefined && Number.isFinite(apiNights) && apiNights > 0 && apiNights <= 365;
 
-    if (startDate && endDate) {
+    if (rawApiNights) {
+      nights = rawApiNights;
+      calculationMethod = 'provider';
+      console.log(`[DataTransformer] ✓ Using provider booking nights for ${cruise.shipName}: ${nights}`);
+    }
+
+    if (calculationMethod === 'unknown' && startDate && endDate) {
       const dateNights = calculateNightsFromDates(startDate, endDate);
       if (dateNights !== null && dateNights > 0 && dateNights <= 365) {
         nights = dateNights;
@@ -546,19 +565,15 @@ export function transformBookedCruisesToAppFormat(
       }
     }
 
-    if (calculationMethod === 'default') {
-      const rawNights = cruise.numberOfNights;
-      if (rawNights !== undefined && rawNights !== null) {
-        const numValue = typeof rawNights === 'number' ? rawNights : parseInt(String(rawNights), 10);
-        if (!Number.isNaN(numValue) && numValue > 0 && numValue <= 365) {
-          nights = numValue;
-          calculationMethod = 'api';
-          console.log(`[DataTransformer] ✓ Using API nights for ${cruise.shipName}: ${nights}`);
-        }
+    if (calculationMethod === 'unknown') {
+      if (hasValidApiNights) {
+        nights = apiNights as number;
+        calculationMethod = 'api';
+        console.log(`[DataTransformer] ✓ Using API nights for ${cruise.shipName}: ${nights}`);
       }
     }
 
-    if (calculationMethod === 'default') {
+    if (calculationMethod === 'unknown') {
       const titleNights = extractNightsFromText(cruise.cruiseTitle || '');
       if (titleNights !== null && titleNights > 0 && titleNights <= 365) {
         nights = titleNights;
@@ -574,56 +589,61 @@ export function transformBookedCruisesToAppFormat(
       }
     }
 
-    if (typeof nights !== 'number' || Number.isNaN(nights) || nights <= 0 || nights > 365) {
-      console.error(`[DataTransformer] ❌ INVALID nights value for ${cruise.shipName}: ${nights} (type: ${typeof nights}). Using default: 7`);
-      nights = 7;
-      calculationMethod = 'default';
+    const normalizedStatus = firstMeaningfulText(cruise.status, rawBooking.status, rawBooking.bookingStatus).trim().toLowerCase();
+    const isCourtesyHold = normalizedStatus === 'courtesy hold' || normalizedStatus === 'hold' || normalizedStatus === 'offer';
+    const isCompleted = normalizedStatus === 'completed' || normalizedStatus === 'past' || cruise.sourcePage?.toLowerCase().includes('past') === true;
+    if (!nights) {
+      console.warn(`[DataTransformer] Missing authoritative nights for ${cruise.shipName}; preserving unknown instead of defaulting to 7`);
+      nights = 0;
     }
 
-    console.log(`[DataTransformer] Final nights for ${cruise.shipName} (${startDate} to ${endDate}): ${nights} (method: ${calculationMethod})`);
+    console.log(`[DataTransformer] Final nights for ${cruise.shipName} (${startDate || 'unknown'} to ${endDate || 'unknown'}): ${nights || 'unknown'} (method: ${calculationMethod})`);
 
-    const normalizedInputStatus = `${cruise.status || ''} ${cruise.bookingStatus || ''} ${cruise.sourcePage || ''}`.toLowerCase();
-    const isCompletedInput = normalizedInputStatus.includes('completed') || normalizedInputStatus.includes('past') || normalizedInputStatus.includes('history');
-    const isCourtesyHold = !isCompletedInput && (cruise.status === 'Courtesy Hold' || cruise.status === 'Offer');
-    const finalEndDate = endDate || calculateReturnDate(startDate, nights);
+    const dateNights = startDate && endDate ? calculateNightsFromDates(startDate, endDate) : null;
+    const hasExplicitDateRange = Boolean(startDate && endDate && dateNights && dateNights > 0);
+    const hasDurationConflict = Boolean(hasExplicitDateRange && hasValidApiNights && dateNights !== apiNights);
+    const derivedOnlyDuration = calculationMethod === 'title' || calculationMethod === 'itinerary';
+    const finalEndDate = endDate || (startDate && hasValidApiNights ? calculateReturnDate(startDate, apiNights as number) : '');
+    const hasCompleteSchedule = hasExplicitDateRange && !hasDurationConflict && !derivedOnlyDuration;
+    const requiresCompletedReview = isCompleted && !hasCompleteSchedule;
+    const validationStatus = requiresCompletedReview ? 'quarantined' : hasCompleteSchedule ? 'valid' : 'partial';
     const interiorPrice = parseMoneyValue(cruise.interiorPrice);
     const oceanviewPrice = parseMoneyValue(cruise.oceanviewPrice);
     const balconyPrice = parseMoneyValue(cruise.balconyPrice);
     const suitePrice = parseMoneyValue(cruise.suitePrice);
     const taxesAndFees = parseMoneyValue(cruise.taxesAndFees);
-    const importedPerPersonCabinRetailValue = getBookedCabinRetailPrice(cruise.cabinType, {
+    const importedPerPersonCabinRetailValue = getBookedCabinRetailPrice(providerCabin.cabinType, {
       interior: interiorPrice,
       oceanview: oceanviewPrice,
       balcony: balconyPrice,
       suite: suitePrice,
     });
     const importedRoomCabinRetailValue = getDoubleOccupancyRoomRetailValue(importedPerPersonCabinRetailValue);
-    const passengerRows = Array.isArray(cruise.passengers) && cruise.passengers.length > 0
-      ? cruise.passengers
-      : (Array.isArray(cruise.passengersInStateroom) ? cruise.passengersInStateroom : []);
-    const guestNames = passengerRows
-      .map((passenger) => [passenger.firstName, passenger.lastName].filter(Boolean).join(' ').trim())
-      .filter((name) => name.length > 0);
-    const parsedGuestCount = Number.parseInt(String(cruise.numberOfGuests || ''), 10);
-    const guestCount = Number.isFinite(parsedGuestCount) && parsedGuestCount > 0
-      ? parsedGuestCount
-      : (guestNames.length > 0 ? guestNames.length : undefined);
+
+    const providerRecordId = getProviderRecordId(firstMeaningfulText(
+      rawBooking.bookingId,
+      rawBooking.masterBookingId,
+      cruise.bookingId,
+    ));
+    const materialIdentity = createRoyalBookedCruiseIdentity({
+      ...cruise,
+      sailingStartDate: startDate,
+      sailingEndDate: finalEndDate,
+      numberOfNights: nights,
+    });
 
     const bookedCruise: BookedCruise = {
-      sourcePayload: (cruise as { rawBooking?: unknown }).rawBooking,
+      sourcePayload: cruise.rawBooking,
       id: generateId(),
       shipName: cruise.shipName,
       sailDate: startDate,
       returnDate: finalEndDate,
       departurePort: cruise.departurePort,
-      // v13.0: Never fabricate the literal word "Unknown" as real-looking destination text.
-      // Leave it blank when we truly have nothing so the UI's own fallback (e.g. "Cruise")
-      // renders instead of a misleading placeholder.
       destination: cruise.itinerary || cruise.cruiseTitle || '',
       nights,
-      cabinType: cruise.cabinType,
-      cabinNumber: cruise.cabinNumberOrGTY && cruise.cabinNumberOrGTY !== 'GTY' ? cruise.cabinNumberOrGTY : undefined,
-      cabinCategory: cruise.cabinCategory || cruise.stateroomCategoryCode,
+      cabinType: providerCabin.cabinType,
+      cabinNumber: providerCabin.cabinNumber,
+      cabinCategory: providerCabin.category,
       price: importedPerPersonCabinRetailValue,
       interiorPrice,
       oceanviewPrice,
@@ -634,28 +654,43 @@ export function transformBookedCruisesToAppFormat(
       retailValue: importedRoomCabinRetailValue,
       totalRetailCost: importedRoomCabinRetailValue,
       originalPrice: importedRoomCabinRetailValue,
-      deckNumber: cruise.deckNumber,
-      bookingId: cruise.bookingId,
-      reservationNumber: isPlaceholderBookingIdentifier(cruise.bookingId) ? undefined : cruise.bookingId,
-      status: isCompletedInput ? 'completed' : 'booked',
-      completionState: isCompletedInput ? 'completed' : 'upcoming',
+      deckNumber: providerCabin.deckNumber,
+      bookingId: providerRecordId,
+      reservationNumber: providerRecordId,
+      status: requiresCompletedReview ? 'reviewNeeded' : isCompleted ? 'completed' : isCourtesyHold ? 'Courtesy Hold' : 'booked',
+      completionState: requiresCompletedReview ? undefined : isCompleted ? 'completed' : 'upcoming',
       isCourtesyHold,
       holdExpiration: cruise.holdExpiration || undefined,
-      notes: isCourtesyHold ? `Courtesy Hold${cruise.holdExpiration ? ` (expires ${cruise.holdExpiration})` : ''}` : undefined,
+      notes: requiresCompletedReview
+        ? 'Royal completed-cruise record requires review because its provider date range or duration is incomplete or conflicting.'
+        : isCompleted
+        ? 'Imported from Royal Caribbean Past Trips'
+        : isCourtesyHold
+          ? `Courtesy Hold${cruise.holdExpiration ? ` (expires ${cruise.holdExpiration})` : ''}`
+          : undefined,
       itineraryName: cruise.itinerary,
       itineraryRaw: cruise.itinerary ? [cruise.itinerary] : [],
-      bookingStatus: cruise.bookingStatus,
-      packageCode: cruise.packageCode,
-      passengerStatus: cruise.passengerStatus,
-      stateroomNumber: cruise.stateroomNumber,
-      stateroomCategoryCode: cruise.stateroomCategoryCode,
-      stateroomType: cruise.stateroomType,
-      musterStation: cruise.musterStation,
-      guestNames: guestNames.length > 0 ? guestNames : undefined,
-      guests: guestCount,
+      bookingStatus: firstMeaningfulText(rawBooking.bookingStatus, cruise.bookingStatus) || undefined,
+      packageCode: firstMeaningfulText(rawBooking.packageCode, cruise.packageCode) || undefined,
+      passengerStatus: firstMeaningfulText(rawPassengers[0]?.passengerStatus, cruise.passengerStatus) || undefined,
+      stateroomNumber: providerCabin.cabinNumberOrGty || undefined,
+      stateroomCategoryCode: providerCabin.category,
+      stateroomType: providerCabin.stateroomType,
+      musterStation: firstMeaningfulText(rawBooking.musterStation, cruise.musterStation) || undefined,
+      guests: rawPassengers.length || parseGuestCount(cruise.numberOfGuests || ''),
+      guestNames: rawGuestNames.length > 0 ? rawGuestNames : undefined,
       cruiseSource: source,
-      ...brandFields,
       ...ownershipFields,
+      sourceRecordId: providerRecordId ? `${source}|provider:${providerRecordId}` : `${source}|${materialIdentity}`,
+      sourceEvidence: {
+        rawCategory: isCompleted ? 'completed_cruise' : isCourtesyHold ? 'courtesy_hold' : 'booked_cruise',
+        sourcePage: cruise.sourcePage,
+        sourceRecordId: providerRecordId ? `provider:${providerRecordId}` : materialIdentity,
+        capturedAt: ownershipFields.sourceRetrievedAt,
+        authority: 'provider',
+      },
+      validationStatus,
+      dataConfidence: validationStatus === 'valid' ? ownershipFields.dataConfidence : 'partial',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };

@@ -1,0 +1,53 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Stack, useRouter } from 'expo-router';
+import { ArrowLeft, CircleDollarSign, PauseCircle, PlayCircle, Save, ShieldCheck } from 'lucide-react-native';
+import { useAuth } from '@/state/AuthProvider';
+import { useCoreData } from '@/state/CoreDataProvider';
+import { useCasinoSessions } from '@/state/CasinoSessionProvider';
+import { ALL_STORAGE_KEYS, getUserScopedKey } from '@/lib/storage/storageKeys';
+import { quotaSafeGetJsonItem, quotaSafeSetJsonItem } from '@/lib/storage/quotaSafeStorage';
+import { evaluateResponsiblePlay } from '@/lib/casino/responsiblePlay';
+import type { ResponsiblePlayLimits } from '@/types/intelligence';
+import { inferCasinoProgram } from '@/lib/casino/casinoProgramSeasons';
+
+const C = { navy: '#051525', panel: '#0E2A43', card: '#173D5C', white: '#FFFFFF', muted: '#B7CADD', gold: '#E6B83F', teal: '#3CD1B3', red: '#FF6B64', line: '#315978' };
+const asNumber = (value: string) => { const number = Number(value.replace(/[$,]/g, '')); return Number.isFinite(number) ? number : 0; };
+const initialLimits = (tripId: string): ResponsiblePlayLimits => ({ tripId, tripBankroll: null, dailyStopLoss: null, dailyWinGoal: null, sessionMinutes: null, cooldownMinutes: 30, privateOnDevice: true, updatedAt: new Date().toISOString() });
+
+export default function OnboardCasinoModeScreen() {
+  const router = useRouter();
+  const { authenticatedEmail } = useAuth();
+  const { bookedCruises } = useCoreData();
+  const { sessions, addSession } = useCasinoSessions();
+  const today = new Date().toISOString().slice(0, 10), cruise = bookedCruises.find((row) => row.sailDate <= today && row.returnDate >= today) ?? bookedCruises.filter((row) => row.returnDate >= today).sort((a, b) => a.sailDate.localeCompare(b.sailDate))[0];
+  const tripId = cruise?.id ?? 'unassigned-trip', limitsKey = getUserScopedKey(ALL_STORAGE_KEYS.RESPONSIBLE_PLAY_LIMITS, authenticatedEmail);
+  const [startedAt, setStartedAt] = useState<string | null>(null), [now, setNow] = useState(Date.now());
+  const [cashIn, setCashIn] = useState(''), [cashOut, setCashOut] = useState(''), [points, setPoints] = useState(''), [machine, setMachine] = useState(''), [location, setLocation] = useState(''), [notes, setNotes] = useState(''), [handPay, setHandPay] = useState('');
+  const [limits, setLimits] = useState<ResponsiblePlayLimits>(initialLimits(tripId));
+  useEffect(() => { void quotaSafeGetJsonItem<ResponsiblePlayLimits>(limitsKey, initialLimits(tripId), (value): value is ResponsiblePlayLimits => Boolean(value && typeof value === 'object' && 'privateOnDevice' in value)).then((saved) => setLimits(saved.tripId === tripId ? saved : initialLimits(tripId))); }, [limitsKey, tripId]);
+  useEffect(() => { if (!startedAt) return; const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, [startedAt]);
+  const elapsedMinutes = startedAt ? Math.max(0, Math.floor((now - Date.parse(startedAt)) / 60_000)) : 0;
+  const todaySessions = useMemo(() => sessions.filter((row) => row.date === today && (!cruise || row.cruiseId === cruise.id)), [cruise, sessions, today]);
+  const todayNet = todaySessions.reduce((sum, row) => sum + (row.winLoss ?? 0), 0) + (startedAt ? asNumber(cashOut) + asNumber(handPay) - asNumber(cashIn) : 0);
+  const status = evaluateResponsiblePlay({ limits, tripNetResult: todayNet, todayNetResult: todayNet, sessionMinutes: elapsedMinutes });
+  const saveLimits = async (updates: Partial<ResponsiblePlayLimits>) => { const next = { ...limits, ...updates, tripId, privateOnDevice: true as const, updatedAt: new Date().toISOString() }; setLimits(next); await quotaSafeSetJsonItem(limitsKey, next); };
+  const stop = async () => {
+    if (!startedAt) return;
+    const endedAt = new Date().toISOString(), buyIn = asNumber(cashIn), out = asNumber(cashOut), jackpot = asNumber(handPay), durationMinutes = Math.max(1, Math.round((Date.parse(endedAt) - Date.parse(startedAt)) / 60_000));
+    const program = cruise ? inferCasinoProgram(cruise as unknown as Record<string, unknown>) : 'other';
+    await addSession({ date: today, cruiseId: cruise?.id, machineName: machine.trim() || undefined, casinoLocation: location.trim() || undefined, startTime: startedAt, endTime: endedAt, durationMinutes, notes: [notes.trim(), jackpot > 0 ? `Hand pay: $${jackpot.toLocaleString()}` : ''].filter(Boolean).join(' · ') || undefined, buyIn, cashIn: buyIn, cashOut: out, winLoss: out + jackpot - buyIn, pointsEarned: asNumber(points), jackpotHit: jackpot > 0, jackpotAmount: jackpot || undefined, handpayAmount: jackpot || undefined, handpayIncludedInCashOut: false, program, recordKind: 'actual', pointsSource: 'user_entered' });
+    setStartedAt(null); setCashIn(''); setCashOut(''); setPoints(''); setNotes(''); setHandPay(''); Alert.alert('Session saved locally', 'The session is available offline and will remain on this device unless you choose a cloud sync.');
+  };
+  const field = (label: string, value: string, setValue: (value: string) => void, numeric = false) => <View style={s.field}><Text style={s.label}>{label}</Text><TextInput style={s.input} value={value} onChangeText={setValue} keyboardType={numeric ? 'decimal-pad' : 'default'} placeholder="Tap to enter" placeholderTextColor={C.muted} /></View>;
+  const limitField = (label: string, value: number | null, key: keyof ResponsiblePlayLimits) => <View style={s.field}><Text style={s.label}>{label}</Text><TextInput style={s.input} defaultValue={value == null ? '' : String(value)} keyboardType="number-pad" placeholder="Not set" placeholderTextColor={C.muted} onEndEditing={(event) => { const valueText = event.nativeEvent.text.trim(); void saveLimits({ [key]: valueText ? asNumber(valueText) : null }); }} /></View>;
+  return <View style={s.root}><Stack.Screen options={{ headerShown: false }} /><SafeAreaView style={s.safe} edges={['top']}><View style={s.header}><TouchableOpacity style={s.back} onPress={() => router.back()}><ArrowLeft size={24} color={C.gold} /></TouchableOpacity><View><Text style={s.title}>Onboard Casino Mode</Text><Text style={s.sub}>{cruise?.shipName || 'Unassigned trip'} · offline-first</Text></View></View><ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
+    <View style={[s.guard, status.state === 'stop_and_cool_down' && s.guardStop]}><ShieldCheck size={24} color={status.state === 'stop_and_cool_down' ? C.red : C.teal} /><View style={s.flex}><Text style={s.guardTitle}>{status.state.replaceAll('_', ' ').toUpperCase()}</Text><Text style={s.guardText}>{status.neutralReminder}</Text></View></View>
+    <TouchableOpacity style={[s.mainButton, startedAt && s.stopButton]} onPress={() => startedAt ? void stop() : setStartedAt(new Date().toISOString())} testID="onboard-session-toggle">{startedAt ? <PauseCircle size={42} color={C.white} /> : <PlayCircle size={42} color={C.navy} />}<Text style={[s.mainButtonText, !startedAt && { color: C.navy }]}>{startedAt ? `STOP & SAVE · ${elapsedMinutes} MIN` : 'START CASINO SESSION'}</Text></TouchableOpacity>
+    <Text style={s.section}>SESSION DETAILS</Text><View style={s.grid}>{field('Cash in', cashIn, setCashIn, true)}{field('Cash out', cashOut, setCashOut, true)}{field('Points', points, setPoints, true)}{field('Hand pay', handPay, setHandPay, true)}{field('Machine / table', machine, setMachine)}{field('Casino location', location, setLocation)}</View>{field('Notes', notes, setNotes)}
+    <Text style={s.section}>PRIVATE RESPONSIBLE-PLAY GUARDRAILS</Text><View style={s.panel}><Text style={s.copy}>Stored only on this device. Limits are guardrails—not targets—and are never described as optimization.</Text><View style={s.grid}>{limitField('Trip bankroll', limits.tripBankroll, 'tripBankroll')}{limitField('Daily stop-loss', limits.dailyStopLoss, 'dailyStopLoss')}{limitField('Daily win goal', limits.dailyWinGoal, 'dailyWinGoal')}{limitField('Session minutes', limits.sessionMinutes, 'sessionMinutes')}{limitField('Cooldown minutes', limits.cooldownMinutes, 'cooldownMinutes')}</View></View>
+    <View style={s.stats}><CircleDollarSign size={22} color={C.gold} /><Text style={s.copy}>{todaySessions.length} saved session(s) today · net {todayNet.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</Text></View><Text style={s.notice}>No network is required to start, stop, or save a session. Photos can be attached later from the full session editor so the live controls stay fast and dependable.</Text>
+  </ScrollView></SafeAreaView></View>;
+}
+const s = StyleSheet.create({ root: { flex: 1, backgroundColor: C.navy }, safe: { flex: 1 }, flex: { flex: 1 }, header: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderBottomWidth: 1, borderBottomColor: C.line }, back: { width: 48, height: 48, borderRadius: 24, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center' }, title: { color: C.white, fontSize: 22, fontWeight: '900' }, sub: { color: C.muted, fontSize: 12, marginTop: 2 }, content: { padding: 16, paddingBottom: 70 }, guard: { flexDirection: 'row', gap: 12, borderRadius: 14, backgroundColor: C.panel, padding: 14, borderWidth: 1, borderColor: C.teal }, guardStop: { borderColor: C.red }, guardTitle: { color: C.white, fontWeight: '900', fontSize: 13 }, guardText: { color: C.muted, fontSize: 11, lineHeight: 16, marginTop: 3 }, mainButton: { minHeight: 92, borderRadius: 18, backgroundColor: C.gold, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: 15 }, stopButton: { backgroundColor: C.red }, mainButtonText: { color: C.white, fontSize: 18, fontWeight: '900' }, section: { color: C.gold, fontSize: 12, fontWeight: '900', letterSpacing: 1, marginTop: 20, marginBottom: 9 }, grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, field: { width: '48%', flexGrow: 1 }, label: { color: C.muted, fontSize: 10, fontWeight: '800', marginBottom: 4 }, input: { color: C.white, backgroundColor: C.panel, borderRadius: 12, borderWidth: 1, borderColor: C.line, padding: 14, minHeight: 50, fontSize: 15, fontWeight: '700' }, panel: { backgroundColor: C.panel, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: C.line }, copy: { color: C.muted, fontSize: 12, lineHeight: 18 }, stats: { flexDirection: 'row', gap: 10, alignItems: 'center', backgroundColor: C.card, padding: 14, borderRadius: 13, marginTop: 15 }, notice: { color: C.muted, fontSize: 10, lineHeight: 16, marginTop: 15 } });

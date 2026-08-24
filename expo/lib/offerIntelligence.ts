@@ -1,7 +1,8 @@
 import type { CasinoOffer, Cruise, TravelerProfile } from '@/types/models';
-import { getCabinPriceFromEntity, getDoubleOccupancyRoomRetailValue, GUEST_COUNT_DEFAULT } from '@/lib/valueCalculator';
+import { getCabinPriceFromEntity, getDoubleOccupancyRoomRetailValue } from '@/lib/valueCalculator';
 import { getDaysUntil, formatDate } from '@/lib/date';
 import { calculateSeaDayDensityScore, buildPortTracker, calculateShipFamiliarityScore } from '@/lib/cruisePlanningIntelligence';
+import { knownGuestCount, knownNightCount } from '@/lib/cruiseRecordIntegrity';
 
 export type OfferRatingLabel = 'Excellent' | 'Strong' | 'Average' | 'Weak' | 'Poor Use';
 export type CommandCenterBucketId = 'expires7' | 'expires14' | 'expires30' | 'recentlyExpired' | 'needsReview';
@@ -138,8 +139,65 @@ function findAssociatedCruises(offer: CasinoOffer, cruises: Cruise[]): Cruise[] 
   });
 }
 
-function estimateTaxes(nights: number, guests: number): number {
-  return Math.round(Math.max(1, nights || 7) * 30 * Math.max(1, guests || GUEST_COUNT_DEFAULT));
+interface CruiseAssociationIndex {
+  byId: Map<string, Cruise>;
+  byInstance: Map<string, Cruise[]>;
+  byCode: Map<string, Cruise[]>;
+}
+
+function appendIndexedCruise(index: Map<string, Cruise[]>, key: string, cruise: Cruise): void {
+  if (!key) return;
+  const rows = index.get(key);
+  if (rows) rows.push(cruise);
+  else index.set(key, [cruise]);
+}
+
+function getOfferInstanceKey(record: CasinoOffer | Cruise): string {
+  return normalizeLower(record.playerOfferId || record.offerInstanceId || ('carnivalOfferId' in record ? record.carnivalOfferId : undefined));
+}
+
+function buildCruiseAssociationIndex(cruises: Cruise[]): CruiseAssociationIndex {
+  const index: CruiseAssociationIndex = {
+    byId: new Map<string, Cruise>(),
+    byInstance: new Map<string, Cruise[]>(),
+    byCode: new Map<string, Cruise[]>(),
+  };
+
+  for (const cruise of cruises) {
+    const id = normalizeLower(cruise.id);
+    if (id) index.byId.set(id, cruise);
+    appendIndexedCruise(index.byInstance, getOfferInstanceKey(cruise), cruise);
+    appendIndexedCruise(index.byCode, normalizeLower(cruise.offerCode), cruise);
+  }
+
+  return index;
+}
+
+function findAssociatedCruisesFromIndex(offer: CasinoOffer, index: CruiseAssociationIndex): Cruise[] {
+  // Unique provider offer identity wins over a shared marketing code. This is
+  // both faster and required for offers such as 2607TOR403 that legitimately
+  // have multiple offer instances.
+  const instanceKey = getOfferInstanceKey(offer);
+  const instanceRows = instanceKey ? index.byInstance.get(instanceKey) ?? [] : [];
+  if (instanceRows.length > 0) return instanceRows;
+
+  const explicitIds = [offer.cruiseId, ...(offer.cruiseIds ?? [])]
+    .map(normalizeLower)
+    .filter(Boolean);
+  if (explicitIds.length > 0) {
+    const explicitRows = explicitIds
+      .map((id) => index.byId.get(id))
+      .filter((cruise): cruise is Cruise => Boolean(cruise));
+    if (explicitRows.length > 0) return Array.from(new Map(explicitRows.map((cruise) => [cruise.id, cruise])).values());
+  }
+
+  const offerCode = normalizeLower(offer.offerCode);
+  return offerCode ? index.byCode.get(offerCode) ?? [] : [];
+}
+
+function estimateTaxes(nights: number | undefined, guests: number | undefined): number {
+  if (!nights || !guests) return 0;
+  return Math.round(nights * 30 * guests);
 }
 
 function getCruiseRetailValue(cruise: Cruise, cabinType?: string): number {
@@ -151,17 +209,20 @@ function getCruiseRetailValue(cruise: Cruise, cabinType?: string): number {
   const roomValueFromPerPersonPrice = getDoubleOccupancyRoomRetailValue(cruise.price);
   if (roomValueFromPerPersonPrice && roomValueFromPerPersonPrice > 0) return roomValueFromPerPersonPrice;
   const baseNightly = normalizeLower(targetCabin).includes('suite') ? 350 : normalizeLower(targetCabin).includes('balcony') ? 180 : normalizeLower(targetCabin).includes('ocean') ? 140 : 100;
-  return Math.round(baseNightly * Math.max(1, cruise.nights || 7) * GUEST_COUNT_DEFAULT);
+  const nights = knownNightCount(cruise.nights);
+  const guests = knownGuestCount(cruise.guests);
+  return nights && guests ? Math.round(baseNightly * nights * guests) : 0;
 }
 
 export function calculateCasinoPaysForOffer(offer: CasinoOffer, cruises: Cruise[] = []): CasinoPaysForResult {
   const associatedCruises = findAssociatedCruises(offer, cruises);
-  const guests = offer.guests || GUEST_COUNT_DEFAULT;
+  const guests = knownGuestCount(offer.guests);
   const cabinType = offer.roomType || associatedCruises[0]?.cabinType || 'Balcony';
   const directCabinValue = getMoney(offer.retailCabinValue) || getMoney(offer.totalValue) || getMoney(offer.offerValue) || getMoney(offer.value);
   const cruiseCabinValues = associatedCruises.map((cruise) => getCruiseRetailValue(cruise, cabinType)).filter((value) => value > 0);
   const retailCabinValue = directCabinValue || (cruiseCabinValues.length > 0 ? Math.round(cruiseCabinValues.reduce((sum, value) => sum + value, 0) / cruiseCabinValues.length) : 0);
-  const taxesFees = getMoney(offer.taxesFees) || getMoney(offer.portCharges) || (associatedCruises[0] ? getMoney(associatedCruises[0].taxes) : 0) || estimateTaxes(offer.nights || associatedCruises[0]?.nights || 7, guests);
+  const nights = knownNightCount(offer.nights) ?? knownNightCount(associatedCruises[0]?.nights);
+  const taxesFees = getMoney(offer.taxesFees) || getMoney(offer.portCharges) || (associatedCruises[0] ? getMoney(associatedCruises[0].taxes) : 0) || estimateTaxes(nights, guests);
   const upgradeCost = getMoney((offer as unknown as Record<string, unknown>).upgradeCost) || Math.max(0, getMoney(offer.suitePrice) - getMoney(offer.balconyPrice));
   const freePlay = getMoney(offer.freePlay) || getMoney(offer.freeplayAmount);
   const onboardCredit = getMoney(offer.OBC) || getMoney(offer.obcAmount);
@@ -171,10 +232,10 @@ export function calculateCasinoPaysForOffer(offer: CasinoOffer, cruises: Cruise[
   const effectiveSavingsPercentage = denominator > 0 ? Math.round((casinoCoveredValue / denominator) * 100) : 0;
   const missingInputs: string[] = [];
   if (!directCabinValue && cruiseCabinValues.length === 0) missingInputs.push('retail cabin value');
-  if (!offer.taxesFees && !offer.portCharges && !associatedCruises[0]?.taxes) missingInputs.push('exact taxes/fees');
+  if (!offer.taxesFees && !offer.portCharges && !associatedCruises[0]?.taxes) missingInputs.push(nights && guests ? 'exact taxes/fees (estimated)' : 'taxes/fees and duration or guest count');
   if (!offer.roomType && !associatedCruises[0]?.cabinType) missingInputs.push('included cabin type');
   const compEfficiencyRating = getRating(clamp(Math.round(effectiveSavingsPercentage * 0.9 + (freePlay + onboardCredit > 0 ? 8 : 0)), 0, 100));
-  if ((globalThis as any).__EASYSEAS_VERBOSE_OFFER_INTELLIGENCE) console.log('[OfferIntelligence] Casino Pays For calculated:', { offerCode: offer.offerCode, retailCabinValue, taxesFees, upgradeCost, freePlay, onboardCredit, casinoCoveredValue, userOutOfPocket, effectiveSavingsPercentage, missingInputs });
+  if (typeof __DEV__ !== 'undefined' && __DEV__) console.log('[OfferIntelligence] Casino Pays For calculated:', { offerCode: offer.offerCode, retailCabinValue, taxesFees, upgradeCost, freePlay, onboardCredit, casinoCoveredValue, userOutOfPocket, effectiveSavingsPercentage, missingInputs });
   return { retailCabinValue, taxesFees, upgradeCost, freePlay, onboardCredit, casinoCoveredValue, userOutOfPocket, effectiveSavingsPercentage, compEfficiencyRating, missingInputs };
 }
 
@@ -191,26 +252,24 @@ function getCertificateFit(offer: CasinoOffer, certificates: CertificateLike[]):
 
 function getSeaDayDensityScore(cruises: Cruise[]): number {
   if (cruises.length === 0) return 0;
-  const sampleCruises = cruises.slice(0, 25);
-  const scores = sampleCruises.map((cruise) => calculateSeaDayDensityScore(cruise).casinoOpportunityScore);
+  const scores = cruises.map((cruise) => calculateSeaDayDensityScore(cruise).casinoOpportunityScore);
   return Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length / 10);
 }
 
 function getPlanningIntelligenceBoost(cruises: Cruise[], offer: CasinoOffer, profile?: Partial<TravelerProfile> | null): { score: number; reasons: string[] } {
   if (cruises.length === 0) return { score: 0, reasons: [] };
-  const sampleCruises = cruises.slice(0, 25);
-  const seaScores = sampleCruises.map((cruise) => calculateSeaDayDensityScore(cruise).casinoOpportunityScore);
-  const averageSeaScore = seaScores.length ? seaScores.reduce((sum, score) => sum + score, 0) / seaScores.length : 0;
-  const portTrackers = sampleCruises.map((cruise) => buildPortTracker(sampleCruises, cruise, profile));
+  const seaScores = cruises.map((cruise) => calculateSeaDayDensityScore(cruise).casinoOpportunityScore);
+  const averageSeaScore = seaScores.reduce((sum, score) => sum + score, 0) / seaScores.length;
+  const portTrackers = cruises.map((cruise) => buildPortTracker(cruises, cruise, profile));
   const bestNovelty = portTrackers.reduce((best, tracker) => Math.max(best, tracker.itineraryNoveltyScore), 0);
-  const shipScores = sampleCruises.map((cruise) => calculateShipFamiliarityScore(cruise.shipName, sampleCruises, [offer], profile).score);
+  const shipScores = cruises.map((cruise) => calculateShipFamiliarityScore(cruise.shipName, cruises, [offer], profile).score);
   const bestShipScore = shipScores.reduce((best, score) => Math.max(best, score), 0);
   const score = clamp(Math.round(averageSeaScore * 0.08 + bestNovelty * 0.04 + bestShipScore * 0.04), 0, 14);
   const reasons: string[] = [];
   if (averageSeaScore >= 65) reasons.push('Strong sea-day density improves casino opportunity.');
   if (bestNovelty >= 50) reasons.push('Itinerary includes meaningful new-port value.');
   if (bestShipScore >= 55) reasons.push('Ship familiarity supports easier planning.');
-  if ((globalThis as any).__EASYSEAS_VERBOSE_OFFER_INTELLIGENCE) console.log('[OfferIntelligence] Phase 3 planning boost:', { offerCode: offer.offerCode, averageSeaScore, bestNovelty, bestShipScore, score });
+  if (typeof __DEV__ !== 'undefined' && __DEV__) console.log('[OfferIntelligence] Phase 3 planning boost:', { offerCode: offer.offerCode, averageSeaScore, bestNovelty, bestShipScore, score });
   return { score, reasons };
 }
 
@@ -260,7 +319,7 @@ export function calculateOfferIntelligenceScore(
   planningBoost.reasons.forEach((reason) => reasons.push(reason));
   if (casinoPaysFor.missingInputs.length > 0) reasons.push(`Missing ${casinoPaysFor.missingInputs.join(', ')}; score uses safe estimates.`);
   const explanation = `${rating} (${finalScore}/100): ${reasons[0] ?? 'Score is based on available cabin value, expiration, FreePlay, OBC, and profile ownership.'}`;
-  console.log('[OfferIntelligence] Score calculated:', { offerCode: offer.offerCode, finalScore, rating, reasons });
+  if (typeof __DEV__ !== 'undefined' && __DEV__) console.log('[OfferIntelligence] Score calculated:', { offerCode: offer.offerCode, finalScore, rating, reasons });
   return {
     score: finalScore,
     rating,
@@ -349,9 +408,11 @@ export function buildCommandCenterBuckets(offers: CasinoOffer[], cruises: Cruise
     { id: 'recentlyExpired', title: 'Recently expired', subtitle: 'Review before archiving or asking the casino desk.', offers: [] },
     { id: 'needsReview', title: 'Needs review', subtitle: 'Missing dates, uncertain ownership, or import reconciliation flags.', offers: [] },
   ];
+  const associationIndex = buildCruiseAssociationIndex(cruises);
   offers.forEach((offer) => {
     if (offer.archiveStatus === 'archived' || offer.status === 'archived' || offer.status === 'skipped' || offer.archiveStatus === 'replaced') return;
-    const intelligence = calculateOfferIntelligenceScore(offer, cruises, certificates, profile);
+    const associatedCruises = findAssociatedCruisesFromIndex(offer, associationIndex);
+    const intelligence = calculateOfferIntelligenceScore(offer, associatedCruises, certificates, profile);
     const item = { offer, intelligence };
     const days = intelligence.daysUntilExpiration;
     if (offer.archiveStatus === 'reviewNeeded' || offer.reconciliationStatus === 'reviewNeeded' || days === null) buckets[4].offers.push(item);
@@ -361,6 +422,6 @@ export function buildCommandCenterBuckets(offers: CasinoOffer[], cruises: Cruise
     else if (days <= 30) buckets[2].offers.push(item);
   });
   const sortedBuckets = buckets.map((bucket) => ({ ...bucket, offers: bucket.offers.sort((a, b) => b.intelligence.score - a.intelligence.score) }));
-  console.log('[OfferIntelligence] Command Center buckets built:', sortedBuckets.map((bucket) => ({ id: bucket.id, count: bucket.offers.length })));
+  if (typeof __DEV__ !== 'undefined' && __DEV__) console.log('[OfferIntelligence] Command Center buckets built:', sortedBuckets.map((bucket) => ({ id: bucket.id, count: bucket.offers.length })));
   return sortedBuckets;
 }

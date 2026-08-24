@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { quotaSafeGetJsonItem, quotaSafeSetJsonItem } from '@/lib/storage/quotaSafeStorage';
 import createContextHook from '@nkzw/create-context-hook';
 import { 
   ShipDeckPlan, 
@@ -70,12 +70,13 @@ const [DeckPlanContext, useDeckPlanHook] = createContextHook((): DeckPlanState =
       const scopedStorageKey = getUserScopedKey(STORAGE_KEY_DECK_MAPPINGS, authenticatedEmail);
       console.log('[DeckPlan] Loading deck mappings...', { authenticatedEmail, scopedStorageKey });
 
-      const data = await AsyncStorage.getItem(scopedStorageKey);
-      if (data) {
-        const parsed: MachineDeckMapping[] = JSON.parse(data);
-        setMappings(parsed);
-        console.log(`[DeckPlan] Loaded ${parsed.length} mappings`);
-      }
+      const parsed = await quotaSafeGetJsonItem<MachineDeckMapping[]>(
+        scopedStorageKey,
+        [],
+        Array.isArray,
+      );
+      setMappings(parsed);
+      console.log(`[DeckPlan] Loaded ${parsed.length} mappings`);
     } catch (error) {
       console.error('[DeckPlan] Error loading mappings:', error);
     } finally {
@@ -90,7 +91,7 @@ const [DeckPlanContext, useDeckPlanHook] = createContextHook((): DeckPlanState =
   const saveData = useCallback(async (data: MachineDeckMapping[]) => {
     try {
       const scopedStorageKey = getUserScopedKey(STORAGE_KEY_DECK_MAPPINGS, authenticatedEmail);
-      await AsyncStorage.setItem(scopedStorageKey, JSON.stringify(data));
+      await quotaSafeSetJsonItem(scopedStorageKey, data);
       console.log(`[DeckPlan] Saved ${data.length} mappings`, { authenticatedEmail, scopedStorageKey });
     } catch (error) {
       console.error('[DeckPlan] Error saving mappings:', error);

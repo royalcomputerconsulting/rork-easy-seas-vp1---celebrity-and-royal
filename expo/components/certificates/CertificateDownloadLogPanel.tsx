@@ -8,7 +8,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { File as ExpoFile, Paths as ExpoPaths } from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import {
   ChevronDown,
@@ -31,6 +31,9 @@ const EMPTY_SNAPSHOT: CertificateDownloadLogSnapshot = {
   currentCertificateCodes: [],
   isActive: false,
   sessionStartedAt: null,
+  completed: 0,
+  total: 0,
+  items: [],
 };
 
 function getEntryColor(type: CertificateDownloadLogEntry['type']): string {
@@ -42,7 +45,7 @@ function getEntryColor(type: CertificateDownloadLogEntry['type']): string {
 
 function buildExportFilename(): string {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  return `certificate-download-${stamp}.log`;
+  return `certificate-download-${stamp}.txt`;
 }
 
 export function CertificateDownloadLogPanel({ initiallyExpanded = false }: { initiallyExpanded?: boolean }) {
@@ -56,6 +59,7 @@ export function CertificateDownloadLogPanel({ initiallyExpanded = false }: { ini
     const limit = expanded ? 80 : 4;
     return snapshot.entries.slice(-limit);
   }, [expanded, snapshot.entries]);
+  const visibleProgressItems = useMemo(() => snapshot.items.slice(-6), [snapshot.items]);
 
   const exportLog = useCallback(async () => {
     const text = certificateDownloadLogger.getLogsAsText();
@@ -78,15 +82,24 @@ export function CertificateDownloadLogPanel({ initiallyExpanded = false }: { ini
         document.body.removeChild(anchor);
         URL.revokeObjectURL(url);
       } else {
-        const file = new ExpoFile(ExpoPaths.cache, filename);
-        await file.write(text);
+        const baseDirectory = FileSystem.documentDirectory ?? FileSystem.cacheDirectory;
+        if (!baseDirectory) throw new Error('Easy Seas could not access a local export folder on this device.');
+        const exportDirectory = `${baseDirectory}easyseas-exports/`;
+        await FileSystem.makeDirectoryAsync(exportDirectory, { intermediates: true });
+        const fileUri = `${exportDirectory}${filename}`;
+        await FileSystem.writeAsStringAsync(fileUri, text, { encoding: FileSystem.EncodingType.UTF8 });
+        const savedFile = await FileSystem.getInfoAsync(fileUri);
+        if (!savedFile.exists || (typeof savedFile.size === 'number' && savedFile.size === 0)) {
+          throw new Error('The certificate log file was not written correctly.');
+        }
         if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(file.uri, {
+          await Sharing.shareAsync(fileUri, {
             mimeType: 'text/plain',
+            UTI: 'public.plain-text',
             dialogTitle: 'Export Certificate Download Log',
           });
         } else {
-          Alert.alert('Log saved', `The certificate log was saved as ${filename}.`);
+          Alert.alert('Log saved', `The certificate log was saved locally as ${filename}.`);
         }
       }
     } catch (error) {
@@ -125,6 +138,26 @@ export function CertificateDownloadLogPanel({ initiallyExpanded = false }: { ini
           ) : null}
         </View>
       </View>
+
+      {snapshot.total > 0 ? (
+        <View style={styles.progressWrap} testID="certificate-download-log.progress">
+          <View style={styles.progressHeader}>
+            <Text style={styles.progressLabel}>Certificates processed</Text>
+            <Text style={styles.progressCount}>{snapshot.completed}/{snapshot.total}</Text>
+          </View>
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: `${Math.max(0, Math.min(100, (snapshot.completed / snapshot.total) * 100))}%` }]} />
+          </View>
+          {(expanded || snapshot.isActive) ? visibleProgressItems.map((item) => (
+            <View key={item.certificateCode} style={styles.progressItem}>
+              <Text style={styles.progressCode}>{item.certificateCode}</Text>
+              <Text style={[styles.progressPhase, item.phase === 'failed' && styles.progressFailed, item.phase === 'saved' && styles.progressSaved]}>
+                {item.phase.toUpperCase()} · {item.message}
+              </Text>
+            </View>
+          )) : null}
+        </View>
+      ) : null}
 
       <View style={styles.headerRow}>
         <View style={styles.titleRow}>
@@ -199,6 +232,17 @@ const styles = StyleSheet.create({
   statusLabel: { fontSize: 11, fontWeight: '800', color: '#175CD3', textTransform: 'uppercase', letterSpacing: 0.7 },
   statusText: { marginTop: 3, fontSize: 13, lineHeight: 18, fontWeight: '700', color: '#173B63' },
   codeText: { marginTop: 4, fontSize: 12, lineHeight: 17, fontWeight: '800', color: '#9A6700' },
+  progressWrap: { backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: '#D7E2EF', padding: 10, gap: 6 },
+  progressHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  progressLabel: { color: '#173B63', fontSize: 12, fontWeight: '800' },
+  progressCount: { color: '#0E7FA7', fontSize: 12, fontWeight: '900' },
+  progressTrack: { height: 8, borderRadius: 4, overflow: 'hidden', backgroundColor: '#DDE8F3', marginBottom: 3 },
+  progressFill: { height: '100%', borderRadius: 4, backgroundColor: '#0E7FA7' },
+  progressItem: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  progressCode: { width: 86, color: '#173B63', fontSize: 11, fontWeight: '900' },
+  progressPhase: { flex: 1, color: '#475467', fontSize: 10, lineHeight: 14, fontWeight: '700' },
+  progressFailed: { color: '#B42318' },
+  progressSaved: { color: '#067647' },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   title: { fontSize: 15, fontWeight: '800', color: '#173B63' },

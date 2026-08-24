@@ -1,11 +1,14 @@
-import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, View, Text, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import React, { useCallback, useMemo, useState } from 'react';
+import { ActivityIndicator, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, ChevronRight, CloudSun, MapPin, Waves, Wind, X } from 'lucide-react-native';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { AlertTriangle, CloudSun, MapPin, RefreshCw, Waves, Wind } from 'lucide-react-native';
 import { BORDER_RADIUS, COLORS, SPACING, TYPOGRAPHY } from '@/constants/theme';
-import { useSailingWeather, type SailingWeatherCruiseInput, type SailingWeatherForecast } from '@/state/SailingWeatherProvider';
+import { SAILING_WEATHER_REFRESH_MS, useSailingWeather, type SailingWeatherCruiseInput, type SailingWeatherForecast } from '@/state/SailingWeatherProvider';
+import { getCruiseDayForDate, isWithinForecastWindow } from '@/lib/cruiseDayPipeline';
+import { createUtcDateFromLocalCalendarDay } from '@/lib/date';
+import { getItineraryFingerprint } from '@/lib/itineraryIntegrity';
+import { buildOperationalMarineSummary } from '@/lib/marineForecastOperations';
 
 interface SailingWeatherCardProps {
   cruise: SailingWeatherCruiseInput;
@@ -26,6 +29,43 @@ function formatUpdatedTime(value: string): string {
     hour: 'numeric',
     minute: '2-digit',
   });
+}
+
+function getForecastAvailabilityLabel(targetDate: Date, horizonDays = 15): string {
+  const availableDate = new Date(targetDate);
+  availableDate.setUTCDate(availableDate.getUTCDate() - horizonDays);
+  return availableDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+}
+
+function buildPlanningOutlook(cruise: SailingWeatherCruiseInput, targetDate: Date): { location: string; wind: string; seas: string; context: string } {
+  const day = getCruiseDayForDate(cruise, targetDate);
+  const port = String(day?.port || (day?.day === 1 ? cruise.departurePort : '') || '').trim();
+  const normalized = port.toLowerCase();
+  const isFloridaAtlantic = /orlando|port canaveral|brevard|coco.?cay|bahamas|nassau/.test(normalized) || /bahamas|perfect day/.test(String(cruise.destination || cruise.itineraryName || '').toLowerCase());
+  if (day?.isSeaDay && isFloridaAtlantic) return {
+    location: 'AT SEA · Atlantic route toward/near the Bahamas',
+    wind: 'Typical September planning range: E–SE trade winds around 10–20 kt; locally higher near squalls.',
+    seas: 'Typical planning range: 2–5 ft Atlantic/Bahamas seas; tropical systems can change this substantially.',
+    context: 'Route-position numerical wind, wave height, period, swell, and gusts replace this planning range when the dated model window opens.',
+  };
+  if (/coco.?cay|perfect day|nassau|bahamas/.test(normalized)) return {
+    location: port || 'Bahamas port area',
+    wind: 'Typical September planning range: E–SE winds around 10–15 kt, with stronger gusts in showers.',
+    seas: 'Typical planning range: 2–4 ft in adjacent Atlantic/Bahamas waters.',
+    context: 'September is within Atlantic tropical season; the dated forecast may change quickly and supersedes this climatology.',
+  };
+  if (isFloridaAtlantic || day?.day === 1) return {
+    location: /orlando|port canaveral|brevard/.test(normalized) ? 'Port Canaveral · Atlantic waters off Brevard County (Orlando-area embarkation)' : port || cruise.departurePort || 'Embarkation waters',
+    wind: 'Typical mid-September pattern: light S–SW morning flow, shifting to an E–SE sea breeze around 5–15 kt.',
+    seas: 'Typical planning range: 1–3 ft near the central Florida Atlantic coast, absent a tropical disturbance.',
+    context: 'September 10 is near the statistical Atlantic hurricane-season peak. Reliable NWS coastal detail is normally available about 5–7 days ahead.',
+  };
+  return {
+    location: day?.isSeaDay ? 'AT SEA · route position pending verified surrounding ports' : port || 'Itinerary location pending',
+    wind: 'A location-specific numerical wind forecast has not been published for this date.',
+    seas: 'Wave height is not estimated without a verified port or route position.',
+    context: 'Sync the cruise itinerary; Easy Seas will replace this notice when the location and dated provider window are available.',
+  };
 }
 
 function formatMetricValue(value: number | null, suffix: string, decimals = 0): string {
@@ -54,6 +94,13 @@ function getSourceMeta(forecast: SailingWeatherForecast | null): { label: string
     return {
       label: 'Live',
       style: styles.statusLive,
+    };
+  }
+
+  if (forecast.source === 'historical') {
+    return {
+      label: 'Historical',
+      style: styles.statusCached,
     };
   }
 
@@ -96,27 +143,53 @@ function getAdvisoryMeta(severity: 'info' | 'watch' | 'warning'): { accent: stri
 
 export function SailingWeatherCard({ cruise, selectedDate }: SailingWeatherCardProps) {
   const { isHydrated, getForecastForCruiseDay } = useSailingWeather();
+  const queryClient = useQueryClient();
+  const [manualRefreshBusy, setManualRefreshBusy] = useState(false);
+  const [manualRefreshMessage, setManualRefreshMessage] = useState('');
   const dateKey = useMemo(() => formatDateKey(selectedDate), [selectedDate]);
-  const [isDetailVisible, setIsDetailVisible] = useState<boolean>(false);
+  const weatherTargetDate = useMemo(() => createUtcDateFromLocalCalendarDay(selectedDate), [selectedDate]);
+  const itineraryFingerprint = useMemo(() => getItineraryFingerprint(cruise), [cruise]);
 
+  const weatherQueryKey = useMemo(() => ['sailing-weather', cruise.id, itineraryFingerprint, dateKey] as const, [cruise.id, dateKey, itineraryFingerprint]);
   const weatherQuery = useQuery({
-    queryKey: ['sailing-weather', cruise.id, dateKey],
-    queryFn: async () => getForecastForCruiseDay(cruise, selectedDate),
+    queryKey: ['sailing-weather', cruise.id, itineraryFingerprint, dateKey],
+    queryFn: async () => getForecastForCruiseDay(cruise, weatherTargetDate),
     enabled: isHydrated,
-    staleTime: 1000 * 60 * 30,
-    gcTime: 1000 * 60 * 60 * 12,
+    staleTime: SAILING_WEATHER_REFRESH_MS,
+    gcTime: 1000 * 60 * 60 * 24,
     retry: 1,
     refetchOnMount: 'always',
-    refetchInterval: 1000 * 60 * 60 * 6,
+    refetchInterval: SAILING_WEATHER_REFRESH_MS,
   });
 
   const forecast = weatherQuery.data ?? null;
+  const forecastWindowAvailable = useMemo(() => isWithinForecastWindow(weatherTargetDate), [weatherTargetDate]);
+  const planningOutlook = useMemo(() => buildPlanningOutlook(cruise, weatherTargetDate), [cruise, weatherTargetDate]);
   const sourceMeta = getSourceMeta(forecast);
-  const isBackgroundSyncing = weatherQuery.isFetching && !weatherQuery.isLoading;
+  const operationalMarine = useMemo(() => forecast ? buildOperationalMarineSummary(forecast) : null, [forecast]);
   const primaryAlert = useMemo(() => {
     if (!forecast) return null;
     return forecast.advisories.find((advisory) => advisory.severity !== 'info') ?? forecast.advisories[0] ?? null;
   }, [forecast]);
+
+  const handleManualRefresh = useCallback(async () => {
+    if (manualRefreshBusy) return;
+    setManualRefreshBusy(true);
+    setManualRefreshMessage('');
+    try {
+      const refreshed = await getForecastForCruiseDay(cruise, weatherTargetDate, { force: true });
+      queryClient.setQueryData(weatherQueryKey, refreshed);
+      setManualRefreshMessage(refreshed
+        ? `Updated ${refreshed.zoneLabel} at ${formatUpdatedTime(refreshed.updatedAt)} and saved it for offline use.`
+        : forecastWindowAvailable
+          ? 'The location resolved, but both live forecast providers returned no usable data. Try again while online.'
+          : `A numerical forecast has not been published for this date. Automatic live refresh begins around ${getForecastAvailabilityLabel(weatherTargetDate)}.`);
+    } catch (error) {
+      setManualRefreshMessage(`Weather refresh failed: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setManualRefreshBusy(false);
+    }
+  }, [cruise, forecastWindowAvailable, getForecastForCruiseDay, manualRefreshBusy, queryClient, weatherQueryKey, weatherTargetDate]);
 
   if (!forecast && weatherQuery.isLoading) {
     return (
@@ -160,21 +233,22 @@ export function SailingWeatherCard({ cruise, selectedDate }: SailingWeatherCardP
             <Text style={styles.statusText}>Unavailable</Text>
           </View>
         </View>
-        <Text style={styles.headline}>Forecast needs a connection first</Text>
-        <Text style={styles.summary}>
-          Once the app can resolve this sailing’s location online, it will save the day forecast locally for spotty-at-sea usage.
-        </Text>
+        <Text style={styles.headline}>{forecastWindowAvailable ? 'Dated forecast unavailable—retry location/provider' : 'Forecast not available yet · planning outlook (not live)'}</Text>
+        <View style={styles.planningLocation}><MapPin size={13} color="#D9F3FF" /><Text style={styles.planningLocationText}>{planningOutlook.location}</Text></View>
+        <Text style={styles.planningLine}><Text style={styles.planningLabel}>WIND: </Text>{planningOutlook.wind}</Text>
+        <Text style={styles.planningLine}><Text style={styles.planningLabel}>SEAS: </Text>{planningOutlook.seas}</Text>
+        <Text style={styles.summary}>{planningOutlook.context}</Text>
+        {!forecastWindowAvailable ? <Text style={styles.availabilityHint}>Dated model refresh begins around {getForecastAvailabilityLabel(weatherTargetDate)}. Easy Seas then refreshes and caches the numerical forecast every four hours while online.</Text> : null}
+        <TouchableOpacity style={styles.refreshButton} onPress={() => void handleManualRefresh()} disabled={manualRefreshBusy} testID={`sailing-weather-refresh-${cruise.id}-${dateKey}`}>
+          {manualRefreshBusy ? <ActivityIndicator size="small" color="#071426" /> : <RefreshCw size={15} color="#071426" />}
+          <Text style={styles.refreshButtonText}>{manualRefreshBusy ? 'Refreshing…' : 'Retry Weather Location & Day'}</Text>
+        </TouchableOpacity>
+        {manualRefreshMessage ? <Text style={styles.refreshMessage}>{manualRefreshMessage}</Text> : null}
       </LinearGradient>
     );
   }
 
   return (
-    <>
-    <Pressable
-      onPress={() => setIsDetailVisible(true)}
-      style={({ pressed }) => [pressed ? styles.cardPressed : null]}
-      testID={`sailing-weather-card-press-${cruise.id}`}
-    >
     <LinearGradient
       colors={['rgba(9, 24, 52, 0.98)', 'rgba(14, 54, 103, 0.95)', 'rgba(6, 111, 147, 0.92)']}
       start={{ x: 0, y: 0 }}
@@ -191,13 +265,6 @@ export function SailingWeatherCard({ cruise, selectedDate }: SailingWeatherCardP
           <Text style={styles.statusText}>{sourceMeta.label}</Text>
         </View>
       </View>
-
-      {isBackgroundSyncing ? (
-        <View style={styles.syncingRow} testID={`sailing-weather-syncing-${cruise.id}`}>
-          <ActivityIndicator size="small" color="#8BE0FF" />
-          <Text style={styles.syncingText}>Checking for the latest marine forecast…</Text>
-        </View>
-      ) : null}
 
       <Text style={styles.shipLabel}>{cruise.shipName}</Text>
       <Text style={styles.headline}>{forecast.headline}</Text>
@@ -237,6 +304,7 @@ export function SailingWeatherCard({ cruise, selectedDate }: SailingWeatherCardP
         <MapPin size={13} color="#D9F3FF" />
         <Text style={styles.locationText}>{forecast.zoneLabel}</Text>
       </View>
+      {manualRefreshMessage ? <Text style={styles.refreshMessage}>{manualRefreshMessage}</Text> : null}
 
       <View style={styles.metricGrid}>
         <View style={styles.metricCard} testID={`sailing-weather-temp-${cruise.id}`}>
@@ -259,7 +327,13 @@ export function SailingWeatherCard({ cruise, selectedDate }: SailingWeatherCardP
             <Waves size={13} color="#B4EBFF" />
             <Text style={styles.metricLabel}>Seas</Text>
           </View>
-          <Text style={styles.metricValue}>{formatMetricValue(forecast.metrics.maxWaveHeightFt, ' ft', 1)}</Text>
+          <Text style={styles.metricValue}>
+            {forecast.metrics.marineDataStatus === 'pending'
+              ? 'Pending'
+              : forecast.metrics.marineDataStatus === 'unavailable'
+                ? 'Unavailable'
+                : formatMetricValue(forecast.metrics.maxWaveHeightFt, ' ft', 1)}
+          </Text>
         </View>
       </View>
 
@@ -282,6 +356,23 @@ export function SailingWeatherCard({ cruise, selectedDate }: SailingWeatherCardP
         </View>
       </View>
 
+      {operationalMarine ? (
+        <View style={styles.operationalPanel} testID={`sailing-weather-operational-marine-${cruise.id}`}>
+          <View style={styles.operationalHeader}>
+            <Text style={styles.operationalTitle}>Operational marine detail</Text>
+            <Text style={styles.operationalConfidence}>{operationalMarine.confidence} confidence · {operationalMarine.availability.replaceAll('_', ' ')}</Text>
+          </View>
+          <View style={styles.operationalGrid}>
+            <View style={styles.operationalMetric}><Text style={styles.operationalLabel}>Waves</Text><Text style={styles.operationalValue}>{formatMetricValue(operationalMarine.waveHeightFt, ' ft', 1)} · {formatMetricValue(operationalMarine.wavePeriodSeconds, ' sec')}</Text><Text style={styles.operationalMeta}>{operationalMarine.waveDirection}</Text></View>
+            <View style={styles.operationalMetric}><Text style={styles.operationalLabel}>Swell</Text><Text style={styles.operationalValue}>{formatMetricValue(operationalMarine.swellHeightFt, ' ft', 1)} · {formatMetricValue(operationalMarine.swellPeriodSeconds, ' sec')}</Text><Text style={styles.operationalMeta}>{operationalMarine.swellDirection}</Text></View>
+            <View style={styles.operationalMetric}><Text style={styles.operationalLabel}>Wind gusts</Text><Text style={styles.operationalValue}>{formatMetricValue(operationalMarine.windGustMph, ' mph')}</Text><Text style={styles.operationalMeta}>Max forecast</Text></View>
+            <View style={styles.operationalMetric}><Text style={styles.operationalLabel}>Horizon</Text><Text style={styles.operationalValue}>{operationalMarine.forecastHorizonHours === null ? '—' : `${Math.round(operationalMarine.forecastHorizonHours)} hr`}</Text><Text style={styles.operationalMeta}>{operationalMarine.sourceAgeHours === null ? 'Source time unknown' : `Source age ${Math.round(operationalMarine.sourceAgeHours)} hr`}</Text></View>
+          </View>
+          <Text style={styles.motionExplanation}>{operationalMarine.motionExplanation}</Text>
+          <Text style={styles.operationalSource}>Source: {operationalMarine.sourceLabel} · forecast saved {forecast.updatedAt}</Text>
+        </View>
+      ) : null}
+
       <View style={styles.snapshotHeaderRow}>
         <Text style={styles.snapshotSectionTitle}>4 daily snapshots</Text>
         <Text style={styles.snapshotSectionHint}>Morning · Midday · Afternoon · Evening</Text>
@@ -300,7 +391,7 @@ export function SailingWeatherCard({ cruise, selectedDate }: SailingWeatherCardP
 
       {forecast.advisories.length > 0 ? (
         <View style={styles.advisoriesSection} testID={`sailing-weather-advisories-${cruise.id}`}>
-          <Text style={styles.advisoriesTitle}>Marine watchouts</Text>
+          <Text style={styles.advisoriesTitle}>EasySeas model notes</Text>
           {forecast.advisories.map((advisory) => {
             const advisoryMeta = getAdvisoryMeta(advisory.severity);
             return (
@@ -329,152 +420,18 @@ export function SailingWeatherCard({ cruise, selectedDate }: SailingWeatherCardP
 
       <View style={styles.footerRow}>
         <Text style={styles.footerText}>
-          Updated {formatUpdatedTime(forecast.updatedAt)} · {forecast.timezone}
+          Updated {formatUpdatedTime(forecast.updatedAt)} · {forecast.timezone} · {forecast.marineSourceLabel ?? 'Open-Meteo marine'}
         </Text>
-        <Text style={styles.footerText}>Updates up to 4x/day</Text>
+        <Text style={styles.footerText}>Refreshes every 4 hours online</Text>
       </View>
+      <TouchableOpacity style={styles.refreshButton} onPress={() => void handleManualRefresh()} disabled={manualRefreshBusy} testID={`sailing-weather-refresh-${cruise.id}`}>
+        {manualRefreshBusy ? <ActivityIndicator size="small" color="#071426" /> : <RefreshCw size={15} color="#071426" />}
+        <Text style={styles.refreshButtonText}>{manualRefreshBusy ? 'Refreshing forecast…' : 'Refresh Weather & Waves Now'}</Text>
+      </TouchableOpacity>
       <Text style={styles.offlineHint}>
-        Saved locally for this sailing day, so you can still read the forecast when service gets patchy offshore.
+        Saved locally for this sailing day. Opening Easy Seas online refreshes stale data; the saved copy remains readable offline.
       </Text>
-
-      <View style={styles.detailTapRow}>
-        <MapPin size={12} color="rgba(232, 246, 255, 0.65)" />
-        <Text style={styles.detailTapText}>Tap for the full hour-by-hour marine forecast</Text>
-        <ChevronRight size={14} color="rgba(232, 246, 255, 0.65)" />
-      </View>
     </LinearGradient>
-    </Pressable>
-
-    <Modal
-      visible={isDetailVisible}
-      transparent
-      animationType="slide"
-      onRequestClose={() => setIsDetailVisible(false)}
-    >
-      <SafeAreaView style={styles.modalOverlay} edges={['bottom']}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setIsDetailVisible(false)} />
-        <View style={styles.modalSheet} testID={`sailing-weather-detail-modal-${cruise.id}`}>
-          <LinearGradient
-            colors={['rgba(9, 24, 52, 0.99)', 'rgba(14, 54, 103, 0.98)', 'rgba(6, 111, 147, 0.97)']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.modalGradient}
-          >
-            <View style={styles.modalHeaderRow}>
-              <View style={styles.modalHeaderBadge}>
-                <CloudSun size={13} color="#8BE0FF" />
-                <Text style={styles.modalHeaderBadgeText} numberOfLines={1}>{cruise.shipName} · Full Marine Forecast</Text>
-              </View>
-              <Pressable style={styles.modalCloseButton} onPress={() => setIsDetailVisible(false)} testID={`sailing-weather-detail-close-${cruise.id}`}>
-                <X size={16} color="#E7F8FF" />
-              </Pressable>
-            </View>
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalScrollContent}>
-              <Text style={styles.modalHeadline}>{forecast.headline}</Text>
-              <View style={styles.modalLocationRow}>
-                <MapPin size={13} color="#D9F3FF" />
-                <Text style={styles.modalLocationText}>{forecast.zoneLabel}</Text>
-              </View>
-              <Text style={styles.summary}>{forecast.summary}</Text>
-
-              <View style={styles.metricGrid}>
-                <View style={styles.metricCard}>
-                  <Text style={styles.metricLabel}>Temp</Text>
-                  <Text style={styles.metricValue}>
-                    {forecast.metrics.lowTempF !== null && forecast.metrics.highTempF !== null
-                      ? `${Math.round(forecast.metrics.lowTempF)}°–${Math.round(forecast.metrics.highTempF)}°`
-                      : '—'}
-                  </Text>
-                </View>
-                <View style={styles.metricCard}>
-                  <View style={styles.metricHeaderInline}>
-                    <Wind size={13} color="#B4EBFF" />
-                    <Text style={styles.metricLabel}>Wind / Gust</Text>
-                  </View>
-                  <Text style={styles.metricValue}>
-                    {formatMetricValue(forecast.metrics.maxWindMph, ' mph')} / {formatMetricValue(forecast.metrics.maxWindGustMph, ' mph')}
-                  </Text>
-                </View>
-                <View style={styles.metricCard}>
-                  <View style={styles.metricHeaderInline}>
-                    <Waves size={13} color="#B4EBFF" />
-                    <Text style={styles.metricLabel}>Seas / Swell</Text>
-                  </View>
-                  <Text style={styles.metricValue}>
-                    {formatMetricValue(forecast.metrics.maxWaveHeightFt, ' ft', 1)} / {formatMetricValue(forecast.metrics.maxSwellHeightFt, ' ft', 1)}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.detailGrid}>
-                <View style={styles.detailChip}>
-                  <Text style={styles.detailChipLabel}>Wind Dir</Text>
-                  <Text style={styles.detailChipValue}>{formatDirectionLabel(forecast.metrics.dominantWindDirectionDegrees)}</Text>
-                </View>
-                <View style={styles.detailChip}>
-                  <Text style={styles.detailChipLabel}>Swell Dir</Text>
-                  <Text style={styles.detailChipValue}>{formatDirectionLabel(forecast.metrics.dominantSwellDirectionDegrees)}</Text>
-                </View>
-                <View style={styles.detailChip}>
-                  <Text style={styles.detailChipLabel}>Wave Period</Text>
-                  <Text style={styles.detailChipValue}>{formatMetricValue(forecast.metrics.maxWavePeriodSeconds, 's')}</Text>
-                </View>
-                <View style={styles.detailChip}>
-                  <Text style={styles.detailChipLabel}>Rain Risk</Text>
-                  <Text style={styles.detailChipValue}>{formatMetricValue(forecast.metrics.precipitationChance, '%')}</Text>
-                </View>
-              </View>
-
-              {forecast.advisories.length > 0 ? (
-                <View style={styles.advisoriesSection}>
-                  <Text style={styles.modalSectionTitle}>Marine watchouts</Text>
-                  {forecast.advisories.map((advisory) => {
-                    const advisoryMeta = getAdvisoryMeta(advisory.severity);
-                    return (
-                      <View
-                        key={advisory.id}
-                        style={[
-                          styles.advisoryCard,
-                          { backgroundColor: advisoryMeta.backgroundColor, borderColor: advisoryMeta.borderColor },
-                        ]}
-                      >
-                        <View style={[styles.advisoryIconBadge, { backgroundColor: `${advisoryMeta.accent}22` }]}>
-                          <AlertTriangle size={13} color={advisoryMeta.accent} />
-                        </View>
-                        <View style={styles.advisoryTextWrap}>
-                          <Text style={[styles.advisoryTitle, { color: advisoryMeta.accent }]}>{advisory.title}</Text>
-                          <Text style={styles.advisoryDetail}>{advisory.detail}</Text>
-                        </View>
-                      </View>
-                    );
-                  })}
-                </View>
-              ) : null}
-
-              {forecast.hourly.length > 0 ? (
-                <View style={styles.advisoriesSection}>
-                  <Text style={styles.modalSectionTitle}>Hour-by-hour</Text>
-                  {forecast.hourly.map((point) => (
-                    <View key={point.isoTime} style={styles.hourlyRow} testID={`sailing-weather-hourly-${cruise.id}-${point.isoTime}`}>
-                      <Text style={styles.hourlyTime}>{point.label}</Text>
-                      <Text style={styles.hourlyMetric}>{formatMetricValue(point.temperatureF, '°')}</Text>
-                      <Text style={styles.hourlyMetric}>{formatMetricValue(point.windMph, ' mph')}</Text>
-                      <Text style={styles.hourlyMetric}>{formatMetricValue(point.waveHeightFt, ' ft', 1)}</Text>
-                      <Text style={styles.hourlyMetric}>{formatMetricValue(point.precipitationProbability, '%')}</Text>
-                    </View>
-                  ))}
-                </View>
-              ) : null}
-
-              <Text style={styles.footerText}>
-                Updated {formatUpdatedTime(forecast.updatedAt)} · {forecast.timezone} · {sourceMeta.label}
-              </Text>
-            </ScrollView>
-          </LinearGradient>
-        </View>
-      </SafeAreaView>
-    </Modal>
-    </>
   );
 }
 
@@ -494,6 +451,37 @@ const styles = StyleSheet.create({
       height: 12,
     },
     elevation: 8,
+  },
+  refreshButton: {
+    minHeight: 44,
+    borderRadius: 14,
+    backgroundColor: '#A7E7F6',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: SPACING.xs,
+  },
+  refreshButtonText: {
+    color: '#071426',
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: '900',
+  },
+  refreshMessage: {
+    color: '#E7F8FF',
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    lineHeight: 17,
+    backgroundColor: 'rgba(2, 20, 39, 0.32)',
+    borderRadius: 10,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 7,
+  },
+  availabilityHint: {
+    color: '#D9F3FF',
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    lineHeight: 18,
   },
   topRow: {
     flexDirection: 'row',
@@ -516,21 +504,6 @@ const styles = StyleSheet.create({
     color: '#E7F8FF',
     textTransform: 'uppercase',
     letterSpacing: 0.8,
-  },
-  syncingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: BORDER_RADIUS.md,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 6,
-    alignSelf: 'flex-start',
-  },
-  syncingText: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(231, 248, 255, 0.85)',
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
   },
   shipLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
@@ -577,6 +550,17 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: 'rgba(231, 248, 255, 0.82)',
   },
+  operationalPanel: { backgroundColor: 'rgba(2, 20, 39, 0.42)', borderWidth: 1, borderColor: 'rgba(139,224,255,.22)', borderRadius: BORDER_RADIUS.lg, padding: SPACING.md, gap: SPACING.sm },
+  operationalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  operationalTitle: { color: '#E7F8FF', fontSize: TYPOGRAPHY.fontSizeSM, fontWeight: TYPOGRAPHY.fontWeightBold },
+  operationalConfidence: { color: '#8BE0FF', fontSize: 9, textTransform: 'uppercase' },
+  operationalGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  operationalMetric: { width: '48%', backgroundColor: 'rgba(255,255,255,.07)', borderRadius: 10, padding: 9 },
+  operationalLabel: { color: 'rgba(231,248,255,.68)', fontSize: 9, textTransform: 'uppercase' },
+  operationalValue: { color: COLORS.white, fontSize: 13, fontWeight: '800', marginTop: 3 },
+  operationalMeta: { color: '#B4EBFF', fontSize: 9, marginTop: 2 },
+  motionExplanation: { color: '#E7F8FF', fontSize: 11, lineHeight: 17 },
+  operationalSource: { color: 'rgba(231,248,255,.62)', fontSize: 9 },
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -747,6 +731,27 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: 'rgba(231, 248, 255, 0.66)',
   },
+  planningLocation: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+  },
+  planningLocationText: {
+    flex: 1,
+    color: '#D9F3FF',
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    lineHeight: 20,
+  },
+  planningLine: {
+    color: 'rgba(231, 248, 255, 0.84)',
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    lineHeight: 20,
+  },
+  planningLabel: {
+    color: COLORS.white,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
   statusPill: {
     paddingHorizontal: SPACING.sm,
     paddingVertical: 6,
@@ -770,121 +775,5 @@ const styles = StyleSheet.create({
   },
   statusPending: {
     backgroundColor: 'rgba(255, 255, 255, 0.18)',
-  },
-  cardPressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.99 }],
-  },
-  detailTapRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    marginTop: 2,
-  },
-  detailTapText: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    fontStyle: 'italic',
-    color: 'rgba(232, 246, 255, 0.65)',
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(3, 10, 22, 0.55)',
-  },
-  modalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  modalSheet: {
-    maxHeight: '85%',
-    borderTopLeftRadius: BORDER_RADIUS.xl,
-    borderTopRightRadius: BORDER_RADIUS.xl,
-    overflow: 'hidden',
-  },
-  modalGradient: {
-    paddingTop: SPACING.lg,
-    paddingHorizontal: SPACING.lg,
-    paddingBottom: SPACING.lg,
-  },
-  modalHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: SPACING.sm,
-  },
-  modalHeaderBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 6,
-    backgroundColor: 'rgba(255,255,255,0.10)',
-    borderRadius: 999,
-    flex: 1,
-  },
-  modalHeaderBadgeText: {
-    color: '#E7F8FF',
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    textTransform: 'uppercase',
-    letterSpacing: 0.7,
-  },
-  modalCloseButton: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.10)',
-  },
-  modalScrollContent: {
-    gap: SPACING.sm,
-    paddingBottom: SPACING.lg,
-  },
-  modalHeadline: {
-    color: COLORS.white,
-    fontSize: TYPOGRAPHY.fontSizeXL,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-  },
-  modalLocationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  modalLocationText: {
-    flex: 1,
-    color: '#D9F3FF',
-    fontSize: TYPOGRAPHY.fontSizeSM,
-  },
-  modalSectionTitle: {
-    color: '#E7F8FF',
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginTop: SPACING.sm,
-  },
-  hourlyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: BORDER_RADIUS.md,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-  },
-  hourlyTime: {
-    width: 56,
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#BDEBFF',
-  },
-  hourlyMetric: {
-    flex: 1,
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: 'rgba(231, 248, 255, 0.85)',
-    textAlign: 'center',
   },
 });

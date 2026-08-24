@@ -29,3 +29,4 @@ export * from '@/lib/optimization/alerts';
 export * from '@/lib/optimization/learning';
 
 export * from '@/lib/optimization/release';
+export * from '@/lib/optimization/CasinoIntelligenceEngine';

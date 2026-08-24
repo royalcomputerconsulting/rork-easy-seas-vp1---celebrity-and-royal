@@ -2,6 +2,7 @@ import type { BookedCruise, CasinoOffer } from '@/types/models';
 import { CLUB_ROYALE_TIERS, getTierByPoints, TIER_ORDER } from '@/constants/clubRoyaleTiers';
 import { CROWN_ANCHOR_LEVELS, getLevelByNights, LEVEL_ORDER } from '@/constants/crownAnchor';
 import { DOLLARS_PER_POINT } from '@/types/models';
+import { knownNightCount } from '@/lib/cruiseRecordIntegrity';
 
 
 export type ScenarioType = 
@@ -357,7 +358,7 @@ export function runSimulation(
 
   switch (scenario.type) {
     case 'add_cruise':
-      additionalNights = scenario.newNights || 7;
+      additionalNights = knownNightCount(scenario.newNights) ?? 0;
       additionalPoints = additionalNights * playerContext.averagePointsPerNight;
       additionalSpend = scenario.newSpend || playerContext.averageSpendPerCruise;
       additionalRetailValue = additionalSpend * 1.3;
@@ -390,7 +391,7 @@ export function runSimulation(
       if (scenario.offerId) {
         const offer = offers.find(o => o.id === scenario.offerId);
         if (offer) {
-          additionalNights = offer.minNights || 7;
+          additionalNights = knownNightCount(offer.minNights) ?? 0;
           additionalPoints = additionalNights * playerContext.averagePointsPerNight;
           additionalCompValue = (offer.freeplayAmount || 0) + (offer.obcAmount || 0);
           additionalSpend = playerContext.averageSpendPerCruise * (1 - (offer.discountPercent || 0) / 100);

@@ -11,12 +11,17 @@ import {
   View,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { CalendarDays, ChevronDown, ChevronUp, ExternalLink, Search, Sparkles, Terminal, X } from 'lucide-react-native';
+import { CalendarDays, ChevronDown, ChevronUp, ExternalLink, RefreshCw, Search, Sparkles, Terminal, X } from 'lucide-react-native';
 
 import { BORDER_RADIUS, CLEAN_THEME, COLORS, SHADOW, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import { formatDate } from '@/lib/date';
 import { openCertificatePdf } from '@/lib/royalCaribbean/certificatePdf';
-import { trpc } from '@/lib/trpc';
+import type { DeviceCertificateParseResult } from '@/lib/certificates/certificatePdfPipeline';
+import { downloadCertificateCatalogBatched } from '@/lib/certificates/certificateBatchDownload';
+import { CERTIFICATE_DOCUMENT_STORE_KEY } from '@/lib/certificates/certificateDocumentStore';
+import { getUserScopedKey } from '@/lib/storage/storageKeys';
+import { useAuth } from '@/state/AuthProvider';
+import { useCertificates } from '@/state/CertificatesProvider';
 
 interface CertificateExplorerModalProps {
   visible: boolean;
@@ -91,7 +96,14 @@ export function CertificateExplorerModal({ visible, onClose }: CertificateExplor
   const [includeC, setIncludeC] = useState<boolean>(true);
   const [debugLog, setDebugLog] = useState<LogEntry[]>([]);
   const [logExpanded, setLogExpanded] = useState<boolean>(false);
+  const [deviceFallbackResult, setDeviceFallbackResult] = useState<DeviceCertificateParseResult | null>(null);
+  const [deviceDocumentId, setDeviceDocumentId] = useState<string | null>(null);
+  const [result, setResult] = useState<any>(null);
+  const [isPending, setIsPending] = useState(false);
+  const [hasAttemptedSearch, setHasAttemptedSearch] = useState(false);
   const logScrollRef = useRef<ScrollView>(null);
+  const { authenticatedEmail } = useAuth();
+  const { certificateDocuments, reprocessCertificateDocument, refreshCertificateDocuments } = useCertificates();
 
   const addLog = useCallback((level: LogLevel, message: string) => {
     const entry = makeLog(level, message);
@@ -99,11 +111,12 @@ export function CertificateExplorerModal({ visible, onClose }: CertificateExplor
     console.log(`[CertExplorer:${level.toUpperCase()}] ${message}`);
   }, []);
 
-  const examineMutation = trpc.certificateExplorer.examine.useMutation();
-
-  const result = examineMutation.data;
-  const hasResults = (result?.matches?.length ?? 0) > 0;
-  const hasAttemptedSearch = examineMutation.isSuccess || examineMutation.isError;
+  const hasDeviceResults = (deviceFallbackResult?.sailings.length ?? 0) > 0;
+  const hasResults = (result?.matches?.length ?? 0) > 0 || hasDeviceResults;
+  const storedDocuments = useMemo(
+    () => [...certificateDocuments].sort((left, right) => right.storedAt.localeCompare(left.storedAt)),
+    [certificateDocuments],
+  );
 
   const summaryChips = useMemo(() => {
     if (!result) {
@@ -116,81 +129,6 @@ export function CertificateExplorerModal({ visible, onClose }: CertificateExplor
       { label: 'Certificate levels', value: String(result.summary.matchedCertificateCount) },
     ];
   }, [result]);
-
-  useEffect(() => {
-    if (examineMutation.isPending) return;
-    const result = examineMutation.data;
-    if (!result) return;
-
-    const { summary, filters, pdfScanLog } = result;
-
-    if (filters.resolvedShips.length > 0) {
-      addLog('success', `Ships resolved: ${filters.resolvedShips.join(', ')}`);
-    } else {
-      addLog('warn', `No exact ships matched — searched broadly for "${filters.shipQuery}"`);
-    }
-
-    const types: string[] = [];
-    if (filters.includeA) types.push('A');
-    if (filters.includeC) types.push('C');
-    addLog('info', `Certificate types requested: ${types.join(', ')}`);
-
-    if (summary.indexCount === 0) {
-      addLog('error', 'Index PDF returned 0 certificate entries — PDF may be unreachable or empty');
-    } else {
-      addLog('success', `Index loaded: ${summary.indexCount} certificate entries found`);
-      addLog('step', `Scanned ${summary.searchedCertificateCount} individual certificate PDFs`);
-    }
-
-    if (pdfScanLog && pdfScanLog.length > 0) {
-      const okCount = pdfScanLog.filter((e: { status: string }) => e.status === 'ok').length;
-      const errorCount = pdfScanLog.filter((e: { status: string }) => e.status === 'error').length;
-      const emptyCount = pdfScanLog.filter((e: { status: string }) => e.status === 'empty').length;
-      const noSailingsCount = pdfScanLog.filter((e: { status: string }) => e.status === 'no_sailings').length;
-
-      if (okCount > 0) {
-        addLog('success', `${okCount} PDF(s) had matching sailings`);
-      }
-      if (noSailingsCount > 0) {
-        addLog('info', `${noSailingsCount} PDF(s) parsed OK but had no matching ship+date`);
-      }
-      if (emptyCount > 0) {
-        addLog('warn', `${emptyCount} PDF(s) returned empty/unreadable text`);
-      }
-      if (errorCount > 0) {
-        addLog('error', `${errorCount} PDF(s) failed to fetch (blocked or unreachable)`);
-        const errorEntries = pdfScanLog.filter((e: { status: string }) => e.status === 'error');
-        errorEntries.slice(0, 5).forEach((e: { certificateCode: string; errorMessage: string | null }) => {
-          addLog('error', `  ${e.certificateCode}: ${e.errorMessage ?? 'unknown error'}`);
-        });
-        if (errorEntries.length > 5) {
-          addLog('error', `  …and ${errorEntries.length - 5} more`);
-        }
-      }
-
-      const withSailings = pdfScanLog.filter((e: { status: string; sailingsFound: number }) => e.sailingsFound > 0);
-      withSailings.forEach((e: { certificateCode: string; sailingsFound: number; textLength: number }) => {
-        addLog('step', `${e.certificateCode}: ${e.sailingsFound} sailing(s) extracted (${Math.round(e.textLength / 1024)}KB text)`);
-      });
-    }
-
-    if (summary.matchedSailingCount === 0) {
-      addLog('warn', `No sailings matched your ship/date filter after scanning all ${summary.searchedCertificateCount} PDFs`);
-      addLog('info', 'Tip: try broadening ship name (e.g. just "Legend") or clearing sail date');
-    } else {
-      addLog('success', `Found ${summary.matchedSailingCount} matching sailing(s) across ${summary.matchedCertificateCount} certificate level(s)`);
-    }
-
-    addLog('info', `Done — month code: ${result.monthCode}`);
-  }, [examineMutation.data, examineMutation.isPending, addLog]);
-
-  useEffect(() => {
-    if (examineMutation.isError && examineMutation.error) {
-      const err = examineMutation.error;
-      const msg = err instanceof Error ? err.message : 'Unknown error — check connection';
-      addLog('error', `Request failed: ${msg}`);
-    }
-  }, [examineMutation.isError, examineMutation.error, addLog]);
 
   useEffect(() => {
     if (logExpanded && debugLog.length > 0) {
@@ -209,7 +147,7 @@ export function CertificateExplorerModal({ visible, onClose }: CertificateExplor
     }
 
     if (!includeA && !includeC) {
-      Alert.alert('Choose a source', 'Turn on A, C, or both certificate sources before searching.');
+      Alert.alert('Choose a source', 'Turn on at least one certificate family before searching.');
       return;
     }
 
@@ -219,6 +157,8 @@ export function CertificateExplorerModal({ visible, onClose }: CertificateExplor
     }
 
     setDebugLog([]);
+    setDeviceFallbackResult(null);
+    setDeviceDocumentId(null);
     setLogExpanded(true);
     addLog('step', `Starting examination — month ${trimmedMonthCode}`);
     addLog('info', `Query: "${trimmedShipQuery}"${trimmedSailDate ? ` · Sail date: ${trimmedSailDate}` : ''}`);
@@ -235,33 +175,55 @@ export function CertificateExplorerModal({ visible, onClose }: CertificateExplor
       includeC,
     });
 
+    setIsPending(true);
+    setHasAttemptedSearch(false);
+    setResult(null);
     try {
-      await examineMutation.mutateAsync({
+      const directResult = await downloadCertificateCatalogBatched({
         shipQuery: trimmedShipQuery,
-        sailDate: trimmedSailDate.length > 0 ? trimmedSailDate : undefined,
+        sailDate: trimmedSailDate || undefined,
         monthCode: trimmedMonthCode,
         includeA,
         includeC,
+        documentStorageKey: getUserScopedKey(CERTIFICATE_DOCUMENT_STORE_KEY, authenticatedEmail),
+        resetLog: true,
       });
-    } catch (error) {
-      // Intentionally console.warn (not console.error): this failure is fully
-      // caught, retried upstream, logged in the in-app log panel below, and
-      // shown via the friendly Alert right after — a raw console.error would
-      // trigger a disruptive full-screen dev overlay that looks like a crash.
-      console.warn('[CertificateExplorerModal] Certificate examination failed:', error);
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      const isNetworkError = errorMsg.includes('fetch') || errorMsg.includes('Failed') || errorMsg.includes('network') || errorMsg.includes('timeout');
-      const userMessage = isNetworkError
-        ? 'Network issue — check your connection and try again. Royal Caribbean\'s server may be temporarily slow.'
-        : errorMsg;
-      addLog('error', `Request failed: ${userMessage}`);
-      addLog('info', 'Tip: wait a few seconds and try again. The Royal Caribbean CDN can be intermittent.');
-      Alert.alert(
-        'Search failed',
-        userMessage
+      setResult({ ...directResult, monthCode: trimmedMonthCode });
+      await refreshCertificateDocuments({ force: true });
+      addLog('success', `Downloaded ${directResult.summary.completedCodes} certificate PDF${directResult.summary.completedCodes === 1 ? '' : 's'} directly from Royal.`);
+      addLog(
+        directResult.summary.matchedSailingCount > 0 ? 'success' : 'warn',
+        `Found ${directResult.summary.matchedSailingCount} matching sailing(s) across ${directResult.summary.matchedCertificateCount} certificate level(s).`,
       );
+      if (directResult.summary.failedCodes.length > 0) {
+        addLog('warn', `${directResult.summary.failedCodes.length} direct Royal download(s) could not be parsed; saved certificate data was preserved.`);
+      }
+      addLog('info', 'No Easy Seas backend was contacted. Downloaded PDFs are retained locally for Ask My Data.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'The direct Royal certificate download failed.';
+      console.error('[CertificateExplorerModal] Direct certificate examination failed:', error);
+      addLog('error', message);
+      Alert.alert('Certificate download unavailable', message);
+    } finally {
+      setIsPending(false);
+      setHasAttemptedSearch(true);
     }
-  }, [shipQuery, monthCode, sailDate, includeA, includeC, examineMutation, addLog]);
+  }, [shipQuery, monthCode, sailDate, includeA, includeC, addLog, authenticatedEmail, refreshCertificateDocuments]);
+
+  const handleReprocessStoredDocument = useCallback(async (documentId = deviceDocumentId, expectedCode?: string) => {
+    if (!documentId) return;
+    try {
+      const document = await reprocessCertificateDocument(documentId, expectedCode);
+      const parsedResult = document.parseHistory[document.parseHistory.length - 1]?.result ?? null;
+      setDeviceFallbackResult(parsedResult);
+      setDeviceDocumentId(document.id);
+      addLog('success', `Reprocessed stored PDF with ${parsedResult?.parserVersion ?? 'the current parser'}; ${parsedResult?.sailings.length ?? 0} sailing row(s) retained.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to reprocess the stored certificate PDF.';
+      addLog('error', message);
+      Alert.alert('Reprocessing unavailable', message);
+    }
+  }, [addLog, deviceDocumentId, reprocessCertificateDocument]);
 
   const handleOpenPdf = useCallback((url: string) => {
     console.log('[CertificateExplorerModal] Opening certificate PDF:', url);
@@ -361,16 +323,16 @@ export function CertificateExplorerModal({ visible, onClose }: CertificateExplor
                 style={styles.searchButton}
                 onPress={() => void handleSearch()}
                 activeOpacity={0.85}
-                disabled={examineMutation.isPending}
+                disabled={isPending}
                 testID="certificate-explorer.search-button"
               >
-                {examineMutation.isPending ? (
+                {isPending ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
                   <Search size={18} color="#FFFFFF" />
                 )}
                 <Text style={styles.searchButtonText}>
-                  {examineMutation.isPending ? 'Examining certificates…' : 'Search certificate bank'}
+                  {isPending ? 'Examining certificates…' : 'Search certificate bank'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -387,7 +349,7 @@ export function CertificateExplorerModal({ visible, onClose }: CertificateExplor
             ) : null}
 
             {hasResults
-              ? result?.matches.map((match) => (
+              ? result?.matches.map((match: any) => (
                   <View
                     key={`${match.shipName}-${match.sailDate}`}
                     style={styles.resultCard}
@@ -406,7 +368,7 @@ export function CertificateExplorerModal({ visible, onClose }: CertificateExplor
                     {match.decisionGuide.length > 0 ? (
                       <View style={styles.insightCard}>
                         <Text style={styles.insightTitle}>Decision guide</Text>
-                        {match.decisionGuide.map((step, stepIndex) => (
+                        {match.decisionGuide.map((step: string, stepIndex: number) => (
                           <Text
                             key={`${match.shipName}-${match.sailDate}-guide-${stepIndex}`}
                             style={styles.insightText}
@@ -418,7 +380,7 @@ export function CertificateExplorerModal({ visible, onClose }: CertificateExplor
                     ) : null}
 
                     <View style={styles.levelsList}>
-                      {match.levels.map((level) => (
+                      {match.levels.map((level: any) => (
                         <View key={`${level.certificateCode}-${level.pdfUrl}`} style={styles.levelRow}>
                           <View style={styles.levelContent}>
                             <View style={styles.levelTopRow}>
@@ -486,7 +448,7 @@ export function CertificateExplorerModal({ visible, onClose }: CertificateExplor
                     {match.opportunities.length > 0 ? (
                       <View style={styles.opportunityCard}>
                         <Text style={styles.opportunityTitle}>Point jump opportunities</Text>
-                        {match.opportunities.map((opportunity) => (
+                        {match.opportunities.map((opportunity: any) => (
                           <Text
                             key={`${opportunity.fromCode}-${opportunity.toCode}`}
                             style={styles.opportunityText}
@@ -500,7 +462,112 @@ export function CertificateExplorerModal({ visible, onClose }: CertificateExplor
                 ))
               : null}
 
-            {hasAttemptedSearch && !hasResults && !examineMutation.isPending ? (
+            {hasDeviceResults && deviceFallbackResult ? (
+              <View style={styles.resultCard} testID="certificate-explorer.device-fallback-results">
+                <View style={styles.resultHeader}>
+                  <View style={styles.resultHeaderText}>
+                    <Text style={styles.resultShip}>On-device PDF results</Text>
+                    <Text style={styles.resultDate}>
+                      {deviceFallbackResult.provenance.documentHash ?? 'Document hash unavailable'}
+                    </Text>
+                  </View>
+                  <View style={styles.matchCountBadge}>
+                    <Text style={styles.matchCountBadgeText}>{deviceFallbackResult.sailings.length} rows</Text>
+                  </View>
+                </View>
+                <Text style={styles.levelSubMeta}>
+                  Device parser · {deviceFallbackResult.parserVersion} · retained by page and section
+                </Text>
+                {deviceDocumentId ? (
+                  <TouchableOpacity style={styles.secondaryAction} onPress={() => void handleReprocessStoredDocument()} testID="certificate-explorer.reprocess-stored-pdf">
+                    <RefreshCw size={14} color={CLEAN_THEME.text.primary} />
+                    <Text style={styles.secondaryActionText}>Reprocess stored PDF</Text>
+                  </TouchableOpacity>
+                ) : null}
+                <View style={styles.levelsList}>
+                  {deviceFallbackResult.sailings.map((sailing) => (
+                    <View key={`${sailing.certificateCode}-${sailing.sourceGroup}-${sailing.shipName}-${sailing.sailingDate}-${sailing.cabinCategory ?? ''}`} style={styles.levelRow}>
+                      <View style={styles.levelContent}>
+                        <View style={styles.levelTopRow}>
+                          <View style={styles.levelPill}>
+                            <Text style={styles.levelPillText}>{sailing.certificateCode}</Text>
+                          </View>
+                          <Text style={styles.levelPoints}>{sailing.certificateFamily} family</Text>
+                        </View>
+                        <Text style={styles.levelDetailText}>{sailing.shipName} · {formatDate(sailing.sailingDate, 'medium')}</Text>
+                        <Text style={styles.levelSubMeta}>Page {sailing.sourcePage} · {sailing.sourceGroup}</Text>
+                        <View style={styles.benefitChipRow}>
+                          {sailing.cabinCategory ? <View style={styles.benefitChip}><Text style={styles.benefitChipText}>{sailing.cabinCategory}</Text></View> : null}
+                          {sailing.occupancy ? <View style={styles.benefitChip}><Text style={styles.benefitChipText}>{sailing.occupancy}</Text></View> : null}
+                          {sailing.freePlay !== undefined ? <View style={styles.benefitChip}><Text style={styles.benefitChipText}>{formatCurrency(sailing.freePlay)} FP</Text></View> : null}
+                          {sailing.onboardCredit !== undefined ? <View style={styles.benefitChip}><Text style={styles.benefitChipText}>{formatCurrency(sailing.onboardCredit)} OBC</Text></View> : null}
+                          {sailing.tradeInValue !== undefined ? <View style={styles.benefitChip}><Text style={styles.benefitChipText}>{formatCurrency(sailing.tradeInValue)} trade</Text></View> : null}
+                          {sailing.pointRequirement !== undefined ? <View style={styles.benefitChip}><Text style={styles.benefitChipText}>{formatPoints(sailing.pointRequirement)}</Text></View> : null}
+                        </View>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            ) : null}
+
+            {storedDocuments.length > 0 ? (
+              <View style={styles.resultCard} testID="certificate-explorer.stored-documents">
+                <View style={styles.resultHeader}>
+                  <View style={styles.resultHeaderText}>
+                    <Text style={styles.resultShip}>Stored PDF evidence</Text>
+                    <Text style={styles.resultDate}>Original documents retained for future parser improvements</Text>
+                  </View>
+                  <View style={styles.matchCountBadge}>
+                    <Text style={styles.matchCountBadgeText}>{storedDocuments.length} PDFs</Text>
+                  </View>
+                </View>
+                <View style={styles.levelsList}>
+                  {storedDocuments.slice(0, 5).map((document) => {
+                    const latest = document.parseHistory[document.parseHistory.length - 1]?.result;
+                    const expectedCode = latest?.sailings[0]?.certificateCode;
+                    return (
+                      <View key={document.id} style={styles.levelRow}>
+                        <View style={styles.levelContent}>
+                          <View style={styles.levelTopRow}>
+                            <View style={styles.levelPill}>
+                              <Text style={styles.levelPillText}>{expectedCode ?? 'Certificate PDF'}</Text>
+                            </View>
+                            <Text style={styles.levelPoints}>{latest?.sailings.length ?? 0} rows</Text>
+                          </View>
+                          <Text style={styles.levelSubMeta} numberOfLines={1}>{document.documentVersion}</Text>
+                          <Text style={styles.levelSubMeta}>
+                            {latest?.parserVersion ?? 'No parser result'} · {latest?.status.replace(/_/g, ' ') ?? 'not processed'}
+                          </Text>
+                        </View>
+                        <View style={styles.levelActions}>
+                          <TouchableOpacity
+                            style={styles.secondaryAction}
+                            onPress={() => void handleReprocessStoredDocument(document.id, expectedCode)}
+                            activeOpacity={0.8}
+                            testID={`certificate-explorer.reprocess-${document.id}`}
+                          >
+                            <RefreshCw size={14} color={CLEAN_THEME.text.primary} />
+                            <Text style={styles.secondaryActionText}>Reprocess</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.primaryAction}
+                            onPress={() => handleOpenPdf(document.originalUrl)}
+                            activeOpacity={0.8}
+                            testID={`certificate-explorer.open-stored-${document.id}`}
+                          >
+                            <ExternalLink size={14} color="#FFFFFF" />
+                            <Text style={styles.primaryActionText}>Source</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            ) : null}
+
+            {hasAttemptedSearch && !hasResults && !isPending ? (
               <View style={styles.emptyState} testID="certificate-explorer.empty-state">
                 <Text style={styles.emptyStateTitle}>No matching certificate sailings found</Text>
                 <Text style={styles.emptyStateText}>
@@ -520,7 +587,7 @@ export function CertificateExplorerModal({ visible, onClose }: CertificateExplor
                   <View style={styles.debugHeaderLeft}>
                     <Terminal size={13} color="#60C8F5" />
                     <Text style={styles.debugHeaderTitle}>Connection Log</Text>
-                    {examineMutation.isPending ? (
+                    {isPending ? (
                       <View style={styles.debugLiveChip}>
                         <View style={styles.debugLiveDot} />
                         <Text style={styles.debugLiveText}>LIVE</Text>
@@ -684,18 +751,18 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: BORDER_RADIUS.round,
     borderWidth: 1,
-    borderColor: CLEAN_THEME.border.medium,
+    borderColor: '#111827',
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.md,
     alignItems: 'center',
-    backgroundColor: CLEAN_THEME.background.primary,
+    backgroundColor: '#FFFFFF',
   },
   toggleChipActive: {
     backgroundColor: COLORS.navyDeep,
     borderColor: COLORS.navyDeep,
   },
   toggleChipText: {
-    color: CLEAN_THEME.text.secondary,
+    color: '#111827',
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightBold,
   },
@@ -863,6 +930,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   secondaryActionText: {
     color: CLEAN_THEME.text.primary,

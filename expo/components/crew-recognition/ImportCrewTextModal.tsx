@@ -11,34 +11,37 @@ import {
   Alert,
   Platform,
 } from 'react-native';
-import { X, FileText, Upload, Info, ChevronDown } from 'lucide-react-native';
+import { X, FileText, Upload, Info } from 'lucide-react-native';
+import { File as ExpoFile } from 'expo-file-system';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
 
 interface ImportCrewTextModalProps {
   visible: boolean;
   onClose: () => void;
-  onImport: (text: string, department?: string) => Promise<{ importedCount: number; skippedCount: number; shipName: string; sailDate: string }>;
+  onImport: (text: string) => Promise<{
+    importedCount: number;
+    skippedCount: number;
+    shipName: string;
+    sailDate: string;
+    sailingCount: number;
+    format: 'csv' | 'text';
+    warnings: string[];
+  }>;
 }
 
-const EXAMPLE_TEXT = `Radiance of the Seas 09-26-2025\nJohn Smith\nJane Doe - Casino\nBob Johnson, Dining\nMaria Garcia`;
+const EXAMPLE_TEXT = `Ship: Radiance of the Seas
+Sailing: 2026-09-26
+John Smith | Casino | Dealer | Outstanding service
+Jane Doe | Dining | Waiter
 
-const DEFAULT_DEPARTMENT_OPTIONS: string[] = [
-  'Other',
-  'Casino',
-  'Dining',
-  'Guest Relations',
-  'Housekeeping',
-  'Beverage',
-  'Cruise Staff',
-  'Front Desk',
-];
+Ship: Celebrity Equinox
+Sailing: 2026-10-03; 2026-11-07
+Maria Garcia | Beverage | Bartender`;
 
 export function ImportCrewTextModal({ visible, onClose, onImport }: ImportCrewTextModalProps) {
   const [text, setText] = useState('');
   const [isImporting, setIsImporting] = useState(false);
   const [showExample, setShowExample] = useState(false);
-  const [showDeptPicker, setShowDeptPicker] = useState(false);
-  const [defaultDepartment, setDefaultDepartment] = useState<string>('Other');
 
   const handleImport = useCallback(async () => {
     const trimmed = text.trim();
@@ -49,10 +52,11 @@ export function ImportCrewTextModal({ visible, onClose, onImport }: ImportCrewTe
 
     setIsImporting(true);
     try {
-      const result = await onImport(trimmed, defaultDepartment);
+      const result = await onImport(trimmed);
+      const warningLine = result.warnings.length ? `\n⚠ ${result.warnings.length} row warning(s)` : '';
       Alert.alert(
         'Import Complete',
-        `Ship: ${result.shipName}${result.sailDate ? `\nSailing: ${result.sailDate}` : ''}\n\n✅ Imported: ${result.importedCount} crew members\n⏭ Skipped (duplicates): ${result.skippedCount}`,
+        `Read ${result.format.toUpperCase()} data across ${result.sailingCount} sailing record(s).\n\n✅ Imported: ${result.importedCount} crew recognition rows\n⏭ Skipped (duplicates): ${result.skippedCount}${warningLine}`,
         [{ text: 'OK', onPress: () => { setText(''); onClose(); } }]
       );
     } catch (err) {
@@ -60,14 +64,14 @@ export function ImportCrewTextModal({ visible, onClose, onImport }: ImportCrewTe
     } finally {
       setIsImporting(false);
     }
-  }, [text, onImport, onClose, defaultDepartment]);
+  }, [text, onImport, onClose]);
 
   const handlePickFile = useCallback(async () => {
     if (Platform.OS === 'web') {
       try {
         const input = document.createElement('input');
         input.type = 'file';
-        input.accept = '.txt,text/plain';
+        input.accept = '.csv,.txt,text/csv,text/plain';
         input.onchange = async (e: Event) => {
           const file = (e.target as HTMLInputElement).files?.[0];
           if (!file) return;
@@ -88,13 +92,12 @@ export function ImportCrewTextModal({ visible, onClose, onImport }: ImportCrewTe
     try {
       const DocumentPicker = (await import('expo-document-picker')).default;
       const result = await DocumentPicker.getDocumentAsync({
-        type: ['text/plain', '*/*'],
+        type: ['text/csv', 'text/plain', 'text/comma-separated-values', '*/*'],
         copyToCacheDirectory: true,
       });
       if (result.canceled || !result.assets?.[0]) return;
       const asset = result.assets[0];
-      const response = await fetch(asset.uri);
-      const content = await response.text();
+      const content = await new ExpoFile(asset.uri).text();
       if (content) setText(content);
     } catch {
       Alert.alert('Error', 'Could not read the selected file.');
@@ -104,8 +107,6 @@ export function ImportCrewTextModal({ visible, onClose, onImport }: ImportCrewTe
   const handleClose = useCallback(() => {
     setText('');
     setShowExample(false);
-    setShowDeptPicker(false);
-    setDefaultDepartment('Other');
     onClose();
   }, [onClose]);
 
@@ -115,7 +116,7 @@ export function ImportCrewTextModal({ visible, onClose, onImport }: ImportCrewTe
         <View style={styles.modal}>
           <View style={styles.header}>
             <FileText size={22} color={COLORS.primary} />
-            <Text style={styles.title}>Import Crew List</Text>
+            <Text style={styles.title}>Import Crew Registry</Text>
             <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
               <X size={22} color={COLORS.textSecondary} />
             </TouchableOpacity>
@@ -125,33 +126,11 @@ export function ImportCrewTextModal({ visible, onClose, onImport }: ImportCrewTe
             <View style={styles.infoBox}>
               <Info size={14} color="#0369A1" />
               <Text style={styles.infoText}>
-                Line 1: Ship name + sailing date{'\n'}
-                Lines 2+: One crew member per line. Add " - Department" after a name to set that person's department.
+                Import one CSV or text file containing multiple ships and sailings. CSV accepts Ship, Crew Member, Department, Role / Location, and All Sailing Dates. Text accepts repeated Ship: and Sailing: sections.
               </Text>
               <TouchableOpacity onPress={() => setShowExample(v => !v)} style={styles.exampleToggle}>
                 <Text style={styles.exampleToggleText}>{showExample ? 'Hide example' : 'See example'}</Text>
               </TouchableOpacity>
-            </View>
-
-            <View style={styles.deptSection}>
-              <Text style={styles.deptLabel}>Default department (used when a line doesn't specify one)</Text>
-              <TouchableOpacity style={styles.deptSelector} onPress={() => setShowDeptPicker(v => !v)} activeOpacity={0.7}>
-                <Text style={styles.deptSelectorText}>{defaultDepartment}</Text>
-                <ChevronDown size={16} color={COLORS.textSecondary} />
-              </TouchableOpacity>
-              {showDeptPicker && (
-                <View style={styles.deptOptionsList}>
-                  {DEFAULT_DEPARTMENT_OPTIONS.map((dept) => (
-                    <TouchableOpacity
-                      key={dept}
-                      style={[styles.deptOption, dept === defaultDepartment && styles.deptOptionActive]}
-                      onPress={() => { setDefaultDepartment(dept); setShowDeptPicker(false); }}
-                    >
-                      <Text style={[styles.deptOptionText, dept === defaultDepartment && styles.deptOptionTextActive]}>{dept}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
             </View>
 
             {showExample && (
@@ -163,7 +142,7 @@ export function ImportCrewTextModal({ visible, onClose, onImport }: ImportCrewTe
             <View style={styles.actions}>
               <TouchableOpacity style={styles.fileButton} onPress={handlePickFile} activeOpacity={0.7}>
                 <Upload size={16} color={COLORS.primary} />
-                <Text style={styles.fileButtonText}>Pick .txt File</Text>
+                <Text style={styles.fileButtonText}>Pick CSV or Text File</Text>
               </TouchableOpacity>
               <Text style={styles.orText}>or paste below</Text>
             </View>
@@ -172,7 +151,7 @@ export function ImportCrewTextModal({ visible, onClose, onImport }: ImportCrewTe
               style={styles.textArea}
               value={text}
               onChangeText={setText}
-              placeholder={`Radiance of the Seas 09-26-2025\nJohn Smith\nJane Doe\n...`}
+              placeholder={`Ship: Radiance of the Seas\nSailing: 2026-09-26\nJohn Smith | Casino | Dealer\n\nShip: Celebrity Equinox\nSailing: 2026-10-03\nJane Doe | Dining | Waiter`}
               placeholderTextColor={COLORS.textTertiary}
               multiline
               numberOfLines={10}
@@ -284,56 +263,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#0369A1',
     lineHeight: 20,
-  },
-  deptSection: {
-    marginBottom: SPACING.md,
-  },
-  deptLabel: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.textSecondary,
-    marginBottom: 6,
-  },
-  deptSelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: BORDER_RADIUS.md,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    backgroundColor: '#fff',
-  },
-  deptSelectorText: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: '600' as const,
-    color: COLORS.text,
-  },
-  deptOptionsList: {
-    marginTop: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(3,105,161,0.2)',
-    borderRadius: BORDER_RADIUS.md,
-    backgroundColor: '#F0F9FF',
-    overflow: 'hidden',
-  },
-  deptOption: {
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(3,105,161,0.1)',
-  },
-  deptOptionActive: {
-    backgroundColor: 'rgba(3,105,161,0.12)',
-  },
-  deptOptionText: {
-    fontSize: TYPOGRAPHY.fontSizeSM,
-    color: '#334155',
-    fontWeight: '500' as const,
-  },
-  deptOptionTextActive: {
-    color: '#0369A1',
-    fontWeight: '700' as const,
   },
   actions: {
     flexDirection: 'row',

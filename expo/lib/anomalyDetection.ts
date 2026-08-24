@@ -12,6 +12,7 @@ import { DEFAULT_ANOMALY_CONFIG } from '@/types/models';
 import { findUpgradeOpportunities, convertUpgradeOpportunitiesToAnomalies } from '@/lib/upgradeMonitor';
 import { dedupeBookedCruises } from '@/lib/dataIdentity';
 import { applyKnownBookingCorrectionsToCruise } from '@/lib/cruiseOverlapGuards';
+import { formatDate } from '@/lib/date';
 
 function generateId(): string {
   return `anomaly_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -427,7 +428,7 @@ export function detectSpendingSpikes(
     const totalSpend = cruise.actualSpend || cruise.totalPrice || 0;
     const nights = cruise.nights || 1;
     const percentAboveAvg = meanDailySpend > 0 ? ((dailySpend - meanDailySpend) / meanDailySpend) * 100 : 0;
-    const sailDate = new Date(cruise.sailDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const sailDate = formatDate(cruise.sailDate, 'medium');
     
     if (dailySpend > config.spendingThresholds.dailyCritical) {
       const criticalThreshold = config.spendingThresholds.dailyCritical;
@@ -513,11 +514,7 @@ export function detectPriceDrops(
       severity = 'low';
     }
 
-    const formattedSailDate = new Date(drop.sailDate).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
+    const formattedSailDate = formatDate(drop.sailDate, 'medium');
 
     const isBookedCruise = upcomingBooked.some(c => {
       const shipMatch = c.shipName?.toLowerCase() === drop.shipName?.toLowerCase();
@@ -774,9 +771,9 @@ export function runFullAnomalyDetection(
     ...detectROIAnomalies(cruises, config),
     ...detectExpiringOffers(offers, config),
     ...detectTierMilestones(currentPoints, [
-      { name: 'Prime', threshold: 2500 },
-      { name: 'Signature', threshold: 25000 },
-      { name: 'Masters', threshold: 100000 },
+      { name: 'Prime', threshold: 2501 },
+      { name: 'Signature', threshold: 25001 },
+      { name: 'Masters', threshold: 100001 },
     ], config),
     ...detectBookingConflicts(cruises),
     ...detectSpendingSpikes(cruises, config),

@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import createContextHook from '@nkzw/create-context-hook';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { quotaSafeGetJsonItem, quotaSafeSetJsonItem } from '@/lib/storage/quotaSafeStorage';
 import type { CompItem, W2GRecord, TaxSummary } from '@/types/models';
 import { useAuth } from '@/state/AuthProvider';
 import { ALL_STORAGE_KEYS, getUserScopedKey } from '@/lib/storage/storageKeys';
@@ -35,26 +35,15 @@ export const [TaxProvider, useTax] = createContextHook((): TaxState => {
   const loadData = useCallback(async () => {
     try {
       setIsLoading(true);
-      const [compItemsJson, w2gRecordsJson] = await Promise.all([
-        AsyncStorage.getItem(compItemsKeyRef.current),
-        AsyncStorage.getItem(w2gRecordsKeyRef.current),
+      const [items, records] = await Promise.all([
+        quotaSafeGetJsonItem<CompItem[]>(compItemsKeyRef.current, [], Array.isArray),
+        quotaSafeGetJsonItem<W2GRecord[]>(w2gRecordsKeyRef.current, [], Array.isArray),
       ]);
 
-      if (compItemsJson) {
-        const items = JSON.parse(compItemsJson) as CompItem[];
-        setCompItems(items);
-        console.log('[TaxProvider] Loaded scoped comp items:', { email: authenticatedEmail, count: items.length });
-      } else {
-        setCompItems([]);
-      }
-
-      if (w2gRecordsJson) {
-        const records = JSON.parse(w2gRecordsJson) as W2GRecord[];
-        setW2GRecords(records);
-        console.log('[TaxProvider] Loaded scoped W-2G records:', { email: authenticatedEmail, count: records.length });
-      } else {
-        setW2GRecords([]);
-      }
+      setCompItems(items);
+      setW2GRecords(records);
+      console.log('[TaxProvider] Loaded scoped comp items:', { email: authenticatedEmail, count: items.length });
+      console.log('[TaxProvider] Loaded scoped W-2G records:', { email: authenticatedEmail, count: records.length });
     } catch (error) {
       console.error('[TaxProvider] Failed to load scoped tax data:', error);
       setCompItems([]);
@@ -72,7 +61,7 @@ export const [TaxProvider, useTax] = createContextHook((): TaxState => {
 
   const saveCompItems = useCallback(async (items: CompItem[]) => {
     try {
-      await AsyncStorage.setItem(compItemsKeyRef.current, JSON.stringify(items));
+      await quotaSafeSetJsonItem(compItemsKeyRef.current, items);
       console.log('[TaxProvider] Saved scoped comp items:', { email: authenticatedEmail, count: items.length });
     } catch (error) {
       console.error('[TaxProvider] Failed to save scoped comp items:', error);
@@ -81,7 +70,7 @@ export const [TaxProvider, useTax] = createContextHook((): TaxState => {
 
   const saveW2GRecords = useCallback(async (records: W2GRecord[]) => {
     try {
-      await AsyncStorage.setItem(w2gRecordsKeyRef.current, JSON.stringify(records));
+      await quotaSafeSetJsonItem(w2gRecordsKeyRef.current, records);
       console.log('[TaxProvider] Saved scoped W-2G records:', { email: authenticatedEmail, count: records.length });
     } catch (error) {
       console.error('[TaxProvider] Failed to save scoped W-2G records:', error);

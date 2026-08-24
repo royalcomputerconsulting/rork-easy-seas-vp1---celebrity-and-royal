@@ -9,7 +9,7 @@ import { useCoreData } from '@/state/CoreDataProvider';
 import { useUser, type UserProfile } from '@/state/UserProvider';
 import { IntelligenceFilterStrip } from '@/components/IntelligenceFilterStrip';
 import { useIntelligenceFilters } from '@/state/IntelligenceFiltersProvider';
-import { getManagedSecondProfile, recordMatchesIntelligenceFilters } from '@/lib/intelligenceFilters';
+import { recordMatchesIntelligenceFilters } from '@/lib/intelligenceFilters';
 import {
   buildImportAssignmentPatch,
   buildKeepUnassignedPatch,
@@ -27,7 +27,6 @@ export default function ImportReviewScreen() {
   const router = useRouter();
   const {
     casinoOffers,
-    cruises,
     bookedCruises,
     calendarEvents,
     updateCasinoOffer,
@@ -47,21 +46,30 @@ export default function ImportReviewScreen() {
 
   const allReviewItems = useMemo(() => getImportAssignmentReviewItems({
     offers: casinoOffers,
-    cruises,
+    cruises: [],
     bookedCruises,
     calendarEvents,
     users,
-  }), [bookedCruises, calendarEvents, casinoOffers, cruises, users]);
+  }), [bookedCruises, calendarEvents, casinoOffers, users]);
 
   const reviewItems = useMemo(() => allReviewItems.filter((item) => recordMatchesIntelligenceFilters(item.record, intelligenceFilterSnapshot, users)), [allReviewItems, intelligenceFilterSnapshot, users]);
 
   const reviewGroups = useMemo(() => groupImportAssignmentReviewItems(reviewItems), [reviewItems]);
-  // Only ever show one canonical "second traveler" profile in the assignment chips, even if
-  // duplicate non-owner profiles still exist in storage from an old bug.
   const activeProfiles = useMemo(() => {
-    const allActive = users.filter((profile) => profile.active !== false);
-    const canonicalSecondProfile = getManagedSecondProfile(allActive);
-    return allActive.filter((profile) => profile.isOwner || profile.defaultProfile || profile.id === canonicalSecondProfile?.id);
+    const seenProfileIds = new Set<string>();
+    return users.filter((profile) => {
+      if (profile.active === false) {
+        return false;
+      }
+
+      const profileId = profile.id.trim();
+      if (!profileId || seenProfileIds.has(profileId)) {
+        return false;
+      }
+
+      seenProfileIds.add(profileId);
+      return true;
+    });
   }, [users]);
 
   const applyPatchToItem = useCallback((item: ImportAssignmentReviewItem, patch: Partial<CasinoOffer & Cruise & BookedCruise & CalendarEvent>) => {
@@ -162,7 +170,7 @@ export default function ImportReviewScreen() {
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.profileChipRow}>
             {activeProfiles.map((profile) => (
               <TouchableOpacity
-                key={profile.id}
+                key={`assign-profile-${profile.id}`}
                 style={styles.profileChip}
                 onPress={() => { void assignGroupToProfile(group, profile); }}
                 activeOpacity={0.78}

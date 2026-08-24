@@ -7,7 +7,8 @@ export const CONFIRMED_CLUB_ROYALE_2025_POINTS = 58680;
 export const CONFIRMED_CLUB_ROYALE_2025_COIN_IN = CONFIRMED_CLUB_ROYALE_2025_POINTS * DOLLARS_PER_POINT;
 export const CONFIRMED_CLUB_ROYALE_2025_WINNINGS_HOME = 19457;
 export const CONFIRMED_CLUB_ROYALE_2025_NET_CASH_RESULT = 15218.59;
-export const CONFIRMED_CLUB_ROYALE_2026_POINTS = 6660;
+/** Confirmed account total for the 2026-04-01 Club Royale earning year. */
+export const CONFIRMED_CLUB_ROYALE_2026_POINTS = 24631;
 export const CONFIRMED_CLUB_ROYALE_2026_COIN_IN = CONFIRMED_CLUB_ROYALE_2026_POINTS * DOLLARS_PER_POINT;
 export const CLUB_ROYALE_SIGNATURE_RETAIN_POINTS = 25000;
 export const DEFAULT_ESTIMATED_POINTS_PER_PLAY_HOUR = 400;
@@ -149,22 +150,17 @@ export function getKnownCurrentClubRoyaleFact(cruise: Pick<BookedCruise, 'shipNa
 }
 
 export function getBookedCruiseCasinoPoints(cruise: BookedCruise): number {
-  // A real, explicitly-recorded points value on the cruise itself is always authoritative --
-  // it must never be silently overridden by an older hardcoded season snapshot below, or the
-  // app would keep showing stale/frozen totals after the user updates their actual results.
+  if (!isClubRoyaleCasinoCruise(cruise)) {
+    return 0;
+  }
+
   const explicitPoints = firstFiniteNumber(cruise.pointsEarned, cruise.earnedPoints, cruise.casinoPoints);
-  if (explicitPoints !== null && explicitPoints > 0) {
+  if (explicitPoints !== null) {
     return Math.round(explicitPoints);
   }
 
   const knownFact = getKnownCurrentClubRoyaleFact(cruise);
-  if (knownFact) {
-    return knownFact.pointsEarned;
-  }
-
-  if (!isClubRoyaleCasinoCruise(cruise)) {
-    return 0;
-  }
+  if (knownFact) return knownFact.pointsEarned;
 
   const coinIn = firstFiniteNumber(cruise.coinIn);
   if (coinIn !== null && coinIn > 0) {
@@ -175,33 +171,24 @@ export function getBookedCruiseCasinoPoints(cruise: BookedCruise): number {
 }
 
 export function getBookedCruiseWinningsBroughtHome(cruise: BookedCruise): number {
-  // Same rule as points above: an explicit recorded win/loss on the cruise is authoritative
-  // over the hardcoded season-snapshot fallback (including 0 or negative -- those are real data too).
+  if (!isClubRoyaleCasinoCruise(cruise)) {
+    return 0;
+  }
+
   const explicitWinnings = firstFiniteNumber(cruise.winningsBroughtHome, cruise.winnings, cruise.totalWinnings, cruise.netResult);
   if (explicitWinnings !== null) {
     return explicitWinnings;
   }
 
   const knownFact = getKnownCurrentClubRoyaleFact(cruise);
-  if (knownFact) {
-    return knownFact.winningsBroughtHome;
-  }
-
-  if (!isClubRoyaleCasinoCruise(cruise)) {
-    return 0;
-  }
+  if (knownFact) return knownFact.winningsBroughtHome;
 
   return 0;
 }
 
 export function normalizeCruiseCasinoPerformance(cruise: BookedCruise): BookedCruise {
   const knownFact = getKnownCurrentClubRoyaleFact(cruise);
-  // If the cruise already has its own explicitly-recorded points, that's real user data and it
-  // must win over the hardcoded season-snapshot fact below (which otherwise freezes the cruise at
-  // an old, lower total forever, even after the user records more accurate/updated results).
-  const explicitPointsCheck = firstFiniteNumber(cruise.pointsEarned, cruise.earnedPoints, cruise.casinoPoints);
-  const hasExplicitPoints = explicitPointsCheck !== null && explicitPointsCheck > 0;
-  if (!knownFact || hasExplicitPoints) {
+  if (!knownFact) {
     if (!isClubRoyaleCasinoCruise(cruise)) {
       return cruise;
     }
@@ -221,6 +208,10 @@ export function normalizeCruiseCasinoPerformance(cruise: BookedCruise): BookedCr
 
   const points = knownFact.pointsEarned;
   const winnings = knownFact.winningsBroughtHome;
+  const storedPoints = firstFiniteNumber(cruise.pointsEarned, cruise.earnedPoints, cruise.casinoPoints);
+  const storedWinnings = firstFiniteNumber(cruise.winningsBroughtHome, cruise.winnings, cruise.totalWinnings, cruise.cashResult, cruise.netResult);
+  const authoritativePoints = storedPoints ?? points;
+  const authoritativeWinnings = storedWinnings ?? winnings;
 
   return {
     ...cruise,
@@ -232,16 +223,16 @@ export function normalizeCruiseCasinoPerformance(cruise: BookedCruise): BookedCr
     cruiseSource: 'royal',
     status: knownFact.status,
     completionState: knownFact.status === 'completed' ? 'completed' : 'upcoming',
-    pointsEarned: Math.round(points),
-    earnedPoints: Math.round(points),
-    casinoPoints: Math.round(points),
-    coinIn: Math.round(points) * DOLLARS_PER_POINT,
-    winningsBroughtHome: winnings,
-    winnings,
-    totalWinnings: winnings,
-    netResult: winnings,
+    pointsEarned: Math.round(authoritativePoints),
+    earnedPoints: Math.round(authoritativePoints),
+    casinoPoints: Math.round(authoritativePoints),
+    coinIn: cruise.coinIn ?? Math.round(authoritativePoints) * DOLLARS_PER_POINT,
+    winningsBroughtHome: authoritativeWinnings,
+    winnings: authoritativeWinnings,
+    totalWinnings: authoritativeWinnings,
+    netResult: cruise.netResult ?? authoritativeWinnings,
     calculationConfidence: knownFact.calculationConfidence,
-    notes: [cruise.notes, knownFact.notes, 'Confirmed Club Royale season facts are authoritative for current-season casino points and win/loss.']
+    notes: [cruise.notes, knownFact.notes, 'Saved app/manual cruise values are authoritative; confirmed Club Royale facts fill only missing current-season casino fields.']
       .filter((note): note is string => Boolean(note))
       .join(' '),
   };
@@ -325,7 +316,7 @@ export function buildClubRoyaleDiscrepancy(appPoints: number, syncedPoints: numb
     difference,
     hasDiscrepancy,
     message: hasDiscrepancy
-      ? `Club Royale sync differs by ${Math.abs(difference).toLocaleString()} point${Math.abs(difference) === 1 ? '' : 's'} (${appPoints.toLocaleString()} in app vs ${normalizedSynced.toLocaleString()} synced). App-entered points are authoritative.`
+      ? `Club Royale sources differ by ${Math.abs(difference).toLocaleString()} point${Math.abs(difference) === 1 ? '' : 's'} (${appPoints.toLocaleString()} saved app/cruise points vs ${normalizedSynced.toLocaleString()} provider-synced). Saved app and manual per-cruise points remain authoritative; the provider total is retained as reconciliation evidence.`
       : null,
   };
 }

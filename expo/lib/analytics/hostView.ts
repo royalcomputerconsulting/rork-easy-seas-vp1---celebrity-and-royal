@@ -9,6 +9,9 @@ type CruiseLike = {
   netResult?: number;
   cashResult?: number;
   winningsBroughtHome?: number;
+  brand?: string;
+  casinoProgram?: string;
+  cruiseSource?: string;
 };
 
 type SessionLike = {
@@ -57,7 +60,11 @@ export function buildHostViewProfile(input: { cruises?: CruiseLike[]; sessions?:
   const points = cruisePointsTotal || sessionPointsTotal;
   const cruiseCoinIn = cruises.reduce((sum, cruise) => sum + num(cruise.coinIn), 0);
   const sessionCoinIn = sessions.reduce((sum, session) => sum + num(session.coinIn), 0);
-  const coinIn = cruiseCoinIn || sessionCoinIn || points * 5;
+  const royalEstimatedCoinIn = cruises.reduce((sum, cruise) => {
+    const identity = `${cruise.brand ?? ''} ${cruise.casinoProgram ?? ''} ${cruise.cruiseSource ?? ''}`.toLowerCase();
+    return sum + (/(royal|club\s*royale)/.test(identity) ? cruisePoints(cruise) * 5 : 0);
+  }, 0);
+  const coinIn = cruiseCoinIn || sessionCoinIn || royalEstimatedCoinIn;
   const cruiseWinLossTotal = cruises.reduce((sum, cruise) => sum + cruiseWinLoss(cruise), 0);
   const sessionWinLoss = sessions.reduce((sum, session) => sum + num(session.winLoss), 0);
   const winLoss = cruiseWinLossTotal || sessionWinLoss;
@@ -108,6 +115,6 @@ export function buildHostViewProfile(input: { cruises?: CruiseLike[]; sessions?:
     risks,
     talkingPoints,
     copySummary,
-    warnings: ['Coin-in is wagering volume, not cost.', cruisePointsTotal ? 'Cruise-level closeout totals were preferred over session rollups.' : 'Session totals were used because cruise-level totals were unavailable.'],
+    warnings: ['Coin-in is wagering volume, not cost.', 'The $5-per-point estimate is restricted to records explicitly identified as Royal Caribbean / Club Royale.', cruisePointsTotal ? 'Cruise-level closeout totals were preferred over session rollups.' : 'Session totals were used because cruise-level totals were unavailable.'],
   };
 }

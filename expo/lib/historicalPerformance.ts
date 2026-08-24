@@ -1,6 +1,7 @@
 import type { BookedCruise } from '@/types/models';
 import { DOLLARS_PER_POINT } from '@/types/models';
 import { getBookedCruiseCasinoPoints, getBookedCruiseWinningsBroughtHome } from '@/lib/casinoPointTruth';
+import { knownNightCount } from '@/lib/cruiseRecordIntegrity';
 
 export interface HistoricalPerformanceMetrics {
   averagePointsPerNight: number;
@@ -152,7 +153,17 @@ export function projectROIForUpcomingCruise(
 ): ROIProjection {
   console.log('[HistoricalPerformance] Projecting ROI for cruise:', cruise.shipName);
 
-  const nights = cruise.nights || 7;
+  const nights = knownNightCount(cruise.nights);
+  if (!nights) {
+    return {
+      expectedPoints: 0,
+      expectedCoinIn: 0,
+      expectedWinnings: { best: 0, average: 0, worst: 0 },
+      expectedROI: { best: 0, average: 0, worst: 0 },
+      confidence: 'low',
+      assumptions: ['Cruise duration is unknown, so no casino-performance projection was calculated.'],
+    };
+  }
   const casinoOpenDays = cruise.casinoOpenDays || Math.ceil(nights * 0.5);
 
   const expectedPointsFromHistory = historicalMetrics.averagePointsPerNight * nights;

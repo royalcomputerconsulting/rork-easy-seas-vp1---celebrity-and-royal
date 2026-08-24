@@ -1,23 +1,17 @@
 const { withInfoPlist, withXcodeProject } = require('expo/config-plugins');
 
-const APP_STORE_VERSION = '12.4.2';
-const IOS_BUILD_NUMBER = '314';
+const APP_STORE_VERSION = '13.0.45';
 
 /**
- * Final native safeguard. This runs during Expo prebuild and writes the values
- * into both Info.plist and Xcode build settings, after higher-level config has
- * been resolved.
+ * Final native safeguard for the user-facing marketing version only. EAS owns
+ * CFBundleVersion/CURRENT_PROJECT_VERSION so every production build can receive
+ * a unique automatically incremented build number.
  */
 module.exports = function withForcedIOSVersion(config) {
   config.version = APP_STORE_VERSION;
-  config.ios = {
-    ...(config.ios || {}),
-    buildNumber: IOS_BUILD_NUMBER,
-  };
 
   config = withInfoPlist(config, (modConfig) => {
     modConfig.modResults.CFBundleShortVersionString = APP_STORE_VERSION;
-    modConfig.modResults.CFBundleVersion = IOS_BUILD_NUMBER;
     return modConfig;
   });
 
@@ -27,7 +21,6 @@ module.exports = function withForcedIOSVersion(config) {
       const entry = section[key];
       if (!entry || typeof entry !== 'object' || !entry.buildSettings) return;
       entry.buildSettings.MARKETING_VERSION = APP_STORE_VERSION;
-      entry.buildSettings.CURRENT_PROJECT_VERSION = IOS_BUILD_NUMBER;
     });
     return modConfig;
   });

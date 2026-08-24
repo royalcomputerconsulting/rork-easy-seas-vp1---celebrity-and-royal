@@ -20,7 +20,7 @@ export const CARNIVAL_VIFP_TIERS: Record<string, CarnivalVifpTierInfo> = {
   },
   Red: {
     name: 'Red',
-    cruiseDays: 1,
+    cruiseDays: 25,
     color: '#CC2232',
     bgColor: 'rgba(204, 34, 50, 0.15)',
     benefits: [
@@ -32,7 +32,7 @@ export const CARNIVAL_VIFP_TIERS: Record<string, CarnivalVifpTierInfo> = {
   },
   Gold: {
     name: 'Gold',
-    cruiseDays: 25,
+    cruiseDays: 75,
     color: '#D4AF37',
     bgColor: 'rgba(212, 175, 55, 0.15)',
     benefits: [
@@ -45,7 +45,7 @@ export const CARNIVAL_VIFP_TIERS: Record<string, CarnivalVifpTierInfo> = {
   },
   Platinum: {
     name: 'Platinum',
-    cruiseDays: 75,
+    cruiseDays: 200,
     color: '#E5E4E2',
     bgColor: 'rgba(229, 228, 226, 0.20)',
     benefits: [
@@ -58,7 +58,7 @@ export const CARNIVAL_VIFP_TIERS: Record<string, CarnivalVifpTierInfo> = {
   },
   Diamond: {
     name: 'Diamond',
-    cruiseDays: 200,
+    cruiseDays: 500,
     color: '#B9F2FF',
     bgColor: 'rgba(185, 242, 255, 0.15)',
     benefits: [

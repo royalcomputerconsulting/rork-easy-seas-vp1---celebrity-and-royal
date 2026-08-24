@@ -1,18 +1,133 @@
 import type { BookedCruise, CasinoOffer, CalendarEvent, ClubRoyaleProfile } from "@/types/models";
 import { SAMPLE_CLUB_ROYALE_PROFILE } from "@/types/models";
-import {
-  applyKnownRetailValues,
-  enrichCruisesWithReceiptData,
-  enrichCruisesWithMockItineraries,
-  applyFreeplayOBCData,
-} from "./dataEnrichment";
 import { updateAllCruiseLifecycles } from "@/lib/lifecycleManager";
 import { applyKnownBookingCorrectionsToCruise, applyUserConfirmedBookedCruiseManifest, isKnownInvalidBookedCruise } from "@/lib/cruiseOverlapGuards";
 import { STORAGE_KEYS, DEFAULT_SETTINGS, getScopedStorageKeys, type AppSettings } from "./storageConfig";
-import { quotaSafeGetItem } from "@/lib/storage/quotaSafeStorage";
+import { quotaSafeGetItem, quotaSafeGetJsonItemWithRaw, type QuotaSafeJsonRead } from "@/lib/storage/quotaSafeStorage";
 import { containsKnownForeignPersonalData } from "@/lib/storage/dataOwnership";
 import { dedupeBookedCruises, dedupeCalendarEvents } from "@/lib/dataIdentity";
+import { canonicalizeDataRecords } from "@/lib/dataAuthority";
 import { generateCruiseCalendarEvents } from "@/lib/calendar/cruiseEvents";
+
+
+export function parseJsonArray<T>(raw: string | null, label: string): T[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) {
+      console.warn(`[CoreData] Ignored non-array ${label} payload`);
+      return [];
+    }
+    return parsed.filter((item): item is T => item !== null && typeof item === 'object');
+  } catch (error) {
+    console.warn(`[CoreData] Isolated invalid ${label} JSON:`, error);
+    return [];
+  }
+}
+
+export function parseJsonObject(raw: string | null, label: string): Record<string, unknown> | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      console.warn(`[CoreData] Ignored non-object ${label} payload`);
+      return null;
+    }
+    return parsed as Record<string, unknown>;
+  } catch (error) {
+    console.warn(`[CoreData] Isolated invalid ${label} JSON:`, error);
+    return null;
+  }
+}
+
+const LOCAL_STORAGE_READ_TIMEOUT_MS = 1800;
+const STORAGE_VALUE_PRESENT = '1';
+
+type LateStorageReadListener = (key: string, label: string) => void;
+
+const lateStorageReadCache = new Map<string, string | null>();
+const lateStorageReadListeners = new Set<LateStorageReadListener>();
+
+export function subscribeToLateStorageReads(listener: LateStorageReadListener): () => void {
+  lateStorageReadListeners.add(listener);
+  return () => lateStorageReadListeners.delete(listener);
+}
+
+function publishLateStorageRead(key: string, label: string, value: string | null): void {
+  lateStorageReadCache.set(key, value);
+  if (value === null) return;
+  lateStorageReadListeners.forEach((listener) => {
+    try {
+      listener(key, label);
+    } catch (error) {
+      console.warn('[CoreData] Late storage listener failed:', error);
+    }
+  });
+}
+
+export async function readStorageValueWithTimeout(key: string, label: string, timeoutMs = LOCAL_STORAGE_READ_TIMEOUT_MS): Promise<string | null> {
+  if (lateStorageReadCache.has(key)) {
+    return lateStorageReadCache.get(key) ?? null;
+  }
+
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+  let timedOut = false;
+  const storageRead = quotaSafeGetItem(key)
+    .then((value) => {
+      if (timedOut) publishLateStorageRead(key, label, value);
+      return value;
+    })
+    .catch((error) => {
+      console.error(`[CoreData] Error loading ${label}:`, error);
+      return null;
+    });
+  const timeout = new Promise<null>((resolve) => {
+    timeoutHandle = setTimeout(() => {
+      timedOut = true;
+      console.warn(`[CoreData] Local storage read timed out for ${label}; continuing startup with the remaining saved data.`);
+      resolve(null);
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([storageRead, timeout]);
+  } finally {
+    if (timeoutHandle) clearTimeout(timeoutHandle);
+  }
+}
+
+async function readStorageArrayWithTimeout<T extends Record<string, unknown>>(
+  key: string,
+  label: string,
+  timeoutMs = LOCAL_STORAGE_READ_TIMEOUT_MS,
+): Promise<QuotaSafeJsonRead<T[]>> {
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+  let timedOut = false;
+  const storageRead = quotaSafeGetJsonItemWithRaw<T[]>(
+    key,
+    [],
+    (value): value is T[] => Array.isArray(value),
+  ).then((result) => {
+    if (timedOut) publishLateStorageRead(key, label, result.raw);
+    return result;
+  }).catch((error) => {
+    console.error(`[CoreData] Error loading ${label}:`, error);
+    return { raw: null, value: [] };
+  });
+  const timeout = new Promise<QuotaSafeJsonRead<T[]>>((resolve) => {
+    timeoutHandle = setTimeout(() => {
+      timedOut = true;
+      console.warn(`[CoreData] Local storage read timed out for ${label}; continuing startup with the remaining saved data.`);
+      resolve({ raw: null, value: [] });
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([storageRead, timeout]);
+  } finally {
+    if (timeoutHandle) clearTimeout(timeoutHandle);
+  }
+}
 
 export interface StorageSnapshot {
   cruisesData: string | null;
@@ -24,6 +139,10 @@ export interface StorageSnapshot {
   pointsData: string | null;
   profileData: string | null;
   hasImportedData: string | null;
+  parsedCruisesData: Record<string, unknown>[];
+  parsedBookedData: Record<string, unknown>[];
+  parsedOffersData: Record<string, unknown>[];
+  parsedEventsData: Record<string, unknown>[];
 }
 
 export interface UserStatus {
@@ -90,30 +209,53 @@ function normalizeCruiseLifecycle(cruises: BookedCruise[]): BookedCruise[] {
 }
 
 export function enrichCruisePipeline(cruises: BookedCruise[]): BookedCruise[] {
-  const withItineraries = enrichCruisesWithMockItineraries(cruises);
-  const withKnownRetail = applyKnownRetailValues(withItineraries);
-  const withFreeplayOBC = applyFreeplayOBCData(withKnownRetail);
-  return enrichCruisesWithReceiptData(withFreeplayOBC);
+  // Imported records retain only their supplied data. Provider/document/user
+  // enrichment happens explicitly in the reconciliation flow, never from a
+  // bundled personal or mock-data table while storage hydrates.
+  return cruises;
 }
 
-export async function readAllStorageKeys(email?: string | null): Promise<StorageSnapshot> {
+export async function readAllStorageKeys(
+  email?: string | null,
+  options?: { includeAvailableCruises?: boolean },
+): Promise<StorageSnapshot> {
   const keys = email ? getScopedStorageKeys(email) : STORAGE_KEYS;
+  const includeAvailableCruises = options?.includeAvailableCruises ?? true;
   console.log('[CoreData] Loading from storage for user:', email || 'unknown', 'using scoped keys:', !!email);
-  const [cruisesData, bookedData, offersData, eventsData, lastSync, settingsData, pointsData, profileData, hasImportedData] = await Promise.all([
-    quotaSafeGetItem(keys.CRUISES).catch(e => { console.error('[CoreData] Error loading cruises:', e); return null; }),
-    quotaSafeGetItem(keys.BOOKED_CRUISES).catch(e => { console.error('[CoreData] Error loading booked:', e); return null; }),
-    quotaSafeGetItem(keys.CASINO_OFFERS).catch(e => { console.error('[CoreData] Error loading offers:', e); return null; }),
-    quotaSafeGetItem(keys.CALENDAR_EVENTS).catch(e => { console.error('[CoreData] Error loading events:', e); return null; }),
-    quotaSafeGetItem(keys.LAST_SYNC).catch(e => { console.error('[CoreData] Error loading lastSync:', e); return null; }),
-    quotaSafeGetItem(keys.SETTINGS).catch(e => { console.error('[CoreData] Error loading settings:', e); return null; }),
-    quotaSafeGetItem(keys.USER_POINTS).catch(e => { console.error('[CoreData] Error loading points:', e); return null; }),
-    quotaSafeGetItem(keys.CLUB_PROFILE).catch(e => { console.error('[CoreData] Error loading profile:', e); return null; }),
-    quotaSafeGetItem(keys.HAS_IMPORTED_DATA).catch(e => { console.error('[CoreData] Error loading import flag:', e); return null; }),
+  const [cruisesResult, bookedResult, offersResult, eventsResult, lastSync, settingsData, pointsData, profileData, hasImportedData] = await Promise.all([
+    includeAvailableCruises
+      ? readStorageArrayWithTimeout(keys.CRUISES, 'available cruises')
+      : Promise.resolve({ raw: STORAGE_VALUE_PRESENT, value: [] } as QuotaSafeJsonRead<Record<string, unknown>[]>),
+    readStorageArrayWithTimeout(keys.BOOKED_CRUISES, 'booked cruises'),
+    readStorageArrayWithTimeout(keys.CASINO_OFFERS, 'casino offers'),
+    readStorageArrayWithTimeout(keys.CALENDAR_EVENTS, 'calendar events'),
+    readStorageValueWithTimeout(keys.LAST_SYNC, 'last sync timestamp'),
+    readStorageValueWithTimeout(keys.SETTINGS, 'settings'),
+    readStorageValueWithTimeout(keys.USER_POINTS, 'user points'),
+    readStorageValueWithTimeout(keys.CLUB_PROFILE, 'Club Royale profile'),
+    readStorageValueWithTimeout(keys.HAS_IMPORTED_DATA, 'import status'),
   ]);
 
   console.log('[CoreData] Storage promises resolved for user:', email || 'unknown');
 
-  return { cruisesData, bookedData, offersData, eventsData, lastSync, settingsData, pointsData, profileData, hasImportedData };
+  return {
+    // Downstream startup logic only needs presence for these four fields; it
+    // consumes the already-parsed arrays below. Keeping the multi-megabyte raw
+    // JSON strings in the snapshot doubled peak cold-start memory.
+    cruisesData: cruisesResult.raw === null ? null : STORAGE_VALUE_PRESENT,
+    bookedData: bookedResult.raw === null ? null : STORAGE_VALUE_PRESENT,
+    offersData: offersResult.raw === null ? null : STORAGE_VALUE_PRESENT,
+    eventsData: eventsResult.raw === null ? null : STORAGE_VALUE_PRESENT,
+    lastSync,
+    settingsData,
+    pointsData,
+    profileData,
+    hasImportedData,
+    parsedCruisesData: cruisesResult.value,
+    parsedBookedData: bookedResult.value,
+    parsedOffersData: offersResult.value,
+    parsedEventsData: eventsResult.value,
+  };
 }
 
 export function determineUserStatus(
@@ -126,8 +268,13 @@ export function determineUserStatus(
   const hasImported = hasImportedData === 'true';
   const hasAnyExistingData = !!(bookedData || offersData || profileData || pointsData || cruisesData);
 
-  const parsedBookedData: BookedCruise[] = bookedData ? dedupeBookedCruises(JSON.parse(bookedData) as BookedCruise[], 'stored booked cruises') : [];
-  const parsedOffersData: CasinoOffer[] = offersData ? JSON.parse(offersData) : [];
+  const parsedBookedData = dedupeBookedCruises(
+    canonicalizeDataRecords(snapshot.parsedBookedData as Array<BookedCruise & Record<string, unknown>>) as BookedCruise[],
+    'stored booked cruises',
+  );
+  const parsedOffersData = canonicalizeDataRecords(
+    snapshot.parsedOffersData as Array<CasinoOffer & Record<string, unknown>>,
+  ) as CasinoOffer[];
   const realBookedData = filterDemoCruises(parsedBookedData);
   const realOffersData = filterDemoOffers(parsedOffersData);
   const hasRealData = realBookedData.length > 0 || realOffersData.length > 0;
@@ -153,9 +300,6 @@ export function determineUserStatus(
 export async function processBookedCruises(
   status: UserStatus,
   snapshot: StorageSnapshot,
-  getMockCruises: () => { BOOKED_CRUISES_DATA: BookedCruise[]; COMPLETED_CRUISES_DATA: BookedCruise[] },
-  getFirstTimeUserSampleData: () => { sampleCruises: BookedCruise[]; sampleOffers: CasinoOffer[] },
-  _email?: string | null,
 ): Promise<ProcessedBookedResult> {
   const { parsedBookedData, isFirstTimeUser, hasRealData } = status;
   const { bookedData } = snapshot;
@@ -163,20 +307,14 @@ export async function processBookedCruises(
   if (bookedData && parsedBookedData.length > 0) {
     console.log('[CoreData] Found existing booked data, processing...');
 
-    // Persisted authenticated sync data is the only production source of booked/history rows.
-    // Never merge account-specific mock/history fallback rows during hydration because doing so
-    // changes post-sync counts and can reintroduce records that were not returned by the live API.
     const nonMockCruises = filterDemoCruises(parsedBookedData);
 
     if (nonMockCruises.length === 0 && !hasRealData) {
-      console.log('[CoreData] Existing booked data only contains demo records - loading isolated sample demo data');
-      const { sampleCruises, sampleOffers } = getFirstTimeUserSampleData();
-      const enrichedSample = enrichCruisePipeline(sampleCruises);
+      console.log('[CoreData] Existing booked data only contains demo records - keeping production state empty');
       return {
-        bookedCruises: enrichedSample,
-        offersOverride: sampleOffers,
-        finalBookedCount: enrichedSample.length,
-        shouldPersistMergedCruises: false,
+        bookedCruises: [],
+        finalBookedCount: 0,
+        shouldPersistMergedCruises: true,
         shouldPersistFirstTimeData: false,
       };
     }
@@ -187,10 +325,20 @@ export async function processBookedCruises(
       merged: nonMockCruises.length,
     });
 
-    const dedupedNonMockCruises = dedupeBookedCruises(nonMockCruises, 'processed booked cruises');
+    // filterDemoCruises already applies the authoritative booked-cruise
+    // identity pass. Repeating it here doubled cold-start work for large
+    // histories without changing the result.
+    const dedupedNonMockCruises = nonMockCruises;
     const withNormalizedLifecycle = normalizeCruiseLifecycle(dedupedNonMockCruises);
     const enrichedBooked = enrichCruisePipeline(withNormalizedLifecycle);
-    const cleanedKnownData = parsedBookedData.length !== nonMockCruises.length || JSON.stringify(parsedBookedData) !== JSON.stringify(nonMockCruises);
+    const correctedKnownData = parsedBookedData.some((originalCruise) => {
+      const correctedCruise = applyKnownBookingCorrectionsToCruise(originalCruise);
+      return correctedCruise.sailDate !== originalCruise.sailDate
+        || correctedCruise.returnDate !== originalCruise.returnDate
+        || correctedCruise.itineraryNeedsManualEntry !== originalCruise.itineraryNeedsManualEntry
+        || JSON.stringify(correctedCruise.itinerary ?? []) !== JSON.stringify(originalCruise.itinerary ?? []);
+    });
+    const cleanedKnownData = parsedBookedData.length !== nonMockCruises.length || correctedKnownData;
 
     return {
       bookedCruises: enrichedBooked,
@@ -200,18 +348,13 @@ export async function processBookedCruises(
     };
   }
 
-  if (isFirstTimeUser && !hasRealData && false) {
-    console.log('[CoreData] First time user demo data disabled in production local-first mode');
-    const { sampleCruises, sampleOffers } = getFirstTimeUserSampleData();
-    const enrichedSample = enrichCruisePipeline(sampleCruises);
-    console.log('[CoreData] Sample demo data loaded:', enrichedSample.length, 'cruises,', sampleOffers.length, 'offers');
-
+  if (isFirstTimeUser && !hasRealData) {
+    console.log('[CoreData] First time user with no real data - keeping production state empty');
     return {
-      bookedCruises: enrichedSample,
-      offersOverride: sampleOffers,
-      finalBookedCount: enrichedSample.length,
+      bookedCruises: [],
+      finalBookedCount: 0,
       shouldPersistMergedCruises: false,
-      shouldPersistFirstTimeData: true,
+      shouldPersistFirstTimeData: false,
     };
   }
 
@@ -232,7 +375,10 @@ export function processCalendarEvents(
   const { eventsData, bookedData } = snapshot;
   const { parsedBookedData } = status;
 
-  let parsedEvents: CalendarEvent[] = eventsData ? dedupeCalendarEvents(JSON.parse(eventsData) as CalendarEvent[], 'stored calendar events') : [];
+  let parsedEvents = dedupeCalendarEvents(
+    canonicalizeDataRecords(snapshot.parsedEventsData as Array<CalendarEvent & Record<string, unknown>>) as CalendarEvent[],
+    'stored calendar events',
+  );
 
   if (parsedEvents.length === 0 && finalBookedCount > 0) {
     console.log('[CoreData] No calendar events found but', finalBookedCount, 'booked cruises exist - auto-generating events');
@@ -262,18 +408,18 @@ export function processMetadata(
 ): ProcessedMetadata {
   const { settingsData, pointsData, profileData } = snapshot;
 
-  const parsedSettings = settingsData ? JSON.parse(settingsData) : null;
+  const parsedSettings = parseJsonObject(settingsData, 'settings');
   const settings: AppSettings | null = parsedSettings && !containsKnownForeignPersonalData(parsedSettings, email)
     ? { ...DEFAULT_SETTINGS, ...parsedSettings }
     : null;
 
-  const userPoints: number | null = pointsData
-    ? parseInt(pointsData, 10)
-    : null;
+  const parsedUserPoints = pointsData ? parseInt(pointsData, 10) : Number.NaN;
+  const userPoints: number | null = Number.isFinite(parsedUserPoints) ? parsedUserPoints : null;
 
   let clubRoyaleProfile: ClubRoyaleProfile | null = null;
   if (profileData) {
-    const parsedProfile = JSON.parse(profileData) as ClubRoyaleProfile;
+    const parsedProfile = parseJsonObject(profileData, 'Club Royale profile') as ClubRoyaleProfile | null;
+    if (!parsedProfile) return { settings, userPoints, clubRoyaleProfile: null };
     if (!containsKnownForeignPersonalData(parsedProfile, email)) {
       clubRoyaleProfile = parsedProfile;
       console.log('[CoreData] Loaded existing loyalty profile');

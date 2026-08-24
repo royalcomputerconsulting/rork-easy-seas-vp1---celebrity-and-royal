@@ -1,7 +1,10 @@
 import type { BookedCruise, ItineraryDay } from '@/types/models';
 import { createDateFromString } from '@/lib/date';
 import { dedupeBookedCruises } from '@/lib/dataIdentity';
-import { USER_CONFIRMED_BOOKED_CRUISE_MANIFEST } from '@/constants/confirmedBookedCruises';
+import {
+  USER_CONFIRMED_BOOKED_CRUISE_MANIFEST,
+  USER_CONFIRMED_CURRENT_ROYAL_BOOKINGS,
+} from '@/constants/confirmedBookedCruises';
 
 export interface CruiseOverlapWarning {
   cruiseId: string;
@@ -32,6 +35,39 @@ const ICON_MAY_2026_PORTS: string[] = [
   'Cozumel, Mexico',
   'Perfect Day at CocoCay, Bahamas',
   'Miami, Florida',
+];
+
+/**
+ * Public-document itinerary for VACAYA's 6–15 August 2026 Celebrity Equinox
+ * charter. This sailing is intentionally kept as a complete day-by-day plan:
+ * the Ibiza overnight spans two calendar days and the two final days are at
+ * sea. Weather, calendar, and casino-day consumers must not infer those dates
+ * from the shorter ports-only list.
+ *
+ * Source: https://www.myvacaya.com/trip/total-eclipse-med-cruise-2026/
+ */
+export const VERIFIED_EQUINOX_ECLIPSE_2026_ITINERARY: ItineraryDay[] = [
+  { day: 1, port: 'Barcelona, Spain', departure: '17:00', isSeaDay: false, source: 'public_document', dataConfidence: 'verified' },
+  { day: 2, port: 'Ibiza, Spain', arrival: '11:00', departure: 'Overnight', isSeaDay: false, notes: 'Overnight in Ibiza', source: 'public_document', dataConfidence: 'verified' },
+  { day: 3, port: 'Ibiza, Spain', departure: '09:00', isSeaDay: false, notes: 'Overnight stay continues until 9:00 AM; relaxing sea day follows departure.', source: 'public_document', dataConfidence: 'verified' },
+  { day: 4, port: 'Tangier, Morocco', arrival: '07:00', departure: '16:00', isSeaDay: false, source: 'public_document', dataConfidence: 'verified' },
+  { day: 5, port: 'Lisbon, Portugal', arrival: '10:30', departure: '21:00', isSeaDay: false, source: 'public_document', dataConfidence: 'verified' },
+  { day: 6, port: 'Porto (Leixoes), Portugal', arrival: '08:30', departure: '18:00', isSeaDay: false, source: 'public_document', dataConfidence: 'verified' },
+  { day: 7, port: 'A Coruna, Spain', arrival: '08:00', departure: '17:00', isSeaDay: false, notes: 'Total eclipse day', source: 'public_document', dataConfidence: 'verified' },
+  { day: 8, port: 'At Sea', isSeaDay: true, source: 'public_document', dataConfidence: 'verified' },
+  { day: 9, port: 'At Sea', isSeaDay: true, source: 'public_document', dataConfidence: 'verified' },
+  { day: 10, port: 'Barcelona, Spain', arrival: '05:00', isSeaDay: false, source: 'public_document', dataConfidence: 'verified' },
+];
+
+export const VERIFIED_EQUINOX_ECLIPSE_2026_PORTS = [
+  'Barcelona, Spain',
+  'Ibiza, Spain',
+  'Ibiza, Spain',
+  'Tangier, Morocco',
+  'Lisbon, Portugal',
+  'Porto (Leixoes), Portugal',
+  'A Coruna, Spain',
+  'Barcelona, Spain',
 ];
 
 const CONFIRMED_PINNACLE_CRUISE_PLAN: BookedCruise[] = [
@@ -283,14 +319,7 @@ function normalizeCruiseKey(shipName?: string, sailDate?: string): string {
 }
 
 function getReservationKey(cruise: BookedCruise): string {
-  const candidates = [cruise.reservationNumber, cruise.bookingId, cruise.bwoNumber];
-  for (const value of candidates) {
-    const candidate = String(value ?? '').trim().toUpperCase();
-    if (!candidate) continue;
-    if (/^(?:UNCONFIRMED:|BOOKING[_:-]?\d*|RC[_:-]?\d*|CRUISE[_:-]?\d*|ROW[_:-]?\d*|TEMP(?:ORARY)?[_:-]?\d*|UNKNOWN(?:[_:-].*)?)$/i.test(candidate)) continue;
-    return candidate;
-  }
-  return '';
+  return String(cruise.bookingId ?? cruise.reservationNumber ?? cruise.bwoNumber ?? '').trim().toUpperCase();
 }
 
 const USER_CONFIRMED_MANIFEST_RESERVATIONS = new Set(
@@ -309,47 +338,34 @@ function isScottPinnaclePlanningData(cruises: BookedCruise[]): boolean {
 }
 
 function shouldApplyUserConfirmedManifest(cruises: BookedCruise[]): boolean {
-  // Activate the personal correction overlay only when the incoming collection
-  // contains an exact confirmed reservation or exact confirmed ship/date. A
-  // common guest name, ship family, or broad date range is never sufficient.
   return cruises.some((cruise) => {
     const reservation = getReservationKey(cruise);
     const sailing = normalizeCruiseKey(cruise.shipName, cruise.sailDate);
-    return (reservation.length > 0 && USER_CONFIRMED_MANIFEST_RESERVATIONS.has(reservation))
+    const ship = cruise.shipName?.toLowerCase().trim() ?? '';
+    const sailDate = normalizeDateOnly(cruise.sailDate);
+    const returnDate = normalizeDateOnly(cruise.returnDate);
+
+    return cruise.guestNames?.some((guest) => guest.toLowerCase().includes('scott')) === true
+      || USER_CONFIRMED_MANIFEST_RESERVATIONS.has(reservation)
       || USER_CONFIRMED_MANIFEST_SAILINGS.has(sailing)
-      || isSymphonyMay2026Replacement(cruise);
+      || isSymphonyMay2026Replacement(cruise)
+      || (ship === 'allure of the seas' && sailDate === '2026-04-29' && (!returnDate || returnDate === '2026-05-02'))
+      || (ship === 'st of the seas' || ship === 'sg of the seas');
   });
 }
 
 function mergeUserConfirmedCruise(existing: BookedCruise | undefined, confirmed: BookedCruise): BookedCruise {
-  if (!existing) return { ...confirmed };
-
-  // The manifest may correct/enrich cabin, pricing, offer, itinerary, and other planning
-  // details, but the live source remains authoritative for record identity and lifecycle.
-  // Known date/ship replacements are handled earlier by applyKnownBookingCorrectionsToCruise.
-  const merged: BookedCruise = {
-    ...existing,
+  return {
+    ...(existing ?? {}),
     ...confirmed,
-    id: existing.id || confirmed.id,
-    reservationNumber: existing.reservationNumber || confirmed.reservationNumber,
-    bookingId: existing.bookingId || confirmed.bookingId,
-    bwoNumber: existing.bwoNumber || confirmed.bwoNumber,
-    shipName: existing.shipName || confirmed.shipName,
-    sailDate: existing.sailDate || confirmed.sailDate,
-    returnDate: existing.returnDate || confirmed.returnDate,
-    status: existing.status || confirmed.status,
-    bookingStatus: existing.bookingStatus || confirmed.bookingStatus,
-    completionState: existing.completionState || confirmed.completionState,
-    cruiseSource: existing.cruiseSource || confirmed.cruiseSource,
-    offerSource: existing.offerSource || confirmed.offerSource,
-    brand: existing.brand || confirmed.brand,
-    ownerProfileId: existing.ownerProfileId || confirmed.ownerProfileId,
-    sourceEmail: existing.sourceEmail || confirmed.sourceEmail,
-    dataOwnerEmail: existing.dataOwnerEmail || confirmed.dataOwnerEmail,
-    dataOwnerScopeId: existing.dataOwnerScopeId || confirmed.dataOwnerScopeId,
-    createdAt: existing.createdAt || confirmed.createdAt,
+    id: existing?.id || confirmed.id,
+    bookingId: confirmed.bookingId,
+    reservationNumber: confirmed.reservationNumber,
+    sourcePayload: existing?.sourcePayload,
+    sourceProvider: existing?.sourceProvider ?? confirmed.sourceProvider,
+    sourceEndpoint: existing?.sourceEndpoint ?? confirmed.sourceEndpoint,
+    sourceRetrievedAt: existing?.sourceRetrievedAt ?? confirmed.sourceRetrievedAt,
   };
-  return merged;
 }
 
 function mergeConfirmedPlanCruise(existing: BookedCruise, confirmed: BookedCruise): BookedCruise {
@@ -364,29 +380,8 @@ function mergeConfirmedPlanCruise(existing: BookedCruise, confirmed: BookedCruis
 
 /** Ensures the user-confirmed 590 → 702 Pinnacle plan is present and uses solo double C&A points. */
 export function applyConfirmedPinnacleCruisePlan(cruises: BookedCruise[]): BookedCruise[] {
-  if (!isScottPinnaclePlanningData(cruises)) {
-    return cruises;
-  }
-
-  const result = [...cruises];
-
-  CONFIRMED_PINNACLE_CRUISE_PLAN.forEach((confirmedCruise) => {
-    const confirmedReservation = getReservationKey(confirmedCruise);
-    const confirmedSailingKey = normalizeCruiseKey(confirmedCruise.shipName, confirmedCruise.sailDate);
-    const existingIndex = result.findIndex((cruise) => {
-      const reservationMatches = confirmedReservation.length > 0 && getReservationKey(cruise) === confirmedReservation;
-      const sailingMatches = normalizeCruiseKey(cruise.shipName, cruise.sailDate) === confirmedSailingKey;
-      return reservationMatches || sailingMatches;
-    });
-
-    if (existingIndex >= 0) {
-      result[existingIndex] = mergeConfirmedPlanCruise(result[existingIndex], confirmedCruise);
-    } else {
-      result.push(confirmedCruise);
-    }
-  });
-
-  return dedupeBookedCruises(result, 'confirmed pinnacle cruise plan');
+  // Bundled personal plans are fixtures, never a provider source of truth.
+  return cruises;
 }
 
 function normalizeKnownShipAlias(cruise: BookedCruise): BookedCruise {
@@ -408,160 +403,95 @@ function normalizeKnownShipAlias(cruise: BookedCruise): BookedCruise {
 
 /** Returns true for known bad sample/scraped booking rows that should never be treated as real bookings. */
 export function isKnownInvalidBookedCruise(cruise: BookedCruise): boolean {
-  const ship = cruise.shipName?.toLowerCase().trim() ?? '';
-  const sailDate = normalizeDateOnly(cruise.sailDate);
-  const returnDate = normalizeDateOnly(cruise.returnDate);
-  const reservation = String(cruise.reservationNumber ?? cruise.bookingId ?? '').trim().toUpperCase();
-
-  const status = String(cruise.status ?? '').trim().toLowerCase();
-  const isCompleted = cruise.completionState === 'completed' || status === 'completed' || status === 'past';
-  const isFutureSupplementWithoutBooking = cruise.id?.startsWith('supp-') === true && !isCompleted && !reservation;
-  const isBogusAllureCurrentSailing = ship === 'allure of the seas'
-    && sailDate === '2026-04-29'
-    && (!returnDate || returnDate === '2026-05-02');
-
-  const isReplacedOvationSeptember2026 = ship === 'ovation of the seas'
-    && (
-      sailDate === '2026-09-04'
-      || sailDate === '2026-09-11'
-      || reservation === '5709803'
-      || reservation === '3677807'
-    );
-
-  return isFutureSupplementWithoutBooking || isBogusAllureCurrentSailing || isReplacedOvationSeptember2026;
+  // Do not discard a provider row because it resembles a bundled fixture.
+  return false;
 }
 
 /** Applies known booking corrections that should be treated as authoritative in-app. */
 export function applyKnownBookingCorrectionsToCruise(cruise: BookedCruise): BookedCruise {
-  const normalizedCruise = normalizeKnownShipAlias(cruise);
+  const shipName = cruise.shipName?.trim().toLowerCase();
+  const sailDate = normalizeDateOnly(cruise.sailDate);
+  const itineraryName = cruise.itineraryName?.trim().toLowerCase() ?? '';
+  const isVerifiedEclipseCharter = shipName === 'celebrity equinox'
+    && (sailDate === '2026-08-05' || sailDate === '2026-08-06')
+    && (itineraryName.includes('eclipse') || itineraryName.includes('ibiza') || cruise.programCharter?.trim().toLowerCase() === 'vacaya');
 
-  if (!isSymphonyMay2026Replacement(normalizedCruise)) {
-    return normalizedCruise;
-  }
-
-  return {
-    ...normalizedCruise,
-    shipName: 'Icon of the Seas',
-    sailDate: '2026-05-09',
-    returnDate: '2026-05-16',
-    departurePort: 'Miami, Florida',
-    destination: 'Western Caribbean & Perfect Day',
-    itineraryName: '7 Night Western Caribbean & Perfect Day',
-    nights: 7,
-    ports: ICON_MAY_2026_PORTS,
-    itinerary: ICON_MAY_2026_ITINERARY,
-    seaDays: 2,
-    portDays: 4,
-    casinoOpenDays: 7,
-    notes: addCorrectionNote(normalizedCruise.notes, 'Corrected by EasySeas: Symphony of the Seas May 10-17, 2026 was replaced by Icon of the Seas May 9-16, 2026.'),
-    reconciliationStatus: normalizedCruise.reconciliationStatus === 'overlap' ? 'matched' : normalizedCruise.reconciliationStatus,
-  };
-}
-
-export type ConfirmedManifestLedgerAction = 'corrected' | 'enriched' | 'added' | 'unchanged' | 'rejected';
-
-export interface ConfirmedManifestLedgerEntry {
-  action: ConfirmedManifestLedgerAction;
-  manifestReservation: string;
-  manifestSailing: string;
-  matchedIdentity?: string;
-  reason: string;
-}
-
-export interface ConfirmedManifestOverlayResult {
-  cruises: BookedCruise[];
-  ledger: ConfirmedManifestLedgerEntry[];
-  activated: boolean;
-}
-
-/**
- * Applies user-confirmed corrections as a non-destructive overlay. Every live
- * record remains in the collection unless the ordinary identity deduper proves
- * it is an exact duplicate. The manifest is never used as a replacement list.
- */
-export function applyUserConfirmedBookedCruiseManifestWithLedger(cruises: BookedCruise[]): ConfirmedManifestOverlayResult {
-  const correctedInput = cruises
-    .filter((cruise) => !isKnownInvalidBookedCruise(cruise))
-    .map(applyKnownBookingCorrectionsToCruise);
-  const activated = shouldApplyUserConfirmedManifest(correctedInput);
-  const ledger: ConfirmedManifestLedgerEntry[] = [];
-
-  if (!activated) {
+  if (isVerifiedEclipseCharter) {
     return {
-      cruises: dedupeBookedCruises(correctedInput, 'booked cruises without user-confirmed manifest overlay'),
-      ledger,
-      activated: false,
+      ...cruise,
+      sailDate: '2026-08-06',
+      returnDate: '2026-08-15',
+      nights: 9,
+      departurePort: 'Barcelona, Spain',
+      destination: cruise.destination || 'Mediterranean',
+      itineraryName: cruise.itineraryName || 'VACAYA Total Eclipse Mediterranean Cruise',
+      ports: [...VERIFIED_EQUINOX_ECLIPSE_2026_PORTS],
+      itinerary: VERIFIED_EQUINOX_ECLIPSE_2026_ITINERARY.map((day) => ({ ...day })),
+      itineraryNeedsManualEntry: false,
+      sourceAuthority: 'public_document',
+      dataConfidence: 'verified',
+      notes: addCorrectionNote(cruise.notes, 'Verified itinerary: VACAYA Total Eclipse Med Cruise, August 6–15, 2026.'),
     };
   }
 
-  const result = [...correctedInput];
-  for (const confirmedCruise of USER_CONFIRMED_BOOKED_CRUISE_MANIFEST) {
-    const confirmedReservation = getReservationKey(confirmedCruise);
-    const confirmedSailingKey = normalizeCruiseKey(confirmedCruise.shipName, confirmedCruise.sailDate);
-    const reservationMatches = confirmedReservation
-      ? result.map((cruise, index) => ({ cruise, index })).filter(({ cruise }) => getReservationKey(cruise) === confirmedReservation)
-      : [];
-    const sailingMatches = result
-      .map((cruise, index) => ({ cruise, index }))
-      .filter(({ cruise }) => normalizeCruiseKey(cruise.shipName, cruise.sailDate) === confirmedSailingKey);
-    const matches = reservationMatches.length > 0 ? reservationMatches : sailingMatches;
-
-    if (matches.length > 1 && reservationMatches.length === 0) {
-      ledger.push({
-        action: 'rejected',
-        manifestReservation: confirmedReservation,
-        manifestSailing: confirmedSailingKey,
-        reason: 'Ambiguous ship/date fallback matched multiple live bookings; no correction applied',
-      });
-      continue;
-    }
-
-    if (matches.length === 1) {
-      const { cruise: existing, index } = matches[0];
-      const merged = mergeUserConfirmedCruise(existing, confirmedCruise);
-      result[index] = {
-        ...merged,
-        id: existing.id || confirmedCruise.id,
-        reservationNumber: existing.reservationNumber || confirmedCruise.reservationNumber,
-        bookingId: existing.bookingId || confirmedCruise.bookingId,
-      };
-      ledger.push({
-        action: JSON.stringify(existing) === JSON.stringify(result[index]) ? 'unchanged' : 'corrected',
-        manifestReservation: confirmedReservation,
-        manifestSailing: confirmedSailingKey,
-        matchedIdentity: getReservationKey(result[index]) || normalizeCruiseKey(result[index].shipName, result[index].sailDate),
-        reason: reservationMatches.length > 0 ? 'Matched by reservation/booking ID' : 'Matched by unique ship and sail date',
-      });
-      continue;
-    }
-
-    result.push({ ...confirmedCruise });
-    ledger.push({
-      action: 'added',
-      manifestReservation: confirmedReservation,
-      manifestSailing: confirmedSailingKey,
-      matchedIdentity: confirmedReservation || confirmedSailingKey,
-      reason: 'Confirmed manifest cruise was absent from live data and was added without removing live rows',
-    });
-  }
-
-  return {
-    cruises: dedupeBookedCruises(result, 'non-destructive user-confirmed booked cruise manifest overlay'),
-    ledger,
-    activated: true,
-  };
+  return cruise;
 }
 
+/** Applies the user-confirmed booked-cruise manifest so stale imports cannot recreate duplicate or made-up sailings. */
 export function applyUserConfirmedBookedCruiseManifest(cruises: BookedCruise[]): BookedCruise[] {
-  return applyUserConfirmedBookedCruiseManifestWithLedger(cruises).cruises;
+  const corrected = cruises.map(applyKnownBookingCorrectionsToCruise);
+  if (!shouldApplyUserConfirmedManifest(corrected)) {
+    return dedupeBookedCruises(corrected, 'booked cruises without user-confirmed current manifest');
+  }
+
+  const knownStaleReservations = new Set(['NAV-20260821', 'HARMONY-20260905', 'HERO-20271016']);
+  const knownStaleSailings = new Set([
+    normalizeCruiseKey('Navigator of the Seas', '2026-08-21'),
+    normalizeCruiseKey('Harmony of the Seas', '2026-09-05'),
+    normalizeCruiseKey('Hero of the Seas', '2027-10-16'),
+  ]);
+  const currentReservationKeys = new Set(USER_CONFIRMED_CURRENT_ROYAL_BOOKINGS.map(getReservationKey));
+  const merged = corrected.filter((cruise) => {
+    const reservation = getReservationKey(cruise);
+    const sailing = normalizeCruiseKey(cruise.shipName, cruise.sailDate);
+    return !knownStaleReservations.has(reservation) && !knownStaleSailings.has(sailing);
+  });
+  const usedIndexes = new Set<number>();
+
+  USER_CONFIRMED_CURRENT_ROYAL_BOOKINGS.forEach((confirmed) => {
+    const confirmedReservation = getReservationKey(confirmed);
+    let existingIndex = merged.findIndex((candidate, index) =>
+      !usedIndexes.has(index) && getReservationKey(candidate) === confirmedReservation
+    );
+
+    if (existingIndex < 0) {
+      const confirmedSailing = normalizeCruiseKey(confirmed.shipName, confirmed.sailDate);
+      existingIndex = merged.findIndex((candidate, index) => {
+        if (usedIndexes.has(index) || normalizeCruiseKey(candidate.shipName, candidate.sailDate) !== confirmedSailing) return false;
+        const candidateReservation = getReservationKey(candidate);
+        // A synthetic old sailing key may be upgraded to the confirmed booking
+        // number; another real reservation on the same departure may not.
+        return !candidateReservation || !currentReservationKeys.has(candidateReservation);
+      });
+    }
+
+    if (existingIndex >= 0) {
+      merged[existingIndex] = mergeUserConfirmedCruise(merged[existingIndex], confirmed);
+      usedIndexes.add(existingIndex);
+    } else {
+      merged.push({ ...confirmed });
+      usedIndexes.add(merged.length - 1);
+    }
+  });
+
+  return dedupeBookedCruises(merged, 'booked cruises with user-confirmed current Royal manifest');
 }
 
 /** Applies known booking corrections to a list without mutating the input records. */
 export function applyKnownBookingCorrections(cruises: BookedCruise[]): BookedCruise[] {
-  const correctedCruises = cruises.filter((cruise) => !isKnownInvalidBookedCruise(cruise)).map(applyKnownBookingCorrectionsToCruise);
   return dedupeBookedCruises(
-    applyUserConfirmedBookedCruiseManifest(correctedCruises),
-    'known booking corrections'
+    cruises.map(applyKnownBookingCorrectionsToCruise),
+    'booked cruises with verified corrections',
   );
 }
 

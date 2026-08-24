@@ -155,7 +155,7 @@ export function injectCarnivalAuthenticationProbe(requestId: string, runId: stri
     if (!value || typeof value !== 'object') return false;
     var message = compact(value.message || value.error || value.errorMessage || value.description || value.title || '').toLowerCase();
     var status = Number(value.status || value.statusCode || value.httpStatus || 0);
-    return status === 401 || status === 403 || /unauthori[sz]ed|forbidden|not authenticated|authentication required|session (?:has )?expired|please sign in|log in to continue/.test(message);
+    return status === 402 || status === 403 || /unauthori[sz]ed|forbidden|not authenticated|authentication required|session (?:has )?expired|please sign in|log in to continue/.test(message);
   }
   function payloadLooksProtected(value) {
     if (!value || typeof value !== 'object' || payloadShowsAuthenticationFailure(value)) return false;
@@ -211,7 +211,7 @@ export function injectCarnivalAuthenticationProbe(requestId: string, runId: stri
       var responseText = await response.text();
       var redirectedToLogin = /(?:login|sign[-_]?in|identity|security|challenge|authenticate|session-expired)/i.test(responseUrl);
       var authFailureText = /session (?:has )?expired|please sign in|log in to continue|unauthori[sz]ed|forbidden|authentication required/i.test(responseText);
-      if (response.status === 401 || response.status === 403 || redirectedToLogin || authFailureText) {
+      if (response.status === 402 || response.status === 403 || redirectedToLogin || authFailureText) {
         window.__easySeasCarnivalApiAuthenticatedAt = 0;
         post(false, 'protected_profile_api_rejected', { reason: 'Protected Carnival profile API rejected the session', httpStatus: response.status, url: responseUrl });
         return;
@@ -737,6 +737,8 @@ export function injectCarnivalSearchPageScrape(input: {
   function normalizeDate(value) {
     var raw = compact(value);
     if (!raw) return '';
+    var compactUs = raw.match(/^(\\d{2})(\\d{2})(20\\d{2})$/);
+    if (compactUs) return compactUs[1] + '/' + compactUs[2] + '/' + compactUs[3];
     var iso = raw.match(/^(20\\d{2})[-\\/](\\d{1,2})[-\\/](\\d{1,2})/);
     if (iso) return String(iso[2]).padStart(2, '0') + '/' + String(iso[3]).padStart(2, '0') + '/' + iso[1];
     var us = raw.match(/^(\\d{1,2})[-\\/](\\d{1,2})[-\\/](20\\d{2})/);
@@ -749,13 +751,17 @@ export function injectCarnivalSearchPageScrape(input: {
     var patterns = [
       /(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\\.?\\s+\\d{1,2},?\\s+20\\d{2}/gi,
       /\\b\\d{1,2}\\/\\d{1,2}\\/20\\d{2}\\b/g,
-      /\\b20\\d{2}-\\d{1,2}-\\d{1,2}\\b/g
+      /\\b20\\d{2}-\\d{1,2}-\\d{1,2}\\b/g,
+      /(?:sailDate|departureDate|startDate|date)=((?:0[1-9]|1[0-2])(?:0[1-9]|[12]\\d|3[01])20\\d{2})/gi
     ];
     for (var pi = 0; pi < patterns.length; pi++) {
       var matches = String(text || '').match(patterns[pi]) || [];
       for (var mi = 0; mi < matches.length; mi++) {
-        var key = compact(matches[mi]).toLowerCase();
-        if (!seen[key]) { seen[key] = true; found.push(normalizeDate(matches[mi])); }
+        var rawMatch = compact(matches[mi]);
+        var compactDate = rawMatch.match(/((?:0[1-9]|1[0-2])(?:0[1-9]|[12]\\d|3[01])20\\d{2})/);
+        var normalizedDate = normalizeDate(compactDate ? compactDate[1] : rawMatch);
+        var key = normalizedDate.toLowerCase();
+        if (!seen[key]) { seen[key] = true; found.push(normalizedDate); }
       }
     }
     return found;
@@ -817,6 +823,48 @@ export function injectCarnivalSearchPageScrape(input: {
     var payloads = window.capturedPayloads || {};
     var key = String(INPUT.runId || '') + '|' + String(INPUT.offerCode || '').toUpperCase() + '|' + Number(INPUT.pageNumber || 1) + '|' + String(INPUT.requestId || '');
     var envelope = payloads.carnivalSearchByContext && payloads.carnivalSearchByContext[key];
+    if (!envelope || typeof envelope !== 'object') {
+      var candidates = Array.isArray(payloads.carnivalSearchCandidates) ? payloads.carnivalSearchCandidates : [];
+      var cutoff = Date.now() - 90000;
+      var matchingCandidates = candidates.filter(function(candidate) {
+        var analysis = candidate && candidate.analysis;
+        var metadata = candidate && candidate.metadata;
+        if (!analysis || !metadata || Number(candidate.capturedAt || 0) < cutoff) return false;
+        if (analysis.kind !== 'inventory' && analysis.kind !== 'inventory_empty') return false;
+        if (!analysis.approvedEndpoint || !analysis.offerCodeMatched || !analysis.pageMatched) return false;
+        if (analysis.offerProofSource === 'none' || analysis.pageProofSource === 'none') return false;
+        var codes = Array.isArray(analysis.requestOfferCodes) ? analysis.requestOfferCodes : [];
+        if (codes.indexOf(String(INPUT.offerCode || '').toUpperCase()) < 0 && String(metadata.expectedOfferCode || '').toUpperCase() !== String(INPUT.offerCode || '').toUpperCase()) return false;
+        var candidatePage = Number(analysis.pageNumber || metadata.expectedPageNumber || 1);
+        return candidatePage === Number(INPUT.pageNumber || 1);
+      }).slice(-8);
+      if (matchingCandidates.length > 0) {
+        envelope = {
+          runId: INPUT.runId,
+          offerCode: INPUT.offerCode,
+          requestId: INPUT.requestId,
+          contextFingerprint: INPUT.contextFingerprint,
+          pageNumber: INPUT.pageNumber,
+          url: window.location.href || '',
+          inventoryValidated: true,
+          requestProof: true,
+          pageProof: true,
+          payloads: matchingCandidates.map(function(candidate) {
+            return {
+              data: candidate.data,
+              analysis: candidate.analysis,
+              metadata: Object.assign({}, candidate.metadata, {
+                runId: INPUT.runId,
+                requestId: INPUT.requestId,
+                contextFingerprint: INPUT.contextFingerprint,
+                offerCode: INPUT.offerCode,
+                pageNumber: INPUT.pageNumber
+              })
+            };
+          })
+        };
+      }
+    }
     if (!envelope || typeof envelope !== 'object') return null;
     if (String(envelope.runId || '') !== String(INPUT.runId || '')) return null;
     if (String(envelope.offerCode || '').toUpperCase() !== String(INPUT.offerCode || '').toUpperCase()) return null;
@@ -964,10 +1012,138 @@ export function injectCarnivalSearchPageScrape(input: {
     // schema-validated network inventory can complete an offer.
     return rows;
   }
+  function rowFromCurrentCarnivalApi(itinerary, sailing, meta) {
+    if (!itinerary || !sailing) return null;
+    var ship = compact(itinerary.shipName || itinerary.ship || itinerary.vesselName || '');
+    var date = compact(sailing.departureDate || sailing.sailDate || sailing.startDate || '');
+    if (!ship || !date) return null;
+    var rooms = sailing.rooms && typeof sailing.rooms === 'object' ? sailing.rooms : {};
+    function roomPrice(key) {
+      var room = rooms[key] && typeof rooms[key] === 'object' ? rooms[key] : null;
+      if (!room || room.soldOut) return '';
+      return moneyForTwo(room.price, 'average per person', true);
+    }
+    var bookingLink = absolute(sailing.sailingURL || itinerary.itineraryURLWithSailing || itinerary.itineraryURL || '');
+    var taxRoom = rooms.interior || rooms.oceanview || rooms.balcony || rooms.suite || null;
+    var taxes = taxRoom && !taxRoom.soldOut ? moneyForTwo(taxRoom.taxesAndFees, 'per person', true) : '';
+    return {
+      sourcePage: 'Offers', offerName: meta.title, offerCode: INPUT.offerCode,
+      offerExpirationDate: meta.expiry, offerType: 'Carnival Players Club',
+      shipName: ship, shipCode: compact(itinerary.shipCode || ''), sailingDate: normalizeDate(date),
+      itinerary: compact(itinerary.itineraryTitleFormatted || itinerary.itineraryTitle || itinerary.regionName || ''),
+      departurePort: compact(itinerary.departurePortName || itinerary.departurePort || ''),
+      cabinType: '', numberOfGuests: '2',
+      perks: compact((meta.perks || '') + ' • Carnival displayed prices converted to totals for 2 guests'),
+      loyaltyLevel: '', loyaltyPoints: '',
+      interiorPrice: roomPrice('interior'), oceanviewPrice: roomPrice('oceanview'),
+      balconyPrice: roomPrice('balcony'), suitePrice: roomPrice('suite'), taxesAndFees: taxes,
+      portList: Array.isArray(itinerary.portsToDisplay) ? itinerary.portsToDisplay.map(function(port) { return compact(port && (port.name || port.portName || port)); }).filter(Boolean).join(', ') : '',
+      dayByDayItinerary: [], destinationName: compact(itinerary.regionName || itinerary.itineraryTitle || ''),
+      totalNights: Number(itinerary.dur || 0) || null, bookingLink: bookingLink || window.location.href,
+      carnivalSailingId: compact(sailing.sailingId || '')
+    };
+  }
+  async function fetchCurrentCarnivalInventory(meta) {
+    if (typeof window.fetch !== 'function') {
+      post('log', { message: 'Carnival direct inventory API is unavailable in this browser session; checking the rendered page.', logType: 'warning' });
+      return null;
+    }
+    try {
+      var expected = new URL(INPUT.expectedUrl || window.location.href, window.location.href);
+      var apiUrl = new URL('/cruisesearch/api/search', expected.origin);
+      expected.searchParams.forEach(function(value, key) {
+        if (/^_easySeasRetry$/i.test(key)) return;
+        apiUrl.searchParams.set(key, value);
+      });
+      apiUrl.searchParams.delete('pageSize');
+      apiUrl.searchParams.delete('rateCodes');
+      apiUrl.searchParams.set('pageNumber', String(Math.max(1, Number(INPUT.pageNumber || 1))));
+      apiUrl.searchParams.set('pagesize', String(Math.max(8, Number(INPUT.pageSize || 50))));
+      apiUrl.searchParams.set('ratecodes', String(INPUT.offerCode || '').toUpperCase());
+      apiUrl.searchParams.set('client', 'cruisesearch');
+      if (!apiUrl.searchParams.get('numadults')) apiUrl.searchParams.set('numadults', '2');
+      if (!apiUrl.searchParams.get('sort')) apiUrl.searchParams.set('sort', 'fromprice');
+      if (!apiUrl.searchParams.get('showBest')) apiUrl.searchParams.set('showBest', 'true');
+      if (!apiUrl.searchParams.get('async')) apiUrl.searchParams.set('async', 'true');
+      if (!apiUrl.searchParams.get('currency')) apiUrl.searchParams.set('currency', 'USD');
+      if (!apiUrl.searchParams.get('locality')) apiUrl.searchParams.set('locality', '1');
+
+      post('log', {
+        message: 'Loading every Carnival sailing for ' + String(INPUT.offerCode || '').toUpperCase() + ' from inventory API page ' + String(INPUT.pageNumber || 1) + '.',
+        logType: 'info'
+      });
+
+      var controller = typeof AbortController === 'function' ? new AbortController() : null;
+      var timer = setTimeout(function() { try { if (controller) controller.abort(); } catch (e) {} }, 15000);
+      var response = await window.fetch(apiUrl.toString(), {
+        method: 'GET', credentials: 'include', cache: 'no-store',
+        headers: { 'Accept': 'application/json, text/plain, */*', 'X-Requested-With': 'XMLHttpRequest' },
+        signal: controller ? controller.signal : undefined
+      });
+      clearTimeout(timer);
+      if (!response.ok) {
+        post('log', { message: 'Carnival inventory API returned HTTP ' + response.status + ' for ' + String(INPUT.offerCode || '').toUpperCase() + '; checking the rendered page.', logType: 'warning' });
+        return null;
+      }
+      var responseUrl = new URL(response.url || apiUrl.toString(), expected.origin);
+      if (responseUrl.origin !== expected.origin || responseUrl.pathname !== '/cruisesearch/api/search') {
+        post('log', { message: 'Carnival inventory response URL could not be verified for ' + String(INPUT.offerCode || '').toUpperCase() + '; checking the rendered page.', logType: 'warning' });
+        return null;
+      }
+      var data = await response.json();
+      var filters = data && data.filters && typeof data.filters === 'object' ? data.filters : {};
+      var responseCodes = Array.isArray(filters.rateCodes) ? filters.rateCodes.map(function(code) { return compact(code).toUpperCase(); }) : [];
+      if (responseCodes.indexOf(String(INPUT.offerCode || '').toUpperCase()) < 0) {
+        post('log', { message: 'Carnival inventory response did not prove rate code ' + String(INPUT.offerCode || '').toUpperCase() + '; refusing to mix another offer into this sync.', logType: 'warning' });
+        return null;
+      }
+      var results = data && data.results && typeof data.results === 'object' ? data.results : null;
+      var itineraries = results && Array.isArray(results.itineraries) ? results.itineraries : null;
+      if (!itineraries) {
+        post('log', { message: 'Carnival inventory response had an unsupported result shape for ' + String(INPUT.offerCode || '').toUpperCase() + '; checking the rendered page.', logType: 'warning' });
+        return null;
+      }
+      var currentPage = Math.max(1, Number(results.currentPage || filters.pageNumber || INPUT.pageNumber || 1));
+      if (currentPage !== Math.max(1, Number(INPUT.pageNumber || 1))) {
+        post('log', { message: 'Carnival returned page ' + currentPage + ' while page ' + String(INPUT.pageNumber || 1) + ' was requested; refusing an out-of-order page.', logType: 'warning' });
+        return null;
+      }
+      var rows = [];
+      for (var ii = 0; ii < itineraries.length; ii++) {
+        var itinerary = itineraries[ii] || {};
+        var sailings = Array.isArray(itinerary.sailings) ? itinerary.sailings : [];
+        if (!sailings.length && itinerary.leadSailing) sailings = [itinerary.leadSailing];
+        for (var si = 0; si < sailings.length; si++) {
+          var row = rowFromCurrentCarnivalApi(itinerary, sailings[si], meta);
+          if (row) rows.push(row);
+        }
+      }
+      var totalResults = Math.max(0, Number(results.totalResults || 0));
+      var lastPage = Math.max(currentPage, Number(results.lastPage || currentPage));
+      post('log', {
+        message: 'Carnival ' + String(INPUT.offerCode || '').toUpperCase() + ' page ' + currentPage + ': verified ' + rows.length + ' sailing' + (rows.length === 1 ? '' : 's') + ' from the inventory API' + (lastPage > currentPage ? '; more pages remain.' : '; final page reached.'),
+        logType: 'success'
+      });
+      return {
+        rows: dedupe(rows),
+        totalResults: totalResults,
+        currentPage: currentPage,
+        pageSize: Math.max(1, Number(filters.pageSize || INPUT.pageSize || 50)),
+        lastPage: lastPage,
+        hasNextPage: currentPage < lastPage,
+        url: responseUrl.toString()
+      };
+    } catch (error) {
+      post('log', { message: 'Carnival inventory API attempt failed for ' + String(INPUT.offerCode || '').toUpperCase() + ': ' + String(error && error.message ? error.message : error) + '. Checking the rendered page.', logType: 'warning' });
+      return null;
+    }
+  }
   function candidateCards() {
     var candidates = [];
     var selectors = [
+      '[data-testid^="tripTile_"]',
       '[data-testid*="cruise-result"]', '[data-testid*="sailing"]',
+      '[data-testid*="itinerary"]', '[data-testid*="cruise-card"]',
       '[class*="CruiseCard"]', '[class*="cruise-card"]', '[class*="SearchResult"]', '[class*="search-result"]',
       'article', 'li'
     ];
@@ -975,7 +1151,7 @@ export function injectCarnivalSearchPageScrape(input: {
       var found = document.querySelectorAll(selectors[si]);
       for (var fi = 0; fi < found.length && candidates.length < 500; fi++) {
         var text = compact(found[fi].textContent);
-        if (text.length < 40 || text.length > 5000) continue;
+        if (text.length < 40 || text.length > 20000) continue;
         if (!/(Carnival|\\d+[- ](?:Day|Night)|View Itinerary|from \\$|average per person)/i.test(text)) continue;
         if (candidates.indexOf(found[fi]) < 0) candidates.push(found[fi]);
       }
@@ -986,12 +1162,42 @@ export function injectCarnivalSearchPageScrape(input: {
   async function expandDates() {
     var controls = document.querySelectorAll('button,a,[role="button"]');
     var clicked = 0;
-    for (var i = 0; i < controls.length && clicked < 40; i++) {
+    for (var i = 0; i < controls.length && clicked < 250; i++) {
       var text = compact((controls[i].textContent || '') + ' ' + (controls[i].getAttribute('aria-label') || ''));
-      if (!/(show|view|check)\\s+dates?/i.test(text)) continue;
-      try { controls[i].click(); clicked++; } catch (e) {}
+      if (!/(?:show|view|check|see|choose|select)\\s+(?:more\\s+)?(?:dates?|sailings?|departures?)/i.test(text)) continue;
+      try {
+        controls[i].click();
+        clicked++;
+        if (clicked % 12 === 0) await new Promise(function(resolve) { setTimeout(resolve, 250); });
+      } catch (e) {}
     }
-    if (clicked) await new Promise(function(resolve) { setTimeout(resolve, 1200); });
+    if (clicked) await new Promise(function(resolve) { setTimeout(resolve, 1400); });
+  }
+  async function settleLazyResults() {
+    var stablePasses = 0;
+    var priorSignature = '';
+    var originalY = Number(window.scrollY || 0);
+    for (var pass = 0; pass < 16 && stablePasses < 3; pass++) {
+      var beforeCount = candidateCards().length;
+      var controls = document.querySelectorAll('button,a,[role="button"]');
+      var clickedMore = false;
+      for (var ci = 0; ci < controls.length; ci++) {
+        var label = compact((controls[ci].textContent || '') + ' ' + (controls[ci].getAttribute('aria-label') || ''));
+        if (!/^(?:load|show|view)\\s+more(?:\\s+(?:cruises?|results?|sailings?))?$/i.test(label)) continue;
+        try { controls[ci].click(); clickedMore = true; break; } catch (e) {}
+      }
+      var height = Math.max(document.body ? document.body.scrollHeight : 0, document.documentElement ? document.documentElement.scrollHeight : 0);
+      window.scrollTo(0, height);
+      for (var settle = 0; settle < 10; settle++) {
+        await new Promise(function(resolve) { setTimeout(resolve, 180); });
+        if (!clickedMore || candidateCards().length > beforeCount) break;
+      }
+      var nextHeight = Math.max(document.body ? document.body.scrollHeight : 0, document.documentElement ? document.documentElement.scrollHeight : 0);
+      var signature = candidateCards().length + '|' + nextHeight;
+      stablePasses = signature === priorSignature ? stablePasses + 1 : 0;
+      priorSignature = signature;
+    }
+    window.scrollTo(0, originalY);
   }
   function collectDomRows(meta) {
     var rows = [];
@@ -1001,13 +1207,16 @@ export function injectCarnivalSearchPageScrape(input: {
       var text = compact(card.textContent);
       var heading = card.querySelector('h1,h2,h3,h4,h5,[class*="title"],[class*="Title"]');
       var title = compact(heading ? heading.textContent : '');
-      var ship = knownShip(text);
+      var itineraryLink = card.querySelector('a[href*="/itinerary/"][href*="sailDate="]');
+      var itineraryLabel = compact(itineraryLink ? itineraryLink.getAttribute('aria-label') : '');
+      var itineraryLabelMatch = itineraryLabel.match(/this sail\\s+(\\d{1,2})[- ](?:Day|Night)\\s+(.+?),\\s+((?:Carnival\\s+.+?)|Mardi Gras)\\s+from\\s+(.+)$/i);
+      var ship = compact(itineraryLabelMatch ? itineraryLabelMatch[3] : knownShip(text));
       if (!ship) continue;
-      var nightsMatch = (title + ' ' + text).match(/(\\d{1,2})[- ](?:Day|Night)/i);
+      var nightsMatch = (itineraryLabel + ' ' + title + ' ' + text).match(/(\\d{1,2})[- ](?:Day|Night)/i);
       var nights = nightsMatch ? Number(nightsMatch[1]) : 0;
-      var port = '';
+      var port = compact(itineraryLabelMatch ? itineraryLabelMatch[4] : '');
       var portMatch = (title + ' ' + text).match(/(?:from|Start:)\\s*([^•|\\n]+?)(?:,\\s*[A-Z]{2}|\\s*>|\\s*to|\\s*\\$|$)/i);
-      if (portMatch) port = compact(portMatch[1]);
+      if (!port && portMatch) port = compact(portMatch[1]);
       var priceMatch = text.match(/\\$\\s*([0-9][0-9,]*(?:\\.[0-9]{1,2})?)/);
       var price = priceMatch ? moneyForTwo(priceMatch[1], text, true) : '';
       var dates = extractDateStrings(text);
@@ -1016,7 +1225,7 @@ export function injectCarnivalSearchPageScrape(input: {
       for (var li = 0; li < links.length; li++) {
         var rawHref = links[li].getAttribute('href') || '';
         var href = absolute(rawHref);
-        if (href) { bookingLink = href; }
+        if (href && !bookingLink) { bookingLink = href; }
         dates = dates.concat(extractDateStrings(rawHref));
         try {
           var hrefUrl = new URL(href || rawHref, window.location.href);
@@ -1025,7 +1234,6 @@ export function injectCarnivalSearchPageScrape(input: {
             if (value) dates = dates.concat(extractDateStrings(value));
           });
         } catch (e) {}
-        if (href && /book|cruise|itinerary/i.test(href)) break;
       }
       var dateAttributes = ['data-sail-date','data-departure-date','data-start-date','datetime'];
       for (var ai = 0; ai < dateAttributes.length; ai++) {
@@ -1050,7 +1258,7 @@ export function injectCarnivalSearchPageScrape(input: {
         rows.push({
           sourcePage: 'Offers', offerName: meta.title, offerCode: INPUT.offerCode,
           offerExpirationDate: meta.expiry, offerType: 'Carnival Players Club',
-          shipName: ship, shipCode: '', sailingDate: dates[di], itinerary: title || text.substring(0, 180),
+          shipName: ship, shipCode: '', sailingDate: dates[di], itinerary: compact(itineraryLabelMatch ? itineraryLabelMatch[2] : title) || text.substring(0, 180),
           departurePort: port, cabinType: '', numberOfGuests: '2', perks: compact((meta.perks || '') + ' • Carnival displayed price converted to total for 2 guests'),
           loyaltyLevel: '', loyaltyPoints: '', interiorPrice: price, oceanviewPrice: '', balconyPrice: '', suitePrice: '', taxesAndFees: '',
           portList: '', dayByDayItinerary: [], destinationName: title, totalNights: nights || null,
@@ -1092,7 +1300,7 @@ export function injectCarnivalSearchPageScrape(input: {
     while (Date.now() - started < 8000) {
       var text = compact(document.body ? document.body.innerText : '');
       var cardCount = candidateCards().length;
-      var hasTotal = /[0-9][0-9,]*\\s+(?:Cruise\\s+Results|Deals|Results)/i.test(text);
+      var hasTotal = /[0-9][0-9,]*\\s+(?:Cruises?(?:\\s+Results)?|Sailings?|Deals|Results)/i.test(text);
       var hasEmpty = visibleOfferSpecificEmptyState();
       var loading = /loading|searching cruises|please wait/i.test(text) && cardCount === 0;
       lastSignal = 'cards=' + cardCount + ', total=' + hasTotal + ', empty=' + hasEmpty + ', loading=' + loading;
@@ -1103,9 +1311,65 @@ export function injectCarnivalSearchPageScrape(input: {
   }
   async function run() {
     try {
-      var readiness = await waitForSearchReady();
-      await expandDates();
       var meta = getOfferMeta();
+      // Carnival commonly canonicalizes the visible search URL after login by
+      // removing or changing query-string casing. Gating the exact same-origin
+      // inventory request on that visible URL silently skipped the complete API
+      // collector and left the app with zero-row/partial rendered-page results.
+      // The API response is independently verified below by endpoint, rate code,
+      // requested page, and response filters, so it is safe to run immediately.
+      var directInventory = await fetchCurrentCarnivalInventory(meta);
+      if (directInventory) {
+        var directRows = directInventory.rows;
+        var directAuthoritativeEmpty = directRows.length === 0 && directInventory.totalResults === 0;
+        // Carnival totalResults counts itinerary groups, while each itinerary
+        // may contain several distinct sailing dates. Preserve Carnival's
+        // authoritative group total so expectedPages remains aligned with its
+        // lastPage value; using rows.length here made 2-page complete results
+        // look like 4-page partial syncs (for example 171 sailings in 50 groups).
+        var directTotal = directInventory.totalResults > 0 ? directInventory.totalResults : directRows.length;
+        var directSignature = pageSignature(directRows, {
+          totalResults: directTotal, pageNumber: directInventory.currentPage,
+          pageSize: directInventory.pageSize, offset: null, cursor: '', nextCursor: '', nextUrl: ''
+        });
+        // Keep each bridge message well below the native size ceiling while
+        // avoiding hundreds of tiny React Native state/queue handoffs for a
+        // large 200-itinerary API page.
+        var directChunkSize = 20;
+        if (!directRows.length) {
+          post('carnival_search_page_chunk', { requestId: INPUT.requestId, rows: [], chunkIndex: 1, totalChunks: 1 });
+        } else {
+          var directChunkCount = Math.ceil(directRows.length / directChunkSize);
+          for (var directIndex = 0; directIndex < directChunkCount; directIndex++) {
+            post('carnival_search_page_chunk', {
+              requestId: INPUT.requestId,
+              rows: directRows.slice(directIndex * directChunkSize, (directIndex + 1) * directChunkSize),
+              chunkIndex: directIndex + 1,
+              totalChunks: directChunkCount
+            });
+          }
+        }
+        post('carnival_search_page_complete', {
+          requestId: INPUT.requestId, runId: INPUT.runId, offerCode: INPUT.offerCode, offerName: meta.title,
+          offerExpiry: meta.expiry, perks: meta.perks, pageNumber: directInventory.currentPage,
+          pageSize: INPUT.pageSize, effectivePageSize: directInventory.pageSize,
+          totalResults: directTotal, hasNextPage: directInventory.hasNextPage, rowCount: directRows.length,
+          readiness: 'authoritative-current-carnival-api', url: window.location.href || '',
+          expectedUrl: INPUT.expectedUrl || '', capturedUrl: directInventory.url,
+          payloadMatched: true, authoritativeEmpty: directAuthoritativeEmpty,
+          requestProof: true, pageProof: true, pageContextMatched: true,
+          renderedTerminalProof: false, resultStable: true, visibleRowCount: 0,
+          displayedTotal: directInventory.totalResults, nextControlState: 'unknown',
+          terminalProofSource: directAuthoritativeEmpty ? 'authoritative_empty' : 'api',
+          pageSignature: directSignature, paginationMode: 'page',
+          nextPageNumber: directInventory.currentPage + 1, nextOffset: null, nextCursor: '', nextUrl: '',
+          truncationReason: '', inventoryPayloadCount: 1, payloadKinds: ['current_carnival_api']
+        });
+        return;
+      }
+      var readiness = await waitForSearchReady();
+      await settleLazyResults();
+      await expandDates();
       var envelope = capturedEnvelope();
       var adapter = adapterMeta(envelope);
       var fallbackPagination = payloadPagination(envelope && envelope.data);
@@ -1113,9 +1377,9 @@ export function injectCarnivalSearchPageScrape(input: {
       var apiRows = collectEmbeddedRows(meta, envelope);
       var domRows = pageContextMatched ? collectDomRows(meta) : [];
       var firstBodyText = compact(document.body ? document.body.innerText : '');
-      var firstTotalMatch = firstBodyText.match(/([0-9][0-9,]*)\s+(?:Cruise\s+Results|Deals|Results)/i);
+      var firstTotalMatch = firstBodyText.match(/([0-9][0-9,]*)\s+(?:Cruises?(?:\s+Results)?|Sailings?|Deals|Results)/i);
       var firstDomTotal = firstTotalMatch ? Number(firstTotalMatch[1].replace(/,/g, '')) : null;
-      var firstNextControl = document.querySelector('a[rel="next"],button[aria-label*="next" i],a[aria-label*="next" i]');
+      var firstNextControl = document.querySelector('a[rel="next"],button[aria-label*="next" i],a[aria-label*="next" i],[data-testid*="pagination-next" i]');
       var firstNextDisabled = !!(firstNextControl && (firstNextControl.disabled || firstNextControl.getAttribute('aria-disabled') === 'true' || /disabled/i.test(firstNextControl.className || '')));
       var firstNextState = firstNextControl ? (firstNextDisabled ? 'disabled' : 'enabled') : 'absent';
       var firstDomSignature = pageSignature(dedupe(domRows), { totalResults: firstDomTotal, pageNumber: Number(INPUT.pageNumber || 1), pageSize: Number(INPUT.pageSize || 50), offset: null, cursor: '', nextCursor: '', nextUrl: firstNextState });
@@ -1124,9 +1388,9 @@ export function injectCarnivalSearchPageScrape(input: {
       var secondContextMatched = pageContextMatchesExpected();
       var secondDomRows = secondContextMatched ? collectDomRows(meta) : [];
       var bodyText = compact(document.body ? document.body.innerText : '');
-      var totalMatch = bodyText.match(/([0-9][0-9,]*)\s+(?:Cruise\s+Results|Deals|Results)/i);
+      var totalMatch = bodyText.match(/([0-9][0-9,]*)\s+(?:Cruises?(?:\s+Results)?|Sailings?|Deals|Results)/i);
       var domTotal = totalMatch ? Number(totalMatch[1].replace(/,/g, '')) : null;
-      var nextControl = document.querySelector('a[rel="next"],button[aria-label*="next" i],a[aria-label*="next" i]');
+      var nextControl = document.querySelector('a[rel="next"],button[aria-label*="next" i],a[aria-label*="next" i],[data-testid*="pagination-next" i]');
       var nextDisabled = !!(nextControl && (nextControl.disabled || nextControl.getAttribute('aria-disabled') === 'true' || /disabled/i.test(nextControl.className || '')));
       var nextControlState = nextControl ? (nextDisabled ? 'disabled' : 'enabled') : 'absent';
       var secondDomSignature = pageSignature(dedupe(secondDomRows), { totalResults: domTotal, pageNumber: Number(INPUT.pageNumber || 1), pageSize: Number(INPUT.pageSize || 50), offset: null, cursor: '', nextCursor: '', nextUrl: nextControlState });

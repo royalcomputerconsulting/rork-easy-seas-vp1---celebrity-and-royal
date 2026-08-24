@@ -1,6 +1,6 @@
 import createContextHook from '@nkzw/create-context-hook';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { quotaSafeGetJsonItem, quotaSafeSetJsonItem, quotaSafeRemoveItem } from '@/lib/storage/quotaSafeStorage';
 import { useAuth } from '@/state/AuthProvider';
 import { ALL_STORAGE_KEYS, getUserScopedKey } from '@/lib/storage/storageKeys';
 import type { FavoriteStateroom, FavoriteStateroomDraft } from '@/types/favorite-staterooms';
@@ -92,8 +92,11 @@ export const [FavoriteStateroomsProvider, useFavoriteStaterooms] = createContext
     setIsLoading(true);
 
     try {
-      const storedEntries = await AsyncStorage.getItem(storageKeyRef.current);
-      const parsedEntries = storedEntries ? (JSON.parse(storedEntries) as FavoriteStateroom[]) : [];
+      const parsedEntries = await quotaSafeGetJsonItem<FavoriteStateroom[]>(
+        storageKeyRef.current,
+        [],
+        Array.isArray,
+      );
       const sortedEntries = sortEntries(parsedEntries);
       setAllEntries(sortedEntries);
       console.log('[FavoriteStaterooms] Loaded favorite staterooms:', {
@@ -144,7 +147,7 @@ export const [FavoriteStateroomsProvider, useFavoriteStaterooms] = createContext
   const persistEntries = useCallback(async (nextEntries: FavoriteStateroom[]) => {
     const sortedEntries = sortEntries(nextEntries);
     setAllEntries(sortedEntries);
-    await AsyncStorage.setItem(storageKeyRef.current, JSON.stringify(sortedEntries));
+    await quotaSafeSetJsonItem(storageKeyRef.current, sortedEntries);
     console.log('[FavoriteStaterooms] Persisted favorite staterooms:', {
       count: sortedEntries.length,
       key: storageKeyRef.current,
@@ -238,7 +241,7 @@ export const [FavoriteStateroomsProvider, useFavoriteStaterooms] = createContext
     console.log('[FavoriteStaterooms] Clearing all favorite staterooms');
     setAllEntries([]);
     setFilters(DEFAULT_FILTERS);
-    await AsyncStorage.removeItem(storageKeyRef.current);
+    await quotaSafeRemoveItem(storageKeyRef.current);
   }, []);
 
   const entries = useMemo(() => {

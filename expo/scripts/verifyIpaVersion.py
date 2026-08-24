@@ -5,8 +5,10 @@ import sys
 import zipfile
 from pathlib import Path
 
-EXPECTED_VERSION = "12.4.2"
-EXPECTED_BUILD = "314"
+EXPECTED_VERSION = "13.0.45"
+# EAS owns CFBundleVersion remotely. Build 410 is the minimum release identity
+# for the complete Casino restoration; remote auto-increment may produce more.
+EXPECTED_MIN_BUILD = 411
 
 if len(sys.argv) != 2:
     print("Usage: python3 scripts/verifyIpaVersion.py /path/to/EasySeas.ipa", file=sys.stderr)
@@ -29,8 +31,13 @@ build = str(info.get("CFBundleVersion", ""))
 print(f"IPA CFBundleShortVersionString={version}")
 print(f"IPA CFBundleVersion={build}")
 
-if version != EXPECTED_VERSION or build != EXPECTED_BUILD:
-    print(f"FAIL: expected {EXPECTED_VERSION} ({EXPECTED_BUILD})", file=sys.stderr)
+try:
+    numeric_build = int(build)
+except ValueError:
+    numeric_build = -1
+
+if version != EXPECTED_VERSION or numeric_build < EXPECTED_MIN_BUILD:
+    print(f"FAIL: expected {EXPECTED_VERSION} with build >= {EXPECTED_MIN_BUILD}", file=sys.stderr)
     raise SystemExit(1)
 
-print(f"PASS: IPA contains Easy Seas {EXPECTED_VERSION} ({EXPECTED_BUILD})")
+print(f"PASS: IPA contains Easy Seas {EXPECTED_VERSION} ({build}); minimum build {EXPECTED_MIN_BUILD}")

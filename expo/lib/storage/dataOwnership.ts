@@ -81,10 +81,6 @@ export function isRecordForOwner(record: unknown, ownerScopeId: string | null | 
     return true;
   }
 
-  if (containsKnownForeignPersonalData(record, email)) {
-    return false;
-  }
-
   const normalizedEmail = normalizeOwnerEmail(email);
   const normalizedScope = ownerScopeId?.trim() ?? '';
   const ownedRecord = record as OwnedDataRecord & { userId?: unknown; email?: unknown; ownerEmail?: unknown };
@@ -114,10 +110,29 @@ export function isRecordForOwner(record: unknown, ownerScopeId: string | null | 
     return normalizedEmail !== null && recordUserId === normalizedEmail;
   }
 
+  // Explicit owner fields above are authoritative and make a recursive scan of
+  // every itinerary, source payload and offer benefit unnecessary. On a catalog
+  // with thousands of cruises that legacy scan ran multiple times at cold start
+  // and monopolized the JS thread. Keep the signature quarantine for genuinely
+  // unscoped legacy records, where it is still required to prevent data leakage.
+  if (containsKnownForeignPersonalData(record, email)) {
+    return false;
+  }
+
   return true;
 }
 
 export function filterRecordsForOwner<T>(records: T[], ownerScopeId: string | null | undefined, email: string | null | undefined, label: string): T[] {
+  // The normal case is an already-scoped local dataset. Avoid allocating a
+  // second several-thousand-element array just to discover that every record
+  // belongs to the active user.
+  let removedCount = 0;
+  for (const record of records) {
+    if (!isRecordForOwner(record, ownerScopeId, email)) removedCount += 1;
+  }
+
+  if (removedCount === 0) return records;
+
   const filteredRecords = records.filter((record) => isRecordForOwner(record, ownerScopeId, email));
 
   if (filteredRecords.length !== records.length) {
@@ -143,7 +158,8 @@ export function stampRecordsForOwner<T extends object>(records: T[], ownerScopeI
     return records;
   }
 
-  return records.map((record) => {
+  let stampedRecords: T[] | null = null;
+  records.forEach((record, index) => {
     const existing = record as Record<string, unknown>;
     const existingOwnerProfileId = typeof existing.ownerProfileId === 'string' && existing.ownerProfileId.trim().length > 0 ? existing.ownerProfileId : undefined;
     const existingSourceEmail = typeof existing.sourceEmail === 'string' && existing.sourceEmail.trim().length > 0 ? existing.sourceEmail.toLowerCase().trim() : undefined;
@@ -156,17 +172,31 @@ export function stampRecordsForOwner<T extends object>(records: T[], ownerScopeI
     const nextOwnerProfileId = existingOwnerProfileId ?? (assignmentNeedsReview ? undefined : normalizedEmail);
     const nextSourceEmail = existingSourceEmail ?? (assignmentNeedsReview ? undefined : normalizedEmail);
 
-    return {
+    const nextImportStatus = existingImportStatus ?? (nextOwnerProfileId ? 'assigned' : 'unassigned');
+    const nextReconciliationStatus = existingReconciliationStatus ?? (nextOwnerProfileId ? 'matched' : 'reviewNeeded');
+    const alreadyStamped = existing.dataOwnerScopeId === normalizedScope
+      && existing.dataOwnerEmail === normalizedEmail
+      && existing.ownerProfileId === nextOwnerProfileId
+      && existing.sourceEmail === nextSourceEmail
+      && existing.importStatus === nextImportStatus
+      && existing.reconciliationStatus === nextReconciliationStatus
+      && typeof existing.dataOwnerSyncedAt === 'string'
+      && existing.dataOwnerSyncedAt.length > 0;
+
+    if (alreadyStamped) return;
+    if (!stampedRecords) stampedRecords = records.slice();
+    stampedRecords[index] = {
       ...record,
       dataOwnerScopeId: normalizedScope,
       dataOwnerEmail: normalizedEmail,
       dataOwnerSyncedAt: syncedAt,
       ownerProfileId: nextOwnerProfileId,
       sourceEmail: nextSourceEmail,
-      importStatus: existingImportStatus ?? (nextOwnerProfileId ? 'assigned' : 'unassigned'),
-      reconciliationStatus: existingReconciliationStatus ?? (nextOwnerProfileId ? 'matched' : 'reviewNeeded'),
+      importStatus: nextImportStatus,
+      reconciliationStatus: nextReconciliationStatus,
     };
   });
+  return stampedRecords ?? records;
 }
 
 export function isScopedDynamicKeyForOwner(key: string, basePrefix: string, email: string | null | undefined): boolean {

@@ -94,7 +94,7 @@ function getCalendarLooseKey(event: CalendarEvent): string {
 }
 
 function hasReviewStatus(record: AnyImportRecord): boolean {
-  const status = (record as { status?: string }).status;
+  const status = 'status' in record ? record.status : undefined;
   return record.importStatus === 'reviewNeeded' || record.importStatus === 'unassigned' || record.reconciliationStatus === 'reviewNeeded' || record.archiveStatus === 'reviewNeeded' || status === 'reviewNeeded';
 }
 

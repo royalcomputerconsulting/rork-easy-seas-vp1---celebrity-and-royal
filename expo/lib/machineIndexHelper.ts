@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { SlotManufacturer, MachineVolatility, CabinetType, PersistenceType } from '@/types/models';
-import { isCloudBackupEnabled, trpcClient } from '@/lib/trpc';
+import { trpcClient } from '@/lib/trpc';
 import { quotaSafeGetItem, quotaSafeSetJsonItem, quotaSafeRemoveItem } from '@/lib/storage/quotaSafeStorage';
 
 const MACHINE_INDEX_KEY = '@easyseas/MACHINE_INDEX_V3_262_ONLY';
@@ -92,10 +92,6 @@ async function loadCachedSharedMachines(): Promise<any[]> {
 }
 
 async function fetchSharedMachines(): Promise<any[]> {
-  if (!isCloudBackupEnabled()) {
-    return loadCachedSharedMachines();
-  }
-
   try {
     const result = await trpcClient.machineLibrary.getAll.query();
     const machines = Array.isArray(result.machines) ? result.machines : [];

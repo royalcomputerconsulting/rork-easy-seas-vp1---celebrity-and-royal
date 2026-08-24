@@ -20,18 +20,33 @@
 export type CasinoLedgerConfidence =
   | 'actual'
   | 'imported'
+  | 'synced'
   | 'user-entered'
+  | 'derived'
   | 'estimated'
   | 'generated'
   | 'mixed'
-  | 'missing';
+  | 'missing'
+  | 'incomplete'
+  | 'unavailable';
+
+export type CasinoLedgerDataQuality =
+  | 'Actual'
+  | 'Imported'
+  | 'Synced'
+  | 'Derived'
+  | 'Estimated'
+  | 'Incomplete'
+  | 'Unavailable';
 
 /** A single normalized dollar/points figure with where it came from. */
 export interface CasinoLedgerValue {
   value: number;
   confidence: CasinoLedgerConfidence;
+  dataQuality: CasinoLedgerDataQuality;
   /** Short human-readable source, e.g. "Cruise Portfolio edit", "Session rollup". */
   source: string;
+  formula?: string;
   lastUpdated?: string;
 }
 
@@ -49,6 +64,12 @@ export interface CasinoBenefitInclusion {
 /** Normalized casino record for a single cruise, drawn from BookedCruise + sessions. */
 export interface CasinoLedgerCruiseEntry {
   cruiseId: string;
+  ownerProfileId?: string;
+  sourceEmail?: string;
+  reservationNumber?: string;
+  bookingId?: string;
+  matchKey: string;
+  matchSource: 'reservation' | 'booking' | 'owner-ship-date' | 'ship-date' | 'cruise-id';
   shipName: string;
   sailDate: string;
   points: CasinoLedgerValue;

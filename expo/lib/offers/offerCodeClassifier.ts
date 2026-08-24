@@ -18,7 +18,7 @@ export function classifyOfferCode(rawCode?: string | null): OfferCodeClassificat
   if (code.includes('NEXT')) return { code, offerType: 'nextcruise', confidence: 'medium', notes };
   if (code.includes('ANNUAL')) return { code, offerType: 'annual-cruise', confidence: 'medium', notes };
   if (code.includes('FP')) return { code, offerType: 'freeplay', confidence: 'medium', notes };
-  const instant = code.match(/^(\d{4})(A|C)(VIP2|\d{2}A?|\d{2})/);
+  const instant = code.match(/^(\d{4})(A|C)(VIP\d+|\d{2}A?|\d{2})/);
   if (instant) {
     const bank = instant[2] as 'A' | 'C';
     const levelCode = instant[3];

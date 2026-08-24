@@ -125,12 +125,17 @@ const getRequestTimeoutMs = (url: string, options?: RequestInit): number => {
   const lowerUrl = url.toLowerCase();
   const lowerBody = bodyText.toLowerCase();
   const isCertificateRequest = lowerUrl.includes("certificateexplorer") || lowerBody.includes("certificateexplorer");
+  const isCloudBackupRequest = lowerBody.includes('savealluserdata') || lowerBody.includes('getalluserdata');
   // The backend enforces its own 45s hard wall-clock budget on certificate scans
   // and always returns valid JSON before that budget expires. A 180s client
   // timeout let a single stuck request hang for 3 minutes with no feedback,
   // which is what made the download screen look permanently "stuck" on one
   // code. 60s gives ample buffer over the backend's 45s budget for network
   // latency without leaving the user staring at a frozen screen for minutes.
+  // Full local-first backups can contain several thousand cruises plus weather,
+  // certificates and machine data. Fifteen seconds was too short for the
+  // upload/database commit even on a healthy connection.
+  if (isCloudBackupRequest) return 120_000;
   return isCertificateRequest ? 60_000 : 15_000;
 };
 

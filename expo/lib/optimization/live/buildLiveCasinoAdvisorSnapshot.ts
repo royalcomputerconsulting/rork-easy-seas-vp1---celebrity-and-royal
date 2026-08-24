@@ -7,6 +7,7 @@ import { evaluateOneMoreSession } from './evaluateOneMoreSession';
 import { isLiveCasinoStateStale } from './normalizeLiveCasinoState';
 import { projectEndOfCruisePoints } from './projectEndOfCruisePoints';
 import type { LiveCasinoAdvisorJournalEntry, LiveCasinoAdvisorSnapshot, LiveCasinoStateRecord } from './types';
+import { buildEcosystemValueAdjustments, type TargetEcosystemValueEvidence } from '../value/buildEcosystemValueAdjustments';
 
 export interface BuildLiveCasinoAdvisorInput {
   state: LiveCasinoStateRecord;
@@ -14,6 +15,8 @@ export interface BuildLiveCasinoAdvisorInput {
   model: OptimizationModelSnapshot;
   thresholds: CertificateThresholdDefinition[];
   valueSnapshots: CertificateValueSnapshot[];
+  valueAdjustmentsByThresholdId?: import('../engine/types').BuildOptimalStoppingRecommendationInput['valueAdjustmentsByThresholdId'];
+  ecosystemValueEvidence?: TargetEcosystemValueEvidence[];
   now?: string;
   offline?: boolean;
 }
@@ -26,16 +29,28 @@ export function buildLiveCasinoAdvisorSnapshot(input: BuildLiveCasinoAdvisorInpu
   }
   const now = new Date(input.now ?? input.state.asOf).toISOString();
   const stale = isLiveCasinoStateStale(input.state, now);
+  const ecosystem = buildEcosystemValueAdjustments(input.ecosystemValueEvidence ?? []);
+  const valueAdjustmentsByThresholdId = { ...ecosystem.adjustmentsByThresholdId };
+  Object.entries(input.valueAdjustmentsByThresholdId ?? {}).forEach(([thresholdId, manual]) => {
+    valueAdjustmentsByThresholdId[thresholdId] = { ...(valueAdjustmentsByThresholdId[thresholdId] ?? {}), ...manual };
+  });
   const recommendation = buildOptimalStoppingRecommendation({
     state: input.state,
     history: input.history,
     model: input.model,
     thresholds: input.thresholds,
     valueSnapshots: input.valueSnapshots,
+    valueAdjustmentsByThresholdId,
     dismissFatigueSignal: input.state.fatigueSignalDismissed,
   });
   const projection = projectEndOfCruisePoints(input.state, input.model);
   const oneMoreSessionScenario = evaluateOneMoreSession(input.state, input.model);
+  const sessionScenarios = [30, 60, 90].map(minutes => evaluateOneMoreSession(input.state, input.model, minutes));
+  const playMode = input.state.currentDailyLoss > 0 || input.state.currentTripLoss > 0
+    ? 'loss-control' as const
+    : input.state.currentResult > 0 && input.state.lockedProfitFloor !== null
+      ? 'profit-protected' as const
+      : 'neutral' as const;
   const refreshReasons: string[] = [];
   if (stale) refreshReasons.push('Live casino state is stale and should be refreshed before relying on this recommendation.');
   if (input.offline) refreshReasons.push('Device is offline; recommendation uses the last saved model and certificate values.');
@@ -57,6 +72,9 @@ export function buildLiveCasinoAdvisorSnapshot(input: BuildLiveCasinoAdvisorInpu
     recommendation,
     endOfCruiseProjection: projection,
     oneMoreSessionScenario,
+    sessionScenarios,
+    playMode,
+    valueEvidenceByThresholdId: ecosystem.evidenceByThresholdId,
     stale,
     offline: Boolean(input.offline),
     refreshReasons,
@@ -81,8 +99,8 @@ export function buildLiveCasinoAdvisorJournalEntry(
     recommendedTargetPoints: snapshot.recommendation.recommendedTargetPoints,
     exactInputs: JSON.parse(JSON.stringify(state)) as LiveCasinoStateRecord,
     formulas: [
-      'incremental EV = probability of success × incremental certificate value − expected additional loss',
-      'risk-adjusted EV = incremental EV − bankroll, fatigue, loss-mode, uncertainty, and time penalties',
+      'certificate value snapshots are redemption-adjusted before target comparison and are not discounted twice',
+      'expected net vacation value = certificate + future offer + tier + ancillary + cruise savings − gambling loss − travel − cruise cost − unredeemed loss − risk penalty',
       'projected points = current points + personal points-per-hour × remaining casino hours',
     ],
     modelVersion: snapshot.modelVersion,

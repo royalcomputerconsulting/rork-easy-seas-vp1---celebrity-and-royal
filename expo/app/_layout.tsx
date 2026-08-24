@@ -4,10 +4,8 @@ import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { LogBox } from "react-native";
-import { StyleSheet, View, Text, ActivityIndicator, Platform, useWindowDimensions } from "react-native";
+import { StyleSheet, View, Text, ActivityIndicator, Platform, useWindowDimensions, Pressable } from "react-native";
 import { CoreDataProvider, useCoreData } from "@/state/CoreDataProvider";
-import { clearAllAppData } from "@/lib/dataManager";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ALL_STORAGE_KEYS } from "@/lib/storage/storageKeys";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -28,8 +26,6 @@ import { HistoricalPerformanceProvider } from "@/state/HistoricalPerformanceProv
 import { PriceHistoryProvider } from "@/state/PriceHistoryProvider";
 import { PriceTrackingProvider } from "@/state/PriceTrackingProvider";
 import { CasinoSessionProvider } from "@/state/CasinoSessionProvider";
-import { CasinoSettingsProvider } from "@/state/CasinoSettingsProvider";
-import { CasinoBenefitsProvider } from "@/state/CasinoBenefitsProvider";
 import { GamificationProvider } from "@/state/GamificationProvider";
 import { PPHAlertsProvider } from "@/state/PPHAlertsProvider";
 import { BankrollProvider } from "@/state/BankrollProvider";
@@ -45,30 +41,20 @@ import { CrewRecognitionProvider } from "@/state/CrewRecognitionProvider";
 import { COLORS, SPACING, TYPOGRAPHY } from "@/constants/theme";
 import { composeProviders } from "@/lib/composeProviders";
 import { ensureStorageHealthy } from "@/lib/storage/storageRecovery";
+import { recoverIncompleteSyncTransaction } from "@/lib/storage/syncTransaction";
 import { SailingWeatherProvider } from "@/state/SailingWeatherProvider";
 import { IntelligenceFiltersProvider } from "@/state/IntelligenceFiltersProvider";
+import { AskAllOffersProvider } from "@/state/AskAllOffersProvider";
+import { CasinoBenefitsProvider } from "@/state/CasinoBenefitsProvider";
+import { CasinoSettingsProvider } from "@/state/CasinoSettingsProvider";
 import { PersonalCertificateOptimizerProvider } from "@/state/PersonalCertificateOptimizerProvider";
 import { PersonalOptimizationAlertsProvider } from "@/state/PersonalOptimizationAlertsProvider";
+import { VoyageNotificationObserver } from "@/components/VoyageNotificationObserver";
 
 try {
   void SplashScreen.preventAutoHideAsync();
 } catch {
 }
-
-// These certificate/network messages are already caught, retried, surfaced in
-// an in-app log panel, and shown via a friendly Alert — they are handled,
-// non-fatal outcomes, not crashes. Without this, React Native's dev LogBox
-// still pops a disruptive full-screen "Console Error"/"Console Warning"
-// overlay for them that looks like the app crashed.
-LogBox.ignoreLogs([
-  /Certificate Download (ERROR|WARNING)/i,
-  /CertificateExplorerModal\] Certificate examination failed/i,
-  /JSON Parse error/i,
-  /Unexpected character:\s*N/i,
-  /Unexpected end of input/i,
-]);
-
-// Diagnostics intentionally do NOT auto-initialize here.
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -119,6 +105,46 @@ const rootStyles = StyleSheet.create({
     fontSize: 13,
     color: "#B00020",
     marginTop: 12,
+  },
+  storageRetryButton: {
+    alignSelf: 'flex-start',
+    marginTop: 16,
+    borderRadius: 10,
+    backgroundColor: COLORS.navy,
+    paddingHorizontal: 18,
+    paddingVertical: 11,
+  },
+  storageRetryButtonText: {
+    color: COLORS.white,
+    fontSize: 14,
+    fontWeight: '700' as const,
+  },
+  storageWarningBanner: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    top: 54,
+    zIndex: 9999,
+    borderRadius: 10,
+    backgroundColor: '#FFF5D6',
+    borderWidth: 1,
+    borderColor: '#E2B93B',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  storageWarningText: {
+    color: '#5A4300',
+    fontSize: 12,
+    flex: 1,
+    marginRight: 12,
+  },
+  storageWarningDismiss: {
+    color: COLORS.navy,
+    fontSize: 12,
+    fontWeight: '800' as const,
   },
   cloudRestoreContainer: {
     flex: 1,
@@ -187,44 +213,58 @@ function FreshStartHandler({ onComplete }: { onComplete: () => void }) {
   const [status, setStatus] = useState('Setting up your profile...');
 
   useEffect(() => {
+    let finished = false;
+    const finish = (reason: 'complete' | 'timeout' | 'error') => {
+      if (finished) return;
+      finished = true;
+      console.log('[FreshStartHandler] Releasing startup:', reason);
+      void clearFreshStartFlag().catch((error) => {
+        console.warn('[FreshStartHandler] Could not clear fresh-start flag; navigation is still being released:', error);
+      });
+      try {
+        router.replace('/(tabs)/settings' as any);
+      } catch (error) {
+        console.warn('[FreshStartHandler] Settings redirect failed; opening the app anyway:', error);
+      }
+      onComplete();
+    };
+
+    const failOpenTimer = setTimeout(() => {
+      setStatus('Opening EasySeas...');
+      console.warn('[FreshStartHandler] Local setup exceeded 2500ms; releasing navigation without waiting.');
+      finish('timeout');
+    }, 2500);
+
     const handleFirstLaunch = async () => {
       try {
         const hasLaunchedBefore = await AsyncStorage.getItem(ALL_STORAGE_KEYS.HAS_LAUNCHED_BEFORE);
-        
+
         if (!hasLaunchedBefore) {
           if (__DEV__) console.log('[FreshStartHandler] First time user');
           setStatus('Setting up your profile...');
-          await clearAllAppData();
+          // Missing launch metadata must never erase recognized local data.
           await AsyncStorage.setItem(ALL_STORAGE_KEYS.HAS_LAUNCHED_BEFORE, 'true');
         } else {
           setStatus('Loading your profile...');
         }
-        
-        await clearFreshStartFlag();
-        
-        setTimeout(() => {
-          router.replace('/(tabs)/settings' as any);
-          onComplete();
-        }, 150);
+
+        finish('complete');
       } catch (error) {
         console.error('[FreshStartHandler] Error:', error);
-        setStatus('Error occurred, redirecting...');
-        await clearFreshStartFlag();
-        setTimeout(() => {
-          router.replace('/(tabs)/settings' as any);
-          onComplete();
-        }, 300);
+        setStatus('Opening EasySeas...');
+        finish('error');
       }
     };
-    
+
     void handleFirstLaunch();
+    return () => clearTimeout(failOpenTimer);
   }, [clearFreshStartFlag, router, onComplete]);
 
   return (
     <View style={freshStartStyles.container}>
       <ActivityIndicator size="large" color={COLORS.navy} />
       <Text style={freshStartStyles.text}>{status}</Text>
-      <Text style={freshStartStyles.subtext}>Please enter your profile information</Text>
+      <Text style={freshStartStyles.subtext}>Preparing saved data on this device</Text>
     </View>
   );
 }
@@ -327,21 +367,13 @@ function RootLayoutNav() {
           animation: 'slide_from_bottom' as const,
         }} 
       />
-      <Stack.Screen 
-        name="advisor" 
-        options={{ 
+      <Stack.Screen
+        name="ask-all-offers"
+        options={{
           presentation: "modal",
           headerShown: false,
           animation: 'slide_from_bottom' as const,
-        }} 
-      />
-      <Stack.Screen 
-        name="data-health" 
-        options={{ 
-          presentation: "modal",
-          headerShown: false,
-          animation: 'slide_from_bottom' as const,
-        }} 
+        }}
       />
       <Stack.Screen 
         name="add-machine-wizard" 
@@ -437,55 +469,38 @@ function RootLayoutNav() {
           headerShown: true,
         }} 
       />
-      <Stack.Screen 
-        name="certificate-lookup" 
-        options={{ 
-          headerShown: false,
-        }} 
-      />
     </Stack>
   );
 }
 
-function AppContent() {
-  const [showSplash, setShowSplash] = useState(true);
-  const [isClearing, setIsClearing] = useState(false);
-
-  useEffect(() => {
-    const hideSplash = async () => {
-      try {
-        await SplashScreen.hideAsync();
-      } catch {
-      }
-    };
-    
-    void hideSplash();
-    
-    const timeout = setTimeout(() => {
-      setShowSplash(false);
-    }, 900);
-    
-    return () => {
-      clearTimeout(timeout);
-    };
-  }, []);
-
-  return <AppContentInner showSplash={showSplash} setShowSplash={setShowSplash} isClearing={isClearing} setIsClearing={setIsClearing} />;
+function LocalDataStartup({ message = 'Opening your saved data…' }: { message?: string }) {
+  return (
+    <View style={freshStartStyles.container}>
+      <ActivityIndicator size="large" color={COLORS.navy} />
+      <Text style={freshStartStyles.text}>{message}</Text>
+      <Text style={freshStartStyles.subtext}>Loading saved EasySeas data from this device.</Text>
+    </View>
+  );
 }
 
-function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing }: { 
-  showSplash: boolean; 
-  setShowSplash: (show: boolean) => void;
-  isClearing: boolean;
-  setIsClearing: (clearing: boolean) => void;
-}) {
-  const { isAuthenticated, isLoading: authLoading, isFreshStart, authenticatedEmail, isWhitelisted } = useAuth();
-  const { initialCheckComplete, isSyncing, syncError, lastRestoreTime } = useUserDataSync();
+function SlotMachineWhitelistBridge() {
+  const { isWhitelisted } = useAuth();
   const { setIsUserWhitelisted } = useSlotMachineLibrary();
+
+  useEffect(() => {
+    setIsUserWhitelisted(isWhitelisted);
+  }, [isWhitelisted, setIsUserWhitelisted]);
+
+  return null;
+}
+
+function AuthenticatedAppContent() {
+  const { isFreshStart, authenticatedEmail } = useAuth();
+  const { lastRestoreTime } = useUserDataSync();
   const { refreshData } = useCoreData();
   const { updateUser, ensureOwner, syncFromStorage: syncUserFromStorage } = useUser();
-  const [showLandingPage, setShowLandingPage] = useState(true);
-  const [forceSkipRestore, setForceSkipRestore] = useState(false);
+  const [freshStartReleased, setFreshStartReleased] = useState(false);
+  const releaseFreshStart = useCallback(() => setFreshStartReleased(true), []);
 
   const refreshDataRef = useRef(refreshData);
   refreshDataRef.current = refreshData;
@@ -499,27 +514,13 @@ function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing 
   const lastRestoreHandledRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (isAuthenticated && !initialCheckComplete && !forceSkipRestore) {
-      const timeout = setTimeout(() => {
-        if (__DEV__) console.log('[AppContent] Cloud restore safety timeout');
-        setForceSkipRestore(true);
-      }, 4000);
-      return () => clearTimeout(timeout);
-    }
-  }, [isAuthenticated, initialCheckComplete, forceSkipRestore]);
-
-  const handleContinueToLogin = useCallback(() => {
-    setShowLandingPage(false);
-  }, []);
-
-  useEffect(() => {
-    if (!isAuthenticated || !authenticatedEmail) {
+    if (!authenticatedEmail) {
       emailSyncDoneRef.current = null;
       return;
     }
     if (emailSyncDoneRef.current === authenticatedEmail) return;
 
-    const syncEmailToProfile = async () => {
+    void (async () => {
       try {
         const owner = await ensureOwnerRef.current();
         if (owner && owner.email !== authenticatedEmail) {
@@ -527,88 +528,32 @@ function AppContentInner({ showSplash, setShowSplash, isClearing, setIsClearing 
         }
         emailSyncDoneRef.current = authenticatedEmail;
       } catch (error) {
-        console.error('[AppContent] Error syncing email:', error);
+        console.error('[AppContent] Error syncing local profile email:', error);
       }
-    };
-    void syncEmailToProfile();
-  }, [isAuthenticated, authenticatedEmail]);
+    })();
+  }, [authenticatedEmail]);
 
   useEffect(() => {
-    if (!isAuthenticated || !lastRestoreTime) return;
-    if (lastRestoreHandledRef.current === lastRestoreTime) return;
+    if (!lastRestoreTime || lastRestoreHandledRef.current === lastRestoreTime) return;
     lastRestoreHandledRef.current = lastRestoreTime;
-
-    Promise.all([
-      refreshDataRef.current(),
-      syncUserRef.current(),
-    ]).catch((error) => {
-      console.error('[AppContent] Error refreshing after cloud restore:', error);
+    Promise.all([refreshDataRef.current(), syncUserRef.current()]).catch((error) => {
+      console.error('[AppContent] Error refreshing after manual cloud restore:', error);
     });
-  }, [isAuthenticated, lastRestoreTime]);
+  }, [lastRestoreTime]);
 
-  useEffect(() => {
-    setIsUserWhitelisted(isWhitelisted);
-  }, [isWhitelisted, setIsUserWhitelisted]);
-
-  const handleSplashComplete = useCallback(() => {
-    setShowSplash(false);
-  }, [setShowSplash]);
-
-  if (authLoading) {
-    return (
-      <WelcomeSplash 
-        onAnimationComplete={() => {}}
-        duration={1500}
-      />
-    );
+  if (isFreshStart && !freshStartReleased) {
+    return <FreshStartHandler onComplete={releaseFreshStart} />;
   }
 
-  if (!isAuthenticated) {
-    if (showLandingPage) {
-      return <LandingPage onContinue={handleContinueToLogin} />;
-    }
-    return <LoginScreen />;
-  }
-
-  if (showSplash) {
-    return (
-      <WelcomeSplash 
-        onAnimationComplete={handleSplashComplete}
-        duration={800}
-      />
-    );
-  }
-
-  if (isAuthenticated && !initialCheckComplete && !forceSkipRestore) {
-    return (
-      <View style={rootStyles.cloudRestoreContainer} testID="cloudRestoreScreen">
-        <View style={rootStyles.cloudRestoreCard}>
-          <Text style={rootStyles.cloudRestoreTitle} testID="cloudRestoreTitle">Restoring your data</Text>
-          <Text style={rootStyles.cloudRestoreSubtitle} testID="cloudRestoreSubtitle">
-            Signing in as {authenticatedEmail ?? 'your account'}
-          </Text>
-          <Text style={rootStyles.cloudRestoreHint} testID="cloudRestoreHint">
-            {isSyncing ? 'Checking cloud backup…' : 'Preparing your workspace…'}
-          </Text>
-          {!!syncError && (
-            <Text style={rootStyles.cloudRestoreError} testID="cloudRestoreError">
-              {syncError}
-            </Text>
-          )}
-        </View>
-      </View>
-    );
-  }
-
-  if (isFreshStart && !isClearing) {
-    return <FreshStartHandler onComplete={() => setIsClearing(false)} />;
-  }
-
-  return <RootLayoutNav />;
+  return (
+    <>
+      <VoyageNotificationObserver />
+      <RootLayoutNav />
+    </>
+  );
 }
 
-const DataProviders = composeProviders(
-  CoreDataProvider,
+const FeatureDataProviders = composeProviders(
   CrewRecognitionProvider,
   HistoricalPerformanceProvider,
   PriceHistoryProvider,
@@ -621,10 +566,9 @@ const DataProviders = composeProviders(
 );
 
 const CasinoProviders = composeProviders(
+  CasinoSettingsProvider,
   CasinoStrategyProvider,
   CasinoSessionProvider,
-  CasinoSettingsProvider,
-  CasinoBenefitsProvider,
   SlotMachineProvider,
   SlotMachineLibraryProvider,
   MachineConditionLogProvider,
@@ -638,54 +582,100 @@ const ServiceProviders = composeProviders(
   TaxProvider,
   AlertsProvider,
   CertificatesProvider,
-  IntelligenceFiltersProvider,
-  SailingWeatherProvider,
-  AgentXProvider,
+  CasinoBenefitsProvider,
   PersonalCertificateOptimizerProvider,
   PersonalOptimizationAlertsProvider,
+  IntelligenceFiltersProvider,
+  AskAllOffersProvider,
+  SailingWeatherProvider,
+  AgentXProvider,
 );
 
+function AuthenticatedFeatureGate() {
+  const { isLoading } = useCoreData();
+  const startupLoggedRef = useRef(false);
+
+  useEffect(() => {
+    if (isLoading && !startupLoggedRef.current) {
+      startupLoggedRef.current = true;
+      console.log('[Startup] Main navigation rendered immediately; local providers are hydrating in the background.');
+      return;
+    }
+
+    if (!isLoading && startupLoggedRef.current) {
+      console.log('[Startup] Core local-data hydration completed without blocking navigation.');
+    }
+  }, [isLoading]);
+
+  // Build 336: startup is fail-open. All providers mount around the usable app,
+  // but no provider hydration flag is allowed to gate navigation. Feature
+  // screens may show their own local loading state while their cache hydrates.
+  return (
+    <FeatureDataProviders>
+      <CasinoProviders>
+        <ServiceProviders>
+          <SlotMachineWhitelistBridge />
+          <AuthenticatedAppContent />
+        </ServiceProviders>
+      </CasinoProviders>
+    </FeatureDataProviders>
+  );
+}
+
+function AuthenticatedProviderTree() {
+  return (
+    <UserDataSyncProvider>
+      <UserProvider>
+        <EntitlementProvider>
+          <CoreDataProvider>
+            <AuthenticatedFeatureGate />
+          </CoreDataProvider>
+        </EntitlementProvider>
+      </UserProvider>
+    </UserDataSyncProvider>
+  );
+}
+
+function AuthGate() {
+  const { isAuthenticated, isLoading } = useAuth();
+  const [showLandingPage, setShowLandingPage] = useState(true);
+  const ignoreSplashCompletion = useCallback(() => {}, []);
+
+  if (isLoading) {
+    return <WelcomeSplash onAnimationComplete={ignoreSplashCompletion} duration={1800} />;
+  }
+
+  if (!isAuthenticated) {
+    return showLandingPage
+      ? <LandingPage onContinue={() => setShowLandingPage(false)} />
+      : <LoginScreen />;
+  }
+
+  return <AuthenticatedProviderTree />;
+}
+
 export default function RootLayout() {
-  const [isStorageReady, setIsStorageReady] = useState<boolean>(false);
   const [storageError, setStorageError] = useState<string | null>(null);
 
   useEffect(() => {
-    let isMounted = true;
-
-    const bootstrapStorage = async () => {
-      try {
-        const result = await ensureStorageHealthy();
-
-        if (!isMounted) {
-          return;
-        }
-
-        if (result.recovered) {
-          console.warn('[RootLayout] Local storage was reset after a migration failure');
-        }
-
-        setStorageError(result.healthy ? null : result.errorMessage ?? 'Unable to open local storage.');
-        setIsStorageReady(result.healthy);
-      } catch (error) {
-        console.error('[RootLayout] Unexpected storage bootstrap failure:', error);
-
-        if (isMounted) {
-          setStorageError(error instanceof Error ? error.message : 'Unable to open local storage.');
-          setIsStorageReady(false);
-        }
-      } finally {
-        try {
-          await SplashScreen.hideAsync();
-        } catch {
-        }
-      }
-    };
-
-    void bootstrapStorage();
-
-    return () => {
-      isMounted = false;
-    };
+    let mounted = true;
+    void ensureStorageHealthy()
+      .then((result) => {
+        if (mounted && !result.healthy) setStorageError(result.errorMessage ?? 'Local storage check did not finish.');
+      })
+      .catch((error) => {
+        if (mounted) setStorageError(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => {
+        void SplashScreen.hideAsync().catch(() => undefined);
+        // An interrupted sync only needs its small manifest closed. Recovery is
+        // intentionally background work and must never hold the splash screen or
+        // provider tree hostage during cold start.
+        void recoverIncompleteSyncTransaction().catch((error) => {
+          console.warn('[Startup] Interrupted sync recovery will be retried later:', error);
+        });
+      });
+    return () => { mounted = false; };
   }, []);
 
   return (
@@ -694,38 +684,19 @@ export default function RootLayout() {
         <GestureHandlerRootView style={rootStyles.gestureHandler}>
           <ErrorBoundary>
             <WebResponsiveWrapper>
-              {isStorageReady ? (
+              <View style={rootStyles.gestureHandler}>
                 <AuthProvider>
-                  <UserDataSyncProvider>
-                    <UserProvider>
-                      <EntitlementProvider>
-                        <DataProviders>
-                          <CasinoProviders>
-                            <ServiceProviders>
-                              <AppContent />
-                            </ServiceProviders>
-                          </CasinoProviders>
-                        </DataProviders>
-                      </EntitlementProvider>
-                    </UserProvider>
-                  </UserDataSyncProvider>
+                  <AuthGate />
                 </AuthProvider>
-              ) : (
-                <View style={rootStyles.storageBootstrapContainer}>
-                  <View style={rootStyles.storageBootstrapCard}>
-                    <ActivityIndicator size="large" color={COLORS.navy} />
-                    <Text style={rootStyles.storageBootstrapTitle}>{storageError ? 'Local storage needs attention' : 'Preparing your app'}</Text>
-                    <Text style={rootStyles.storageBootstrapSubtitle}>
-                      {storageError
-                        ? 'The app could not finish opening its local data store. Please restart the app and try again.'
-                        : 'Checking your saved data and finishing startup.'}
-                    </Text>
-                    {storageError ? (
-                      <Text style={rootStyles.storageBootstrapError}>{storageError}</Text>
-                    ) : null}
+                {storageError ? (
+                  <View style={rootStyles.storageWarningBanner}>
+                    <Text style={rootStyles.storageWarningText}>Local storage warning: {storageError}</Text>
+                    <Pressable onPress={() => setStorageError(null)} accessibilityRole="button">
+                      <Text style={rootStyles.storageWarningDismiss}>Dismiss</Text>
+                    </Pressable>
                   </View>
-                </View>
-              )}
+                ) : null}
+              </View>
             </WebResponsiveWrapper>
           </ErrorBoundary>
         </GestureHandlerRootView>

@@ -1,6 +1,5 @@
-import { buildCruiseDetailsParams } from '@/lib/navigation/cruiseDetails';
 import React, { useMemo, useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { 
@@ -26,19 +25,20 @@ import { CasinoSessionTracker } from '@/components/CasinoSessionTracker';
 import { AddSessionModal } from '@/components/AddSessionModal';
 import type { PlayingHours } from '@/state/UserProvider';
 import { createDateFromString } from '@/lib/date';
-import { determineCasinoHoursWithContext, determineSeaDay, resolveFullCruiseItinerary, type CasinoDayContext } from '@/lib/casinoAvailability';
+import { determineCasinoHoursWithContext, determineSeaDay, type CasinoDayContext } from '@/lib/casinoAvailability';
 import type { CalendarEvent, BookedCruise, ItineraryDay } from '@/types/models';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { TimeZoneConverter } from '@/components/TimeZoneConverter';
 import { DailyLuckSection } from '@/components/DailyLuckSection';
-import { SailingWeatherCard } from '@/components/SailingWeatherCard';
-import { MarineAlertsPanel } from '@/components/MarineAlertsPanel';
+import { VoyageWeatherSection } from '@/components/VoyageWeatherSection';
 import { ResponsiveContainer } from '@/components/ResponsiveContainer';
 import { useSailingWeather } from '@/state/SailingWeatherProvider';
+import { dedupeBookedCruises } from '@/lib/dataIdentity';
 import {
   generateCruiseCalendarEvents,
   getDisplayCalendarEvents,
   getNormalizedCruiseDateRange,
+  isBookedCruiseEligibleForCalendar,
   isCruiseCalendarEventBackedByBookedCruise,
 } from '@/lib/calendar/cruiseEvents';
 
@@ -242,10 +242,13 @@ export default function DayAgendaScreen() {
   const coreData = useCoreData();
   const { bookedCruises: storedBookedCruises } = coreData;
   const { isHydrated: isWeatherHydrated, prefetchCruiseForecastWindow } = useSailingWeather();
-  const [isPrefetchingWeather, setIsPrefetchingWeather] = useState<boolean>(false);
 
   const normalizedBookedCruises = useMemo((): BookedCruise[] => {
-    return storedBookedCruises
+    return dedupeBookedCruises(
+      [...((localData.booked ?? []) as BookedCruise[]), ...storedBookedCruises],
+      'day agenda booked cruise weather merge',
+    )
+      .filter(isBookedCruiseEligibleForCalendar)
       .map((cruise) => {
         const cruiseDateRange = getNormalizedCruiseDateRange(cruise);
         if (!cruiseDateRange) {
@@ -259,7 +262,7 @@ export default function DayAgendaScreen() {
         };
       })
       .filter((cruise): cruise is BookedCruise => cruise !== null);
-  }, [storedBookedCruises]);
+  }, [localData.booked, storedBookedCruises]);
 
   const playingHours: PlayingHours = currentUser?.playingHours || DEFAULT_PLAYING_HOURS;
   const { getSessionsForDate, getDailySummary, addSession, removeSession } = useCasinoSessions();
@@ -349,7 +352,7 @@ export default function DayAgendaScreen() {
           itineraryName: cruise.itineraryName,
           departurePort: cruise.departurePort,
           nights: cruise.nights || 0,
-          itinerary: resolveFullCruiseItinerary(cruise),
+          itinerary: cruise.itinerary,
           bookings: [{
             reservationNumber: cruise.reservationNumber,
             cabinNumber: cruise.cabinNumber,
@@ -683,8 +686,8 @@ export default function DayAgendaScreen() {
     if (item.type === 'cruise' && 'sailDate' in item.data) {
       const cruiseData = item.data as MergedCruiseData;
       router.push({
-        pathname: '/cruise-details' as any,
-        params: buildCruiseDetailsParams(cruiseData, { source: 'day-agenda' }),
+        pathname: '/(tabs)/(overview)/cruise-details' as any,
+        params: { id: cruiseData.id },
       });
     }
   }, [router]);
@@ -852,9 +855,9 @@ export default function DayAgendaScreen() {
   }, [selectedDate]);
 
   const upcomingCruisesForWeather = useMemo(() => {
-    const sevenDaysAhead = new Date(selectedDate);
-    sevenDaysAhead.setDate(sevenDaysAhead.getDate() + 7);
-    sevenDaysAhead.setHours(23, 59, 59, 999);
+    const forecastHorizonEnd = new Date(selectedDate);
+    forecastHorizonEnd.setDate(forecastHorizonEnd.getDate() + 15);
+    forecastHorizonEnd.setHours(23, 59, 59, 999);
     const activeIds = new Set(mergedCruiseBookings.map((c) => c.id));
     return normalizedBookedCruises
       .filter((c) => {
@@ -864,7 +867,7 @@ export default function DayAgendaScreen() {
         sail.setHours(0, 0, 0, 0);
         const today = new Date(selectedDate);
         today.setHours(0, 0, 0, 0);
-        return sail > today && sail <= sevenDaysAhead;
+        return sail > today && sail <= forecastHorizonEnd;
       })
       .map((c) => ({
         id: c.id,
@@ -875,7 +878,7 @@ export default function DayAgendaScreen() {
         destination: c.destination,
         itineraryName: c.itineraryName,
         nights: c.nights,
-        itinerary: resolveFullCruiseItinerary(c),
+        itinerary: c.itinerary,
       }));
   }, [normalizedBookedCruises, mergedCruiseBookings, selectedDate]);
 
@@ -917,7 +920,7 @@ export default function DayAgendaScreen() {
         destination: cruise.destination,
         itineraryName: cruise.itineraryName,
         nights: cruise.nights || 0,
-        itinerary: resolveFullCruiseItinerary(cruise),
+        itinerary: cruise.itinerary,
       });
     });
 
@@ -952,13 +955,13 @@ export default function DayAgendaScreen() {
     return Array.from(cruiseMap.values());
   }, [fallbackCruisesForWeather, mergedCruiseBookings, upcomingCruisesForWeather]);
 
-  const weatherAlertCruises = useMemo(() => {
-    return mergedCruiseBookings.length > 0 ? mergedCruiseBookings : allWeatherCruises;
+  const weatherVoyage = useMemo(() => {
+    if (mergedCruiseBookings.length > 0) return mergedCruiseBookings[0];
+    const todayKey = new Date().toISOString().slice(0, 10);
+    return [...allWeatherCruises]
+      .filter((cruise) => cruise.returnDate >= todayKey)
+      .sort((left, right) => left.sailDate.localeCompare(right.sailDate))[0] ?? allWeatherCruises[0] ?? null;
   }, [allWeatherCruises, mergedCruiseBookings]);
-
-  const weatherAlertDaysAhead = useMemo(() => {
-    return mergedCruiseBookings.length > 0 ? 0 : upcomingCruisesForWeather.length > 0 ? 7 : 0;
-  }, [mergedCruiseBookings.length, upcomingCruisesForWeather.length]);
 
   useEffect(() => {
     if (!isWeatherHydrated || allWeatherCruises.length === 0) {
@@ -979,23 +982,16 @@ export default function DayAgendaScreen() {
         })),
       });
 
-      setIsPrefetchingWeather(true);
-      try {
-        for (const cruise of allWeatherCruises) {
-          if (isCancelled) {
-            return;
-          }
+      for (const cruise of allWeatherCruises) {
+        if (isCancelled) {
+          return;
+        }
 
-          await prefetchCruiseForecastWindow(cruise, {
-            anchorDate: mergedCruiseBookings.some((mergedCruise) => mergedCruise.id === cruise.id)
-              ? selectedDate
-              : createDateFromString(cruise.sailDate),
-          });
-        }
-      } finally {
-        if (!isCancelled) {
-          setIsPrefetchingWeather(false);
-        }
+        await prefetchCruiseForecastWindow(cruise, {
+          anchorDate: mergedCruiseBookings.some((mergedCruise) => mergedCruise.id === cruise.id)
+            ? selectedDate
+            : createDateFromString(cruise.sailDate),
+        });
       }
     };
 
@@ -1303,11 +1299,11 @@ export default function DayAgendaScreen() {
     }
   }, [normalizedBookedCruises, coreData]);
 
-  const renderAllDayScheduleItem = useCallback((item: AllDayScheduleItem, index: number) => {
+  const renderAllDayScheduleItem = useCallback((item: AllDayScheduleItem) => {
     const IconComponent = getTimelineIcon(item.icon);
     return (
       <View
-        key={`${item.id}-${index}`}
+        key={item.id}
         style={[
           styles.allDayItem,
           { borderColor: `${item.color}55`, backgroundColor: `${item.color}18` },
@@ -1325,7 +1321,7 @@ export default function DayAgendaScreen() {
     );
   }, [getTimelineIcon]);
 
-  const renderDayScheduleBlock = useCallback((block: DayScheduleBlock, index: number) => {
+  const renderDayScheduleBlock = useCallback((block: DayScheduleBlock) => {
     const IconComponent = getTimelineIcon(block.icon);
     const top = (block.startMinutes / 60) * HOUR_ROW_HEIGHT;
     const rawHeight = ((block.endMinutes - block.startMinutes) / 60) * HOUR_ROW_HEIGHT;
@@ -1336,7 +1332,7 @@ export default function DayAgendaScreen() {
     const isCompact = blockHeight < 82;
     return (
       <View
-        key={`${block.id}-${index}`}
+        key={block.id}
         style={[
           styles.dayScheduleBlock,
           {
@@ -1364,12 +1360,12 @@ export default function DayAgendaScreen() {
     );
   }, [getTimelineIcon]);
 
-  const renderTimelineEvent = useCallback((event: TimelineEvent, index: number) => {
+  const renderTimelineEvent = useCallback((event: TimelineEvent) => {
     const IconComponent = getTimelineIcon(event.icon);
     const isOpportune = event.isOpportune || event.type === 'opportune';
     
     return (
-      <View key={`${event.id}-${index}`} style={[
+      <View key={event.id} style={[
         styles.timelineEvent,
         isOpportune && styles.timelineEventOpportune,
       ]}>
@@ -1424,7 +1420,7 @@ export default function DayAgendaScreen() {
     );
   }, [getTimelineIcon]);
 
-  const renderAgendaItem = useCallback((item: AgendaItem, index: number) => {
+  const renderAgendaItem = useCallback((item: AgendaItem) => {
     const IconComponent = getIcon(item.type);
     const isCruise = item.type === 'cruise' && 'bookings' in item.data;
     const cruiseData = isCruise ? (item.data as MergedCruiseData) : null;
@@ -1433,7 +1429,7 @@ export default function DayAgendaScreen() {
     
     return (
       <TouchableOpacity
-        key={`${item.id}-${index}`}
+        key={item.id}
         style={styles.agendaItem}
         activeOpacity={isCruise ? 0.7 : 1}
         onPress={() => handleItemPress(item)}
@@ -1607,15 +1603,7 @@ export default function DayAgendaScreen() {
             </View>
 
           <View style={styles.sectionContainer}>
-            <View style={styles.sectionTitleRow}>
-              <Text style={styles.sectionTitle}>Sailing Weather</Text>
-              {isPrefetchingWeather ? (
-                <View style={styles.weatherSyncStatusPill} testID="agenda-weather-syncing-status">
-                  <ActivityIndicator size="small" color={COLORS.aquaAccent} />
-                  <Text style={styles.weatherSyncStatusText}>Syncing forecast…</Text>
-                </View>
-              ) : null}
-            </View>
+            <Text style={styles.sectionTitle}>Sailing Weather</Text>
             <Text style={styles.sectionDescription}>
               {mergedCruiseBookings.length > 0
                 ? 'Full-day weather, wind, and sea-state snapshots with offline saving for spotty-at-sea service.'
@@ -1623,29 +1611,8 @@ export default function DayAgendaScreen() {
                   ? 'Upcoming cruise weather is pinned here so the build always shows the latest forecast cards.'
                   : 'Add a booked cruise to unlock weather, wind, and sea-state snapshots here.'}
             </Text>
-            {allWeatherCruises.length > 0 ? (
-              <>
-                <MarineAlertsPanel
-                  cruises={weatherAlertCruises}
-                  startDate={selectedDate}
-                  daysAhead={weatherAlertDaysAhead}
-                  maxItems={3}
-                  title="Rough seas / weather alerts"
-                  description={mergedCruiseBookings.length > 0
-                    ? 'Heads-up for rough conditions on this selected cruise day.'
-                    : 'Heads-up for rough conditions in your sailing window.'}
-                  testID="agenda-marine-alerts-panel"
-                />
-                <View style={styles.weatherCardsStack}>
-                  {allWeatherCruises.map((cruise) => (
-                    <SailingWeatherCard
-                      key={`sailing-weather-${cruise.id}`}
-                      cruise={cruise}
-                      selectedDate={mergedCruiseBookings.some((m) => m.id === cruise.id) ? selectedDate : createDateFromString(cruise.sailDate)}
-                    />
-                  ))}
-                </View>
-              </>
+            {weatherVoyage ? (
+              <VoyageWeatherSection cruise={weatherVoyage} />
             ) : (
               <View style={styles.emptyState} testID="agenda-weather-empty-state">
                 <View style={styles.emptyIconContainer}>
@@ -1853,6 +1820,10 @@ const styles = StyleSheet.create({
     gap: SPACING.md,
     marginTop: SPACING.md,
   },
+  weatherDayPickers: {
+    gap: SPACING.md,
+    marginBottom: SPACING.md,
+  },
   sectionDescription: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     color: 'rgba(255, 255, 255, 0.76)',
@@ -1866,27 +1837,6 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
     textTransform: 'uppercase',
     letterSpacing: 1,
-  },
-  sectionTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: SPACING.sm,
-  },
-  weatherSyncStatusPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 5,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255, 255, 255, 0.10)',
-    marginBottom: SPACING.sm,
-  },
-  weatherSyncStatusText: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: 'rgba(255, 255, 255, 0.82)',
   },
   agendaList: {
     gap: SPACING.md,

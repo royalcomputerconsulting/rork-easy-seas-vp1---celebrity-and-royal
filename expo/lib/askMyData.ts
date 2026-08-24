@@ -4,6 +4,7 @@ import { calculateOfferIntelligenceScore } from '@/lib/offerIntelligence';
 import type { AskMyDataOverview } from '@/lib/askMyDataOverview';
 import type { RecognitionEntryWithCrew } from '@/types/crew-recognition';
 import type { SailingWeatherForecast } from '@/state/SailingWeatherProvider';
+import type { ConversationSourceReference } from '@/lib/askAllOffers/types';
 
 export type AskMyDataSource = 'overview' | 'offers' | 'cruises' | 'certificates' | 'calendar' | 'crew' | 'machines' | 'weather' | 'system';
 export type AskMyDataConfidence = 'high' | 'medium' | 'low';
@@ -42,6 +43,24 @@ export interface AskMyDataResponse {
   noResultsExplanation?: string;
   interpretedIntent: string;
   suggestedQueries: string[];
+  directAnswer?: string;
+}
+
+export function buildAskMyDataSourceReferences(response: AskMyDataResponse, limit = 8): ConversationSourceReference[] {
+  const typeBySource: Record<AskMyDataSource, ConversationSourceReference['sourceType']> = {
+    overview: 'system', offers: 'offer', cruises: 'cruise', certificates: 'certificate',
+    calendar: 'calendar', crew: 'crew', machines: 'machine', weather: 'weather', system: 'system',
+  };
+  return response.results.slice(0, limit).map((result, index) => ({
+    id: `ask-my-data-source-${index + 1}-${result.id}`,
+    sourceType: typeBySource[result.source],
+    label: `[S${index + 1}] ${result.title}`,
+    detail: `${result.subtitle}${result.matchReasons.length ? ` · ${result.matchReasons.slice(0, 3).join('; ')}` : ''}`,
+    evidenceKind: result.source === 'overview' || result.source === 'system'
+      ? 'calculated'
+      : result.confidence === 'high' ? 'fact' : result.confidence === 'medium' ? 'calculated' : 'estimated',
+    route: result.actionRoute,
+  }));
 }
 
 type ExtendedCertificate = Certificate & {
@@ -84,14 +103,13 @@ interface QueryIntent {
   wantsMachines: boolean;
   wantsWeather: boolean;
   wantsSystem: boolean;
-  wantsOfferInventoryOnly: boolean;
-  wantsFreeCruise: boolean;
-  wantsGuestCoverage: boolean;
-  requestedGuestCount?: number;
+  wantsAnnualTierRewardUsage: boolean;
   minNights?: number;
   maxNights?: number;
   afterDate?: string;
   beforeDate?: string;
+  calendarMonth?: number;
+  calendarYear?: number;
 }
 
 const STOP_WORDS = new Set([
@@ -106,7 +124,7 @@ const SYNONYMS: Record<string, string[]> = {
   crew: ['crew', 'recognition', 'crew recognition', 'staff', 'employee', 'server', 'host', 'dealer', 'casino host', 'bartender', 'waiter', 'waitress', 'department'],
   machine: ['slot', 'slots', 'machine', 'machines', 'slot machine', 'atlas', 'ap', 'advantage play', 'must hit', 'must-hit', 'persistent', 'volatility', 'denomination'],
   weather: ['weather', 'forecast', 'rough seas', 'marine', 'wind', 'wave', 'swell', 'rain', 'storm', 'squall', 'sea state'],
-  system: ['financial', 'finance', 'money', 'payment', 'balance due', 'deposit', 'price drop', 'price history', 'upgrade price', 'alert', 'anomaly', 'insight', 'bankroll', 'limit', 'tax', 'w2g', 'w-2g', 'comp item', 'comp', 'achievement', 'goal', 'analytics', 'performance', 'portfolio', 'data source', 'system'],
+  system: ['financial', 'finance', 'money', 'payment', 'balance due', 'deposit', 'price drop', 'price history', 'upgrade price', 'alert', 'anomaly', 'insight', 'bankroll', 'limit', 'tax', 'w2g', 'w-2g', 'comp item', 'comp', 'achievement', 'goal', 'analytics', 'performance', 'portfolio', 'data source', 'system', 'casino session', 'session', 'machine log', 'condition log', 'deck mapping', 'atlas observation'],
   expiring: ['expiring', 'expires', 'expiration', 'urgent', 'soon', 'deadline', 'lapsing', 'last chance'],
   booked: ['booked', 'booking', 'reservation', 'reserved', 'hold', 'courtesy hold'],
   value: ['value', 'best', 'strongest', 'highest', 'worth', 'roi', 'score', 'retail', 'savings'],
@@ -188,23 +206,19 @@ function parseDateConstraint(normalizedQuery: string, mode: 'after' | 'before'):
   return `${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
 }
 
-function parseRequestedGuestCount(normalizedQuery: string): number | undefined {
-  const explicit = normalizedQuery.match(/(?:for|fare for|cruise fare for|covers|covering)\s+(\d+|one|two|three|four)\s*(?:guests?|people|passengers?|pax|persons?)?\b/);
-  if (explicit?.[1]) return wordToNumber(explicit[1]);
-  const guestNoun = normalizedQuery.match(/\b(\d+|one|two|three|four)\s*(?:guests?|people|passengers?|pax|persons?)\b/);
-  if (guestNoun?.[1]) return wordToNumber(guestNoun[1]);
-  if (/\bfor\s+2\b|\bfor\s+two\b|\bdouble\s+occupancy\b|\bfor\s+a\s+couple\b/.test(normalizedQuery)) return 2;
-  if (/\bfor\s+1\b|\bfor\s+one\b|\bsolo\b|\bsingle\s+guest\b/.test(normalizedQuery)) return 1;
-  return undefined;
-}
+const MONTH_NUMBER_BY_NAME: Record<string, number> = {
+  january: 1, february: 2, march: 3, april: 4, may: 5, june: 6,
+  july: 7, august: 8, september: 9, october: 10, november: 11, december: 12,
+};
 
-function isOfferInventoryQuery(normalizedQuery: string, sourceMentions: SourceIntent, requestedGuestCount?: number): boolean {
-  if (!sourceMentions.offers) return false;
-  if (/\b(from|in|inside|using|use|loaded|current|active|available)\s+(my\s+)?offers?\b/.test(normalizedQuery)) return true;
-  if (/\b(my|loaded|current|active|available|club royale|casino)\s+offers?\b/.test(normalizedQuery)) return true;
-  if (/\boffer\s+catalog\b|\bcatalog\s+of\s+offers\b|\boffer\s+sailings\b|\boffer\s+rows\b/.test(normalizedQuery)) return true;
-  if (requestedGuestCount !== undefined && /\boffers?\b/.test(normalizedQuery) && !/\bbooked|booking|reservation|reserved|already booked|completed|past\b/.test(normalizedQuery)) return true;
-  return false;
+function parseCalendarMonthConstraint(normalizedQuery: string): { month?: number; year?: number } {
+  const monthMatch = normalizedQuery.match(/\b(january|february|march|april|may|june|july|august|september|october|november|december)\b(?:\s+(20\d{2}))?/);
+  if (!monthMatch?.[1]) return {};
+  return {
+    month: MONTH_NUMBER_BY_NAME[monthMatch[1]],
+    // An unqualified month means that month in the current calendar year.
+    year: monthMatch[2] ? Number(monthMatch[2]) : new Date().getFullYear(),
+  };
 }
 
 function parseQueryIntent(query: string): QueryIntent {
@@ -222,15 +236,11 @@ function parseQueryIntent(query: string): QueryIntent {
     weather: hasAny(normalizedQuery, SYNONYMS.weather),
     system: hasAny(normalizedQuery, SYNONYMS.system),
   };
-  const requestedGuestCount = parseRequestedGuestCount(normalizedQuery);
-  const wantsOfferInventoryOnly = isOfferInventoryQuery(normalizedQuery, sourceMentions, requestedGuestCount);
-  if (wantsOfferInventoryOnly && !/\bbooked|booking|reservation|reserved|already booked|completed|past\b/.test(normalizedQuery)) {
-    sourceMentions.cruises = false;
-  }
   const wantsAllSources = !Object.values(sourceMentions).some(Boolean);
 
   const nightsMatch = normalizedQuery.match(/(?:longer than|more than|over|at least)\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(?:night|nights|day|days)/);
   const maxNightsMatch = normalizedQuery.match(/(?:shorter than|less than|under|at most)\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(?:night|nights|day|days)/);
+  const calendarConstraint = parseCalendarMonthConstraint(normalizedQuery);
 
   return {
     originalQuery: query,
@@ -259,15 +269,36 @@ function parseQueryIntent(query: string): QueryIntent {
     wantsMachines: sourceMentions.machines,
     wantsWeather: sourceMentions.weather,
     wantsSystem: sourceMentions.system,
-    wantsOfferInventoryOnly,
-    wantsFreeCruise: /free\s+cruise|comp(?:ed)?\s+cruise|cruise\s+fare/.test(normalizedQuery),
-    wantsGuestCoverage: requestedGuestCount !== undefined || /guest|passenger|for\s+two|for\s+2|double\s+occupancy/.test(normalizedQuery),
-    requestedGuestCount,
+    wantsAnnualTierRewardUsage: isAnnualTierRewardQuestion(query),
     minNights: nightsMatch?.[1] ? wordToNumber(nightsMatch[1]) : undefined,
     maxNights: maxNightsMatch?.[1] ? wordToNumber(maxNightsMatch[1]) : undefined,
     afterDate: parseDateConstraint(normalizedQuery, 'after'),
     beforeDate: parseDateConstraint(normalizedQuery, 'before'),
+    calendarMonth: calendarConstraint.month,
+    calendarYear: calendarConstraint.year,
   };
+}
+
+export function isAnnualTierRewardQuestion(message: string): boolean {
+  const text = normalize(message).replace(/[^a-z0-9]+/g, ' ').trim();
+  const asksForUsage = /\b(what|which|where|use|used|using|redeem|redeemed|apply|applied|book|booked)\b/.test(text);
+  const referencesCruise = /\b(cruise|sailing|voyage|booking|reservation|ship)\b/.test(text);
+  const referencesTier = /\b(signature|tier|status)\b/.test(text);
+  const referencesAnnualReward = /\bannual\b/.test(text) && /\b(reward|rewards|benefit|benefits|offer|offers|cruise)\b/.test(text);
+  const referencesAnnualCruise = /\bannual\s+(?:tier\s+|signature\s+|complimentary\s+|free\s+)?cruise\b/.test(text);
+  const referencesExactTierCode = /\b(?:offer|promo|promotion|rate)?\s*code\s+(?:was\s+|is\s+)?tier\b/.test(text)
+    || /\btier\s+(?:as\s+)?(?:the\s+)?(?:offer\s+|promo\s+|rate\s+)?code\b/.test(text);
+  return asksForUsage && referencesCruise && ((referencesTier && referencesAnnualReward) || referencesAnnualCruise || referencesExactTierCode);
+}
+
+export function buildAskMyDataConversationalQuery(currentMessage: string, previousUserMessage?: string): string {
+  const current = currentMessage.trim();
+  const previous = previousUserMessage?.trim() ?? '';
+  if (!current || !previous) return current;
+  const tokenCount = current.split(/\s+/).filter(Boolean).length;
+  const followUpLanguage = /^(?:and|also|yes|no|actually|instead|what about|how about)\b|\b(it|its|that|this|those|them|one|same|code|clarification|meant)\b/i.test(current);
+  if (!followUpLanguage || tokenCount > 24) return current;
+  return `${previous}\nFollow-up clarification: ${current}`;
 }
 
 function scoreText(intent: QueryIntent, text: string): { score: number; matchedTerms: string[] } {
@@ -298,6 +329,12 @@ function datePasses(dateString: string | undefined, intent: QueryIntent): boolea
   if (!date) return true;
   if (intent.afterDate && date < intent.afterDate) return false;
   if (intent.beforeDate && date > intent.beforeDate) return false;
+  if (intent.calendarMonth || intent.calendarYear) {
+    const match = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return false;
+    if (intent.calendarYear && Number(match[1]) !== intent.calendarYear) return false;
+    if (intent.calendarMonth && Number(match[2]) !== intent.calendarMonth) return false;
+  }
   return true;
 }
 
@@ -322,93 +359,6 @@ function getFirstNumber(record: Record<string, unknown>, keys: string[]): number
 function money(value: number | null): string | null {
   if (value === null) return null;
   return String.fromCharCode(36) + value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-type OfferGuestCoverage = 'two-free' | 'two-discount' | 'one-free' | 'dollars-off' | 'unknown';
-
-function getOfferText(offer: CasinoOffer): string {
-  return [
-    offer.offerCode,
-    offer.offerName,
-    offer.title,
-    offer.description,
-    offer.category,
-    offer.roomType,
-    offer.guestsInfo,
-    offer.classification,
-    offer.offerType,
-    offer.perks?.join(' '),
-    offer.termsConditions,
-  ].filter(Boolean).join(' ').toLowerCase();
-}
-
-function getOfferGuestCoverage(offer: CasinoOffer): { coverage: OfferGuestCoverage; guestCount: number | null; label: string; rank: number; reasons: string[] } {
-  const text = getOfferText(offer);
-  const reasons: string[] = [];
-  const explicitGuests = typeof offer.guests === 'number' && Number.isFinite(offer.guests) ? offer.guests : null;
-  const saysTwo = explicitGuests === 2 || /cruise\s*fare\s*for\s*2|cruise\s*fare\s*for\s*two|fare\s*for\s*2|fare\s*for\s*two|for\s*2\s*guests?|for\s*two\s*guests?|2\s*guests?|two\s*guests?|double\s*occupancy|for\s+two|classification\s*2person/.test(text) || offer.classification === '2person';
-  const saysOne = explicitGuests === 1 || /cruise\s*fare\s*for\s*1|cruise\s*fare\s*for\s*one|fare\s*for\s*1|fare\s*for\s*one|for\s*1\s*guest|for\s*one\s*guest|1\s*guest|one\s*guest|solo/.test(text);
-  const secondDiscount = /second\s+(guest|passenger|person).*discount|discount.*second\s+(guest|passenger|person)|1\s*\+\s*discount|one\s*\+\s*discount|companion\s+discount|discounted\s+companion|discounted\s+second/.test(text) || offer.classification === '1+discount';
-  const dollarsOff = /dollars?\s*off|amount\s*off|discount\s*offer|\$\d+\s*off/.test(text) || offer.offerType === 'discount';
-
-  if (saysTwo && !secondDiscount) {
-    reasons.push('free cruise fare for 2 guests outranks one-person and discount-only offers');
-    return { coverage: 'two-free', guestCount: 2, label: 'Free cruise fare for 2 guests', rank: 400, reasons };
-  }
-  if (secondDiscount) {
-    reasons.push('covers a second guest only by discount, so it ranks below true free-for-two offers');
-    return { coverage: 'two-discount', guestCount: 2, label: '1 guest plus discounted second guest', rank: 240, reasons };
-  }
-  if (saysOne) {
-    reasons.push('free cruise fare appears to cover 1 guest only');
-    return { coverage: 'one-free', guestCount: 1, label: 'Free cruise fare for 1 guest', rank: 140, reasons };
-  }
-  if (dollarsOff) {
-    reasons.push('dollars-off/discount offer ranks below free cruise fare offers');
-    return { coverage: 'dollars-off', guestCount: null, label: 'Dollars-off / discount offer', rank: 80, reasons };
-  }
-  return { coverage: 'unknown', guestCount: explicitGuests, label: explicitGuests ? `Guest coverage ${explicitGuests}` : 'Guest coverage unknown', rank: 100, reasons: ['guest coverage was not explicit in the saved offer row'] };
-}
-
-function getCabinRank(roomType?: string): number {
-  const text = normalize(roomType);
-  if (/grand suite|owner.?s suite|royal suite|penthouse/.test(text)) return 110;
-  if (/junior suite|suite/.test(text)) return 90;
-  if (/balcony/.test(text)) return 70;
-  if (/ocean|outside/.test(text)) return 50;
-  if (/interior|inside/.test(text)) return 30;
-  return 10;
-}
-
-function getOfferValueAmount(offer: CasinoOffer): number {
-  const values = [
-    offer.totalValue,
-    offer.offerValue,
-    offer.value,
-    offer.retailCabinValue,
-    offer.balconyPrice,
-    offer.oceanviewPrice,
-    offer.interiorPrice,
-    offer.suitePrice,
-    offer.juniorSuitePrice,
-    offer.grandSuitePrice,
-    offer.discountValue,
-    offer.tradeInValue,
-  ].filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
-  return values.length > 0 ? Math.max(...values) : 0;
-}
-
-function buildOfferValueDetail(offer: CasinoOffer, coverageLabel: string): string {
-  const value = getOfferValueAmount(offer);
-  const parts = [
-    `Guest value: ${coverageLabel}`,
-    offer.roomType ? `Cabin: ${offer.roomType}` : null,
-    value > 0 ? `Estimated offer value: ${money(value)}` : null,
-    (offer.freePlay ?? offer.freeplayAmount ?? 0) > 0 ? `FreePlay: ${money(offer.freePlay ?? offer.freeplayAmount ?? null)}` : null,
-    (offer.OBC ?? offer.obcAmount ?? 0) > 0 ? `OBC: ${money(offer.OBC ?? offer.obcAmount ?? null)}` : null,
-    offer.taxesFees !== undefined ? `Taxes/fees: ${money(offer.taxesFees)}` : null,
-  ].filter((part): part is string => Boolean(part));
-  return parts.join(' · ');
 }
 
 function getCruiseOfferData(cruise: Cruise): {
@@ -478,6 +428,135 @@ function getCruiseOfferData(cruise: Cruise): {
   };
 }
 
+const TIER_CODE_FIELDS = [
+  'offerCode',
+  'promoCode',
+  'promotionCode',
+  'rateCode',
+  'casinoOfferCode',
+  'bookingOfferCode',
+] as const;
+
+function stringField(record: Record<string, unknown>, keys: readonly string[]): string {
+  for (const key of keys) {
+    const value = record[key];
+    if ((typeof value === 'string' || typeof value === 'number') && String(value).trim()) return String(value).trim();
+  }
+  return '';
+}
+
+function findExactTierCodeInPayload(value: unknown, depth = 0): string | null {
+  if (depth > 4 || value === null || value === undefined) return null;
+  if (typeof value === 'string') {
+    return /["'](?:offerCode|promoCode|promotionCode|rateCode|casinoOfferCode|bookingOfferCode)["']\s*:\s*["']TIER["']/i.test(value)
+      ? 'source payload offer code TIER'
+      : null;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value.slice(0, 100)) {
+      const match = findExactTierCodeInPayload(item, depth + 1);
+      if (match) return match;
+    }
+    return null;
+  }
+  if (typeof value !== 'object') return null;
+  for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+    if (TIER_CODE_FIELDS.some((field) => field.toLowerCase() === key.toLowerCase()) && normalize(nested) === 'tier') {
+      return `${key} TIER`;
+    }
+    const match = findExactTierCodeInPayload(nested, depth + 1);
+    if (match) return match;
+  }
+  return null;
+}
+
+function exactTierCodeEvidence(record: Record<string, unknown>): string | null {
+  for (const field of TIER_CODE_FIELDS) {
+    if (normalize(record[field]) === 'tier') return `${field} TIER`;
+  }
+  return findExactTierCodeInPayload(record.sourcePayload ?? record.rawPayload ?? record.bookingPayload);
+}
+
+function hasBookedCruiseEvidence(cruise: Cruise): boolean {
+  const record = cruise as unknown as Record<string, unknown>;
+  const status = [cruise.status, record.bookingStatus, record.completionState, record.reservationStatus].filter(Boolean).join(' ').toLowerCase();
+  if (/booked|confirmed|reserved|completed|courtesy hold|active/.test(status)) return true;
+  if (record.isBooked === true || record.isReservation === true) return true;
+  return Boolean(stringField(record, ['reservationNumber', 'reservationId', 'bookingNumber', 'bookingId', 'confirmationNumber']));
+}
+
+function findLinkedTierOffer(cruise: Cruise, offers: CasinoOffer[]): CasinoOffer | undefined {
+  const cruiseRecord = cruise as unknown as Record<string, unknown>;
+  const reservation = stringField(cruiseRecord, ['reservationNumber', 'reservationId', 'bookingNumber', 'bookingId', 'confirmationNumber']);
+  const shipName = normalize(cruise.shipName);
+  const sailDate = normalizeDate(cruise.sailDate);
+  return offers.find((offer) => {
+    const offerRecord = offer as unknown as Record<string, unknown>;
+    if (!exactTierCodeEvidence(offerRecord)) return false;
+    if (String(offer.cruiseId ?? '') === String(cruise.id) || offer.cruiseIds?.some((id) => String(id) === String(cruise.id))) return true;
+    const offerReservation = stringField(offerRecord, ['reservationNumber', 'reservationId', 'bookingNumber', 'bookingId', 'confirmationNumber']);
+    if (reservation && offerReservation && reservation === offerReservation) return true;
+    return Boolean(shipName && sailDate && normalize(offer.shipName) === shipName && normalizeDate(offer.sailingDate) === sailDate);
+  });
+}
+
+function buildAnnualTierRewardAnswer(offers: CasinoOffer[], cruises: Cruise[]): { results: AskMyDataResult[]; directAnswer?: string } {
+  const matches = new Map<string, AskMyDataResult>();
+
+  cruises.forEach((cruise) => {
+    if (!hasBookedCruiseEvidence(cruise)) return;
+    const record = cruise as unknown as Record<string, unknown>;
+    const directEvidence = exactTierCodeEvidence(record);
+    const linkedOffer = directEvidence ? undefined : findLinkedTierOffer(cruise, offers);
+    const linkedEvidence = linkedOffer ? exactTierCodeEvidence(linkedOffer as unknown as Record<string, unknown>) : null;
+    const codeEvidence = directEvidence ?? linkedEvidence;
+    if (!codeEvidence) return;
+
+    const reservation = stringField(record, ['reservationNumber', 'reservationId', 'bookingNumber', 'bookingId', 'confirmationNumber']);
+    const status = stringField(record, ['status', 'bookingStatus', 'completionState', 'reservationStatus']);
+    const endDate = stringField(record, ['returnDate', 'endDate', 'sailEndDate']);
+    const key = reservation || `${normalize(cruise.shipName)}|${normalizeDate(cruise.sailDate)}`;
+    const subtitleParts = [
+      normalizeDate(cruise.sailDate) || 'sailing date missing',
+      endDate ? `returns ${normalizeDate(endDate)}` : null,
+      cruise.nights ? `${cruise.nights} nights` : null,
+      cruise.destination || cruise.departurePort || null,
+      reservation ? `reservation ${reservation}` : null,
+    ].filter((part): part is string => Boolean(part));
+    const evidenceParts = [
+      `exact saved ${codeEvidence}`,
+      status ? `booking status ${status}` : 'booked-cruise record',
+      linkedOffer ? `linked offer record ${linkedOffer.id}` : null,
+    ].filter((part): part is string => Boolean(part));
+
+    matches.set(key, {
+      id: `annual-tier-reward-${cruise.id}`,
+      source: 'cruises',
+      title: cruise.shipName || 'Saved cruise booking',
+      subtitle: subtitleParts.join(' · '),
+      score: directEvidence ? 500 : 450,
+      owner: getOwner(cruise),
+      actionLabel: 'View cruise',
+      actionRoute: `/cruise-details?id=${encodeURIComponent(cruise.id)}`,
+      confidence: 'high',
+      matchedTerms: ['signature', 'annual', 'tier', 'cruise', 'tier code'],
+      matchReasons: evidenceParts,
+      detail: `Evidence: ${evidenceParts.join('; ')}.`,
+    });
+  });
+
+  const results = Array.from(matches.values()).sort((left, right) => right.score - left.score);
+  const primary = results[0];
+  if (!primary) return { results };
+  const extra = results.length > 1
+    ? ` I found ${results.length} booked records carrying that exact code; the strongest saved match is shown first.`
+    : '';
+  return {
+    results,
+    directAnswer: `You used your Signature annual cruise reward on ${primary.title}, ${primary.subtitle}. Easy Seas identified it from the exact saved offer code TIER on the booked-cruise evidence.${extra}`,
+  };
+}
+
 function addReason(reasons: string[], condition: boolean, reason: string, score: number): number {
   if (!condition) return 0;
   reasons.push(reason);
@@ -506,7 +585,8 @@ function offerPassesStructuredFilters(offer: CasinoOffer, intent: QueryIntent): 
 
 function cruisePassesStructuredFilters(cruise: Cruise, intent: QueryIntent): boolean {
   const record = cruise as unknown as Record<string, unknown>;
-  if (intent.wantsBooked && !/booked|reservation|courtesy hold|completed/.test(`${cruise.status ?? ''} ${record.completionState ?? ''}`.toLowerCase())) return false;
+  const bookingState = `${cruise.status ?? ''} ${record.bookingStatus ?? ''} ${record.reservationStatus ?? ''} ${record.completionState ?? ''}`.toLowerCase();
+  if (intent.wantsBooked && (!/booked|confirmed|reserved|reservation|courtesy hold|active/.test(bookingState) || /completed|cancelled/.test(bookingState))) return false;
   if (intent.wantsAvailable && /archived|cancelled/.test(`${cruise.status ?? ''}`.toLowerCase())) return false;
   if (intent.minNights && (cruise.nights ?? 0) < intent.minNights) return false;
   if (intent.maxNights && (cruise.nights ?? 999) > intent.maxNights) return false;
@@ -521,7 +601,9 @@ function certificatePassesStructuredFilters(certificate: ExtendedCertificate, in
   if (intent.wantsExpiring && (days === null || days > 60 || days < 0)) return false;
   if (intent.wantsExpired && !(days !== null && days < 0 || certificate.status === 'expired')) return false;
   if (intent.wantsAvailable && /used|expired/.test(certificate.status ?? '')) return false;
-  return datePasses(certificate.expiryDate, intent);
+  // Query date constraints for certificates apply to parsed sailing dates, not
+  // to the certificate's redemption deadline. Expiry filters are handled above.
+  return true;
 }
 
 function crewPassesStructuredFilters(entry: RecognitionEntryWithCrew, intent: QueryIntent): boolean {
@@ -533,6 +615,7 @@ function weatherPassesStructuredFilters(forecast: SailingWeatherForecast, intent
 }
 
 function getInterpretedIntent(intent: QueryIntent): string {
+  if (intent.wantsAnnualTierRewardUsage) return 'Club Royale annual tier cruise reward usage';
   const pieces: string[] = [];
   if (intent.wantsAllSources) pieces.push('all data sources');
   else {
@@ -546,14 +629,13 @@ function getInterpretedIntent(intent: QueryIntent): string {
     if (intent.sources.system) pieces.push('app-wide system context');
   }
   if (intent.wantsExpiring) pieces.push('expiring soon');
-  if (intent.wantsOfferInventoryOnly) pieces.push('standalone offer catalog only');
-  if (intent.requestedGuestCount) pieces.push(`for ${intent.requestedGuestCount} guest(s)`);
   if (intent.wantsHighValue) pieces.push('high value');
   if (intent.wantsLowCost) pieces.push('low out-of-pocket');
   if (intent.minNights) pieces.push(`${intent.minNights}+ nights`);
   if (intent.maxNights) pieces.push(`≤${intent.maxNights} nights`);
   if (intent.afterDate) pieces.push(`after ${intent.afterDate}`);
   if (intent.beforeDate) pieces.push(`before ${intent.beforeDate}`);
+  if (intent.calendarMonth && intent.calendarYear) pieces.push(`month ${String(intent.calendarMonth).padStart(2, '0')}/${intent.calendarYear}`);
   if (intent.wantsOwnerIssues || intent.wantsReviewNeeded) pieces.push('needs review/assignment');
   return pieces.join(' • ');
 }
@@ -569,7 +651,6 @@ function buildSuggestedQueries(intent: QueryIntent): string[] {
     'What slot machines should I check on my next ship?',
     'Show weather and rough seas reports for my next cruise',
   ];
-  if (intent.sources.offers || intent.wantsExpiring) suggestions.unshift('Compare my best offers for 2 guests by value');
   if (intent.sources.offers || intent.wantsExpiring) suggestions.unshift('Compare my best expiring offers by score');
   if (intent.sources.cruises || intent.wantsSeaDays) suggestions.unshift('Show cruises with the most sea days');
   if (intent.sources.crew) suggestions.unshift('Summarize crew recognition by ship and department');
@@ -579,6 +660,7 @@ function buildSuggestedQueries(intent: QueryIntent): string[] {
 }
 
 function wantsOverviewResult(intent: QueryIntent): boolean {
+  if (intent.wantsAnnualTierRewardUsage) return false;
   return intent.wantsAllSources || /overview|summary|annual|historical|current season|season|roi|cash result|value capture|economic value|coin.?in|tier|signature|masters|points|casino|context|latest/.test(intent.normalizedQuery);
 }
 
@@ -600,13 +682,26 @@ export function askMyDataSearch(params: {
   const weatherReports = params.weatherReports ?? [];
   const additionalContextBlocks = params.additionalContextBlocks ?? [];
   const cruiseOfferRecords = params.cruises.filter((cruise) => getCruiseOfferData(cruise).hasOfferData);
-  const dataIndexLabel = `loaded ${params.offers.length.toLocaleString()} standalone offer sailing row(s), ${cruiseOfferRecords.length.toLocaleString()} booked-cruise offer/value record(s), ${params.cruises.length.toLocaleString()} cruise(s), ${params.certificates.length.toLocaleString()} certificate(s), ${params.calendarEvents.length.toLocaleString()} event(s), ${crewRecognitionEntries.length.toLocaleString()} crew recognition record(s), ${slotMachines.length.toLocaleString()} slot machine record(s), ${weatherReports.length.toLocaleString()} weather report(s), ${additionalContextBlocks.length.toLocaleString()} app-wide context block(s)`;
+  const certificateSailingRecords = params.certificates.reduce((total, certificate) => total + (certificate.parsedSailings?.length ?? 0), 0);
+  const dataIndexLabel = `loaded ${params.offers.length.toLocaleString()} standalone offer(s), ${cruiseOfferRecords.length.toLocaleString()} booked cruise offer record(s), ${params.cruises.length.toLocaleString()} cruise(s), ${params.certificates.length.toLocaleString()} certificate(s) with ${certificateSailingRecords.toLocaleString()} parsed sailing row(s), ${params.calendarEvents.length.toLocaleString()} event(s), ${crewRecognitionEntries.length.toLocaleString()} crew recognition record(s), ${slotMachines.length.toLocaleString()} slot machine record(s), ${weatherReports.length.toLocaleString()} weather report(s), ${additionalContextBlocks.length.toLocaleString()} app-wide context block(s)`;
   const interpretedIntent = getInterpretedIntent(intent) || 'all data sources';
   const filtersApplied: string[] = [interpretedIntent, dataIndexLabel];
-  if (intent.wantsOfferInventoryOnly) {
-    filtersApplied.push('Offer-source lock: searching standalone loaded offer sailings, not booked/completed cruises.');
-  }
   const results: AskMyDataResult[] = [];
+
+  if (intent.wantsAnnualTierRewardUsage) {
+    const annualReward = buildAnnualTierRewardAnswer(params.offers, params.cruises);
+    return {
+      query: params.query,
+      filtersApplied,
+      results: annualReward.results,
+      interpretedIntent,
+      directAnswer: annualReward.directAnswer,
+      suggestedQueries: ['Show this booked cruise', 'What benefits were recorded on that booking?', 'Show my other booked casino offer cruises'],
+      noResultsExplanation: annualReward.results.length === 0
+        ? 'I searched booked and completed cruise records, linked offers, reservation fields, and retained source payloads for the exact offer code TIER, but no verified match was stored in the active profile scope.'
+        : undefined,
+    };
+  }
 
   if (params.overview && wantsOverviewResult(intent)) {
     results.push({
@@ -631,21 +726,8 @@ export function askMyDataSearch(params: {
       const expiryDays = daysUntil(expiry);
       const textScore = scoreText(intent, haystack);
       const intelligence = calculateOfferIntelligenceScore(offer, params.cruises, params.certificates);
-      const coverage = getOfferGuestCoverage(offer);
-      const offerValueAmount = getOfferValueAmount(offer);
-      const reasons: string[] = [...coverage.reasons];
+      const reasons: string[] = [];
       let score = textScore.score + Math.round(intelligence.score / 6);
-      if (intent.wantsOfferInventoryOnly || intent.wantsHighValue || intent.wantsGuestCoverage) {
-        score += coverage.rank;
-        score += Math.min(70, Math.round(offerValueAmount / 100));
-        score += getCabinRank(offer.roomType);
-      }
-      if (intent.requestedGuestCount === 2) {
-        if (coverage.coverage === 'two-free') score += 260;
-        else if (coverage.coverage === 'two-discount') score += 70;
-        else if (coverage.coverage === 'one-free') score -= 90;
-        else if (coverage.coverage === 'dollars-off') score -= 120;
-      }
       score += addReason(reasons, intent.wantsExpiring && expiryDays !== null && expiryDays >= 0 && expiryDays <= 45, `expires in ${expiryDays ?? 0} day(s)`, Math.max(8, 36 - (expiryDays ?? 0)));
       score += addReason(reasons, intent.wantsHighValue && intelligence.score >= 65, `offer score ${intelligence.score}/100`, 26);
       score += addReason(reasons, intent.wantsFreePlay && ((offer.freePlay ?? 0) > 0 || (offer.freeplayAmount ?? 0) > 0), 'has FreePlay', 18);
@@ -653,16 +735,13 @@ export function askMyDataSearch(params: {
       score += addReason(reasons, intent.wantsOwnerIssues && !getOwner(offer), 'missing owner/profile', 22);
       score += addReason(reasons, intent.wantsReviewNeeded && (offer.importStatus === 'reviewNeeded' || offer.reconciliationStatus === 'reviewNeeded' || offer.importStatus === 'unassigned'), 'needs import review', 24);
       score += addReason(reasons, intent.minNights !== undefined && (offer.nights ?? 0) >= intent.minNights, `${offer.nights} nights`, 10);
-      score += addReason(reasons, intent.requestedGuestCount === 2 && coverage.coverage === 'two-free', 'best fit for 2: true free cruise fare for two', 40);
-      score += addReason(reasons, intent.requestedGuestCount === 2 && coverage.coverage === 'two-discount', 'second passenger is discounted, not fully comped', 8);
-      score += addReason(reasons, intent.requestedGuestCount === 2 && coverage.coverage === 'one-free', 'only one guest appears fully covered', -24);
 
-      if (score > 0 || reasons.length > 0 || intent.wantsExpiring || intent.wantsReviewNeeded || intent.wantsOfferInventoryOnly) {
+      if (score > 0 || reasons.length > 0 || intent.wantsExpiring || intent.wantsReviewNeeded) {
         results.push({
           id: `offer-${offer.id}`,
           source: 'offers',
           title: offer.offerName || offer.title || offer.offerCode || 'Casino offer',
-          subtitle: `${offer.offerCode || 'No code'} · ${coverage.label} · ${expiry ? `expires ${expiry}` : 'no expiry'} · ${offer.shipName || 'any ship'}`,
+          subtitle: `${offer.offerCode || 'No code'} · ${expiry ? `expires ${expiry}` : 'no expiry'} · ${offer.shipName || 'any ship'}`,
           score,
           owner: getOwner(offer),
           offerScore: intelligence.score,
@@ -671,17 +750,16 @@ export function askMyDataSearch(params: {
             return extended.cruiseId === offer.cruiseId || extended.offerCode === offer.offerCode || extended.description?.includes(offer.offerCode || '');
           }) ? 'possible certificate fit' : 'no certificate match found',
           actionLabel: 'View offer',
-          actionRoute: `/offer-details?offerCode=${encodeURIComponent(offer.offerCode || offer.id)}&offerSource=${encodeURIComponent(String(offer.offerSource || offer.brand || 'unknown'))}`,
+          actionRoute: `/offer-details?offerId=${encodeURIComponent(offer.id)}&offerCode=${encodeURIComponent(offer.offerCode || offer.id)}`,
           confidence: confidenceFromScore(score),
           matchedTerms: textScore.matchedTerms,
-          matchReasons: reasons.length > 0 ? unique(reasons) : textScore.matchedTerms.map((term) => `matched “${term}”`),
-          detail: buildOfferValueDetail(offer, coverage.label),
+          matchReasons: reasons.length > 0 ? reasons : textScore.matchedTerms.map((term) => `matched “${term}”`),
         });
       }
     });
   }
 
-  if ((intent.sources.cruises || intent.sources.offers || intent.wantsAllSources) && !(intent.wantsOfferInventoryOnly && !intent.wantsBooked && params.offers.length > 0)) {
+  if (intent.sources.cruises || intent.sources.offers || intent.wantsAllSources) {
     params.cruises.forEach((cruise) => {
       const offerData = getCruiseOfferData(cruise);
       if (intent.sources.offers && !intent.sources.cruises && !intent.wantsAllSources && !offerData.hasOfferData) return;
@@ -744,32 +822,128 @@ export function askMyDataSearch(params: {
     });
   }
 
-  if (intent.sources.certificates || intent.wantsAllSources || intent.wantsCertificateFit) {
+  if (intent.sources.certificates || intent.sources.offers || intent.sources.cruises || intent.wantsAllSources || intent.wantsCertificateFit) {
     (params.certificates as ExtendedCertificate[]).forEach((certificate) => {
       if (!certificatePassesStructuredFilters(certificate, intent)) return;
-      const haystack = [certificate.type, certificate.label, certificate.description, certificate.usedOnCruise, certificate.expiryDate, certificate.sourceEmail, certificate.ownerProfileId, certificate.casinoProgram, certificate.offerCode, certificate.cabinEntitlement].filter(Boolean).join(' ');
-      const textScore = scoreText(intent, haystack);
+      const parsedSailings = Array.isArray(certificate.parsedSailings) ? certificate.parsedSailings : [];
+      const certificateHaystack = [
+        certificate.type,
+        certificate.label,
+        certificate.description,
+        certificate.usedOnCruise,
+        certificate.expiryDate,
+        certificate.sourceEmail,
+        certificate.ownerProfileId,
+        certificate.casinoProgram,
+        certificate.offerCode,
+        certificate.certificateCode,
+        certificate.certificateFamily,
+        certificate.cabinEntitlement,
+        certificate.parserStatus,
+        parsedSailings.map((sailing) => [
+          sailing.certificateCode,
+          sailing.shipName,
+          sailing.sailingDate,
+          sailing.cabinCategory,
+          sailing.occupancy,
+          sailing.guestCount,
+          sailing.departurePort,
+          sailing.itinerary,
+          sailing.offerTypeLabel,
+          sailing.freePlay,
+          sailing.onboardCredit,
+          sailing.tradeInValue,
+          sailing.pointRequirement,
+        ].filter(Boolean).join(' ')).join(' '),
+      ].filter(Boolean).join(' ');
+      const certificateTextScore = scoreText(intent, certificateHaystack);
       const expiryDays = daysUntil(certificate.expiryDate);
-      const reasons: string[] = [];
-      let score = textScore.score + (certificate.status === 'available' ? 8 : 0);
-      score += addReason(reasons, intent.wantsExpiring && expiryDays !== null && expiryDays >= 0 && expiryDays <= 60, `expires in ${expiryDays ?? 0} day(s)`, Math.max(8, 32 - Math.floor((expiryDays ?? 0) / 2)));
-      score += addReason(reasons, intent.wantsCertificateFit && Boolean(certificate.offerCode || certificate.cruiseId || certificate.description), 'has offer/cruise fit clues', 22);
-      score += addReason(reasons, intent.wantsOwnerIssues && !getOwner(certificate), 'missing owner/profile', 18);
-      score += addReason(reasons, intent.wantsReviewNeeded && (certificate.importStatus === 'reviewNeeded' || certificate.reconciliationStatus === 'reviewNeeded' || certificate.importStatus === 'unassigned'), 'needs import review', 22);
+      const certificateReasons: string[] = [];
+      let certificateScore = certificateTextScore.score + (certificate.status === 'available' ? 8 : 0);
+      certificateScore += addReason(certificateReasons, intent.wantsExpiring && expiryDays !== null && expiryDays >= 0 && expiryDays <= 60, `expires in ${expiryDays ?? 0} day(s)`, Math.max(8, 32 - Math.floor((expiryDays ?? 0) / 2)));
+      certificateScore += addReason(certificateReasons, intent.wantsCertificateFit && Boolean(certificate.offerCode || certificate.cruiseId || certificate.description || parsedSailings.length), 'has offer/cruise fit clues', 22);
+      certificateScore += addReason(certificateReasons, intent.wantsOwnerIssues && !getOwner(certificate), 'missing owner/profile', 18);
+      certificateScore += addReason(certificateReasons, intent.wantsReviewNeeded && (certificate.importStatus === 'reviewNeeded' || certificate.reconciliationStatus === 'reviewNeeded' || certificate.importStatus === 'unassigned'), 'needs import review', 22);
+      certificateScore += addReason(certificateReasons, parsedSailings.length > 0, `${parsedSailings.length.toLocaleString()} parsed eligible sailing(s)`, 18);
 
-      if (score > 0 || reasons.length > 0 || intent.wantsCertificateFit) {
+      const matchingSailings = parsedSailings
+        .map((sailing) => {
+          const haystack = [
+            sailing.certificateCode,
+            sailing.shipName,
+            sailing.sailingDate,
+            sailing.cabinCategory,
+            sailing.occupancy,
+            sailing.guestCount,
+            sailing.departurePort,
+            sailing.itinerary,
+            sailing.offerTypeLabel,
+            sailing.freePlay,
+            sailing.onboardCredit,
+            sailing.tradeInValue,
+            sailing.pointRequirement,
+          ].filter(Boolean).join(' ');
+          const textScore = scoreText(intent, haystack);
+          const reasons: string[] = [];
+          let score = textScore.score;
+          score += addReason(reasons, intent.wantsFreePlay && (sailing.freePlay ?? 0) > 0, `$${(sailing.freePlay ?? 0).toLocaleString()} FreePlay`, 22);
+          score += addReason(reasons, intent.wantsObc && (sailing.onboardCredit ?? 0) > 0, `$${(sailing.onboardCredit ?? 0).toLocaleString()} OBC`, 22);
+          score += addReason(reasons, intent.wantsSuite && /suite/i.test(sailing.cabinCategory ?? ''), sailing.cabinCategory || 'suite', 20);
+          score += addReason(reasons, intent.wantsBalcony && /balcony/i.test(sailing.cabinCategory ?? ''), sailing.cabinCategory || 'balcony', 20);
+          score += addReason(reasons, intent.afterDate !== undefined && sailing.sailingDate >= intent.afterDate, `sails ${sailing.sailingDate}`, 10);
+          score += addReason(reasons, intent.beforeDate !== undefined && sailing.sailingDate <= intent.beforeDate, `sails ${sailing.sailingDate}`, 10);
+          return { sailing, score, matchedTerms: textScore.matchedTerms, reasons };
+        })
+        .filter((match) => match.score > 0 || match.reasons.length > 0)
+        .sort((left, right) => right.score - left.score)
+        .slice(0, 12);
+
+      matchingSailings.forEach(({ sailing, score, matchedTerms, reasons }) => {
+        const benefits = [
+          sailing.cabinCategory,
+          sailing.occupancy,
+          sailing.freePlay ? `$${sailing.freePlay.toLocaleString()} FreePlay` : null,
+          sailing.onboardCredit ? `$${sailing.onboardCredit.toLocaleString()} OBC` : null,
+          sailing.tradeInValue ? `$${sailing.tradeInValue.toLocaleString()} trade-in` : null,
+          sailing.pointRequirement ? `${sailing.pointRequirement.toLocaleString()} points` : null,
+        ].filter(Boolean).join(' · ');
+        results.push({
+          id: `certificate-sailing-${certificate.id}-${sailing.certificateCode}-${sailing.shipName}-${sailing.sailingDate}`,
+          source: 'certificates',
+          title: `${sailing.shipName} — ${sailing.sailingDate}`,
+          subtitle: `${sailing.certificateCode}${benefits ? ` · ${benefits}` : ''}`,
+          score: score + 40,
+          owner: getOwner(certificate),
+          certificateFit: certificate.status === 'used' ? 'certificate already used' : `eligible sailing on ${sailing.certificateCode}`,
+          actionLabel: 'Open certificate lookup',
+          actionRoute: `/certificate-lookup?query=${encodeURIComponent(`${sailing.certificateCode} ${sailing.shipName} ${sailing.sailingDate}`)}`,
+          confidence: confidenceFromScore(score + 40),
+          matchedTerms,
+          matchReasons: reasons.length > 0 ? reasons : matchedTerms.map((term) => `matched “${term}”`),
+          detail: [
+            sailing.departurePort ? `Departs ${sailing.departurePort}` : null,
+            sailing.itinerary || null,
+            sailing.offerTypeLabel || null,
+            `Source PDF parsed successfully${certificate.parserVersion ? ` with ${certificate.parserVersion}` : ''}. Page ${sailing.sourcePage}; group ${sailing.sourceGroup}.`,
+          ].filter(Boolean).join(' · '),
+        });
+      });
+
+      if (certificateScore > 0 || certificateReasons.length > 0 || intent.wantsCertificateFit) {
         results.push({
           id: `certificate-${certificate.id}`,
           source: 'certificates',
-          title: certificate.label || `${certificate.type} certificate`,
-          subtitle: `${certificate.status ?? 'available'} · $${(certificate.value ?? 0).toLocaleString()}${certificate.expiryDate ? ` · expires ${certificate.expiryDate}` : ''}`,
-          score,
+          title: certificate.label || certificate.certificateCode || `${certificate.type} certificate`,
+          subtitle: `${certificate.status ?? 'available'} · $${(certificate.value ?? 0).toLocaleString()}${certificate.expiryDate ? ` · expires ${certificate.expiryDate}` : ''}${parsedSailings.length ? ` · ${parsedSailings.length.toLocaleString()} sailings` : ''}`,
+          score: certificateScore,
           owner: getOwner(certificate),
-          certificateFit: certificate.status === 'used' ? 'already used' : certificate.offerCode ? `linked to ${certificate.offerCode}` : 'available for review',
-          actionLabel: 'Review certificate',
-          confidence: confidenceFromScore(score),
-          matchedTerms: textScore.matchedTerms,
-          matchReasons: reasons.length > 0 ? reasons : textScore.matchedTerms.map((term) => `matched “${term}”`),
+          certificateFit: certificate.status === 'used' ? 'already used' : certificate.offerCode ? `linked to ${certificate.offerCode}` : parsedSailings.length ? 'parsed sailing inventory available' : 'available for review',
+          actionLabel: 'Open certificate lookup',
+          actionRoute: `/certificate-lookup?query=${encodeURIComponent(certificate.certificateCode || certificate.label || '')}`,
+          confidence: confidenceFromScore(certificateScore),
+          matchedTerms: certificateTextScore.matchedTerms,
+          matchReasons: certificateReasons.length > 0 ? certificateReasons : certificateTextScore.matchedTerms.map((term) => `matched “${term}”`),
+          detail: certificate.parserWarnings?.length ? `Parser warnings: ${certificate.parserWarnings.join('; ')}` : certificate.description,
         });
       }
     });
@@ -961,8 +1135,12 @@ export function askMyDataSearch(params: {
 }
 
 export function formatAskMyDataResponse(response: AskMyDataResponse): string {
+  if (response.directAnswer) {
+    const citations = response.results.slice(0, 4).map((_, index) => `[S${index + 1}]`).join(' ');
+    return `${response.directAnswer}${citations ? `\n\nSources: ${citations}` : ''}`;
+  }
   if (response.results.length === 0) {
-    return `Ask My Data interpreted your query as: ${response.interpretedIntent}. ${response.noResultsExplanation}`;
+    return `I searched ${response.interpretedIntent} in the active local scope, but I did not find a matching saved record. ${response.noResultsExplanation}`;
   }
 
   const lines = response.results.slice(0, 12).map((result, index) => {
@@ -971,8 +1149,12 @@ export function formatAskMyDataResponse(response: AskMyDataResponse): string {
     const certificateFit = result.certificateFit ? ` · ${result.certificateFit}` : '';
     const reasons = result.matchReasons.length > 0 ? ` · why: ${result.matchReasons.slice(0, 3).join('; ')}` : '';
     const detail = result.detail ? `\n${result.detail}` : '';
-    return `${index + 1}. [${result.source}/${result.confidence}] ${result.title} — ${result.subtitle}${owner}${offerScore}${certificateFit}${reasons}. Action: ${result.actionLabel}.${detail}`;
+    return `[S${index + 1}] [${result.source}/${result.confidence}] ${result.title} — ${result.subtitle}${owner}${offerScore}${certificateFit}${reasons}. Action: ${result.actionLabel}.${detail}`;
   });
 
-  return `Ask My Data interpreted your query as: ${response.interpretedIntent}.\n\n${lines.join('\n')}\n\nTry next: ${response.suggestedQueries.slice(0, 3).join(' | ')}`;
+  const sourceLabels = Array.from(new Set(response.results.map((result) => result.source))).join(', ');
+  const highConfidenceCount = response.results.filter((result) => result.confidence === 'high').length;
+  const summary = `I found ${response.results.length} relevant local record${response.results.length === 1 ? '' : 's'} across ${sourceLabels}. ${highConfidenceCount > 0 ? `${highConfidenceCount} high-confidence match${highConfidenceCount === 1 ? '' : 'es'} ranked first.` : 'The closest matches are ranked first with their evidence.'}`;
+
+  return `${summary}\nInterpreted request: ${response.interpretedIntent}.\n\n${lines.join('\n')}\n\nYou can also ask: ${response.suggestedQueries.slice(0, 3).join(' | ')}`;
 }

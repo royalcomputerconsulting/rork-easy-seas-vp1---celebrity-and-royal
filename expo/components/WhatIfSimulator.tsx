@@ -34,6 +34,7 @@ import {
 } from '@/lib/whatIfSimulator';
 import type { BookedCruise, CasinoOffer } from '@/types/models';
 import * as Haptics from 'expo-haptics';
+import { knownNightCount } from '@/lib/cruiseRecordIntegrity';
 
 interface WhatIfSimulatorProps {
   playerContext: PlayerContext;
@@ -91,7 +92,7 @@ export function WhatIfSimulator({
 
     switch (selectedScenario) {
       case 'add_cruise':
-        scenario.newNights = parseInt(newNights, 10) || 7;
+        scenario.newNights = knownNightCount(parseInt(newNights, 10));
         scenario.newSpend = parseFloat(newSpend) || playerContext.averageSpendPerCruise;
         break;
       case 'remove_cruise':

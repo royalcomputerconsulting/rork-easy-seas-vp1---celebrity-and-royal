@@ -1,5 +1,6 @@
 import type { BookedCruise } from '@/types/models';
 import { createDateFromString } from '@/lib/date';
+import { buildCruiseDayPlan } from '@/lib/cruiseDayPipeline';
 
 function startOfToday(): Date {
   const today = new Date();
@@ -25,6 +26,14 @@ function startOfDate(value: string | undefined): Date | null {
   }
 }
 
+function getCruiseCalendarRange(cruise: BookedCruise): { sailDate: Date; returnDate: Date } | null {
+  const plan = buildCruiseDayPlan(cruise);
+  if (!plan || plan.integrity === 'conflict' || plan.integrity === 'unknown') return null;
+  const sailDate = startOfDate(plan.sailDate);
+  const returnDate = startOfDate(plan.returnDate);
+  return sailDate && returnDate ? { sailDate, returnDate } : null;
+}
+
 export function isCourtesyHoldCruise(cruise: BookedCruise): boolean {
   const normalizedStatus = String(cruise.status ?? '').trim().toLowerCase();
   return cruise.isCourtesyHold === true || normalizedStatus === 'courtesy hold' || normalizedStatus === 'hold' || normalizedStatus === 'offer';
@@ -41,20 +50,8 @@ export function isCompletedBookedCruise(cruise: BookedCruise, today: Date = star
     return true;
   }
 
-  const returnDate = startOfDate(cruise.returnDate);
-  if (returnDate) {
-    return returnDate < today;
-  }
-
-  const sailDate = startOfDate(cruise.sailDate);
-  if (sailDate && typeof cruise.nights === 'number' && Number.isFinite(cruise.nights) && cruise.nights > 0) {
-    const estimatedReturn = new Date(sailDate);
-    estimatedReturn.setDate(estimatedReturn.getDate() + cruise.nights);
-    estimatedReturn.setHours(0, 0, 0, 0);
-    return estimatedReturn < today;
-  }
-
-  return false;
+  const range = getCruiseCalendarRange(cruise);
+  return range ? range.returnDate < today : false;
 }
 
 export function isInProgressBookedCruise(cruise: BookedCruise, today: Date = startOfToday()): boolean {
@@ -67,14 +64,8 @@ export function isInProgressBookedCruise(cruise: BookedCruise, today: Date = sta
     return true;
   }
 
-  const sailDate = startOfDate(cruise.sailDate);
-  const returnDate = startOfDate(cruise.returnDate);
-
-  if (!sailDate || !returnDate) {
-    return false;
-  }
-
-  return today >= sailDate && today <= returnDate;
+  const range = getCruiseCalendarRange(cruise);
+  return Boolean(range && today >= range.sailDate && today <= range.returnDate);
 }
 
 export function isActiveBookedCruise(cruise: BookedCruise, today: Date = startOfToday()): boolean {

@@ -11,7 +11,7 @@ export interface CrownAnchorLevelInfo {
 export const CROWN_ANCHOR_LEVELS: Record<string, CrownAnchorLevelInfo> = {
   Gold: {
     name: 'Gold',
-    cruiseNights: 1,
+    cruiseNights: 3,
     color: CROWN_ANCHOR_TIER_COLORS.Gold,
     bgColor: withAlpha(CROWN_ANCHOR_TIER_COLORS.Gold, 0.15),
     benefits: [

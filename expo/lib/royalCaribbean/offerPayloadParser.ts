@@ -230,6 +230,13 @@ function collectOfferRecords(value: unknown, depth: number = 0): UnknownRecord[]
 
 function getOfferIdentityKey(offer: UnknownRecord, fallback: string): string {
   const offerRecord = getOfferRecord(offer);
+  const providerInstanceId = getString(
+    offer.playerOfferId ?? offer.offerInstanceId ?? offer.carnivalOfferId ?? offer.offerId ?? offer.id ??
+    offerRecord.playerOfferId ?? offerRecord.offerInstanceId ?? offerRecord.carnivalOfferId ?? offerRecord.offerId ?? offerRecord.id
+  );
+  if (providerInstanceId) {
+    return `provider:${providerInstanceId.toLowerCase()}`;
+  }
   const keyParts = [
     getString(offerRecord.offerCode ?? offerRecord.marketingCouponCode ?? offerRecord.couponCode ?? offerRecord.code),
     getString(offerRecord.name ?? offerRecord.title ?? offerRecord.offerName ?? offerRecord.marketingTitle ?? offerRecord.description),
@@ -637,6 +644,9 @@ export function parseCasinoOffersPayload(
 
   rawOffers.forEach((entry) => {
     const offer = getOfferRecord(entry);
+    const playerOfferId = getString(entry.playerOfferId ?? offer.playerOfferId);
+    const carnivalOfferId = getString(entry.carnivalOfferId ?? offer.carnivalOfferId ?? entry.offerId ?? offer.offerId);
+    const offerInstanceId = getString(entry.offerInstanceId ?? offer.offerInstanceId) || playerOfferId || carnivalOfferId;
     const offerName = getString(offer.name ?? offer.title ?? offer.offerName ?? offer.marketingTitle ?? offer.description);
     const offerCode = getString(offer.offerCode ?? offer.marketingCouponCode ?? offer.couponCode ?? offer.code);
     const offerExpirationDate = formatDate(offer.reserveByDate ?? offer.expirationDate ?? offer.marketingEndDate);
@@ -652,6 +662,9 @@ export function parseCasinoOffersPayload(
     if (sailings.length === 0) {
       offerRows.push({
         sourcePage,
+        playerOfferId: playerOfferId || undefined,
+        carnivalOfferId: carnivalOfferId || undefined,
+        offerInstanceId: offerInstanceId || undefined,
         offerName: offerName || offerCode || defaultOfferType,
         offerCode,
         offerExpirationDate,
@@ -698,6 +711,9 @@ export function parseCasinoOffersPayload(
 
       offerRows.push({
         sourcePage,
+        playerOfferId: playerOfferId || undefined,
+        carnivalOfferId: carnivalOfferId || undefined,
+        offerInstanceId: offerInstanceId || undefined,
         offerName: offerName || offerCode || defaultOfferType,
         offerCode,
         offerExpirationDate,

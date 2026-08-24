@@ -1,5 +1,6 @@
 import type { BookedCruise, CalendarEvent, ItineraryDay } from '@/types/models';
-import { createDateFromString } from '@/lib/date';
+import { toCalendarDateOnly } from '@/lib/date';
+import { buildCruiseDayPlan } from '@/lib/cruiseDayPipeline';
 
 const SHORT_EVENT_MINUTES = 30;
 const ALL_ABOARD_WINDOW_MINUTES = 45;
@@ -18,17 +19,7 @@ function normalizeText(value?: string | null): string {
 }
 
 function normalizeDateOnly(value?: string | null): string {
-  if (!value) return '';
-  const parsed = createDateFromString(value);
-  if (Number.isNaN(parsed.getTime())) return '';
-  return `${parsed.getFullYear()}-${pad2(parsed.getMonth() + 1)}-${pad2(parsed.getDate())}`;
-}
-
-function addDaysToDateOnly(dateOnly: string, days: number): string {
-  const baseDate = createDateFromString(dateOnly);
-  if (Number.isNaN(baseDate.getTime())) return dateOnly;
-  baseDate.setDate(baseDate.getDate() + days);
-  return `${baseDate.getFullYear()}-${pad2(baseDate.getMonth() + 1)}-${pad2(baseDate.getDate())}`;
+  return toCalendarDateOnly(value) ?? '';
 }
 
 function parseTimeValue(value?: string): ParsedTime | null {
@@ -113,23 +104,82 @@ function createCruiseEvent(event: CalendarEvent): CalendarEvent {
   return event;
 }
 
+const NON_SAILING_BOOKING_STATUSES = new Set([
+  'available',
+  'cancelled',
+  'canceled',
+  'archived',
+  'replaced',
+  'skipped',
+  'courtesy hold',
+  'hold',
+  'offer',
+]);
+
+/**
+ * The calendar represents actual sailings, not offers or unconfirmed holds.
+ * Completed cruises remain eligible so historical months continue to work.
+ */
+export function isBookedCruiseEligibleForCalendar(cruise: BookedCruise): boolean {
+  const status = normalizeText(cruise.status).replace(/[\s_-]+/g, ' ');
+  if (NON_SAILING_BOOKING_STATUSES.has(status) || cruise.isCourtesyHold === true) return false;
+  return getNormalizedCruiseDateRange(cruise) !== null;
+}
+
+function getCruiseCalendarScheduleKey(cruise: BookedCruise): string {
+  const range = getNormalizedCruiseDateRange(cruise);
+  return [
+    normalizeText(cruise.ownerProfileId),
+    normalizeText(cruise.sourceEmail),
+    normalizeText(cruise.brand ?? cruise.cruiseSource),
+    normalizeText(cruise.shipName),
+    range?.sailDate ?? '',
+  ].join('|');
+}
+
+function cruiseCalendarDetailScore(cruise: BookedCruise): number {
+  const plan = buildCruiseDayPlan(cruise);
+  const integrityScore = plan?.integrity === 'verified'
+    ? 10_000
+    : plan?.integrity === 'partial'
+      ? 5_000
+      : plan?.integrity === 'conflict'
+        ? -10_000
+        : 0;
+  const authorityScore = cruise.sourceAuthority === 'user_entered'
+    ? 1_000
+    : cruise.sourceAuthority === 'provider'
+      ? 750
+      : cruise.sourceAuthority === 'public_document' || cruise.sourceAuthority === 'verified_local'
+        ? 500
+        : 0;
+  return integrityScore + authorityScore
+    + (cruise.itinerary?.length ?? 0) * 100
+    + (cruise.ports?.length ?? 0) * 10
+    + (cruise.departurePort ? 4 : 0)
+    + (cruise.itineraryName ? 2 : 0)
+    + (cruise.reservationNumber ? 1 : 0);
+}
+
+/**
+ * One calendar schedule per physical ship departure, even when several cabins
+ * share it or an older duplicate retained a conflicting return date.
+ */
+export function getCalendarEligibleCruises(bookedCruises: BookedCruise[]): BookedCruise[] {
+  const bySchedule = new Map<string, BookedCruise>();
+  bookedCruises.filter(isBookedCruiseEligibleForCalendar).forEach((cruise) => {
+    const key = getCruiseCalendarScheduleKey(cruise);
+    const existing = bySchedule.get(key);
+    if (!existing || cruiseCalendarDetailScore(cruise) > cruiseCalendarDetailScore(existing)) {
+      bySchedule.set(key, cruise);
+    }
+  });
+  return Array.from(bySchedule.values());
+}
+
 export function getNormalizedCruiseDateRange(cruise: BookedCruise): { sailDate: string; returnDate: string } | null {
-  const sailDate = normalizeDateOnly(cruise.sailDate);
-  if (!sailDate) return null;
-
-  let returnDate = normalizeDateOnly(cruise.returnDate);
-
-  if (!returnDate && typeof cruise.nights === 'number' && cruise.nights > 0) {
-    returnDate = addDaysToDateOnly(sailDate, cruise.nights);
-    console.log(`[CruiseEvents] Calculated returnDate for ${cruise.shipName}: ${returnDate} (${cruise.nights} nights)`);
-  }
-
-  if (!returnDate) {
-    returnDate = sailDate;
-    console.log(`[CruiseEvents] No returnDate for ${cruise.shipName}, using sailDate as single-day event`);
-  }
-
-  return { sailDate, returnDate };
+  const plan = buildCruiseDayPlan(cruise);
+  return plan ? { sailDate: plan.sailDate, returnDate: plan.returnDate } : null;
 }
 
 function createCruiseSpanEvent(cruise: BookedCruise): CalendarEvent | null {
@@ -227,35 +277,17 @@ function sortCalendarEvents(events: CalendarEvent[]): CalendarEvent[] {
   });
 }
 
-function matchesCruiseSummaryEvent(event: CalendarEvent, cruise: BookedCruise): boolean {
-  const eventCruiseId = event.cruiseId;
-  if (eventCruiseId && eventCruiseId === cruise.id) return true;
-
-  const eventStartDate = normalizeDateOnly(getEventStartValue(event));
-  const eventEndDate = normalizeDateOnly(getEventEndValue(event));
-  const cruiseStartDate = normalizeDateOnly(cruise.sailDate);
-  const cruiseEndDate = normalizeDateOnly(cruise.returnDate);
-  if (!eventStartDate || !eventEndDate || !cruiseStartDate || !cruiseEndDate) return false;
-  if (eventStartDate !== cruiseStartDate || eventEndDate !== cruiseEndDate) return false;
-
-  const normalizedShipName = normalizeText(cruise.shipName);
-  if (!normalizedShipName) return false;
-
-  const haystacks = [event.title, event.location, event.description]
-    .map((value) => normalizeText(value))
-    .filter(Boolean);
-
-  return haystacks.some((value) => value.includes(normalizedShipName));
-}
-
 export function isGeneratedCruiseEventId(id?: string | null): boolean {
   return typeof id === 'string' && id.startsWith('generated-cruise-');
 }
 
-export function isCruiseCalendarEventBackedByBookedCruise(event: CalendarEvent, bookedCruises: BookedCruise[]): boolean {
+export function isCruiseCalendarEventBackedByBookedCruise(event: CalendarEvent, _bookedCruises: BookedCruise[]): boolean {
   if (isGeneratedCruiseEventId(event.id)) return true;
   if (event.sourceType !== 'cruise' && event.type !== 'cruise') return false;
-  return bookedCruises.some((cruise) => matchesCruiseSummaryEvent(event, cruise));
+  // Booked cruises are the only authority for cruise-day markings. Suppress
+  // every stored cruise event here, including orphaned legacy spans whose
+  // former cruise no longer exists or whose dates have since changed.
+  return true;
 }
 
 export function getDisplayCalendarEvents(bookedCruises: BookedCruise[], calendarEvents: CalendarEvent[]): CalendarEvent[] {
@@ -267,43 +299,42 @@ export function getDisplayCalendarEvents(bookedCruises: BookedCruise[], calendar
 export function generateCruiseCalendarEvents(bookedCruises: BookedCruise[]): CalendarEvent[] {
   const generatedEvents: CalendarEvent[] = [];
 
-  bookedCruises.forEach((cruise) => {
+  getCalendarEligibleCruises(bookedCruises).forEach((cruise) => {
     const cruiseSpanEvent = createCruiseSpanEvent(cruise);
     if (cruiseSpanEvent) {
       generatedEvents.push(cruiseSpanEvent);
     }
 
-    const sailDate = normalizeDateOnly(cruise.sailDate);
-    if (!sailDate) {
+    const dayPlan = buildCruiseDayPlan(cruise);
+    if (!dayPlan) {
       return;
     }
 
     if (!Array.isArray(cruise.itinerary) || cruise.itinerary.length === 0) {
-      const totalDays = Math.max(1, (typeof cruise.nights === 'number' && cruise.nights > 0 ? cruise.nights : 1) + 1);
-      for (let day = 1; day <= totalDays; day += 1) {
-        const eventDate = addDaysToDateOnly(sailDate, day - 1);
-        const isFirstDay = day === 1;
-        const isLastDay = day === totalDays;
+      dayPlan.days.forEach((day) => {
+        const isFirstDay = day.day === 1;
+        const isLastDay = day.day === dayPlan.days.length;
         generatedEvents.push(
           createAllDayCruiseEvent({
-            id: `generated-cruise-day-${cruise.id}-${day}`,
-            title: isFirstDay ? 'Embarkation Day' : isLastDay ? 'Disembarkation Day' : `Cruise Day • Day ${day}`,
-            dateOnly: eventDate,
+            id: `generated-cruise-day-${cruise.id}-${day.day}`,
+            title: isFirstDay ? 'Embarkation Day' : isLastDay ? 'Disembarkation Day' : `Cruise Day • Day ${day.day}`,
+            dateOnly: day.date,
             cruise,
-            location: isFirstDay || isLastDay ? cruise.departurePort : cruise.shipName,
-            description: buildCruiseDescription(cruise),
+            itineraryDay: day,
+            location: isFirstDay || isLastDay ? cruise.departurePort : undefined,
+            description: `${buildCruiseDescription(cruise, day) ?? cruise.shipName} • Itinerary details unavailable`,
           })
         );
-      }
+      });
       return;
     }
 
-    cruise.itinerary
-      .slice()
-      .sort((left, right) => left.day - right.day)
+    dayPlan.days
       .forEach((itineraryDay) => {
-        const eventDate = addDaysToDateOnly(sailDate, itineraryDay.day - 1);
-        const portLabel = itineraryDay.port || cruise.departurePort || 'Port';
+        const eventDate = itineraryDay.date;
+        const isFirstDay = itineraryDay.day === 1;
+        const isLastDay = itineraryDay.day === dayPlan.days.length;
+        const portLabel = itineraryDay.port || (isFirstDay || isLastDay ? cruise.departurePort : '');
         const arrivalDateTime = combineDateAndTime(eventDate, itineraryDay.arrival);
         const departureDateTime = combineDateAndTime(eventDate, itineraryDay.departure);
 
@@ -316,6 +347,20 @@ export function generateCruiseCalendarEvents(bookedCruises: BookedCruise[]): Cal
               cruise,
               itineraryDay,
               location: cruise.shipName,
+            })
+          );
+          return;
+        }
+
+        if (!portLabel) {
+          generatedEvents.push(
+            createAllDayCruiseEvent({
+              id: `generated-cruise-itinerary-pending-${cruise.id}-${itineraryDay.day}`,
+              title: `Itinerary Pending • Day ${itineraryDay.day}`,
+              dateOnly: eventDate,
+              cruise,
+              itineraryDay,
+              description: `${buildCruiseDescription(cruise, itineraryDay) ?? cruise.shipName} • Provider itinerary details unavailable`,
             })
           );
           return;
@@ -366,7 +411,7 @@ export function generateCruiseCalendarEvents(bookedCruises: BookedCruise[]): Cal
           generatedEvents.push(
             createAllDayCruiseEvent({
               id: `generated-cruise-embarkation-day-${cruise.id}-${itineraryDay.day}`,
-              title: itineraryDay.day === 1 ? 'Embarkation Day' : `Port Day • ${portLabel}`,
+              title: isFirstDay ? 'Embarkation Day' : `Port Day • ${portLabel}`,
               dateOnly: eventDate,
               cruise,
               itineraryDay,
@@ -392,7 +437,7 @@ export function generateCruiseCalendarEvents(bookedCruises: BookedCruise[]): Cal
           generatedEvents.push(
             createAllDayCruiseEvent({
               id: `generated-cruise-disembarkation-day-${cruise.id}-${itineraryDay.day}`,
-              title: itineraryDay.day === cruise.nights + 1 ? 'Disembarkation Day' : `Port Day • ${portLabel}`,
+              title: isLastDay ? 'Disembarkation Day' : `Port Day • ${portLabel}`,
               dateOnly: eventDate,
               cruise,
               itineraryDay,

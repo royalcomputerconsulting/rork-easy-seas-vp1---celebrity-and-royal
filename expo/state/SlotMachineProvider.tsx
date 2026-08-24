@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { InteractionManager } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { quotaSafeGetJsonItem, quotaSafeSetJsonItem } from '@/lib/storage/quotaSafeStorage';
 import createContextHook from '@nkzw/create-context-hook';
 import type { SlotMachine, SlotMachineFilter, DeckPlanLocation } from '@/types/models';
 import { searchSlotMachines, filterSlotMachines, loadGlobalSlotMachines } from '@/lib/slotMachineUtils';
@@ -82,31 +82,17 @@ export const [SlotMachineProvider, useSlotMachines] = createContextHook((): Slot
       
       const [globalData, userMachinesData, deckLocationsData] = await Promise.all([
         loadGlobalSlotMachines(),
-        AsyncStorage.getItem(userMachinesKey),
-        AsyncStorage.getItem(deckLocationsKey),
+        quotaSafeGetJsonItem<SlotMachine[]>(userMachinesKey, [], Array.isArray),
+        quotaSafeGetJsonItem<DeckPlanLocation[]>(deckLocationsKey, [], Array.isArray),
       ]);
       
       setGlobalMachines(globalData);
+      setUserMachines(userMachinesData);
+      setDeckLocations(deckLocationsData);
       
-      if (userMachinesData) {
-        const parsed = JSON.parse(userMachinesData);
-        setUserMachines(parsed);
-        console.log('[SlotMachine] Loaded', parsed.length, 'user machines');
-      } else {
-        setUserMachines([]);
-        console.log('[SlotMachine] No scoped user machines found, using empty state');
-      }
-      
-      if (deckLocationsData) {
-        const parsed = JSON.parse(deckLocationsData);
-        setDeckLocations(parsed);
-        console.log('[SlotMachine] Loaded', parsed.length, 'deck locations');
-      } else {
-        setDeckLocations([]);
-        console.log('[SlotMachine] No scoped deck locations found, using empty state');
-      }
-      
-      console.log('[SlotMachine] Total machines available:', globalData.length + (userMachinesData ? JSON.parse(userMachinesData).length : 0));
+      console.log('[SlotMachine] Loaded', userMachinesData.length, 'user machines');
+      console.log('[SlotMachine] Loaded', deckLocationsData.length, 'deck locations');
+      console.log('[SlotMachine] Total machines available:', globalData.length + userMachinesData.length);
     } catch (error) {
       console.error('[SlotMachine] Failed to load from storage:', error);
     } finally {
@@ -164,7 +150,7 @@ export const [SlotMachineProvider, useSlotMachines] = createContextHook((): Slot
   const persistUserMachines = useCallback(async (machines: SlotMachine[]) => {
     try {
       const userMachinesKey = getUserScopedKey(STORAGE_KEYS.USER_MACHINES, authenticatedEmail);
-      await AsyncStorage.setItem(userMachinesKey, JSON.stringify(machines));
+      await quotaSafeSetJsonItem(userMachinesKey, machines);
       console.log('[SlotMachine] Persisted', machines.length, 'user machines for scoped user:', authenticatedEmail);
     } catch (error) {
       console.error('[SlotMachine] Failed to persist user machines:', error);
@@ -174,7 +160,7 @@ export const [SlotMachineProvider, useSlotMachines] = createContextHook((): Slot
   const persistDeckLocations = useCallback(async (locations: DeckPlanLocation[]) => {
     try {
       const deckLocationsKey = getUserScopedKey(STORAGE_KEYS.DECK_LOCATIONS, authenticatedEmail);
-      await AsyncStorage.setItem(deckLocationsKey, JSON.stringify(locations));
+      await quotaSafeSetJsonItem(deckLocationsKey, locations);
       console.log('[SlotMachine] Persisted', locations.length, 'deck locations for scoped user:', authenticatedEmail);
     } catch (error) {
       console.error('[SlotMachine] Failed to persist deck locations:', error);

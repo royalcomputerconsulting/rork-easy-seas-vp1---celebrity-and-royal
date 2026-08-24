@@ -12,6 +12,8 @@ import {
 } from './apiTypes';
 import { BookedCruiseRow, OfferRow, LoyaltyData } from './types';
 import { BookedCruise, CasinoOffer, ItineraryDay } from '@/types/models';
+import { getProviderRecordId, hasAuthoritativeValue } from './syncIntegrity';
+import { addCalendarDateDays, formatDateMDY, getDaysBetween } from '@/lib/date';
 
 function generateId(): string {
   return `rc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -39,12 +41,8 @@ function extractValueFromPerk(perk: RCApiMarketingTargetedOffer): number | undef
 }
 
 function calcNightsFromDates(sailDate: string, endDate: string): number | null {
-  try {
-    const start = new Date(sailDate);
-    const end = new Date(endDate);
-    const diff = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-    if (diff > 0 && diff <= 365) return diff;
-  } catch {}
+  const diff = getDaysBetween(sailDate, endDate);
+  if (Number.isFinite(diff) && diff > 0 && diff <= 365) return diff;
   return null;
 }
 
@@ -55,14 +53,14 @@ export function transformApiBookingToBookedCruiseRow(
   const shipName = sailingInfo?.shipName || getShipNameFromCode(booking.shipCode);
   const sailDate = parseRCDate(booking.sailDate);
   
-  // Use numberOfNights from API, then calculate from dates, then fallback to 7
+  // Use provider evidence only. A missing duration stays unknown rather than becoming seven nights.
   const nightsFromApi = typeof booking.numberOfNights === 'number' && booking.numberOfNights > 0 && booking.numberOfNights <= 365
     ? booking.numberOfNights
     : null;
   const nightsFromDates = sailingInfo?.sailingEndDate
     ? calcNightsFromDates(sailDate, parseRCDate(sailingInfo.sailingEndDate))
     : null;
-  const nights = nightsFromApi ?? nightsFromDates ?? 7;
+  const nights = nightsFromApi ?? nightsFromDates;
   
   let sailingEndDate = '';
   let itinerary = '';
@@ -72,17 +70,14 @@ export function transformApiBookingToBookedCruiseRow(
     sailingEndDate = parseRCDate(sailingInfo.sailingEndDate);
     itinerary = sailingInfo.itinerary?.description || '';
     departurePort = sailingInfo.departurePortName || '';
-  } else {
-    const startDate = new Date(sailDate);
-    startDate.setDate(startDate.getDate() + nights);
-    const month = String(startDate.getMonth() + 1).padStart(2, '0');
-    const day = String(startDate.getDate()).padStart(2, '0');
-    const year = String(startDate.getFullYear());
-    sailingEndDate = `${month}-${day}-${year}`;
+  } else if (nights) {
+    const returnDate = addCalendarDateDays(sailDate, nights);
+    sailingEndDate = returnDate ? formatDateMDY(returnDate, '-') : '';
   }
   
   const status = isCourtesyHold(booking) ? 'Courtesy Hold' : 'Upcoming';
   const cabinType = getStateroomTypeName(booking.stateroomType);
+  const providerBookingId = getProviderRecordId(booking.bookingId) || '';
   
   const row: BookedCruiseRow = {
     sourcePage: 'API',
@@ -96,11 +91,11 @@ export function transformApiBookingToBookedCruiseRow(
     departurePort,
     cabinType,
     cabinCategory: booking.stateroomCategoryCode,
-    cabinNumberOrGTY: booking.stateroomNumber || 'GTY',
+    cabinNumberOrGTY: booking.stateroomNumber || '',
     deckNumber: booking.deckNumber,
-    bookingId: booking.bookingId,
-    numberOfGuests: String(booking.passengers?.length || 1),
-    numberOfNights: nights,
+    bookingId: providerBookingId,
+    numberOfGuests: booking.passengers?.length ? String(booking.passengers.length) : undefined,
+    numberOfNights: nights ?? undefined,
     status,
     loyaltyLevel: '',
     loyaltyPoints: '',
@@ -162,14 +157,14 @@ export function transformApiBookingToBookedCruise(
   const shipName = sailingInfo?.shipName || getShipNameFromCode(booking.shipCode);
   const sailDate = parseRCDate(booking.sailDate);
   
-  // Use numberOfNights from API, then calculate from dates, then fallback to 7
+  // Use provider evidence only. A missing duration stays unknown rather than becoming seven nights.
   const nightsFromApi = typeof booking.numberOfNights === 'number' && booking.numberOfNights > 0 && booking.numberOfNights <= 365
     ? booking.numberOfNights
     : null;
   const nightsFromDates = sailingInfo?.sailingEndDate
     ? calcNightsFromDates(sailDate, parseRCDate(sailingInfo.sailingEndDate))
     : null;
-  const nights = nightsFromApi ?? nightsFromDates ?? 7;
+  const nights = nightsFromApi ?? nightsFromDates ?? 0;
   
   let sailingEndDate = '';
   let itinerary = '';
@@ -190,18 +185,18 @@ export function transformApiBookingToBookedCruise(
         .filter(p => p.portType !== 'CRUISING')
         .map(p => p.title);
     }
-  } else {
-    const startDate = new Date(sailDate);
-    startDate.setDate(startDate.getDate() + nights);
-    const month = String(startDate.getMonth() + 1).padStart(2, '0');
-    const day = String(startDate.getDate()).padStart(2, '0');
-    const year = String(startDate.getFullYear());
-    sailingEndDate = `${month}-${day}-${year}`;
+  } else if (nights > 0) {
+    const returnDate = addCalendarDateDays(sailDate, nights);
+    sailingEndDate = returnDate ? formatDateMDY(returnDate, '-') : '';
   }
   
   const status = isCourtesyHold(booking) ? 'available' : 'booked';
   const cabinType = getStateroomTypeName(booking.stateroomType);
   
+  const providerBookingId = getProviderRecordId(booking.bookingId);
+  const hasCompleteSailingEvidence = hasAuthoritativeValue(sailDate)
+    && hasAuthoritativeValue(sailingEndDate)
+    && nights > 0;
   const bookedCruise: BookedCruise = {
     id: generateId(),
     shipName,
@@ -212,22 +207,35 @@ export function transformApiBookingToBookedCruise(
     nights,
     cabinType,
     cabinCategory: booking.stateroomCategoryCode,
-    cabinNumber: booking.stateroomNumber !== 'GTY' ? booking.stateroomNumber : undefined,
+    cabinNumber: booking.stateroomNumber && booking.stateroomNumber !== 'GTY' ? booking.stateroomNumber : undefined,
     deckNumber: booking.deckNumber,
-    bookingId: booking.bookingId,
-    reservationNumber: booking.bookingId,
-    status,
-    completionState: 'upcoming',
+    bookingId: providerBookingId,
+    reservationNumber: providerBookingId,
+    status: hasCompleteSailingEvidence ? status : 'reviewNeeded',
+    completionState: hasCompleteSailingEvidence ? 'upcoming' : undefined,
     notes: isCourtesyHold(booking) ? 'Courtesy Hold' : undefined,
     itineraryName: itinerary,
     itinerary: itineraryDays.length > 0 ? itineraryDays : undefined,
     itineraryRaw: itinerary ? [itinerary] : undefined,
     ports: ports.length > 0 ? ports : undefined,
-    guests: booking.passengers?.length || 1,
+    guests: booking.passengers?.length || undefined,
     balanceDue: booking.balanceDueAmount,
     cruiseSource: 'royal',
+    sourceProvider: 'royalCaribbeanApi',
+    sourceEndpoint: 'profileBookings',
+    sourceRecordId: providerBookingId || undefined,
+    sourceAuthority: hasCompleteSailingEvidence ? 'provider' : 'unknown',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+    validationStatus: hasCompleteSailingEvidence ? 'valid' : 'partial',
+    dataConfidence: hasCompleteSailingEvidence ? 'verified' : 'partial',
+    sourceEvidence: {
+      rawCategory: 'booked_cruise',
+      sourcePage: 'API',
+      sourceRecordId: providerBookingId || undefined,
+      capturedAt: new Date().toISOString(),
+      authority: hasCompleteSailingEvidence ? 'provider' : 'unknown',
+    },
   };
   
   return bookedCruise;
@@ -256,7 +264,7 @@ export function transformPortInfoToItinerary(portInfo: RCApiPortInfo[]): Itinera
     
     return {
       day: port.day,
-      port: isSeaDay ? 'At Sea' : port.title,
+      port: isSeaDay ? 'At Sea' : port.title || 'Unknown port',
       arrival: arrival,
       departure: departure,
       isSeaDay,

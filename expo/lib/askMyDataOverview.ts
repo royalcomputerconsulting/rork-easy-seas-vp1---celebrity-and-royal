@@ -16,6 +16,9 @@ export interface CasinoSessionLike {
   durationMinutes?: number;
   pointsEarned?: number;
   winLoss?: number;
+  coinIn?: number;
+  recordKind?: 'actual' | 'generated' | 'imported';
+  notes?: string;
 }
 
 export interface AskMyDataCasinoSessionOverview {
@@ -23,6 +26,7 @@ export interface AskMyDataCasinoSessionOverview {
   totalPlayHours: number;
   totalPointsEarned: number;
   totalCoinIn: number;
+  coinInSource: 'actual' | 'mixed' | 'missing';
   netWinLoss: number;
   pointsPerHour: number;
 }
@@ -103,16 +107,19 @@ function resolveCurrentSeasonMetrics(bookedCruises: BookedCruise[], useKnownAnnu
 }
 
 function buildSessionOverview(casinoSessions: CasinoSessionLike[] = []): AskMyDataCasinoSessionOverview {
-  const totalPlayHours = round2(casinoSessions.reduce((sum, session) => sum + ((session.durationMinutes ?? 0) / 60), 0));
-  const totalPointsEarned = Math.round(casinoSessions.reduce((sum, session) => sum + (session.pointsEarned ?? 0), 0));
-  const netWinLoss = round2(casinoSessions.reduce((sum, session) => sum + (session.winLoss ?? 0), 0));
-  const totalCoinIn = round2(totalPointsEarned * DOLLARS_PER_POINT);
+  const actualSessions = casinoSessions.filter((session) => session.recordKind !== 'generated' && !/auto-calculated|generated|estimated historical/i.test(session.notes ?? ''));
+  const totalPlayHours = round2(actualSessions.reduce((sum, session) => sum + ((session.durationMinutes ?? 0) / 60), 0));
+  const totalPointsEarned = Math.round(actualSessions.reduce((sum, session) => sum + (session.pointsEarned ?? 0), 0));
+  const netWinLoss = round2(actualSessions.reduce((sum, session) => sum + (session.winLoss ?? 0), 0));
+  const sessionsWithCoinIn = actualSessions.filter((session) => typeof session.coinIn === 'number' && Number.isFinite(session.coinIn) && session.coinIn >= 0);
+  const totalCoinIn = round2(sessionsWithCoinIn.reduce((sum, session) => sum + (session.coinIn ?? 0), 0));
 
   return {
-    totalSessions: casinoSessions.length,
+    totalSessions: actualSessions.length,
     totalPlayHours,
     totalPointsEarned,
     totalCoinIn,
+    coinInSource: sessionsWithCoinIn.length === 0 ? 'missing' : sessionsWithCoinIn.length === actualSessions.length ? 'actual' : 'mixed',
     netWinLoss,
     pointsPerHour: totalPlayHours > 0 ? round2(totalPointsEarned / totalPlayHours) : 0,
   };
@@ -125,8 +132,8 @@ export function formatAskMyDataOverview(overview: Omit<AskMyDataOverview, 'text'
   const current = overview.currentSeason;
   const sessions = overview.sessions;
   const discrepancyLine = overview.discrepancy.hasDiscrepancy
-    ? `Club Royale discrepancy: app has ${overview.discrepancy.appPoints.toLocaleString()} points vs sync ${overview.discrepancy.syncedPoints?.toLocaleString() ?? 'unknown'} (${overview.discrepancy.difference > 0 ? '+' : ''}${overview.discrepancy.difference.toLocaleString()}); app-entered cruise points win.`
-    : 'Club Royale discrepancy: none detected from available sync data; app-entered cruise points remain authoritative.';
+    ? `Club Royale discrepancy: reconstructed history has ${overview.discrepancy.appPoints.toLocaleString()} points vs provider sync ${overview.discrepancy.syncedPoints?.toLocaleString() ?? 'unknown'} (${overview.discrepancy.difference > 0 ? '+' : ''}${overview.discrepancy.difference.toLocaleString()}); provider sync wins unless the user explicitly saved a manual override.`
+    : 'Club Royale discrepancy: none detected from available sync data.';
 
   return [
     `${overview.dataFreshnessLabel}`,
@@ -134,8 +141,8 @@ export function formatAskMyDataOverview(overview: Omit<AskMyDataOverview, 'text'
     `Annual points/casino activity: ${annualTotals.totalPoints.toLocaleString()} points, ${plainMoney(annualTotals.totalCoinIn)} coin-in, ${round2(annualAverages.pointsPerNight).toLocaleString()} points/night, cash ROI ${percent(annualRoi.netRoiOnPaid)}, retail-to-paid ${annualRoi.retailToPaidMultiple.toFixed(2)}x.`,
     `Current Club Royale season: ${current.points.toLocaleString()} points, ${current.pointsNeededForSignature.toLocaleString()} to keep Signature (${CLUB_ROYALE_SIGNATURE_RETAIN_POINTS.toLocaleString()} target), ${plainMoney(current.coinIn)} point-derived coin-in, ${plainMoney(current.winningsBroughtHome)} winnings, ${current.averagePointsPerNight.toLocaleString()} points/night, estimated ${current.estimatedPlayHours.toLocaleString()} play hours at ${current.estimatedPointsPerPlayHour.toLocaleString()} points/hour.`,
     `Tier context: ${overview.currentTier || 'Unknown'} tier, ${overview.currentPoints.toLocaleString()} current points (${overview.pointBalanceSource || 'app'} source). ${discrepancyLine}`,
-    `Saved session context: ${sessions.totalSessions.toLocaleString()} sessions, ${sessions.totalPlayHours.toLocaleString()} hours, ${sessions.totalPointsEarned.toLocaleString()} points, ${plainMoney(sessions.totalCoinIn)} coin-in, ${money(sessions.netWinLoss)} session win/loss, ${sessions.pointsPerHour.toLocaleString()} points/hour.`,
-    `Formula guard: Cash Result = Winnings Brought Home - Net Effective Paid. Cruise Value Captured = Retail Value - Net Effective Paid. Total Economic Value = Retail Value + Winnings Brought Home - Net Effective Paid. Coin-In is gaming volume only and is never added to profit or value capture.`,
+    `Saved actual-session context: ${sessions.totalSessions.toLocaleString()} sessions, ${sessions.totalPlayHours.toLocaleString()} hours, ${sessions.totalPointsEarned.toLocaleString()} points, ${sessions.coinInSource === 'missing' ? 'coin-in missing' : `${plainMoney(sessions.totalCoinIn)} explicit coin-in (${sessions.coinInSource})`}, ${money(sessions.netWinLoss)} session win/loss, ${sessions.pointsPerHour.toLocaleString()} points/hour. Generated history is excluded.`,
+    `Formula guard: Net Gaming Result = Cash Out + separate Handpays - Cash In; cruise fare excluded. Theoretical = Coin-In × weighted hold. ADT = theoretical / rated gaming days. Cruise Value Captured = Retail Value - actual acquisition cost. Coin-In is gaming volume only and is never added to profit or value capture.`,
   ].join('\n');
 }
 
@@ -165,6 +172,8 @@ export function buildAskMyDataOverview(params: BuildAskMyDataOverviewParams): As
       'Cruise Value Captured excludes coin-in.',
       'Total Economic Value excludes coin-in.',
       'Coin-In is gaming activity volume only.',
+      'Blue Chip Club points reset August 1; Club Royale points reset April 1.',
+      'Generated sessions never count as actual sessions.',
     ],
   };
 

@@ -4,6 +4,27 @@ import { createTRPCRouter, publicProcedure } from "../create-context";
 
 const ADMIN_EMAILS = ["scott.merlis1@gmail.com", "s@a.com"] as const;
 
+function readBooleanEnvironment(name: string, fallback: boolean): boolean {
+  const raw = process.env[name]?.trim().toLowerCase();
+  if (!raw) return fallback;
+  if (['0', 'false', 'off', 'no'].includes(raw)) return false;
+  if (['1', 'true', 'on', 'yes'].includes(raw)) return true;
+  return fallback;
+}
+
+function getCarnivalFeaturePolicy() {
+  const emergencyStop = readBooleanEnvironment('CARNIVAL_SYNC_EMERGENCY_STOP', false);
+  const enabled = readBooleanEnvironment('CARNIVAL_SYNC_ENABLED', true) && !emergencyStop;
+  const ttlSeconds = Math.max(60, Math.min(3600, Number(process.env.CARNIVAL_SYNC_POLICY_TTL_SECONDS ?? 300) || 300));
+  return {
+    scope: 'all_authenticated' as const,
+    enabled,
+    emergencyStop,
+    policyVersion: process.env.CARNIVAL_SYNC_POLICY_VERSION?.trim() || 'server-default-2026-07',
+    expiresAt: new Date(Date.now() + ttlSeconds * 1000).toISOString(),
+  };
+}
+
 function normalizeEmail(email: string): string {
   return email.toLowerCase().trim();
 }
@@ -25,6 +46,21 @@ async function loadWhitelistFromDb(): Promise<string[]> {
 }
 
 export const accessRouter = createTRPCRouter({
+  /**
+   * This policy contains no account data or credentials. It is intentionally
+   * remote-controlled so an operations change can release, pause, or stop
+   * Carnival sync without an app update.
+   */
+  getCarnivalSyncPolicy: publicProcedure.query(() => {
+    const policy = getCarnivalFeaturePolicy();
+    console.log('[AccessAPI] Issued Carnival sync policy', {
+      enabled: policy.enabled,
+      emergencyStop: policy.emergencyStop,
+      policyVersion: policy.policyVersion,
+    });
+    return policy;
+  }),
+
   getWhitelist: publicProcedure.query(async () => {
     try {
       const whitelist = await loadWhitelistFromDb();

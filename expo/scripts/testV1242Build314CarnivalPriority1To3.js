@@ -7,9 +7,9 @@ const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 function assert(condition, message) { if (!condition) throw new Error(message); }
 
 const app = JSON.parse(read('app.json'));
-assert(app.expo.version === '12.4.2', 'Marketing version must remain 12.4.2');
-assert(app.expo.ios.buildNumber === '314', 'iOS buildNumber must remain 314');
-assert(app.expo.android.versionCode === 120405, 'Android versionCode must remain 120405');
+assert(app.expo.version === '12.4.4', 'Marketing version must remain 12.4.4');
+assert(app.expo.ios.buildNumber === '319', 'iOS buildNumber must remain 319');
+assert(app.expo.android.versionCode === 120410, 'Android versionCode must remain 120410');
 
 let ts;
 try { ts = require('typescript'); }
@@ -288,7 +288,7 @@ for (const marker of [
   'authoritativeEmpty', 'pageContextMatched', 'inventoryPayloadCount', 'bookingLinkVerified',
 ]) assert(safeSource.includes(marker), `Safe scraper missing Priority 1-3 marker: ${marker}`);
 for (const marker of [
-  'v12.4.2-build314-carnival-priority1-3 active', 'maxPages = 50',
+  'v12.4.4-build319-carnival-priority1-8 active', 'maxPages = 50',
   'evaluateCarnivalPaginationStep', 'buildCarnivalNextPageUrl', 'signatureCounts',
   'releaseCarnivalSearchContext', 'verified DOM fallback', 'no verified code-specific Shop Now context',
 ]) assert(provider.includes(marker), `Provider missing Priority 1-3 marker: ${marker}`);

@@ -1,8 +1,13 @@
 import * as z from 'zod';
 import pako from 'pako';
 import { createTRPCRouter, publicProcedure } from '../create-context';
-
-const CERTIFICATE_EXPLORER_VERSION = 'v12.3.8-certificate-offer-catalog-chat';
+import {
+  discoverCertificateCodesFromText,
+  extractCertificatePdfText,
+  getCertificateFamilyDefinition,
+  parseCertificatePdfTextOnBackend,
+  type CertificateParseResult,
+} from '../../../lib/certificates/certificatePdfPipeline';
 
 const CERTIFICATE_PDF_BASE_URL = 'https://www.royalcaribbean.com/content/dam/royal/resources/pdf/casino/offers';
 const MONTH_CODE_REGEX = /^\d{4}$/;
@@ -43,7 +48,7 @@ const ROYAL_SHIP_NAMES = [
 
 interface IndexEntry {
   certificateCode: string;
-  certificateType: 'A' | 'C';
+  certificateType: string;
   points: number | null;
   pdfUrl: string;
   monthlyIndexUrl: string;
@@ -59,7 +64,7 @@ interface CertificateBenefitSnapshot {
 
 interface SailingEntry extends CertificateBenefitSnapshot {
   certificateCode: string;
-  certificateType: 'A' | 'C';
+  certificateType: string;
   level: string;
   points: number | null;
   shipName: string;
@@ -74,7 +79,7 @@ interface SailingEntry extends CertificateBenefitSnapshot {
 
 interface CertificateMatchLevel extends CertificateBenefitSnapshot {
   certificateCode: string;
-  certificateType: 'A' | 'C';
+  certificateType: string;
   level: string;
   points: number | null;
   departurePort: string | null;
@@ -83,16 +88,6 @@ interface CertificateMatchLevel extends CertificateBenefitSnapshot {
   nextCruiseBonusLabel: string | null;
   pdfUrl: string;
   monthlyIndexUrl: string;
-}
-
-interface StructuredCertificateRow {
-  shipName: string;
-  sailDate: string;
-  departurePort: string | null;
-  itinerary: string | null;
-  offerTypeLabel: string | null;
-  nextCruiseBonusLabel: string | null;
-  benefits: CertificateBenefitSnapshot;
 }
 
 interface CertificateOpportunity {
@@ -222,51 +217,6 @@ function extractCabinBenefit(text: string): { cabinLabel: string | null; cabinRa
   return {
     cabinLabel: bestMatch.label,
     cabinRank: bestMatch.rank,
-  };
-}
-
-function extractCertificateBenefits(pdfText: string): CertificateBenefitSnapshot {
-  const normalizedText = pdfText.replace(/®/g, ' ').replace(/\s+/g, ' ').trim();
-  const { cabinLabel, cabinRank } = extractCabinBenefit(normalizedText);
-
-  const freePlayValues = extractDollarValues(normalizedText, [
-    /\$\s*([0-9][0-9,]*)\s*(?:in\s*)?(?:free\s*play|freeplay|fp)\b/gi,
-    /(?:free\s*play|freeplay|fp)\s*(?:of|included|:|up to)?\s*\$?\s*([0-9][0-9,]*)\b/gi,
-  ]);
-
-  const onBoardCreditValues = extractDollarValues(normalizedText, [
-    /\$\s*([0-9][0-9,]*)\s*(?:in\s*)?(?:obc|on[-\s]*board credit|onboard credit)\b/gi,
-    /(?:obc|on[-\s]*board credit|onboard credit)\s*(?:of|included|:)?\s*\$?\s*([0-9][0-9,]*)\b/gi,
-  ]);
-
-  const freePlay = freePlayValues.length > 0 ? Math.max(...freePlayValues) : null;
-  const onBoardCredit = onBoardCreditValues.length > 0 ? Math.max(...onBoardCreditValues) : null;
-
-  const benefitSummary: string[] = [];
-  if (cabinLabel) {
-    benefitSummary.push(cabinLabel);
-  }
-  if (freePlay !== null) {
-    benefitSummary.push(`${freePlay.toLocaleString()} free play`);
-  }
-  if (onBoardCredit !== null) {
-    benefitSummary.push(`${onBoardCredit.toLocaleString()} OBC`);
-  }
-
-  console.log('[CertificateExplorer] Parsed certificate benefits:', {
-    cabinLabel,
-    cabinRank,
-    freePlay,
-    onBoardCredit,
-    benefitSummary,
-  });
-
-  return {
-    cabinLabel,
-    cabinRank,
-    freePlay,
-    onBoardCredit,
-    benefitSummary,
   };
 }
 
@@ -496,143 +446,6 @@ function findShipOccurrence(text: string): { shipName: string; start: number; en
   });
 
   return bestMatch;
-}
-
-function extractStructuredBenefitSnapshot(segment: string, nextCruiseBonusLabel: string | null): CertificateBenefitSnapshot {
-  const normalizedBonusText = cleanStructuredValue(nextCruiseBonusLabel) ?? '';
-  const { cabinLabel, cabinRank } = extractCabinBenefit(segment);
-
-  const freePlayValues = extractDollarValues(normalizedBonusText, [
-    /\$\s*([0-9][0-9,]*)\s*(?:in\s*)?(?:free\s*play|freeplay|fp)\b/gi,
-    /(?:free\s*play|freeplay|fp)\s*(?:of|included|:)?\s*\$?\s*([0-9][0-9,]*)\b/gi,
-  ]);
-
-  const onBoardCreditValues = extractDollarValues(normalizedBonusText, [
-    /\$\s*([0-9][0-9,]*)\s*(?:in\s*)?(?:obc|on[-\s]*board credit|onboard credit)\b/gi,
-    /(?:obc|on[-\s]*board credit|onboard credit)\s*(?:of|included|:)?\s*\$?\s*([0-9][0-9,]*)\b/gi,
-  ]);
-
-  const freePlay = freePlayValues.length > 0 ? Math.max(...freePlayValues) : null;
-  const onBoardCredit = onBoardCreditValues.length > 0 ? Math.max(...onBoardCreditValues) : null;
-  const benefitSummary: string[] = [];
-
-  if (cabinLabel) {
-    benefitSummary.push(cabinLabel);
-  }
-  if (normalizedBonusText) {
-    benefitSummary.push(normalizedBonusText);
-  }
-
-  return {
-    cabinLabel,
-    cabinRank,
-    freePlay,
-    onBoardCredit,
-    benefitSummary,
-  };
-}
-
-function splitStructuredRowSegments(indexEntry: IndexEntry, pdfText: string): string[] {
-  const normalizedText = pdfText.replace(/®/g, '').replace(/\s+/g, ' ').trim();
-  const startRegex = new RegExp(`(?=${escapeRegExp(indexEntry.certificateCode)}\\b)`, 'g');
-  const starts = Array.from(normalizedText.matchAll(startRegex))
-    .map((match) => match.index ?? -1)
-    .filter((index) => index >= 0);
-
-  if (starts.length === 0) {
-    return [];
-  }
-
-  return starts.map((start, index) => {
-    const end = starts[index + 1] ?? normalizedText.length;
-    return normalizedText.slice(start, end).trim();
-  }).filter(Boolean);
-}
-
-function parseStructuredCertificateRow(segment: string): StructuredCertificateRow | null {
-  const cleanedSegment = cleanStructuredValue(segment);
-  if (!cleanedSegment) {
-    return null;
-  }
-
-  const shipMatch = findShipOccurrence(cleanedSegment);
-  if (!shipMatch) {
-    return null;
-  }
-
-  const dateMatch = Array.from(cleanedSegment.matchAll(DATE_TEXT_REGEX)).find((match) => {
-    const index = match.index ?? -1;
-    return index >= shipMatch.end;
-  });
-  const dateText = dateMatch?.[0] ?? null;
-  const dateIndex = dateMatch?.index ?? -1;
-
-  if (!dateText || dateIndex < 0) {
-    return null;
-  }
-
-  const sailDate = parseDateToIso(dateText);
-  if (!sailDate) {
-    return null;
-  }
-
-  const departurePort = cleanStructuredValue(cleanedSegment.slice(shipMatch.end, dateIndex));
-  const tailText = cleanStructuredValue(cleanedSegment.slice(dateIndex + dateText.length)) ?? '';
-
-  const cabinMatch = findCabinBenefitMatch(tailText);
-  const offerTypeMatch = findFirstTextMatch(tailText, OFFER_TYPE_PATTERNS);
-  const bonusMatch = findLastTextMatch(tailText, BONUS_TEXT_PATTERNS);
-  const itineraryBoundaryCandidates = [cabinMatch?.index, offerTypeMatch?.index, bonusMatch?.index]
-    .filter((value): value is number => typeof value === 'number' && value >= 0);
-  const itineraryBoundary = itineraryBoundaryCandidates.length > 0 ? Math.min(...itineraryBoundaryCandidates) : tailText.length;
-  const itinerary = cleanStructuredValue(tailText.slice(0, itineraryBoundary));
-  const offerTypeLabel = cleanStructuredValue(offerTypeMatch?.label);
-  const nextCruiseBonusLabel = cleanStructuredValue(bonusMatch?.label);
-  const benefits = extractStructuredBenefitSnapshot(tailText, nextCruiseBonusLabel);
-
-  console.log('[CertificateExplorer] Parsed structured certificate row:', {
-    shipName: shipMatch.shipName,
-    sailDate,
-    departurePort,
-    itinerary,
-    offerTypeLabel,
-    nextCruiseBonusLabel,
-    benefits: benefits.benefitSummary,
-  });
-
-  return {
-    shipName: shipMatch.shipName,
-    sailDate,
-    departurePort,
-    itinerary,
-    offerTypeLabel,
-    nextCruiseBonusLabel,
-    benefits,
-  };
-}
-
-function extractStructuredRowsFromCertificatePdf(indexEntry: IndexEntry, pdfText: string): StructuredCertificateRow[] {
-  const rowSegments = splitStructuredRowSegments(indexEntry, pdfText);
-  const rowMap = new Map<string, StructuredCertificateRow>();
-
-  rowSegments.forEach((segment) => {
-    const parsedRow = parseStructuredCertificateRow(segment);
-    if (!parsedRow) {
-      return;
-    }
-
-    const key = `${parsedRow.shipName}__${parsedRow.sailDate}`;
-    if (!rowMap.has(key)) {
-      rowMap.set(key, parsedRow);
-    }
-  });
-
-  const rows = Array.from(rowMap.values());
-  console.log('[CertificateExplorer] Structured rows extracted from certificate PDF:', {
-    certificateCode: indexEntry.certificateCode,
-    rowCount: rows.length,
-  });
-  return rows;
 }
 
 function decodePdfLiteralString(value: string): string {
@@ -877,44 +690,7 @@ function stringToUint8(str: string): Uint8Array {
 }
 
 function extractPdfText(pdfBytes: Uint8Array): string {
-  const raw = uint8ToLatin1(pdfBytes);
-  const streamRegex = /(<<[\s\S]*?>>)\s*stream\r?\n([\s\S]*?)\r?\nendstream/g;
-  const extracted: string[] = [];
-
-  for (const match of raw.matchAll(streamRegex)) {
-    const dictionary = match[1] ?? '';
-    const streamBinary = stringToUint8(match[2] ?? '');
-    let decodedStream: string | null = null;
-
-    if (dictionary.includes('/FlateDecode')) {
-      try {
-        const inflated = pako.inflate(streamBinary);
-        decodedStream = uint8ToLatin1(inflated);
-      } catch {
-        try {
-          const inflatedRaw = pako.inflateRaw(streamBinary);
-          decodedStream = uint8ToLatin1(inflatedRaw);
-        } catch {
-          decodedStream = null;
-        }
-      }
-    } else {
-      decodedStream = uint8ToLatin1(streamBinary);
-    }
-
-    if (!decodedStream) {
-      continue;
-    }
-
-    const text = extractTextFromContentStream(decodedStream);
-    if (text.trim()) {
-      extracted.push(text.trim());
-    }
-  }
-
-  return sanitizePdfText(extracted.join(' '))
-    .replace(/\s+/g, ' ')
-    .trim();
+  return extractCertificatePdfText(pdfBytes);
 }
 
 async function sleep(ms: number): Promise<void> {
@@ -936,17 +712,11 @@ async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: nu
   }
 }
 
-const MAX_RETRIES = 3;
-const FETCH_TIMEOUT_MS = 12000;
-const BASE_RETRY_DELAY_MS = 900;
+const MAX_RETRIES = 5;
+const FETCH_TIMEOUT_MS = 25000;
+const BASE_RETRY_DELAY_MS = 1500;
 
 async function fetchPdfText(url: string, retries = MAX_RETRIES): Promise<string> {
-  const cached = pdfTextCache.get(url);
-  if (cached && Date.now() - cached.fetchedAt < PDF_TEXT_CACHE_TTL_MS) {
-    console.log('[CertificateExplorer] PDF cache hit:', { url, textLength: cached.text.length });
-    return cached.text;
-  }
-
   console.log('[CertificateExplorer] Fetching PDF:', url);
 
   const HEADERS: Record<string, string> = {
@@ -985,7 +755,6 @@ async function fetchPdfText(url: string, retries = MAX_RETRIES): Promise<string>
 
       if (response.status === 404) {
         console.log('[CertificateExplorer] PDF not found (404):', url);
-        pdfTextCache.set(url, { text: '', fetchedAt: Date.now() });
         return '';
       }
 
@@ -1009,9 +778,7 @@ async function fetchPdfText(url: string, retries = MAX_RETRIES): Promise<string>
       }
 
       console.log('[CertificateExplorer] PDF downloaded:', { url, bytes: pdfBytes.length });
-      const extractedText = extractPdfText(pdfBytes);
-      pdfTextCache.set(url, { text: extractedText, fetchedAt: Date.now() });
-      return extractedText;
+      return extractCertificatePdfText(pdfBytes);
     } catch (error) {
       const isAbort = error instanceof DOMException && error.name === 'AbortError';
       const isNetworkError = error instanceof TypeError && (
@@ -1047,91 +814,24 @@ async function fetchPdfText(url: string, retries = MAX_RETRIES): Promise<string>
   return '';
 }
 
-const KNOWN_CERTIFICATE_SUFFIXES = [
-  'VIP2',
-  '01',
-  '02',
-  '02A',
-  '03',
-  '03A',
-  '04',
-  '05',
-  '06',
-  '07',
-  '08',
-  '09',
-  '10',
-];
-
-const DEFAULT_CERTIFICATE_POINTS: Record<string, number> = {
-  VIP2: 40000,
-  '01': 25000,
-  '02': 15000,
-  '02A': 9000,
-  '03': 6500,
-  '03A': 4000,
-  '04': 3000,
-  '05': 2000,
-  '06': 1500,
-  '07': 1200,
-  '08': 800,
-  '09': 600,
-  '10': 400,
-};
-
-function getCertificateLevelCode(certificateCode: string): string {
-  const cleaned = certificateCode.toUpperCase().trim();
-  const match = cleaned.match(/^\d{4}[AC](VIP2|\d{2}A?|\d{2})$/);
-  return match?.[1] ?? cleaned.slice(5);
-}
-
-function getDefaultPointsForCertificate(certificateCode: string): number | null {
-  const level = getCertificateLevelCode(certificateCode);
-  return DEFAULT_CERTIFICATE_POINTS[level] ?? null;
-}
-
-const PDF_TEXT_CACHE_TTL_MS = 1000 * 60 * 30;
-const pdfTextCache = new Map<string, { text: string; fetchedAt: number }>();
-
-function buildKnownIndexEntries(monthCode: string, certificateType: 'A' | 'C'): IndexEntry[] {
+async function discoverIndexEntries(monthCode: string, certificateType: string): Promise<IndexEntry[]> {
   const monthlyIndexUrl = buildPdfUrl(`${monthCode}${certificateType}`);
-  const entries: IndexEntry[] = KNOWN_CERTIFICATE_SUFFIXES.map(suffix => {
-    const certificateCode = `${monthCode}${certificateType}${suffix}`.toUpperCase();
-    return {
-      certificateCode,
-      certificateType,
-      points: getDefaultPointsForCertificate(certificateCode),
-      pdfUrl: buildPdfUrl(certificateCode),
-      monthlyIndexUrl,
-    };
-  });
-
-  console.log('[CertificateExplorer] Built known index entries:', {
+  const indexText = await fetchPdfText(monthlyIndexUrl);
+  const codes = discoverCertificateCodesFromText(indexText, { monthCode, familyCodes: [certificateType] });
+  console.log('[CertificateExplorer] Discovered certificate index entries:', {
     monthCode,
     certificateType,
-    count: entries.length,
-    codes: entries.map(e => e.certificateCode),
+    monthlyIndexUrl,
+    count: codes.length,
+    codes,
   });
-  return entries;
-}
-
-function extractPointsFromPdfText(certificateCode: string, pdfText: string): number | null {
-  const normalizedText = pdfText.replace(/®/g, ' ').replace(/\s+/g, ' ').trim();
-  const pointsPatterns = [
-    new RegExp(`${escapeRegExp(certificateCode)}\\s*(?:[–—\\-]\\s*)?([\\d,]+)\\s*points`, 'i'),
-    new RegExp(`${escapeRegExp(certificateCode)}\\s*(?:[–—\\-]\\s*)?\\$\\s*([\\d,]+)`, 'i'),
-    new RegExp(`\\$\\s*([\\d,]+)\\s*(?:[–—\\-]\\s*)?${escapeRegExp(certificateCode)}`, 'i'),
-  ];
-
-  for (const pattern of pointsPatterns) {
-    const match = normalizedText.match(pattern);
-    if (match?.[1]) {
-      const pts = parseInt(match[1].replace(/,/g, ''), 10);
-      if (Number.isFinite(pts)) return pts;
-    }
-  }
-
-  return null;
+  return codes.map((certificateCode) => ({
+    certificateCode,
+    certificateType: getCertificateFamilyDefinition(certificateCode).familyCode ?? 'unclassified',
+    points: null,
+    pdfUrl: buildPdfUrl(certificateCode),
+    monthlyIndexUrl,
+  }));
 }
 
 function resolveShipTargets(shipQuery: string): string[] {
@@ -1173,90 +873,44 @@ function resolveShipTargets(shipQuery: string): string[] {
   return result;
 }
 
-function extractSailingsFromCertificatePdf(indexEntry: IndexEntry, pdfText: string): SailingEntry[] {
-  const normalizedText = pdfText.replace(/®/g, '').replace(/\s+/g, ' ').trim();
-  const structuredRows = extractStructuredRowsFromCertificatePdf(indexEntry, normalizedText);
+interface CertificatePdfExtraction {
+  sailings: SailingEntry[];
+  parserResult: CertificateParseResult;
+}
 
-  if (structuredRows.length > 0) {
-    return structuredRows.map((row) => ({
-      certificateCode: indexEntry.certificateCode,
-      certificateType: indexEntry.certificateType,
-      level: getCertificateLevelCode(indexEntry.certificateCode),
-      points: indexEntry.points,
-      shipName: row.shipName,
-      sailDate: row.sailDate,
-      departurePort: row.departurePort,
-      itinerary: row.itinerary,
-      offerTypeLabel: row.offerTypeLabel,
-      nextCruiseBonusLabel: row.nextCruiseBonusLabel,
-      pdfUrl: indexEntry.pdfUrl,
-      monthlyIndexUrl: indexEntry.monthlyIndexUrl,
-      cabinLabel: row.benefits.cabinLabel,
-      cabinRank: row.benefits.cabinRank,
-      freePlay: row.benefits.freePlay,
-      onBoardCredit: row.benefits.onBoardCredit,
-      benefitSummary: row.benefits.benefitSummary,
-    }));
-  }
-
-  const benefits = extractCertificateBenefits(normalizedText);
-  const sailings = new Map<string, SailingEntry>();
-
-  ROYAL_SHIP_NAMES.forEach(shipName => {
-    const shipRegex = new RegExp(escapeRegExp(shipName.replace(/®/g, '')), 'gi');
-
-    for (const match of normalizedText.matchAll(shipRegex)) {
-      const matchIndex = match.index ?? -1;
-      if (matchIndex < 0) {
-        continue;
-      }
-
-      const searchWindow = normalizedText.slice(matchIndex, matchIndex + 220);
-      const dateMatch = searchWindow.match(DATE_TEXT_REGEX)?.[0];
-      if (!dateMatch) {
-        continue;
-      }
-
-      const sailDate = parseDateToIso(dateMatch);
-      if (!sailDate) {
-        continue;
-      }
-
-      const key = `${shipName}__${sailDate}`;
-      if (sailings.has(key)) {
-        continue;
-      }
-
-      sailings.set(key, {
-        certificateCode: indexEntry.certificateCode,
-        certificateType: indexEntry.certificateType,
-        level: getCertificateLevelCode(indexEntry.certificateCode),
-        points: indexEntry.points,
-        shipName,
-        sailDate,
-        departurePort: null,
-        itinerary: null,
-        offerTypeLabel: null,
-        nextCruiseBonusLabel: null,
-        pdfUrl: indexEntry.pdfUrl,
-        monthlyIndexUrl: indexEntry.monthlyIndexUrl,
-        cabinLabel: benefits.cabinLabel,
-        cabinRank: benefits.cabinRank,
-        freePlay: benefits.freePlay,
-        onBoardCredit: benefits.onBoardCredit,
-        benefitSummary: benefits.benefitSummary,
-      });
-    }
-  });
-
-  const results = Array.from(sailings.values());
+function extractSailingsFromCertificatePdf(indexEntry: IndexEntry, pdfText: string): CertificatePdfExtraction {
+  const parsed = parseCertificatePdfTextOnBackend(pdfText, {
+    originalUrl: indexEntry.pdfUrl,
+    resolvedUrl: indexEntry.pdfUrl,
+    retrievedAt: new Date().toISOString(),
+  }, indexEntry.certificateCode);
+  const results = parsed.sailings.map((row) => ({
+    certificateCode: row.certificateCode,
+    certificateType: row.certificateFamilyCode ?? row.certificateFamily,
+    level: row.certificateCode.slice(4),
+    points: row.pointRequirement ?? indexEntry.points,
+    shipName: row.shipName,
+    sailDate: row.sailingDate,
+    departurePort: null,
+    itinerary: null,
+    offerTypeLabel: row.occupancy ?? null,
+    nextCruiseBonusLabel: null,
+    pdfUrl: indexEntry.pdfUrl,
+    monthlyIndexUrl: indexEntry.monthlyIndexUrl,
+    cabinLabel: row.cabinCategory ?? null,
+    cabinRank: null,
+    freePlay: row.freePlay ?? null,
+    onBoardCredit: row.onboardCredit ?? null,
+    benefitSummary: row.benefits.map((benefit) => `${benefit.kind.replace(/_/g, ' ')} ${benefit.amount.toLocaleString()}`),
+  }));
   console.log('[CertificateExplorer] Sailings extracted from certificate PDF:', {
     certificateCode: indexEntry.certificateCode,
     count: results.length,
-    benefits: benefits.benefitSummary,
-    usedStructuredRows: false,
+    parserVersion: parsed.parserVersion,
+    parserStatus: parsed.status,
+    rejectedRows: parsed.rejectedRows.length,
   });
-  return results;
+  return { sailings: results, parserResult: parsed };
 }
 
 async function mapWithConcurrency<T, R>(items: T[], concurrency: number, mapper: (item: T, index: number) => Promise<R>): Promise<R[]> {
@@ -1280,11 +934,10 @@ export const certificateExplorerRouter = createTRPCRouter({
     .input(
       z.object({
         monthCode: z.string().regex(MONTH_CODE_REGEX).optional(),
-        shipQuery: z.string().min(0).optional(),
+        shipQuery: z.string().min(2),
         sailDate: z.string().optional(),
         includeA: z.boolean().optional(),
         includeC: z.boolean().optional(),
-        certificateCodes: z.array(z.string().regex(/^\d{4}[AC](?:VIP2|\d{2}A?)$/i)).optional(),
       })
     )
     .mutation(async ({ input }) => {
@@ -1292,29 +945,16 @@ export const certificateExplorerRouter = createTRPCRouter({
       const includeA = input.includeA ?? true;
       const includeC = input.includeC ?? true;
       const requestedSailDate = parseDateToIso(input.sailDate);
-      const effectiveShipQuery = (input.shipQuery?.trim() || 'Star, Legend, Icon, Wonder, Utopia, Symphony, Harmony, Allure, Oasis, Odyssey, Anthem, Ovation, Quantum, Spectrum, Navigator, Voyager, Mariner, Explorer, Adventure, Freedom, Liberty, Independence, Enchantment, Grandeur, Rhapsody, Vision, Radiance, Brilliance, Serenade, Jewel');
-      const targetShips = resolveShipTargets(effectiveShipQuery);
+      const targetShips = resolveShipTargets(input.shipQuery);
       const certificateTypes = (['A', 'C'] as const).filter(type => (type === 'A' ? includeA : includeC));
 
       if (certificateTypes.length === 0) {
         throw new Error('Select at least one certificate source.');
       }
 
-      // Hard wall-clock budget for the whole mutation. Hosting has its own outer
-      // request timeout; if we got close to it the platform (not our code) would
-      // cut the connection and return a non-JSON error page that the client
-      // cannot safely JSON.parse. Always returning a valid (possibly partial)
-      // JSON payload well before that outer limit prevents that raw parse crash.
-      const MUTATION_TIME_BUDGET_MS = 45_000;
-      const mutationStartedAt = Date.now();
-      const timeBudgetExceeded = () => Date.now() - mutationStartedAt > MUTATION_TIME_BUDGET_MS;
+      const allIndexEntries = (await Promise.all(certificateTypes.map((certificateType) => discoverIndexEntries(monthCode, certificateType)))).flat();
 
-      const requestedCodeSet = new Set((input.certificateCodes ?? []).map(code => code.toUpperCase().trim()));
-      const allIndexEntries = certificateTypes.flatMap(certificateType =>
-        buildKnownIndexEntries(monthCode, certificateType)
-      ).filter(entry => requestedCodeSet.size === 0 || requestedCodeSet.has(entry.certificateCode));
-
-      console.log('[CertificateExplorer] '+CERTIFICATE_EXPLORER_VERSION+' using known certificate codes:', {
+      console.log('[CertificateExplorer] Using known certificate codes:', {
         monthCode,
         types: certificateTypes,
         totalEntries: allIndexEntries.length,
@@ -1322,17 +962,7 @@ export const certificateExplorerRouter = createTRPCRouter({
 
       const pdfScanLog: PdfScanLogEntry[] = [];
 
-      const sailingResults = await mapWithConcurrency<IndexEntry, SailingEntry[]>(allIndexEntries, 5, async (entry, entryIndex) => {
-        if (timeBudgetExceeded()) {
-          pdfScanLog.push({
-            certificateCode: entry.certificateCode,
-            status: 'error',
-            textLength: 0,
-            sailingsFound: 0,
-            errorMessage: 'Skipped: certificate download time budget reached. Try again or download fewer codes at once.',
-          });
-          return [] as SailingEntry[];
-        }
+      const sailingResults = await mapWithConcurrency<IndexEntry, CertificatePdfExtraction | null>(allIndexEntries, 2, async (entry, entryIndex) => {
         if (entryIndex > 0 && entryIndex % 4 === 0) {
           await sleep(jitteredDelay(800));
         }
@@ -1351,13 +981,13 @@ export const certificateExplorerRouter = createTRPCRouter({
               sailingsFound: 0,
               errorMessage: pdfText.length === 0 ? 'PDF not found for this code (404 or unavailable)' : 'PDF text too short to contain sailings',
             });
-            return [] as SailingEntry[];
+            return null;
           }
 
-          const detectedPoints = extractPointsFromPdfText(entry.certificateCode, pdfText);
-          entry.points = detectedPoints ?? entry.points ?? getDefaultPointsForCertificate(entry.certificateCode);
-
-          const sailings = extractSailingsFromCertificatePdf(entry, pdfText);
+          const extracted = extractSailingsFromCertificatePdf(entry, pdfText);
+          const sailings = extracted.sailings;
+          const detectedPoints = sailings.find((sailing) => sailing.points !== null)?.points ?? null;
+          if (detectedPoints !== null) entry.points = detectedPoints;
           pdfScanLog.push({
             certificateCode: entry.certificateCode,
             status: sailings.length > 0 ? 'ok' : 'no_sailings',
@@ -1365,7 +995,7 @@ export const certificateExplorerRouter = createTRPCRouter({
             sailingsFound: sailings.length,
             errorMessage: sailings.length === 0 ? 'Text extracted but no ship+date pairs found' : null,
           });
-          return sailings;
+          return extracted;
         } catch (error) {
           const errorMsg = error instanceof Error ? error.message : String(error);
           console.error('[CertificateExplorer] Failed to inspect certificate PDF:', {
@@ -1379,16 +1009,24 @@ export const certificateExplorerRouter = createTRPCRouter({
             sailingsFound: 0,
             errorMessage: errorMsg,
           });
-          return [] as SailingEntry[];
+          return null;
         }
       });
 
-      const allSailings = sailingResults.flat();
+      const parserEvidence = sailingResults
+        .filter((result): result is CertificatePdfExtraction => result !== null)
+        .map((result) => ({
+          certificateCode: result.parserResult.sailings[0]?.certificateCode
+            ?? result.parserResult.provenance.originalUrl.split('/').pop()?.replace(/\.pdf$/i, '')
+            ?? '',
+          result: result.parserResult,
+        }));
+      const allSailings = sailingResults.flatMap((result) => result?.sailings ?? []);
       const normalizedShipTargets = targetShips.map(ship => normalizeText(ship));
 
       const filteredSailings = allSailings.filter(sailing => {
         const shipMatches = normalizedShipTargets.length === 0
-          ? normalizeText(sailing.shipName).includes(normalizeText(effectiveShipQuery))
+          ? normalizeText(sailing.shipName).includes(normalizeText(input.shipQuery))
           : normalizedShipTargets.includes(normalizeText(sailing.shipName));
         const dateMatches = requestedSailDate ? sailing.sailDate === requestedSailDate : true;
         return shipMatches && dateMatches;
@@ -1477,22 +1115,10 @@ export const certificateExplorerRouter = createTRPCRouter({
         errors: errorCount,
       });
 
-      const catalog = allIndexEntries.map(entry => ({
-        certificateCode: entry.certificateCode,
-        certificateType: entry.certificateType,
-        level: getCertificateLevelCode(entry.certificateCode),
-        points: entry.points ?? getDefaultPointsForCertificate(entry.certificateCode),
-        pdfUrl: entry.pdfUrl,
-        monthlyIndexUrl: entry.monthlyIndexUrl,
-        status: pdfScanLog.find(scan => scan.certificateCode === entry.certificateCode)?.status ?? 'empty',
-        sailingsFound: pdfScanLog.find(scan => scan.certificateCode === entry.certificateCode)?.sailingsFound ?? 0,
-      }));
-
       return {
         monthCode,
-        catalog,
         filters: {
-          shipQuery: effectiveShipQuery,
+          shipQuery: input.shipQuery,
           sailDate: requestedSailDate,
           includeA,
           includeC,
@@ -1505,6 +1131,7 @@ export const certificateExplorerRouter = createTRPCRouter({
           matchedCertificateCount,
         },
         pdfScanLog,
+        parserEvidence,
         matches,
       };
     }),

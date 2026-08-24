@@ -1,5 +1,4 @@
-import { generateObject } from '@rork-ai/toolkit-sdk';
-import { z } from 'zod';
+import { createDateFromString, formatDate } from './date';
 
 export interface CruisePricing {
   bookingId: string;
@@ -24,15 +23,20 @@ interface CruiseInput {
   departurePort: string;
 }
 
-const pricingSchema = z.object({
-  interiorPrice: z.number().describe('Per-person starting price for an interior/inside cabin in USD'),
-  oceanviewPrice: z.number().describe('Per-person starting price for an oceanview cabin in USD'),
-  balconyPrice: z.number().describe('Per-person starting price for a balcony stateroom in USD'),
-  suitePrice: z.number().describe('Per-person starting price for a junior suite or entry-level suite in USD'),
-  portTaxesFees: z.number().describe('Per-person port taxes, fees, and government charges in USD. Typically $50-$200+ depending on itinerary length and ports visited'),
-  confidence: z.enum(['high', 'medium', 'low']).describe('Confidence in the accuracy of these prices'),
-  notes: z.string().optional().describe('Brief note about the pricing'),
-});
+export interface PricingCatalogRow extends Record<string, unknown> { id?: string; shipName?: string; sailDate?: string }
+export interface PricingSyncOptions { catalog?: PricingCatalogRow[]; signal?: AbortSignal; concurrency?: number }
+const numeric=(...values:unknown[])=>{for(const value of values){const number=Number(value);if(Number.isFinite(number)&&number>0)return number}return undefined};
+const normalized=(value:unknown)=>String(value??'').trim().toLowerCase().replace(/[^a-z0-9]/g,'');
+function pricingFromCatalog(cruise:CruiseInput,catalog:PricingCatalogRow[]):CruisePricing|null{const matches=catalog.filter(row=>normalized(row.shipName)===normalized(cruise.shipName)&&String(row.sailDate??'').slice(0,10)===cruise.sailDate.slice(0,10));for(const row of matches){const interiorPrice=numeric(row.interiorPrice,row.interior,row.insidePrice),oceanviewPrice=numeric(row.oceanviewPrice,row.oceanViewPrice,row.oceanview),balconyPrice=numeric(row.balconyPrice,row.balcony),suitePrice=numeric(row.suitePrice,row.suite),portTaxesFees=numeric(row.portTaxesFees,row.taxes,row.taxesFees);if(interiorPrice||oceanviewPrice||balconyPrice||suitePrice)return{bookingId:cruise.id,shipName:cruise.shipName,sailDate:cruise.sailDate,interiorPrice,oceanviewPrice,balconyPrice,suitePrice,portTaxesFees,source:'royalcaribbean',url:String(row.sourceUrl??row.url??''),lastUpdated:String(row.pricingVerifiedAt??row.updatedAt??new Date().toISOString()),confidence:row.pricingVerified===true||row.verified===true?'high':'medium'}}return null}
+
+// Live pricing is populated by the signed-in cruise-line sync. This module no
+// longer imports an AI SDK into Metro or fabricates prices when authoritative
+// provider data is unavailable.
+const pricingSchema = {};
+async function generateObject(_input: unknown): Promise<any | null> {
+  console.log('[CruisePricing] AI price estimation is disabled; waiting for authoritative provider pricing.');
+  return null;
+}
 
 const SHIP_CLASS_INFO: Record<string, string> = {
   'icon of the seas': 'Icon-class, newest and largest, premium pricing',
@@ -71,16 +75,17 @@ const getShipClassContext = (shipName: string): string => {
   return SHIP_CLASS_INFO[key] || 'Royal Caribbean cruise ship';
 };
 
-const searchCruisePricing = async (cruise: CruiseInput): Promise<CruisePricing | null> => {
+const searchCruisePricing = async (cruise: CruiseInput, catalog: PricingCatalogRow[] = []): Promise<CruisePricing | null> => {
   try {
-    const sailDateObj = new Date(cruise.sailDate);
+    const captured = pricingFromCatalog(cruise, catalog);
+    if (captured) return captured;
+    const sailDateObj = createDateFromString(cruise.sailDate);
+    if (Number.isNaN(sailDateObj.getTime())) {
+      console.warn('[CruisePricing] Skipping pricing search with an invalid sailing day:', cruise.sailDate);
+      return null;
+    }
     const monthYear = sailDateObj.toLocaleString('en-US', { month: 'long', year: 'numeric' });
-    const formattedDate = sailDateObj.toLocaleDateString('en-US', {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-    });
+    const formattedDate = formatDate(cruise.sailDate, 'long');
     const shipClass = getShipClassContext(cruise.shipName);
 
     console.log(`[CruisePricing] Searching prices for: ${cruise.shipName} sailing ${formattedDate} (${cruise.nights}N from ${cruise.departurePort})`);
@@ -168,15 +173,16 @@ export interface SyncProgress {
 
 export const syncCruisePricing = async (
   cruises: CruiseInput[],
-  onProgress?: (progress: SyncProgress) => void
+  onProgress?: (progress: SyncProgress) => void,
+  options: PricingSyncOptions = {},
 ) => {
   console.log(`[CruisePricing] Starting web price search for ${cruises.length} cruises`);
 
   const allPricing: CruisePricing[] = [];
   const errors: string[] = [];
 
-  for (let i = 0; i < cruises.length; i++) {
-    const cruise = cruises[i];
+  let cursor=0;
+  const workers=Array.from({length:Math.max(1,Math.min(4,Math.floor(options.concurrency??2),cruises.length||1))},async()=>{while(true){if(options.signal?.aborted)throw new Error('PRICING_SYNC_CANCELLED');const i=cursor++;if(i>=cruises.length)return;const cruise=cruises[i];
 
     onProgress?.({
       current: i + 1,
@@ -186,7 +192,7 @@ export const syncCruisePricing = async (
     });
 
     try {
-      const pricing = await searchCruisePricing(cruise);
+      const pricing = await searchCruisePricing(cruise, options.catalog ?? []);
 
       if (pricing) {
         allPricing.push(pricing);
@@ -215,8 +221,8 @@ export const syncCruisePricing = async (
         shipName: cruise.shipName,
         status: 'error',
       });
-    }
-  }
+    }}});
+  await Promise.all(workers);
 
   console.log(`[CruisePricing] Search complete: ${allPricing.length}/${cruises.length} cruises with pricing`);
 

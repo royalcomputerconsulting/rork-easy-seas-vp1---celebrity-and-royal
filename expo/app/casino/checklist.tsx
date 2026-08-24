@@ -31,7 +31,7 @@ interface DisplayTask {
  */
 export default function ChecklistScreen() {
   const router = useRouter();
-  const { cruiseEconomicsSummary, bookedCruises } = useCasinoEconomicsData();
+  const { allCruiseEconomicsSummary, bookedCruises } = useCasinoEconomicsData();
   const { clubRoyaleTier, clubRoyaleCurrentYearPoints } = useLoyalty();
   const { localData } = useAppState();
   const { casinoOffers } = useCoreData();
@@ -59,7 +59,7 @@ export default function ChecklistScreen() {
   const [newPriority, setNewPriority] = useState<ChecklistPriority>('medium');
 
   const autoTasks = useMemo((): DisplayTask[] => {
-    const missingResultsCount = cruiseEconomicsSummary.rows.filter((row) => row.calculationConfidence !== 'actual').length;
+    const missingResultsCount = allCruiseEconomicsSummary.rows.filter((row) => row.status === 'completed' && row.calculationConfidence !== 'actual').length;
     const upcomingCount = bookedCruises.filter((c) => {
       const sail = c.sailDate ? new Date(c.sailDate) : null;
       return sail && sail.getTime() >= Date.now();
@@ -99,7 +99,7 @@ export default function ChecklistScreen() {
         if (override?.snoozedUntil && new Date(override.snoozedUntil).getTime() > Date.now()) return false;
         return true;
       });
-  }, [cruiseEconomicsSummary.rows, bookedCruises, dataHealthIssueCount, checklistOverrides, isAdmin]);
+  }, [allCruiseEconomicsSummary.rows, bookedCruises, dataHealthIssueCount, checklistOverrides, isAdmin]);
 
   const customDisplayTasks = useMemo((): DisplayTask[] => {
     return customTasks

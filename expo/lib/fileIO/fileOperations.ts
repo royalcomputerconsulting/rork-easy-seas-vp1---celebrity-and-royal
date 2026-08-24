@@ -203,3 +203,15 @@ export async function exportFile(content: string, fileName: string): Promise<boo
     throw error;
   }
 }
+
+export async function exportBase64File(base64: string, fileName: string, mimeType: string): Promise<boolean> {
+  if (Platform.OS === 'web') {
+    const bytes=Uint8Array.from(atob(base64),character=>character.charCodeAt(0));
+    const blob=new Blob([bytes],{type:mimeType}),url=URL.createObjectURL(blob),anchor=document.createElement('a');
+    anchor.href=url;anchor.download=fileName;document.body.appendChild(anchor);anchor.click();document.body.removeChild(anchor);URL.revokeObjectURL(url);return true;
+  }
+  const file=new ExpoFile(ExpoPaths.cache,fileName);
+  file.write(Uint8Array.from(atob(base64),character=>character.charCodeAt(0)));
+  if(!(await Sharing.isAvailableAsync()))return false;
+  await Sharing.shareAsync(file.uri,{mimeType,dialogTitle:`Export ${fileName}`});return true;
+}

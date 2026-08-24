@@ -112,7 +112,7 @@ export const CasinoCertificatesCard = React.memo(function CasinoCertificatesCard
                   activeOpacity={0.7}
                   testID="casino-certificates-card.view-offers-button"
                 >
-                  <Text style={styles.viewOffersText}>View Offers</Text>
+                  <Text style={styles.viewOffersText}>View Certificates</Text>
                 </TouchableOpacity>
               ) : null}
 
@@ -124,7 +124,7 @@ export const CasinoCertificatesCard = React.memo(function CasinoCertificatesCard
                   testID="casino-certificates-card.examine-certificates-button"
                 >
                   <Sparkles size={16} color={COLORS.navyDeep} />
-                  <Text style={styles.examineButtonText}>Examine Offers</Text>
+                  <Text style={styles.examineButtonText}>Examine Certificates</Text>
                 </TouchableOpacity>
               ) : null}
             </View>

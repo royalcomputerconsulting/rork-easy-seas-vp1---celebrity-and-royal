@@ -1,14 +1,16 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import createContextHook from "@nkzw/create-context-hook";
-import { trpc, trpcClient, isBackendReachable, isCloudBackupEnabled } from "@/lib/trpc";
+import { trpc, trpcClient, isBackendReachable } from "@/lib/trpc";
 import { useAuth } from "@/state/AuthProvider";
 import { getUserScopedKey, ALL_STORAGE_KEYS } from "@/lib/storage/storageKeys";
-import { clearUserSpecificData } from "@/lib/storage/storageOperations";
 import { quotaSafeGetItem, quotaSafeSetItem, quotaSafeSetJsonItem, quotaSafeRemoveItem } from "@/lib/storage/quotaSafeStorage";
 import { buildOwnerScopeId, getInstallationId } from "@/lib/storage/installationId";
 import { containsKnownForeignPersonalData, filterRecordsForOwner, isOwnerScopeForEmail, isScopedDynamicKeyForOwner, stampRecordsForOwner, toOwnerScopedDynamicKey } from "@/lib/storage/dataOwnership";
 import { normalizeAlertRulesFromStorage, serializeAlertRulesForStorage } from "@/lib/alertRules";
+import { cruiseInventoryRepository } from '@/lib/cruiseInventory/CruiseInventoryRepository';
+import { getCruiseInventoryOwnerScope } from '@/lib/cruiseInventory/cruiseCanonicalIdentity';
+import type { Cruise } from '@/types/models';
 
 const _BASE_LAST_SYNC_KEY = "easyseas_last_cloud_sync";
 const MAX_RETRY_ATTEMPTS = 1;
@@ -219,10 +221,10 @@ function buildJsonSetPromise(key: string, value: unknown, options?: { removeWhen
   }
 
   if ((value === null || value === '') && options?.removeWhenNull) {
-    return quotaSafeRemoveItem(key);
+    return quotaSafeRemoveItem(key).then(() => undefined);
   }
 
-  return quotaSafeSetJsonItem(key, value);
+  return quotaSafeSetJsonItem(key, value).then(() => undefined);
 }
 
 function buildStringSetPromise(key: string, value: string | null | undefined): Promise<void> | undefined {
@@ -231,10 +233,10 @@ function buildStringSetPromise(key: string, value: string | null | undefined): P
   }
 
   if (value === null || value.length === 0) {
-    return quotaSafeRemoveItem(key);
+    return quotaSafeRemoveItem(key).then(() => undefined);
   }
 
-  return quotaSafeSetItem(key, value);
+  return quotaSafeSetItem(key, value).then(() => undefined);
 }
 
 function buildNumberSetPromise(key: string, value: number | null | undefined): Promise<void> | undefined {
@@ -243,10 +245,10 @@ function buildNumberSetPromise(key: string, value: number | null | undefined): P
   }
 
   if (value === null || Number.isNaN(value)) {
-    return quotaSafeRemoveItem(key);
+    return quotaSafeRemoveItem(key).then(() => undefined);
   }
 
-  return quotaSafeSetItem(key, value.toString());
+  return quotaSafeSetItem(key, value.toString()).then(() => undefined);
 }
 
 function buildDualJsonSetPromises(primaryKey: string, secondaryKey: string, value: unknown): Promise<void>[] {
@@ -353,9 +355,9 @@ interface SyncState {
   syncError: string | null;
   hasCloudData: boolean;
   initialCheckComplete: boolean;
-  syncToCloud: () => Promise<void>;
+  syncToCloud: () => Promise<boolean>;
   loadFromCloud: () => Promise<boolean>;
-  forceSyncNow: () => Promise<void>;
+  forceSyncNow: () => Promise<boolean>;
   checkCloudDataExists: (email: string) => Promise<boolean>;
 }
 
@@ -374,6 +376,10 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       setOwnerScopeId(null);
       return;
     }
+
+    const fallbackOwnerScopeId = buildOwnerScopeId(authenticatedEmail, 'local');
+    ownerScopeIdRef.current = fallbackOwnerScopeId;
+    setOwnerScopeId(fallbackOwnerScopeId);
 
     void getInstallationId()
       .then((installationId) => {
@@ -399,16 +405,13 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [hasCloudData, setHasCloudData] = useState(false);
-  const [initialCheckComplete, setInitialCheckComplete] = useState(false);
+  const [initialCheckComplete, setInitialCheckComplete] = useState(true);
   const [lastRestoreTime, setLastRestoreTime] = useState<string | null>(null);
   
-  const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSyncedEmailRef = useRef<string | null>(null);
   const retryCountRef = useRef(0);
   const lastSyncAttemptRef = useRef<number>(0);
   const isMountedRef = useRef(true);
-  const hasInitializedRef = useRef(false);
-  const safetyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const saveAllMutation = trpc.data.saveAllUserData.useMutation({
     retry: false,
@@ -437,9 +440,11 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       const scopedBankrollAlertsKey = sk(ALL_STORAGE_KEYS.BANKROLL_ALERTS);
       const scopedFavoriteStateroomsKey = sk(ALL_STORAGE_KEYS.FAVORITE_STATEROOMS);
       const scopedSailingWeatherKey = resolveSailingWeatherStorageKey(emailRef.current);
+      const inventoryOwnerScope = getCruiseInventoryOwnerScope(emailRef.current);
+      const activeInventoryRows = (await cruiseInventoryRepository.getCounts(inventoryOwnerScope)).total;
 
       const [
-        cruisesRaw,
+        legacyCruisesRaw,
         bookedCruisesRaw,
         casinoOffersRaw,
         calendarEventsRaw,
@@ -479,7 +484,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         compItemsRaw,
         w2gRecordsRaw,
       ] = await Promise.all([
-        quotaSafeGetItem(sk(ALL_STORAGE_KEYS.CRUISES)),
+        activeInventoryRows > 0 ? Promise.resolve(null) : quotaSafeGetItem(sk(ALL_STORAGE_KEYS.CRUISES)),
         quotaSafeGetItem(sk(ALL_STORAGE_KEYS.BOOKED_CRUISES)),
         quotaSafeGetItem(sk(ALL_STORAGE_KEYS.CASINO_OFFERS)),
         quotaSafeGetItem(sk(ALL_STORAGE_KEYS.CALENDAR_EVENTS)),
@@ -521,6 +526,15 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       ]);
 
       const casinoOpenHoursEntries = await loadStoredEntriesByPrefix(CASINO_OPEN_HOURS_STORAGE_PREFIX, emailRef.current);
+      const inventoryCruises: Cruise[] = [];
+      await cruiseInventoryRepository.exportAllSourceRows(
+        (batch) => { inventoryCruises.push(...batch); },
+        500,
+        inventoryOwnerScope,
+      );
+      const cloudCruiseRows = inventoryCruises.length > 0
+        ? inventoryCruises as unknown as Record<string, unknown>[]
+        : parseStoredUnknownArray(legacyCruisesRaw, 'legacy cruises').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item));
       const alertsRaw = scopedAlertsRaw ?? legacyAlertsRaw;
       const alertRulesRaw = scopedAlertRulesRaw ?? legacyAlertRulesRaw;
 
@@ -574,7 +588,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         : normalizedLegacyLoyaltyData;
 
       const data = {
-        cruises: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(cruisesRaw, 'cruises').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync available cruises'),
+        cruises: prepareOwnedRecords<Record<string, unknown>>(cloudCruiseRows, ownerScopeIdRef.current, emailRef.current, 'cloud-sync available cruises'),
         bookedCruises: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(bookedCruisesRaw, 'bookedCruises').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync booked cruises'),
         casinoOffers: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(casinoOffersRaw, 'casinoOffers').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync casino offers'),
         calendarEvents: prepareOwnedRecords<Record<string, unknown>>(parseStoredUnknownArray(calendarEventsRaw, 'calendarEvents').filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item)), ownerScopeIdRef.current, emailRef.current, 'cloud-sync calendar events'),
@@ -644,25 +658,13 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       const currentOwnerScopeId = ownerScopeIdRef.current;
       const currentEmail = emailRef.current;
       const cloudOwnerScopeId = typeof cloudData?.ownerScopeId === 'string' ? cloudData.ownerScopeId : currentOwnerScopeId;
-      // Owner scope embeds a per-device installation id, so restoring the same account from a
-      // different device will always have a different ownerScopeId than what was saved. Only the
-      // email portion needs to match here - a cross-device restore for the same account must not
-      // be refused just because the device changed. Every record we write below is re-stamped with
-      // THIS device's currentOwnerScopeId, so ownership stays consistent going forward.
-      if (!currentOwnerScopeId || !cloudOwnerScopeId || !isOwnerScopeForEmail(cloudOwnerScopeId, currentEmail)) {
+      if (!currentOwnerScopeId || !cloudOwnerScopeId || cloudOwnerScopeId !== currentOwnerScopeId || !isOwnerScopeForEmail(cloudOwnerScopeId, currentEmail)) {
         console.warn('[UserDataSync] Refusing cloud restore for mismatched owner scope:', {
           currentEmail,
           currentOwnerScopeId,
           cloudOwnerScopeId,
         });
         return false;
-      }
-      if (cloudOwnerScopeId !== currentOwnerScopeId) {
-        console.log('[UserDataSync] Cross-device restore detected for the same account - re-stamping records to this device:', {
-          currentEmail,
-          currentOwnerScopeId,
-          cloudOwnerScopeId,
-        });
       }
 
       const savePromises: Promise<void>[] = [];
@@ -676,7 +678,15 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       const scopedSailingWeatherKey = resolveSailingWeatherStorageKey(emailRef.current);
 
       if (hasDefinedProperty(cloudData, 'cruises')) {
-        appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.CRUISES), prepareOwnedUnknownArray(cloudData.cruises, currentOwnerScopeId, currentEmail, 'cloud-restore available cruises')));
+        const restoredCruises = prepareOwnedUnknownArray(cloudData.cruises, currentOwnerScopeId, currentEmail, 'cloud-restore available cruises') as Cruise[];
+        appendPromise(
+          savePromises,
+          cruiseInventoryRepository.replaceCatalog(restoredCruises, {
+            ownerScopeId: getCruiseInventoryOwnerScope(currentEmail),
+            runId: `cloud-restore-${Date.now()}`,
+            batchSize: 500,
+          }).then(() => undefined),
+        );
       }
       if (hasDefinedProperty(cloudData, 'bookedCruises')) {
         appendPromise(savePromises, buildJsonSetPromise(sk(ALL_STORAGE_KEYS.BOOKED_CRUISES), prepareOwnedUnknownArray(cloudData.bookedCruises, currentOwnerScopeId, currentEmail, 'cloud-restore booked cruises')));
@@ -810,7 +820,11 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
 
       appendPromise(savePromises, buildStringSetPromise(sk(ALL_STORAGE_KEYS.HAS_IMPORTED_DATA), "true"));
 
-      await Promise.allSettled(savePromises);
+      const saveResults = await Promise.allSettled(savePromises);
+      const rejectedSave = saveResults.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+      if (rejectedSave) {
+        throw rejectedSave.reason instanceof Error ? rejectedSave.reason : new Error(String(rejectedSave.reason));
+      }
 
       console.log("[UserDataSync] Cloud data restored to local storage:", {
         availableCruises: getArrayLength(cloudData.cruises),
@@ -842,10 +856,6 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
   }, []);
 
   const checkCloudDataExists = useCallback(async (email: string): Promise<boolean> => {
-    if (!isCloudBackupEnabled()) {
-      console.log("[UserDataSync] Local-first mode: cloud data check skipped");
-      return false;
-    }
     if (!email) return false;
     const reachable = await isBackendReachable();
     if (!reachable) {
@@ -868,13 +878,6 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
   }, [fetchAllUserDataByEmail]);
 
   const loadFromCloud = useCallback(async (): Promise<boolean> => {
-    if (!isCloudBackupEnabled()) {
-      console.log("[UserDataSync] Local-first mode: cloud restore skipped");
-      setHasCloudData(false);
-      setInitialCheckComplete(true);
-      return false;
-    }
-
     if (!authenticatedEmail) {
       console.log("[UserDataSync] No authenticated email, skipping cloud load");
       setInitialCheckComplete(true);
@@ -887,18 +890,12 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       '[UserDataSync] Reading pending account switch flag'
     );
     if (pendingSwitchEarly === "true") {
-      console.log("[UserDataSync] Account switch detected early - clearing local user data regardless of backend status");
-      await withTimeout(
-        clearUserSpecificData(),
-        ASYNC_OPERATION_TIMEOUT_MS,
-        '[UserDataSync] Clearing local data for account switch'
-      );
+      console.log("[UserDataSync] Account switch detected; preserving all user-scoped local data");
       await withTimeout(
         AsyncStorage.removeItem(PENDING_ACCOUNT_SWITCH_KEY),
         ASYNC_OPERATION_TIMEOUT_MS,
         '[UserDataSync] Removing pending account switch flag'
       );
-      console.log("[UserDataSync] Local user data cleared for account switch (early)");
     }
 
     const reachable = await withTimeout(
@@ -1003,32 +1000,26 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
   }, [authenticatedEmail, fetchAllUserDataByEmail, restoreDataToLocal]);
 
   const syncToCloud = useCallback(async () => {
-    if (!isCloudBackupEnabled()) {
-      console.log("[UserDataSync] Local-first mode: cloud sync skipped");
-      setSyncError(null);
-      return;
-    }
-
     if (!authenticatedEmail) {
       console.log("[UserDataSync] No authenticated email, skipping cloud sync");
-      return;
+      return false;
     }
 
     const reachable = await isBackendReachable();
     if (!reachable) {
       console.log("[UserDataSync] Backend not reachable, skipping cloud sync");
-      return;
+      return false;
     }
 
     if (retryCountRef.current >= MAX_RETRY_ATTEMPTS) {
       console.log("[UserDataSync] Max retry attempts reached, skipping sync");
-      return;
+      return false;
     }
 
     const now = Date.now();
     if (now - lastSyncAttemptRef.current < MIN_SYNC_INTERVAL_MS) {
       console.log("[UserDataSync] Too soon since last sync attempt, skipping");
-      return;
+      return false;
     }
 
     lastSyncAttemptRef.current = now;
@@ -1041,20 +1032,20 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       
       if (!localData || !isMountedRef.current) {
         console.log("[UserDataSync] No local data to sync or component unmounted");
-        return;
+        return false;
       }
 
       const hasData = hasSyncableData(localData as Record<string, unknown>);
 
       if (!hasData) {
         console.log("[UserDataSync] No meaningful data to sync, skipping");
-        return;
+        return false;
       }
 
       const currentOwnerScopeId = ownerScopeIdRef.current;
       if (!currentOwnerScopeId) {
         console.log('[UserDataSync] Cloud sync skipped until owner scope is ready');
-        return;
+        return false;
       }
 
       await saveAllMutation.mutateAsync({
@@ -1063,7 +1054,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
         ...localData,
       });
 
-      if (!isMountedRef.current) return;
+      if (!isMountedRef.current) return false;
 
       const syncTime = new Date().toISOString();
       setLastSyncTime(syncTime);
@@ -1073,6 +1064,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
       retryCountRef.current = 0;
       
       console.log("[UserDataSync] Successfully synced to cloud");
+      return true;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       console.log("[UserDataSync] Cloud sync error (backend may be unavailable):", errorMessage);
@@ -1091,6 +1083,7 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
           setSyncError(errorMessage);
         }
       }
+      return false;
     } finally {
       if (isMountedRef.current) {
         setIsSyncing(false);
@@ -1099,12 +1092,12 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
   }, [authenticatedEmail, gatherAllLocalData, saveAllMutation]);
 
   const forceSyncNow = useCallback(async () => {
-    if (syncTimeoutRef.current) {
-      clearTimeout(syncTimeoutRef.current);
-      syncTimeoutRef.current = null;
-    }
+    // A manual user action must always get a fresh attempt. Automatic retry
+    // protection previously left this button permanently disabled after a few
+    // transient network failures even after connectivity returned.
     lastSyncAttemptRef.current = 0;
-    await syncToCloud();
+    retryCountRef.current = 0;
+    return syncToCloud();
   }, [syncToCloud]);
 
   useEffect(() => {
@@ -1118,133 +1111,30 @@ export const [UserDataSyncProvider, useUserDataSync] = createContextHook((): Syn
   }, []);
 
   useEffect(() => {
+    // Local device storage is the startup authority. Cloud backup/restore is optional
+    // and only runs when the user explicitly requests it from the app.
+    setInitialCheckComplete(true);
+
     if (!isAuthenticated || !authenticatedEmail) {
-      console.log("[UserDataSync] User not authenticated, clearing sync state");
+      console.log('[UserDataSync] Local-first startup ready; no authenticated cloud session required.');
       setHasCloudData(false);
       setLastSyncTime(null);
-      setInitialCheckComplete(false);
       lastSyncedEmailRef.current = null;
-      hasInitializedRef.current = false;
       return;
     }
 
-    // On hot reload, if initialCheckComplete is false but hasInitialized is true, reset
-    if (hasInitializedRef.current && !initialCheckComplete) {
-      console.log("[UserDataSync] Detected incomplete initialization (hot reload?), resetting");
-      hasInitializedRef.current = false;
-    }
-
-    if (hasInitializedRef.current && lastSyncedEmailRef.current === authenticatedEmail) {
-      console.log("[UserDataSync] Already initialized for this email, skipping");
-      return;
-    }
-
-    if (!ownerScopeId) {
-      console.log('[UserDataSync] Waiting for owner data scope before cloud initialization');
-      return;
-    }
-
-    if (!isCloudBackupEnabled()) {
-      console.log("[UserDataSync] Local-first mode: backend initialization skipped");
-      hasInitializedRef.current = true;
-      setHasCloudData(false);
-      setSyncError(null);
-      setInitialCheckComplete(true);
-      lastSyncedEmailRef.current = authenticatedEmail;
-      return;
-    }
-
-    console.log("[UserDataSync] New user login detected, checking backend...");
-    hasInitializedRef.current = true;
-    
-    if (safetyTimeoutRef.current) {
-      clearTimeout(safetyTimeoutRef.current);
-    }
-    safetyTimeoutRef.current = setTimeout(() => {
-      if (isMountedRef.current && !initialCheckComplete) {
-        console.log("[UserDataSync] Safety timeout reached - forcing initialCheckComplete");
-        setInitialCheckComplete(true);
-      }
-    }, 6000);
-    
-    const initSync = async () => {
-      const reachable = await withTimeout(
-        isBackendReachable(),
-        ASYNC_OPERATION_TIMEOUT_MS,
-        '[UserDataSync] Checking backend reachability during initialization'
-      );
-      if (!reachable) {
-        console.log("[UserDataSync] Backend not reachable, skipping initial sync");
-        setInitialCheckComplete(true);
-        if (safetyTimeoutRef.current) {
-          clearTimeout(safetyTimeoutRef.current);
-          safetyTimeoutRef.current = null;
-        }
-        return;
-      }
-
-      const cloudLoaded = await withTimeout(
-        loadFromCloud(),
-        ASYNC_OPERATION_TIMEOUT_MS + 2000,
-        '[UserDataSync] Initial cloud restore'
-      );
-      
-      if (safetyTimeoutRef.current) {
-        clearTimeout(safetyTimeoutRef.current);
-        safetyTimeoutRef.current = null;
-      }
-      
-      if (syncTimeoutRef.current) {
-        clearTimeout(syncTimeoutRef.current);
-        syncTimeoutRef.current = null;
-      }
-
-      if (isMountedRef.current) {
-        const syncDelayMs = cloudLoaded ? 3000 : 5000;
-        console.log(cloudLoaded
-          ? "[UserDataSync] Cloud data restored, scheduling post-restore sync to backfill latest local-only data"
-          : "[UserDataSync] No cloud data, scheduling initial cloud backup");
-
-        syncTimeoutRef.current = setTimeout(() => {
-          if (!isMountedRef.current) {
-            return;
-          }
-
-          console.log('[UserDataSync] Running post-initialization cloud sync');
-          lastSyncAttemptRef.current = 0;
-          void syncToCloud();
-        }, syncDelayMs);
-      }
-    };
-
-    void initSync();
-  }, [isAuthenticated, authenticatedEmail, ownerScopeId, loadFromCloud, syncToCloud, initialCheckComplete]);
-
-  // Removed automatic storage change listener to prevent continuous sync loops
-  // Users can manually trigger sync via forceSyncNow() if needed
-  useEffect(() => {
-    return () => {
-      if (syncTimeoutRef.current) {
-        clearTimeout(syncTimeoutRef.current);
-        syncTimeoutRef.current = null;
-      }
-      if (safetyTimeoutRef.current) {
-        clearTimeout(safetyTimeoutRef.current);
-        safetyTimeoutRef.current = null;
-      }
-    };
-  }, []);
+    console.log('[UserDataSync] Local-first startup complete; automatic backend restore is disabled.');
+  }, [isAuthenticated, authenticatedEmail]);
 
   useEffect(() => {
     setHasCloudData(false);
     setLastSyncTime(null);
     setLastRestoreTime(null);
     setSyncError(null);
-    setInitialCheckComplete(false);
+    setInitialCheckComplete(true);
     lastSyncedEmailRef.current = null;
     retryCountRef.current = 0;
     lastSyncAttemptRef.current = 0;
-    hasInitializedRef.current = false;
 
     if (!authenticatedEmail) {
       return;

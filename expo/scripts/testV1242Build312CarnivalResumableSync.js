@@ -5,9 +5,9 @@ const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 function assert(condition, message) { if (!condition) throw new Error(message); }
 
 const app = JSON.parse(read('app.json'));
-assert(app.expo.version === '12.4.2', 'Marketing version must remain 12.4.2');
-assert(app.expo.ios.buildNumber === '314', 'iOS buildNumber must remain 314');
-assert(app.expo.android.versionCode === 120405, 'Android versionCode must remain 120405');
+assert(app.expo.version === '12.4.4', 'Marketing version must remain 12.4.4');
+assert(app.expo.ios.buildNumber === '319', 'iOS buildNumber must remain 319');
+assert(app.expo.android.versionCode === 120410, 'Android versionCode must remain 120410');
 
 const runtime = read('lib/carnival/carnivalSyncRuntime.ts');
 for (const marker of [
@@ -45,7 +45,7 @@ for (const marker of [
 
 const provider = read('state/RoyalCaribbeanSyncProvider.tsx');
 for (const marker of [
-  'v12.4.2-build313-carnival-integrity-stage1 active',
+  'v12.4.4-build319-carnival-integrity active',
   'let activeCarnivalRun',
   'new AbortController()',
   'CarnivalSyncCancelledError',

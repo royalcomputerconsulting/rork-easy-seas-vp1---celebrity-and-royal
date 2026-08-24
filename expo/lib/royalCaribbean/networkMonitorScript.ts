@@ -23,7 +23,7 @@ export const NETWORK_MONITOR_SCRIPT = `
     }
   }
   
-  log('🌐 Network monitoring active - will capture all API payloads, including full casino offers v2 response bodies', 'info');
+  log('🌐 Network monitoring active - will capture all API payloads', 'info');
   
   function extractHeaderValue(headers, name) {
     try {
@@ -53,28 +53,75 @@ export const NETWORK_MONITOR_SCRIPT = `
   function captureRequestHeaders(url, options) {
     try {
       if (!url || typeof url !== 'string') return;
-      if (!url.includes('aws-prd.api.rccl.com')) return;
+      const isRoyalApi = url.includes('aws-prd.api.rccl.com')
+        || ((url.includes('royalcaribbean.com') || url.includes('celebritycruises.com')) && url.includes('/api/casino/'));
+      if (!isRoyalApi) return;
 
       const headers = options?.headers;
-      const apiKey = extractHeaderValue(headers, 'x-api-key') || extractHeaderValue(headers, 'X-Api-Key');
+      const apiKey = extractHeaderValue(headers, 'x-api-key') || extractHeaderValue(headers, 'X-Api-Key') || extractHeaderValue(headers, 'appkey');
       const authorization = extractHeaderValue(headers, 'authorization');
-      const accountId = extractHeaderValue(headers, 'account-id');
+      const accountId = extractHeaderValue(headers, 'x-account-id') || extractHeaderValue(headers, 'account-id');
+      const loyaltyId = extractHeaderValue(headers, 'x-loyalty-id');
 
       if (apiKey) window.capturedRequestHeaders.apiKey = apiKey;
       if (authorization) window.capturedRequestHeaders.authorization = authorization;
-      if (accountId) window.capturedRequestHeaders.accountId = accountId;
+      if (accountId) {
+        window.capturedRequestHeaders.accountId = accountId;
+        window.capturedRequestHeaders.xAccountId = accountId;
+      }
+      if (loyaltyId) {
+        window.capturedRequestHeaders.loyaltyId = loyaltyId;
+        window.capturedRequestHeaders.xLoyaltyId = loyaltyId;
+      }
 
-      if (apiKey || authorization || accountId) {
+      if (apiKey || authorization || accountId || loyaltyId) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'network_capture_headers',
           url,
           hasApiKey: !!apiKey,
           hasAuthorization: !!authorization,
           hasAccountId: !!accountId,
+          hasLoyaltyId: !!loyaltyId,
         }));
       }
     } catch (e) {
       // ignore
+    }
+  }
+
+
+  function looksLikeOfferPayload(url, data) {
+    try {
+      const normalizedUrl = String(url || '').toLowerCase();
+      if (!data || typeof data !== 'object') return false;
+      const isRoyalFamilyUrl = normalizedUrl.includes('royalcaribbean.com') || normalizedUrl.includes('celebritycruises.com') || normalizedUrl.includes('api.rccl.com');
+      if (normalizedUrl && !isRoyalFamilyUrl) return false;
+      if (normalizedUrl.includes('/i18n/') || normalizedUrl.includes('/translations/')) return false;
+      const preview = JSON.stringify(data).slice(0, 240000).toLowerCase();
+      const hasOfferShape = preview.includes('offercode') || preview.includes('casinooffers') || preview.includes('campaignoffer') || (preview.includes('sailings') && (preview.includes('reserveby') || preview.includes('expiration')));
+      return normalizedUrl.includes('offer') || normalizedUrl.includes('club-royale') || hasOfferShape;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function storeOfferCandidate(url, data) {
+    try {
+      if (!looksLikeOfferPayload(url, data)) return;
+      window.capturedPayloads.offerCandidates = window.capturedPayloads.offerCandidates || [];
+      const key = String(url || '') + '|' + String(Date.now());
+      window.capturedPayloads.offerCandidates.push({ key: key, url: String(url || ''), data: data, timestamp: new Date().toISOString() });
+      if (window.capturedPayloads.offerCandidates.length > 20) {
+        window.capturedPayloads.offerCandidates = window.capturedPayloads.offerCandidates.slice(-20);
+      }
+      window.capturedPayloads.offers = data;
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'network_capture_offer_available',
+        url: String(url || '')
+      }));
+      log('📦 Captured live ' + (String(url || '').toLowerCase().includes('celebritycruises.com') ? 'Blue Chip Club' : 'Club Royale') + ' offer payload from ' + String(url || '').split('?')[0], 'success');
+    } catch (e) {
+      // Never let optional offer discovery interfere with the website request.
     }
   }
 
@@ -87,28 +134,31 @@ export const NETWORK_MONITOR_SCRIPT = `
 
     return originalFetch.apply(this, args).then(async (response) => {
       const clonedResponse = response.clone();
+      const offerProbeResponse = response.clone();
+
+      try {
+        const contentType = offerProbeResponse.headers.get('content-type') || '';
+        if (response.ok && contentType.toLowerCase().includes('json')) {
+          try {
+            const offerProbeData = await offerProbeResponse.json();
+            storeOfferCandidate(url, offerProbeData);
+          } catch (offerProbeError) {
+            // Ignore non-offer or unreadable JSON probes.
+          }
+        }
+      } catch (offerProbeOuterError) {
+        // Ignore optional offer discovery failures.
+      }
       
       try {
-        if (url.includes('/casino-offers') || url.includes('/api/casino/casino-offers') || url.includes('/api/casino/v2/offers/merged') || url.includes('/api/casino/v2/offers/facets')) {
+        if (url.includes('/casino-offers') || url.includes('/api/casino/casino-offers')) {
           log('📦 Captured Casino Offers API payload', 'info');
           const data = await clonedResponse.json();
-          const offers = data?.payload?.casinoOffers || data?.casinoOffers || data?.payload?.offers || data?.offers || [];
-          const capture = { url, data, method: options?.method || 'GET', requestBody: options?.body || null, transport: 'fetch', capturedAt: new Date().toISOString() };
+          const offers = data?.payload?.casinoOffers || data?.casinoOffers || [];
           window.capturedPayloads.offers = data;
-          window.capturedPayloads.offerPayloads = window.capturedPayloads.offerPayloads || [];
-          window.capturedPayloads.offerPayloads.push(capture);
-          window.capturedOfferPayloads = window.capturedOfferPayloads || [];
-          window.capturedOfferPayloads.push(capture);
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'network_capture',
-            endpoint: 'casinoOffersV2',
-            data: data,
-            url: url,
-            requestBody: options?.body || null
-          }));
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'log',
-            message: \`📦 Captured Casino Offers API payload with \${offers.length} top-level offer item(s) from \${url}\`,
+            message: \`📦 Captured Casino Offers API payload with \${offers.length} offers\`,
             logType: 'info'
           }));
         }
@@ -154,7 +204,16 @@ export const NETWORK_MONITOR_SCRIPT = `
           log(\`📦 [Fetch] Captured Loyalty API payload from \${url}\`, 'success');
           
           const loyaltyInfo = data?.payload?.loyaltyInformation || data?.loyaltyInformation || data;
-          if (loyaltyInfo?.crownAndAnchorSocietyLoyaltyTier || loyaltyInfo?.clubRoyaleLoyaltyTier) {
+          const loyaltyUrl = String(url || '').toLowerCase();
+          const isCelebrityLoyalty = loyaltyUrl.includes('celebritycruises.com') || loyaltyUrl.includes('/celebrity/');
+          if (isCelebrityLoyalty) {
+            if (loyaltyInfo?.captainsClubLoyaltyTier) {
+              log(\`   🌟 Captain's Club: \${loyaltyInfo.captainsClubLoyaltyTier}\`, 'info');
+            }
+            if (loyaltyInfo?.celebrityBlueChipLoyaltyTier) {
+              log(\`   🎲 Blue Chip Club: \${loyaltyInfo.celebrityBlueChipLoyaltyTier}\`, 'info');
+            }
+          } else if (loyaltyInfo?.crownAndAnchorSocietyLoyaltyTier || loyaltyInfo?.clubRoyaleLoyaltyTier) {
             if (loyaltyInfo.crownAndAnchorSocietyLoyaltyTier) {
               log(\`   👑 Crown & Anchor: \${loyaltyInfo.crownAndAnchorSocietyLoyaltyTier}\`, 'info');
             }
@@ -209,48 +268,26 @@ export const NETWORK_MONITOR_SCRIPT = `
           log(\`🎫 [Fetch] Captured Booked Cruise Details from \${url}\`, 'info');
         }
         
-        else if (url.includes('carnival.com') && (url.includes('/api/') || url.includes('/profilemanagement/'))) {
+        else if (url.includes('carnival.com')) {
           try {
             const ct = clonedResponse.headers.get('content-type') || '';
             if (ct.includes('json')) {
               const data = await clonedResponse.json();
-              
-              if (url.includes('/offers') || url.includes('/vifp')) {
-                if (data.Items && Array.isArray(data.Items)) {
-                  window.capturedPayloads.carnivalVifpOffers = data;
-                  window.__carnivalVifpOffers = data;
-                  window.ReactNativeWebView.postMessage(JSON.stringify({
-                    type: 'network_payload',
-                    endpoint: 'carnival_vifp_offers',
-                    data: data,
-                    url: url
-                  }));
-                  log(\`🎪 [Fetch] Captured Carnival VIFP offers: \${data.Items.length} items from \${url}\`, 'success');
-                }
+              // Carnival frequently changes endpoint aliases. Capture the live JSON response
+              // and let the app classify its structure instead of treating the URL as authority.
+              window.capturedPayloads.carnivalLiveJson = window.capturedPayloads.carnivalLiveJson || [];
+              window.capturedPayloads.carnivalLiveJson.push({ url: url, data: data, timestamp: new Date().toISOString() });
+              if (data && data.Items && Array.isArray(data.Items)) {
+                window.capturedPayloads.carnivalVifpOffers = data;
+                window.__carnivalVifpOffers = data;
               }
-              
-              if (url.includes('/bookings') || url.includes('/cruises') || url.includes('/reservation')) {
-                let bookings = null;
-                if (Array.isArray(data)) bookings = data;
-                else if (data.bookings && Array.isArray(data.bookings)) bookings = data.bookings;
-                else if (data.cruises && Array.isArray(data.cruises)) bookings = data.cruises;
-                else if (data.data && Array.isArray(data.data)) bookings = data.data;
-                else if (data.payload && Array.isArray(data.payload)) bookings = data.payload;
-                else if (data.upcoming && Array.isArray(data.upcoming)) bookings = data.upcoming;
-                else if (data.upcomingCruises && Array.isArray(data.upcomingCruises)) bookings = data.upcomingCruises;
-                else if (data.pastCruises && Array.isArray(data.pastCruises)) bookings = data.pastCruises;
-                
-                if (bookings && bookings.length > 0) {
-                  window.capturedPayloads.upcomingCruises = data;
-                  window.ReactNativeWebView.postMessage(JSON.stringify({
-                    type: 'network_payload',
-                    endpoint: 'bookings',
-                    data: data,
-                    url: url
-                  }));
-                  log(\`🎪 [Fetch] Captured Carnival bookings: \${bookings.length} from \${url}\`, 'success');
-                }
-              }
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'network_payload',
+                endpoint: 'carnival_structured_payload',
+                data: data,
+                url: url
+              }));
+              log(\`🎪 [Fetch] Captured Carnival live JSON from \${url.split('?')[0]}\`, 'info');
             }
           } catch (carnivalErr) {
             // ignore carnival parse errors
@@ -286,14 +323,24 @@ export const NETWORK_MONITOR_SCRIPT = `
       try {
         _headers[String(name || '').toLowerCase()] = String(value ?? '');
 
-        if (_url.includes('aws-prd.api.rccl.com')) {
-          const apiKey = _headers['x-api-key'];
+        const isRoyalApi = _url.includes('aws-prd.api.rccl.com')
+          || ((_url.includes('royalcaribbean.com') || _url.includes('celebritycruises.com')) && _url.includes('/api/casino/'));
+        if (isRoyalApi) {
+          const apiKey = _headers['x-api-key'] || _headers['appkey'];
           const authorization = _headers['authorization'];
-          const accountId = _headers['account-id'];
+          const accountId = _headers['x-account-id'] || _headers['account-id'];
+          const loyaltyId = _headers['x-loyalty-id'];
 
           if (apiKey) window.capturedRequestHeaders.apiKey = apiKey;
           if (authorization) window.capturedRequestHeaders.authorization = authorization;
-          if (accountId) window.capturedRequestHeaders.accountId = accountId;
+          if (accountId) {
+            window.capturedRequestHeaders.accountId = accountId;
+            window.capturedRequestHeaders.xAccountId = accountId;
+          }
+          if (loyaltyId) {
+            window.capturedRequestHeaders.loyaltyId = loyaltyId;
+            window.capturedRequestHeaders.xLoyaltyId = loyaltyId;
+          }
         }
       } catch (e) {
         // ignore
@@ -306,25 +353,14 @@ export const NETWORK_MONITOR_SCRIPT = `
         const url = this.responseURL || _url || '';
         
         try {
-          if (url.includes('/casino-offers') || url.includes('/api/casino/casino-offers') || url.includes('/api/casino/v2/offers/merged') || url.includes('/api/casino/v2/offers/facets')) {
-            const data = JSON.parse(this.responseText);
-            const offers = data?.payload?.casinoOffers || data?.casinoOffers || data?.payload?.offers || data?.offers || [];
-            const capture = { url, data, method: 'XHR', requestBody: null, transport: 'xhr', capturedAt: new Date().toISOString() };
-            window.capturedPayloads.offers = data;
-            window.capturedPayloads.offerPayloads = window.capturedPayloads.offerPayloads || [];
-            window.capturedPayloads.offerPayloads.push(capture);
-            window.capturedOfferPayloads = window.capturedOfferPayloads || [];
-            window.capturedOfferPayloads.push(capture);
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'network_capture',
-              endpoint: 'casinoOffersV2',
-              data: data,
-              url: url
-            }));
-            log(\`📦 [XHR] Captured Casino Offers API payload with \${offers.length} top-level offer item(s) from \${url}\`, 'info');
+          try {
+            const genericJson = JSON.parse(this.responseText);
+            storeOfferCandidate(url, genericJson);
+          } catch (genericOfferError) {
+            // Ignore non-JSON responses.
           }
-          
-          else if (url.includes('/profileBookings/enriched')) {
+
+          if (url.includes('/profileBookings/enriched')) {
             const data = JSON.parse(this.responseText);
             const bookings = data?.payload?.profileBookings || [];
             window.capturedPayloads.upcomingCruises = data;
@@ -365,7 +401,16 @@ export const NETWORK_MONITOR_SCRIPT = `
             log(\`📦 [XHR] Captured Loyalty API from \${url}\`, 'success');
             
             const loyaltyInfo = data?.payload?.loyaltyInformation || data?.loyaltyInformation || data;
-            if (loyaltyInfo?.crownAndAnchorSocietyLoyaltyTier || loyaltyInfo?.clubRoyaleLoyaltyTier) {
+            const loyaltyUrl = String(url || '').toLowerCase();
+            const isCelebrityLoyalty = loyaltyUrl.includes('celebritycruises.com') || loyaltyUrl.includes('/celebrity/');
+            if (isCelebrityLoyalty) {
+              if (loyaltyInfo?.captainsClubLoyaltyTier) {
+                log(\`   🌟 Captain's Club: \${loyaltyInfo.captainsClubLoyaltyTier}\`, 'info');
+              }
+              if (loyaltyInfo?.celebrityBlueChipLoyaltyTier) {
+                log(\`   🎲 Blue Chip Club: \${loyaltyInfo.celebrityBlueChipLoyaltyTier}\`, 'info');
+              }
+            } else if (loyaltyInfo?.crownAndAnchorSocietyLoyaltyTier || loyaltyInfo?.clubRoyaleLoyaltyTier) {
               if (loyaltyInfo.crownAndAnchorSocietyLoyaltyTier) {
                 log(\`   👑 Crown & Anchor: \${loyaltyInfo.crownAndAnchorSocietyLoyaltyTier}\`, 'info');
               }

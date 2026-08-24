@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Animated,
   Alert,
+  Keyboard,
   TextInput,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -43,6 +44,9 @@ import {
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
 import { IntelligenceFilterStrip } from '@/components/IntelligenceFilterStrip';
 import type { AgentXMode } from '@/types/models';
+import type { ConversationSourceReference } from '@/lib/askAllOffers/types';
+import { useRouter } from 'expo-router';
+import type { AgentConfirmedAction } from '@/lib/agentConfirmedActions';
 
 export interface ChatMessage {
   id: string;
@@ -54,6 +58,9 @@ export interface ChatMessage {
   toolInput?: unknown;
   contextSummary?: string;
   suggestedActions?: { id: string; label: string; prompt: string }[];
+  sourceReferences?: ConversationSourceReference[];
+  pendingAction?: AgentConfirmedAction;
+  actionStatus?: 'pending' | 'confirmed' | 'cancelled' | 'failed';
 }
 
 export interface AgentXQuickAction {
@@ -85,6 +92,11 @@ interface AgentXChatProps {
   showFilterStrip?: boolean;
   quickActions?: AgentXQuickAction[];
   defaultTtsEnabled?: boolean;
+  showAgentModes?: boolean;
+  unifiedComposer?: boolean;
+  keyboardAvoidanceEnabled?: boolean;
+  onConfirmAction?: (action: AgentConfirmedAction) => Promise<{ route?: string } | void>;
+  onCancelAction?: (action: AgentConfirmedAction) => void;
 }
 
 const STT_ENDPOINT = 'https://toolkit.rork.com/stt/transcribe/';
@@ -208,7 +220,13 @@ export const AgentXChat = React.memo(function AgentXChat({
   showFilterStrip = true,
   quickActions = QUICK_ACTIONS,
   defaultTtsEnabled = true,
+  showAgentModes = true,
+  unifiedComposer = false,
+  keyboardAvoidanceEnabled = true,
+  onConfirmAction,
+  onCancelAction,
 }: AgentXChatProps) {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -275,6 +293,14 @@ export const AgentXChat = React.memo(function AgentXChat({
       }, 100);
     }
   }, [messages]);
+
+  useEffect(() => {
+    const eventName = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const subscription = Keyboard.addListener(eventName, () => {
+      setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), Platform.OS === 'ios' ? 80 : 20);
+    });
+    return () => subscription.remove();
+  }, []);
 
   useEffect(() => {
     if (!ttsEnabled) return;
@@ -528,6 +554,11 @@ export const AgentXChat = React.memo(function AgentXChat({
     setManualInput('');
   }, [manualInput, isLoading, isTranscribing, isRecording, isSpeaking, stopSpeaking, onSendMessage]);
 
+  const handleConfirmAction = useCallback(async (action: AgentConfirmedAction) => {
+    const result = await onConfirmAction?.(action);
+    if (result?.route) router.push(result.route as never);
+  }, [onConfirmAction, router]);
+
   const renderMessage = useCallback((message: ChatMessage, _index: number) => {
     const isUser = message.role === 'user';
 
@@ -565,18 +596,41 @@ export const AgentXChat = React.memo(function AgentXChat({
                 {!isUser && message.contextSummary ? (
                   <View style={styles.contextBadge} testID={`agentx-answer-context-${message.id}`}>
                     <SlidersHorizontal size={12} color="#0F766E" />
-                    <Text style={styles.contextBadgeText}>{message.contextSummary}</Text>
+                    <Text style={styles.contextBadgeText}>{unifiedComposer ? 'Answer based on your saved Easy Seas data' : message.contextSummary}</Text>
                   </View>
                 ) : null}
-                <ScrollView 
-                  style={styles.messageScrollView}
-                  nestedScrollEnabled={true}
-                  showsVerticalScrollIndicator={true}
-                >
-                  <Text style={[styles.messageText, isUser && styles.userMessageText]}>
-                    {message.content}
-                  </Text>
-                </ScrollView>
+                <Text style={[styles.messageText, isUser && styles.userMessageText]}>
+                  {message.content}
+                </Text>
+                {!isUser && message.sourceReferences && message.sourceReferences.length > 0 ? (
+                  <View style={styles.sourceReferences} testID={`agentx-source-references-${message.id}`}>
+                    <Text style={styles.sourceReferencesTitle}>Sources and calculations</Text>
+                    {message.sourceReferences.map((source) => (
+                      <TouchableOpacity
+                        key={source.id}
+                        style={styles.sourceReference}
+                        disabled={!source.route}
+                        onPress={() => source.route && router.push(source.route as never)}
+                        testID={`agentx-source-${source.id}`}
+                      >
+                        <View style={styles.sourceReferenceTop}><Text style={styles.sourceReferenceLabel}>{source.label}</Text><Text style={styles.sourceEvidenceKind}>{source.evidenceKind}</Text></View>
+                        <Text style={styles.sourceReferenceDetail} numberOfLines={3}>{source.detail}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                ) : null}
+                {!isUser && message.pendingAction ? (
+                  <View style={styles.confirmAction} testID={`agentx-confirm-action-${message.pendingAction.id}`}>
+                    <Text style={styles.confirmActionTitle}>Confirmation required</Text>
+                    <Text style={styles.confirmActionDescription}>{message.pendingAction.description}</Text>
+                    {message.actionStatus === 'pending' || !message.actionStatus ? (
+                      <View style={styles.confirmActionButtons}>
+                        <TouchableOpacity style={styles.cancelActionButton} onPress={() => onCancelAction?.(message.pendingAction!)} testID={`agentx-cancel-${message.pendingAction.id}`}><Text style={styles.cancelActionText}>Cancel</Text></TouchableOpacity>
+                        <TouchableOpacity style={styles.confirmActionButton} onPress={() => void handleConfirmAction(message.pendingAction!)} testID={`agentx-confirm-${message.pendingAction.id}`}><Text style={styles.confirmActionText}>Confirm: {message.pendingAction.label}</Text></TouchableOpacity>
+                      </View>
+                    ) : <Text style={styles.actionResult}>{message.actionStatus === 'confirmed' ? 'Confirmed and completed.' : message.actionStatus === 'cancelled' ? 'Cancelled—no changes made.' : 'Action could not be completed.'}</Text>}
+                  </View>
+                ) : null}
                 {!isUser && message.suggestedActions && message.suggestedActions.length > 0 ? (
                   <View style={styles.suggestedActionsRow} testID={`agentx-suggested-actions-${message.id}`}>
                     {message.suggestedActions.map((action) => (
@@ -621,7 +675,7 @@ export const AgentXChat = React.memo(function AgentXChat({
         </View>
       </Animated.View>
     );
-  }, [fadeAnim, handleQuickAction, speakText]);
+  }, [fadeAnim, handleConfirmAction, handleQuickAction, onCancelAction, router, speakText, unifiedComposer]);
 
   const renderWelcome = () => (
     <View style={styles.welcomeContainer}>
@@ -641,7 +695,7 @@ export const AgentXChat = React.memo(function AgentXChat({
 
       <View style={styles.voiceHintContainer}>
         <Mic size={16} color={COLORS.navyDeep} />
-        <Text style={styles.voiceHintText}>Choose Voice or Manual below — speak naturally or type your request</Text>
+        <Text style={styles.voiceHintText}>{unifiedComposer ? 'Tap the microphone to speak, or type in the same message box.' : 'Choose Voice or Manual below — speak naturally or type your request'}</Text>
       </View>
 
       {showDevAssistant ? (
@@ -713,6 +767,7 @@ export const AgentXChat = React.memo(function AgentXChat({
       style={[styles.container, isExpanded && styles.containerExpanded]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      enabled={keyboardAvoidanceEnabled}
     >
       <LinearGradient
         colors={['#E0F2FE', '#DBEAFE', '#E0F7FA']}
@@ -775,7 +830,7 @@ export const AgentXChat = React.memo(function AgentXChat({
         )}
       </View>
 
-      <View style={styles.agentModeStrip} testID="agentx-mode-selector">
+      {showAgentModes ? <View style={styles.agentModeStrip} testID="agentx-mode-selector">
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.agentModeScroll}>
           {AGENT_MODES.map((agentMode) => {
             const ModeIcon = agentMode.icon;
@@ -794,7 +849,7 @@ export const AgentXChat = React.memo(function AgentXChat({
             );
           })}
         </ScrollView>
-      </View>
+      </View> : null}
 
       {showFilterStrip ? (
         <View style={styles.filterStripWrap}>
@@ -829,6 +884,10 @@ export const AgentXChat = React.memo(function AgentXChat({
         contentContainerStyle={styles.messagesContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        onContentSizeChange={() => {
+          if (messages.length > 0) scrollViewRef.current?.scrollToEnd({ animated: false });
+        }}
       >
         {messages.length === 0 ? renderWelcome() : messages.map(renderMessage)}
       </ScrollView>
@@ -851,7 +910,50 @@ export const AgentXChat = React.memo(function AgentXChat({
         </View>
       )}
       
-      <View style={styles.inputContainer}>
+      <View style={[styles.inputContainer, unifiedComposer && styles.unifiedInputContainer]}>
+        {unifiedComposer ? (
+          <View style={[styles.inputWrapper, styles.unifiedComposer]} testID="agentx-composer">
+            <TouchableOpacity
+              style={[
+                styles.micButton,
+                isRecording && styles.micButtonRecording,
+                (isLoading || isTranscribing) && styles.micButtonDisabled,
+              ]}
+              onPress={handleMicPress}
+              disabled={isLoading || isTranscribing}
+              activeOpacity={0.7}
+              accessibilityLabel={isRecording ? 'Stop voice input' : 'Start voice input'}
+              testID="agentx-unified-mic"
+            >
+              {isTranscribing ? <ActivityIndicator size="small" color={COLORS.white} /> : isRecording ? <MicOff size={20} color={COLORS.white} /> : <Mic size={20} color={COLORS.white} />}
+            </TouchableOpacity>
+            <TextInput
+              style={styles.unifiedTextInput}
+              value={manualInput}
+              onChangeText={setManualInput}
+              placeholder={isRecording ? 'Listening… tap the microphone when finished' : placeholder}
+              placeholderTextColor="rgba(30, 58, 95, 0.45)"
+              editable={!isLoading && !isTranscribing && !isRecording}
+              multiline
+              blurOnSubmit={false}
+              onFocus={() => setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 80)}
+              textAlignVertical="center"
+              autoCorrect
+              autoCapitalize="sentences"
+              testID="agentx-unified-input"
+            />
+            <TouchableOpacity
+              style={[styles.sendButton, styles.unifiedSendButton, (!manualInput.trim() || isLoading || isTranscribing || isRecording) && styles.sendButtonDisabled]}
+              onPress={handleManualSend}
+              disabled={!manualInput.trim() || isLoading || isTranscribing || isRecording}
+              activeOpacity={0.7}
+              accessibilityLabel="Send message"
+              testID="agentx-unified-send"
+            >
+              <Text style={styles.sendButtonText}>Send</Text>
+            </TouchableOpacity>
+          </View>
+        ) : <>
         <View style={styles.modeSelector} testID="agentx-input-mode-toggle">
           <TouchableOpacity
             style={[
@@ -984,6 +1086,7 @@ export const AgentXChat = React.memo(function AgentXChat({
             </View>
           </View>
         )}
+        </>}
 
         <Text style={styles.disclaimer}>
           {disclaimerText}
@@ -1385,9 +1488,64 @@ const styles = StyleSheet.create({
     color: '#0F766E',
     lineHeight: 14,
   },
-  messageScrollView: {
-    maxHeight: 200,
+  sourceReferences: {
+    marginTop: SPACING.sm,
+    gap: 6,
   },
+  sourceReferencesTitle: {
+    color: '#0F766E',
+    fontSize: 11,
+    fontWeight: '900' as const,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
+  },
+  sourceReference: {
+    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 7,
+  },
+  sourceReferenceTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  sourceReferenceLabel: {
+    flex: 1,
+    color: COLORS.navyDeep,
+    fontSize: 11,
+    fontWeight: '800' as const,
+  },
+  sourceEvidenceKind: {
+    color: '#0F766E',
+    fontSize: 9,
+    fontWeight: '900' as const,
+    textTransform: 'uppercase' as const,
+  },
+  sourceReferenceDetail: {
+    color: '#475569',
+    fontSize: 10,
+    lineHeight: 14,
+    marginTop: 3,
+  },
+  confirmAction: {
+    marginTop: SPACING.sm,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+    backgroundColor: '#FFFBEB',
+    padding: SPACING.sm,
+  },
+  confirmActionTitle: { color: '#92400E', fontSize: 11, fontWeight: '900' as const, textTransform: 'uppercase' as const },
+  confirmActionDescription: { color: '#78350F', fontSize: 11, lineHeight: 16, marginTop: 4 },
+  confirmActionButtons: { flexDirection: 'row', gap: 7, marginTop: 9 },
+  cancelActionButton: { paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#CBD5E1', backgroundColor: '#FFFFFF' },
+  cancelActionText: { color: '#475569', fontSize: 10, fontWeight: '800' as const },
+  confirmActionButton: { flex: 1, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8, backgroundColor: '#0F766E', alignItems: 'center' },
+  confirmActionText: { color: '#FFFFFF', fontSize: 10, fontWeight: '900' as const },
+  actionResult: { color: '#0F766E', fontSize: 11, fontWeight: '800' as const, marginTop: 7 },
   suggestedActionsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1460,6 +1618,11 @@ const styles = StyleSheet.create({
     borderTopColor: 'rgba(0, 31, 63, 0.1)',
     backgroundColor: 'rgba(255, 255, 255, 0.8)',
   },
+  unifiedInputContainer: {
+    marginBottom: 0,
+    paddingHorizontal: SPACING.sm,
+    paddingBottom: SPACING.sm,
+  },
   modeSelector: {
     flexDirection: 'row',
     backgroundColor: 'rgba(0, 31, 63, 0.06)',
@@ -1526,6 +1689,25 @@ const styles = StyleSheet.create({
     color: COLORS.navyDeep,
     paddingTop: Platform.OS === 'ios' ? 12 : 8,
     paddingBottom: Platform.OS === 'ios' ? 12 : 8,
+  },
+  unifiedComposer: {
+    alignItems: 'center',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 6,
+  },
+  unifiedTextInput: {
+    flex: 1,
+    minHeight: 44,
+    maxHeight: 104,
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    lineHeight: 21,
+    color: COLORS.navyDeep,
+    paddingHorizontal: 4,
+    paddingVertical: Platform.OS === 'ios' ? 10 : 7,
+  },
+  unifiedSendButton: {
+    minWidth: 64,
+    height: 42,
   },
   sendButton: {
     minWidth: 74,

@@ -1,6 +1,15 @@
-export const CERTIFICATE_DOWNLOAD_LOG_VERSION = 'v12.4.0-certificate-download-live-log-export';
+export const CERTIFICATE_DOWNLOAD_LOG_VERSION = 'v12.7.0-hermes-explicit-date-evidence';
 
 export type CertificateDownloadLogType = 'info' | 'success' | 'warning' | 'error';
+export type CertificateDownloadPhase = 'queued' | 'downloading' | 'parsing' | 'saving' | 'saved' | 'failed';
+
+export interface CertificateDownloadProgressItem {
+  certificateCode: string;
+  phase: CertificateDownloadPhase;
+  message: string;
+  updatedAt: string;
+  sailingReferences?: number;
+}
 
 export interface CertificateDownloadLogEntry {
   id: string;
@@ -17,6 +26,9 @@ export interface CertificateDownloadLogSnapshot {
   currentCertificateCodes: string[];
   isActive: boolean;
   sessionStartedAt: string | null;
+  completed: number;
+  total: number;
+  items: CertificateDownloadProgressItem[];
 }
 
 type Listener = (snapshot: CertificateDownloadLogSnapshot) => void;
@@ -40,6 +52,7 @@ class CertificateDownloadLogger {
   private currentCertificateCodes: string[] = [];
   private isActive = false;
   private sessionStartedAt: string | null = null;
+  private progressItems = new Map<string, CertificateDownloadProgressItem>();
   private nextId = 1;
 
   private emit() {
@@ -68,6 +81,9 @@ class CertificateDownloadLogger {
       currentCertificateCodes: [...this.currentCertificateCodes],
       isActive: this.isActive,
       sessionStartedAt: this.sessionStartedAt,
+      completed: Array.from(this.progressItems.values()).filter((item) => item.phase === 'saved' || item.phase === 'failed').length,
+      total: this.progressItems.size,
+      items: Array.from(this.progressItems.values()),
     };
   }
 
@@ -80,6 +96,12 @@ class CertificateDownloadLogger {
     this.isActive = true;
     this.currentActivity = message;
     this.currentCertificateCodes = [...(options?.certificateCodes ?? [])];
+    this.progressItems = new Map((options?.certificateCodes ?? []).map((certificateCode) => [certificateCode, {
+      certificateCode,
+      phase: 'queued' as const,
+      message: 'Queued',
+      updatedAt: this.sessionStartedAt!,
+    }]));
     this.log(message, 'info', options?.certificateCodes, false);
     this.emit();
   }
@@ -88,6 +110,26 @@ class CertificateDownloadLogger {
     this.currentActivity = message;
     this.currentCertificateCodes = [...(certificateCodes ?? [])];
     this.isActive = true;
+    this.emit();
+  }
+
+  updateCertificate(
+    certificateCode: string,
+    phase: CertificateDownloadPhase,
+    message?: string,
+    sailingReferences?: number,
+  ) {
+    const code = String(certificateCode ?? '').trim().toUpperCase();
+    if (!code) return;
+    this.progressItems.set(code, {
+      certificateCode: code,
+      phase,
+      message: message?.trim() || phase,
+      updatedAt: new Date().toISOString(),
+      sailingReferences,
+    });
+    this.currentActivity = `${code}: ${message?.trim() || phase}`;
+    this.currentCertificateCodes = [code];
     this.emit();
   }
 
@@ -134,6 +176,7 @@ class CertificateDownloadLogger {
     this.currentCertificateCodes = [];
     this.isActive = false;
     this.sessionStartedAt = null;
+    this.progressItems.clear();
     this.nextId = 1;
     this.emit();
   }
@@ -145,6 +188,10 @@ class CertificateDownloadLogger {
       `Exported: ${new Date().toISOString()}`,
       `Session started: ${this.sessionStartedAt ?? 'not started'}`,
       `Current status: ${this.currentActivity}`,
+      `Progress: ${Array.from(this.progressItems.values()).filter((item) => item.phase === 'saved' || item.phase === 'failed').length}/${this.progressItems.size}`,
+      '',
+      '--- PER CERTIFICATE ---',
+      ...Array.from(this.progressItems.values()).map((item) => `${item.certificateCode}: ${item.phase.toUpperCase()} — ${item.message}${item.sailingReferences == null ? '' : ` (${item.sailingReferences} sailing references)`}`),
       '',
       '--- ACTIVITY ---',
     ];

@@ -14,8 +14,6 @@ import {
   ShieldCheck,
 } from 'lucide-react-native';
 import { useLoyalty } from '@/state/LoyaltyProvider';
-import { useAuth } from '@/state/AuthProvider';
-import { useUserDataSync } from '@/state/UserDataSyncProvider';
 import { formatNumber } from '@/lib/format';
 import { CLUB_ROYALE_TIERS } from '@/constants/clubRoyaleTiers';
 import { CROWN_ANCHOR_LEVELS, LEVEL_ORDER } from '@/constants/crownAnchor';
@@ -32,8 +30,6 @@ import { LARGE_SCREEN_BREAKPOINT } from '@/constants/layout';
  */
 export default function LoyaltyDataScreen() {
   const router = useRouter();
-  const { authenticatedEmail } = useAuth();
-  const { lastSyncTime, isSyncing, forceSyncNow } = useUserDataSync();
   const {
     clubRoyaleTier,
     clubRoyaleCurrentYearPoints,
@@ -51,17 +47,12 @@ export default function LoyaltyDataScreen() {
   const drill = useDrillDown();
 
   const dataAsOfLabel = useMemo(() => {
-    if (!lastSyncTime) return 'Data as of your last local update';
-    const parsed = new Date(lastSyncTime);
-    if (Number.isNaN(parsed.getTime())) return 'Data as of your last local update';
-    return `Data as of ${parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
-  }, [lastSyncTime]);
+    return 'Data as of your last local update';
+  }, []);
 
   const handleSyncNow = useCallback(() => {
-    if (authenticatedEmail) {
-      forceSyncNow().catch((error) => console.error('[LoyaltyData] Sync Now failed:', error));
-    }
-  }, [authenticatedEmail, forceSyncNow]);
+    router.push('/royal-caribbean-sync' as any);
+  }, [router]);
 
   const signatureThreshold = CLUB_ROYALE_TIERS.Signature.threshold;
   const mastersThreshold = CLUB_ROYALE_TIERS.Masters.threshold;
@@ -167,8 +158,8 @@ export default function LoyaltyDataScreen() {
         <View>
           <Text style={styles.dataAsOfText} numberOfLines={1}>{dataAsOfLabel}</Text>
           <TouchableOpacity style={styles.syncButton} activeOpacity={0.75} onPress={handleSyncNow} testID="loyalty-sync-now">
-            <RefreshCw size={12} color={COLORS.royalBlue} style={isSyncing ? { transform: [{ rotate: '45deg' }] } : undefined} />
-            <Text style={styles.syncButtonText}>{isSyncing ? 'Syncing…' : 'Sync Now'}</Text>
+            <RefreshCw size={12} color={COLORS.royalBlue} />
+            <Text style={styles.syncButtonText}>Sync Loyalty</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -229,7 +220,7 @@ export default function LoyaltyDataScreen() {
               <Database size={14} color={COLORS.green} />
               <Text style={styles.integrityLabel}>Data Source</Text>
             </View>
-            <Text style={[styles.integrityValue, { color: COLORS.green }]}>{lastSyncTime ? 'Synced' : 'Local Only'}</Text>
+            <Text style={[styles.integrityValue, { color: COLORS.green }]}>{clubRoyalePointsSource === 'api' ? 'Royal Sync' : 'Local First'}</Text>
           </View>
           <View style={styles.integrityDivider} />
           <View style={styles.integrityItem}>

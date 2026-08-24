@@ -79,6 +79,9 @@ export interface LiveCasinoAdvisorSnapshot {
   recommendation: CertificateRecommendationSnapshot;
   endOfCruiseProjection: EndOfCruisePointProjection;
   oneMoreSessionScenario: OneMoreSessionScenario;
+  sessionScenarios: OneMoreSessionScenario[];
+  playMode: 'loss-control' | 'profit-protected' | 'neutral';
+  valueEvidenceByThresholdId: Record<string, { sourceIds: string[]; confidence: ConfidenceBand; warnings: string[]; formula: string }>;
   stale: boolean;
   offline: boolean;
   refreshReasons: string[];

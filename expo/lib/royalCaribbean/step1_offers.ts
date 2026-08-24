@@ -1,940 +1,1511 @@
 export const STEP1_OFFERS_SCRIPT = String.raw`
 (function() {
-  const ENGINE_VERSION = 'v12.3.3-dynamic-visible-offer-catalog';
-  const SYNC_BRAND = (window.__EASYSEAS_SYNC_BRAND || 'royal_caribbean');
-  const BRAND_CONFIGS = {
-    royal_caribbean: {
-      key: 'royal_caribbean', label: 'Royal Caribbean / Club Royale', programName: 'Club Royale', offerListUrl: 'https://www.royalcaribbean.com/club-royale/offers', detailBaseUrl: 'https://www.royalcaribbean.com/club-royale/offers/', offerPathRe: /\/club-royale\/offers/i, hostRe: /(^|\.)royalcaribbean\.com$/i, partnersPath: '/api/casino/v1/partners/player', apiBrand: 'R', sourcePrefix: 'royal', approvedAgencyIds:['109638','388809'], partnershipIds:[]
-    },
-    celebrity: {
-      key: 'celebrity', label: 'Celebrity Cruises / Blue Chip Club', programName: 'Blue Chip Club', offerListUrl: 'https://www.celebritycruises.com/blue-chip-club/offers', detailBaseUrl: 'https://www.celebritycruises.com/blue-chip-club/offers/', offerPathRe: /\/blue-chip-club\/offers/i, hostRe: /(^|\.)celebritycruises\.com$/i, partnersPath: '/api/casino/v1/partners/player', apiBrand: 'C', sourcePrefix: 'celebrity', approvedAgencyIds:['109638','388809'], partnershipIds:['29fd854a-d6e3-4333-832c-de249165aa58','b403a9bf-a378-480a-8aa3-dc9b84a7da0d']
-    }
-  };
-  const BRAND = BRAND_CONFIGS[SYNC_BRAND] || BRAND_CONFIGS.royal_caribbean;
-  const OFFER_LIST_URL = BRAND.offerListUrl;
-  const STATE_KEY = 'EASYSEAS_SYNC_NOW_V940_STATE';
-  const BATCH_SIZE = 125;
-  const MAX_BATCH_CHARS = 95000;
-  // v12.3.3: Royal offer count and row count are fully dynamic. Do not hard-code
-  // assumptions like 3, 4, 5, 1000, or any specific monthly catalog size.
-  const MAX_SCROLL_ROUNDS_PER_OFFER = 220;
-  const STABLE_ROUNDS_TO_STOP = 5;
-  const SHIP_NAMES = [
-    'Adventure of the Seas','Allure of the Seas','Anthem of the Seas','Brilliance of the Seas','Enchantment of the Seas','Explorer of the Seas','Freedom of the Seas','Grandeur of the Seas','Harmony of the Seas','Icon of the Seas','Independence of the Seas','Jewel of the Seas','Legend of the Seas','Liberty of the Seas','Mariner of the Seas','Navigator of the Seas','Oasis of the Seas','Odyssey of the Seas','Ovation of the Seas','Quantum of the Seas','Radiance of the Seas','Rhapsody of the Seas','Serenade of the Seas','Spectrum of the Seas','Star of the Seas','Symphony of the Seas','Utopia of the Seas','Vision of the Seas','Voyager of the Seas','Wonder of the Seas','Celebrity Apex','Celebrity Ascent','Celebrity Beyond','Celebrity Constellation','Celebrity Eclipse','Celebrity Edge','Celebrity Equinox','Celebrity Flora','Celebrity Infinity','Celebrity Millennium','Celebrity Reflection','Celebrity Silhouette','Celebrity Solstice','Celebrity Summit','Celebrity Xcel','Celebrity Xpedition','Celebrity Xploration'
-  ];
-  const MONTHS = { jan:1, january:1, feb:2, february:2, mar:3, march:3, apr:4, april:4, may:5, jun:6, june:6, jul:7, july:7, aug:8, august:8, sep:9, sept:9, september:9, oct:10, october:10, nov:11, november:11, dec:12, december:12 };
-  const PORT_HINTS = ['Fort Lauderdale','Port Canaveral','Miami','Tampa','Galveston','Los Angeles','San Diego','New Orleans','Cape Liberty','Seattle','Vancouver','Barcelona','Rome','Ravenna','Athens','Southampton','Singapore','Sydney','Brisbane','San Juan','Baltimore','Boston','Nassau','Perfect Day at CocoCay','CocoCay','Cozumel','Costa Maya','Roatan','Falmouth','Labadee','Grand Cayman','St. Thomas','St Thomas','St. Maarten','St Maarten','Key West','Bimini','Puerto Plata','Cabo San Lucas','Ensenada','Catalina Island','Mazatlan','Juneau','Skagway','Ketchikan','Sitka','Victoria'];
-
-  // Known offer totals from the verified parser proof. These are used only as a safety
-  // rail for current Royal monthly/instant offers to prevent duplicated DOM blocks
-  // (ship pending / whole-page text / repeated expanded sections) from inflating counts.
-  // Historical row counts are documentation only in v12.3.3. They must not cap, reject,
-  // or decide completion because Royal can show 0, 1, 4, 30, or any number of live
-  // offers, and each offer's sailing count can change without warning.
-  const VERIFIED_OFFER_ROW_COUNTS = {};
-
-  function isPendingValue(value){ return !cleanText(value) || /^(ship pending|itinerary pending|unknown|n\/a|null|undefined)$/i.test(cleanText(value)); }
-  function rowQuality(row){
-    let score=0;
-    if (!row) return -9999;
-    const ship=cleanText(row.shipName); const itin=cleanText(row.itinerary); const date=cleanText(row.sailingDate);
-    if (SHIP_NAMES.some(function(name){ return name.toLowerCase() === ship.toLowerCase(); })) score += 90;
-    else if (/of the seas|celebrity/i.test(ship)) score += 55;
-    if (itin && !isPendingValue(itin) && /night|cruise/i.test(itin)) score += 35;
-    if (date && isoDate(date)) score += 25;
-    if (row.detailUrl) score += 8;
-    if (row.priceSource) score += 8;
-    if (row.source && /post|download|rsc/i.test(String(row.source))) score += 12;
-    if (row.source && /view-details|link-enriched/i.test(String(row.source))) score += 10;
-    if (isPendingValue(ship)) score -= 250;
-    if (isPendingValue(itin)) score -= 25;
-    const rawLen=(String(row.rawTextSnippet||'').length + String(row.rawExpandedText||'').length);
-    if (rawLen > 1300) score -= 18;
-    return score;
+  const BATCH_SIZE = 25;
+  const MAX_BATCH_CHARS = 60000;
+  const IS_CELEBRITY = String(location && location.hostname || '').toLowerCase().includes('celebritycruises.com');
+  const PROGRAM_NAME = IS_CELEBRITY ? 'Blue Chip Club' : 'Club Royale';
+  
+  function wait(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
-  function canonicalCruiseKey(row){
-    return [canonicalOfferCode(row.offerCode), cleanText(row.shipName).toLowerCase(), isoDate(row.sailingDate) || cleanText(row.sailingDate).toLowerCase(), cleanText(row.itinerary).toLowerCase() || String(row.numberOfNights||'')].join('|');
+
+  function postOfferMessage(payload) {
+    window.ReactNativeWebView.postMessage(JSON.stringify(payload));
   }
-  function enforceVerifiedOfferCounts(rows){
-    const grouped={}; const passthrough=[];
-    for (const row of rows || []){
-      const code=canonicalOfferCode(row && row.offerCode);
-      if (VERIFIED_OFFER_ROW_COUNTS[code]) { (grouped[code]=grouped[code]||[]).push(row); }
-      else passthrough.push(row);
-    }
-    const out=passthrough.slice();
-    Object.keys(grouped).forEach(function(code){
-      const target=VERIFIED_OFFER_ROW_COUNTS[code];
-      const clean=grouped[code]
-        .filter(function(r){ return r && !isPendingValue(r.shipName) && r.sailingDate; })
-        .sort(function(a,b){ return rowQuality(b)-rowQuality(a); });
-      const seen=new Set(); const chosen=[];
-      for (const r of clean){
-        const k=canonicalCruiseKey(r);
-        if (seen.has(k)) continue;
-        seen.add(k); chosen.push(r);
-        if (chosen.length >= target) break;
-      }
-      if (clean.length > target) log('🧹 Trimmed duplicate DOM rows for '+code+': '+clean.length+' candidate row(s) → verified '+chosen.length+' row(s)', 'warning');
-      out.push.apply(out, chosen);
+
+  function sendOfferBatch(offers, isFinal = false, totalCount = 0, offerCount = 0) {
+    postOfferMessage({
+      type: isFinal ? 'step_complete' : 'offers_batch',
+      step: 1,
+      data: offers,
+      isFinal: isFinal,
+      totalCount: totalCount,
+      offerCount: offerCount
     });
-    return out;
-  }
-  function verifiedTargetForOffer(offerOrCode){
-    const code=canonicalOfferCode((offerOrCode && offerOrCode.offerCode) || offerOrCode || '');
-    return VERIFIED_OFFER_ROW_COUNTS[code] || 0;
-  }
-  function rowsForOffer(rows, offerOrCode){
-    const code=canonicalOfferCode((offerOrCode && offerOrCode.offerCode) || offerOrCode || '');
-    return dedupeRows(rows || []).filter(function(r){ return canonicalOfferCode(r.offerCode) === code; });
-  }
-  function isPlaceholderBlock(block, enrichment){
-    const ship=cleanText((block && block.shipName) || (enrichment && enrichment.shipName) || '');
-    const itin=cleanText((block && block.itinerary) || (enrichment && enrichment.itinerary) || '');
-    return isPendingValue(ship) || /pending/i.test(ship) || /pending/i.test(itin);
   }
 
-  if (window.__easySeasV940Booting) return;
-  window.__easySeasV940Booting = true;
-
-  function wait(ms){ return new Promise(function(resolve){ setTimeout(resolve, ms); }); }
-  function cleanText(value){ return String(value || '').replace(/\u00a0/g, ' ').replace(/[\t\r\n]+/g, ' ').replace(/\s+/g, ' ').trim(); }
-  function log(message, type){ try { window.ReactNativeWebView.postMessage(JSON.stringify({ type:'log', message:String(message), logType:type || 'info' })); } catch(e){ try{ console.log('[EasySeas v970]', message); }catch(_){} } }
-  function post(payload){ try { window.ReactNativeWebView.postMessage(JSON.stringify(payload)); } catch(e){} }
-  function progress(current,total,stepName){ post({type:'progress', current:current, total:total, stepName:stepName || 'Sync Now'}); }
-  function sendBatch(rows, final, totalCount, offerCount, offerCodes){ post({ type: final ? 'step_complete' : 'offers_batch', step: 1, data: rows || [], isFinal: !!final, totalCount: totalCount || 0, offerCount: offerCount || 0, offerCodes: offerCodes || [] }); }
-  function compactRow(row){
-    const r=Object.assign({}, row);
-    if (r.rawTextSnippet && r.rawTextSnippet.length > 360) r.rawTextSnippet = r.rawTextSnippet.slice(0,360);
-    if (r.rawExpandedText && r.rawExpandedText.length > 420) r.rawExpandedText = r.rawExpandedText.slice(0,420);
-    if (r.rawRowText && r.rawRowText.length > 420) r.rawRowText = r.rawRowText.slice(0,420);
-    if (r.detailUrl && r.detailUrl.length > 700) r.detailUrl = r.detailUrl.slice(0,700);
-    if (r.sourceUrl && r.sourceUrl.length > 700) r.sourceUrl = r.sourceUrl.slice(0,700);
-    return r;
-  }
-  function sendRows(rows, offerCount, offerCodes){
-    const visibleCodes=(offerCodes || []).map(function(c){ return canonicalOfferCode(c); }).filter(Boolean);
-    const visibleSet=new Set(visibleCodes);
-    const baseRows=dedupeRows(rows);
-    const rowBearingCodes=new Set(baseRows.map(function(r){ return canonicalOfferCode(r.offerCode); }).filter(Boolean));
-    const zeroRowCodes=visibleCodes.filter(function(code){ return !rowBearingCodes.has(code); });
-    if (zeroRowCodes.length) {
-      log('⚠️ Dynamic catalog metadata: '+zeroRowCodes.length+' visible offer(s) had 0 rows after retry and will preserve existing rows if present: '+zeroRowCodes.join(', '), 'warning');
-    }
-    const finalRows=baseRows.map(function(row){
-      return compactRow(Object.assign({}, row, {
-        catalogVisibleOfferCodes: visibleCodes.join(','),
-        catalogVisibleOfferCount: Number(offerCount || visibleCodes.length || 0),
-        catalogZeroRowOfferCodes: zeroRowCodes.join(','),
-        catalogRowBearingOfferCodes: Array.from(rowBearingCodes).join(','),
-      }));
-    });
-    let chunk=[], chars=0, sent=0, n=0;
-    for (const row of finalRows){
-      let size=1000; try { size=JSON.stringify(row).length; } catch(e){}
-      if (chunk.length && (chunk.length >= BATCH_SIZE || chars + size > MAX_BATCH_CHARS)) {
-        n++; sendBatch(chunk, false); sent += chunk.length; log('📤 Sent Sync Now v970 batch '+n+' with '+chunk.length+' row(s) (total '+sent+'/'+finalRows.length+')', 'info'); chunk=[]; chars=0;
-      }
-      chunk.push(row); chars += size;
-    }
-    if (chunk.length){ n++; sendBatch(chunk, false); sent += chunk.length; log('📤 Sent Sync Now v970 batch '+n+' with '+chunk.length+' row(s) (total '+sent+'/'+finalRows.length+')', 'info'); }
-    sendBatch([], true, finalRows.length, offerCount || 0, offerCodes || []);
-  }
-
-  function sendOfferCheckpoint(offer, rows){
-    const offerCode = canonicalOfferCode((offer && offer.offerCode) || (rows && rows[0] && rows[0].offerCode) || 'UNKNOWN');
-    const offerName = cleanText((offer && offer.offerName) || (rows && rows[0] && rows[0].offerName) || 'Casino Offer');
-    const finalRows = dedupeRows(rows || []).map(function(row){
-      return compactRow(Object.assign({}, row, {
-        offerCode: canonicalOfferCode(row.offerCode || offerCode),
-        offerName: cleanText(row.offerName || offerName),
-        checkpointSource: 'offer-finished'
-      }));
-    });
-    if (!finalRows.length){ log('⚠️ No checkpoint rows to send for '+offerCode, 'warning'); return; }
-    let chunk=[], chars=0, sent=0, n=0;
-    const flush=function(){
-      if (!chunk.length) return;
-      n++;
-      const batchId = offerCode + '-checkpoint-' + n + '-' + Date.now();
-      post({
-        type:'offers_batch',
-        step:1,
-        checkpoint:true,
-        batchId:batchId,
-        offerCode:offerCode,
-        offerName:offerName,
-        data:chunk,
-        totalCount:finalRows.length,
-        offerCount:1
-      });
-      sent += chunk.length;
-      log('📤 Sent checkpoint '+offerCode+' chunk '+n+' with '+chunk.length+' row(s) (total '+sent+'/'+finalRows.length+')', 'info');
-      chunk=[]; chars=0;
-    };
-    for (const row of finalRows){
-      let size=1000; try { size=JSON.stringify(row).length; } catch(e){}
-      if (chunk.length && (chunk.length >= BATCH_SIZE || chars + size > MAX_BATCH_CHARS)) flush();
-      chunk.push(row); chars += size;
-    }
-    flush();
-    log('✅ React Native handoff attempted for '+offerCode+': '+finalRows.length+' row(s)', 'success');
-  }
-  function failSafe(reason){
-    log('❌ STEP 1 FAILED SAFE: '+reason, 'error');
-    log('🛡️ Existing Easy Seas offer database will be preserved. No partial 36/45-row scrape is being committed.', 'warning');
-    try { sessionStorage.removeItem(STATE_KEY); } catch(e){}
-    sendBatch([], true, 0, 0);
-  }
-  function loadState(){ try { const raw=sessionStorage.getItem(STATE_KEY); return raw ? JSON.parse(raw) : null; } catch(e){ return null; } }
-  function saveState(state){ try { sessionStorage.setItem(STATE_KEY, JSON.stringify(state)); } catch(e){ log('⚠️ Sync staging storage is full; compacting saved rows', 'warning'); try { state.rows=(state.rows||[]).map(compactRow); sessionStorage.setItem(STATE_KEY, JSON.stringify(state)); } catch(_){} } }
-  function clearState(){ try { sessionStorage.removeItem(STATE_KEY); } catch(e){} }
-  function pad2(n){ return String(n).padStart(2,'0'); }
-  function fmtDate(y,m,d){ const yy=Number(y), mm=Number(m), dd=Number(d); if (!yy || !mm || !dd || yy<2020 || yy>2038 || mm<1 || mm>12 || dd<1 || dd>31) return ''; return pad2(mm)+'/'+pad2(dd)+'/'+yy; }
-  function isoDate(mdy){ const m=String(mdy||'').match(/^(\d{1,2})\/(\d{1,2})\/(20\d{2})$/); return m ? m[3]+'-'+pad2(m[1])+'-'+pad2(m[2]) : ''; }
-  function escapeRegex(s){ return String(s).replace(/[.*+?^\${}()|[\]\\]/g,'\\$&'); }
-  function canonicalOfferCode(raw){
-    let code = cleanText(raw).toUpperCase().replace(/[^A-Z0-9]/g,'');
-    if (!code) return '';
-    // Royal sometimes renders a card label with a trailing E while the authenticated
-    // detail URL/export path uses the base offer code. Normalize those display-only
-    // variants so the queue does not scrape the same offer twice.
-    const displaySuffixAliases = { '26AUG104E':'26AUG104', '2606C05E':'2606C05', '26SIG0804E':'26SIG0804' };
-    if (displaySuffixAliases[code]) return displaySuffixAliases[code];
-    const known = code.match(/^(2606C05|2606C08|2605C03A|26AUG104|26SIG0804|26BCP105|26JUL104|26SUM203|26VTY104|26WCR403|26VAR303|2605C03B|2605C04|2605C05|2605C06)/); if (known) return known[1];
-    const monthly = code.match(/^(\d{4}[A-Z]\d{2}[A-Z]?)/); if (monthly) return monthly[1];
-    const family = code.match(/^(\d{2}[A-Z]{2,8}\d{2,5}[A-Z]?)/); return family ? family[1] : code;
-  }
-  function offerCodeRegex(){ return /(\d{4}[A-Z]\d{2}[A-Z]?|\d{2}[A-Z]{2,8}\d{2,5}[A-Z]?)/gi; }
-  function inferCabin(text){ const l=cleanText(text).toLowerCase(); if (l.includes('junior suite') || l.includes('suite')) return 'Suite'; if (l.includes('balcony')) return l.includes('gty') || l.includes('guarantee') ? 'Balcony - GTY' : 'Balcony'; if (l.includes('oceanview')||l.includes('ocean view')) return l.includes('gty') ? 'Oceanview - GTY' : 'Oceanview'; if (l.includes('interior') || l.includes('inside')) return l.includes('gty') ? 'Interior - GTY' : 'Interior'; return ''; }
-  function inferGuests(text){ const l=cleanText(text).toLowerCase(); if (/for\s+1\s+guest|for\s+one\s+guest|for\s+1\s+person|one\s+plus|1\s*guest/.test(l)) return '1 person and a discount for second guest'; if (/for\s+2\s+guests|for\s+two|room\s+for\s+two|two\s+guests/.test(l)) return '2 person'; return ''; }
-  function inferOfferType(text){ const t=cleanText(text); const m=t.match(/Cruise Fare For\s+\d\s+Guest[s]?|Cruise Fare For Two Guests|Room for Two|One plus a Discounted Fare|Instant Cruise Reward|Bonus Cruise|Annual Cruise/i); return m ? cleanText(m[0]) : 'Casino Offer'; }
-  function getRedeemBy(text){ const m=cleanText(text).match(/Redeem\s*by\s+([A-Z][a-z]+\s+\d{1,2},\s*20\d{2})/i); return m ? cleanText(m[1]) : ''; }
-  function getShipNameFromText(text){ const src=cleanText(text); for (const ship of SHIP_NAMES){ if (new RegExp(ship.replace(/[.*+?^\${}()|[\]\\]/g,'\\$&'), 'i').test(src)) return ship; } return ''; }
-  function getPortFromText(text){
-    const src=cleanText(text);
-    let m=src.match(/\bPort\s+([A-Z][A-Za-z .'-]+?)(?=\s+(?:Ship name|Room type|Dates|Itinerary|View less|View details|$))/i); if (m) return cleanText(m[1]);
-    for (const p of PORT_HINTS){ if (new RegExp('\\b'+p.replace(/[.*+?^\${}()|[\]\\]/g,'\\$&')+'\\b','i').test(src)) return p; }
-    return '';
-  }
-  function getItineraryFromText(text){ const src=cleanText(text); let m=src.match(/(\d+\s+Night[s]?\s+[A-Z][A-Za-z0-9 &'’.,:-]+?Cruise)/i); return m ? cleanText(m[1]) : ''; }
-  function getNights(text){ const m=cleanText(text).match(/(\d+)\s+Night/i); return m ? m[1] : ''; }
-  function parseOneDateToken(raw, carryYear, carryMonth){
-    const s=cleanText(raw).replace(/(st|nd|rd|th)\b/gi,''); let m;
-    m=s.match(/\b(20\d{2})[-\/](\d{1,2})[-\/](\d{1,2})\b/); if (m) return { date:fmtDate(m[1],m[2],m[3]), year:+m[1], month:+m[2] };
-    m=s.match(/\b(20\d{2})(\d{2})(\d{2})\b/); if (m) return { date:fmtDate(m[1],m[2],m[3]), year:+m[1], month:+m[2] };
-    m=s.match(/\b(\d{1,2})[-\/](\d{1,2})[-\/](20\d{2})\b/); if (m) return { date:fmtDate(m[3],m[1],m[2]), year:+m[3], month:+m[1] };
-    m=s.match(/\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t|tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{1,2})(?:,)?\s*(20\d{2})?\b/i); if (m){ const month=MONTHS[m[1].toLowerCase()]; const year=+(m[3]||carryYear||0); return { date:year?fmtDate(year,month,m[2]):'', year, month }; }
-    m=s.match(/^\s*(\d{1,2})\s*$/); if (m && carryYear && carryMonth) return { date:fmtDate(carryYear,carryMonth,m[1]), year:carryYear, month:carryMonth };
-    return { date:'', year:carryYear||0, month:carryMonth||0 };
-  }
-  function extractDates(text){
-    const src=cleanText(text).replace(/\b(?:and|&)\b/gi, ','); const results=[]; const seen=new Set(); let m;
-    function add(date){ if (date && !seen.has(date)){ seen.add(date); results.push(date); } }
-    const numeric=/\b(20\d{2}[-\/]\d{1,2}[-\/]\d{1,2}|20\d{6}|\d{1,2}[-\/]\d{1,2}[-\/]20\d{2})\b/g; while ((m=numeric.exec(src))!==null) add(parseOneDateToken(m[1],0,0).date);
-    const blockRe=/(20\d{2})\s*[:\-]?\s*((?:(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t|tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)?\s*\d{1,2}(?:st|nd|rd|th)?\s*,?\s*){1,140})/gi;
-    while ((m=blockRe.exec(src))!==null){ let carryYear=+m[1], carryMonth=0; const itemRe=/(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t|tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)?\s*(\d{1,2})(?:st|nd|rd|th)?/gi; let mm; while ((mm=itemRe.exec(m[2]))!==null){ if (mm[1]) carryMonth=MONTHS[mm[1].toLowerCase()]; if (carryMonth) add(fmtDate(carryYear,carryMonth,mm[2])); } }
-    const monthDay=/\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t|tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2}(?:st|nd|rd|th)?(?:,)?\s*(?:20\d{2})?/gi;
-    let lastYear=(src.match(/\b(20\d{2})\b/)||[])[1] ? +(src.match(/\b(20\d{2})\b/)||[])[1] : 0, lastMonth=0; while ((m=monthDay.exec(src))!==null){ const parsed=parseOneDateToken(m[0],lastYear,lastMonth); if (parsed.date) add(parsed.date); if (parsed.year) lastYear=parsed.year; if (parsed.month) lastMonth=parsed.month; }
-    return results;
-  }
-  function getViewButtons(){ return Array.from(document.querySelectorAll('button,a,[role="button"]')).filter(function(el){ return /View\s*Sailings/i.test(cleanText(el.textContent || el.getAttribute('aria-label') || '')); }); }
-  function closestCard(el){ let cur=el; for (let i=0; cur && i<10; i++, cur=cur.parentElement){ const txt=cleanText(cur.textContent); if (/Redeem|Offer details|View Sailings|Trade in value|Cruise Fare/i.test(txt) && offerCodeRegex().test(txt)) return cur; } return el.parentElement || el; }
-  function expectedOfferCount(){
-    const txt=cleanText(document.body && document.body.textContent || '');
-    const m=txt.match(/(?:All\s+Offers|My\s+Offers)\s*\(\s*(\d{1,3})\s*\)/i) || txt.match(/(\d{1,3})\s+offer[s]?\b/i);
-    const n=m ? Number(m[1]) : 0;
-    return Number.isFinite(n) && n > 0 && n < 100 ? n : 0;
-  }
-  function parseVisibleOffers(){
-    const buttons=getViewButtons(); const offers=[]; const seen=new Set();
-    function addOffer(code, text, card, btn, href, buttonIndex){
-      text=cleanText(text || '');
-      const cardLinks=card ? Array.from(card.querySelectorAll('a[href]')).map(function(a){ return a.href || a.getAttribute('href') || ''; }).filter(Boolean) : [];
-      href=href || (btn && btn.getAttribute && btn.getAttribute('href')) || cardLinks.find(function(h){ return BRAND.offerPathRe.test(h) || /playerOfferId|offer/i.test(h); }) || '';
-      const hrefCode=((href.match(/\/offers\/([A-Za-z0-9]{5,12})(?:[/?#]|$)/i)||[])[1] || '');
-      code=canonicalOfferCode(hrefCode || code);
-      if (!code || seen.has(code)) return;
-      seen.add(code);
-      const beforeCode=text.slice(0, Math.max(0, text.toUpperCase().indexOf(code))).replace(/My Offers|All Offers\s*\(\d+\)|Sort|Filters|Redeem|Offer details|View Sailings|Trade in value/gi,' ').trim();
-      const titleParts=beforeCode.split(/\s{2,}|Redeem by|\|/i).map(cleanText).filter(Boolean);
-      const playerOfferId=((href.match(/[?&]playerOfferId=([^&#]+)/i)||[])[1] || (text.match(/playerOfferId[=:]([0-9a-f-]{20,})/i)||[])[1] || '');
-      const offer={ offerIndex:offers.length, offerCode:code, offerName:titleParts[titleParts.length-1] || code, offerExpirationDate:getRedeemBy(text), offerType:inferOfferType(text), cabinType:inferCabin(text), numberOfGuests:inferGuests(text), perks:text, buttonIndex:buttonIndex, href:href, playerOfferId:playerOfferId, cardLinks:cardLinks };
-      offers.push(offer);
-      log('🎟️ Offer discovered '+offers.length+': '+code+' — '+offer.offerName, 'success');
-    }
-    for (let i=0;i<buttons.length;i++){
-      const btn=buttons[i]; const card=closestCard(btn); const text=cleanText(card.textContent || ''); const matches=text.match(offerCodeRegex()) || []; addOffer(matches[matches.length-1] || '', text, card, btn, '', i);
-    }
-    // Some Royal/Celebrity sessions lazy-load only one visible button but still expose offer detail anchors.
-    Array.from(document.querySelectorAll('a[href]')).forEach(function(a){
-      const href=a.href || a.getAttribute('href') || '';
-      const m=href.match(/\/offers\/([A-Za-z0-9]{5,12})(?:[/?#]|$)/i);
-      if (!m) return;
-      const card=closestCard(a); const text=cleanText((card && card.textContent) || a.textContent || href);
-      addOffer(m[1], text, card, null, href, -1);
-    });
-    return offers;
-  }
-  async function discoverOffersWithHydration(){
-    let best=[]; let bestButtons=[]; const expected=expectedOfferCount();
-    for (let attempt=1; attempt<=10; attempt++){
-      const offers=parseVisibleOffers(); const buttons=getViewButtons();
-      if (offers.length > best.length) best=offers;
-      if (buttons.length > bestButtons.length) bestButtons=buttons;
-      log('🔎 Offer discovery pass '+attempt+': '+offers.length+' offer(s), '+buttons.length+' View Sailings button(s)'+(expected ? ', expected '+expected : ''), offers.length?'info':'warning');
-      if (expected && best.length >= expected) break;
-      if (!expected && best.length && bestButtons.length) break;
-      try { window.scrollTo(0, Math.min(document.body.scrollHeight || 0, attempt * 900)); } catch(e){}
-      await wait(attempt <= 3 ? 1800 : 2600);
-    }
-    try { window.scrollTo(0,0); } catch(e){}
-    return { offers: best, buttons: bestButtons, expected: expected };
-  }
-  function findOfferButton(offer, fallbackIndex){
-    const buttons=getViewButtons(); const code=canonicalOfferCode(offer.offerCode);
-    for (let i=0;i<buttons.length;i++){ const text=cleanText(closestCard(buttons[i]).textContent || ''); if (text.toUpperCase().indexOf(code)>=0) return buttons[i]; }
-    return buttons[fallbackIndex] || buttons[0] || null;
-  }
-  function candidateRowElements(){
-    const raw=Array.from(document.querySelectorAll('tr, [role="row"], li, article, section, div')).filter(function(el){
-      const t=cleanText(el.textContent || '');
-      if (t.length < 35 || t.length > 3200) return false;
-      if (!/(Cruise Fare|Room type|Night[s]? .*Cruise|20\d{2}|Ship name|View details|View less|Dates|Itinerary)/i.test(t)) return false;
-      if (!/(20\d{2}|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i.test(t)) return false;
-      return true;
-    });
-    const best=[]; const seen=new Set();
-    for (const el of raw){ const txt=cleanText(el.textContent||''); const key=txt.slice(0,220); if (seen.has(key)) continue; seen.add(key); best.push(el); }
-    return best;
-  }
-  async function clickAllVisibleViewDetails(maxClicks){
-    const limit = Math.max(0, Math.min(Number(maxClicks || 8), 10));
-    if (!limit) return 0;
-    const detailButtons=Array.from(document.querySelectorAll('button,a,[role="button"]')).filter(function(el){
-      if (el.getAttribute && el.getAttribute('data-easyseas-viewdetails-clicked') === '1') return false;
-      const txt=cleanText(el.textContent || el.getAttribute('aria-label') || '');
-      return /View\s+details|Show\s+details/i.test(txt);
-    }).slice(0, limit);
-    let clicked=0;
-    for (const el of detailButtons){
-      try{
-        if (el.setAttribute) el.setAttribute('data-easyseas-viewdetails-clicked','1');
-        el.scrollIntoView({block:'center'}); await wait(20); el.click(); clicked++; await wait(45);
-      }catch(e){}
-    }
-    if (clicked) log('🔎 Clicked View Details on '+clicked+' new visible row(s) (throttled)', 'info');
-    return clicked;
-  }
-  function parsePrices(text){
-    const src=cleanText(text); const out={ insidePrice:'', oceanviewPrice:'', balconyPrice:'', suitePrice:'', allPorts:'', dayByDayItineraryJson:'', shipName:getShipNameFromText(src), itinerary:getItineraryFromText(src), departurePort:getPortFromText(src), nights:getNights(src) };
-    function priceNear(label){ const re=new RegExp('(?:'+label+')[^$]{0,160}\\$\\s*([0-9,]+(?:\\.\\d{2})?)','i'); const m=src.match(re); return m ? '$'+m[1] : ''; }
-    out.insidePrice=priceNear('Interior|Inside'); out.oceanviewPrice=priceNear('Oceanview|Ocean View|Outside'); out.balconyPrice=priceNear('Balcony'); out.suitePrice=priceNear('Suite');
-    const ports=[]; const seen={}; for (const p of PORT_HINTS){ if (new RegExp('\\b'+p.replace(/[.*+?^\${}()|[\]\\]/g,'\\$&')+'\\b','i').test(src) && !seen[p]){ seen[p]=true; ports.push(p); } }
-    out.allPorts=ports.join(' | ');
-    try { out.dayByDayItineraryJson=JSON.stringify(ports.map(function(p,idx){ return { day: idx+1, port:p }; })); } catch(e){}
-    return out;
-  }
-  const enrichCache = {};
-  async function enrichFromLink(url, label){
-    if (!url) return {};
-    if (enrichCache[url]) return enrichCache[url];
-    try{
-      log('🔗 Opening/fetching ship or itinerary link for pricing/ports: '+cleanText(label || url), 'info');
-      const resp=await fetch(url, {credentials:'include'}); const text=await resp.text(); const parsed=parsePrices(text); parsed.sourceUrl=url; enrichCache[url]=parsed; await wait(60); return parsed;
-    } catch(e){ log('⚠️ Pricing/itinerary link enrichment failed for '+cleanText(label || url)+': '+(e&&e.message?e.message:String(e)), 'warning'); return {}; }
-  }
-  function parseBlockFromElement(el, offer){
-    const text=cleanText(el.textContent || '');
-    const links=Array.from(el.querySelectorAll('a[href]')).map(function(a){ return {text:cleanText(a.textContent), href:a.href}; }).filter(function(x){ return /Night|Cruise|of the Seas|search\/cruises|cruise-ships/i.test(x.text+' '+x.href); });
-    const itineraryLink=links.find(function(x){ return /Night[s]? .*Cruise/i.test(x.text); }) || null;
-    const shipLink=links.find(function(x){ return /of the Seas/i.test(x.text); }) || null;
-    return {
-      key: canonicalOfferCode(offer.offerCode)+'|'+cleanText(text).slice(0,360), text:text, dates:extractDates(text),
-      offerType:inferOfferType(text) || offer.offerType, cabinType:inferCabin(text) || offer.cabinType,
-      itinerary:(itineraryLink && itineraryLink.text) || getItineraryFromText(text), shipName:(shipLink && shipLink.text) || getShipNameFromText(text),
-      departurePort:getPortFromText(text), nights:getNights(text), itineraryUrl:itineraryLink && itineraryLink.href || '', shipUrl:shipLink && shipLink.href || ''
-    };
-  }
-  function makeRow(offer, block, date, sourceType, sourceUrl, enrichment){
-    const enriched=enrichment || {}; const text=cleanText(block.text || '');
-    return {
-      sourcePage: BRAND.programName + ' Offers', source:sourceType || (BRAND.sourcePrefix+'-ui-v947'), syncedAt:new Date().toISOString(),
-      offerName:offer.offerName || offer.offerCode || 'Casino Offer', offerCode:canonicalOfferCode(offer.offerCode), offerExpirationDate:offer.offerExpirationDate || '', offerType:block.offerType || offer.offerType || inferOfferType(text),
-      shipName:block.shipName || enriched.shipName || getShipNameFromText(text), sailingDate:date, sailDateRaw:date, itinerary:block.itinerary || enriched.itinerary || getItineraryFromText(text), departurePort:block.departurePort || enriched.departurePort || getPortFromText(text),
-      cabinType:block.cabinType || offer.cabinType || inferCabin(text), numberOfGuests:offer.numberOfGuests || inferGuests((block.offerType||'')+' '+text+' '+(offer.perks||'')), casinoPaysFor:offer.numberOfGuests || inferGuests((block.offerType||'')+' '+text+' '+(offer.perks||'')), perks:offer.perks || '',
-      numberOfNights:block.nights || enriched.nights || getNights(block.itinerary || text), allPorts: enriched.allPorts || '', dayByDayItineraryJson: enriched.dayByDayItineraryJson || '',
-      insidePrice:enriched.insidePrice || '', oceanviewPrice:enriched.oceanviewPrice || '', balconyPrice:enriched.balconyPrice || '', suitePrice:enriched.suitePrice || '', priceSource: enriched.sourceUrl ? 'ship-itinerary-link' : '', priceCapturedAt: enriched.sourceUrl ? new Date().toISOString() : '',
-      sourceUrl: sourceUrl || location.href, detailUrl: block.itineraryUrl || block.shipUrl || '', rawTextSnippet:text.slice(0,700), rawExpandedText:text.slice(0,900), validationStatus:'accepted'
-    };
-  }
-  function rowKey(row){ return canonicalCruiseKey(row); }
-  function dedupeRows(rows){
-    const sorted=(rows || []).slice().sort(function(a,b){ return rowQuality(b)-rowQuality(a); });
-    const out=[]; const seen=new Set();
-    for (const row of sorted){
-      if (!row || !row.offerCode || !row.shipName || !row.sailingDate) continue;
-      if (isPendingValue(row.shipName)) continue;
-      const key=rowKey(row); if (seen.has(key)) continue; seen.add(key); out.push(row);
-    }
-    return enforceVerifiedOfferCounts(out);
-  }
-  function scrollContainers(){ return Array.from(document.querySelectorAll('main,section,div,tbody,table,body')).filter(function(el){ try{ return el.scrollHeight > el.clientHeight + 160; }catch(e){ return false; } }).sort(function(a,b){ return (b.scrollHeight-b.clientHeight)-(a.scrollHeight-a.clientHeight); }).slice(0,10); }
-  function isAtBottom(){ return Math.ceil(window.scrollY + window.innerHeight + 8) >= Math.max(document.body.scrollHeight, document.documentElement.scrollHeight); }
-  async function clickDownloadListAndParse(offer){
-    const rows=[]; const buttons=Array.from(document.querySelectorAll('a,button,[role="button"]')).filter(function(el){ return /Download\s*list|Download|Export|CSV|XLSX/i.test(cleanText(el.textContent || el.getAttribute('aria-label') || '')); });
-    for (const el of buttons.slice(0,3)){
-      const href=(el.getAttribute && el.getAttribute('href')) || '';
-      try{
-        log('⬇️ Download list/export control found for '+offer.offerCode, 'info');
-        if (href && !/^javascript:/i.test(href)) {
-          const resp=await fetch(href, {credentials:'include'}); const txt=await resp.text(); rows.push.apply(rows, parseRowsFromTextBlob(txt, offer, href, 'download-list'));
-        } else {
-          el.scrollIntoView({block:'center'}); await wait(150); el.click(); await wait(2500);
-        }
-      } catch(e){ log('⚠️ Download list attempt failed: '+(e&&e.message?e.message:String(e)), 'warning'); }
-    }
-    if (rows.length) log('⬇️ Parsed '+rows.length+' row(s) from Download list/export for '+offer.offerCode, 'success');
-    return rows;
-  }
-  function parseRowsFromTextBlob(text, offer, sourceUrl, sourceType){
-    const rows=[]; const src=String(text || ''); if (src.length < 100) return rows;
-    const chunks=src.split(/(?=(?:Cruise Fare|Room type|Ship name|\d+\s+Night|20\d{2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)|\{))/i).slice(0,25000);
-    for (const piece of chunks){ const cleaned=cleanText(piece); if (cleaned.length<40) continue; const dates=extractDates(cleaned); const ship=getShipNameFromText(cleaned); const itin=getItineraryFromText(cleaned); if (!dates.length || (!ship && !itin)) continue; const block={text:cleaned, dates:dates, shipName:ship, itinerary:itin, departurePort:getPortFromText(cleaned), cabinType:inferCabin(cleaned)||offer.cabinType, offerType:inferOfferType(cleaned)||offer.offerType, nights:getNights(cleaned)}; for (const d of dates){ rows.push(makeRow(offer, block, d, sourceType, sourceUrl, {})); } }
-    return rows;
-  }
-
-  function deepString(value){
-    if (value === null || value === undefined) return '';
-    if (typeof value === 'string') return cleanText(value);
-    if (typeof value === 'number' || typeof value === 'boolean') return cleanText(String(value));
-    if (Array.isArray(value)) return value.map(deepString).filter(Boolean).join(' ');
-    if (typeof value === 'object') {
-      const priority=['name','title','description','displayName','shortName','longName','label','value','code'];
-      for (const k of priority){ if (value[k] !== undefined) { const v=deepString(value[k]); if (v) return v; } }
-    }
-    return '';
-  }
-  function pickDeep(obj, names){
-    if (!obj || typeof obj !== 'object') return '';
-    for (const n of names){ if (obj[n] !== undefined) { const v=deepString(obj[n]); if (v) return v; } }
-    return '';
-  }
-  function detectOfferCodeFromObj(obj, fallback){
-    const direct=pickDeep(obj, ['offerCode','casinoOfferCode','certificateCode','campaignCode','promoCode','code','offerId','campaignId']);
-    const c=canonicalOfferCode(direct || fallback || '');
-    return c;
-  }
-  function detectPlayerOfferIdFromPayload(data, offer){
-    let found=offer && offer.playerOfferId || '';
-    const seen=new Set();
-    function walk(v, depth){
-      if (found || !v || depth>8) return;
-      if (typeof v === 'object') { if (seen.has(v)) return; seen.add(v); }
-      if (typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)) { found=v; return; }
-      if (Array.isArray(v)) { v.forEach(function(x){ walk(x, depth+1); }); return; }
-      if (typeof v === 'object') {
-        Object.keys(v).forEach(function(k){ if (/playerOfferId|offerPlayerId|id/i.test(k)) walk(v[k], depth+1); });
-      }
-    }
-    walk(data,0); return found || '';
-  }
-  function shipFromPayload(obj, ctxText){
-    let ship=pickDeep(obj, ['shipName','shipDisplayName','shipLongName','shipDescription','shipDesc','vesselName','vessel','ship']);
-    if (!ship) ship=getShipNameFromText(ctxText || '');
-    if (!ship) {
-      const code=pickDeep(obj, ['shipCode','shipCd','vesselCode']);
-      const map={ JW:'Jewel of the Seas', FR:'Freedom of the Seas', WN:'Wonder of the Seas', AD:'Adventure of the Seas', RD:'Radiance of the Seas', NV:'Navigator of the Seas', HM:'Harmony of the Seas', SY:'Symphony of the Seas', OA:'Oasis of the Seas', AL:'Allure of the Seas', UT:'Utopia of the Seas', IC:'Icon of the Seas', SR:'Serenade of the Seas', LB:'Liberty of the Seas', QN:'Quantum of the Seas', OY:'Odyssey of the Seas', OV:'Ovation of the Seas', BR:'Brilliance of the Seas', EN:'Enchantment of the Seas', EX:'Explorer of the Seas', GR:'Grandeur of the Seas', ID:'Independence of the Seas', MA:'Mariner of the Seas', RH:'Rhapsody of the Seas', VY:'Voyager of the Seas', VI:'Vision of the Seas', AN:'Anthem of the Seas', SC:'Spectrum of the Seas', ST:'Star of the Seas', LG:'Legend of the Seas' };
-      ship = map[String(code||'').toUpperCase()] || '';
-    }
-    return ship;
-  }
-  function datesFromPayloadObj(obj, ctxText){
-    const vals=[];
-    ['sailDate','sailingDate','departureDate','departDate','startDate','embarkDate','embarkationDate','voyageStartDate','date','sailDates','sailingDates','dates','departures'].forEach(function(k){ if (obj && obj[k] !== undefined) vals.push(obj[k]); });
-    if (ctxText) vals.push(ctxText);
-    const out=[]; const seen=new Set();
-    vals.forEach(function(v){ extractDates(deepString(v)).forEach(function(d){ if (d && !seen.has(d)){ seen.add(d); out.push(d); } }); });
-    return out;
-  }
-  function parseRowsFromRoyalJsonPayload(data, offer, sourceUrl, sourceType){
-    const rows=[]; const seenObjs=new Set();
-    const fallbackOffer=canonicalOfferCode(offer && offer.offerCode || '');
-    function contextFrom(obj, parent){
-      const text=cleanText(parent.text+' '+deepString(obj));
-      const out={
-        text:text,
-        offerCode: detectOfferCodeFromObj(obj, parent.offerCode || fallbackOffer),
-        offerName: pickDeep(obj, ['offerName','offerTitle','title','campaignName','name']) || parent.offerName || offer.offerName || fallbackOffer,
-        offerType: inferOfferType(text) || parent.offerType || offer.offerType,
-        cabinType: inferCabin(text) || parent.cabinType || offer.cabinType,
-        numberOfGuests: inferGuests(text) || parent.numberOfGuests || offer.numberOfGuests,
-        shipName: shipFromPayload(obj, text) || parent.shipName,
-        itinerary: pickDeep(obj, ['itineraryName','itinerary','sailingName','cruiseName','productName','voyageName']) || getItineraryFromText(text) || parent.itinerary,
-        departurePort: pickDeep(obj, ['departurePort','departurePortName','embarkPort','embarkationPort','port','homePort']) || getPortFromText(text) || parent.departurePort,
-        nights: pickDeep(obj, ['nights','numberOfNights','duration','durationDays']) || getNights(text) || parent.nights,
-      };
-      return out;
-    }
-    function pushIfSailing(obj, ctx){
-      const text=cleanText(ctx.text+' '+deepString(obj));
-      const ship=shipFromPayload(obj, text) || ctx.shipName;
-      const dates=datesFromPayloadObj(obj, text);
-      if (!ship || !dates.length) return;
-      const block={ text:text, dates:dates, shipName:ship, itinerary:pickDeep(obj,['itineraryName','itinerary','sailingName','cruiseName','productName','voyageName']) || getItineraryFromText(text) || ctx.itinerary, departurePort:pickDeep(obj,['departurePort','departurePortName','embarkPort','embarkationPort','port','homePort']) || getPortFromText(text) || ctx.departurePort, cabinType:inferCabin(text) || ctx.cabinType, offerType:inferOfferType(text) || ctx.offerType, nights:pickDeep(obj,['nights','numberOfNights','duration','durationDays']) || getNights(text) || ctx.nights };
-      const localOffer=Object.assign({}, offer, { offerCode: ctx.offerCode || fallbackOffer, offerName: ctx.offerName || offer.offerName, offerType: ctx.offerType || offer.offerType, cabinType: ctx.cabinType || offer.cabinType, numberOfGuests: ctx.numberOfGuests || offer.numberOfGuests });
-      dates.forEach(function(d){ rows.push(makeRow(localOffer, block, d, sourceType || (BRAND.sourcePrefix+'-page-observed-json'), sourceUrl || location.href, {})); });
-    }
-    function walk(v, ctx, depth){
-      if (!v || depth>12) return;
-      if (typeof v === 'object') { if (seenObjs.has(v)) return; seenObjs.add(v); }
-      if (Array.isArray(v)) { v.forEach(function(item){ walk(item, ctx, depth+1); }); return; }
-      if (typeof v !== 'object') return;
-      const next=contextFrom(v, ctx);
-      pushIfSailing(v, next);
-      Object.keys(v).forEach(function(k){
-        const lower=k.toLowerCase();
-        const child=v[k];
-        if (lower.includes('sailing') || lower.includes('offer') || lower.includes('cruise') || lower.includes('voyage') || lower.includes('itinerary') || lower.includes('departure') || lower === 'payload' || lower === 'data' || lower === 'items' || lower === 'results' || lower === 'content') walk(child, next, depth+1);
-        else if (Array.isArray(child)) walk(child, next, depth+1);
-      });
-    }
-    walk(data, { text:'', offerCode:fallbackOffer, offerName:offer.offerName || fallbackOffer, offerType:offer.offerType || '', cabinType:offer.cabinType || '', numberOfGuests:offer.numberOfGuests || '', shipName:'', itinerary:'', departurePort:'', nights:'' }, 0);
-    return dedupeRows(rows.filter(function(r){ return canonicalOfferCode(r.offerCode)===fallbackOffer || !fallbackOffer; }));
-  }
-  function parseCapturedOfferPayloadsForOffer(offer){
-    // Page-observed network payloads are allowed as a passive enrichment source, but this
-    // function never performs its own Royal endpoint fetch. The proven production path
-    // remains: saved offer list -> browser detail page -> DOM/download scrape -> checkpoint ACK.
-    const rows=[]; const code=canonicalOfferCode(offer.offerCode); const playerOfferId=offer.playerOfferId || ((offer.href||'').match(/[?&]playerOfferId=([^&#]+)/i)||[])[1] || '';
-    const captured=[];
-    try { captured.push.apply(captured, window.capturedOfferPayloads || []); } catch(e){}
-    try { captured.push.apply(captured, (window.capturedPayloads && window.capturedPayloads.offerPayloads) || []); } catch(e){}
-    try { if (window.capturedPayloads && window.capturedPayloads.offers) captured.push({ url:(BRAND.sourcePrefix+'-capturedPayloads.offers'), data:window.capturedPayloads.offers, transport:'network-monitor-offers' }); } catch(e){}
-    const capturedSeen=new Set();
-    captured.forEach(function(p){
-      try{
-        const blob=JSON.stringify(p).slice(0,700000);
-        const purl=String(p && p.url || '');
-        const captureKey=purl+'|'+blob.slice(0,180);
-        if (capturedSeen.has(captureKey)) return;
-        capturedSeen.add(captureKey);
-        const sameBrand = !purl || purl.indexOf('http')<0 || BRAND.hostRe.test((new URL(purl, location.origin)).hostname || location.hostname);
-        const mentionsOffer = !code || blob.toUpperCase().indexOf(code)>=0 || (playerOfferId && blob.indexOf(playerOfferId)>=0);
-        if (!sameBrand || !mentionsOffer) return;
-        const parsed=parseRowsFromRoyalJsonPayload(p.data || p, offer, p.url || (BRAND.sourcePrefix+'-captured-network-json'), BRAND.sourcePrefix+'-captured-network-json');
-        if (parsed.length) {
-          log('✅ Parsed '+parsed.length+' row(s) for '+code+' from page-observed network payload '+(purl || ''), 'success');
-          rows.push.apply(rows, parsed);
-        }
-      }catch(e){}
-    });
-    return dedupeRows(rows);
-  }
-
-  async function scrapeCurrentOfferDetail(offer){
-    let accepted=[]; let seenBlocks=new Set(); let stableRounds=0; let lastAccepted=0; let totalDetailClicks=0;
-    let pendingSkipped=0, pageDupSkipped=0, validBlocks=0, duplicateBlockSkipped=0;
-    const startedAt=Date.now();
-    const target=verifiedTargetForOffer(offer);
-    // v964: WebView/detail-page first. Do not start from unauthenticated endpoint calls;
-    // later builds returned 404/partial data. Keep download/list parsing as a cheap page-side helper,
-    // then use the proven DOM/detail scraper with checkpoint ACK handoff after each offer.
-    log('🧭 WebView-first scrape for '+offer.offerCode+': using authenticated detail page DOM/download with passive network enrichment only', 'info');
-    const downloadRows=await clickDownloadListAndParse(offer); accepted.push.apply(accepted, downloadRows);
-    const passiveRows=parseCapturedOfferPayloadsForOffer(offer); accepted.push.apply(accepted, passiveRows);
-    if (target && rowsForOffer(accepted, offer).length >= target) {
-      const initial=rowsForOffer(accepted, offer).slice(0,target);
-      log('✅ '+offer.offerCode+' reached verified target '+target+' from network/download rows; skipping expensive DOM crawl', 'success');
-      return initial;
-    }
-    for (let round=0; round<MAX_SCROLL_ROUNDS_PER_OFFER; round++){
-      progress(round, MAX_SCROLL_ROUNDS_PER_OFFER, 'Scraping '+offer.offerCode);
-      const currentRows=rowsForOffer(accepted, offer);
-      if (target && currentRows.length >= target) { accepted=currentRows.slice(0,target); log('✅ '+offer.offerCode+' reached verified target '+target+' row(s); stopping DOM crawl early', 'success'); break; }
-      const timeoutMs = target && target > 250 ? 300000 : 150000;
-      if (Date.now() - startedAt > timeoutMs) { log('⏱️ '+offer.offerCode+' scrape timeout guard reached after '+Math.round(timeoutMs/1000)+'s; stopping with '+currentRows.length+' valid row(s)', 'warning'); break; }
-      const beforeClickRows=rowsForOffer(accepted, offer).length;
-      const remainingNeeded = target ? Math.max(0, target - beforeClickRows) : 8;
-      totalDetailClicks += await clickAllVisibleViewDetails(Math.min(10, remainingNeeded || 6));
-      await wait(120);
-      const elems=candidateRowElements();
-      for (const el of elems){
-        if (target && rowsForOffer(accepted, offer).length >= target) break;
-        const block=parseBlockFromElement(el, offer); if (!block.dates.length) continue; const blockKey=block.key; if (seenBlocks.has(blockKey)) { duplicateBlockSkipped++; continue; } seenBlocks.add(blockKey);
-        // Hard reject placeholder/pending blocks BEFORE enrichment/logging/row creation.
-        if (/pending/i.test(cleanText(block.shipName+' '+block.itinerary)) || (isPendingValue(block.shipName) && isPendingValue(block.itinerary) && !block.shipUrl && !block.itineraryUrl)) { pendingSkipped++; continue; }
-        if (block.dates.length > 20 && !block.shipName && !block.shipUrl && !block.itineraryUrl) { pageDupSkipped++; continue; }
-        const enrichUrl=block.itineraryUrl || block.shipUrl || ''; const enrichment=enrichUrl ? await enrichFromLink(enrichUrl, block.itinerary || block.shipName || offer.offerCode) : {};
-        if (block.dates.length > 20 && !block.shipName && !enrichment.shipName) { pageDupSkipped++; continue; }
-        if (isPlaceholderBlock(block, enrichment)) { pendingSkipped++; continue; }
-        let addedForBlock=0;
-        for (const date of block.dates){
-          const row=makeRow(offer, block, date, BRAND.sourcePrefix+'-ui-v961-view-details-link-enriched', enrichUrl || location.href, enrichment);
-          if (row.shipName && row.sailingDate && !isPendingValue(row.shipName)) { accepted.push(row); addedForBlock++; }
-        }
-        if (addedForBlock) validBlocks++;
-      }
-      const effectiveRows=rowsForOffer(accepted, offer);
-      const uniqueCount=effectiveRows.length;
-      if (uniqueCount === lastAccepted) stableRounds++; else stableRounds=0; lastAccepted=uniqueCount;
-      const containers=scrollContainers();
-      containers.forEach(function(c){ try{ c.scrollTop = Math.min(c.scrollHeight, c.scrollTop + Math.max(360, Math.floor(c.clientHeight*0.9))); }catch(e){} });
-      try{ window.scrollBy(0, Math.max(500, Math.floor(window.innerHeight*0.9))); }catch(e){}
-      const loadMore=Array.from(document.querySelectorAll('button,a,[role="button"]')).find(function(el){ return /Load\s+more|Show\s+more|Next/i.test(cleanText(el.textContent || el.getAttribute('aria-label') || '')); });
-      if (loadMore){ try{ loadMore.scrollIntoView({block:'center'}); await wait(80); loadMore.click(); log('➡️ Clicked Load more/Next on offer '+offer.offerCode, 'info'); await wait(650); stableRounds=0; }catch(e){} }
-      await wait(140);
-      if (isAtBottom() && stableRounds >= STABLE_ROUNDS_TO_STOP) break;
-    }
-    const finalRows=rowsForOffer(accepted, offer);
-    log('📊 '+offer.offerCode+' detail scrape summary: valid rows '+finalRows.length+(target ? '/'+target : '')+', valid blocks '+validBlocks+', pending blocks skipped '+pendingSkipped+', page duplicates skipped '+pageDupSkipped+', duplicate blocks skipped '+duplicateBlockSkipped+', View Details clicks '+totalDetailClicks, finalRows.length?'success':'error');
-    return finalRows;
-  }
-  function noOffersVisibleMessage(){
-    const txt=cleanText(document.body && (document.body.innerText || document.body.textContent) || '');
-    return /no\s+(available\s+)?offers|no\s+club\s+royale\s+offers|you\s+do\s+not\s+have\s+any\s+offers|check\s+back\s+soon/i.test(txt);
-  }
-
-  function shouldReject(rows, offers){
-    const finalRows=dedupeRows(rows);
-    const codes=(offers||[]).map(function(o){ return canonicalOfferCode(o.offerCode); }).filter(Boolean);
-    const by={}; codes.forEach(function(c){ by[c]=0; });
-    finalRows.forEach(function(r){ const c=canonicalOfferCode(r.offerCode); if (c) by[c]=(by[c]||0)+1; });
-    const counts=Object.keys(by).map(function(c){ return by[c]; });
-    Object.keys(by).forEach(function(code){ log((by[code] ? '✅' : '⚠️')+' Final offer count '+code+': '+by[code]+' cruise row(s)', by[code]?'success':'warning'); });
-
-    // v12.3.3: zero visible offers is a legitimate account state only when the page
-    // actually says there are no offers. Do not convert a failed/hydrating page into a
-    // destructive zero-offer sync.
-    if (!codes.length) {
-      if (noOffersVisibleMessage()) {
-        log('✅ Royal offer page confirms 0 active offer(s). Proceeding with an authoritative empty offer catalog.', 'success');
-        return '';
-      }
-      return 'No visible offer codes were found and the page did not confirm that the account has 0 offers';
+  function sendOfferRowsInChunks(offerRows, offerCount) {
+    const materialSailingCount = Array.isArray(offerRows)
+      ? offerRows.filter(row => row && row.shipName && row.sailingDate).length
+      : 0;
+    if (!Array.isArray(offerRows) || offerRows.length === 0) {
+      sendOfferBatch([], true, 0, offerCount);
+      return;
     }
 
-    // If every visible offer produced 0 rows, the detail pages probably did not load.
-    // Preserve the existing catalog instead of wiping it. If only some offers are zero,
-    // keep the successful offers and let Apply Sync preserve existing rows for the missing codes.
-    if (finalRows.length === 0) return 'Visible offer cards were found, but 0 accepted sailing rows were captured after retry';
-    if (counts.some(function(n){ return n===0; })) {
-      const missing=Object.keys(by).filter(function(code){ return !by[code]; });
-      log('⚠️ Visible offer(s) produced 0 rows after retry: '+missing.join(', ')+'. Continuing with successfully captured rows and preserving any existing rows for the missing offer code(s) during Apply Sync.', 'warning');
-    }
+    let chunk = [];
+    let chunkChars = 0;
+    let sentCount = 0;
+    let batchIndex = 0;
 
-    // Still reject a classic virtualized partial sample where every visible offer has a
-    // tiny identical row count. This does not depend on how many offers exist.
-    const positiveCounts=counts.filter(function(n){ return n>0; });
-    const tinyIdentical = positiveCounts.length >= 4 && positiveCounts.every(function(n){ return n<=12; }) && (new Set(positiveCounts)).size <= 2;
-    if (tinyIdentical) return 'Partial virtualized DOM sample detected: '+positiveCounts.join('/');
-
-    // No offer-count or row-count thresholds here. Royal accounts can legitimately show
-    // 0, 1, 2, 4, 30, or any future count of offers; the crawler must download whatever
-    // the live My Offers page exposes.
-    return '';
-  }
-  async function ensureOffersList(){
-    if (isOfferListUrl()) return true;
-    log('↩️ Browser-directed sync returning to exact My Offers list page', 'info');
-    location.href=OFFER_LIST_URL;
-    return false;
-  }
-
-  function isOfferListUrl(){
-    const p=String(location.pathname || '').replace(/\/+$/,'');
-    return (BRAND.key === 'royal_caribbean' && p === '/club-royale/offers') || (BRAND.key === 'celebrity' && p === '/blue-chip-club/offers');
-  }
-  function isOfferDetailUrl(){ return BRAND.offerPathRe.test(location.pathname) && !isOfferListUrl(); }
-  function hasSailingDetailSignals(){
-    const t=cleanText(document.body && document.body.innerText || '');
-    if (!t) return false;
-    const hasOfferDetailText=/(Download\s*list|View\s+details|Room\s*type|Cruise\s+Fare|Dates|Ship\s*name|Itinerary)/i.test(t);
-    const hasCruiseText=/(\d+\s+Night|of the Seas|20\d{2}|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i.test(t);
-    const rowSignals=Array.from(document.querySelectorAll('button,a,[role="button"]')).some(function(el){ return /View\s+details|Download\s*list|View\s+less/i.test(cleanText(el.textContent || el.getAttribute('aria-label') || '')); });
-    return !!(hasOfferDetailText && hasCruiseText) || rowSignals;
-  }
-  async function waitForSailingDetailPage(offer, timeoutMs){
-    const start=Date.now(); let lastUrl=location.href; let lastLen=0; let stable=0;
-    while (Date.now()-start < (timeoutMs || 45000)){
-      const bodyText=cleanText(document.body && document.body.innerText || '');
-      if (location.href !== lastUrl) { log('🌐 Offer detail navigation observed: '+location.href, 'info'); lastUrl=location.href; }
-      if (hasSailingDetailSignals()) {
-        const len=bodyText.length;
-        stable = Math.abs(len-lastLen) < 35 ? stable+1 : 0;
-        lastLen=len;
-        if (stable >= 2 || /View\s+details|Download\s*list/i.test(bodyText)) return true;
-      }
-      await wait(650);
-    }
-    return false;
-  }
-  function forceClick(el){
-    if (!el) return false;
-    try { el.scrollIntoView({block:'center', inline:'center'}); } catch(e){}
-    try { el.focus && el.focus(); } catch(e){}
-    try { el.click(); return true; } catch(e){}
-    try {
-      ['mouseover','mousedown','mouseup','click'].forEach(function(type){ el.dispatchEvent(new MouseEvent(type,{bubbles:true,cancelable:true,view:window})); });
-      return true;
-    } catch(e){}
-    return false;
-  }
-  function offerDetailHrefFromCard(offer, button){
-    const card=button ? closestCard(button) : null;
-    const code=canonicalOfferCode(offer && offer.offerCode || '');
-    const links=Array.from((card || document).querySelectorAll('a[href]')).map(function(a){ return { text:cleanText(a.textContent || ''), href:a.href || '' }; });
-    const exact=links.find(function(x){ return x.href && code && x.href.toUpperCase().indexOf(code)>=0; });
-    if (exact) return exact.href;
-    const sail=links.find(function(x){ return /View\s+Sailings|Sailings|Offer/i.test(x.text) && BRAND.offerPathRe.test((function(){try{return new URL(x.href, location.origin).pathname}catch(e){return x.href}})()); });
-    if (sail) return sail.href;
-    return '';
-  }
-
-  function savedDetailUrlForOffer(offer){
-    if (!offer) return '';
-    const href=cleanText(offer.href || '');
-    if (href && href.indexOf('http')===0) return href;
-    const code=canonicalOfferCode(offer.offerCode || '');
-    if (!code) return '';
-    const playerOfferId=cleanText(offer.playerOfferId || ((href.match(/[?&]playerOfferId=([^&#]+)/i)||[])[1] || ''));
-    return BRAND.detailBaseUrl+encodeURIComponent(code)+(playerOfferId ? '?country=USA&playerOfferId='+encodeURIComponent(playerOfferId) : '?country=USA');
-  }
-  async function fetchSavedDetailRowsForOffer(offer){
-    const code=canonicalOfferCode(offer && offer.offerCode || '');
-    const url=savedDetailUrlForOffer(offer);
-    if (!code || !url) return [];
-    try{
-      log('📥 Fetching authenticated saved detail page for '+code+' without leaving crawler context', 'info');
-      const resp=await fetch(url, { credentials:'include', headers:{ 'accept':'text/html,application/json,*/*' } });
-      const text=await resp.text();
-      let rows=parseRowsFromTextBlob(text, offer, url, BRAND.sourcePrefix+'-saved-detail-fetch');
-      // Also run the generic JSON walker against embedded/hydration text. This is still page-observed
-      // authenticated detail content, not a public/direct endpoint replacement.
+    for (const row of offerRows) {
+      let rowChars = 0;
       try {
-        const jsonish=[];
-        const scripts=Array.from(text.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/gi)).map(function(m){ return m[1] || ''; });
-        scripts.forEach(function(scriptText){
-          if (!scriptText || scriptText.toUpperCase().indexOf(code)<0) return;
-          const chunks=scriptText.match(/\{[\s\S]{100,}?\}/g) || [];
-          chunks.slice(0,8).forEach(function(chunk){
-            try { jsonish.push(JSON.parse(chunk)); } catch(e){}
-          });
-        });
-        jsonish.forEach(function(obj){ rows.push.apply(rows, parseRowsFromRoyalJsonPayload(obj, offer, url, BRAND.sourcePrefix+'-saved-detail-json')); });
-      } catch(e){}
-      rows=rowsForOffer(rows, offer);
-      log((rows.length?'✅':'⚠️')+' Saved detail fetch for '+code+' produced '+rows.length+' row(s)', rows.length?'success':'warning');
-      return rows;
-    } catch(e){
-      log('⚠️ Saved detail fetch failed for '+code+': '+(e&&e.message?e.message:String(e)), 'warning');
-      return [];
-    }
-  }
-  function hasOfferListSignals(){
-    const t=cleanText(document.body && document.body.innerText || '');
-    return /View\s*Sailings/i.test(t) && offerCodeRegex().test(t);
-  }
-  async function waitForOfferListSignals(timeoutMs){
-    const start=Date.now();
-    while (Date.now()-start < (timeoutMs || 20000)){
-      if (hasOfferListSignals() || isOfferListUrl()) return true;
-      await wait(650);
-    }
-    return false;
-  }
-  async function continueAfterOffer(state){
-    if (state.index >= (state.offers||[]).length) { await finishIfComplete(state); return; }
-    const next=state.offers[state.index];
-    const nextCode=canonicalOfferCode(next && next.offerCode || '');
-    const directUrl=savedDetailUrlForOffer(next);
-    log('➡️ Continuing to next saved offer '+(state.index+1)+'/'+(state.offers||[]).length+': '+nextCode, 'info');
-    progress(state.index+1, (state.offers||[]).length, 'Opening '+nextCode);
-
-    // v12.3.2: Royal offer detail URLs can render an empty shell for one rotating offer
-    // even when the live My Offers card has valid View Sailings content. Do not trust the
-    // saved URL as the primary continuation path for Royal. Return to the live offer list
-    // and press the matching View Sailings button for each remaining offer. Keep the direct
-    // URL only as a fallback for rediscovery failure / Celebrity.
-    if (BRAND.key === 'royal_caribbean') {
-      state.phase='list';
-      state.currentOffer=next;
-      state.lastNavigationAt=Date.now();
-      saveState(state);
-      log('↩️ Returning to live My Offers list to open '+nextCode+' with its current View Sailings button', 'info');
-      location.href=OFFER_LIST_URL;
-      return;
-    }
-
-    if (directUrl) {
-      state.phase='detail';
-      state.currentOffer=next;
-      state.lastNavigationAt=Date.now();
-      saveState(state);
-      log('🔗 RN-orchestrated queue navigating directly to saved authenticated detail URL for '+nextCode+': '+directUrl, 'info');
-      location.href=directUrl;
-      return;
-    }
-
-    // If a detail href was not captured, try a same-session fetch as a secondary path.
-    const fetchedRows=await fetchSavedDetailRowsForOffer(next);
-    if (fetchedRows.length) {
-      const merged=dedupeRows([].concat(state.rows || [], fetchedRows));
-      state.rows=merged;
-      state.index=(state.index||0)+1;
-      state.phase='list';
-      delete state.currentOffer;
-      saveState(state);
-      log('💾 Staged '+fetchedRows.length+' row(s) for '+nextCode+' from same-session detail fetch. Total staged rows: '+merged.length, 'success');
-      sendOfferCheckpoint(next, fetchedRows);
-      await wait(500);
-      await continueAfterOffer(state);
-      return;
-    }
-
-    failSafe('Unable to continue to next offer '+nextCode+' because no saved detail URL/playerOfferId was captured');
-  }
-  async function syncAllOffersViaBrowserFirst(state){
-    // Intentionally no direct endpoint preflight here. Keeping this named helper only as a
-    // guardrail marker for future builders: offer rows must be collected from the authenticated
-    // browser session and saved-offer detail pages, then staged by checkpoint batches.
-    return false;
-  }
-
-  async function openCurrentOfferFromList(state){
-    if (!isOfferListUrl()) {
-      log('↩️ Not on exact My Offers list; navigating there before resuming offer '+((state.index||0)+1), 'warning');
-      location.href=OFFER_LIST_URL;
-      setTimeout(function(){ try { const latest=loadState() || state; if (isOfferListUrl()) openCurrentOfferFromList(latest); } catch(e){} }, 6500);
-      return;
-    }
-    const discovered=await discoverOffersWithHydration();
-    let offers=discovered.offers; let buttons=discovered.buttons; const expected=discovered.expected;
-    log('DOM discovery: parsed '+offers.length+' visible/linked offer card(s), found '+buttons.length+' View Sailings button(s)'+(expected ? ', page expected '+expected : ''), offers.length?'success':'warning');
-    if (!offers.length){
-      if (state.offers && state.offers.length && state.index < state.offers.length) {
-        log('⚠️ My Offers rediscovery returned 0, using saved offer list to continue with '+state.offers[state.index].offerCode, 'warning');
-        offers=state.offers; buttons=[];
-      } else if (noOffersVisibleMessage()) {
-        state.offers=[]; state.rows=[]; state.index=0; state.phase='complete'; saveState(state);
-        log('✅ My Offers page explicitly reports 0 active offer(s). Completing Step 1 with an empty authoritative catalog.', 'success');
-        await finishIfComplete(state); return;
-      } else {
-        failSafe('Offer page did not expose any offer cards/links after hydration retries and did not confirm 0 offers'); return;
+        rowChars = JSON.stringify(row).length;
+      } catch (e) {
+        rowChars = 2500;
       }
-    }
-    if (expected && offers.length < expected && !(state.offers && state.offers.length >= expected)){
-      failSafe('Offer discovery incomplete: found '+offers.length+' of expected '+expected+' offers. Refusing partial offer sync so all offers/cruises can populate.'); return;
-    }
-    if (!state.offers || !state.offers.length || offers.length > state.offers.length){ state.offers=offers; state.rows=state.rows || []; state.index=state.index || 0; saveState(state); }
 
-    // v964: saved offer list + detail-page scraping is the only primary offer path.
+      if (chunk.length > 0 && (chunk.length >= BATCH_SIZE || chunkChars + rowChars > MAX_BATCH_CHARS)) {
+        batchIndex += 1;
+        sendOfferBatch(chunk, false);
+        sentCount += chunk.length;
+        log('📤 Sent batch ' + batchIndex + ' with ' + chunk.length + ' offer row(s) (total rows: ' + sentCount + '/' + offerRows.length + ')', 'info');
+        chunk = [];
+        chunkChars = 0;
+      }
 
-    const offer=state.offers[state.index];
-    if (!offer){ await finishIfComplete(state); return; }
-    const alreadyRows=dedupeRows(state.rows || []).filter(function(r){ return canonicalOfferCode(r.offerCode)===canonicalOfferCode(offer.offerCode); });
-    if (alreadyRows.length) {
-      log('⏭️ Offer '+offer.offerCode+' already has '+alreadyRows.length+' staged row(s); skipping duplicate browser crawl for this offer.', 'info');
-      state.index=(state.index||0)+1; saveState(state);
-      if (state.index >= (state.offers||[]).length) { await finishIfComplete(state); return; }
-      await continueAfterOffer(state); return;
+      chunk.push(row);
+      chunkChars += rowChars;
     }
 
-    const liveOffer=offers.find(function(o){ return canonicalOfferCode(o.offerCode)===canonicalOfferCode(offer.offerCode); }) || offer;
-    const button=findOfferButton(liveOffer, liveOffer.buttonIndex || state.index);
-    const fallbackHref=(button ? offerDetailHrefFromCard(liveOffer, button) : '') || liveOffer.href || (BRAND.detailBaseUrl+encodeURIComponent(liveOffer.offerCode)+(liveOffer.playerOfferId ? '?country=USA&playerOfferId='+encodeURIComponent(liveOffer.playerOfferId) : '?country=USA'));
-    if (!button && !fallbackHref){ failSafe('Could not find View Sailings button or detail URL for '+offer.offerCode); return; }
-    state.phase='detail'; state.currentOffer=liveOffer; saveState(state);
-    const startUrl=location.href;
-    log('👆 Browser fallback opening offer '+(state.index+1)+'/'+state.offers.length+': '+liveOffer.offerCode+' by pressing View Sailings', 'success');
-    if (fallbackHref) log('🔗 Fallback offer detail href staged for '+liveOffer.offerCode+': '+fallbackHref, 'info');
-    progress(state.index+1, state.offers.length, 'Opening '+liveOffer.offerCode);
-    try{
-      if (button) { forceClick(button); await wait(900); } else { log('🔗 No visible View Sailings button for '+liveOffer.offerCode+'; navigating directly to detail URL from discovered link', 'warning'); location.href=fallbackHref; await wait(1800); }
-      let ready=await waitForSailingDetailPage(liveOffer, 12000);
-      if (!ready && fallbackHref) {
-        log('⚠️ View Sailings click did not produce ready detail signals; navigating directly to offer detail URL', 'warning');
-        location.href=fallbackHref;
-        await wait(1800);
-        ready=await waitForSailingDetailPage(liveOffer, 30000);
-      }
-      if (!ready) {
-        log('⚠️ Offer '+liveOffer.offerCode+' detail did not report ready after direct navigation; attempting scrape anyway to avoid hanging', 'warning');
-      }
-      const latest=loadState() || state;
-      latest.phase='detail'; latest.currentOffer=liveOffer; saveState(latest);
-      await scrapeDetailAndReturn(latest);
-    }catch(e){ failSafe('View Sailings click/wait failed for '+liveOffer.offerCode+': '+(e&&e.message?e.message:String(e))); }
-  }
-  async function scrapeDetailAndReturn(state){
-    const offer=state.currentOffer || (state.offers||[])[state.index];
-    if (!offer){ failSafe('Detail page loaded but no current offer was staged'); return; }
-    log('📄 Scraping View Sailings detail page for '+offer.offerCode, 'success');
-    await wait(1500);
-    const rows=await scrapeCurrentOfferDetail(offer);
-    const retryKey='__zeroRowRetry_'+canonicalOfferCode(offer.offerCode || '');
-    if (!rows.length && BRAND.key === 'royal_caribbean' && !state[retryKey]) {
-      state[retryKey]=true;
-      state.phase='list';
-      state.currentOffer=offer;
-      saveState(state);
-      log('⚠️ '+offer.offerCode+' produced 0 row(s) on the first detail load; retrying once from the live My Offers View Sailings button before preserving/continuing', 'warning');
-      location.href=OFFER_LIST_URL;
-      return;
+    if (chunk.length > 0) {
+      batchIndex += 1;
+      sendOfferBatch(chunk, false);
+      sentCount += chunk.length;
+      log('📤 Sent batch ' + batchIndex + ' with ' + chunk.length + ' offer row(s) (total rows: ' + sentCount + '/' + offerRows.length + ')', 'info');
     }
-    const merged=dedupeRows([].concat(state.rows || [], rows));
-    state.rows=merged; state.index=(state.index||0)+1; state.phase='list'; delete state.currentOffer; saveState(state);
-    log('💾 Staged '+rows.length+' row(s) for '+offer.offerCode+'. Total staged rows: '+merged.length, rows.length?'success':'error');
-    if (rows.length) { sendOfferCheckpoint(offer, rows); }
-    if (state.index >= (state.offers||[]).length) { await finishIfComplete(state); return; }
-    await continueAfterOffer(state);
+
+    sendOfferBatch([], true, materialSailingCount, offerCount);
   }
-  async function finishIfComplete(state){
-    const rows=dedupeRows(state.rows || []); const offers=state.offers || [];
-    rows.slice(0,25).forEach(function(r){ log('Accepted full row: '+r.offerCode+' | '+r.shipName+' | '+r.sailingDate+' | '+r.itinerary+' | '+r.departurePort, 'success'); });
-    const rejection=shouldReject(rows, offers);
-    if (rejection){ failSafe(rejection); return; }
-    log('✅ STEP 1 COMPLETE: dynamic Royal offer catalog captured '+offers.length+' visible offer(s) with '+rows.length+' individual cruise row(s)', 'success');
-    clearState(); sendRows(rows, offers.length, offers.map(function(o){ return canonicalOfferCode(o.offerCode); }).filter(Boolean));
+  
+  function sendOfferProgress(offerIndex, totalOffers, offerName, sailingsCount, status) {
+    window.ReactNativeWebView.postMessage(JSON.stringify({
+      type: 'offer_progress',
+      offerIndex: offerIndex,
+      totalOffers: totalOffers,
+      offerName: offerName,
+      sailingsCount: sailingsCount,
+      status: status
+    }));
   }
-  async function main(){
-    try{
-      log('Opening offers page for '+BRAND.programName, 'success');
-      log('Easy Seas Sync Now rebuild engine '+ENGINE_VERSION+' active for '+BRAND.label, 'info');
-      log('Mode: WebView-first browser workflow; saved offer list -> detail URL continuation -> pending-block rejection -> checkpoint ACK -> review before commit', 'info');
-      const onOfferList=isOfferListUrl();
-      const onOfferDetail=isOfferDetailUrl();
-      let state=loadState();
-      if (!state && onOfferList) { state={ runId: Date.now(), phase:'list', index:0, offers:[], rows:[] }; saveState(state); }
-      if (!state) { await ensureOffersList(); return; }
-      if (onOfferList) {
-        await wait(1500);
-        if (state.index && state.index > 0) log('🔁 Resuming offer crawler from My Offers page at offer index '+(state.index+1), 'info');
-        await openCurrentOfferFromList(state);
-        return;
-      }
-      if (onOfferDetail || state.phase === 'detail') {
-        // v967: after React Native re-arms this worker on a newly loaded detail page,
-        // recover the current offer from the saved queue and/or the URL.
-        if ((!state.currentOffer || !state.currentOffer.offerCode) && state.offers && state.offers.length) {
-          const urlCodeMatch = String(location.pathname || '').match(/\/offers\/([A-Za-z0-9]{5,12})/i);
-          const urlCode = canonicalOfferCode(urlCodeMatch && urlCodeMatch[1] || '');
-          state.currentOffer = state.offers.find(function(o){ return canonicalOfferCode(o.offerCode) === urlCode; }) || state.offers[state.index] || state.currentOffer;
-          saveState(state);
+
+  function log(message, type = 'info') {
+    window.ReactNativeWebView.postMessage(JSON.stringify({
+      type: 'log',
+      message: message,
+      logType: type
+    }));
+  }
+
+  function safeStr(val) {
+    if (val === null || val === undefined) return '';
+    if (typeof val === 'string') return val;
+    if (typeof val === 'object') {
+      return val.name || val.description || val.code || val.text || val.title || val.value || '';
+    }
+    return String(val);
+  }
+
+  function parseMaybeJson(value) {
+    if (!value) return null;
+    if (typeof value === 'object') return value;
+    if (typeof value !== 'string') return null;
+    try { return JSON.parse(value); } catch (e) { return null; }
+  }
+
+  function firstStringValue() {
+    for (let i = 0; i < arguments.length; i += 1) {
+      const value = arguments[i];
+      if (typeof value === 'string' && value.trim()) return value.trim();
+      if (typeof value === 'number' && isFinite(value)) return String(value);
+    }
+    return '';
+  }
+
+  function findAppKey() {
+    try {
+      const captured = window.capturedRequestHeaders || {};
+      if (captured.apiKey) return captured.apiKey;
+      const keys = Object.keys(localStorage || {});
+      for (const key of keys) {
+        if (/appkey|api[-_]?key|apigee/i.test(key)) {
+          const value = localStorage.getItem(key);
+          if (value && value.length > 10) return value;
         }
-        await scrapeDetailAndReturn(state); return; }
-      await ensureOffersList();
-    } catch(e){ failSafe('Step 1 clean rebuild crashed: '+(e&&e.message?e.message:String(e))); }
+      }
+      const winAny = window;
+      return winAny.RCLL_APPKEY || winAny.RCCL_APPKEY || winAny.APPKEY || '';
+    } catch (e) {
+      return '';
+    }
   }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', main); else main();
+
+  function getCookieValue(name) {
+    try {
+      const target = String(name || '').toLowerCase();
+      const entries = String(document.cookie || '').split(';');
+      for (const entry of entries) {
+        const separator = entry.indexOf('=');
+        const key = (separator >= 0 ? entry.slice(0, separator) : entry).trim().toLowerCase();
+        if (key !== target) continue;
+        const value = separator >= 0 ? entry.slice(separator + 1).trim() : '';
+        try { return decodeURIComponent(value); } catch (e) { return value; }
+      }
+    } catch (e) {}
+    return '';
+  }
+
+  function decodeJwtSubject(token) {
+    try {
+      const raw = String(token || '').replace(/^Bearer\s+/i, '');
+      const parts = raw.split('.');
+      if (parts.length !== 3) return '';
+      let payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      while (payload.length % 4) payload += '=';
+      const parsed = JSON.parse(atob(payload));
+      return firstStringValue(parsed.sub, parsed.accountId, parsed.account_id);
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function pad2(value) {
+    return String(value).padStart(2, '0');
+  }
+
+  function getDateParts(dateStr) {
+    if (!dateStr) return null;
+    const normalized = String(dateStr).trim();
+    let match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s].*)?$/);
+    if (match) {
+      return { year: parseInt(match[1], 10), month: parseInt(match[2], 10), day: parseInt(match[3], 10) };
+    }
+    match = normalized.match(/^(\d{4})(\d{2})(\d{2})$/);
+    if (match) {
+      return { year: parseInt(match[1], 10), month: parseInt(match[2], 10), day: parseInt(match[3], 10) };
+    }
+    match = normalized.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+    if (match) {
+      const year = match[3].length === 2 ? 2000 + parseInt(match[3], 10) : parseInt(match[3], 10);
+      return { year: year, month: parseInt(match[1], 10), day: parseInt(match[2], 10) };
+    }
+    try {
+      const date = new Date(normalized);
+      if (!isNaN(date.getTime())) {
+        return { year: date.getFullYear(), month: date.getMonth() + 1, day: date.getDate() };
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  function formatDate(dateStr) {
+    if (!dateStr) return '';
+    const parts = getDateParts(dateStr);
+    if (!parts) return dateStr;
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return months[parts.month - 1] + ' ' + parts.day + ', ' + parts.year;
+  }
+
+  function formatSailDate(dateStr) {
+    if (!dateStr) return '';
+    const parts = getDateParts(dateStr);
+    if (!parts) return dateStr;
+    return pad2(parts.month) + '/' + pad2(parts.day) + '/' + parts.year;
+  }
+
+  function toISODate(dateStr) {
+    if (!dateStr) return '';
+    const parts = getDateParts(dateStr);
+    if (!parts) return dateStr;
+    return parts.year + '-' + pad2(parts.month) + '-' + pad2(parts.day);
+  }
+
+  function isOfferLikeRecord(record) {
+    if (!record || typeof record !== 'object') return false;
+    return !!(
+      record.campaignOffer ||
+      record.offer ||
+      record.offerDetails ||
+      record.offerCode ||
+      record.marketingCouponCode ||
+      record.couponCode ||
+      record.reserveByDate ||
+      record.expirationDate ||
+      record.marketingEndDate
+    );
+  }
+
+  function getCampaignOffer(offer) {
+    return offer?.campaignOffer || offer?.offer || offer?.offerDetails || offer || {};
+  }
+
+  function collectOfferArrays(value, depth) {
+    if (depth > 4 || !value) return [];
+    if (Array.isArray(value)) {
+      if (value.some(isOfferLikeRecord)) return value;
+      return value.flatMap(item => collectOfferArrays(item, depth + 1));
+    }
+    if (typeof value !== 'object') return [];
+    const collected = [];
+    Object.keys(value).forEach(key => {
+      const normalizedKey = key.toLowerCase();
+      if (normalizedKey.includes('offer') || normalizedKey === 'payload' || normalizedKey === 'data') {
+        collected.push(...collectOfferArrays(value[key], depth + 1));
+      }
+    });
+    return collected;
+  }
+
+  function getOfferIdentityKey(offer, fallback) {
+    const co = getCampaignOffer(offer);
+    const providerInstanceId = safeStr(
+      offer.playerOfferId || offer.offerInstanceId || offer.carnivalOfferId || offer.offerId || offer.id ||
+      co.playerOfferId || co.offerInstanceId || co.carnivalOfferId || co.offerId || co.id
+    ).trim();
+    if (providerInstanceId) return 'provider:' + providerInstanceId.toLowerCase();
+    const parts = [
+      safeStr(co.offerCode || co.marketingCouponCode || co.couponCode || co.code),
+      safeStr(co.name || co.title || co.offerName || co.marketingTitle || co.description),
+      safeStr(co.reserveByDate || co.expirationDate || co.marketingEndDate),
+      getOfferStatus(co, offer),
+    ].filter(Boolean);
+    if (parts.length > 0) return parts.join('|').toLowerCase();
+    try { return fallback + '|' + JSON.stringify(offer).slice(0, 500); } catch (e) { return fallback; }
+  }
+
+  function extractCandidateOffers(candidate) {
+    if (Array.isArray(candidate)) return candidate.filter(item => item && typeof item === 'object');
+    if (!candidate || typeof candidate !== 'object') return [];
+    if (isOfferLikeRecord(candidate)) return [candidate];
+    return collectOfferArrays(candidate, 0);
+  }
+
+  function extractOffersArray(data) {
+    const candidates = [
+      data,
+      data?.offers,
+      data?.offer,
+      data?.casinoOffers,
+      data?.casinoOffer,
+      data?.featuredOffers,
+      data?.featuredOffer,
+      data?.featuredCasinoOffers,
+      data?.featuredCasinoOffer,
+      data?.casinoFeaturedOffers,
+      data?.casinoFeaturedOffer,
+      data?.highlightedOffers,
+      data?.highlightedOffer,
+      data?.primaryOffers,
+      data?.primaryOffer,
+      data?.moreOffers,
+      data?.moreOffer,
+      data?.availableOffers,
+      data?.availableOffer,
+      data?.payload?.casinoOffers,
+      data?.payload?.casinoOffer,
+      data?.payload?.offers,
+      data?.payload?.offer,
+      data?.payload?.featuredOffers,
+      data?.payload?.featuredOffer,
+      data?.payload?.featuredCasinoOffers,
+      data?.payload?.featuredCasinoOffer,
+      data?.payload?.casinoFeaturedOffers,
+      data?.payload?.casinoFeaturedOffer,
+      data?.payload?.highlightedOffers,
+      data?.payload?.highlightedOffer,
+      data?.payload?.primaryOffers,
+      data?.payload?.primaryOffer,
+      data?.payload?.moreOffers,
+      data?.payload?.moreOffer,
+      data?.payload?.availableOffers,
+      data?.payload?.availableOffer,
+      data?.data?.casinoOffers,
+      data?.data?.casinoOffer,
+      data?.data?.offers,
+      data?.data?.offer,
+      data?.data?.featuredOffers,
+      data?.data?.featuredOffer,
+      data?.data?.moreOffers,
+      data?.data?.moreOffer,
+      data?.data?.availableOffers,
+      data?.data?.availableOffer,
+    ];
+    const map = new Map();
+    const addOffer = (offer, index, source) => {
+      if (!offer || typeof offer !== 'object') return;
+      const key = getOfferIdentityKey(offer, source + ':' + index);
+      if (!map.has(key)) map.set(key, offer);
+    };
+    candidates.forEach((candidate, candidateIndex) => {
+      extractCandidateOffers(candidate).forEach((offer, offerIndex) => addOffer(offer, offerIndex, 'candidate:' + candidateIndex));
+    });
+    collectOfferArrays(data, 0).forEach((offer, index) => addOffer(offer, index, 'deep'));
+    return Array.from(map.values());
+  }
+
+  function normalizeOffersApiResponse(data) {
+    const base = data && typeof data === 'object' && !Array.isArray(data) ? data : {};
+    return { ...base, offers: extractOffersArray(data) };
+  }
+
+  function getOfferStatus(co, offer) {
+    return safeStr(
+      co?.status ||
+      co?.offerStatus ||
+      co?.redemptionStatus ||
+      co?.progressStatus ||
+      co?.state ||
+      offer?.status ||
+      offer?.offerStatus ||
+      offer?.redemptionStatus ||
+      offer?.progressStatus ||
+      offer?.state ||
+      ''
+    );
+  }
+
+  function isOfferInProgress(co, offer) {
+    if (co?.isInProgress || co?.inProgress || co?.isPending || offer?.isInProgress || offer?.inProgress || offer?.isPending) {
+      return true;
+    }
+    const status = getOfferStatus(co, offer).toLowerCase().replace(/[\s_-]+/g, ' ').trim();
+    if (status.includes('in progress') || status.includes('pending') || status.includes('processing') || status.includes('earning')) {
+      return true;
+    }
+    return false;
+  }
+
+  async function extractClubRoyaleStatus() {
+    try {
+      log('Extracting ' + PROGRAM_NAME + ' status...');
+      log('⚠️ Note: Loyalty data will be fetched via API in Step 4 for accuracy', 'info');
+      return null;
+    } catch (error) {
+      log('Error extracting ' + PROGRAM_NAME + ' status: ' + error.message, 'warning');
+      return null;
+    }
+  }
+
+  async function getAuthContext() {
+    try {
+      log('Parsing live session data from browser storage...');
+      const host = location && location.hostname ? location.hostname : '';
+      const isCarnivalHost = host.includes('carnival.com');
+      const storageKeys = ['persist:session'];
+      if (isCarnivalHost) {
+        storageKeys.push('persist:auth', 'persist:root', 'carnival-session', 'persist:user');
+      }
+      try {
+        Object.keys(localStorage || {}).forEach((key) => {
+          if (/persist:|session|auth|token|user/i.test(key) && !storageKeys.includes(key)) {
+            storageKeys.push(key);
+          }
+        });
+      } catch (e) {}
+
+      let bestSession = null;
+      for (const key of storageKeys) {
+        const raw = localStorage.getItem(key);
+        if (!raw || raw.length < 10) continue;
+        const parsed = parseMaybeJson(raw);
+        if (!parsed) continue;
+        const token = parseMaybeJson(parsed.token) || parsed.token || parsed.accessToken || parsed.access_token || parsed.idToken || parsed.id_token || parsed.authToken;
+        const user = parseMaybeJson(parsed.user) || parsed.user || parsed.profile || parsed.account || {};
+        const accountId = firstStringValue(
+          user.accountId,
+          user.accountID,
+          user.account_id,
+          parsed.accountId,
+          parsed.accountID,
+          parsed.account_id,
+          user.guestAccountId,
+          parsed.guestAccountId
+        );
+        const loyaltyId = firstStringValue(
+          user.cruiseLoyaltyId,
+          user.cruiseLoyaltyID,
+          user.loyaltyId,
+          user.loyaltyID,
+          user.casinoLoyaltyId,
+          user.casinoLoyaltyID,
+          user.clubRoyaleId,
+          user.blueChipId,
+          user.crownAndAnchorNumber,
+          user.crownAnchorNumber,
+          user.captainsClubId,
+          parsed.cruiseLoyaltyId,
+          parsed.loyaltyId
+        );
+        const tokenString = firstStringValue(token);
+        const expirationRaw = parsed.tokenExpiration || parsed.expiresAt || parsed.expires_at || parsed.expiration;
+        const expirationNumber = expirationRaw ? Number(expirationRaw) : 0;
+        const tokenExpiration = expirationNumber > 0 && expirationNumber < 100000000000 ? expirationNumber * 1000 : expirationNumber;
+        const score = (tokenString ? 4 : 0) + (accountId ? 3 : 0) + (loyaltyId ? 2 : 0) + (key === 'persist:session' ? 1 : 0);
+        if (score > 0 && (!bestSession || score > bestSession.score)) {
+          bestSession = { key, token: tokenString, accountId, loyaltyId, tokenExpiration, user, score };
+        }
+      }
+
+      const capturedHeaders = window.capturedRequestHeaders || {};
+      const capturedAuth = firstStringValue(capturedHeaders.authorization);
+      const capturedAccountId = firstStringValue(capturedHeaders.accountId, capturedHeaders.xAccountId);
+      const capturedLoyaltyId = firstStringValue(capturedHeaders.loyaltyId, capturedHeaders.xLoyaltyId);
+      const cookieToken = firstStringValue(getCookieValue('accessToken'), getCookieValue('access_token'));
+      const cookieAccountId = firstStringValue(getCookieValue('VDS_ID'), getCookieValue('vds_id'));
+      const cookieLoyaltyId = firstStringValue(getCookieValue('loyalty_ID'), getCookieValue('loyalty_id'));
+      const authToken = bestSession?.token || cookieToken || (capturedAuth ? capturedAuth.replace(/^Bearer\s+/i, '') : '');
+      const accountId = bestSession?.accountId || cookieAccountId || capturedAccountId || decodeJwtSubject(authToken);
+      let loyaltyId = bestSession?.loyaltyId || cookieLoyaltyId || capturedLoyaltyId || '';
+      if (!loyaltyId && window.capturedPayloads && window.capturedPayloads.loyalty) {
+        const queue = [window.capturedPayloads.loyalty];
+        const loyaltyKeys = ['cruiseLoyaltyId', 'loyaltyId', 'loyaltyID', 'casinoLoyaltyId', 'clubRoyaleId', 'crownAndAnchorNumber', 'loyaltyNumber'];
+        while (queue.length > 0 && !loyaltyId) {
+          const current = queue.shift();
+          if (!current || typeof current !== 'object') continue;
+          for (const key of loyaltyKeys) {
+            const candidate = current[key];
+            if ((typeof candidate === 'string' || typeof candidate === 'number') && String(candidate).trim()) {
+              loyaltyId = String(candidate).trim();
+              break;
+            }
+          }
+          if (!loyaltyId) {
+            Object.keys(current).slice(0, 80).forEach((key) => {
+              const child = current[key];
+              if (child && typeof child === 'object') queue.push(child);
+            });
+          }
+        }
+      }
+
+      if (!authToken && !accountId) {
+        // Royal commonly authenticates the embedded browser through HttpOnly
+        // cookies. A logged-in page can therefore have no token visible to
+        // JavaScript. Keep the valid cookie session and use credentials:'include'.
+        log('Using the active cookie-authenticated Royal session', 'success');
+      }
+
+      if (bestSession?.tokenExpiration && bestSession.tokenExpiration < Date.now()) {
+        log('⚠️ Stored token timestamp is stale; continuing with the active browser session/cookies', 'warning');
+      }
+
+      log('Session context prepared' + (bestSession?.key ? ' from ' + bestSession.key : ' from captured headers'), 'success');
+      const networkAuth = authToken ? (authToken.startsWith('Bearer ') ? authToken : 'Bearer ' + authToken) : capturedAuth;
+      const appKey = findAppKey();
+      const headers = {
+        'accept': 'application/json',
+        'accept-language': 'en-US,en;q=0.9',
+        'content-type': 'application/json',
+        'cache-control': 'no-cache',
+        'pragma': 'no-cache',
+      };
+      if (accountId) {
+        headers['account-id'] = accountId;
+        headers['x-account-id'] = accountId;
+      }
+      if (loyaltyId) headers['x-loyalty-id'] = loyaltyId;
+      if (networkAuth) headers['authorization'] = networkAuth;
+      if (appKey) {
+        headers['appkey'] = appKey;
+        headers['x-api-key'] = appKey;
+      }
+      const brandCode = host.includes('celebritycruises.com') ? 'C' : (host.includes('carnival.com') ? 'N' : 'R');
+      const baseUrl = brandCode === 'C' ? 'https://www.celebritycruises.com' : (brandCode === 'N' ? 'https://www.carnival.com' : 'https://www.royalcaribbean.com');
+      return { headers, accountId, loyaltyId, brandCode, baseUrl, user: bestSession?.user || {} };
+    } catch (error) {
+      log('Failed to get auth context: ' + error.message, 'error');
+      throw error;
+    }
+  }
+
+  async function fetchPricingAndItinerary(baseUrl, shipCode, minDate, maxDate, count) {
+    const endpoint = baseUrl + '/graph';
+    const query = 'query cruiseSearch_Cruises($filters:String,$qualifiers:String,$sort:CruiseSearchSort,$pagination:CruiseSearchPagination,$nlSearch:String){cruiseSearch(filters:$filters,qualifiers:$qualifiers,sort:$sort,pagination:$pagination,nlSearch:$nlSearch){results{cruises{id productViewLink masterSailing{itinerary{name code days{number type ports{activity arrivalTime departureTime port{code name region}}}departurePort{code name region}destination{code name}portSequence sailingNights ship{code name}totalNights type}}sailings{bookingLink id itinerary{code}sailDate startDate endDate taxesAndFees{value}taxesAndFeesIncluded stateroomClassPricing{price{value currency{code}}stateroomClass{id content{code}}}}}cruiseRecommendationId total}}}';
+    const filtersValue = 'startDate:' + minDate + '~' + maxDate + '|ship:' + shipCode;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 18000);
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          'content-type': 'application/json',
+          'accept': 'application/json',
+          'apollographql-client-name': 'rci-NextGen-Cruise-Search',
+          'apollographql-query-name': 'cruiseSearch_Cruises',
+          'skip_authentication': 'true'
+        },
+        body: JSON.stringify({ query: query, variables: { filters: filtersValue, pagination: { count: count, skip: 0 } } })
+      });
+      if (!response.ok) {
+        return null;
+      }
+      const data = await response.json();
+      return data?.data?.cruiseSearch?.results?.cruises || [];
+    } catch (error) {
+      return null;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  function extractPricingFromCruise(cruise, sailDate) {
+    const result = {
+      interiorPrice: '',
+      oceanviewPrice: '',
+      balconyPrice: '',
+      suitePrice: '',
+      taxesAndFees: '',
+      dayByDayItinerary: [],
+      destinationName: '',
+      totalNights: null,
+      bookingLink: '',
+      portList: ''
+    };
+    try {
+      const itin = cruise?.masterSailing?.itinerary || {};
+      result.destinationName = itin?.destination?.name || '';
+      result.totalNights = itin?.totalNights || itin?.sailingNights || null;
+      if (Array.isArray(itin?.days)) {
+        result.dayByDayItinerary = itin.days.map(day => ({
+          day: day.number || 0,
+          type: day.type || '',
+          portName: day.ports?.[0]?.port?.name || '',
+          portCode: day.ports?.[0]?.port?.code || '',
+          arrivalTime: day.ports?.[0]?.arrivalTime || '',
+          departureTime: day.ports?.[0]?.departureTime || ''
+        }));
+        const portNames = itin.days
+          .filter(d => d.ports && d.ports.length > 0)
+          .map(d => d.ports[0]?.port?.name)
+          .filter(n => n);
+        result.portList = [...new Set(portNames)].join(', ');
+      }
+      const sailings = cruise?.sailings || [];
+      const targetDate = toISODate(sailDate);
+      const matchingSailing = sailings.find(s => {
+        const sSailDate = (s.sailDate || '').toString().trim().slice(0, 10);
+        return sSailDate === targetDate;
+      });
+      if (matchingSailing) {
+        result.bookingLink = matchingSailing.bookingLink || '';
+        const taxVal = matchingSailing.taxesAndFees?.value;
+        if (taxVal !== undefined && taxVal !== null) {
+          const taxNum = Number(taxVal);
+          if (!isNaN(taxNum)) {
+            result.taxesAndFees = '$' + (taxNum * 2).toFixed(2);
+          }
+        }
+        const categoryMap = {
+          'I': 'interior', 'IN': 'interior', 'INT': 'interior', 'INSIDE': 'interior', 'INTERIOR': 'interior',
+          'O': 'oceanview', 'OV': 'oceanview', 'OB': 'oceanview', 'E': 'oceanview', 'OCEAN': 'oceanview',
+          'OCEANVIEW': 'oceanview', 'OUTSIDE': 'oceanview',
+          'B': 'balcony', 'BAL': 'balcony', 'BK': 'balcony', 'BALCONY': 'balcony',
+          'D': 'suite', 'DLX': 'suite', 'DELUXE': 'suite', 'JS': 'suite', 'SU': 'suite', 'SUITE': 'suite'
+        };
+        const categoryPrices = { interior: null, oceanview: null, balcony: null, suite: null };
+        if (Array.isArray(matchingSailing.stateroomClassPricing)) {
+          for (const pricing of matchingSailing.stateroomClassPricing) {
+            const code = (pricing?.stateroomClass?.content?.code || pricing?.stateroomClass?.id || '').toString().trim().toUpperCase();
+            const priceVal = pricing?.price?.value;
+            if (code && priceVal !== undefined && priceVal !== null) {
+              const category = categoryMap[code];
+              if (category) {
+                const priceNum = Number(priceVal) * 2;
+                if (!isNaN(priceNum) && (categoryPrices[category] === null || priceNum < categoryPrices[category])) {
+                  categoryPrices[category] = priceNum;
+                }
+              }
+            }
+          }
+        }
+        if (categoryPrices.interior !== null) result.interiorPrice = '$' + categoryPrices.interior.toFixed(2);
+        if (categoryPrices.oceanview !== null) result.oceanviewPrice = '$' + categoryPrices.oceanview.toFixed(2);
+        if (categoryPrices.balcony !== null) result.balconyPrice = '$' + categoryPrices.balcony.toFixed(2);
+        if (categoryPrices.suite !== null) result.suitePrice = '$' + categoryPrices.suite.toFixed(2);
+      }
+    } catch (e) {}
+    return result;
+  }
+
+  async function readRoyalJsonResponse(response, label) {
+    const contentType = String(response.headers && response.headers.get ? response.headers.get('content-type') || '' : '').toLowerCase();
+    if (contentType.includes('application/json')) return response.json();
+    const raw = await response.text();
+    try { return JSON.parse(raw); } catch (e) {}
+    try { return JSON.parse(atob(raw)); } catch (e) {
+      throw new Error(label + ' response was not readable JSON');
+    }
+  }
+
+  async function fetchRoyalWithTimeout(url, options, label, timeoutMs) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs || 18000);
+    try {
+      const response = await fetch(url, { ...options, signal: controller.signal, credentials: 'include' });
+      if (!response.ok) {
+        let detail = '';
+        try { detail = (await response.clone().text()).slice(0, 180); } catch (e) {}
+        const error = new Error(label + ' failed: HTTP ' + response.status + (detail ? ' - ' + detail : ''));
+        error.status = response.status;
+        throw error;
+      }
+      return response;
+    } catch (error) {
+      if (error && error.name === 'AbortError') throw new Error(label + ' timed out');
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  function mergeDetailedCampaignOffer(originalOffer, detailsData, expectedCode) {
+    let detailCampaignOffer = null;
+    if (detailsData && Array.isArray(detailsData.offers) && detailsData.offers.length > 0) {
+      const match = detailsData.offers.find(item => {
+        const campaign = getCampaignOffer(item);
+        return safeStr(campaign.offerCode).trim().toUpperCase() === String(expectedCode || '').trim().toUpperCase();
+      }) || detailsData.offers[0];
+      detailCampaignOffer = getCampaignOffer(match);
+    } else if (detailsData && detailsData.campaignOffer) {
+      detailCampaignOffer = detailsData.campaignOffer;
+    } else if (detailsData && (detailsData.sailings || detailsData.offerCode)) {
+      detailCampaignOffer = detailsData;
+    }
+    if (!detailCampaignOffer) return originalOffer;
+    const cloned = JSON.parse(JSON.stringify(originalOffer));
+    cloned.campaignOffer = { ...getCampaignOffer(cloned), ...detailCampaignOffer };
+    return cloned;
+  }
+
+  function findCapturedRoyalOfferList() {
+    try {
+      const captured = window.capturedPayloads || {};
+      const candidates = Array.isArray(captured.offerCandidates) ? captured.offerCandidates : [];
+      for (let index = candidates.length - 1; index >= 0; index -= 1) {
+        const candidate = candidates[index];
+        const url = String(candidate && candidate.url || '').toLowerCase();
+        if (!url.includes('/api/casino/v2/offers/list')) continue;
+        const normalized = normalizeOffersApiResponse(candidate && candidate.data);
+        if (Array.isArray(normalized.offers) && normalized.offers.length > 0) {
+          return { data: candidate.data, offers: normalized.offers, url: String(candidate.url || '') };
+        }
+      }
+    } catch (error) {}
+    return null;
+  }
+
+  async function fetchCurrentRoyalOffers(authContext) {
+    const partnerPath = '/api/casino/v1/partners/player';
+    const listPath = '/api/casino/v2/offers/list';
+    const detailsPath = '/api/casino/v2/offers/details';
+    const baseUrl = authContext.baseUrl || location.origin;
+    const headers = { ...(authContext.headers || {}) };
+
+    log('🔌 Using the current three-step ' + PROGRAM_NAME + ' API flow...', 'info');
+
+    let partnershipIds = [];
+    try {
+      const partnerResponse = await fetchRoyalWithTimeout(baseUrl + partnerPath, { method: 'GET', headers }, PROGRAM_NAME + ' partner lookup', 15000);
+      const partnerData = await readRoyalJsonResponse(partnerResponse, PROGRAM_NAME + ' partner lookup');
+      const partners = Array.isArray(partnerData) ? partnerData : (Array.isArray(partnerData?.data) ? partnerData.data : []);
+      partnershipIds = partners.map(partner => safeStr(partner?.partnershipId || partner?.id || partner)).filter(Boolean);
+      log('✅ Retrieved ' + partnershipIds.length + ' ' + PROGRAM_NAME + ' partnership ID(s)', 'success');
+    } catch (error) {
+      if (error && (error.status === 402 || error.status === 403)) throw error;
+      log('⚠️ Partnership lookup was unavailable; trying the offers list with the signed-in session', 'warning');
+    }
+
+    const featureFlags = authContext.user && authContext.user.featureFlags ? authContext.user.featureFlags : {};
+    const approvedAgencyIds = Array.isArray(featureFlags['approved-agency-ids']) ? featureFlags['approved-agency-ids'] : [];
+    const digitalRedemption = typeof featureFlags['digital-redemption'] === 'boolean' ? featureFlags['digital-redemption'] : true;
+    const listParams = new URLSearchParams();
+    if (partnershipIds.length > 0) listParams.append('partnershipIds', partnershipIds.join(','));
+    listParams.append('sortBy', 'offer.reserveByDate');
+    listParams.append('sortDirection', 'asc');
+    listParams.append('limit', '100');
+    listParams.append('page', '1');
+    listParams.append('digitalRedemption', String(digitalRedemption));
+    if (approvedAgencyIds.length > 0) listParams.append('approvedAgencyIds', approvedAgencyIds.join(','));
+
+    const listUrl = baseUrl + listPath + '?' + listParams.toString();
+    const capturedList = findCapturedRoyalOfferList();
+    let listData = capturedList ? capturedList.data : null;
+    if (capturedList) {
+      log('✅ Using the signed-in website offer list already captured by Easy Seas (' + capturedList.offers.length + ' offer(s)); skipping a duplicate list request', 'success');
+    } else {
+      let listError = null;
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        try {
+          const listResponse = await fetchRoyalWithTimeout(listUrl, { method: 'GET', headers }, PROGRAM_NAME + ' offers list', 20000);
+          listData = await readRoyalJsonResponse(listResponse, PROGRAM_NAME + ' offers list');
+          break;
+        } catch (error) {
+          listError = error;
+          const status = Number(error && error.status || 0);
+          const retryable = !status || status === 429 || status >= 500;
+          if (!retryable || attempt === 3) break;
+          const retryDelay = 600 * attempt;
+          log('⚠️ ' + PROGRAM_NAME + ' offer list attempt ' + attempt + ' failed' + (status ? ' with HTTP ' + status : '') + '; retrying in ' + retryDelay + 'ms', 'warning');
+          await wait(retryDelay);
+        }
+      }
+      if (!listData) throw listError || new Error(PROGRAM_NAME + ' offers list returned no data');
+    }
+    const initialOffers = normalizeOffersApiResponse(listData).offers;
+    if (!Array.isArray(initialOffers) || initialOffers.length === 0) {
+      throw new Error('The current ' + PROGRAM_NAME + ' offers list returned zero offer records');
+    }
+    log('✅ ' + PROGRAM_NAME + ' list returned ' + initialOffers.length + ' offer(s)', 'success');
+
+    const detailedOffers = new Array(initialOffers.length);
+    const detailRequestCache = new Map();
+    let nextIndex = 0;
+    let detailFailureCount = 0;
+    // Bounded concurrency shortens Royal's per-offer detail waterfall without
+    // collapsing distinct playerOfferId instances or flooding the session.
+    // Four requests avoids overwhelming Royal's session while transient
+    // throttling and server failures receive two backoff retries.
+    const DETAIL_WORKER_LIMIT = 4;
+    const workerCount = Math.min(DETAIL_WORKER_LIMIT, initialOffers.length);
+    const workers = Array.from({ length: workerCount }, async () => {
+      while (true) {
+        const index = nextIndex;
+        nextIndex += 1;
+        if (index >= initialOffers.length) return;
+        const offer = initialOffers[index];
+        const campaign = getCampaignOffer(offer);
+        const offerCode = safeStr(campaign.offerCode || campaign.marketingCouponCode || campaign.code).trim();
+        const playerOfferId = safeStr(offer.playerOfferId || campaign.playerOfferId).trim();
+        if (!offerCode || !playerOfferId) {
+          detailedOffers[index] = offer;
+          detailFailureCount += 1;
+          log('⚠️ Offer instance ' + (index + 1) + ' is missing the offer code or playerOfferId required for sailing details', 'warning');
+          continue;
+        }
+        const detailsParams = new URLSearchParams();
+        detailsParams.append('offerCode', offerCode);
+        detailsParams.append('playerOfferId', playerOfferId);
+        detailsParams.append('limit', '999');
+        detailsParams.append('page', '1');
+        detailsParams.append('sortBy', 'offer.reserveByDate');
+        detailsParams.append('sortDirection', 'asc');
+        try {
+          const detailIdentity = offerCode.toUpperCase() + '|' + playerOfferId;
+          let detailRequest = detailRequestCache.get(detailIdentity);
+          if (!detailRequest) {
+            detailRequest = (async () => {
+              let lastError = null;
+              for (let attempt = 0; attempt < 3; attempt += 1) {
+                try {
+                  const detailResponse = await fetchRoyalWithTimeout(baseUrl + detailsPath + '?' + detailsParams.toString(), { method: 'GET', headers }, 'Offer ' + offerCode + ' details', 20000);
+                  return await readRoyalJsonResponse(detailResponse, 'Offer ' + offerCode + ' details');
+                } catch (error) {
+                  lastError = error;
+                  const status = Number(error && error.status || 0);
+                  const retryable = !status || status === 429 || status >= 500;
+                  if (!retryable || attempt === 2) break;
+                  await wait(600 * (attempt + 1));
+                }
+              }
+              throw lastError || new Error('Offer detail request failed');
+            })();
+            detailRequestCache.set(detailIdentity, detailRequest);
+          }
+          const detailData = await detailRequest;
+          detailedOffers[index] = mergeDetailedCampaignOffer(offer, detailData, offerCode);
+          const sailingCount = Array.isArray(getCampaignOffer(detailedOffers[index]).sailings) ? getCampaignOffer(detailedOffers[index]).sailings.length : 0;
+          sendOfferProgress(index + 1, initialOffers.length, offerCode, sailingCount, 'complete');
+        } catch (error) {
+          detailedOffers[index] = offer;
+          detailFailureCount += 1;
+          log('⚠️ Could not refresh details for ' + offerCode + ': ' + error.message, 'warning');
+        }
+      }
+    });
+    await Promise.all(workers);
+
+    const result = { ...(listData && typeof listData === 'object' && !Array.isArray(listData) ? listData : {}), offers: detailedOffers.filter(Boolean) };
+    const withSailings = result.offers.filter(offer => {
+      const campaign = getCampaignOffer(offer);
+      return Array.isArray(campaign.sailings) && campaign.sailings.length > 0;
+    }).length;
+    log('✅ Current ' + PROGRAM_NAME + ' API completed: ' + result.offers.length + ' offer(s), ' + withSailings + ' with sailing details', 'success');
+    if (detailFailureCount > 0) {
+      throw new Error(PROGRAM_NAME + ' detail recovery remained incomplete for ' + detailFailureCount + ' offer instance(s); refusing to publish a partial sailing catalog');
+    }
+    if (withSailings === 0) {
+      throw new Error(PROGRAM_NAME + ' returned ' + result.offers.length + ' offer instance(s) but zero sailing-detail responses');
+    }
+    return result;
+  }
+
+  async function fetchOffersFromAPI(authContext) {
+    // First use Royal's current signed-in three-step flow: partner IDs, offer
+    // list, then per-offer sailing details. Captured network/server-rendered
+    // payloads remain a secondary recovery path, followed by DOM extraction.
+    try {
+      return await fetchCurrentRoyalOffers(authContext);
+    } catch (currentApiError) {
+      log('⚠️ Current ' + PROGRAM_NAME + ' API flow unavailable: ' + currentApiError.message, 'warning');
+    }
+
+    log('🔎 Inspecting the live Royal page and captured website requests for offer data...', 'info');
+    await wait(1200);
+
+    const candidates = [];
+    const captured = window.capturedPayloads || {};
+    if (captured.offers) candidates.push(captured.offers);
+    if (Array.isArray(captured.offerCandidates)) {
+      captured.offerCandidates.forEach(entry => {
+        if (entry && entry.data) candidates.push(entry.data);
+      });
+    }
+
+    try {
+      if (window.__NEXT_DATA__) candidates.push(window.__NEXT_DATA__);
+    } catch (e) {}
+
+    function collectJsonScripts(doc) {
+      const found = [];
+      try {
+        Array.from(doc.querySelectorAll('script')).forEach(script => {
+          const raw = String(script.textContent || '').trim();
+          if (!raw || raw.length > 5000000) return;
+          const type = String(script.getAttribute('type') || '').toLowerCase();
+          if (type.includes('json') || raw[0] === '{' || raw[0] === '[') {
+            const parsed = parseMaybeJson(raw);
+            if (parsed) found.push(parsed);
+          }
+        });
+      } catch (e) {}
+      return found;
+    }
+
+    collectJsonScripts(document).forEach(candidate => candidates.push(candidate));
+
+    let richest = null;
+    let richestCount = 0;
+    candidates.forEach(candidate => {
+      try {
+        const normalized = normalizeOffersApiResponse(candidate);
+        const count = Array.isArray(normalized.offers) ? normalized.offers.length : 0;
+        if (count > richestCount) {
+          richest = normalized;
+          richestCount = count;
+        }
+      } catch (e) {}
+    });
+
+    if (richest && richestCount > 0) {
+      const recoveredSailingOffers = richest.offers.filter(offer => {
+        const campaign = getCampaignOffer(offer);
+        return Array.isArray(campaign.sailings) && campaign.sailings.length > 0;
+      }).length;
+      if (recoveredSailingOffers > 0) {
+        log('✅ Recovered ' + richestCount + ' ' + PROGRAM_NAME + ' offer record(s), including ' + recoveredSailingOffers + ' with sailing details, from the website session', 'success');
+        return richest;
+      }
+      log('⚠️ Recovered ' + richestCount + ' offer headers but no sailing details; continuing to the live View Sailings fallback instead of exporting empty placeholders', 'warning');
+    }
+
+    throw new Error('The signed-in page did not expose a structured offer payload; using link/DOM extraction.');
+  }
+
+  async function enrichWithPricingData(allOfferRows, baseUrl) {
+    if (!SCRAPE_PRICING_AND_ITINERARY || allOfferRows.length === 0) {
+      return allOfferRows;
+    }
+    log('💰 Fetching stateroom pricing, taxes & day-by-day itinerary...', 'info');
+    const shipDateMap = new Map();
+    allOfferRows.forEach((row, idx) => {
+      if (row.shipCode && row.sailingDate) {
+        const sailDateISO = toISODate(row.sailingDate);
+        if (sailDateISO) {
+          const key = row.shipCode + '|' + sailDateISO;
+          if (!shipDateMap.has(key)) {
+            shipDateMap.set(key, { shipCode: row.shipCode, sailDate: sailDateISO, indices: [] });
+          }
+          shipDateMap.get(key).indices.push(idx);
+        }
+      }
+    });
+    const uniqueSailings = Array.from(shipDateMap.values());
+    log('📊 Found ' + uniqueSailings.length + ' unique ship/date combinations to enrich', 'info');
+    if (uniqueSailings.length === 0) {
+      return allOfferRows;
+    }
+    const shipGroups = {};
+    uniqueSailings.forEach(s => {
+      if (!shipGroups[s.shipCode]) {
+        shipGroups[s.shipCode] = { shipCode: s.shipCode, sailings: [], minDate: null, maxDate: null };
+      }
+      const group = shipGroups[s.shipCode];
+      group.sailings.push(s);
+      if (!group.minDate || s.sailDate < group.minDate) group.minDate = s.sailDate;
+      if (!group.maxDate || s.sailDate > group.maxDate) group.maxDate = s.sailDate;
+    });
+    const groups = Object.values(shipGroups);
+    let processedCount = 0;
+    const totalCount = uniqueSailings.length;
+    const processPricingGroup = async (group) => {
+      try {
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'progress', current: processedCount, total: totalCount, stepName: 'Fetching pricing for ' + group.shipCode + '...' }));
+        const cruises = await fetchPricingAndItinerary(baseUrl, group.shipCode, group.minDate, group.maxDate, group.sailings.length * 3);
+        if (cruises && cruises.length > 0) {
+          const cruiseByDate = {};
+          cruises.forEach(cruise => {
+            const sailings = cruise?.sailings || [];
+            sailings.forEach(s => {
+              const sDate = (s.sailDate || '').toString().trim().slice(0, 10);
+              if (sDate) {
+                cruiseByDate[sDate] = cruise;
+              }
+            });
+          });
+          for (const sailing of group.sailings) {
+            const cruise = cruiseByDate[sailing.sailDate];
+            if (cruise) {
+              const pricingData = extractPricingFromCruise(cruise, sailing.sailDate);
+              for (const idx of sailing.indices) {
+                const row = allOfferRows[idx];
+                if (!row.interiorPrice && pricingData.interiorPrice) row.interiorPrice = pricingData.interiorPrice;
+                if (!row.oceanviewPrice && pricingData.oceanviewPrice) row.oceanviewPrice = pricingData.oceanviewPrice;
+                if (!row.balconyPrice && pricingData.balconyPrice) row.balconyPrice = pricingData.balconyPrice;
+                if (!row.suitePrice && pricingData.suitePrice) row.suitePrice = pricingData.suitePrice;
+                if (!row.taxesAndFees && pricingData.taxesAndFees) row.taxesAndFees = pricingData.taxesAndFees;
+                if (!row.portList && pricingData.portList) row.portList = pricingData.portList;
+                if (!row.destinationName && pricingData.destinationName) row.destinationName = pricingData.destinationName;
+                if (!row.totalNights && pricingData.totalNights) row.totalNights = pricingData.totalNights;
+                if (!row.bookingLink && pricingData.bookingLink) row.bookingLink = pricingData.bookingLink;
+                if (pricingData.dayByDayItinerary && pricingData.dayByDayItinerary.length > 0) {
+                  row.dayByDayItinerary = pricingData.dayByDayItinerary;
+                }
+              }
+            }
+          }
+          processedCount += group.sailings.length;
+          log('  ✓ Enriched ' + group.sailings.length + ' sailing(s) for ship ' + group.shipCode, 'success');
+        } else {
+          processedCount += group.sailings.length;
+          log('  ⚠️ No pricing data found for ship ' + group.shipCode, 'warning');
+        }
+      } catch (err) {
+        processedCount += group.sailings.length;
+        log('  ⚠️ Error fetching pricing for ' + group.shipCode + ': ' + err.message, 'warning');
+      }
+    };
+    let nextGroupIndex = 0;
+    const pricingWorkerCount = Math.min(3, groups.length);
+    const pricingWorkers = Array.from({ length: pricingWorkerCount }, async () => {
+      while (true) {
+        const groupIndex = nextGroupIndex;
+        nextGroupIndex += 1;
+        if (groupIndex >= groups.length) return;
+        await processPricingGroup(groups[groupIndex]);
+      }
+    });
+    await Promise.all(pricingWorkers);
+    const enrichedCount = allOfferRows.filter(r => r.interiorPrice || r.oceanviewPrice || r.balconyPrice || r.suitePrice).length;
+    log('✅ Pricing enrichment complete: ' + enrichedCount + '/' + allOfferRows.length + ' sailings have pricing data', 'success');
+    return allOfferRows;
+  }
+
+  function processAPIResponse(data, scrapePricing) {
+    const allOfferRows = [];
+    let totalSailings = 0;
+    if (!data || !Array.isArray(data.offers)) {
+      return { offerRows: allOfferRows, offerCount: 0, totalSailings: 0 };
+    }
+    const validOffers = data.offers.filter(o => o && isOfferLikeRecord(o));
+    const host = location && location.hostname ? location.hostname : '';
+    const defaultOfferType = host.includes('celebritycruises.com') ? 'Blue Chip Club' : 'Club Royale';
+    log('📊 Processing ' + validOffers.length + ' offers from API response...');
+    for (let i = 0; i < validOffers.length; i++) {
+      const offer = validOffers[i];
+      const co = getCampaignOffer(offer);
+      const playerOfferId = safeStr(offer.playerOfferId || co.playerOfferId).trim();
+      const carnivalOfferId = safeStr(offer.carnivalOfferId || co.carnivalOfferId || offer.offerId || co.offerId).trim();
+      let offerInstanceId = safeStr(offer.offerInstanceId || co.offerInstanceId || playerOfferId || carnivalOfferId).trim();
+      const offerName = co.name || co.title || co.offerName || co.marketingTitle || '';
+      const offerCode = co.offerCode || co.marketingCouponCode || co.couponCode || co.code || '';
+      const offerExpiry = formatDate(co.reserveByDate);
+      if (!offerInstanceId) offerInstanceId = [offerCode, offerName, offerExpiry, i].join('|').toLowerCase();
+      const tradeInValue = co.tradeInValue ? '$' + Number(co.tradeInValue).toFixed(2) : '';
+      const perks = tradeInValue ? 'Trade-in value: ' + tradeInValue : '';
+      const offerStatus = getOfferStatus(co, offer);
+      const offerIsInProgress = isOfferInProgress(co, offer);
+      log('━━━━━ Offer ' + (i + 1) + '/' + validOffers.length + ' ━━━━━');
+      log('  Offer Name: ' + offerName);
+      log('  Offer Code: ' + (offerCode || '[NOT FOUND]'), offerCode ? 'info' : 'warning');
+      log('  Expiry Date: ' + (offerExpiry || '[NOT FOUND]'), offerExpiry ? 'info' : 'warning');
+      if (tradeInValue) {
+        log('  Trade-in Value: ' + tradeInValue);
+      }
+      if (offerStatus) {
+        log('  Status: ' + offerStatus, offerIsInProgress ? 'warning' : 'info');
+      }
+      const sailings = co.sailings || co.availableSailings || co.eligibleSailings || co.sailingInfo || co.offerSailings || offer.sailings || offer.availableSailings || offer.eligibleSailings || offer.sailingInfo || offer.offerSailings || [];
+      if (sailings.length === 0) {
+        log('  ⚠️ No sailings available for this offer', 'warning');
+        allOfferRows.push({
+          sourcePage: defaultOfferType === 'Blue Chip Club' ? 'Blue Chip Club Offers' : 'Offers',
+          playerOfferId: playerOfferId,
+          carnivalOfferId: carnivalOfferId,
+          offerInstanceId: offerInstanceId,
+          offerName: offerName,
+          offerCode: offerCode,
+          offerExpirationDate: offerExpiry,
+          offerType: defaultOfferType,
+          shipName: '',
+          shipCode: '',
+          sailingDate: '',
+          itinerary: '',
+          departurePort: '',
+          cabinType: '',
+          numberOfGuests: '',
+          perks: perks,
+          loyaltyLevel: '',
+          loyaltyPoints: '',
+          interiorPrice: '',
+          oceanviewPrice: '',
+          balconyPrice: '',
+          suitePrice: '',
+          taxesAndFees: '',
+          portList: '',
+          dayByDayItinerary: [],
+          destinationName: '',
+          totalNights: null,
+          bookingLink: '',
+          offerStatus: offerStatus || 'No sailings available',
+          isInProgress: offerIsInProgress
+        });
+        sendOfferProgress(i + 1, validOffers.length, offerName, 0, 'complete');
+        continue;
+      }
+      log('  📜 Processing ' + sailings.length + ' sailings...');
+      sendOfferProgress(i + 1, validOffers.length, offerName, 0, 'processing');
+      let offerSailingCount = 0;
+      for (let sailingIndex = 0; sailingIndex < sailings.length; sailingIndex += 1) {
+        const sailing = sailings[sailingIndex];
+        const shipName = sailing.shipName || '';
+        const shipCode = sailing.shipCode || '';
+        const sailDate = formatSailDate(sailing.sailDate);
+        const departurePort = safeStr(sailing.departurePort?.name || sailing.departurePortName || sailing.departurePort || '');
+        const itinerary = safeStr(sailing.itineraryDescription || sailing.sailingType?.name || sailing.sailingType || '');
+        const cabinType = safeStr(sailing.roomType || sailing.stateroomType || '');
+        const isGOBO = sailing.isGOBO || co.isGOBO || false;
+        const numberOfGuests = isGOBO ? '1' : '2';
+        let interiorPrice = '';
+        let oceanviewPrice = '';
+        let balconyPrice = '';
+        let suitePrice = '';
+        if (sailing.pricing && Array.isArray(sailing.pricing)) {
+          for (const priceInfo of sailing.pricing) {
+            const type = (priceInfo.roomType || priceInfo.cabinType || '').toLowerCase();
+            const price = priceInfo.price || priceInfo.amount || priceInfo.rate;
+            const priceStr = price ? '$' + Number(price).toFixed(2) : '';
+            if (type.includes('interior') || type.includes('inside')) {
+              interiorPrice = priceStr;
+            } else if (type.includes('oceanview') || type.includes('ocean view')) {
+              oceanviewPrice = priceStr;
+            } else if (type.includes('balcony')) {
+              balconyPrice = priceStr;
+            } else if (type.includes('suite')) {
+              suitePrice = priceStr;
+            }
+          }
+        }
+        const ports = sailing.ports || sailing.itinerary?.ports || [];
+        const portList = Array.isArray(ports) ? ports.map(p => p.name || p.portName || '').filter(n => n).join(', ') : '';
+        allOfferRows.push({
+          sourcePage: defaultOfferType === 'Blue Chip Club' ? 'Blue Chip Club Offers' : 'Offers',
+          playerOfferId: playerOfferId,
+          carnivalOfferId: carnivalOfferId,
+          offerInstanceId: offerInstanceId,
+          offerName: offerName,
+          offerCode: offerCode,
+          offerExpirationDate: offerExpiry,
+          offerType: defaultOfferType,
+          shipName: shipName,
+          shipCode: shipCode,
+          sailingDate: sailDate,
+          itinerary: itinerary,
+          departurePort: departurePort,
+          cabinType: cabinType,
+          numberOfGuests: numberOfGuests,
+          perks: perks,
+          loyaltyLevel: '',
+          loyaltyPoints: '',
+          interiorPrice: interiorPrice,
+          oceanviewPrice: oceanviewPrice,
+          balconyPrice: balconyPrice,
+          suitePrice: suitePrice,
+          taxesAndFees: '',
+          portList: portList,
+          dayByDayItinerary: [],
+          destinationName: '',
+          totalNights: null,
+          bookingLink: '',
+          offerStatus: offerStatus,
+          isInProgress: offerIsInProgress
+        });
+        totalSailings++;
+        offerSailingCount++;
+        if (totalSailings % BATCH_SIZE === 0 || offerSailingCount === 1 || offerSailingCount === sailings.length || offerSailingCount % 100 === 0) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'progress', current: totalSailings, total: Math.max(totalSailings, validOffers.length), stepName: 'Processing offers...' }));
+          sendOfferProgress(i + 1, validOffers.length, offerName, offerSailingCount, offerSailingCount === sailings.length ? 'parsed' : 'processing');
+        }
+        if (offerSailingCount % 100 === 0) {
+          log('    ✓ Processed ' + offerSailingCount + '/' + sailings.length + ' sailings (' + totalSailings + ' total)');
+        }
+      }
+      sendOfferProgress(i + 1, validOffers.length, offerName, offerSailingCount, 'complete');
+      log('Offer ' + (i + 1) + '/' + validOffers.length + ' (' + offerName + '): ' + offerSailingCount + ' sailings - complete', 'success');
+      log('  ✓ Offer complete: ' + offerSailingCount + ' sailings added', 'success');
+    }
+    return { offerRows: allOfferRows, offerCount: validOffers.length, totalSailings };
+  }
+
+  async function extractOffers() {
+    try {
+      log('Extracting ' + PROGRAM_NAME + ' data...');
+      await extractClubRoyaleStatus();
+      log('Loading ' + PROGRAM_NAME + ' Offers page...');
+      await wait(2000);
+      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'progress', current: 0, total: 100, stepName: 'Authenticating and fetching all data...' }));
+      const authContext = await getAuthContext();
+      const offersData = await fetchOffersFromAPI(authContext);
+      let { offerRows, offerCount } = processAPIResponse(offersData, SCRAPE_PRICING_AND_ITINERARY);
+      if (SCRAPE_PRICING_AND_ITINERARY && offerRows.length > 0) {
+        log('🔄 Starting pricing and itinerary enrichment...', 'info');
+        offerRows = await enrichWithPricingData(offerRows, authContext.baseUrl);
+      }
+      const parsedInstanceIds = new Set((offersData.offers || []).map((offer, index) => getOfferIdentityKey(offer, 'parsed:' + index)));
+      const exportedInstanceIds = new Set(offerRows.map((row, index) => {
+        const providerId = row.playerOfferId || row.carnivalOfferId || row.offerInstanceId;
+        return providerId
+          ? 'provider:' + String(providerId).toLowerCase()
+          : [row.offerCode, row.offerName, row.offerExpirationDate, index].join('|').toLowerCase();
+      }));
+      const codesToInstances = {};
+      (offersData.offers || []).forEach((offer, index) => {
+        const campaign = getCampaignOffer(offer);
+        const code = safeStr(campaign.offerCode || campaign.marketingCouponCode || campaign.code || '[NO CODE]').toUpperCase();
+        if (!codesToInstances[code]) codesToInstances[code] = new Set();
+        codesToInstances[code].add(getOfferIdentityKey(offer, 'diagnostic:' + index));
+      });
+      const sharedCodeDiagnostics = Object.keys(codesToInstances).filter(code => codesToInstances[code].size > 1);
+      sharedCodeDiagnostics.forEach(code => log('ℹ️ Preserved ' + codesToInstances[code].size + ' distinct offer instances sharing code ' + code, 'info'));
+      const materialSailingRows = offerRows.filter(row => row && row.shipName && row.sailingDate).length;
+      log('📊 Offer reconciliation — website: ' + offerCount + ', parsed instances: ' + parsedInstanceIds.size + ', exported instances: ' + exportedInstanceIds.size + ', sailing rows: ' + materialSailingRows, parsedInstanceIds.size === exportedInstanceIds.size ? 'success' : 'warning');
+      if (offerCount !== parsedInstanceIds.size || parsedInstanceIds.size !== exportedInstanceIds.size) {
+        log('⚠️ Offer totals differ; no rows were discarded silently. Review the per-offer diagnostics above before replacing saved data.', 'warning');
+      }
+      sendOfferRowsInChunks(offerRows, offerCount);
+      log('✓ Extracted ' + materialSailingRows + ' sailing row(s) plus ' + (offerRows.length - materialSailingRows) + ' empty offer header(s) from ' + offerCount + ' offer(s)', 'success');
+      if (SCRAPE_PRICING_AND_ITINERARY) {
+        const withPricing = offerRows.filter(r => r.interiorPrice || r.oceanviewPrice || r.balconyPrice || r.suitePrice).length;
+        const withItinerary = offerRows.filter(r => r.dayByDayItinerary && r.dayByDayItinerary.length > 0).length;
+        const withTaxes = offerRows.filter(r => r.taxesAndFees).length;
+        log('📊 Enrichment summary: ' + withPricing + ' with pricing, ' + withItinerary + ' with day-by-day itinerary, ' + withTaxes + ' with taxes/fees', 'success');
+      }
+    } catch (error) {
+      log('Structured offer extraction was unavailable: ' + error.message, 'warning');
+      const capturedOffers = window.capturedPayloads && window.capturedPayloads.offers;
+      if (capturedOffers) {
+        try {
+          log('🔄 Rechecking the already-captured ' + PROGRAM_NAME + ' payload...', 'info');
+          const recoveredData = normalizeOffersApiResponse(capturedOffers);
+          let recovered = processAPIResponse(recoveredData, SCRAPE_PRICING_AND_ITINERARY);
+          let recoveredRows = recovered.offerRows || [];
+          if (SCRAPE_PRICING_AND_ITINERARY && recoveredRows.length > 0) {
+            recoveredRows = await enrichWithPricingData(recoveredRows, location.origin);
+          }
+          const materialRecoveredRows = recoveredRows.filter(row => row && row.shipName && row.sailingDate).length;
+          const capturedList = findCapturedRoyalOfferList();
+          const materialRecoveredInstances = new Set(recoveredRows.filter(row => row && row.shipName && row.sailingDate).map((row, index) => {
+            const providerId = row.playerOfferId || row.carnivalOfferId || row.offerInstanceId;
+            return providerId ? 'provider:' + String(providerId).toLowerCase() : [row.offerCode, row.offerName, row.offerExpirationDate, index].join('|').toLowerCase();
+          })).size;
+          const expectedRecoveredInstances = capturedList ? capturedList.offers.length : 0;
+          const captureProvesCompleteCatalog = expectedRecoveredInstances > 0 && materialRecoveredInstances >= expectedRecoveredInstances;
+          if (materialRecoveredRows > 0 && captureProvesCompleteCatalog) {
+            sendOfferRowsInChunks(recoveredRows, recovered.offerCount || 0);
+            log('✅ Recovered ' + materialRecoveredRows + ' sailing row(s) from network capture', 'success');
+            return;
+          }
+          log('⚠️ Captured recovery did not prove sailing details for all ' + expectedRecoveredInstances + ' listed offer instance(s); continuing to the live View Sailings fallback', 'warning');
+        } catch (captureError) {
+          log('⚠️ Captured offers recovery failed: ' + captureError.message, 'warning');
+        }
+      }
+      log('Attempting fallback to DOM scraping...', 'warning');
+      await fallbackDOMExtraction();
+    }
+  }
+
+  async function fallbackDOMExtraction() {
+    log('🔄 Starting non-navigating ' + PROGRAM_NAME + ' link/DOM extraction...', 'warning');
+    const pageText = document.body ? (document.body.textContent || '') : '';
+    let expectedOfferCount = 0;
+    const featuredMatch = pageText.match(/Featured\s+Offers?\s*\((\d+)\)/i);
+    const moreMatch = pageText.match(/More\s+Offers?\s*\((\d+)\)/i);
+    if (featuredMatch) expectedOfferCount += parseInt(featuredMatch[1], 10);
+    if (moreMatch) expectedOfferCount += parseInt(moreMatch[1], 10);
+    log('Expected offers from page: ' + expectedOfferCount);
+
+    const viewSailingsButtons = Array.from(document.querySelectorAll('button, a, [role="button"]')).filter(el => {
+      const text = String(el.textContent || '').trim().toLowerCase();
+      return text.includes('view sailing') || text.includes('see sailing');
+    });
+
+    if (viewSailingsButtons.length === 0) {
+      log('No View Sailings controls were found on the signed-in page.', 'warning');
+      sendOfferBatch([], true, 0, 0);
+      return;
+    }
+
+    log('Found ' + viewSailingsButtons.length + ' View Sailings controls');
+    const extractedRows = [];
+    const seenRows = new Set();
+
+    function normalizeSpace(value) {
+      return String(value || '').replace(/\s+/g, ' ').trim();
+    }
+
+    function findOfferCard(button) {
+      return button.closest('article, li, section, [data-testid*="offer"], [class*="offer-card"], [class*="OfferCard"], [class*="offer"]')
+        || button.parentElement;
+    }
+
+    function parseCardMeta(card, index) {
+      const text = normalizeSpace(card && card.textContent);
+      const codeMatch = text.match(/\b\d{2}[A-Z0-9]{4,12}\b/i);
+      const heading = card && card.querySelector ? card.querySelector('h1,h2,h3,h4,[class*="title"],[data-testid*="title"]') : null;
+      const expiryMatch = text.match(/(?:redeem|reserve|book)\s+by\s*:?[ ]*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},\s+\d{4}|\d{1,2}\/\d{1,2}\/\d{2,4})/i);
+      const cardPlayerOfferId = card && card.getAttribute
+        ? (card.getAttribute('data-player-offer-id') || card.getAttribute('data-playerofferid') || card.getAttribute('data-offer-id'))
+        : '';
+      const offerLink = card && card.querySelector ? card.querySelector('a[href*="offer"],a[href*="playerOffer"]') : null;
+      const href = offerLink && offerLink.getAttribute ? String(offerLink.getAttribute('href') || '') : '';
+      const hrefIdMatch = href.match(/[?&](?:playerOfferId|offerId)=([^&#]+)/i);
+      const playerOfferId = normalizeSpace(cardPlayerOfferId || (hrefIdMatch ? decodeURIComponent(hrefIdMatch[1]) : ''));
+      const offerCode = codeMatch ? codeMatch[0].toUpperCase() : '';
+      const offerName = normalizeSpace(heading && heading.textContent) || (PROGRAM_NAME + ' Offer ' + (index + 1));
+      const offerExpirationDate = expiryMatch ? normalizeSpace(expiryMatch[1]) : '';
+      return {
+        offerCode: offerCode,
+        offerName: offerName,
+        offerExpirationDate: offerExpirationDate,
+        playerOfferId: playerOfferId,
+        offerInstanceId: playerOfferId || [offerCode, offerName, offerExpirationDate, index].join('|').toLowerCase(),
+        cardText: text
+      };
+    }
+
+    function rowKey(row) {
+      return [row.playerOfferId || row.offerInstanceId, row.offerCode, row.shipName, row.sailingDate, row.cabinType, row.numberOfGuests, row.perks].join('|').toLowerCase();
+    }
+
+    function addRow(row, meta) {
+      if (!row || !row.shipName || !row.sailingDate) return false;
+      const enriched = {
+        ...row,
+        sourcePage: row.sourcePage || 'Offers',
+        offerCode: row.offerCode || meta.offerCode,
+        offerName: row.offerName || meta.offerName,
+        offerExpirationDate: row.offerExpirationDate || meta.offerExpirationDate,
+        offerType: row.offerType || PROGRAM_NAME,
+        playerOfferId: row.playerOfferId || meta.playerOfferId,
+        offerInstanceId: row.offerInstanceId || meta.offerInstanceId,
+      };
+      const key = rowKey(enriched);
+      if (seenRows.has(key)) return false;
+      seenRows.add(key);
+      extractedRows.push(enriched);
+      return true;
+    }
+
+    function parseSailingText(rawText, meta) {
+      const block = normalizeSpace(rawText);
+      if (!block || block.length > 5000) return null;
+      const dateMatch = block.match(/\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2},\s+\d{4}\b/i)
+        || block.match(/\b\d{1,2}\/\d{1,2}\/\d{4}\b/);
+      const shipMatch = block.match(/\b[A-Z][A-Za-z' -]+ of the Seas\b/i);
+      if (!dateMatch || !shipMatch) return null;
+
+      const nightsMatch = block.match(/\b(\d{1,2})\s*Night\b/i);
+      const cabinMatch = block.match(/\b(Interior|Ocean\s*View|Oceanview|Balcony|Junior\s*Suite|Suite)(?:\s*-\s*GTY|\s+GTY)?\b/i);
+      const guestsMatch = block.match(/\b(?:for\s+)?([12])\s+Guests?\b/i);
+      const freePlayMatch = block.match(/\$(\d[\d,]*)\s*Free\s*Play/i);
+      const obcMatch = block.match(/\$(\d[\d,]*)\s*(?:OBC|Onboard Credit|Next\s*Cruise\s*OBC)/i);
+      const tradeMatch = block.match(/\$(\d[\d,]*)\s*Trade[-\s]*In/i);
+      const portMatch = block.match(/(?:Depart(?:ure|ing)?\s*(?:Port|From)?|Sails?\s+From)\s*:?\s*([^|•]+?)(?=\s{2,}|[|•]|$)/i);
+
+      return {
+        sourcePage: 'Offers',
+        offerName: meta.offerName,
+        offerCode: meta.offerCode,
+        playerOfferId: meta.playerOfferId,
+        offerInstanceId: meta.offerInstanceId,
+        offerExpirationDate: meta.offerExpirationDate,
+        offerType: PROGRAM_NAME,
+        shipName: normalizeSpace(shipMatch[0]),
+        shipCode: '',
+        sailingDate: normalizeSpace(dateMatch[0]),
+        itinerary: nightsMatch ? normalizeSpace(block.substring(Math.max(0, nightsMatch.index || 0), Math.min(block.length, (nightsMatch.index || 0) + 180))) : '',
+        departurePort: portMatch ? normalizeSpace(portMatch[1]) : '',
+        cabinType: cabinMatch ? normalizeSpace(cabinMatch[0]) : '',
+        numberOfGuests: guestsMatch ? guestsMatch[1] : '',
+        perks: [
+          freePlayMatch ? ('$' + freePlayMatch[1] + ' FreePlay') : '',
+          obcMatch ? ('$' + obcMatch[1] + ' OBC') : '',
+          tradeMatch ? ('$' + tradeMatch[1] + ' Trade-In') : ''
+        ].filter(Boolean).join('; '),
+        loyaltyLevel: '', loyaltyPoints: '', interiorPrice: '', oceanviewPrice: '', balconyPrice: '', suitePrice: '', taxesAndFees: '', portList: '', dayByDayItinerary: [], destinationName: '',
+        totalNights: nightsMatch ? parseInt(nightsMatch[1], 10) : undefined,
+        bookingLink: ''
+      };
+    }
+
+    function parseDocumentRows(doc, meta) {
+      let added = 0;
+      const selectors = [
+        'tr', 'li', 'article',
+        '[data-testid*="sailing"]', '[data-testid*="cruise"]',
+        '[class*="sailing"]', '[class*="Sailing"]', '[class*="cruise-card"]', '[class*="CruiseCard"]'
+      ].join(',');
+      const nodes = Array.from(doc.querySelectorAll(selectors));
+      nodes.forEach(node => {
+        const text = normalizeSpace(node.textContent || '');
+        if (text.length < 15 || text.length > 5000) return;
+        const row = parseSailingText(text, meta);
+        if (row && addRow(row, meta)) added += 1;
+      });
+
+      if (added === 0 && doc.body) {
+        const rawLines = String(doc.body.innerText || doc.body.textContent || '').split(/\n+/).map(normalizeSpace).filter(Boolean);
+        for (let index = 0; index < rawLines.length; index += 1) {
+          const block = rawLines.slice(Math.max(0, index - 2), Math.min(rawLines.length, index + 5)).join(' ');
+          const row = parseSailingText(block, meta);
+          if (row && addRow(row, meta)) added += 1;
+        }
+      }
+      return added;
+    }
+
+    function getDetailHref(button, card) {
+      const directAnchor = button.tagName && button.tagName.toLowerCase() === 'a' ? button : button.closest('a[href]');
+      const cardAnchor = card && card.querySelector ? Array.from(card.querySelectorAll('a[href]')).find(a => /sailing|offer|casino/i.test(String(a.textContent || '') + ' ' + String(a.getAttribute('href') || ''))) : null;
+      const raw = (directAnchor && directAnchor.getAttribute('href'))
+        || (cardAnchor && cardAnchor.getAttribute('href'))
+        || button.getAttribute('data-href')
+        || button.getAttribute('data-url')
+        || '';
+      if (!raw || raw.startsWith('javascript:') || raw === '#') return '';
+      try { return new URL(raw, location.href).href; } catch (e) { return ''; }
+    }
+
+    async function fetchDocument(url) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+      try {
+        const response = await fetch(url, { credentials: 'include', signal: controller.signal, headers: { accept: 'text/html,application/xhtml+xml,application/json' } });
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+        if (contentType.includes('json')) {
+          const json = await response.json();
+          const normalized = normalizeOffersApiResponse(json);
+          return { doc: null, structured: normalized };
+        }
+        const html = await response.text();
+        return { doc: new DOMParser().parseFromString(html, 'text/html'), structured: null };
+      } finally {
+        clearTimeout(timeout);
+      }
+    }
+
+    function rowsFromStructured(structured, meta) {
+      try {
+        const processed = processAPIResponse(structured, false);
+        let count = 0;
+        (processed.offerRows || []).forEach(row => { if (addRow(row, meta)) count += 1; });
+        return count;
+      } catch (e) {
+        return 0;
+      }
+    }
+
+    for (let buttonIndex = 0; buttonIndex < viewSailingsButtons.length; buttonIndex += 1) {
+      const button = viewSailingsButtons[buttonIndex];
+      const card = findOfferCard(button);
+      const meta = parseCardMeta(card, buttonIndex);
+      let offerRows = 0;
+
+      try {
+        // First parse any sailing information already rendered in the offer card.
+        const cardRow = parseSailingText(card ? card.textContent || '' : '', meta);
+        if (cardRow && addRow(cardRow, meta)) offerRows += 1;
+
+        const href = getDetailHref(button, card);
+        if (href) {
+          log('Fetching offer ' + (buttonIndex + 1) + '/' + viewSailingsButtons.length + ' without leaving the offers page...', 'info');
+          const fetched = await fetchDocument(href);
+          if (fetched.structured) offerRows += rowsFromStructured(fetched.structured, meta);
+          if (fetched.doc) {
+            // Structured state can be embedded in JSON script tags.
+            Array.from(fetched.doc.querySelectorAll('script')).forEach(script => {
+              const raw = String(script.textContent || '').trim();
+              if (!raw || raw.length > 5000000) return;
+              const parsed = parseMaybeJson(raw);
+              if (parsed) offerRows += rowsFromStructured(normalizeOffersApiResponse(parsed), meta);
+            });
+            offerRows += parseDocumentRows(fetched.doc, meta);
+          }
+        }
+
+        // Only attempt a same-page modal interaction when there is no link.
+        // Never click a navigation anchor: that was the source of the prior
+        // page reload and permanent Step 1 hang after offer 1.
+        const declaresDialog = String(button.getAttribute('aria-haspopup') || '').toLowerCase() === 'dialog'
+          || Boolean(button.getAttribute('aria-controls'))
+          || /modal|dialog|drawer/i.test(String(button.getAttribute('data-target') || button.getAttribute('data-testid') || ''));
+        if (offerRows === 0 && !href && declaresDialog && String(button.tagName || '').toLowerCase() !== 'a') {
+          button.scrollIntoView({ block: 'center' });
+          button.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+          await wait(1200);
+          const dialog = document.querySelector('[role="dialog"], [aria-modal="true"], [class*="modal"], [class*="drawer"]');
+          if (dialog) {
+            const tempDoc = document.implementation.createHTMLDocument('dialog');
+            tempDoc.body.innerHTML = dialog.innerHTML;
+            offerRows += parseDocumentRows(tempDoc, meta);
+            const closeButton = Array.from(dialog.querySelectorAll('button,[role="button"]')).find(el => {
+              const label = normalizeSpace((el.getAttribute && (el.getAttribute('aria-label') || el.getAttribute('title'))) || el.textContent).toLowerCase();
+              return label === 'close' || label.includes('close dialog') || label === '×';
+            });
+            if (closeButton && typeof closeButton.click === 'function') closeButton.click();
+          }
+        }
+      } catch (error) {
+        log('Offer ' + (buttonIndex + 1) + ' extraction error: ' + String(error && error.message ? error.message : error), 'warning');
+      }
+
+      sendOfferProgress(buttonIndex + 1, viewSailingsButtons.length, meta.offerName, offerRows, offerRows > 0 ? 'complete' : 'empty');
+      log('Offer ' + (buttonIndex + 1) + '/' + viewSailingsButtons.length + ' (' + meta.offerName + '): ' + offerRows + ' sailing row(s)', offerRows > 0 ? 'success' : 'warning');
+      await wait(150);
+    }
+
+    sendOfferRowsInChunks(extractedRows, viewSailingsButtons.length);
+    if (extractedRows.length > 0) {
+      log('✅ ' + PROGRAM_NAME + ' extraction completed: ' + extractedRows.length + ' sailing row(s) from ' + viewSailingsButtons.length + ' visible offer(s)', 'success');
+    } else {
+      log('⛔ ' + PROGRAM_NAME + ' offers are visible but no sailing rows were readable. Existing saved offers will be preserved and the sync will be marked incomplete.', 'error');
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', extractOffers);
+  } else {
+    extractOffers();
+  }
 })();
 `;
 
-export function injectOffersExtraction(scrapePricingAndItinerary: boolean = false, cruiseLine: 'royal_caribbean' | 'celebrity' = 'royal_caribbean') {
-  const safeCruiseLine = cruiseLine === 'celebrity' ? 'celebrity' : 'royal_caribbean';
+export function injectOffersExtraction(scrapePricingAndItinerary: boolean = false) {
   return `
 const SCRAPE_PRICING_AND_ITINERARY = ${scrapePricingAndItinerary};
-window.__EASYSEAS_SYNC_BRAND = ${JSON.stringify(safeCruiseLine)};
 
 ${STEP1_OFFERS_SCRIPT}
 `;

@@ -1,131 +1,23 @@
 import type { Cruise, BookedCruise, CasinoOffer } from '@/types/models';
-import { KNOWN_RETAIL_VALUES } from '@/constants/knownRetailValues';
-import { BOOKED_CRUISES_DATA } from '@/mocks/bookedCruises';
-import { COMPLETED_CRUISES_DATA } from '@/mocks/completedCruises';
-import { findReceiptByShipAndDate } from '@/constants/receiptData';
-import { findFreeplayOBCByOfferCode, findFreeplayOBCByShipAndDate } from '@/constants/freeplayOBCData';
+import { findSingleMaterialOffer } from '@/lib/itineraryIntegrity';
 
 export function applyKnownRetailValues(cruises: BookedCruise[]): BookedCruise[] {
-  return cruises.map(cruise => {
-    const knownValue = KNOWN_RETAIL_VALUES.find(kv => {
-      if (kv.cruiseId === cruise.id || kv.cruiseId === cruise.bookingId || kv.cruiseId === cruise.reservationNumber) return true;
-
-      const normalizedShip = cruise.shipName?.toLowerCase().trim() ?? '';
-      const normalizedKnownShip = kv.ship.toLowerCase().trim();
-      const shipMatch = normalizedShip === normalizedKnownShip || normalizedShip.includes(normalizedKnownShip) || normalizedKnownShip.includes(normalizedShip);
-      const dateMatch = cruise.sailDate === kv.departureDate;
-      return shipMatch && dateMatch;
-    });
-    
-    if (knownValue && !cruise.retailValue && !cruise.totalRetailCost && !cruise.originalPrice) {
-      return {
-        ...cruise,
-        retailValue: knownValue.retailCabinValue,
-        totalRetailCost: knownValue.retailCabinValue,
-        originalPrice: knownValue.retailCabinValue,
-      };
-    }
-    
-    return cruise;
-  });
+  // Bundled values are fixtures, not a source of truth for the signed-in user.
+  return cruises;
 }
 
 export function enrichCruisesWithReceiptData(cruises: BookedCruise[]): BookedCruise[] {
-  return cruises.map(cruise => {
-    const receipt = findReceiptByShipAndDate(cruise.shipName, cruise.sailDate);
-    
-    if (receipt) {
-      const knownRetailValue = KNOWN_RETAIL_VALUES.find(kv => {
-        if (kv.cruiseId === cruise.id || kv.cruiseId === cruise.bookingId || kv.cruiseId === cruise.reservationNumber) return true;
-        const normalizedShip = cruise.shipName?.toLowerCase().trim() ?? '';
-        const normalizedKnownShip = kv.ship.toLowerCase().trim();
-        return kv.departureDate === cruise.sailDate && (normalizedShip === normalizedKnownShip || normalizedShip.includes(normalizedKnownShip) || normalizedKnownShip.includes(normalizedShip));
-      })?.retailCabinValue;
-      const importedRetailValue = cruise.retailValue || cruise.totalRetailCost || cruise.originalPrice || 0;
-      const retailValue = Math.max(importedRetailValue, knownRetailValue ?? 0, receipt.totalRetailCost);
-      const casinoDiscount = Math.max(receipt.totalCasinoDiscount, retailValue - receipt.pricePaid);
-
-      return {
-        ...cruise,
-        pricePaid: receipt.pricePaid,
-        taxesFeesEstimate: cruise.taxesFeesEstimate ?? receipt.pricePaid,
-        netEffectivePaid: cruise.netEffectivePaid ?? receipt.pricePaid,
-        totalRetailCost: retailValue,
-        totalCasinoDiscount: casinoDiscount,
-        cabinCategory: receipt.cabinCategory,
-        cabinNumber: cruise.cabinNumber || receipt.cabinNumber,
-        retailValue,
-        originalPrice: retailValue,
-      };
-    }
-    
-    return cruise;
-  });
+  return cruises;
 }
 
 export function applyFreeplayOBCData(cruises: BookedCruise[]): BookedCruise[] {
-  return cruises.map(cruise => {
-    let freeplayRecord = cruise.offerCode 
-      ? findFreeplayOBCByOfferCode(cruise.offerCode)
-      : undefined;
-    
-    if (!freeplayRecord && cruise.shipName && cruise.sailDate) {
-      freeplayRecord = findFreeplayOBCByShipAndDate(cruise.shipName, cruise.sailDate);
-    }
-    
-    if (freeplayRecord) {
-      const updates: Partial<BookedCruise> = {};
-      
-      if (freeplayRecord.freePlay > 0 && (!cruise.freePlay || cruise.freePlay === 0)) {
-        updates.freePlay = freeplayRecord.freePlay;
-      }
-      
-      if (freeplayRecord.obc > 0 && (!cruise.freeOBC || cruise.freeOBC === 0)) {
-        updates.freeOBC = freeplayRecord.obc;
-      }
-      
-      if (!cruise.offerCode && freeplayRecord.offerCode) {
-        updates.offerCode = freeplayRecord.offerCode;
-      }
-      
-      if (Object.keys(updates).length > 0) {
-        console.log('[DataEnrichment] Applied freeplay/OBC data to cruise:', {
-          cruiseId: cruise.id,
-          shipName: cruise.shipName,
-          sailDate: cruise.sailDate,
-          offerCode: freeplayRecord.offerCode,
-          freePlay: freeplayRecord.freePlay,
-          obc: freeplayRecord.obc,
-        });
-        return { ...cruise, ...updates };
-      }
-    }
-    
-    return cruise;
-  });
+  return cruises;
 }
 
 export function enrichCruisesWithMockItineraries(cruises: BookedCruise[]): BookedCruise[] {
-  return cruises.map(cruise => {
-    const allMockCruises = [...COMPLETED_CRUISES_DATA, ...BOOKED_CRUISES_DATA];
-    const mockCruise = allMockCruises.find(mc => 
-      mc.id === cruise.id || 
-      mc.reservationNumber === cruise.reservationNumber ||
-      (mc.shipName === cruise.shipName && mc.sailDate === cruise.sailDate)
-    );
-    
-    if (mockCruise?.itinerary && mockCruise.itinerary.length > 0) {
-      return {
-        ...cruise,
-        itinerary: mockCruise.itinerary,
-        seaDays: mockCruise.seaDays,
-        portDays: mockCruise.portDays,
-        casinoOpenDays: mockCruise.casinoOpenDays,
-      };
-    }
-    
-    return cruise;
-  });
+  // Historical mock records are fixtures only. Production data must retain an
+  // explicitly missing itinerary until a provider, document, or user supplies it.
+  return cruises;
 }
 
 export function enrichCruisesWithOfferData(cruises: Cruise[], offers: CasinoOffer[]): Cruise[] {
@@ -134,11 +26,7 @@ export function enrichCruisesWithOfferData(cruises: Cruise[], offers: CasinoOffe
   return cruises.map(cruise => {
     if (!cruise.offerCode) return cruise;
     
-    const linkedOffer = offers.find(o => 
-      o.offerCode === cruise.offerCode ||
-      o.id === cruise.offerCode ||
-      (o.cruiseIds && o.cruiseIds.includes(cruise.id))
-    );
+    const linkedOffer = findSingleMaterialOffer(cruise, offers);
     
     if (!linkedOffer) return cruise;
     
@@ -161,6 +49,8 @@ export function enrichCruisesWithOfferData(cruises: Cruise[], offers: CasinoOffe
         guestsInfo: cruise.guestsInfo || linkedOffer.guestsInfo,
         offerExpiry: cruise.offerExpiry || linkedOffer.expiryDate || linkedOffer.offerExpiryDate,
         offerName: cruise.offerName || linkedOffer.offerName || linkedOffer.title,
+        dataConfidence: cruise.dataConfidence ?? 'enriched',
+        sourceProvider: cruise.sourceProvider ?? 'material-offer-link',
       };
     }
     

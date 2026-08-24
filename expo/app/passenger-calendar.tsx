@@ -1,7 +1,6 @@
 import React, { useMemo, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, useWindowDimensions } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { buildCruiseDetailsParams } from '@/lib/navigation/cruiseDetails';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Award, CalendarDays, Clock, Gift, MapPin, Plane, Ship, User, Users } from 'lucide-react-native';
 
@@ -11,13 +10,12 @@ import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/
 import { useAppState } from '@/state/AppStateProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { useCertificates } from '@/state/CertificatesProvider';
-import type { Certificate } from '@/components/CertificateManagerModal';
 import { useIntelligenceFilters } from '@/state/IntelligenceFiltersProvider';
 import { useUser } from '@/state/UserProvider';
 import { createDateFromString } from '@/lib/date';
 import { deriveCruiseDayPlan } from '@/lib/cruisePlanningIntelligence';
 import { filterRecordsByIntelligence } from '@/lib/intelligenceFilters';
-import { getNormalizedCruiseDateRange } from '@/lib/calendar/cruiseEvents';
+import { getCalendarEligibleCruises, getDisplayCalendarEvents, getNormalizedCruiseDateRange } from '@/lib/calendar/cruiseEvents';
 import { getBookedCruiseCasinoPoints } from '@/lib/casinoPointTruth';
 import type { BookedCruise, CalendarEvent, CasinoOffer } from '@/types/models';
 
@@ -216,7 +214,7 @@ export default function PassengerCalendarScreen() {
   const filterSnapshot = useMemo(() => ({ selectedProfileId, selectedBrand, selectedProgram }), [selectedBrand, selectedProfileId, selectedProgram]);
 
   const normalizedBookedCruises = useMemo((): BookedCruise[] => {
-    return filterRecordsByIntelligence(bookedCruises, filterSnapshot, users)
+    return getCalendarEligibleCruises(filterRecordsByIntelligence(bookedCruises, filterSnapshot, users))
       .map((cruise) => {
         const range = getNormalizedCruiseDateRange(cruise);
         return range ? { ...cruise, sailDate: range.sailDate, returnDate: range.returnDate } : null;
@@ -226,11 +224,12 @@ export default function PassengerCalendarScreen() {
 
   const sourceEvents = useMemo(() => {
     const mergedEvents = [...((localData.calendar || []) as CalendarEvent[]), ...((localData.tripit || []) as CalendarEvent[])];
-    return filterRecordsByIntelligence(mergedEvents, filterSnapshot, users);
-  }, [filterSnapshot, localData.calendar, localData.tripit, users]);
+    const filteredEvents = filterRecordsByIntelligence(mergedEvents, filterSnapshot, users);
+    return getDisplayCalendarEvents(normalizedBookedCruises, filteredEvents);
+  }, [filterSnapshot, localData.calendar, localData.tripit, normalizedBookedCruises, users]);
 
   const filteredOffers = useMemo(() => filterRecordsByIntelligence((localData.offers || []) as CasinoOffer[], filterSnapshot, users), [filterSnapshot, localData.offers, users]);
-  const filteredCertificates = useMemo(() => filterRecordsByIntelligence(certificates as unknown as Array<Certificate & { ownerProfileId?: string; sourceEmail?: string; brand?: string; casinoProgram?: any }>, filterSnapshot, users), [certificates, filterSnapshot, users]);
+  const filteredCertificates = useMemo(() => filterRecordsByIntelligence(certificates, filterSnapshot, users), [certificates, filterSnapshot, users]);
 
   const passengerItems = useMemo(() => buildPassengerDayItems({
     bookedCruises: normalizedBookedCruises,
@@ -270,16 +269,7 @@ export default function PassengerCalendarScreen() {
 
   const handleItemPress = useCallback((item: PassengerDayItem) => {
     if (item.cruiseId) {
-      const cruise = bookedCruises.find((entry: any) => entry.id === item.cruiseId) as any;
-      router.push({
-        pathname: '/cruise-details' as any,
-        params: buildCruiseDetailsParams(cruise, {
-          id: item.cruiseId,
-          source: 'passenger-calendar',
-          shipName: item.title,
-          sailDate: item.date,
-        }),
-      });
+      router.push({ pathname: '/(tabs)/(overview)/cruise-details' as any, params: { id: item.cruiseId } });
       return;
     }
     router.push({ pathname: '/day-agenda' as any, params: { date: item.date } });

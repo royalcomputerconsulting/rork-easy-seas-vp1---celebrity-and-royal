@@ -1,7 +1,7 @@
-import { findRetailValueByShipAndDate, getKnownRetailValue } from '@/constants/knownRetailValues';
-import { findReceiptByShipAndDate } from '@/constants/receiptData';
 import { getBookedCruiseCasinoPoints } from '@/lib/casinoPointTruth';
 import type { Cruise, CasinoOffer, BookedCruise, CasinoPayTable } from '@/types/models';
+import { knownGuestCount, knownNightCount } from '@/lib/cruiseRecordIntegrity';
+import { isOperationallyAuthoritative } from '@/lib/dataAuthority';
 
 const CABIN_BASE_PRICES: Record<string, number> = {
   'Penthouse Suite': 8000,
@@ -45,7 +45,6 @@ export const CABIN_PRICE_MULTIPLIERS: Record<string, number> = {
 };
 
 export const DOLLARS_PER_POINT = 5;
-export const GUEST_COUNT_DEFAULT = 2;
 const DOUBLE_OCCUPANCY_GUESTS = 2;
 const DEFAULT_PORT_TAXES_PER_PERSON_FOR_7_NIGHTS = 162;
 
@@ -70,8 +69,7 @@ export function getDoubleOccupancyRoomRetailValue(perPersonPrice: number | null 
 }
 
 function getGuestCount(entity: Cruise | BookedCruise | CasinoOffer): number {
-  const guests = entity.guests;
-  return isFiniteNumber(guests) && guests > 0 ? Math.max(DOUBLE_OCCUPANCY_GUESTS, Math.round(guests)) : GUEST_COUNT_DEFAULT;
+  return knownGuestCount(entity.guests) ?? 0;
 }
 
 function getOfferCompedGuestCount(offer: CasinoOffer): number {
@@ -81,7 +79,7 @@ function getOfferCompedGuestCount(offer: CasinoOffer): number {
 
   const parsedGuests = offer.guestsInfo?.match(/\d+/)?.[0];
   const guestCount = parsedGuests ? parseInt(parsedGuests, 10) : NaN;
-  return Number.isFinite(guestCount) && guestCount > 0 ? guestCount : GUEST_COUNT_DEFAULT;
+  return Number.isFinite(guestCount) && guestCount > 0 ? guestCount : 0;
 }
 
 function getMoneyFromPayload(entity: Cruise | BookedCruise, keys: string[]): number | undefined {
@@ -107,28 +105,11 @@ function getMoneyFromPayload(entity: Cruise | BookedCruise, keys: string[]): num
 }
 
 function getKnownRetailValueForEntity(entity: Cruise | BookedCruise): number | undefined {
-  const bookedEntity = entity as BookedCruise;
-  const knownById = [entity.id, bookedEntity.bookingId, bookedEntity.reservationNumber]
-    .map((id) => (id ? getKnownRetailValue(id) : null))
-    .find((value): value is number => isFiniteNumber(value) && value > 0);
-
-  if (knownById !== undefined) {
-    return knownById;
-  }
-
-  if (entity.shipName && entity.sailDate) {
-    const knownByShipDate = findRetailValueByShipAndDate(entity.shipName, entity.sailDate);
-    if (isFiniteNumber(knownByShipDate) && knownByShipDate > 0) {
-      return knownByShipDate;
-    }
-  }
-
   return undefined;
 }
 
-function getReceiptForEntity(entity: Cruise | BookedCruise) {
-  if (!entity.shipName || !entity.sailDate) return undefined;
-  return findReceiptByShipAndDate(entity.shipName, entity.sailDate);
+function getReceiptForEntity(_entity: Cruise | BookedCruise): { totalRetailCost?: number; pricePaid?: number } | undefined {
+  return undefined;
 }
 
 function getReceiptRetailValueForEntity(entity: Cruise | BookedCruise): number | undefined {
@@ -144,7 +125,16 @@ function getReceiptPaidValueForEntity(entity: Cruise | BookedCruise): number | u
 interface ResolvedCruiseRetailValue {
   totalRetailValue: number;
   perGuestRetailValue: number;
-  source: 'known' | 'explicit' | 'payload' | 'receipt' | 'pricing' | 'estimate';
+  source: 'known' | 'explicit' | 'payload' | 'receipt' | 'pricing' | 'estimate' | 'unavailable';
+}
+
+function canUseScheduleForEstimate(cruise: Cruise | BookedCruise): boolean {
+  return knownNightCount(cruise.nights) !== undefined
+    && cruise.dataConfidence === 'verified'
+    && isOperationallyAuthoritative(cruise.sourceAuthority)
+    && cruise.validationStatus !== 'partial'
+    && cruise.validationStatus !== 'quarantined'
+    && cruise.isFallback !== true;
 }
 
 function buildResolvedRetailValue(
@@ -216,9 +206,11 @@ export function resolveCruiseRetailValue(cruise: Cruise | BookedCruise, cabinTyp
 
   if (cruise.price && cruise.price > 0) {
     estimatedRetailValue = getDoubleOccupancyRoomRetailValue(cruise.price) ?? cruise.price;
-  } else if (cruise.nights > 0) {
-    estimatedRetailValue = estimateCabinRetailValue(targetCabinType, cruise.nights);
+  } else if (canUseScheduleForEstimate(cruise)) {
+    estimatedRetailValue = estimateCabinRetailValue(targetCabinType, knownNightCount(cruise.nights)!);
     source = 'estimate';
+  } else {
+    source = 'unavailable';
   }
 
   return buildResolvedRetailValue(estimatedRetailValue, guestCount, source);
@@ -241,9 +233,9 @@ function getDetailedPerPersonCabinPriceFromEntity(
   return entity.balconyPrice || entity.oceanviewPrice || entity.interiorPrice || entity.suitePrice;
 }
 
-function estimateTaxesFees(nights: number, guestCount: number): number {
-  const normalizedNights = nights > 0 ? nights : 7;
-  return roundMoney((DEFAULT_PORT_TAXES_PER_PERSON_FOR_7_NIGHTS / 7) * normalizedNights * guestCount);
+function estimateTaxesFees(nights: number | undefined, guestCount: number): number {
+  if (!nights || !guestCount) return 0;
+  return roundMoney((DEFAULT_PORT_TAXES_PER_PERSON_FOR_7_NIGHTS / 7) * nights * guestCount);
 }
 
 function resolveCruiseTaxesFees(cruise: Cruise | BookedCruise, guestCount: number): { value: number; isEstimated: boolean } {
@@ -268,7 +260,10 @@ function resolveCruiseTaxesFees(cruise: Cruise | BookedCruise, guestCount: numbe
     return { value: roundMoney(explicitTaxesFees), isEstimated: false };
   }
 
-  return { value: estimateTaxesFees(cruise.nights || 0, guestCount), isEstimated: true };
+  return {
+    value: canUseScheduleForEstimate(cruise) ? estimateTaxesFees(knownNightCount(cruise.nights), guestCount) : 0,
+    isEstimated: true,
+  };
 }
 
 function resolveCruisePaidValue(cruise: Cruise | BookedCruise, taxesFees: number): { value: number; isActual: boolean } {
@@ -369,7 +364,7 @@ export function calculateCasinoPayTable(
   taxesFees: number = 0,
   freePlay: number = 0,
   obc: number = 0,
-  guestCount: number = GUEST_COUNT_DEFAULT
+  guestCount: number = 0
 ): CasinoPayTable {
   const retailCabinPrice = getDoubleOccupancyRoomRetailValue(cabinPrice) ?? cabinPrice;
   const cabinValue = guestCount > 0 ? roundMoney(retailCabinPrice / guestCount) : retailCabinPrice;
@@ -413,7 +408,7 @@ export function calculateOfferValue(
   const freePlayValue = offer.freePlay || offer.freeplayAmount || 0;
   const obcValue = offer.OBC || offer.obcAmount || 0;
   const tradeInValue = offer.tradeInValue || 0;
-  const freeInternetValue = (offer.nights || 7) * 30;
+  const freeInternetValue = (knownNightCount(offer.nights) ?? 0) * 30;
   
   const compedGuestCount = getOfferCompedGuestCount(offer);
   const perPersonCabinPrice = cabinValueForTwo / DOUBLE_OCCUPANCY_GUESTS;
@@ -502,13 +497,13 @@ export function calculateCruiseValue(
   const explicitCasinoDiscount = getFirstPositiveNumber(bookedCruise.totalCasinoDiscount);
   const calculatedCasinoDiscount = Math.max(0, totalRetailValue - trueOutOfPocket);
   const casinoDiscount = roundMoney(Math.max(explicitCasinoDiscount ?? 0, calculatedCasinoDiscount));
-  const hasReceiptData = retailInfo.source !== 'estimate' || paidInfo.isActual;
+  const hasReceiptData = !['estimate', 'unavailable'].includes(retailInfo.source) || paidInfo.isActual;
   const cabinValue = retailInfo.perGuestRetailValue;
   
   const freePlayValue = cruise.freePlay || 0;
   const obcValue = cruise.freeOBC || 0;
   const tradeInValue = cruise.tradeInValue || 0;
-  const freeInternetValue = cruise.freeWifi ? (cruise.nights || 7) * 30 : 0;
+  const freeInternetValue = cruise.freeWifi ? (knownNightCount(cruise.nights) ?? 0) * 30 : 0;
   
   const winnings = casinoWinnings ?? bookedCruise.winnings ?? 0;
   
@@ -931,14 +926,14 @@ export interface EstimatedCabinPrices {
   oceanview: number;
   balcony: number;
   suite: number;
-  source: 'actual' | 'estimated' | 'mixed';
+  source: 'actual' | 'estimated' | 'mixed' | 'unavailable';
 }
 
 export function getEstimatedCabinPrices(
   entity: Cruise | CasinoOffer | BookedCruise,
   nights?: number
 ): EstimatedCabinPrices {
-  const cruiseNights = nights || (entity as Cruise).nights || 7;
+  const cruiseNights = knownNightCount(nights) ?? knownNightCount((entity as Cruise).nights);
   
   const actualInterior = entity.interiorPrice;
   const actualOceanview = entity.oceanviewPrice;
@@ -967,6 +962,16 @@ export function getEstimatedCabinPrices(
     };
   }
   
+  if (!cruiseNights || !canUseScheduleForEstimate(entity as Cruise | BookedCruise)) {
+    return {
+      interior: 0,
+      oceanview: 0,
+      balcony: 0,
+      suite: 0,
+      source: 'unavailable',
+    };
+  }
+
   return {
     interior: estimateCabinRetailValue('Interior', cruiseNights),
     oceanview: estimateCabinRetailValue('Oceanview', cruiseNights),

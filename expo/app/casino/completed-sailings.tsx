@@ -39,7 +39,7 @@ function escapeCsv(value: unknown): string {
  */
 export default function CompletedSailingsScreen() {
   const router = useRouter();
-  const { bookedCruises, cruiseEconomicsSummary } = useCasinoEconomicsData();
+  const { bookedCruises, allCruiseEconomicsSummary } = useCasinoEconomicsData();
   const { clubRoyaleTier, clubRoyaleCurrentYearPoints } = useLoyalty();
   const { width } = useWindowDimensions();
   const showSidebar = Platform.OS === 'web' && width >= LARGE_SCREEN_BREAKPOINT;
@@ -55,12 +55,12 @@ export default function CompletedSailingsScreen() {
   }, [bookedCruises]);
 
   const rowsWithQuality = useMemo(() => {
-    return cruiseEconomicsSummary.rows.map((row) => ({
+    return allCruiseEconomicsSummary.rows.filter((row) => row.status === 'completed').map((row) => ({
       row,
       quality: getDataQuality(row),
       cruise: cruiseById.get(row.cruiseId),
     })).sort((a, b) => new Date(b.row.sailDate).getTime() - new Date(a.row.sailDate).getTime());
-  }, [cruiseEconomicsSummary.rows, cruiseById]);
+  }, [allCruiseEconomicsSummary.rows, cruiseById]);
 
   const shipNames = useMemo(() => {
     return Array.from(new Set(rowsWithQuality.map((entry) => entry.row.ship))).sort();
@@ -259,7 +259,7 @@ export default function CompletedSailingsScreen() {
             <Text style={styles.summaryValue}>{formatNumber(summary.nights)}</Text>
             <Text style={styles.summaryLabel}>Total Nights</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.summaryItem} onPress={() => openSummaryDrill('Est. Lifetime Coin-In', formatCurrency(summary.coinIn), 'Est. Coin-In = Casino Points × $5 (Club Royale coin-in rate)')}>
+          <TouchableOpacity style={styles.summaryItem} onPress={() => openSummaryDrill('Recorded / Eligible Estimated Coin-In', formatCurrency(summary.coinIn), 'Sum of explicit coin-in plus clearly labeled Club Royale eligible slot estimates; no Blue Chip or table-play conversion is assumed.')}>
             <DollarSign size={15} color={COLORS.teal} />
             <Text style={styles.summaryValue}>{formatCurrency(summary.coinIn)}</Text>
             <Text style={styles.summaryLabel}>Est. Lifetime Coin-In</Text>

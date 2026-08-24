@@ -47,9 +47,9 @@ export const EASYSEAS_FEATURE_COVERAGE_CHECKLIST: EasySeasFeatureCoverageItem[] 
   {
     id: 6,
     title: 'Cruise Sea-Day Density Score',
-    status: 'represented',
+    status: 'partial',
     representedIn: ['Cruise cards', 'Cruise detail planning intelligence', 'Offer intelligence scoring', 'Cruise replacement candidates'],
-    deficiencies: ['Casino-open assumptions use itinerary-derived estimates when exact onboard casino hours are not imported.'],
+    deficiencies: ['Casino and weather decisions intentionally remain unavailable until imported itinerary evidence is sufficiently specific; EasySeas does not manufacture sea days or ship positions.'],
   },
   {
     id: 7,
@@ -134,6 +134,13 @@ export const EASYSEAS_FEATURE_COVERAGE_CHECKLIST: EasySeasFeatureCoverageItem[] 
     status: 'represented',
     representedIn: ['Learn the System screen', 'Dashboard entry card', 'Responsible-use and legal note', 'Scott Astin books companion card', 'Direct book and author links inside Learn the System'],
     deficiencies: [],
+  },
+  {
+    id: 19,
+    title: 'Operational Data Authority',
+    status: 'partial',
+    representedIn: ['Provider provenance fields', 'Authority-aware booked-cruise reconciliation', 'Weather cache itinerary fingerprints', 'Certificate PDF provenance'],
+    deficiencies: ['Live authenticated device validation and backend contract validation are still required before any provider is described as production-authoritative.', 'Royal and Carnival remain in a shared legacy provider pending a larger module extraction.'],
   },
 ];
 

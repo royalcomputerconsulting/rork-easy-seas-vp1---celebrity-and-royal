@@ -1,0 +1,13 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),Module=require('node:module'),ts=require('typescript');
+const root=path.resolve(__dirname,'..'),read=p=>fs.readFileSync(path.join(root,p),'utf8'),filename=path.join(root,'lib/actionablePriceMonitor.ts');
+const out=ts.transpileModule(read('lib/actionablePriceMonitor.ts'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022},fileName:filename}).outputText,old=Module._load;
+const tier=value=>/balcony/i.test(value)?6:/ocean\s*view|oceanview/i.test(value)?4:/interior/i.test(value)?2:5;
+Module._load=(request,parent,isMain)=>request==='@/lib/upgradeMonitor'?{getCabinTier:value=>({tier:tier(value),label:value}),findUpgradeOpportunities:()=>[{bookedCruiseId:'cruise-1',upgradeCabinType:'Junior Suite',upgradePrice:300,offerId:'offer-1'}]}:request.startsWith('@/')?{}:old(request,parent,isMain);
+let lib;try{const mod=new Module(filename,module);mod.filename=filename;mod.paths=Module._nodeModulePaths(path.dirname(filename));mod._compile(out,filename);lib=mod.exports}finally{Module._load=old}
+const cruise={id:'cruise-1',shipName:'Icon of the Seas',sailDate:'2026-09-26',returnDate:'2026-10-03',cabinType:'Ocean View',amountPaid:1000};
+const history=[{id:'wrong',shipName:'Icon of the Seas',sailDate:'2026-09-26',cabinType:'Balcony',totalPrice:500,recordedAt:'2026-08-21T08:00:00Z',source:'manual'},{id:'right',shipName:'Icon of the Seas',sailDate:'2026-09-26',cabinType:'Oceanview',totalPrice:800,recordedAt:'2026-08-21T08:00:00Z',source:'manual'}];
+const result=lib.buildActionablePriceMonitor({cruise,history,offers:[],preference:{cruiseId:'cruise-1',repricingDeadline:'2026-09-01',cancellationRules:'Verify before changing'},now:new Date('2026-08-21T20:00:00Z')});
+assert.equal(result.currentComparable.id,'right');assert.equal(result.truePriceDrop,200);assert.equal(result.truePriceDropPercent,20);assert.equal(result.freshness,'fresh');assert.equal(result.upgradeOptions.length,1);assert.match(result.action,/confirm repricing eligibility/);
+const stale=lib.buildActionablePriceMonitor({cruise,history:[{...history[1],recordedAt:'2026-08-01T08:00:00Z',source:'offer'}],offers:[],now:new Date('2026-08-21T20:00:00Z')});assert.equal(stale.freshness,'stale');assert.ok(stale.warnings.some(value=>/imported offer/.test(value)));assert.ok(stale.warnings.some(value=>/stale/.test(value)));
+const screen=read('app/price-upgrade-monitor.tsx');assert.match(screen,/price-monitor-freshness/);assert.match(screen,/price-monitor-save-verification/);assert.match(read('app/pricing-summary.tsx'),/pricing-open-actionable-monitor/);
+console.log('PASS build411_actionable_price_upgrade_monitor_regression');

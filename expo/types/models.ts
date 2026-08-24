@@ -15,7 +15,6 @@ export interface TravelerProfile {
   clubRoyaleId?: string;
   celebrityCaptainsClubNumber?: string;
   blueChipId?: string;
-  carnivalVifpNumber?: string;
   defaultProfile?: boolean;
   active?: boolean;
   createdAt: string;
@@ -50,6 +49,25 @@ export interface SharedOwnershipFields {
   importStatus?: ImportReviewStatus;
   archiveStatus?: OfferArchiveStatus;
   reconciliationStatus?: ImportReviewStatus;
+  sourceProvider?: string;
+  sourceEndpoint?: string;
+  sourceRecordId?: string;
+  sourceRetrievedAt?: string;
+  sourceAuthority?: 'provider' | 'public_document' | 'verified_local' | 'enriched' | 'user_entered' | 'derived' | 'unknown';
+  parserVersion?: string;
+  syncRunId?: string;
+  dataConfidence?: 'verified' | 'partial' | 'enriched' | 'unknown';
+  isFallback?: boolean;
+  isStale?: boolean;
+  validationStatus?: 'valid' | 'partial' | 'quarantined' | 'rejected';
+  sourceEvidence?: {
+    rawCategory?: string;
+    sourcePage?: string;
+    sourceRecordId?: string;
+    capturedAt?: string;
+    authority?: 'provider' | 'public_document' | 'verified_local' | 'enriched' | 'user_entered' | 'derived' | 'unknown';
+    reason?: string;
+  };
 }
 
 export interface ImportReconciliationSummary {
@@ -113,6 +131,9 @@ export interface Cruise extends SharedOwnershipFields {
   oceanviewPrice?: number;
   interiorPrice?: number;
   suitePrice?: number;
+  pricingVerified?: boolean;
+  pricingVerifiedAt?: string;
+  pricingSource?: string;
   juniorSuitePrice?: number;
   grandSuitePrice?: number;
   taxes?: number;
@@ -121,10 +142,11 @@ export interface Cruise extends SharedOwnershipFields {
   originalPrice?: number;
   priceDrop?: number;
   offerCode?: string;
+  playerOfferId?: string;
+  offerInstanceId?: string;
   offerName?: string;
   offerExpiry?: string;
   offerCategory?: string;
-  offerSource?: 'royal' | 'celebrity' | 'carnival';
   freeOBC?: number;
   freeGratuities?: boolean;
   freeDrinkPackage?: boolean;
@@ -158,7 +180,7 @@ export interface Cruise extends SharedOwnershipFields {
   received?: string;
   programCharter?: string;
   cruiseSource?: 'royal' | 'celebrity' | 'carnival';
-  totalRetailCost?: number;
+  offerSource?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -171,12 +193,16 @@ export interface ItineraryDay {
   isSeaDay: boolean;
   casinoOpen?: boolean;
   notes?: string;
+  date?: string;
+  /** The provenance of this day, kept separate from display labels. */
+  source?: 'provider' | 'public_document' | 'verified_local' | 'enriched' | 'user_entered' | 'derived' | 'unknown';
+  dataConfidence?: 'verified' | 'partial' | 'enriched' | 'unknown';
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface BookedCruise extends Cruise {
   sourcePayload?: unknown;
-  dataOwnerEmail?: string;
-  dataOwnerScopeId?: string;
   reservationNumber?: string;
   bookingId?: string;
   bwoNumber?: string;
@@ -254,6 +280,13 @@ export interface BookedCruise extends Cruise {
   netEffectivePaid?: number;
   winningsBroughtHome?: number;
   casinoChargesRoomBilled?: number;
+  casinoStartingCash?: number;
+  casinoEndingCash?: number;
+  casinoHandpays?: number;
+  casinoHandpaysIncludedInEndingCash?: boolean;
+  expectedPointsForHours?: number;
+  pointsVsExpected?: number;
+  expectedPointsPerHourSource?: string;
   instantCertificateWon?: boolean;
   instantCertificateOfferCode?: string;
   instantCertificateValue?: number;
@@ -270,17 +303,132 @@ export interface BookedCruise extends Cruise {
   pointsPerHour?: number;
   valuePerHour?: number;
   calculationConfidence?: 'actual' | 'estimated' | 'mixed';
-  /** Stage 9.2 checklist item 21: expanded per-cruise casino ledger fields. */
-  buyIn?: number;
-  cashOut?: number;
-  freePlayUsed?: number;
-  freePlayWon?: number;
-  w2gJackpotAmount?: number;
+  hostCompsReceived?: number;
+  taxesFeesActual?: number;
+  offerUsedCode?: string;
+  w2gRecordCount?: number;
+  w2gTotalAmount?: number;
+  postCruiseSatisfaction?: number;
+  postCruiseCloseoutNotes?: string;
+  postCruiseCloseoutAt?: string;
+  closeoutStatus?: 'not_started' | 'in_progress' | 'complete';
   voomValue?: number;
   diningValue?: number;
   spaValue?: number;
   beverageValue?: number;
-  casinoNotes?: string;
+  invoiceImportedAt?: string;
+  invoiceFileName?: string;
+  invoiceIssueDate?: string;
+  invoiceSpecialServices?: string;
+  invoicePromotions?: string[];
+  invoiceCasinoDiscountLines?: Array<{ label: string; amount: number }>;
+  invoiceParseConfidence?: 'actual' | 'partial' | 'needs-review';
+  /** Versioned, owner-scoped historical import marker; never a global demo seed. */
+  casinoHistoryImportId?: string;
+}
+
+export interface AnnualCruiseBenefit {
+  id: string;
+  program: 'club-royale';
+  tier: 'prime' | 'signature' | 'masters';
+  benefitYear: string;
+  cabinEntitlement: 'interior' | 'balcony' | 'grand-suite';
+  maxNights: number;
+  doubleOccupancy: boolean;
+  taxesAndFeesDue: boolean;
+  bookByDate?: string;
+  sailByDate?: string;
+  selectedCruiseId?: string;
+  estimatedRetailValue?: number;
+  confirmedRetailValue?: number;
+  taxesFees?: number;
+  cashPaid?: number;
+  status: 'available' | 'selected' | 'booked' | 'sailed' | 'expired';
+  notes?: string;
+}
+
+export interface CrownAnchorCruiseCertificate {
+  id: string;
+  triggerPoints: number;
+  estimatedValue?: number;
+  confirmedValue?: number;
+  expirationDate?: string;
+  selectedCruiseId?: string;
+  status: 'not-yet-earned' | 'earned' | 'selected' | 'booked' | 'sailed' | 'expired';
+  notes?: string;
+}
+
+export interface FutureCruiseCredit {
+  id: string;
+  fccNumber?: string;
+  amountOriginal: number;
+  amountRemaining: number;
+  expirationDate?: string;
+  appliedCruiseIds?: string[];
+  status?: 'available' | 'partially-used' | 'used' | 'expired' | 'unknown';
+  notes?: string;
+}
+
+export interface NextCruiseCertificate {
+  id: string;
+  offerType: 'instant-savings' | 'obc' | 'certificate';
+  estimatedValue?: number;
+  confirmedValue?: number;
+  selectionDeadline?: string;
+  selectedCruiseId?: string;
+  status: 'unassigned' | 'assigned' | 'applied' | 'used' | 'expired' | 'cancelled';
+  notes?: string;
+}
+
+export interface InternetValueItem {
+  id: string;
+  cruiseId: string;
+  packageName: string;
+  devices: number;
+  days: number;
+  retailPricePerDevicePerDay: number;
+  confirmedTotalPrice?: number;
+  calculatedValue: number;
+  coveredBy?: string;
+  status: 'estimated' | 'confirmed' | 'applied' | 'used';
+  source: 'manual' | 'invoice' | 'club-royale' | 'crown-anchor' | 'nextcruise' | 'fcc' | 'offer-parser' | 'agentx' | 'cruise-planner' | 'folio' | 'unknown' | 'default-voom-rate';
+  notes?: string;
+}
+
+export interface SpecialtyDiningValueItem {
+  id: string;
+  cruiseId: string;
+  diningType: string;
+  confirmedTotalPrice?: number;
+  valueAmount?: number;
+  coveredBy?: string;
+  status: 'estimated' | 'confirmed' | 'applied' | 'used';
+  source: 'manual' | 'invoice' | 'club-royale' | 'crown-anchor' | 'nextcruise' | 'fcc' | 'offer-parser' | 'agentx' | 'cruise-planner' | 'folio' | 'unknown';
+  notes?: string;
+}
+
+export interface SpaValueItem {
+  id: string;
+  cruiseId: string;
+  serviceType: 'spa' | 'thermal-suite' | 'salon' | 'fitness-class' | string;
+  confirmedTotalPrice?: number;
+  valueAmount?: number;
+  coveredBy?: string;
+  status: 'estimated' | 'confirmed' | 'applied' | 'used';
+  source: 'manual' | 'invoice' | 'club-royale' | 'crown-anchor' | 'nextcruise' | 'fcc' | 'offer-parser' | 'agentx' | 'cruise-planner' | 'folio' | 'unknown';
+  notes?: string;
+}
+
+export interface UserBenefitOverride {
+  id: string;
+  userId: string;
+  benefitType: string;
+  amount: number;
+  validFrom?: string;
+  validThrough?: string;
+  appliesTo: string;
+  source: string;
+  notes?: string;
 }
 
 export type OfferClassification = 
@@ -300,6 +448,9 @@ export interface CasinoOffer extends SharedOwnershipFields {
   cruiseIds?: string[];
   
   offerCode?: string;
+  playerOfferId?: string;
+  offerInstanceId?: string;
+  carnivalOfferId?: string;
   offerName?: string;
   offerType: OfferClassification;
   classification?: '2person' | '1+discount' | 'comped' | 'partial';
@@ -348,11 +499,14 @@ export interface CasinoOffer extends SharedOwnershipFields {
   received?: string;
   expires?: string;
   expiryDate?: string;
+  issueDate?: string;
   offerExpiryDate?: string;
   validFrom?: string;
   validUntil?: string;
   
   status?: 'active' | 'expired' | 'used' | 'booked' | 'archived' | 'reviewNeeded' | 'replaced' | 'skipped';
+  isShortlisted?: boolean;
+  shortlistedAt?: string;
   has2025Badge?: boolean;
   
   termsConditions?: string;
@@ -365,13 +519,6 @@ export interface CasinoOffer extends SharedOwnershipFields {
   
   offerSource?: 'royal' | 'celebrity' | 'carnival';
   bookingLink?: string;
-  /** Authoritative personalized catalog metadata retained after sync/apply. */
-  catalogVisibleOfferCodes?: string;
-  catalogVisibleOfferCount?: number;
-  catalogZeroRowOfferCodes?: string;
-  catalogRowBearingOfferCodes?: string;
-  catalogIncompleteOfferCodes?: string;
-  eligibleSailingCount?: number;
   csvRowNumber?: number;
   createdAt?: string;
   updatedAt?: string;
@@ -478,9 +625,9 @@ export interface ClubRoyaleProfile {
 
 export const CLUB_ROYALE_TIERS: Record<ClubRoyaleTier, { threshold: number; color: string }> = {
   Choice: { threshold: 0, color: '#6B7280' },
-  Prime: { threshold: 2500, color: '#3B82F6' },
-  Signature: { threshold: 25000, color: '#8B5CF6' },
-  Masters: { threshold: 100000, color: '#F59E0B' },
+  Prime: { threshold: 2501, color: '#3B82F6' },
+  Signature: { threshold: 25001, color: '#8B5CF6' },
+  Masters: { threshold: 100001, color: '#F59E0B' },
 };
 
 export const CROWN_ANCHOR_LEVELS: Record<CrownAnchorLevel, { cruiseNights: number; color: string }> = {
@@ -599,6 +746,19 @@ export interface Certificate extends SharedOwnershipFields {
   description?: string;
   earnedOnCruise?: string;
   cruiseLength?: number;
+  certificateCode?: string;
+  certificateFamily?: string;
+  sourcePdfUrl?: string;
+  sourceDocumentHash?: string;
+  sourceDocumentVersion?: string;
+  sourceDocumentSize?: number;
+  parserSource?: 'backend' | 'device' | 'manual' | 'legacy_import';
+  parserStatus?: 'downloaded' | 'download_failed' | 'redirect_blocked' | 'not_pdf' | 'pdf_corrupt' | 'unsupported_layout' | 'parse_failed' | 'parsed_zero_sailings' | 'parsed_with_warnings' | 'parsed_successfully';
+  parserVersion?: string;
+  parserWarnings?: string[];
+  sourcePage?: number;
+  sourceGroup?: string;
+  parsedAt?: string;
 }
 
 export interface CasinoPayTable {
@@ -1271,160 +1431,4 @@ export interface AddGameWizardData {
   
   userNotes?: string;
   images?: SlotMachineImage[];
-}
-
-export type CruiseFutureValueStatus = 'available' | 'unassigned' | 'assigned' | 'applied' | 'used' | 'expired' | 'cancelled' | 'selected' | 'booked' | 'sailed' | 'not-yet-earned' | 'unknown';
-
-export interface NextCruiseCertificate {
-  id: string;
-  bookingType: 'book-now' | 'book-later' | 'unknown';
-  certificateNumber?: string;
-  createdOnShip?: string;
-  createdDuringCruiseId?: string;
-  createdDate: string;
-  selectionDeadline?: string;
-  depositPaid: number;
-  depositPerPerson?: number;
-  selectedCruiseId?: string;
-  selectedShipName?: string;
-  selectedSailDate?: string;
-  offerType: 'obc' | 'instant-savings' | 'unknown';
-  estimatedValue: number;
-  confirmedValue?: number;
-  status: 'unassigned' | 'assigned' | 'applied' | 'expired' | 'cancelled' | 'unknown';
-  notes?: string;
-}
-
-export interface FutureCruiseCredit {
-  id: string;
-  fccNumber?: string;
-  guestName?: string;
-  originalReservationNumber?: string;
-  originalCruiseId?: string;
-  issueDate?: string;
-  expirationDate?: string;
-  amountOriginal: number;
-  amountRemaining: number;
-  currency: 'USD';
-  appliedCruiseIds: string[];
-  status: 'available' | 'partially-used' | 'used' | 'expired' | 'unknown';
-  source: 'manual' | 'email' | 'invoice' | 'unknown';
-  notes?: string;
-}
-
-export interface UserBenefitOverride {
-  id: string;
-  userId: string;
-  benefitType: 'signature-obc' | 'masters-obc' | 'internet' | 'other';
-  amount: number;
-  validFrom?: string;
-  validThrough?: string;
-  appliesTo: 'all-qualifying-cruises' | 'specific-cruises';
-  source: 'manual-user-confirmed' | 'invoice' | 'email' | 'unknown';
-  notes?: string;
-}
-
-export interface AnnualCruiseBenefit {
-  id: string;
-  program: 'club-royale';
-  tier: 'prime' | 'signature' | 'masters';
-  benefitYear: string;
-  cabinEntitlement: 'interior' | 'balcony' | 'grand-suite';
-  maxNights: number;
-  doubleOccupancy: boolean;
-  taxesAndFeesDue: boolean;
-  bookByDate?: string;
-  sailByDate?: string;
-  selectedCruiseId?: string;
-  estimatedRetailValue?: number;
-  confirmedRetailValue?: number;
-  taxesFees?: number;
-  cashPaid?: number;
-  status: 'available' | 'selected' | 'booked' | 'sailed' | 'expired' | 'unknown';
-  notes?: string;
-}
-
-export interface CrownAnchorCruiseCertificate {
-  id: string;
-  program: 'crown-anchor';
-  triggerPoints: number;
-  certificateType:
-    | 'pinnacle-700-balcony'
-    | 'pinnacle-1050-balcony'
-    | 'pinnacle-1400-junior-suite'
-    | 'pinnacle-350-increment-junior-suite'
-    | 'unknown';
-  cabinValueBasis: '7-night-balcony' | 'junior-suite' | 'unknown';
-  earnedDate?: string;
-  expirationDate?: string;
-  selectedCruiseId?: string;
-  estimatedValue?: number;
-  confirmedValue?: number;
-  status: 'not-yet-earned' | 'earned' | 'selected' | 'booked' | 'sailed' | 'expired' | 'unknown';
-  notes?: string;
-}
-
-export interface InternetValueItem {
-  id: string;
-  cruiseId: string;
-  packageName: 'voom' | 'unknown';
-  devices: number;
-  days: number;
-  retailPricePerDevicePerDay: number;
-  confirmedTotalPrice?: number;
-  calculatedValue: number;
-  coveredBy: 'signature' | 'masters' | 'pinnacle' | 'casino-offer' | 'obc' | 'manual' | 'none' | 'unknown';
-  status: 'estimated' | 'confirmed' | 'applied' | 'used' | 'unknown';
-  source: 'default-voom-rate' | 'manual' | 'invoice' | 'cruise-planner' | 'unknown';
-  notes?: string;
-}
-
-export interface SpecialtyDiningValueItem {
-  id: string;
-  cruiseId: string;
-  diningType:
-    | 'single-restaurant'
-    | 'chops'
-    | 'izumi'
-    | 'giovannis'
-    | 'jamies'
-    | 'wonderland'
-    | 'hooked'
-    | '150-central-park'
-    | 'chef-table'
-    | 'three-night-package'
-    | 'unlimited-dining-package'
-    | 'unknown';
-  guests: number;
-  mealsIncluded?: number;
-  retailPricePerGuest?: number;
-  confirmedTotalPrice?: number;
-  coveredBy: 'casino-offer' | 'obc' | 'nextcruise-obc' | 'travel-agent-obc' | 'manual' | 'none' | 'unknown';
-  valueAmount: number;
-  status: 'estimated' | 'confirmed' | 'applied' | 'used' | 'unknown';
-  source: 'manual' | 'invoice' | 'cruise-planner' | 'offer-parser' | 'folio' | 'unknown';
-  notes?: string;
-}
-
-export interface SpaValueItem {
-  id: string;
-  cruiseId: string;
-  serviceType:
-    | 'massage'
-    | 'facial'
-    | 'body-treatment'
-    | 'thermal-suite'
-    | 'salon'
-    | 'fitness-class'
-    | 'personal-training'
-    | 'unknown';
-  guests: number;
-  serviceCount: number;
-  retailPricePerService?: number;
-  confirmedTotalPrice?: number;
-  coveredBy: 'casino-offer' | 'obc' | 'nextcruise-obc' | 'travel-agent-obc' | 'manual' | 'none' | 'unknown';
-  valueAmount: number;
-  status: 'estimated' | 'confirmed' | 'applied' | 'used' | 'unknown';
-  source: 'manual' | 'invoice' | 'cruise-planner' | 'folio' | 'unknown';
-  notes?: string;
 }

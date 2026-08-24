@@ -14,8 +14,9 @@ import { formatCurrency } from '@/lib/format';
 import { getDaysUntil, formatDate } from '@/lib/date';
 import { getUniqueImageForCruise, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
 import type { Cruise } from '@/types/models';
-import { calculateCruiseValue, calculateOfferAggregateValue, getCabinPriceFromEntity, getDoubleOccupancyRoomRetailValue, GUEST_COUNT_DEFAULT, type ValueBreakdown, type OfferAggregateValue } from '@/lib/valueCalculator';
+import { calculateCruiseValue, calculateOfferAggregateValue, getCabinPriceFromEntity, getDoubleOccupancyRoomRetailValue, type ValueBreakdown, type OfferAggregateValue } from '@/lib/valueCalculator';
 import { getCertificatePdfMatch, openCertificatePdf } from '@/lib/royalCaribbean/certificatePdf';
+import { knownGuestCount, knownNightCount } from '@/lib/cruiseRecordIntegrity';
 
 interface OfferCardProps {
   offer: Cruise;
@@ -139,7 +140,9 @@ export const OfferCard = React.memo(function OfferCard({
     let cabinPrice = getCabinPriceFromEntity(offer, roomType) ?? getDoubleOccupancyRoomRetailValue(offer.price) ?? 0;
     
     // If still no price, estimate based on cabin type and nights
-    if (cabinPrice === 0 && offer.nights > 0) {
+    const nights = knownNightCount(offer.nights);
+    const guestCount = knownGuestCount(offer.guests);
+    if (cabinPrice === 0 && nights) {
       const baseRates: Record<string, number> = {
         'Interior': 100,
         'Interior GTY': 80,
@@ -156,17 +159,16 @@ export const OfferCard = React.memo(function OfferCard({
       const typeKey = Object.keys(baseRates).find(key => 
         roomType.toLowerCase().includes(key.toLowerCase())
       ) || 'Balcony';
-      cabinPrice = (baseRates[typeKey] || 180) * (offer.nights || 7);
+      cabinPrice = (baseRates[typeKey] || 180) * nights;
       console.log('[OfferCard] Using estimated cabin price:', { roomType, cabinPrice });
     }
     
-    const guestCount = offer.guests || GUEST_COUNT_DEFAULT;
     const cabinValueForTwo = cabinPrice;
     
     // Estimate taxes if not provided (roughly $30/night per guest)
     let taxes = offer.taxes || 0;
-    if (taxes === 0 && offer.nights > 0) {
-      taxes = Math.round((offer.nights || 7) * 30 * guestCount);
+    if (taxes === 0 && nights && guestCount) {
+      taxes = Math.round(nights * 30 * guestCount);
     }
     
     const freePlay = offer.freePlay || 0;

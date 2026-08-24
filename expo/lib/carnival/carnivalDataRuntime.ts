@@ -396,7 +396,7 @@ export function classifyCarnivalNavigationAuth(input: {
   const body = normalizeLower(input.bodyText);
   const status = Number(input.httpStatus || 0);
   if (Boolean(input.hasPasswordField)) return 'auth_lost';
-  if (status === 401 || status === 403) return 'auth_lost';
+  if (status === 402 || status === 403) return 'auth_lost';
   if (/(?:login|sign[-_]?in|identity|security|challenge|authenticate|session-expired)/i.test(url)) return 'auth_lost';
   if (/session (?:has )?expired|please sign in|log in to continue|access denied|authentication required/i.test(body)) return 'auth_lost';
   if (!url) return 'indeterminate';

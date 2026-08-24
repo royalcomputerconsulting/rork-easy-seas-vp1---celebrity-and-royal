@@ -1,13 +1,11 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useDeferredValue, useMemo, useEffect, useRef } from 'react';
 import createContextHook from '@nkzw/create-context-hook';
-import { generateText } from '@rork-ai/toolkit-sdk';
 import { useCoreData } from './CoreDataProvider';
 import { useLoyalty } from './LoyaltyProvider';
 import type { ChatMessage } from '@/components/AgentXChat';
-import type { AgentXMode, BookedCruise, CalendarEvent, Cruise, SlotMachine, PriceDropAlert, PriceHistoryRecord, Alert, CompItem, W2GRecord } from '@/types/models';
-import { askMyDataSearch, formatAskMyDataResponse, type AskMyDataContextBlock } from '@/lib/askMyData';
+import type { AgentXMode, BookedCruise, CalendarEvent, CasinoOffer, Cruise, SlotMachine, PriceDropAlert, PriceHistoryRecord, Alert, CompItem, W2GRecord } from '@/types/models';
+import { askMyDataSearch, buildAskMyDataConversationalQuery, buildAskMyDataSourceReferences, formatAskMyDataResponse, isAnnualTierRewardQuestion, type AskMyDataContextBlock } from '@/lib/askMyData';
 import { buildAskMyDataOverview } from '@/lib/askMyDataOverview';
-import { buildCasinoValueAgentXContext } from '@/lib/agentXCasinoValueContext';
 import { isKnownCasinoProfile } from '@/lib/knownProfileFallback';
 import { getBookedCruiseCasinoPoints } from '@/lib/casinoPointTruth';
 import { calculateOfferIntelligenceScore } from '@/lib/offerIntelligence';
@@ -47,6 +45,7 @@ import { useIntelligenceFilters } from './IntelligenceFiltersProvider';
 import { useUser } from './UserProvider';
 import { useCrewRecognition } from './CrewRecognitionProvider';
 import { useSailingWeather, type SailingWeatherForecast } from './SailingWeatherProvider';
+import { createUtcDateFromLocalCalendarDay, isDateInFuture, isDateInPast, toLocalCalendarDateOnly } from '@/lib/date';
 import { useFinancials } from './FinancialsProvider';
 import { useSimpleAnalytics } from './SimpleAnalyticsProvider';
 import { useHistoricalPerformance } from './HistoricalPerformanceProvider';
@@ -67,6 +66,15 @@ import {
   getProgramLabel,
   getProfileDisplayName,
 } from '@/lib/intelligenceFilters';
+import { beginPerformanceSpan, recordPerformanceCount, recordProviderRender } from '@/lib/performance/performanceDiagnostics';
+import { useCruiseInventory } from '@/hooks/useCruiseInventory';
+import { buildAllOffersScopeSnapshot } from '@/lib/askAllOffers/context';
+import { archiveConversationThread, buildAskAllOffersOwnerKey, loadConversationThreads, renameConversationThread, upsertConversationThread } from '@/lib/askAllOffers/storage';
+import type { ConversationThread } from '@/lib/askAllOffers/types';
+import { buildAgentReminderEvent, parseAgentConfirmedAction, type AgentConfirmedAction } from '@/lib/agentConfirmedActions';
+import { buildCasinoRelationshipSnapshot } from '@/lib/casino/casinoRelationshipIntelligence';
+import { buildCasinoCruiseTruth, reconcileCasinoSeason } from '@/lib/casino/casinoTruthEngine';
+import { usePersonalCertificateOptimizer } from './PersonalCertificateOptimizerProvider';
 
 interface AgentXState {
   messages: ChatMessage[];
@@ -82,7 +90,20 @@ interface AgentXState {
   setVisible: (visible: boolean) => void;
   setMode: (mode: AgentXMode) => void;
   refreshAnalysis: () => Promise<void>;
+  conversationThreads: ConversationThread[];
+  activeConversationId: string | null;
+  startNewConversation: () => void;
+  openConversation: (threadId: string) => void;
+  renameConversation: (threadId: string, title: string) => Promise<void>;
+  archiveConversation: (threadId: string) => Promise<void>;
+  confirmAgentAction: (action: AgentConfirmedAction) => Promise<{ route?: string }>;
+  cancelAgentAction: (action: AgentConfirmedAction) => void;
 }
+
+const EMPTY_CRUISES: Cruise[] = [];
+const EMPTY_BOOKED_CRUISES: BookedCruise[] = [];
+const EMPTY_OFFERS: CasinoOffer[] = [];
+const EMPTY_CALENDAR_EVENTS: CalendarEvent[] = [];
 
 const AGENT_MODE_LABELS: Record<AgentXMode, string> = {
   travelAgent: 'Travel Agent',
@@ -92,7 +113,7 @@ const AGENT_MODE_LABELS: Record<AgentXMode, string> = {
   apScout: 'AP Scout',
   calendarPlanner: 'Calendar Planner',
   importAuditor: 'Import Auditor',
-  easySeasGuide: 'EasySeas Guide',
+  easySeasGuide: 'Easy Seas Agent',
 };
 
 function buildSystemPrompt(context: {
@@ -110,7 +131,7 @@ function buildSystemPrompt(context: {
   mode: AgentXMode;
   brandProgramLabel: string;
 }): string {
-  return `You are the Ask My Data assistant in ${AGENT_MODE_LABELS[context.mode]} mode, an intelligent cruise and casino advisor for Easy Seas users managing Royal Caribbean / Club Royale, Celebrity / Blue Chip, Carnival / Players Club, and Silversea / Venetian Society cruise and casino data. The active casino system is: ${context.brandProgramLabel}. You help users:
+  return `You are the Ask My Data assistant in ${AGENT_MODE_LABELS[context.mode]} mode, an intelligent cruise and casino advisor for Easy Seas users managing Royal Caribbean / Club Royale and Celebrity / Blue Chip casino cruise data. The active casino system is: ${context.brandProgramLabel}. You help users:
 - Search and filter available cruises, booked cruises, casino offers, certificates, calendar events, and travel agenda items
 - Analyze bookings and calculate ROI
 - Track casino program tier progress using the selected Royal/Celebrity scope
@@ -149,12 +170,15 @@ Mode guidance:
 - EasySeas Guide: prioritize app tutorials, cruise casino basics, offer math, certificates, and responsible-use education.
 
 Key formulas:
-- Points: 1 point per $5 coin-in
-- Cash Result = Winnings Brought Home - Net Effective Paid
+- Club Royale slot estimate only: 1 point per $5 coin-in. Do not apply this conversion to Blue Chip, Carnival, table games, or unknown play.
+- Net Gaming Result = Cash Out + Handpays not already included in Cash Out - Cash In. Cruise fare is never part of gaming win/loss.
+- Theoretical Loss = recorded theoretical, or explicit/validly estimated Coin-In × weighted house edge.
+- ADT = total theoretical loss / rated gaming days.
 - Cruise Value Captured = Retail Value - Net Effective Paid
-- Total Economic Value = Retail Value + Winnings Brought Home - Net Effective Paid
+- Total Economic Benefit = Cruise Value Captured + Net Gaming Result + distinct redeemed benefits - incremental travel costs
 - Coin-In is gambling volume only. Never add Coin-In to Cash Result, Cruise Value Captured, Total Economic Value, ROI, or profit language.
-- App-entered cruise points are authoritative when Club Royale sync differs.`;
+- Club Royale earning years reset April 1. Celebrity Blue Chip Club earning years reset August 1.
+- Prefer explicit manual override, then latest provider sync, then cached profile, then reconstructed history. Never replace missing data with zero in an answer.`;
 }
 
 function hasNumber(value: unknown): value is number {
@@ -193,7 +217,7 @@ function addDays(date: Date, days: number): Date {
 }
 
 function formatDateKey(date: Date): string {
-  return date.toISOString().split('T')[0];
+  return toLocalCalendarDateOnly(date) ?? '';
 }
 
 function isCruiseWeatherEligible(cruise: BookedCruise): boolean {
@@ -218,7 +242,7 @@ function buildWeatherTargetDates(cruise: BookedCruise): Date[] {
   const dates: Date[] = [];
   let cursor = new Date(today);
   while (cursor <= end && dates.length < 10) {
-    dates.push(new Date(cursor));
+    dates.push(createUtcDateFromLocalCalendarDay(cursor));
     cursor = addDays(cursor, 1);
   }
   return dates;
@@ -244,24 +268,6 @@ function buildBookedCruiseOfferContext(bookedCruises: BookedCruise[]): string {
   }).join('\n');
 }
 
-
-function getAgentOfferGuestCoverage(offer: ReturnType<typeof useCoreData>['casinoOffers'][number]): string {
-  const text = [offer.guestsInfo, offer.classification, offer.offerType, offer.offerName, offer.title, offer.description, offer.category, offer.roomType, offer.perks?.join(' ')].filter(Boolean).join(' ').toLowerCase();
-  if ((typeof offer.guests === 'number' && offer.guests >= 2) || /cruise\s*fare\s*for\s*2|cruise\s*fare\s*for\s*two|for\s*2\s*guests?|for\s*two\s*guests?|double\s*occupancy|2person/.test(text) || offer.classification === '2person') {
-    return 'FREE CRUISE FARE FOR 2 GUESTS';
-  }
-  if (/second\s+(guest|passenger|person).*discount|discount.*second\s+(guest|passenger|person)|1\s*\+\s*discount|companion\s+discount|discounted\s+second/.test(text) || offer.classification === '1+discount') {
-    return '1 guest plus discounted second guest';
-  }
-  if ((typeof offer.guests === 'number' && offer.guests === 1) || /cruise\s*fare\s*for\s*1|cruise\s*fare\s*for\s*one|for\s*1\s*guest|for\s*one\s*guest|solo/.test(text)) {
-    return 'free cruise fare for 1 guest';
-  }
-  if (/dollars?\s*off|amount\s*off|discount|\$\d+\s*off/.test(text)) {
-    return 'dollars-off / discount offer';
-  }
-  return 'guest coverage unknown';
-}
-
 function buildStandaloneOfferContext(offers: ReturnType<typeof useCoreData>['casinoOffers'], cruises: Cruise[], certificates: unknown[]): string {
   if (offers.length === 0) {
     return 'No standalone casino offer rows are loaded in the active scope. Use booked-cruise offer/value records above when answering offer questions.';
@@ -271,8 +277,7 @@ function buildStandaloneOfferContext(offers: ReturnType<typeof useCoreData>['cas
     const score = calculateOfferIntelligenceScore(offer, cruises, certificates as any[]).score;
     const expiry = offer.expiryDate || offer.expires || offer.offerExpiryDate || offer.validUntil || 'no expiry';
     const value = offer.totalValue ?? offer.offerValue ?? offer.value ?? offer.retailCabinValue ?? 0;
-    const guestCoverage = getAgentOfferGuestCoverage(offer);
-    return `- ${offer.offerName || offer.title || offer.offerCode || 'Casino offer'} (${offer.offerCode || 'no code'}): ship ${offer.shipName || 'any'}; sail ${offer.sailingDate || 'date n/a'}; nights ${offer.nights ?? 'n/a'}; room ${offer.roomType || 'n/a'}; guest coverage ${guestCoverage}; expires ${expiry}; value ${formatMoney(value)}; FreePlay ${formatMoney(offer.freePlay ?? offer.freeplayAmount ?? null)}; OBC ${formatMoney(offer.OBC ?? offer.obcAmount ?? null)}; score ${score}/100`;
+    return `- ${offer.offerName || offer.title || offer.offerCode || 'Casino offer'} (${offer.offerCode || 'no code'}): ship ${offer.shipName || 'any'}; expires ${expiry}; value ${formatMoney(value)}; FreePlay ${formatMoney(offer.freePlay ?? offer.freeplayAmount ?? null)}; OBC ${formatMoney(offer.OBC ?? offer.obcAmount ?? null)}; score ${score}/100`;
   }).join('\n');
 }
 
@@ -424,6 +429,12 @@ function isWeatherQuestion(message: string): boolean {
 }
 
 function parseToolCall(message: string): { tool: string; params: unknown } | null {
+  // A question about where an annual tier reward was used must search booked
+  // cruise and linked-offer evidence. It is not a tier-progress calculation.
+  if (isAnnualTierRewardQuestion(message)) {
+    return { tool: 'askMyData', params: { query: message } };
+  }
+
   const askDataMatch = message.match(/ask my data|search my data|find in my data|search everything|global search|natural language search|show me.*data|what .* do i have|which .* do i have|who .*recogniz|show .*crew|show .*weather|show .*forecast|show .*events?|show .*slot|show .*alert|show .*financial|show .*payment|show .*price|show .*tax|show .*w-?2g|show .*bankroll|show .*achievement|what .*weather|which .*slot|rough seas|weather reports?|price drops?|bankroll|financials?|payments?|tax|w-?2g|achievements?|app data|data sources?|what can you see/i);
   if (askDataMatch || isWeatherQuestion(message)) {
     return { tool: 'askMyData', params: { query: message } };
@@ -433,7 +444,7 @@ function parseToolCall(message: string): { tool: string; params: unknown } | nul
   const decodeOfferMatch = message.match(/decode\s+(?:my\s+)?offer|decode\s+(?:the\s+)?best\s+offer|explain\s+(?:my\s+)?offer|what\s+does\s+(?:this\s+)?offer\s+mean|break\s+down\s+(?:my\s+)?offer/i);
   const replacementMatch = message.match(/replacement|replace\s+(?:this|my)?\s*cruise|find\s+replacements?|compare\s+replacements?|better\s+replacement|alternate\s+sailing|alternative\s+cruise/i);
   const searchMatch = message.match(/search.*cruise|find.*cruise|available.*cruise|cruise.*search/i);
-  const tierMatch = message.match(/tier.*progress|progress.*tier|points.*tier|signature|masters|pinnacle/i);
+  const tierMatch = message.match(/tier.*progress|progress.*tier|points.*tier|tier.*points|how\s+many.*(?:signature|masters|pinnacle)|(?:reach|keep|retain|earn|next).*\b(?:signature|masters|pinnacle)\b|\b(?:signature|masters|pinnacle)\b.*(?:progress|points|target|threshold|reach|keep|retain)/i);
   const recommendMatch = message.match(/recommend.*for.*me|for.*you|best.*for.*me|suggest.*for.*me|what.*should.*book|which.*cruise|recommended/i);
   const optimizeMatch = message.match(/optimize|maximize.*points|maximize.*value/i);
   const analyzeMatch = message.match(/analyze|roi|value.*breakdown|portfolio.*summary/i);
@@ -589,6 +600,8 @@ function buildReplacementGoalActions(userContent: string): NonNullable<ChatMessa
     { id: 'replacement-goal-new-ports', label: 'New ports', prompt: `Find replacement cruises for this using goal: add new ports. Context: ${base}` },
     { id: 'replacement-goal-ship', label: 'Known ship', prompt: `Find replacement cruises for this using goal: improve ship familiarity. Context: ${base}` },
     { id: 'replacement-goal-tier', label: 'Tier progress', prompt: `Find replacement cruises for this using goal: improve tier progress. Context: ${base}` },
+    { id: 'replacement-goal-airfare', label: 'Easy airfare', prompt: `Find replacement cruises for this using goal: easiest and lowest-risk airfare. Context: ${base}` },
+    { id: 'replacement-goal-favorite-ship', label: 'Favorite ship', prompt: `Find replacement cruises for this using goal: prioritize my favorite ships based on saved history. Context: ${base}` },
   ];
 }
 
@@ -630,9 +643,11 @@ function buildAgentSuggestedActions(tool: string | null, userContent: string): C
 }
 
 export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => {
+  recordProviderRender('AgentXProvider');
   const { tier } = useEntitlement();
   const { isAdmin, authenticatedEmail } = useAuth();
-  const { cruises, bookedCruises, casinoOffers, calendarEvents, filters, settings, lastSyncDate, hasLocalData, isLoading: coreDataLoading, userPoints: coreUserPoints } = useCoreData();
+  const { cruises, bookedCruises, casinoOffers, calendarEvents, filters, settings, lastSyncDate, hasLocalData, isLoading: coreDataLoading, userPoints: coreUserPoints, updateCasinoOffer, addCalendarEvent } = useCoreData();
+  const { queryCruises, totalCruises } = useCruiseInventory();
   const { users } = useUser();
   const { selectedProfileId, selectedBrand, selectedProgram } = useIntelligenceFilters();
   const {
@@ -640,15 +655,16 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
     clubRoyaleTier,
     clubRoyalePointsSource,
     clubRoyaleSyncDiscrepancy,
+    blueChip,
   } = useLoyalty();
   const { allMachines } = useSlotMachines();
   const { myAtlasMachines, globalLibrary, encyclopedia } = useSlotMachineLibrary();
   const { mappings: deckMappings } = useDeckPlan();
   const { sessions, getSessionAnalytics, getMachineAnalytics } = useCasinoSessions();
-  const { certificates } = useCertificates();
+  const { searchableCertificates: certificates, updateCertificate } = useCertificates();
   const { logs: machineLogs } = useMachineConditionLogs();
   const { entries: crewRecognitionEntries } = useCrewRecognition();
-  const { isHydrated: isWeatherHydrated, getForecastForCruiseDay } = useSailingWeather();
+  const { isHydrated: isWeatherHydrated, cachedForecasts, getForecastForCruiseDay } = useSailingWeather();
   const financials = useFinancials();
   const simpleAnalytics = useSimpleAnalytics();
   const historicalPerformance = useHistoricalPerformance();
@@ -660,6 +676,7 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
   const pphAlertsState = usePPHAlerts();
   const gamificationState = useGamification();
   const celebrityState = useCelebrity();
+  const { bundle: optimizationBundle } = usePersonalCertificateOptimizer();
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -668,12 +685,41 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<AgentXMode>('travelAgent');
   const [weatherReports, setWeatherReports] = useState<SailingWeatherForecast[]>([]);
+  const [conversationThreads, setConversationThreads] = useState<ConversationThread[]>([]);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const catalogSearchRequestRef = useRef(0);
 
   const intelligenceFilterSnapshot = useMemo(() => ({
     selectedProfileId,
     selectedBrand,
     selectedProgram,
   }), [selectedBrand, selectedProfileId, selectedProgram]);
+  const conversationOwnerScope = useMemo(() => ({ authenticatedEmail, profileId: selectedProfileId, brand: selectedBrand, program: selectedProgram }), [authenticatedEmail, selectedBrand, selectedProfileId, selectedProgram]);
+  const conversationOwnerKey = useMemo(() => buildAskAllOffersOwnerKey(conversationOwnerScope), [conversationOwnerScope]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadConversationThreads(conversationOwnerKey).then((threads) => {
+      if (cancelled) return;
+      setConversationThreads(threads);
+      const first = threads.find((thread) => !thread.archivedAt) ?? null;
+      setActiveConversationId(first?.id ?? null);
+      setMessages(first ? first.messages.map((message) => ({ ...message, timestamp: new Date(message.timestamp) })) : []);
+    }).catch((loadError) => {
+      console.error('[AgentX] Failed to load conversation history:', loadError);
+      if (!cancelled) { setConversationThreads([]); setActiveConversationId(null); setMessages([]); }
+    });
+    return () => { cancelled = true; };
+  }, [conversationOwnerKey]);
+
+  // The assistant remains mounted for the whole app, so eager filtering here
+  // used to make every CoreData hydration block unrelated tab navigation. React
+  // now prepares the large local context at deferred priority while the current
+  // screen stays interactive.
+  const deferredCruises = useDeferredValue(cruises, EMPTY_CRUISES);
+  const deferredBookedCruises = useDeferredValue(bookedCruises, EMPTY_BOOKED_CRUISES);
+  const deferredCasinoOffers = useDeferredValue(casinoOffers, EMPTY_OFFERS);
+  const deferredCalendarEvents = useDeferredValue(calendarEvents, EMPTY_CALENDAR_EVENTS);
 
   const selectedProfileLabel = useMemo(() => {
     if (selectedProfileId === 'all') return 'All Profiles';
@@ -685,11 +731,100 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
   const activeScopeLabel = useMemo(() => buildIntelligenceScopeLabel(intelligenceFilterSnapshot, users), [intelligenceFilterSnapshot, users]);
   const brandProgramLabel = useMemo(() => getBrandProgramSystemLabel(selectedBrand, selectedProgram), [selectedBrand, selectedProgram]);
 
-  const filteredCruises = useMemo(() => filterRecordsByIntelligence(cruises, intelligenceFilterSnapshot, users), [cruises, intelligenceFilterSnapshot, users]);
-  const filteredBookedCruises = useMemo(() => filterRecordsByIntelligence(bookedCruises, intelligenceFilterSnapshot, users), [bookedCruises, intelligenceFilterSnapshot, users]);
-  const filteredCasinoOffers = useMemo(() => filterRecordsByIntelligence(casinoOffers, intelligenceFilterSnapshot, users), [casinoOffers, intelligenceFilterSnapshot, users]);
-  const filteredCalendarEvents = useMemo(() => filterRecordsByIntelligence(calendarEvents, intelligenceFilterSnapshot, users), [calendarEvents, intelligenceFilterSnapshot, users]);
-  const filteredCertificates = useMemo(() => filterRecordsByIntelligence(certificates as unknown as Array<typeof certificates[number] & { ownerProfileId?: string; sourceEmail?: string; brand?: string; casinoProgram?: any }>, intelligenceFilterSnapshot, users), [certificates, intelligenceFilterSnapshot, users]);
+  const filteredCruises = useMemo(() => isVisible ? filterRecordsByIntelligence(deferredCruises, intelligenceFilterSnapshot, users) : EMPTY_CRUISES, [deferredCruises, intelligenceFilterSnapshot, isVisible, users]);
+  const filteredBookedCruises = useMemo(() => isVisible ? filterRecordsByIntelligence(deferredBookedCruises, intelligenceFilterSnapshot, users) : EMPTY_BOOKED_CRUISES, [deferredBookedCruises, intelligenceFilterSnapshot, isVisible, users]);
+  const filteredCasinoOffers = useMemo(() => isVisible ? filterRecordsByIntelligence(deferredCasinoOffers, intelligenceFilterSnapshot, users) : EMPTY_OFFERS, [deferredCasinoOffers, intelligenceFilterSnapshot, isVisible, users]);
+  const filteredCalendarEvents = useMemo(() => isVisible ? filterRecordsByIntelligence(deferredCalendarEvents, intelligenceFilterSnapshot, users) : EMPTY_CALENDAR_EVENTS, [deferredCalendarEvents, intelligenceFilterSnapshot, isVisible, users]);
+  const filteredCertificates = useMemo(() => isVisible
+    ? filterRecordsByIntelligence(certificates as unknown as Array<typeof certificates[number] & { ownerProfileId?: string; sourceEmail?: string; brand?: string; casinoProgram?: any }>, intelligenceFilterSnapshot, users)
+    : [], [certificates, intelligenceFilterSnapshot, isVisible, users]);
+  const persistConversation = useCallback(async (nextMessages: ChatMessage[]) => {
+    const now = new Date().toISOString();
+    const firstQuestion = nextMessages.find((message) => message.role === 'user')?.content.trim() || 'Easy Seas conversation';
+    const threadId = activeConversationId ?? `easy-seas-thread-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const existing = conversationThreads.find((thread) => thread.id === threadId);
+    const scope = buildAllOffersScopeSnapshot({
+      ownerScope: conversationOwnerScope,
+      offers: filteredCasinoOffers,
+      bookedCruises: filteredBookedCruises,
+      certificates: filteredCertificates,
+      cruises: filteredCruises,
+    });
+    const thread: ConversationThread = {
+      id: threadId,
+      title: existing?.title ?? firstQuestion.slice(0, 52),
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+      archivedAt: null,
+      scope,
+      messages: nextMessages.filter((message) => !message.isLoading).map((message) => ({
+        id: message.id,
+        role: message.role,
+        content: message.content,
+        timestamp: message.timestamp.toISOString(),
+        sourceReferences: message.sourceReferences ?? [],
+      })),
+      lastQuestion: [...nextMessages].reverse().find((message) => message.role === 'user')?.content ?? null,
+    };
+    const nextThreads = await upsertConversationThread(conversationOwnerKey, thread);
+    setConversationThreads(nextThreads);
+    setActiveConversationId(threadId);
+  }, [activeConversationId, conversationOwnerKey, conversationOwnerScope, conversationThreads, filteredBookedCruises, filteredCasinoOffers, filteredCertificates, filteredCruises]);
+
+  const startNewConversation = useCallback(() => {
+    setActiveConversationId(null);
+    setMessages([]);
+    setError(null);
+  }, []);
+
+  const openConversation = useCallback((threadId: string) => {
+    const thread = conversationThreads.find((candidate) => candidate.id === threadId);
+    if (!thread || thread.archivedAt) return;
+    setActiveConversationId(thread.id);
+    setMessages(thread.messages.map((message) => ({ ...message, timestamp: new Date(message.timestamp) })));
+    setError(null);
+  }, [conversationThreads]);
+
+  const renameConversation = useCallback(async (threadId: string, title: string) => {
+    const next = await renameConversationThread(conversationOwnerKey, threadId, title);
+    setConversationThreads(next);
+  }, [conversationOwnerKey]);
+
+  const archiveConversation = useCallback(async (threadId: string) => {
+    const next = await archiveConversationThread(conversationOwnerKey, threadId, true);
+    setConversationThreads(next);
+    if (threadId === activeConversationId) startNewConversation();
+  }, [activeConversationId, conversationOwnerKey, startNewConversation]);
+
+  const confirmAgentAction = useCallback(async (action: AgentConfirmedAction): Promise<{ route?: string }> => {
+    try {
+      if (action.kind === 'shortlist-offer') updateCasinoOffer(action.payload.offerId, { isShortlisted: true, shortlistedAt: new Date().toISOString() });
+      if (action.kind === 'mark-certificate-used') updateCertificate(action.payload.certificateId, { status: 'used' });
+      if (action.kind === 'add-reminder') addCalendarEvent(buildAgentReminderEvent(action));
+      const nextMessages = messages.map((message) => message.pendingAction?.id === action.id ? { ...message, actionStatus: 'confirmed' as const } : message);
+      setMessages(nextMessages);
+      await persistConversation(nextMessages);
+      return action.payload.route ? { route: action.payload.route } : {};
+    } catch (actionError) {
+      const nextMessages = messages.map((message) => message.pendingAction?.id === action.id ? { ...message, actionStatus: 'failed' as const } : message);
+      setMessages(nextMessages);
+      await persistConversation(nextMessages).catch(() => undefined);
+      console.error('[AgentX] Confirmed action failed:', actionError);
+      return {};
+    }
+  }, [addCalendarEvent, messages, persistConversation, updateCasinoOffer, updateCertificate]);
+
+  const cancelAgentAction = useCallback((action: AgentConfirmedAction) => {
+    const nextMessages = messages.map((message) => message.pendingAction?.id === action.id ? { ...message, actionStatus: 'cancelled' as const } : message);
+    setMessages(nextMessages);
+    void persistConversation(nextMessages).catch((saveError) => console.error('[AgentX] Failed to save cancelled action:', saveError));
+  }, [messages, persistConversation]);
+  useEffect(() => {
+    if (!isVisible) return;
+    recordPerformanceCount('AgentXProvider.cruiseScopeRows', filteredCruises.length, {
+      cruisesLoadedIntoJS: deferredCruises.length,
+    });
+  }, [deferredCruises.length, filteredCruises.length, isVisible]);
   const archiveContextLabel = useMemo(() => {
     const archivedOrSkippedOffers = filteredCasinoOffers.filter((offer) => offer.status === 'archived' || offer.status === 'skipped' || offer.archiveStatus === 'archived' || offer.archiveStatus === 'replaced').length;
     const reviewNeededOffers = filteredCasinoOffers.filter((offer) => offer.status === 'reviewNeeded' || offer.archiveStatus === 'reviewNeeded' || offer.reconciliationStatus === 'reviewNeeded' || offer.importStatus === 'reviewNeeded' || offer.importStatus === 'unassigned').length;
@@ -706,8 +841,46 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
     useKnownAnnualReportFacts: isKnownCasinoProfile(authenticatedEmail),
   }), [authenticatedEmail, clubRoyalePoints, clubRoyalePointsSource, clubRoyaleSyncDiscrepancy, clubRoyaleTier, filteredBookedCruises, sessions]);
 
+  const scopedWeatherReports = useMemo(() => {
+    const cruiseIds = new Set(filteredBookedCruises.map((cruise) => cruise.id));
+    const merged = new Map<string, SailingWeatherForecast>();
+    cachedForecasts.forEach((forecast) => {
+      if (cruiseIds.has(forecast.cruiseId)) merged.set(forecast.cacheKey, forecast);
+    });
+    weatherReports.forEach((forecast) => merged.set(forecast.cacheKey, forecast));
+    return Array.from(merged.values());
+  }, [cachedForecasts, filteredBookedCruises, weatherReports]);
+
   const appWideContextBlocks = useMemo<AskMyDataContextBlock[]>(() => {
+    // The provider is app-wide, but its multi-source narrative index is only
+    // needed while an Agent surface is open. Building every financial/session/
+    // weather/slot text block during CoreData hydration delayed unrelated tabs.
+    if (!isVisible) return [];
     const sessionAnalytics = getSessionAnalytics();
+    const relationship = buildCasinoRelationshipSnapshot({
+      cruises: filteredBookedCruises,
+      sessions,
+      offers: filteredCasinoOffers,
+      currentPoints: clubRoyalePoints,
+      currentPointsSource: clubRoyalePointsSource === 'manual' ? 'user_entered' : clubRoyalePointsSource === 'api' ? 'provider_reported' : 'estimated',
+    });
+    const casinoTruthRows = filteredBookedCruises.map((cruise) => buildCasinoCruiseTruth({
+      cruise,
+      sessions,
+      certificates: filteredCertificates,
+    }));
+    const royalReconciliation = reconcileCasinoSeason({
+      program: 'club_royale',
+      syncedPoints: clubRoyalePoints,
+      cruises: casinoTruthRows,
+      certificates: filteredCertificates,
+    });
+    const blueChipReconciliation = reconcileCasinoSeason({
+      program: 'blue_chip',
+      syncedPoints: blueChip.points,
+      cruises: casinoTruthRows,
+      certificates: filteredCertificates,
+    });
     const bankrollStats = bankrollState.getBankrollStats();
     const taxYear = new Date().getFullYear();
     const taxSummary = taxState.getTaxSummary(taxYear);
@@ -723,16 +896,65 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
       .map((payment) => `- Cruise ${payment.cruiseId}: ${formatMoney(payment.amount)} due ${payment.dueDate}`)
       .join('\n') || 'No upcoming payment records loaded.';
 
+    const recordBlocks: AskMyDataContextBlock[] = [
+      ...casinoTruthRows.map((trip) => ({
+        id: `casino-truth-${trip.cruiseId}`,
+        title: `Casino trip evidence — ${trip.shipName}`,
+        subtitle: `${trip.sailDate} · ${trip.points.value ?? 'points missing'} points · ${trip.certificateCodes.length} certificate(s)`,
+        keywords: ['casino trip', 'casino cruise', 'theoretical', 'theo', 'hours played', 'estimated hours', 'points', 'certificate earned', 'sea days', 'port days', trip.shipName, String(trip.points.value ?? ''), ...trip.certificateCodes],
+        detail: [
+          `${trip.shipName} sailing ${trip.sailDate}; program ${trip.program}; earning period ${trip.seasonLabel}.`,
+          `Points: ${trip.points.value ?? 'missing'}; evidence ${trip.points.kind}; source ${trip.points.source}.`,
+          `Play hours: ${trip.hours.value == null ? 'missing' : trip.hours.value.toFixed(2)}; evidence ${trip.hours.kind}; source ${trip.hours.source}; formula ${trip.hours.formula ?? 'none'}.`,
+          `Itinerary casino opportunity: ${trip.seaDays} sea day(s), ${trip.portDays} port day(s), ${trip.estimatedCasinoOpportunityHours == null ? 'missing' : `${trip.estimatedCasinoOpportunityHours} maximum opportunity hour(s)`}. Opportunity hours are not claimed actual play hours.`,
+          `Coin-in: ${trip.coinIn.value == null ? 'missing' : formatMoney(trip.coinIn.value)}; evidence ${trip.coinIn.kind}; source ${trip.coinIn.source}; formula ${trip.coinIn.formula ?? 'none'}.`,
+          `Theoretical loss: ${trip.theoreticalLoss.value == null ? 'missing' : formatMoney(trip.theoreticalLoss.value)}; evidence ${trip.theoreticalLoss.kind}; source ${trip.theoreticalLoss.source}; formula ${trip.theoreticalLoss.formula ?? 'none'}.`,
+          `Net gaming result: ${trip.netGamingResult.value == null ? 'missing' : formatMoney(trip.netGamingResult.value)}; evidence ${trip.netGamingResult.kind}; source ${trip.netGamingResult.source}. Cruise fare excluded.`,
+          `Certificates earned/linked: ${trip.certificateCodes.join(', ') || 'none confidently linked'}.`,
+          `Warnings: ${trip.warnings.join(' ') || 'none'}`,
+        ].join('\n'),
+        actionLabel: 'Open casino trip detail',
+        actionRoute: '/casino/post-cruise-closeout',
+      })),
+      ...sessions.map((session) => ({
+        id: `casino-session-${session.id}`,
+        title: `Casino session — ${session.machineName || session.machineType || 'gaming'}`,
+        subtitle: `${session.date} · ${session.durationMinutes} minutes · ${session.pointsEarned ?? 0} points`,
+        keywords: ['casino session', 'session', 'play', 'points', 'win loss', 'buy in', 'cash out', session.machineName ?? '', session.machineType ?? ''],
+        detail: `Session ${session.id}; cruise ${session.cruiseId ?? 'not linked'}; start ${session.startTime}; end ${session.endTime}; buy-in ${formatMoney(session.buyIn ?? 0)}; cash-out ${formatMoney(session.cashOut ?? 0)}; win/loss ${formatMoney(session.winLoss ?? 0)}; points ${session.pointsEarned ?? 0}; free play ${formatMoney(session.freePlayUsed ?? 0)}; comps ${formatMoney(session.compsReceived ?? 0)}; jackpot ${session.jackpotHit ? formatMoney(session.jackpotAmount ?? 0) : 'no'}; notes ${session.notes ?? 'none'}.`,
+        actionLabel: 'Use casino session',
+        actionRoute: '/casino-sessions',
+      })),
+      ...machineLogs.map((log) => ({
+        id: `machine-condition-${log.id}`,
+        title: `Machine condition — ${log.machineName}`,
+        subtitle: `${log.shipName} · ${log.timeObserved} · ${log.decision}`,
+        keywords: ['machine log', 'condition log', 'atlas observation', log.shipName, log.machineName, log.casinoLocation, log.decision],
+        detail: `Observed ${log.machineName} on ${log.shipName} at ${log.casinoLocation}, position ${log.seatBankPosition}; denomination ${log.denomination}; bet ${log.betLevel}; visible state ${log.visibleMachineState}; bonus meter ${log.bonusMeterCondition}; major ${log.majorAmount ?? 'n/a'}; grand ${log.grandAmount ?? 'n/a'}; decision ${log.decision}; notes ${log.notes ?? 'none'}.`,
+        actionLabel: 'Open machine atlas',
+        actionRoute: '/machines',
+      })),
+      ...deckMappings.map((mapping, index) => ({
+        id: `deck-mapping-${index}`,
+        title: 'Saved deck mapping',
+        subtitle: `Machine/deck reference ${index + 1}`,
+        keywords: ['deck mapping', 'ship deck', 'machine location', 'casino map'],
+        detail: JSON.stringify(mapping),
+        actionLabel: 'Use deck mapping',
+        actionRoute: '/machines',
+      })),
+    ];
+
     return [
       {
         id: 'data-source-coverage',
         title: 'Loaded Easy Seas data sources',
-        subtitle: `${formatCount(filteredCruises.length + filteredBookedCruises.length)} cruises · ${formatCount(filteredCasinoOffers.length)} offers · ${formatCount(filteredCalendarEvents.length)} events · ${formatCount(crewRecognitionEntries.length)} crew · ${formatCount(allMachines.length)} slots`,
+        subtitle: `${formatCount(totalCruises + filteredBookedCruises.length)} cruises · ${formatCount(filteredCasinoOffers.length)} offers · ${formatCount(filteredCalendarEvents.length)} events · ${formatCount(crewRecognitionEntries.length)} crew · ${formatCount(allMachines.length)} slots`,
         keywords: ['data source', 'system', 'context', 'loaded', 'overview', 'coverage', 'what can you see'],
         detail: [
-          `Core data: ${formatCount(filteredCruises.length)} available cruise(s), ${formatCount(filteredBookedCruises.length)} booked/completed cruise(s), ${formatCount(filteredCasinoOffers.length)} casino offer(s), ${formatCount(filteredCertificates.length)} certificate(s), ${formatCount(filteredCalendarEvents.length)} calendar/event record(s).`,
+          `Core data: ${formatCount(totalCruises)} available cruise(s), ${formatCount(filteredBookedCruises.length)} booked/completed cruise(s), ${formatCount(filteredCasinoOffers.length)} casino offer(s), ${formatCount(filteredCertificates.length)} certificate(s), ${formatCount(filteredCalendarEvents.length)} calendar/event record(s).`,
           `Casino/slot data: ${formatCount(sessions.length)} casino session(s), ${formatCount(allMachines.length)} slot machine record(s), ${formatCount(myAtlasMachines.length)} personal Atlas record(s), ${formatCount(globalLibrary.length)} permanent library record(s), ${formatCount(deckMappings.length)} deck mapping(s), ${formatCount(machineLogs.length)} condition log(s).`,
-          `Crew/weather data: ${formatCount(crewRecognitionEntries.length)} crew recognition record(s), ${formatCount(weatherReports.length)} loaded weather report(s).`,
+          `Crew/weather data: ${formatCount(crewRecognitionEntries.length)} crew recognition record(s), ${formatCount(scopedWeatherReports.length)} loaded weather report(s).`,
           `App-wide data: ${formatCount(priceHistoryState.priceHistory.length)} price history row(s), ${formatCount(activePriceDrops.length + trackedPriceDrops.length)} price drop alert row(s), ${formatCount(alertsState.alerts.length)} app alert(s), ${formatCount(taxState.compItems.length)} comp item(s), ${formatCount(taxState.w2gRecords.length)} W-2G record(s), ${formatCount(gamificationState.achievements.length)} achievement record(s).`,
           `Freshness: core data loading=${coreDataLoading ? 'yes' : 'no'}, has local data=${hasLocalData ? 'yes' : 'no'}, last sync=${lastSyncDate ?? 'not recorded'}, authenticated profile=${authenticatedEmail ?? 'guest/local'}.`,
         ].join('\n'),
@@ -757,11 +979,32 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
         keywords: ['analytics', 'performance', 'portfolio', 'roi', 'historical', 'points', 'coin in', 'coin-in', 'casino metrics'],
         detail: [
           `Portfolio analytics: total spent ${formatMoney(simpleAnalytics.analytics.totalSpent)}, total saved ${formatMoney(simpleAnalytics.analytics.totalSaved)}, total port taxes ${formatMoney(simpleAnalytics.analytics.totalPortTaxes)}, average price/night ${formatMoney(simpleAnalytics.analytics.averagePricePerNight)}, portfolio ROI ${simpleAnalytics.analytics.portfolioROI.toFixed(2)}%.`,
-          `Casino analytics: total points ${formatCount(simpleAnalytics.casinoAnalytics.totalPointsEarned)}, historical points ${formatCount(simpleAnalytics.casinoAnalytics.historicalPointsEarned)}, current balance ${formatCount(simpleAnalytics.casinoAnalytics.currentPointBalance)}, point-derived coin-in ${formatMoney(simpleAnalytics.casinoAnalytics.totalCoinIn)}, win/loss ${formatMoney(simpleAnalytics.casinoAnalytics.totalWinLoss)}, tier ${simpleAnalytics.casinoAnalytics.currentStatusTier}.`,
-          `Session analytics: ${formatCount(sessionAnalytics.totalSessions)} sessions, ${Math.round(sessionAnalytics.totalPlayTimeMinutes / 60).toLocaleString()} play hour(s), ${formatCount(sessionAnalytics.totalPointsEarned)} points, ${formatMoney(sessionAnalytics.totalCoinIn)} coin-in, ${formatMoney(sessionAnalytics.netWinLoss)} net win/loss, ${sessionAnalytics.pointsPerHour.toFixed(1)} points/hour.`,
+          `Legacy portfolio analytics: total points ${formatCount(simpleAnalytics.casinoAnalytics.totalPointsEarned)}, historical points ${formatCount(simpleAnalytics.casinoAnalytics.historicalPointsEarned)}, current balance ${formatCount(simpleAnalytics.casinoAnalytics.currentPointBalance)}, Club-Royale-slot-derived coin-in estimate ${formatMoney(simpleAnalytics.casinoAnalytics.totalCoinIn)}, win/loss ${formatMoney(simpleAnalytics.casinoAnalytics.totalWinLoss)}, tier ${simpleAnalytics.casinoAnalytics.currentStatusTier}. Do not apply that point conversion to Blue Chip, Carnival, table games, or unknown play.`,
+          `Actual session analytics: ${formatCount(sessionAnalytics.totalSessions)} sessions, ${Math.round(sessionAnalytics.totalPlayTimeMinutes / 60).toLocaleString()} play hour(s), ${formatCount(sessionAnalytics.totalPointsEarned)} points, ${sessionAnalytics.coinInSource === 'missing' ? 'coin-in missing' : `${formatMoney(sessionAnalytics.totalCoinIn)} explicit coin-in (${sessionAnalytics.coinInSource})`}, ${formatMoney(sessionAnalytics.netWinLoss)} net win/loss, ${sessionAnalytics.pointsPerHour.toFixed(1)} points/hour. Generated sessions excluded.`,
           `Historical performance: average ${historicalPerformance.metrics.averagePointsPerNight.toFixed(1)} points/night, ${formatMoney(historicalPerformance.metrics.averageCoinInPerNight)} coin-in/night, ${historicalPerformance.metrics.averageROI.toFixed(2)}% average ROI, ${historicalPerformance.metrics.consistencyScore.toFixed(1)} consistency score. Best cruise: ${historicalPerformance.metrics.bestCruise?.cruiseName ?? 'n/a'}.`,
         ].join('\n'),
         actionLabel: 'Use analytics',
+      },
+      {
+        id: 'casino-relationship-intelligence',
+        title: 'Casino relationship intelligence',
+        subtitle: `${formatCount(relationship.playerWorth.trackedTrips)} tracked trips · ${formatMoney(relationship.playerWorth.recordedCashResult.value ?? 0)} recorded cash result · ${formatMoney(relationship.playerWorth.capturedCruiseValue.value ?? 0)} captured value`,
+        keywords: ['casino intelligence', 'hourly win loss', 'trip report', 'points pace', 'tier simulator', 'certificate threshold', 'keep playing', 'actual theoretical', 'reinvestment', 'freeplay roi', 'cost per night', 'offer response', 'offer attribution', 'player worth', 'what am i worth'],
+        detail: [
+          `Royal reconciliation: ${royalReconciliation.seasonLabel}; synced ${royalReconciliation.syncedPoints ?? 'missing'} points; cruise-attributed ${royalReconciliation.attributedCruisePoints}; unallocated ${royalReconciliation.unallocatedPoints ?? 'unknown'}; over-attributed ${royalReconciliation.overAttributedPoints}; ${royalReconciliation.unlinkedCertificateCount} unlinked certificate(s).`,
+          `Celebrity reconciliation: ${blueChipReconciliation.seasonLabel}; Blue Chip resets August 1; synced ${blueChipReconciliation.syncedPoints ?? 'missing'} points; cruise-attributed ${blueChipReconciliation.attributedCruisePoints}; unallocated ${blueChipReconciliation.unallocatedPoints ?? 'unknown'}; over-attributed ${blueChipReconciliation.overAttributedPoints}; ${blueChipReconciliation.unlinkedCertificateCount} unlinked certificate(s).`,
+          `Portfolio hourly win/loss: ${formatMoney(relationship.portfolioHourlyWinLoss.value ?? 0)} (${relationship.portfolioHourlyWinLoss.source}); formula ${relationship.portfolioHourlyWinLoss.formula}.`,
+          `Points pace: ${formatCount(relationship.pointsPace.currentPoints.value ?? 0)} current points; historical ${formatCount(relationship.pointsPace.historicalPointsPerCruise.value ?? 0)} points/cruise (${relationship.pointsPace.historicalPointsPerCruise.source}); projected ${formatCount(relationship.pointsPace.projectedSeasonPoints.value ?? 0)} after ${relationship.pointsPace.futureCruises} booked future cruise(s) (${relationship.pointsPace.projectedSeasonPoints.source}); ${formatCount(relationship.pointsPace.pointsToNextTier)} to ${relationship.pointsPace.nextTier ?? 'no higher saved tier'}.`,
+          `Tier scenarios: ${relationship.tierSimulation.map((row) => `${row.label}: ${formatCount(row.projectedPoints)} / ${row.projectedTier} (${row.source})`).join('; ')}.`,
+          `Player-worth proxy: ${formatMoney(relationship.playerWorth.relationshipValueProxy.value ?? 0)} (${relationship.playerWorth.relationshipValueProxy.source}); formula ${relationship.playerWorth.relationshipValueProxy.formula}. ${relationship.playerWorth.warning}`,
+          `Offer response bands: ${relationship.offerResponse.map((band) => `${band.label}: ${band.completedCruises} trip(s), ${band.subsequentOfferInstances} later offer instance(s), average later offer ${band.averageSubsequentOfferValue == null ? 'missing' : formatMoney(band.averageSubsequentOfferValue)} (${band.source})`).join('; ')}. These are temporal correlations, not causal attribution.`,
+          optimizationBundle?.currentRecommendation
+            ? `Saved certificate threshold recommendation: ${optimizationBundle.currentRecommendation.actionLabel}; ${formatCount(optimizationBundle.currentRecommendation.currentPoints)} current points; target ${optimizationBundle.currentRecommendation.recommendedTargetPoints == null ? 'stop at current certificate' : formatCount(optimizationBundle.currentRecommendation.recommendedTargetPoints)}; expected additional loss ${formatMoney(optimizationBundle.currentRecommendation.expectedAdditionalLoss)} (estimated); risk-adjusted incremental value ${formatMoney(optimizationBundle.currentRecommendation.riskAdjustedIncrementalExpectedValue)}; confidence ${optimizationBundle.currentRecommendation.confidence}; safety warnings ${optimizationBundle.currentRecommendation.warnings.join('; ') || 'none'}.`
+            : 'No saved profile-scoped certificate threshold recommendation is available.',
+          `Trip calculations: ${relationship.trips.slice().sort((a, b) => b.sailDate.localeCompare(a.sailDate)).slice(0, 20).map((trip) => `${trip.ship} ${trip.sailDate}: cash ${trip.cashResult.value == null ? 'missing' : formatMoney(trip.cashResult.value)} (${trip.cashResult.source}), hourly ${trip.hourlyWinLoss.value == null ? 'missing' : formatMoney(trip.hourlyWinLoss.value)} (${trip.hourlyWinLoss.source}), points ${trip.points.value ?? 'missing'}, actual/theo ${trip.actualVsTheoretical.value == null ? 'missing' : `${trip.actualVsTheoretical.value.toFixed(1)}%`}, reinvestment ${trip.compReinvestmentPercent.value == null ? 'missing' : `${trip.compReinvestmentPercent.value.toFixed(1)}%`}, FreePlay outcome proxy ${trip.freePlayOutcomeProxy.value == null ? 'missing' : `${trip.freePlayOutcomeProxy.value.toFixed(1)}%`}, value ROI ${trip.trueCruiseCasinoRoi.value == null ? 'missing' : `${trip.trueCruiseCasinoRoi.value.toFixed(1)}%`}, cost/night ${trip.casinoCostPerNight.value == null ? 'missing' : formatMoney(trip.casinoCostPerNight.value)}.`).join('\n') || 'No trip reports available.'}`,
+        ].join('\n'),
+        actionLabel: 'Open relationship intelligence',
+        actionRoute: '/casino/relationship-intelligence',
       },
       {
         id: 'price-history-alerts',
@@ -805,7 +1048,6 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
         ].join('\n'),
         actionLabel: 'Use goals context',
       },
-      ...buildCasinoValueAgentXContext({ bookedCruises: filteredBookedCruises as unknown as Array<Record<string, unknown>>, userId: authenticatedEmail ?? 'scott' }),
       {
         id: 'settings-reference-data',
         title: 'Settings, profile, and reference data',
@@ -821,8 +1063,9 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
         ].join('\n'),
         actionLabel: 'Use profile/settings context',
       },
+      ...recordBlocks,
     ];
-  }, [activeScopeLabel, alertsState.activeAlerts, alertsState.alerts.length, alertsState.anomalies.length, alertsState.criticalAlerts.length, alertsState.insights.length, alertsState.lastDetectionRun, alertsState.rules, allMachines.length, authenticatedEmail, bankrollState, brandProgramLabel, celebrityState.destinations, celebrityState.ships, clubRoyalePoints, clubRoyalePointsSource, clubRoyaleTier, coreDataLoading, coreUserPoints, crewRecognitionEntries.length, deckMappings.length, filteredBookedCruises, filteredCalendarEvents.length, filteredCasinoOffers.length, filteredCertificates.length, filteredCruises.length, financials.summary, gamificationState, getSessionAnalytics, globalLibrary.length, hasLocalData, lastSyncDate, machineLogs.length, myAtlasMachines.length, pphAlertsState, priceHistoryState, priceTrackingState, selectedBrand, selectedProfileLabel, selectedProgram, sessions.length, settings, taxState, users, weatherReports.length]);
+  }, [activeScopeLabel, alertsState.activeAlerts, alertsState.alerts.length, alertsState.anomalies.length, alertsState.criticalAlerts.length, alertsState.insights.length, alertsState.lastDetectionRun, alertsState.rules, allMachines.length, authenticatedEmail, bankrollState, blueChip.points, brandProgramLabel, celebrityState.destinations, celebrityState.ships, clubRoyalePoints, clubRoyalePointsSource, clubRoyaleTier, coreDataLoading, coreUserPoints, crewRecognitionEntries.length, deckMappings, filteredBookedCruises, filteredCalendarEvents.length, filteredCasinoOffers, filteredCertificates, financials.summary, gamificationState, getSessionAnalytics, globalLibrary.length, hasLocalData, lastSyncDate, machineLogs, myAtlasMachines.length, optimizationBundle, pphAlertsState, priceHistoryState, priceTrackingState, selectedBrand, selectedProfileLabel, selectedProgram, sessions, settings, taxState, totalCruises, users, scopedWeatherReports.length]);
 
   const refreshWeatherReports = useCallback(async (options?: { force?: boolean }): Promise<SailingWeatherForecast[]> => {
     if (!isWeatherHydrated) return [];
@@ -876,7 +1119,7 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
       machineLogs: machineLogs.length,
       calendarEvents: filteredCalendarEvents.length,
       crewRecognitionEntries: crewRecognitionEntries.length,
-      weatherReports: weatherReports.length,
+      weatherReports: scopedWeatherReports.length,
       mode,
       filters,
       selectedProfileLabel,
@@ -905,39 +1148,51 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
       getSessionAnalytics,
       getMachineAnalytics,
     };
-  }, [filteredCruises, filteredBookedCruises, filteredCasinoOffers, clubRoyalePoints, clubRoyaleTier, allMachines, myAtlasMachines, globalLibrary, encyclopedia, deckMappings, sessions, getSessionAnalytics, getMachineAnalytics, certificates.length, machineLogs.length, filteredCalendarEvents.length, crewRecognitionEntries.length, weatherReports.length, mode, filters, selectedProfileLabel, selectedBrand, selectedProgram, activeScopeLabel, brandProgramLabel, archiveContextLabel, askMyDataOverview]);
+  }, [isVisible, filteredCruises, filteredBookedCruises, filteredCasinoOffers, clubRoyalePoints, clubRoyaleTier, allMachines, myAtlasMachines, globalLibrary, encyclopedia, deckMappings, sessions, getSessionAnalytics, getMachineAnalytics, certificates.length, machineLogs.length, filteredCalendarEvents.length, crewRecognitionEntries.length, scopedWeatherReports.length, mode, filters, selectedProfileLabel, selectedBrand, selectedProgram, activeScopeLabel, brandProgramLabel, archiveContextLabel, askMyDataOverview]);
 
-  const executeToolCall = useCallback((tool: string, params: unknown, weatherOverride?: SailingWeatherForecast[]): string => {
+  const executeToolCall = useCallback((tool: string, params: unknown, weatherOverride?: SailingWeatherForecast[], catalogOverride: Cruise[] = filteredCruises): string => {
     console.log('[AgentX] Executing tool:', tool, params);
-    const activeWeatherReports = weatherOverride ?? weatherReports;
+    const activeWeatherReports = weatherOverride ?? scopedWeatherReports;
+    const activeToolContext = { ...toolContext, cruises: catalogOverride };
 
     switch (tool) {
       case 'searchCruises':
-        return executeCruiseSearch(params as CruiseSearchInput, toolContext);
+        return executeCruiseSearch(params as CruiseSearchInput, activeToolContext);
       case 'analyzeBooking':
-        return executeBookingAnalysis(params as BookingAnalysisInput, toolContext);
+        return executeBookingAnalysis(params as BookingAnalysisInput, activeToolContext);
       case 'optimizePortfolio':
-        return executePortfolioOptimizer(params as PortfolioOptimizerInput, toolContext);
+        return executePortfolioOptimizer(params as PortfolioOptimizerInput, activeToolContext);
       case 'checkTierProgress':
-        return executeTierProgress(params as TierProgressInput, toolContext);
+        return executeTierProgress(params as TierProgressInput, activeToolContext);
       case 'analyzeOffers':
-        return executeOfferAnalysis(params as OfferAnalysisInput, toolContext);
+        return executeOfferAnalysis(params as OfferAnalysisInput, activeToolContext);
       case 'decodeOffer':
-        return executeDecodeOffer(params as DecodeOfferInput, toolContext);
+        return executeDecodeOffer(params as DecodeOfferInput, activeToolContext);
       case 'findReplacements':
-        return executeReplacementFinder(params as ReplacementFinderInput, toolContext);
+        return executeReplacementFinder(params as ReplacementFinderInput, activeToolContext);
       case 'searchCertificateLevels':
-        return executeCertificateSearch(params as CertificateLevelSearchInput, toolContext);
+        return formatAskMyDataResponse(askMyDataSearch({
+          query: (params as CertificateLevelSearchInput).query ?? '',
+          offers: filteredCasinoOffers,
+          cruises: [...catalogOverride, ...filteredBookedCruises],
+          certificates: filteredCertificates,
+          calendarEvents: filteredCalendarEvents,
+          crewRecognitionEntries,
+          slotMachines: allMachines,
+          weatherReports: activeWeatherReports,
+          additionalContextBlocks: appWideContextBlocks,
+          overview: askMyDataOverview,
+        }));
       case 'getRecommendations':
-        return executeRecommendations(params as RecommendationInput, toolContext);
+        return executeRecommendations(params as RecommendationInput, activeToolContext);
       case 'recommendMachines':
-        return executeMachineRecommendations(params as MachineRecommendationInput, toolContext);
+        return executeMachineRecommendations(params as MachineRecommendationInput, activeToolContext);
       case 'askMyData': {
         const query = typeof (params as { query?: unknown }).query === 'string' ? (params as { query: string }).query : '';
         const response = askMyDataSearch({
           query,
           offers: filteredCasinoOffers,
-          cruises: [...filteredCruises, ...filteredBookedCruises],
+          cruises: [...catalogOverride, ...filteredBookedCruises],
           certificates: filteredCertificates,
           calendarEvents: filteredCalendarEvents,
           crewRecognitionEntries,
@@ -951,7 +1206,7 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
       default:
         return `Unknown tool: ${tool}`;
     }
-  }, [toolContext, filteredCasinoOffers, filteredCruises, filteredBookedCruises, filteredCertificates, filteredCalendarEvents, crewRecognitionEntries, allMachines, weatherReports, appWideContextBlocks, askMyDataOverview]);
+  }, [toolContext, filteredCasinoOffers, filteredCruises, filteredBookedCruises, filteredCertificates, filteredCalendarEvents, crewRecognitionEntries, allMachines, scopedWeatherReports, appWideContextBlocks, askMyDataOverview]);
 
   const sendMessage = useCallback(async (content: string) => {
     console.log('[AgentX] User message:', content, 'mode:', mode);
@@ -980,6 +1235,28 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
       timestamp: new Date(),
     };
 
+    const pendingAction = devAssistantRequest ? null : parseAgentConfirmedAction({
+      message: content,
+      offers: filteredCasinoOffers,
+      certificates: filteredCertificates,
+      cruises: filteredBookedCruises,
+    });
+    if (pendingAction) {
+      const confirmationMessage: ChatMessage = {
+        id: `assistant-action-${Date.now()}`,
+        role: 'assistant',
+        content: 'I found a local action matching your request. Review the exact change below; Easy Seas will not perform it without your confirmation.',
+        timestamp: new Date(),
+        pendingAction,
+        actionStatus: 'pending',
+        contextSummary: `Confirmation gate • ${activeScopeLabel}`,
+      };
+      const nextMessages = [...messages.filter((message) => !message.isLoading), userMessage, confirmationMessage];
+      setMessages(nextMessages);
+      void persistConversation(nextMessages).catch((saveError) => console.error('[AgentX] Failed to save pending action:', saveError));
+      return;
+    }
+
     setMessages(prev => [...prev, userMessage]);
     setIsLoading(true);
 
@@ -994,9 +1271,27 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
     setMessages(prev => [...prev, loadingMessage]);
 
     try {
-      const toolCall = devAssistantRequest ? null : parseToolCall(content);
-      const forceWeatherRefresh = !devAssistantRequest && isWeatherQuestion(content);
-      const latestWeatherReports = devAssistantRequest ? weatherReports : await refreshWeatherReports({ force: forceWeatherRefresh });
+      const catalogSearchRequest = catalogSearchRequestRef.current + 1;
+      catalogSearchRequestRef.current = catalogSearchRequest;
+      const previousUserMessage = [...messages].reverse().find((message) => message.role === 'user')?.content;
+      const resolvedQuery = buildAskMyDataConversationalQuery(content, previousUserMessage);
+      const toolCall = devAssistantRequest ? null : parseToolCall(resolvedQuery);
+      const catalogPage = await queryCruises({
+        providers: selectedBrand && selectedBrand !== 'all' && selectedBrand !== 'unknown' ? [selectedBrand] : undefined,
+        search: resolvedQuery,
+        searchAnyTerm: true,
+        sailDateFrom: undefined,
+        limit: 200,
+      });
+      if (catalogSearchRequest !== catalogSearchRequestRef.current) return;
+      const queriedCatalogCruises = filterRecordsByIntelligence(catalogPage.rows, intelligenceFilterSnapshot, users);
+      const forceWeatherRefresh = !devAssistantRequest && isWeatherQuestion(resolvedQuery);
+      const latestWeatherReports = scopedWeatherReports;
+      if (forceWeatherRefresh) {
+        // The local answer must never wait for a network weather refresh. The
+        // provider updates its cache in the background for the next answer.
+        void refreshWeatherReports({ force: forceWeatherRefresh });
+      }
 
       let toolResult = '';
       if (toolCall) {
@@ -1006,152 +1301,97 @@ export const [AgentXProvider, useAgentX] = createContextHook((): AgentXState => 
             ? { ...m, toolName: toolCall.tool }
             : m
         ));
-        toolResult = executeToolCall(toolCall.tool, toolCall.params, latestWeatherReports);
+        toolResult = executeToolCall(toolCall.tool, toolCall.params, latestWeatherReports, queriedCatalogCruises);
       }
 
-      const completedCruises = toolContext.bookedCruises.filter(c => {
-        const isCompleted = c.completionState === 'completed' || c.status === 'completed';
-        if (!isCompleted && c.returnDate) {
-          const returnDate = new Date(c.returnDate);
-          const today = new Date();
-          return returnDate < today;
-        }
-        return isCompleted;
+      // Easy Seas answers from the complete local index first. This path is
+      // deliberately independent of the optional cloud backup/backend and
+      // avoids constructing or uploading a multi-megabyte raw-data prompt.
+      const finishSearchDiagnostic = beginPerformanceSpan('AgentXProvider.askMyDataSearch', {
+        cruisesLoadedIntoJS: queriedCatalogCruises.length + filteredBookedCruises.length,
+        cruiseInventoryTotal: catalogPage.total,
+        offers: filteredCasinoOffers.length,
+        certificates: filteredCertificates.length,
       });
-      const upcomingCruises = toolContext.bookedCruises.filter(c => c.completionState === 'upcoming');
-      const availableCruises = toolContext.cruises.filter(c => new Date(c.sailDate) > new Date());
-      const totalEarnedPoints = completedCruises.reduce((sum, c) => sum + getBookedCruiseCasinoPoints(c), 0);
-      const completedWithPoints = completedCruises
-        .filter(c => getBookedCruiseCasinoPoints(c) > 0)
-        .map(c => `${c.shipName} (${c.sailDate}): ${getBookedCruiseCasinoPoints(c).toLocaleString()} pts`)
-        .join('\n  ');
-
-      const contextInfo = `
-User's current status (FRESH DATA - UPDATED ON EVERY REQUEST):
-- Current Tier: ${toolContext.currentTier}
-- Current Points: ${toolContext.userPoints.toLocaleString()}
-- Total Booked Cruises: ${toolContext.bookedCruises.length}
-- Completed Cruises: ${completedCruises.length}
-- Total Points Earned from Completed Cruises: ${totalEarnedPoints.toLocaleString()}
-- Upcoming Cruises: ${upcomingCruises.length}
-- Available Cruises: ${availableCruises.length}
-- Active Casino Offers: ${toolContext.offers.length}
-- Calendar / Event Records: ${filteredCalendarEvents.length}
-- Crew Recognition Records: ${crewRecognitionEntries.length}
-- Slot Machine Records: ${allMachines.length}
-- Machine Condition Logs: ${machineLogs.length}
-- Loaded Weather Reports: ${latestWeatherReports.length}
-- App-Wide Context Blocks: ${appWideContextBlocks.length}
-- Active Profile Scope: ${selectedProfileLabel}
-- Active Brand Scope: ${getBrandLabel(selectedBrand)}
-- Active Program Scope: ${getProgramLabel(selectedProgram)}
-- Active Casino System: ${brandProgramLabel}
-- Archive / Review Context: ${archiveContextLabel}
-- Ask My Data Overview Generated: ${askMyDataOverview.generatedAt}
-
-Corrected casino / ROI overview loaded for this request:
-${askMyDataOverview.text}
-
-Completed Cruises with Points Earned:
-  ${completedWithPoints || 'No points data recorded for completed cruises'}
-
-Standalone offer rows loaded in active scope:
-${buildStandaloneOfferContext(filteredCasinoOffers, filteredCruises, filteredCertificates)}
-
-Booked-cruise casino offer/value records loaded in active scope:
-${buildBookedCruiseOfferContext(filteredBookedCruises)}
-
-Calendar and event records loaded in active scope:
-${buildCalendarContext(filteredCalendarEvents)}
-
-Crew recognition records loaded:
-${buildCrewRecognitionContext(crewRecognitionEntries)}
-
-Slot machine / Machine Atlas records loaded:
-${buildMachineDataContext(allMachines, machineLogs)}
-
-Weather / rough-seas reports loaded for the current cruise window:
-${buildWeatherContext(latestWeatherReports)}
-
-App-wide Easy Seas context loaded:
-${buildAppContextBlockText(appWideContextBlocks)}
-
-CRITICAL: The user has EXACTLY ${toolContext.userPoints.toLocaleString()} casino program points in the active Royal/Celebrity scope and is in ${toolContext.currentTier} tier. They have earned ${totalEarnedPoints.toLocaleString()} points from ${completedCruises.length} completed cruises. These numbers are from the live system. Use ONLY these values, not any cached or outdated information. Coin-In is included only as gaming volume, never as profit/value/cash result. When the user asks for results "from my offers", "my offers", "offer catalog", or "best cruises for 2 from offers", answer from standalone active casino offer sailing rows first and do NOT substitute booked/completed cruises unless the user explicitly asks for booked cruises or no standalone offers are loaded. For value ranking, a true free cruise fare for 2 guests always outranks 1 guest plus discounted second guest, one-person offers, dollars-off offers, and booked-cruise historical values. Events, crew recognition, slot machines, machine logs, weather reports, financials, price history, alerts, bankroll, tax/W-2G, comp items, achievements, analytics, settings, profiles, and reference data are valid app data sources for the chat.
-`;
-
-      const systemPrompt = devAssistantRequest
-        ? buildDevAssistantSystemPrompt()
-        : buildSystemPrompt({
-            allMachines,
-            globalLibrary,
-            myAtlasMachines,
-            sessions,
-            deckMappings,
-            machineLogs,
-            certificates: filteredCertificates,
-            calendarEvents: filteredCalendarEvents,
-            crewRecognitionEntries,
-            weatherReports: latestWeatherReports,
-            appContextBlocks: appWideContextBlocks,
-            mode,
-            brandProgramLabel,
-          });
-
-      const messagesForAI = devAssistantRequest
-        ? [
-            { role: 'user' as const, content: systemPrompt },
-            ...messages.slice(-6).map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
-            { role: 'user' as const, content: `Help me with this development request:\n\n${content}` },
-          ]
-        : [
-            { role: 'user' as const, content: `${systemPrompt}\n\n${contextInfo}` },
-            ...messages.slice(-6).map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
-            {
-              role: 'user' as const,
-              content: toolResult
-                ? `Ask My Data mode: ${AGENT_MODE_LABELS[mode]}\nActive context: ${activeScopeLabel}\nArchive/review context: ${archiveContextLabel}\nUser asked: "${content}"\n\nTool result:\n${toolResult}\n\nPlease summarize this information in a helpful, conversational way. Start by confirming the active profile, brand/program, mode, and archive/review context. Highlight the most important points and name the data sources used.`
-                : `Ask My Data mode: ${AGENT_MODE_LABELS[mode]}\nActive context: ${activeScopeLabel}\nArchive/review context: ${archiveContextLabel}\nUser asked: "${content}"\n\nPlease provide a helpful response based on the user's cruise, offer, event, crew, slot machine, weather, financial, price history, alert, bankroll, tax/W-2G, comp, achievement, analytics, settings/profile, active filter context, selected mode, and archive/review context. Start by confirming the active profile, brand/program, mode, and archive/review context.`,
-            },
-          ];
-
-      const contextConfirmation = `Context: ${AGENT_MODE_LABELS[mode]} • ${activeScopeLabel} • ${brandProgramLabel} • Archive/Review: ${archiveContextLabel}`;
-      let aiResponse = '';
-      try {
-        aiResponse = await generateText({ messages: messagesForAI });
-      } catch (aiErr) {
-        console.warn('[AgentX] AI summarization failed; returning deterministic tool result when available:', aiErr);
-        if (!toolResult) throw aiErr;
-      }
-
-      const assistantMessage: ChatMessage = {
+      const localSearchResponse = askMyDataSearch({
+        query: resolvedQuery,
+        offers: filteredCasinoOffers,
+        cruises: [...queriedCatalogCruises, ...filteredBookedCruises],
+        certificates: filteredCertificates,
+        calendarEvents: filteredCalendarEvents,
+        crewRecognitionEntries,
+        slotMachines: allMachines,
+        weatherReports: latestWeatherReports,
+        additionalContextBlocks: appWideContextBlocks,
+        overview: askMyDataOverview,
+      });
+      const localAnswer = toolResult || formatAskMyDataResponse(localSearchResponse);
+      finishSearchDiagnostic({ resultCharacters: localAnswer.length });
+      recordPerformanceCount('AgentXProvider.askMyDataIndexRows', queriedCatalogCruises.length, {
+        bounded: true,
+        cruiseInventoryTotal: catalogPage.total,
+      });
+      const localContext = `Evidence: Easy Seas Agent • ${activeScopeLabel} • ${brandProgramLabel} • Archive/Review: ${archiveContextLabel}`;
+      const localAssistantMessage: ChatMessage = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
-        content: toolResult
-          ? `${contextConfirmation}\n\n${toolResult}${aiResponse ? `\n\n---\n\n${aiResponse}` : ''}`
-          : `${contextConfirmation}\n\n${aiResponse}`,
+        content: localAnswer,
         timestamp: new Date(),
-        contextSummary: contextConfirmation,
+        contextSummary: localContext,
         suggestedActions: buildAgentSuggestedActions(toolCall?.tool ?? null, content),
+        sourceReferences: buildAskMyDataSourceReferences(localSearchResponse),
       };
+      setMessages(prev => prev.filter(m => m.id !== loadingMessage.id).concat(localAssistantMessage));
+      void persistConversation([...messages.filter((message) => !message.isLoading), userMessage, localAssistantMessage]).catch((saveError) => console.error('[AgentX] Failed to save conversation:', saveError));
 
-      setMessages(prev => prev.filter(m => m.id !== loadingMessage.id).concat(assistantMessage));
     } catch (err) {
       console.error('[AgentX] Error:', err);
-      setError(err instanceof Error ? err.message : 'An error occurred');
-
-      const errorMessage: ChatMessage = {
-        id: `error-${Date.now()}`,
-        role: 'assistant',
-        content: `I could not complete that request because the assistant service failed before returning an answer. Active context: ${AGENT_MODE_LABELS[mode]} • ${activeScopeLabel} • ${brandProgramLabel}. Try again, or ask a more specific Ask My Data question so I can return local data-backed results.`,
-        timestamp: new Date(),
-        contextSummary: `Context: ${AGENT_MODE_LABELS[mode]} • ${activeScopeLabel} • ${brandProgramLabel} • Archive/Review: ${archiveContextLabel}`,
-      };
-
-      setMessages(prev => prev.filter(m => m.id !== loadingMessage.id).concat(errorMessage));
+      try {
+        // Repository paging or an optional assistant integration can fail while
+        // the already-hydrated local datasets remain fully usable. Always make
+        // a second, dependency-free Ask My Data pass before showing an error.
+        const previousUserMessage = [...messages].reverse().find((message) => message.role === 'user')?.content;
+        const fallbackQuery = buildAskMyDataConversationalQuery(content, previousUserMessage);
+        const fallbackResponse = askMyDataSearch({
+          query: fallbackQuery,
+          offers: filteredCasinoOffers,
+          cruises: filteredBookedCruises,
+          certificates: filteredCertificates,
+          calendarEvents: filteredCalendarEvents,
+          crewRecognitionEntries,
+          slotMachines: allMachines,
+          weatherReports: scopedWeatherReports,
+          additionalContextBlocks: appWideContextBlocks,
+          overview: askMyDataOverview,
+        });
+        const fallbackMessage: ChatMessage = {
+          id: `assistant-local-fallback-${Date.now()}`,
+          role: 'assistant',
+          content: formatAskMyDataResponse(fallbackResponse),
+          timestamp: new Date(),
+          contextSummary: `Local fallback evidence • ${activeScopeLabel} • ${brandProgramLabel} • Archive/Review: ${archiveContextLabel}`,
+          sourceReferences: buildAskMyDataSourceReferences(fallbackResponse),
+        };
+        setError(null);
+        setMessages(prev => prev.filter(m => m.id !== loadingMessage.id).concat(fallbackMessage));
+        void persistConversation([...messages.filter((message) => !message.isLoading), userMessage, fallbackMessage]).catch((saveError) => console.error('[AgentX] Failed to save local fallback conversation:', saveError));
+      } catch (fallbackError) {
+        console.error('[AgentX] Local fallback also failed:', fallbackError);
+        setError(fallbackError instanceof Error ? fallbackError.message : 'Local data search failed');
+        const errorMessage: ChatMessage = {
+          id: `error-${Date.now()}`,
+          role: 'assistant',
+          content: `Easy Seas could not read the local data index for this request. Your saved data remains intact. Active context: ${AGENT_MODE_LABELS[mode]} • ${activeScopeLabel} • ${brandProgramLabel}.`,
+          timestamp: new Date(),
+          contextSummary: `Context: ${AGENT_MODE_LABELS[mode]} • ${activeScopeLabel} • ${brandProgramLabel} • Archive/Review: ${archiveContextLabel}`,
+        };
+        setMessages(prev => prev.filter(m => m.id !== loadingMessage.id).concat(errorMessage));
+        void persistConversation([...messages.filter((message) => !message.isLoading), userMessage, errorMessage]).catch((saveError) => console.error('[AgentX] Failed to save failed conversation:', saveError));
+      }
     } finally {
       setIsLoading(false);
     }
-  }, [messages, tier, isAdmin, toolContext, executeToolCall, refreshWeatherReports, weatherReports, allMachines, globalLibrary, myAtlasMachines, sessions, deckMappings, machineLogs, filteredCertificates, filteredCalendarEvents, crewRecognitionEntries, filteredCasinoOffers, filteredCruises, filteredBookedCruises, appWideContextBlocks, mode, selectedProfileLabel, selectedBrand, selectedProgram, activeScopeLabel, brandProgramLabel, archiveContextLabel, askMyDataOverview]);
+  }, [messages, tier, isAdmin, toolContext, executeToolCall, refreshWeatherReports, scopedWeatherReports, allMachines, globalLibrary, myAtlasMachines, sessions, deckMappings, machineLogs, filteredCertificates, filteredCalendarEvents, crewRecognitionEntries, filteredCasinoOffers, filteredBookedCruises, appWideContextBlocks, mode, selectedProfileLabel, selectedBrand, selectedProgram, activeScopeLabel, brandProgramLabel, archiveContextLabel, askMyDataOverview, intelligenceFilterSnapshot, persistConversation, queryCruises, users]);
 
   const clearMessages = useCallback(() => {
     console.log('[AgentX] Clearing messages');
@@ -1190,6 +1430,14 @@ CRITICAL: The user has EXACTLY ${toolContext.userPoints.toLocaleString()} casino
     setVisible: setVisibleState,
     setMode,
     refreshAnalysis,
+    conversationThreads,
+    activeConversationId,
+    startNewConversation,
+    openConversation,
+    renameConversation,
+    archiveConversation,
+    confirmAgentAction,
+    cancelAgentAction,
   }), [
     messages,
     isLoading,
@@ -1203,5 +1451,13 @@ CRITICAL: The user has EXACTLY ${toolContext.userPoints.toLocaleString()} casino
     toggleVisible,
     setVisibleState,
     refreshAnalysis,
+    conversationThreads,
+    activeConversationId,
+    startNewConversation,
+    openConversation,
+    renameConversation,
+    archiveConversation,
+    confirmAgentAction,
+    cancelAgentAction,
   ]);
 });

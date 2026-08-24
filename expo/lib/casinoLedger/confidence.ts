@@ -13,21 +13,29 @@ import { DARK_ROYAL_COLORS } from '@/constants/darkRoyalTheme';
 export const CASINO_LEDGER_CONFIDENCE_LABEL: Record<CasinoLedgerConfidence, string> = {
   actual: 'Actual',
   imported: 'Imported',
+  synced: 'Synced',
   'user-entered': 'User-Entered',
+  derived: 'Derived',
   estimated: 'Estimated',
   generated: 'Generated',
   mixed: 'Mixed',
   missing: 'Missing',
+  incomplete: 'Incomplete',
+  unavailable: 'Unavailable',
 };
 
 export const CASINO_LEDGER_CONFIDENCE_COLOR: Record<CasinoLedgerConfidence, string> = {
   actual: DARK_ROYAL_COLORS.green,
   imported: DARK_ROYAL_COLORS.royalBlue,
+  synced: DARK_ROYAL_COLORS.royalBlue,
   'user-entered': DARK_ROYAL_COLORS.purple,
+  derived: DARK_ROYAL_COLORS.teal,
   estimated: DARK_ROYAL_COLORS.orange,
   generated: DARK_ROYAL_COLORS.teal,
   mixed: DARK_ROYAL_COLORS.gold,
   missing: DARK_ROYAL_COLORS.red,
+  incomplete: DARK_ROYAL_COLORS.orange,
+  unavailable: DARK_ROYAL_COLORS.red,
 };
 
 /** Maps the old granular drill-down confidence values onto the new broad vocabulary. */
@@ -40,11 +48,11 @@ export function toLedgerConfidence(source: SourceConfidence): CasinoLedgerConfid
     case 'user-entered':
       return 'user-entered';
     case 'calculated':
-      return 'generated';
+      return 'derived';
     case 'estimated-default':
       return 'estimated';
     case 'needs-review':
-      return 'missing';
+      return 'incomplete';
     default:
       return 'mixed';
   }
@@ -60,10 +68,13 @@ export function toSourceConfidence(ledger: CasinoLedgerConfidence): SourceConfid
     case 'user-entered':
       return 'user-entered';
     case 'generated':
+    case 'derived':
       return 'calculated';
     case 'estimated':
       return 'estimated-default';
     case 'missing':
+    case 'incomplete':
+    case 'unavailable':
       return 'needs-review';
     case 'mixed':
     default:
@@ -76,6 +87,8 @@ export function combineConfidence(values: CasinoLedgerConfidence[]): CasinoLedge
   const present = values.filter((v) => v !== undefined);
   if (present.length === 0) return 'missing';
   if (present.every((v) => v === 'missing')) return 'missing';
+  if (present.every((v) => v === 'unavailable')) return 'unavailable';
+  if (present.some((v) => v === 'incomplete')) return 'incomplete';
   const distinct = new Set(present.filter((v) => v !== 'missing'));
   if (distinct.size === 0) return 'missing';
   if (distinct.size === 1) return Array.from(distinct)[0];

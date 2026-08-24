@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { quotaSafeGetJsonItem, quotaSafeSetJsonItem } from "@/lib/storage/quotaSafeStorage";
 import createContextHook from "@nkzw/create-context-hook";
 import { generateSessionsFromCruise } from '@/lib/historicalSessionCalculator';
 import type { BookedCruise } from '@/types/models';
 import { useAuth } from './AuthProvider';
 import { getUserScopedKey } from '@/lib/storage/storageKeys';
+import { toLocalCalendarDateOnly } from '@/lib/date';
 
 export type MachineType = 
   | 'penny-slots'
@@ -28,6 +29,8 @@ export interface CasinoSession {
   cruiseId?: string;
   machineId?: string;
   machineName?: string;
+  casinoLocation?: string;
+  photoUris?: string[];
   startTime: string;
   endTime: string;
   durationMinutes: number;
@@ -43,32 +46,27 @@ export interface CasinoSession {
   jackpotAmount?: number;
   freePlayUsed?: number;
   compsReceived?: number;
-  /** v1076-safe extension fields: old sessions keep loading because every field is optional. */
-  brand?: 'royal' | 'celebrity' | 'carnival' | 'silversea' | 'unknown';
-  program?: 'club-royale' | 'blue-chip' | 'players-club' | 'venetian-society' | 'unknown';
-  sailingDate?: string;
-  casinoDay?: number;
-  sessionDate?: string;
-  gameCategory?:
-    | 'reel-slot'
-    | 'video-poker'
-    | 'table-game'
-    | 'electronic-table-game'
-    | 'other'
-    | 'unknown';
-  freeplayIn?: number;
-  promoChipsIn?: number;
+  /** Casino program is required for program-specific earning rules. */
+  program?: 'club_royale' | 'blue_chip' | 'carnival_players_club' | 'other';
+  /** Generated estimates remain stored for history but are excluded from actual analytics by default. */
+  recordKind?: 'actual' | 'generated' | 'imported';
+  coinIn?: number;
   cashCoinIn?: number;
   freeplayCoinIn?: number;
-  coinIn?: number;
   coinOut?: number;
-  jackpots?: number;
-  handPays?: number;
-  taxesWithheld?: number;
-  pointsSource?: 'calculated' | 'manual' | 'imported' | 'estimated' | 'unknown';
+  cashIn?: number;
+  handpayAmount?: number;
+  handpayIncludedInCashOut?: boolean;
+  tips?: number;
+  averageBet?: number;
+  houseEdge?: number;
+  ratedDay?: string;
+  casinoDay?: string;
+  gameCategory?: 'slots' | 'video_poker' | 'table_game' | 'poker' | 'other';
+  pointsSource?: 'provider' | 'machine_meter' | 'user_entered' | 'estimated' | 'generated';
   pointEarningProfileId?: string;
   rtp?: number;
-  volatility?: 'low' | 'medium' | 'high' | 'unknown';
+  volatility?: string;
   estimatedTheo?: number;
   estimatedExpectedLoss?: number;
 }
@@ -115,6 +113,11 @@ export interface SessionAnalytics {
   netWinLoss: number;
   totalPointsEarned: number;
   totalCoinIn: number;
+  coinInSource: 'actual' | 'mixed' | 'estimated' | 'missing';
+  actualSessionCount: number;
+  generatedSessionCount: number;
+  ratedGamingDays: number;
+  adt: number | null;
   avgSessionLength: number;
   avgBuyIn: number;
   avgWinLoss: number;
@@ -180,7 +183,7 @@ interface CasinoSessionState {
   getDailySummary: (date: string, goldenMinutes: number) => DailySessionSummary;
   getTotalPlayedForDate: (date: string) => number;
   clearSessionsForDate: (date: string) => Promise<void>;
-  getSessionAnalytics: (sessionSubset?: CasinoSession[]) => SessionAnalytics;
+  getSessionAnalytics: (options?: { includeGenerated?: boolean; program?: CasinoSession['program']; includeUnprogrammedSessionIds?: string[] }) => SessionAnalytics;
   getSessionsByMachineType: (machineType: MachineType) => CasinoSession[];
   getSessionsByDenomination: (denomination: Denomination) => CasinoSession[];
   getSessionsByMachine: (machineId: string) => CasinoSession[];
@@ -219,7 +222,7 @@ export const [CasinoSessionProvider, useCasinoSessions] = createContextHook((): 
 
   const persistSessions = useCallback(async (newSessions: CasinoSession[]) => {
     try {
-      await AsyncStorage.setItem(storageKeyRef.current, JSON.stringify(newSessions));
+      await quotaSafeSetJsonItem(storageKeyRef.current, newSessions);
       console.log('[CasinoSessionProvider] Persisted sessions:', newSessions.length);
     } catch (error) {
       console.error('[CasinoSessionProvider] Failed to persist sessions:', error);
@@ -229,15 +232,13 @@ export const [CasinoSessionProvider, useCasinoSessions] = createContextHook((): 
   const loadSessions = useCallback(async () => {
     try {
       setIsLoading(true);
-      const stored = await AsyncStorage.getItem(storageKeyRef.current);
-      if (stored) {
-        const parsed = JSON.parse(stored) as CasinoSession[];
-        setSessions(parsed);
-        console.log('[CasinoSessionProvider] Loaded sessions:', parsed.length);
-      } else {
-        setSessions([]);
-        console.log('[CasinoSessionProvider] No scoped sessions found, using empty state');
-      }
+      const stored = await quotaSafeGetJsonItem<CasinoSession[]>(
+        storageKeyRef.current,
+        [],
+        Array.isArray,
+      );
+      setSessions(stored);
+      console.log('[CasinoSessionProvider] Loaded sessions:', stored.length);
     } catch (error) {
       console.error('[CasinoSessionProvider] Failed to load sessions:', error);
     } finally {
@@ -563,21 +564,43 @@ export const [CasinoSessionProvider, useCasinoSessions] = createContextHook((): 
     return generatedCount;
   }, [sessions, persistSessions, clearAllAutoGeneratedSessions]);
 
-  const getSessionAnalytics = useCallback((sessionSubset?: CasinoSession[]): SessionAnalytics => {
-    const sourceSessions = sessionSubset ?? sessions;
-    const totalSessions = sourceSessions.length;
-    const totalPlayTimeMinutes = sourceSessions.reduce((sum, s) => sum + s.durationMinutes, 0);
-    const totalBuyIn = sourceSessions.reduce((sum, s) => sum + (s.buyIn || 0), 0);
-    const totalCashOut = sourceSessions.reduce((sum, s) => sum + (s.cashOut || 0), 0);
-    const netWinLoss = sourceSessions.reduce((sum, s) => sum + (s.winLoss || 0), 0);
-    const totalPointsEarned = sourceSessions.reduce((sum, s) => sum + (s.pointsEarned || 0), 0);
-    const totalCoinIn = totalPointsEarned * 5;
+  const getSessionAnalytics = useCallback((options?: { includeGenerated?: boolean; program?: CasinoSession['program']; includeUnprogrammedSessionIds?: string[] }): SessionAnalytics => {
+    const inferredProgramSessionIds = new Set(options?.includeUnprogrammedSessionIds ?? []);
+    const generatedSessionCount = sessions.filter(s => s.recordKind === 'generated' || /auto-calculated|generated|estimated historical/i.test(s.notes ?? '')).length;
+    const analyzedSessions = sessions.filter((session) => {
+      const generated = session.recordKind === 'generated' || /auto-calculated|generated|estimated historical/i.test(session.notes ?? '');
+      if (!options?.includeGenerated && generated) return false;
+      return !options?.program || session.program === options.program || (!session.program && inferredProgramSessionIds.has(session.id));
+    });
+    const actualSessionCount = analyzedSessions.filter(s => s.recordKind !== 'generated' && !/auto-calculated|generated|estimated historical/i.test(s.notes ?? '')).length;
+    const totalSessions = analyzedSessions.length;
+    const totalPlayTimeMinutes = analyzedSessions.reduce((sum, s) => sum + s.durationMinutes, 0);
+    const totalBuyIn = analyzedSessions.reduce((sum, s) => sum + (s.cashIn ?? s.buyIn ?? 0), 0);
+    const totalCashOut = analyzedSessions.reduce((sum, s) => sum + (s.cashOut || 0), 0);
+    const netWinLoss = analyzedSessions.reduce((sum, s) => {
+      if (typeof s.winLoss === 'number' && Number.isFinite(s.winLoss)) return sum + s.winLoss;
+      const cashIn = s.cashIn ?? s.buyIn;
+      if (typeof cashIn !== 'number' || typeof s.cashOut !== 'number') return sum;
+      return sum + s.cashOut + (s.handpayIncludedInCashOut ? 0 : (s.handpayAmount ?? 0)) - cashIn;
+    }, 0);
+    const totalPointsEarned = analyzedSessions.reduce((sum, s) => sum + (s.pointsEarned || 0), 0);
+    const explicitCoinInFor = (session: CasinoSession) => typeof session.coinIn === 'number' && Number.isFinite(session.coinIn)
+      ? session.coinIn
+      : (typeof session.cashCoinIn === 'number' || typeof session.freeplayCoinIn === 'number')
+        ? (session.cashCoinIn ?? 0) + (session.freeplayCoinIn ?? 0)
+        : null;
+    const explicitCoinInSessions = analyzedSessions.filter(s => { const value = explicitCoinInFor(s); return value != null && value >= 0; });
+    const totalCoinIn = explicitCoinInSessions.reduce((sum, s) => sum + (explicitCoinInFor(s) ?? 0), 0);
+    const coinInSource: SessionAnalytics['coinInSource'] = totalSessions === 0 || explicitCoinInSessions.length === 0
+      ? 'missing'
+      : explicitCoinInSessions.length === totalSessions ? 'actual' : 'mixed';
+    const ratedGamingDays = new Set(analyzedSessions.map(s => s.ratedDay ?? s.casinoDay ?? s.date).filter(Boolean)).size;
 
     const avgSessionLength = totalSessions > 0 ? totalPlayTimeMinutes / totalSessions : 0;
     const avgBuyIn = totalSessions > 0 ? totalBuyIn / totalSessions : 0;
     const avgWinLoss = totalSessions > 0 ? netWinLoss / totalSessions : 0;
 
-    const sessionsWithResults = sourceSessions.filter(s => s.winLoss !== undefined);
+    const sessionsWithResults = analyzedSessions.filter(s => s.winLoss !== undefined || ((s.cashIn ?? s.buyIn) !== undefined && s.cashOut !== undefined));
     const winningSessions = sessionsWithResults.filter(s => (s.winLoss || 0) > 0).length;
     const losingSessions = sessionsWithResults.filter(s => (s.winLoss || 0) < 0).length;
     const breakEvenSessions = sessionsWithResults.filter(s => (s.winLoss || 0) === 0).length;
@@ -597,7 +620,7 @@ export const [CasinoSessionProvider, useCasinoSessions] = createContextHook((): 
     const machineTypes: MachineType[] = ['penny-slots', 'nickel-slots', 'quarter-slots', 'dollar-slots', 'high-limit-slots', 'video-poker', 'blackjack', 'roulette', 'craps', 'baccarat', 'poker', 'other'];
     
     machineTypes.forEach(mt => {
-      const mtSessions = sourceSessions.filter(s => s.machineType === mt);
+      const mtSessions = analyzedSessions.filter(s => s.machineType === mt);
       const mtWinLoss = mtSessions.reduce((sum, s) => sum + (s.winLoss || 0), 0);
       const mtWins = mtSessions.filter(s => (s.winLoss || 0) > 0).length;
       machineTypeBreakdown[mt] = {
@@ -612,7 +635,7 @@ export const [CasinoSessionProvider, useCasinoSessions] = createContextHook((): 
     const denoms: Denomination[] = [0.01, 0.05, 0.25, 1, 5, 10, 25, 100];
     
     denoms.forEach(d => {
-      const dSessions = sourceSessions.filter(s => s.denomination === d);
+      const dSessions = analyzedSessions.filter(s => s.denomination === d);
       const dWinLoss = dSessions.reduce((sum, s) => sum + (s.winLoss || 0), 0);
       denominationBreakdown[d] = {
         sessions: dSessions.length,
@@ -674,17 +697,20 @@ export const [CasinoSessionProvider, useCasinoSessions] = createContextHook((): 
       }
     });
 
-    const avgHouseEdge = 0.08;
-    const theoreticalLoss = totalCoinIn * avgHouseEdge;
+    const theoreticalLoss = analyzedSessions.reduce((sum, s) => {
+      const explicitTheo = s.estimatedTheo ?? s.estimatedExpectedLoss;
+      if (typeof explicitTheo === 'number' && Number.isFinite(explicitTheo)) return sum + explicitTheo;
+      return sum + ((explicitCoinInFor(s) ?? 0) * (s.houseEdge ?? (s.rtp != null ? Math.max(0, 1 - s.rtp) : 0.08)));
+    }, 0);
     const actualLoss = netWinLoss < 0 ? Math.abs(netWinLoss) : -netWinLoss;
     const theoVariance = actualLoss - theoreticalLoss;
     const theoVariancePercent = theoreticalLoss > 0 ? (theoVariance / theoreticalLoss) * 100 : 0;
 
     const machinePerformance: SessionAnalytics['machinePerformance'] = {};
-    const machineIds = new Set(sourceSessions.filter(s => s.machineId).map(s => s.machineId!));
+    const machineIds = new Set(analyzedSessions.filter(s => s.machineId).map(s => s.machineId!));
     
     machineIds.forEach(machineId => {
-      const machineSessions = sourceSessions.filter(s => s.machineId === machineId);
+      const machineSessions = analyzedSessions.filter(s => s.machineId === machineId);
       if (machineSessions.length === 0) return;
 
       const machineName = machineSessions[0].machineName || 'Unknown';
@@ -723,6 +749,11 @@ export const [CasinoSessionProvider, useCasinoSessions] = createContextHook((): 
       netWinLoss,
       totalPointsEarned,
       totalCoinIn,
+      coinInSource,
+      actualSessionCount,
+      generatedSessionCount,
+      ratedGamingDays,
+      adt: ratedGamingDays > 0 && totalCoinIn > 0 ? theoreticalLoss / ratedGamingDays : null,
       avgSessionLength,
       avgBuyIn,
       avgWinLoss,
@@ -771,7 +802,7 @@ export const [CasinoSessionProvider, useCasinoSessions] = createContextHook((): 
     notes?: string;
   }): Promise<CasinoSession> => {
     const now = new Date();
-    const dateStr = now.toISOString().split('T')[0];
+    const dateStr = toLocalCalendarDateOnly(now) ?? '';
     const startTime = now.toISOString();
     const endTime = new Date(now.getTime() + data.sessionDuration * 60000).toISOString();
 

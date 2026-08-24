@@ -32,22 +32,6 @@ const SHIP_CODE_MAP: Record<string, string> = {
   'VI': 'Vision of the Seas',
   'VY': 'Voyager of the Seas',
   'WN': 'Wonder of the Seas',
-  'BY': 'Celebrity Beyond',
-  'AX': 'Celebrity Apex',
-  'AP': 'Celebrity Apex',
-  'RF': 'Celebrity Reflection',
-  'SM': 'Celebrity Summit',
-  'SU': 'Celebrity Summit',
-  'AS': 'Celebrity Ascent',
-  'EG': 'Celebrity Edge',
-  'EC': 'Celebrity Eclipse',
-  'EQ': 'Celebrity Equinox',
-  'SL': 'Celebrity Silhouette',
-  'CS': 'Celebrity Constellation',
-  'ML': 'Celebrity Millennium',
-  'IN': 'Celebrity Infinity',
-  'FL': 'Celebrity Flora',
-  'XC': 'Celebrity Xcel',
 };
 
 const STATEROOM_TYPE_MAP: Record<string, string> = {
@@ -204,10 +188,10 @@ export const STEP2_UPCOMING_SCRIPT = `
       var shipCode = booking.shipCode || '';
       var shipName = SHIP_CODE_MAP[shipCode] || (shipCode ? shipCode + ' of the Seas' : '');
       
-      var nights = parseInt(booking.numberOfNights, 10) || 0;
-      if (isNaN(nights) || nights < 0 || nights > 365) {
-        log('   ⚠️ Invalid nights value detected: ' + booking.numberOfNights + ', defaulting to 7', 'warning');
-        nights = 7;
+      var nights = parseInt(booking.numberOfNights, 10);
+      if (isNaN(nights) || nights <= 0 || nights > 365) {
+        log('   ⚠️ Invalid or missing nights value detected: ' + booking.numberOfNights + ', preserving it as unknown', 'warning');
+        nights = 0;
       }
       var packageCode = booking.packageCode || '';
       
@@ -218,15 +202,15 @@ export const STEP2_UPCOMING_SCRIPT = `
         shipName = enrichment.shipName;
       }
       
-      var cruiseTitle = nights + ' Night Cruise';
+      var cruiseTitle = nights > 0 ? nights + ' Night Cruise' : '';
       if (enrichment.itinerary && enrichment.itinerary.description) {
         cruiseTitle = enrichment.itinerary.description;
       } else if (packageCode) {
-        cruiseTitle = nights + ' Night ' + packageCode;
+        cruiseTitle = nights > 0 ? nights + ' Night ' + packageCode : packageCode;
       }
       
       var sailingStartDate = formatDate(booking.sailDate);
-      var sailingEndDate = calculateEndDate(booking.sailDate, nights);
+      var sailingEndDate = nights > 0 ? calculateEndDate(booking.sailDate, nights) : '';
       
       if (enrichment.sailingEndDate) {
         sailingEndDate = formatDate(enrichment.sailingEndDate);
@@ -238,9 +222,11 @@ export const STEP2_UPCOMING_SCRIPT = `
       
       var cabinType = getCabinTypeFromCategory(stateroomCategoryCode, stateroomType);
       var cabinNumber = stateroomNumber === 'GTY' ? '' : stateroomNumber;
-      var isGTY = stateroomNumber === 'GTY' || !stateroomNumber;
+      var isGTY = stateroomNumber === 'GTY';
       
-      var numberOfGuests = booking.passengers ? booking.passengers.length.toString() : '1';
+      var numberOfGuests = booking.passengers && booking.passengers.length
+        ? booking.passengers.length.toString()
+        : (booking.guestCount ? String(booking.guestCount) : '');
       var daysToGo = calculateDaysToGo(booking.sailDate);
       
       var deckNumber = booking.deckNumber || '';
@@ -563,7 +549,7 @@ export const STEP2_UPCOMING_SCRIPT = `
       }
 
       var guestsMatch = fullText.match(/(\\d+)\\s+Guest/i);
-      var numberOfGuests = guestsMatch ? guestsMatch[1] : '1';
+      var numberOfGuests = guestsMatch ? guestsMatch[1] : '';
 
       var daysMatch = fullText.match(/(\\d+)\\s+Days?\\s+to\\s+go/i);
       var daysToGo = daysMatch ? daysMatch[1] : '';

@@ -8,6 +8,11 @@ interface WelcomeSplashProps {
 
 export function WelcomeSplash({ onAnimationComplete, duration = 2000 }: WelcomeSplashProps) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const onAnimationCompleteRef = useRef(onAnimationComplete);
+
+  useEffect(() => {
+    onAnimationCompleteRef.current = onAnimationComplete;
+  }, [onAnimationComplete]);
 
   useEffect(() => {
     console.log('[WelcomeSplash] Starting animation');
@@ -25,12 +30,12 @@ export function WelcomeSplash({ onAnimationComplete, duration = 2000 }: WelcomeS
         duration: 400,
         useNativeDriver: true,
       }).start(() => {
-        onAnimationComplete();
+        onAnimationCompleteRef.current();
       });
     }, duration);
 
     return () => clearTimeout(timer);
-  }, [fadeAnim, duration, onAnimationComplete]);
+  }, [fadeAnim, duration]);
 
   return (
     <Animated.View style={[styles.container, { opacity: fadeAnim }]}>

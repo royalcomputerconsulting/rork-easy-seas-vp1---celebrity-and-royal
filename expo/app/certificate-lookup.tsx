@@ -1,8 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   FlatList,
+  InteractionManager,
   Platform,
   StyleSheet,
   Text,
@@ -11,12 +12,13 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   AlertTriangle,
   CalendarClock,
   ChevronLeft,
+  Columns3,
   ExternalLink,
   Search,
   Ship as ShipIcon,
@@ -29,6 +31,11 @@ import { BORDER_RADIUS, CLEAN_THEME, COLORS, SHADOW, SPACING, TYPOGRAPHY } from 
 import { formatDate, getDaysUntil } from '@/lib/date';
 import { openCertificatePdf } from '@/lib/royalCaribbean/certificatePdf';
 import { downloadCertificateCatalogBatched } from '@/lib/certificates/certificateBatchDownload';
+import { buildCertificateCatalog, buildCertificatePdfUrl } from '@/lib/certificates/certificateCatalog';
+import { CERTIFICATE_DOCUMENT_STORE_KEY } from '@/lib/certificates/certificateDocumentStore';
+import { buildLocalCertificateSailingIndex } from '@/lib/certificates/certificateSailingIndex';
+import { getUserScopedKey } from '@/lib/storage/storageKeys';
+import { useAuth } from '@/state/AuthProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { useCertificates } from '@/state/CertificatesProvider';
 import { useCasinoBenefits } from '@/state/CasinoBenefitsProvider';
@@ -87,7 +94,7 @@ function describeCertificateError(error: unknown): string {
     return 'The certificate download response ended before it finished. Please try again, or open Certificate Codes and use Download All.';
   }
   if (/Unexpected character:\s*N/i.test(raw)) {
-    return 'The backend returned a non-JSON response, usually a temporary Royal/Render download issue. Please try again from Certificate Codes.';
+    return 'Royal returned an unexpected download response. Please try again from Certificate Codes.';
   }
   return raw.replace(/^JSON Parse error:\s*/i, '') || 'Certificate search failed.';
 }
@@ -95,32 +102,105 @@ function describeCertificateError(error: unknown): string {
 
 export default function CertificateLookupScreen() {
   const router = useRouter();
-  const { bookedCruises, cruises } = useCoreData();
-  const { certificates: ownedCertificates } = useCertificates();
-  const { recordCertificateSearch } = useCasinoBenefits();
+  const routeParams = useLocalSearchParams<{ query?: string; monthTarget?: string; certificateType?: string; certificateCode?: string }>();
+  const initialQuery = String(routeParams.query ?? '').trim();
+  const initialMonth: MonthTarget | null = routeParams.monthTarget === 'nextMonth' ? 'nextMonth' : routeParams.monthTarget === 'thisMonth' ? 'thisMonth' : null;
+  const initialFamily = String(routeParams.certificateType ?? 'ALL').toUpperCase();
+  const { bookedCruises } = useCoreData();
+  const { authenticatedEmail } = useAuth();
+  const { certificates: ownedCertificates, searchableCertificates, refreshCertificateDocuments } = useCertificates();
 
-  const [activeMonth, setActiveMonth] = useState<MonthTarget | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  useEffect(() => {
+    const interaction = InteractionManager.runAfterInteractions(() => {
+      void refreshCertificateDocuments();
+    });
+    return () => interaction.cancel();
+  }, [refreshCertificateDocuments]);
+  const casinoBenefits = useCasinoBenefits();
+  const recordCertificateSearch = casinoBenefits?.recordCertificateSearch ?? (() => undefined);
+
+  // View Certificates opens on the current certificate month immediately.
+  // Downloading is still explicit; opening the screen never starts network work.
+  const [activeMonth, setActiveMonth] = useState<MonthTarget | null>(initialMonth ?? 'thisMonth');
+  const [searchQuery, setSearchQuery] = useState(initialQuery);
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [shipQuery, setShipQuery] = useState('');
-  const [includeA, setIncludeA] = useState(true);
-  const [includeC, setIncludeC] = useState(true);
+  const [shipQuery, setShipQuery] = useState(initialQuery);
+  const [includeA, setIncludeA] = useState(initialFamily !== 'C');
+  const [includeC, setIncludeC] = useState(initialFamily !== 'A');
+  const [certificateCodeFilter, setCertificateCodeFilter] = useState(String(routeParams.certificateCode ?? '').trim().toUpperCase());
+  const [startDateFilter, setStartDateFilter] = useState('');
+  const [endDateFilter, setEndDateFilter] = useState('');
+  const includeD = false; // D-style codes are marketing offers, never certificate families.
 
   const [result, setResult] = useState<any>(null);
   const [searchBusy, setSearchBusy] = useState(false);
+  const searchOperationRef = useRef(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [searchProgress, setSearchProgress] = useState({ completed: 0, total: 0 });
-  const hasSearched = result !== null || searchError !== null;
+  const localMatches = useMemo(() => buildLocalCertificateSailingIndex(searchableCertificates), [searchableCertificates]);
+  const hasSearched = result !== null || searchError !== null || localMatches.length > 0 || activeMonth !== null;
+  const locallyParsedSailingCount = useMemo(() => searchableCertificates.reduce((total, certificate) => total + (certificate.parsedSailings?.length ?? 0), 0), [searchableCertificates]);
+  const displayedCertificateCatalog = useMemo(() => {
+    const monthCode = getMonthCode(activeMonth ?? 'thisMonth');
+    const byCode = new Map<string, any>();
+
+    for (const certificate of searchableCertificates) {
+      const code = String(certificate.certificateCode ?? '').toUpperCase();
+      if (!code.startsWith(monthCode)) continue;
+      const fallback = [...buildCertificateCatalog(monthCode, certificate.certificateFamily === 'C' ? 'C' : 'A')]
+        .find((entry) => entry.certificateCode === code);
+      byCode.set(code, {
+        ...fallback,
+        pdfUrl: certificate.sourceDocumentArchiveUri || certificate.sourcePdfUrl || fallback?.pdfUrl,
+        documentArchiveUri: certificate.sourceDocumentArchiveUri,
+        localStatus: String(certificate.parserStatus ?? '').startsWith('parsed')
+          ? `${(certificate.parsedSailings?.length ?? 0).toLocaleString()} saved sailings`
+          : 'Saved locally',
+      });
+    }
+
+    for (const entry of Array.isArray(result?.catalog) ? result.catalog : []) {
+      const code = String(entry?.certificateCode ?? '').toUpperCase();
+      if (!code.startsWith(monthCode)) continue;
+      byCode.set(code, {
+        ...byCode.get(code),
+        ...entry,
+        localStatus: entry.status === 'parsed'
+          ? `${Number(entry.parsedSailingReferences ?? entry.sailingsFound ?? 0).toLocaleString()} saved sailings`
+          : String(entry.status ?? 'Downloaded').replace(/_/g, ' '),
+      });
+    }
+
+    // Before the first download, show the known A/C ladder as a discovery aid.
+    // Once any real document/catalog result exists, show only codes Royal
+    // actually published or Easy Seas actually retained; otherwise nonexistent
+    // fallback URLs misleadingly appear as "PDF unavailable."
+    if (byCode.size === 0) {
+      [...buildCertificateCatalog(monthCode, 'A'), ...buildCertificateCatalog(monthCode, 'C')]
+        .forEach((entry) => byCode.set(entry.certificateCode, { ...entry, localStatus: 'Not downloaded' }));
+    }
+
+    return Array.from(byCode.values()).sort((left, right) => {
+      if (left.certificateType !== right.certificateType) return String(left.certificateType).localeCompare(String(right.certificateType));
+      return String(left.certificateCode).localeCompare(String(right.certificateCode));
+    });
+  }, [activeMonth, result, searchableCertificates]);
+
+  useEffect(() => {
+    if (!initialQuery) return;
+    setSearchQuery(initialQuery);
+    setShipQuery(initialQuery);
+  }, [initialQuery]);
 
   const bookedLookup = useMemo(() => {
     const set = new Set<string>();
-    [...bookedCruises, ...cruises].forEach((cruise) => {
+    bookedCruises.forEach((cruise) => {
       if (!cruise?.shipName || !cruise?.sailDate) return;
       const key = `${normalizeText(cruise.shipName)}__${normalizeText(cruise.sailDate).slice(0, 10)}`;
       set.add(key);
     });
     return set;
-  }, [bookedCruises, cruises]);
+  }, [bookedCruises]);
 
   const isBooked = useCallback((shipName: string, sailDate: string) => {
     const normalizedShip = normalizeText(shipName);
@@ -140,6 +220,8 @@ export default function CertificateLookupScreen() {
   }, [ownedCertificates]);
 
   const runSearch = useCallback(async (target: MonthTarget | null, customShipQuery?: string) => {
+    if (searchOperationRef.current) return;
+    searchOperationRef.current = true;
     const monthCode = target ? getMonthCode(target) : getMonthCode('thisMonth');
     const effectiveShipQuery = (customShipQuery ?? shipQuery).trim() || 'Star, Legend, Icon, Wonder, Utopia, Symphony, Harmony, Allure, Oasis, Odyssey, Anthem, Ovation, Quantum, Spectrum, Navigator, Voyager, Mariner, Explorer, Adventure, Freedom, Liberty, Independence, Enchantment, Grandeur, Rhapsody, Vision, Radiance, Brilliance, Serenade, Jewel';
 
@@ -149,26 +231,43 @@ export default function CertificateLookupScreen() {
       setSearchBusy(true);
       setSearchError(null);
       setSearchProgress({ completed: 0, total: (includeA ? 13 : 0) + (includeC ? 13 : 0) });
+      const completedCodes = searchableCertificates
+        .filter((certificate) => {
+          const code = String(certificate.certificateCode ?? '').trim().toUpperCase();
+          const family = code.slice(4, 5);
+          return code.startsWith(monthCode)
+            && ((family === 'A' && includeA) || (family === 'C' && includeC))
+            && String(certificate.parserStatus ?? '').startsWith('parsed')
+            && (certificate.parsedSailings?.length ?? 0) > 0;
+        })
+        .map((certificate) => String(certificate.certificateCode).trim().toUpperCase());
       const nextResult = await downloadCertificateCatalogBatched({
         shipQuery: effectiveShipQuery,
         monthCode,
         includeA,
         includeC,
+        includeD: false,
         onProgress: (completed, total) => setSearchProgress({ completed, total }),
         resetLog: true,
+        documentStorageKey: getUserScopedKey(CERTIFICATE_DOCUMENT_STORE_KEY, authenticatedEmail),
+        skipCertificateCodes: completedCodes,
       });
+      await refreshCertificateDocuments({ force: true });
       setResult(nextResult);
-      if (nextResult.summary.failedCodes.length > 0 && nextResult.matches.length === 0) {
-        setSearchError(`${nextResult.summary.failedCodes.length} certificate download(s) could not be completed.`);
+      const failedCodes = Array.isArray(nextResult?.summary?.failedCodes) ? nextResult.summary.failedCodes : [];
+      const matches = Array.isArray(nextResult?.matches) ? nextResult.matches : [];
+      if (failedCodes.length > 0 && matches.length === 0) {
+        setSearchError(`${failedCodes.length} certificate download(s) could not be completed.`);
       }
     } catch (error) {
       const message = describeCertificateError(error);
       setSearchError(message);
       Alert.alert('Certificate search failed', message);
     } finally {
+      searchOperationRef.current = false;
       setSearchBusy(false);
     }
-  }, [includeA, includeC, shipQuery]);
+  }, [authenticatedEmail, includeA, includeC, refreshCertificateDocuments, searchableCertificates, shipQuery]);
 
   const handleThisMonth = useCallback(() => { void runSearch('thisMonth'); }, [runSearch]);
   const handleNextMonth = useCallback(() => { void runSearch('nextMonth'); }, [runSearch]);
@@ -181,11 +280,32 @@ export default function CertificateLookupScreen() {
   }, [runSearch, shipQuery]);
 
   const filteredMatches: SailingMatch[] = useMemo(() => {
-    const matches = (result?.matches ?? []) as SailingMatch[];
-    if (!searchQuery.trim()) return matches;
+    const matches = ((result?.matches?.length ? result.matches : localMatches) ?? []) as SailingMatch[];
     const normalizedQuery = normalizeText(searchQuery);
-    return matches.filter((match) => normalizeText(match.shipName).includes(normalizedQuery));
-  }, [result, searchQuery]);
+    const normalizedCode = certificateCodeFilter.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+    const monthCode = activeMonth ? getMonthCode(activeMonth) : '';
+    return matches.flatMap((match) => {
+      if (startDateFilter.trim() && match.sailDate.slice(0, 10) < startDateFilter.trim()) return [];
+      if (endDateFilter.trim() && match.sailDate.slice(0, 10) > endDateFilter.trim()) return [];
+      const levels = match.levels.filter((level) => {
+        if (level.certificateType === 'A' && !includeA) return false;
+        if (level.certificateType === 'C' && !includeC) return false;
+        if (monthCode && !level.certificateCode.startsWith(monthCode)) return false;
+        if (normalizedCode && !level.certificateCode.includes(normalizedCode)) return false;
+        return true;
+      });
+      if (levels.length === 0) return [];
+      if (normalizedQuery) {
+        const searchable = normalizeText([
+          match.shipName,
+          match.sailDate,
+          ...levels.flatMap((level) => [level.certificateCode, level.itinerary, level.cabinLabel, level.offerTypeLabel]),
+        ].join(' '));
+        if (!searchable.includes(normalizedQuery)) return [];
+      }
+      return [{ ...match, levels }];
+    });
+  }, [activeMonth, certificateCodeFilter, endDateFilter, includeA, includeC, localMatches, result, searchQuery, startDateFilter]);
 
   useEffect(() => {
     if (!result || !activeMonth) return;
@@ -203,8 +323,8 @@ export default function CertificateLookupScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result, activeMonth]);
 
-  const handleOpenPdf = useCallback((url: string) => {
-    void openCertificatePdf(url);
+  const handleOpenPdf = useCallback((url: string, fallbackUrl?: string) => {
+    void openCertificatePdf(url, fallbackUrl);
   }, []);
 
   const renderMatch = useCallback(({ item }: { item: SailingMatch }) => {
@@ -290,14 +410,20 @@ export default function CertificateLookupScreen() {
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton} testID="certificate-lookup.back-button">
             <ChevronLeft size={20} color="#FFFFFF" />
           </TouchableOpacity>
-          <View style={styles.headerIconWrap}>
-            <Sparkles size={16} color="#FFFFFF" />
+          <View style={styles.headerActions}>
+            <TouchableOpacity style={styles.portfolioButton} onPress={() => router.push('/certificate-portfolio')} testID="certificate-lookup.portfolio-matrix">
+              <Columns3 size={14} color="#FFFFFF" />
+              <Text style={styles.portfolioButtonText}>Portfolio Matrix</Text>
+            </TouchableOpacity>
+            <View style={styles.headerIconWrap}>
+              <Sparkles size={16} color="#FFFFFF" />
+            </View>
           </View>
         </View>
         <Text style={styles.headerEyebrow}>Certificate intelligence</Text>
         <Text style={styles.headerTitle}>Certificate Lookup</Text>
         <Text style={styles.headerSubtitle}>
-          Pull the official public certificate documents for this month or next month, search by ship, and see which sailings you already have booked.
+          Browse locally saved certificate sailings by ship, date, and certificate code. Download buttons refresh the inventory directly from Royal.
         </Text>
 
         <View style={styles.quickRow}>
@@ -310,7 +436,7 @@ export default function CertificateLookupScreen() {
           >
             <CalendarClock size={15} color={activeMonth === 'thisMonth' ? COLORS.navyDeep : '#FFFFFF'} />
             <Text style={[styles.quickButtonText, activeMonth === 'thisMonth' && styles.quickButtonTextActive]}>
-              This Month{'\n'}{getMonthLabel('thisMonth')}
+              Download All{'\n'}{getMonthLabel('thisMonth')}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -356,7 +482,7 @@ export default function CertificateLookupScreen() {
               <TextInput
                 value={searchQuery}
                 onChangeText={setSearchQuery}
-                placeholder="Filter results by ship name"
+                placeholder="Filter by ship, sailing date, code, cabin…"
                 placeholderTextColor={CLEAN_THEME.text.muted}
                 style={styles.searchInput}
                 testID="certificate-lookup.filter-input"
@@ -367,6 +493,15 @@ export default function CertificateLookupScreen() {
                 </TouchableOpacity>
               ) : null}
             </View>
+
+            {locallyParsedSailingCount > 0 ? (
+              <View style={styles.localInventoryBanner} testID="certificate-lookup.local-inventory">
+                <Text style={styles.localInventoryTitle}>Saved certificate sailing inventory</Text>
+                <Text style={styles.localInventoryText}>
+                  {locallyParsedSailingCount.toLocaleString()} parsed sailing reference{locallyParsedSailingCount === 1 ? '' : 's'} are available locally. These remain separate from Available Cruises.
+                </Text>
+              </View>
+            ) : null}
 
             <TouchableOpacity
               style={styles.advancedToggle}
@@ -388,6 +523,35 @@ export default function CertificateLookupScreen() {
                   autoCapitalize="words"
                   testID="certificate-lookup.ship-input"
                 />
+                <TextInput
+                  value={certificateCodeFilter}
+                  onChangeText={(value) => setCertificateCodeFilter(value.toUpperCase())}
+                  placeholder="Certificate code (optional)"
+                  placeholderTextColor={CLEAN_THEME.text.muted}
+                  style={styles.advancedInput}
+                  autoCapitalize="characters"
+                  testID="certificate-lookup.code-filter"
+                />
+                <View style={styles.dateFilterRow}>
+                  <TextInput
+                    value={startDateFilter}
+                    onChangeText={setStartDateFilter}
+                    placeholder="From YYYY-MM-DD"
+                    placeholderTextColor={CLEAN_THEME.text.muted}
+                    style={[styles.advancedInput, styles.dateFilterInput]}
+                    keyboardType="numbers-and-punctuation"
+                    testID="certificate-lookup.start-date-filter"
+                  />
+                  <TextInput
+                    value={endDateFilter}
+                    onChangeText={setEndDateFilter}
+                    placeholder="To YYYY-MM-DD"
+                    placeholderTextColor={CLEAN_THEME.text.muted}
+                    style={[styles.advancedInput, styles.dateFilterInput]}
+                    keyboardType="numbers-and-punctuation"
+                    testID="certificate-lookup.end-date-filter"
+                  />
+                </View>
                 <View style={styles.toggleRow}>
                   <TouchableOpacity
                     style={[styles.toggleChip, includeA && styles.toggleChipActive]}
@@ -436,17 +600,42 @@ export default function CertificateLookupScreen() {
               </View>
             ) : null}
 
-            {result ? (
-              <View style={styles.summaryRow}>
-                <View style={styles.summaryChip}>
-                  <Text style={styles.summaryChipLabel}>Matched sailings</Text>
-                  <Text style={styles.summaryChipValue}>{result.summary.matchedSailingCount}</Text>
+            {(result || localMatches.length > 0 || displayedCertificateCatalog.length > 0) ? (
+              <>
+                <View style={styles.summaryRow}>
+                  <View style={styles.summaryChip}>
+                    <Text style={styles.summaryChipLabel}>Matched sailings</Text>
+                    <Text style={styles.summaryChipValue}>{filteredMatches.length.toLocaleString()}</Text>
+                  </View>
+                  <View style={styles.summaryChip}>
+                    <Text style={styles.summaryChipLabel}>Local references</Text>
+                    <Text style={styles.summaryChipValue}>{locallyParsedSailingCount.toLocaleString()}</Text>
+                  </View>
                 </View>
-                <View style={styles.summaryChip}>
-                  <Text style={styles.summaryChipLabel}>Certificate levels</Text>
-                  <Text style={styles.summaryChipValue}>{result.summary.matchedCertificateCount}</Text>
+                <View style={styles.downloadedCertificates} testID="certificate-lookup.downloaded-certificates">
+                  <Text style={styles.downloadedCertificatesTitle}>{getMonthLabel(activeMonth ?? 'thisMonth')} certificate PDFs</Text>
+                  <Text style={styles.downloadedCertificatesHelp}>This is the full A/C certificate catalog for the selected month. Download All archives every discovered PDF and every parsed sailing locally; tap a code to open its official PDF.</Text>
+                  <View style={styles.certificateCodeGrid}>
+                    {displayedCertificateCatalog.map((entry: any) => (
+                      <TouchableOpacity
+                        key={entry.certificateCode}
+                        style={styles.certificateCodeButton}
+                        onPress={() => handleOpenPdf(
+                          entry.documentArchiveUri || entry.pdfUrl || buildCertificatePdfUrl(entry.certificateCode),
+                          buildCertificatePdfUrl(entry.certificateCode),
+                        )}
+                        testID={`certificate-lookup.open-catalog-${entry.certificateCode}`}
+                      >
+                        <ExternalLink size={12} color={COLORS.navyDeep} />
+                        <View style={styles.certificateCodeButtonLabels}>
+                          <Text style={styles.certificateCodeButtonText}>{entry.certificateCode}</Text>
+                          <Text style={styles.certificateCodeStatusText}>{entry.localStatus}</Text>
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
                 </View>
-              </View>
+              </>
             ) : null}
           </View>
         }
@@ -496,6 +685,27 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.14)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+  },
+  portfolioButton: {
+    minHeight: 34,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderRadius: BORDER_RADIUS.round,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.22)',
+    paddingHorizontal: SPACING.sm,
+  },
+  portfolioButtonText: {
+    color: '#FFFFFF',
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
   },
   headerIconWrap: {
     width: 34,
@@ -564,6 +774,59 @@ const styles = StyleSheet.create({
     gap: SPACING.md,
     marginBottom: SPACING.sm,
   },
+  downloadedCertificates: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: BORDER_RADIUS.lg,
+    borderWidth: 1,
+    borderColor: CLEAN_THEME.border.light,
+    padding: SPACING.md,
+    gap: SPACING.xs,
+  },
+  downloadedCertificatesTitle: {
+    color: COLORS.navyDeep,
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  downloadedCertificatesHelp: {
+    color: CLEAN_THEME.text.muted,
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    lineHeight: 17,
+  },
+  certificateCodeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.xs,
+    marginTop: SPACING.xs,
+  },
+  certificateCodeButton: {
+    flexBasis: '48%',
+    flexGrow: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 7,
+  },
+  certificateCodeButtonLabels: {
+    flex: 1,
+    minWidth: 0,
+  },
+  certificateCodeButtonText: {
+    color: COLORS.navyDeep,
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  certificateCodeStatusText: {
+    color: CLEAN_THEME.text.muted,
+    fontSize: 9,
+    lineHeight: 12,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    textTransform: 'capitalize',
+  },
   expiringBanner: {
     backgroundColor: '#FFF9ED',
     borderRadius: BORDER_RADIUS.lg,
@@ -605,6 +868,15 @@ const styles = StyleSheet.create({
     color: CLEAN_THEME.text.primary,
     paddingVertical: 4,
   },
+  localInventoryBanner: {
+    backgroundColor: '#ECFDF3',
+    borderRadius: BORDER_RADIUS.lg,
+    borderWidth: 1,
+    borderColor: '#A6F4C5',
+    padding: SPACING.md,
+  },
+  localInventoryTitle: { color: '#05603A', fontSize: TYPOGRAPHY.fontSizeSM, fontWeight: TYPOGRAPHY.fontWeightBold },
+  localInventoryText: { color: '#067647', fontSize: TYPOGRAPHY.fontSizeXS, lineHeight: 17, marginTop: 3 },
   advancedToggle: {
     alignSelf: 'flex-start',
   },
@@ -632,6 +904,8 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeMD,
     color: CLEAN_THEME.text.primary,
   },
+  dateFilterRow: { flexDirection: 'row', gap: SPACING.sm },
+  dateFilterInput: { flex: 1 },
   toggleRow: {
     flexDirection: 'row',
     gap: SPACING.sm,
@@ -640,17 +914,17 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: BORDER_RADIUS.round,
     borderWidth: 1,
-    borderColor: CLEAN_THEME.border.medium,
+    borderColor: '#111827',
     paddingVertical: SPACING.xs,
     alignItems: 'center',
-    backgroundColor: CLEAN_THEME.background.primary,
+    backgroundColor: '#FFFFFF',
   },
   toggleChipActive: {
     backgroundColor: COLORS.navyDeep,
     borderColor: COLORS.navyDeep,
   },
   toggleChipText: {
-    color: CLEAN_THEME.text.secondary,
+    color: '#111827',
     fontSize: TYPOGRAPHY.fontSizeXS,
     fontWeight: TYPOGRAPHY.fontWeightBold,
   },

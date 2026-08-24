@@ -1,4 +1,4 @@
-console.log('[Easy Seas BG] Service worker v3.4.0 initialized');
+console.log('[Easy Seas BG] Service worker v3 initialized');
 
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   if (request.type === 'store_data') {
@@ -37,5 +37,5 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
 });
 
 chrome.runtime.onInstalled.addListener(function() {
-  console.log('[Easy Seas BG] Extension installed/updated v3.4.0');
+  console.log('[Easy Seas BG] Extension installed/updated');
 });

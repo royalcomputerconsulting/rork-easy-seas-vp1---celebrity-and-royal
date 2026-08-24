@@ -1,5 +1,6 @@
 import type { BookedCruise } from '@/types/models';
 import { getDoubleOccupancyRoomRetailValue } from '@/lib/valueCalculator';
+import { knownGuestCount, knownNightCount } from '@/lib/cruiseRecordIntegrity';
 import {
   parseCSVLine,
   normalizeDateString,
@@ -322,13 +323,10 @@ export function parseBookedCSV(content: string, existingCruises: BookedCruise[] 
     const calculatedNights = calculateNightsFromDates(sailDate, returnDate);
     const itineraryNights = extractNightsFromItinerary(itineraryName);
     
-    const nights = explicitNights > 0 
-      ? explicitNights 
-      : (calculatedNights !== null 
-          ? calculatedNights 
-          : (itineraryNights !== null 
-              ? itineraryNights 
-              : 7));
+    const nights = knownNightCount(explicitNights)
+      ?? knownNightCount(calculatedNights)
+      ?? knownNightCount(itineraryNights)
+      ?? 0;
     
     console.log(`[BookedParser] Nights calculation for ${ship}: explicit=${explicitNights}, calculated=${calculatedNights}, itinerary=${itineraryNights}, final=${nights}`);
     const departurePort = getValue(colIndices.departurePort);
@@ -336,7 +334,7 @@ export function parseBookedCSV(content: string, existingCruises: BookedCruise[] 
     const reservationNumber = getValue(colIndices.reservationNumber);
     const guestsRaw = getValue(colIndices.guests);
     const guestsParsed = parseInt((guestsRaw.match(/\d+/)?.[0] ?? '').trim(), 10);
-    const guests = Number.isFinite(guestsParsed) && guestsParsed > 0 ? guestsParsed : (getNumericValue(colIndices.guests) || 2);
+    const guests = knownGuestCount(guestsParsed) ?? knownGuestCount(getNumericValue(colIndices.guests)) ?? 0;
     const bookingId = getValue(colIndices.bookingId) || reservationNumber;
     const isBookedValue = getValue(colIndices.isBooked);
     const sourceValue = getValue(colIndices.source);
@@ -425,8 +423,6 @@ export function parseBookedCSV(content: string, existingCruises: BookedCruise[] 
       amountPaid: pricePaid > 0 ? pricePaid : undefined,
       netEffectivePaid: pricePaid > 0 ? pricePaid : undefined,
       cruiseSource: parsedSource,
-      brand: parsedSource || 'unknown',
-      casinoProgram: parsedSource === 'carnival' ? 'playersClub' : parsedSource === 'celebrity' ? 'blueChip' : parsedSource === 'royal' ? 'clubRoyale' : 'unknown',
       sourceEmail,
       importStatus: sourceEmail ? 'unassigned' : undefined,
       reconciliationStatus: sourceEmail ? 'reviewNeeded' : undefined,

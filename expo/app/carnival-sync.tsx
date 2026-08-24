@@ -1,65 +1,66 @@
-import { View, Text, StyleSheet, Pressable, Modal, Platform, Linking, ScrollView, useWindowDimensions, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Modal, Platform, Linking, ScrollView, useWindowDimensions, ActivityIndicator, Alert } from 'react-native';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Stack, useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
-import { useCallback, useMemo, useState } from 'react';
-import { CarnivalSyncProvider, useRoyalCaribbeanSync } from '@/state/RoyalCaribbeanSyncProvider';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { CarnivalSyncProvider, useCarnivalSync } from '@/state/CarnivalSyncProvider';
 import { exportFile } from '@/lib/importExport';
 import { useLoyalty } from '@/state/LoyaltyProvider';
-import { ChevronDown, ChevronUp, LoaderCircle, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, Anchor, Star, Award, Cookie, FileDown, FileText } from 'lucide-react-native';
+import { ChevronDown, ChevronUp, LoaderCircle, CheckCircle, AlertCircle, XCircle, Ship, Calendar, Clock, ExternalLink, RefreshCcw, Anchor, Star, Award, Download, FileDown, FileText } from 'lucide-react-native';
 import { WebViewMessage } from '@/lib/royalCaribbean/types';
 import { AUTH_DETECTION_SCRIPT } from '@/lib/royalCaribbean/authDetection';
 import { useCoreData } from '@/state/CoreDataProvider';
-import { WebSyncCredentialsModal } from '@/components/WebSyncCredentialsModal';
-import { WebCookieSyncModal } from '@/components/WebCookieSyncModal';
 import { LoyaltyPill } from '@/components/ui/LoyaltyPill';
 import { getCarnivalPlayersClubTierColor, getCarnivalVifpTierColor } from '@/constants/loyaltyTheme';
-import { useAuth } from '@/state/AuthProvider';
-import { trpc, isWebSyncAvailable } from '@/lib/trpc';
+import { downloadScraperExtension } from '@/lib/chromeExtension';
+import { CARNIVAL_SAFE_BRIDGE_SCRIPT } from '@/lib/carnival/carnivalBridgeSafety';
+import { getSafeRemoteWebViewUrl } from '@/lib/webViewSourceSafety';
 const CARNIVAL_RED = '#CC2232';
 const CARNIVAL_GOLD = '#FFB400';
 const CARNIVAL_DARK = '#0c1520';
 const CARNIVAL_CARD = '#1a2535';
 const CARNIVAL_BORDER = '#2a3a50';
-const MAX_WEBVIEW_MESSAGE_SIZE = 350000;
+const MAX_WEBVIEW_MESSAGE_SIZE = 60000;
+const MAX_BRIDGE_QUEUE_LENGTH = 200;
+const CARNIVAL_DEFAULT_WEB_URL = 'https://www.carnival.com/profilemanagement/profiles/cruises';
 
 function CarnivalSyncScreen() {
   const router = useRouter();
-  const { isAdmin, isLoading: isAuthLoading } = useAuth();
   const coreData = useCoreData();
   const loyalty = useLoyalty();
   const {
     state,
     webViewRef,
-    cruiseLine: _cruiseLine,
-    setCruiseLine: _setCruiseLine,
-    config: _config,
     openLogin,
-    confirmCarnivalLogin,
     runIngestion,
+    resumeCarnivalSync,
     syncToApp,
     cancelSync,
     handleWebViewMessage,
     addLog,
+    getSyncLogs,
     extendedLoyaltyData,
     webViewUrl,
-    onPageLoadStarted,
     onPageLoaded,
-  } = useRoyalCaribbeanSync();
+    carnivalSyncAccess,
+  } = useCarnivalSync();
 
   const [webViewVisible, setWebViewVisible] = useState(true);
-  const [showCredentialsModal, setShowCredentialsModal] = useState(false);
-  const [showCookieModal, setShowCookieModal] = useState(false);
-  const [webSyncError, setWebSyncError] = useState<string | null>(null);
-  const [cookieSyncError, setCookieSyncError] = useState<string | null>(null);
   const [isExportingLog, setIsExportingLog] = useState(false);
+  const [isDownloadingExtension, setIsDownloadingExtension] = useState(false);
   const [isConfirmingSync, setIsConfirmingSync] = useState(false);
+  const automaticFinalizeStartedRef = useRef(false);
+  const webProcessRestartCount = useRef(0);
+  const bridgeMessageQueueRef = useRef<WebViewMessage[]>([]);
+  const bridgeDrainTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const coalescedProgressMessageRef = useRef<WebViewMessage | null>(null);
+  const suppressedCosmeticMessageCountRef = useRef(0);
+  const authorizedStartPendingRef = useRef(false);
+  const authorizedStartAttemptsRef = useRef(0);
+  const authorizedStartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestSyncStatusRef = useRef(state.status);
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
-  const webLoginMutation = trpc.royalCaribbeanSync.webLogin.useMutation();
-  const cookieSyncMutation = trpc.royalCaribbeanSync.cookieSync.useMutation();
-
-  const isBackendAvailable = isWebSyncAvailable();
   const isCompactWindow = windowWidth < 420;
   const browserPanelHeight = useMemo(() => {
     const preferredHeight = Platform.OS === 'web' ? windowHeight * 0.4 : windowHeight * 0.42;
@@ -68,69 +69,108 @@ function CarnivalSyncScreen() {
     return Math.max(minHeight, Math.min(preferredHeight, maxHeight));
   }, [windowHeight]);
 
-  const handleCookieSync = async (cookies: string) => {
-    console.log('[CarnivalCookieSync] Starting...');
-    setCookieSyncError(null);
+  const safeWebViewUrl = useMemo(
+    () => getSafeRemoteWebViewUrl(webViewUrl, CARNIVAL_DEFAULT_WEB_URL),
+    [webViewUrl],
+  );
 
-    if (!isBackendAvailable) {
-      setCookieSyncError('Backend not available for cookie sync. Use the mobile app browser instead.');
-      addLog('Backend not available for cookie sync', 'warning');
-      return;
-    }
+  useEffect(() => {
+    // Carnival's embedded browser is the primary workflow and must be ready as
+    // soon as the screen opens.
+    setWebViewVisible(true);
+  }, []);
 
-    addLog('Starting cookie-based sync...', 'info');
+  const handleDownloadExtension = async () => {
+    console.log('[CarnivalSync] Starting browser extension download...');
+    setIsDownloadingExtension(true);
+    addLog('Preparing Easy Seas browser sync extension...', 'info');
 
     try {
-      const result = await cookieSyncMutation.mutateAsync({ cookies, cruiseLine: 'carnival' });
+      const result = await downloadScraperExtension();
       if (!result.success) {
-        setCookieSyncError(result.error || 'Cookie sync failed');
-        addLog('Cookie sync failed', 'error');
+        const errorMessage = result.error || 'Unable to download Easy Seas browser extension';
+        addLog(`Extension download failed: ${errorMessage}`, 'error');
         return;
       }
-      addLog(`Cookie sync successful - ${result.offers.length} offers, ${result.bookedCruises.length} cruises`, 'success');
-      setShowCookieModal(false);
+
+      addLog(`Extension download started${result.filesAdded ? ` (${result.filesAdded} files)` : ''}`, 'success');
+      Alert.alert(
+        'Extension Ready',
+        '1. Unzip the download and install it in Chrome.\n2. Open Carnival and sign in.\n3. Run the Easy Seas overlay on carnival.com and download offers.csv and booked.csv.\n4. Import those CSV files from Settings in Easy Seas.\n\nCarnival imports now stay separate from Royal Caribbean and Celebrity data.'
+      );
     } catch (error) {
-      const msg = error instanceof Error ? error.message : 'Unable to connect to sync service';
-      setCookieSyncError(msg);
-      addLog(`Cookie sync error: ${msg}`, 'error');
+      const errorMessage = error instanceof Error ? error.message : 'Unable to download Easy Seas browser extension';
+      addLog(`Extension download error: ${errorMessage}`, 'error');
+    } finally {
+      setIsDownloadingExtension(false);
     }
   };
 
-  const handleWebSync = async (username: string, password: string) => {
-    console.log('[CarnivalWebSync] Starting...');
-    setWebSyncError(null);
-
-    if (!isBackendAvailable) {
-      setWebSyncError('Backend not available. Use the Easy Seas browser extension or the in-app browser to sync Carnival.');
-      addLog('Backend not available - use browser-assisted Carnival sync', 'warning');
-      return;
-    }
-
-    addLog('Starting web-based sync...', 'info');
-
+  const processBridgeMessageSafely = useCallback((message: WebViewMessage) => {
     try {
-      const result = await webLoginMutation.mutateAsync({ username, password, cruiseLine: 'carnival' });
-      if (!result.success) {
-        setWebSyncError(result.error || 'Web sync is not available');
-        addLog('Web sync not available - use Carnival browser-assisted sync', 'warning');
-        return;
-      }
-      addLog('Web sync completed!', 'success');
-      setShowCredentialsModal(false);
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : 'Unable to connect to sync service';
-      setWebSyncError(msg);
-      addLog(`Web sync error: ${msg}`, 'error');
+      handleWebViewMessage(message);
+    } catch (handlerError) {
+      console.error('[CarnivalSync] Message handler rejected payload:', handlerError);
+      addLog('A Carnival browser message was rejected safely; the app remained open.', 'warning');
     }
-  };
+  }, [addLog, handleWebViewMessage]);
 
+  const drainBridgeMessageQueue = useCallback(() => {
+    if (bridgeDrainTimerRef.current) return;
 
-  const onMessage = (event: any) => {
+    const drainSlice = () => {
+      bridgeDrainTimerRef.current = null;
+      const startedAt = Date.now();
+      let processed = 0;
+      while (bridgeMessageQueueRef.current.length > 0 && processed < 10 && Date.now() - startedAt < 10) {
+        const nextMessage = bridgeMessageQueueRef.current.shift();
+        if (!nextMessage) continue;
+        processBridgeMessageSafely(nextMessage);
+        processed += 1;
+      }
+
+      if (bridgeMessageQueueRef.current.length === 0 && coalescedProgressMessageRef.current) {
+        bridgeMessageQueueRef.current.push(coalescedProgressMessageRef.current);
+        coalescedProgressMessageRef.current = null;
+      }
+
+      if (bridgeMessageQueueRef.current.length > 0) {
+        bridgeDrainTimerRef.current = setTimeout(drainSlice, 0);
+      } else if (suppressedCosmeticMessageCountRef.current > 0) {
+        const suppressed = suppressedCosmeticMessageCountRef.current;
+        suppressedCosmeticMessageCountRef.current = 0;
+        addLog(`${suppressed.toLocaleString()} repetitive Carnival browser log message(s) were hidden while all sync data was retained.`, 'info');
+      }
+    };
+
+    bridgeDrainTimerRef.current = setTimeout(drainSlice, 0);
+  }, [addLog, processBridgeMessageSafely]);
+
+  useEffect(() => () => {
+    if (bridgeDrainTimerRef.current) clearTimeout(bridgeDrainTimerRef.current);
+    bridgeDrainTimerRef.current = null;
+    bridgeMessageQueueRef.current = [];
+    coalescedProgressMessageRef.current = null;
+    suppressedCosmeticMessageCountRef.current = 0;
+    authorizedStartPendingRef.current = false;
+    if (authorizedStartTimerRef.current) clearTimeout(authorizedStartTimerRef.current);
+    authorizedStartTimerRef.current = null;
+    webViewRef.current = null;
+  }, [webViewRef]);
+
+  useEffect(() => {
+    latestSyncStatusRef.current = state.status;
+    if (state.status.startsWith('running_') || state.status === 'syncing' || state.status === 'awaiting_confirmation') {
+      authorizedStartPendingRef.current = false;
+      if (authorizedStartTimerRef.current) clearTimeout(authorizedStartTimerRef.current);
+      authorizedStartTimerRef.current = null;
+    }
+  }, [state.status]);
+
+  const onMessage = useCallback((event: any) => {
     const rawData = typeof event?.nativeEvent?.data === 'string' ? event.nativeEvent.data : '';
 
-    if (!rawData) {
-      return;
-    }
+    if (!rawData) return;
 
     if (rawData.length > MAX_WEBVIEW_MESSAGE_SIZE) {
       console.warn('[CarnivalSync] Ignoring oversized WebView message:', rawData.length);
@@ -140,14 +180,32 @@ function CarnivalSyncScreen() {
 
     try {
       const parsedMessage = JSON.parse(rawData) as unknown;
-      if (!parsedMessage || typeof parsedMessage !== 'object') {
-        return;
+      if (!parsedMessage || typeof parsedMessage !== 'object') return;
+
+      const message = parsedMessage as WebViewMessage;
+      const type = String((parsedMessage as any).type || 'unknown');
+
+      // Cosmetic traffic is coalesced. Authoritative chunks, acknowledgements,
+      // login state, and completion messages are FIFO and never dropped. If the
+      // bounded queue fills, synchronously consume its oldest item before the
+      // new item is appended; the queue therefore remains bounded and lossless.
+      if (type === 'progress') {
+        coalescedProgressMessageRef.current = message;
+      } else if (type === 'log' && bridgeMessageQueueRef.current.length >= Math.floor(MAX_BRIDGE_QUEUE_LENGTH * 0.75)) {
+        suppressedCosmeticMessageCountRef.current += 1;
+      } else {
+        if (bridgeMessageQueueRef.current.length >= MAX_BRIDGE_QUEUE_LENGTH) {
+          const oldest = bridgeMessageQueueRef.current.shift();
+          if (oldest) processBridgeMessageSafely(oldest);
+        }
+        bridgeMessageQueueRef.current.push(message);
       }
-      handleWebViewMessage(parsedMessage as WebViewMessage);
+      drainBridgeMessageQueue();
     } catch (error) {
       console.error('[CarnivalSync] Failed to parse WebView message:', error, rawData.slice(0, 240));
+      addLog('Ignored an unreadable Carnival browser message; sync can be retried.', 'warning');
     }
-  };
+  }, [addLog, drainBridgeMessageQueue, processBridgeMessageSafely]);
 
   const getStatusColor = () => {
     switch (state.status) {
@@ -159,8 +217,11 @@ function CarnivalSyncScreen() {
       case 'awaiting_confirmation': return CARNIVAL_GOLD;
       case 'syncing': return CARNIVAL_RED;
       case 'complete': return '#22c55e';
-      case 'partial': return '#f59e0b';
-      case 'cancelled': return '#f59e0b';
+      case 'complete_with_warnings': return CARNIVAL_GOLD;
+      case 'partial': return CARNIVAL_GOLD;
+      case 'resumable': return CARNIVAL_GOLD;
+      case 'cancelled': return CARNIVAL_GOLD;
+      case 'invalid_response': return '#ef4444';
       case 'login_expired': return CARNIVAL_GOLD;
       case 'error': return '#ef4444';
       default: return '#64748b';
@@ -170,7 +231,7 @@ function CarnivalSyncScreen() {
   const getStatusText = () => {
     switch (state.status) {
       case 'not_logged_in': return 'Not Logged In';
-      case 'logged_in': return 'Logged In - Ready to Sync';
+      case 'logged_in': return 'Logged In — Ready to Sync';
       case 'running_step_1':
         if (state.progress?.stepName) return state.progress.stepName;
         return 'Loading Cruise Deals Page...';
@@ -183,8 +244,11 @@ function CarnivalSyncScreen() {
       case 'awaiting_confirmation': return 'Ready to Sync';
       case 'syncing': return 'Syncing to App...';
       case 'complete': return 'Complete';
-      case 'partial': return 'Partial — Resume Available';
-      case 'cancelled': return 'Cancelled — Ready to Resume';
+      case 'complete_with_warnings': return 'Complete with Warnings';
+      case 'partial': return 'Partial Sync';
+      case 'resumable': return 'Ready to Resume';
+      case 'cancelled': return 'Saving Resume Checkpoint';
+      case 'invalid_response': return 'Invalid Carnival Response';
       case 'login_expired': return 'Login Expired';
       case 'error': return 'Error';
       default: return 'Unknown';
@@ -200,8 +264,9 @@ function CarnivalSyncScreen() {
       case 'running_step_3':
       case 'syncing': return <LoaderCircle size={size} color={color} />;
       case 'complete': return <CheckCircle size={size} color={color} />;
-      case 'partial': return <AlertCircle size={size} color={color} />;
-      case 'cancelled': return <XCircle size={size} color={color} />;
+      case 'complete_with_warnings':
+      case 'partial':
+      case 'resumable': return <AlertCircle size={size} color={color} />;
       case 'awaiting_confirmation': return <Clock size={size} color={color} />;
       case 'login_expired':
       case 'error': return <AlertCircle size={size} color={color} />;
@@ -223,15 +288,17 @@ function CarnivalSyncScreen() {
         logContent += `Last Sync: ${new Date(state.lastSyncTimestamp).toLocaleString()}\n`;
       }
       if (state.syncCounts) {
-        logContent += `\n--- SYNC SUMMARY ---\n`;
+        logContent += `\n--- CURRENT CARNIVAL SYNC RESULT ---\n`;
         logContent += `Offers: ${state.syncCounts.offerCount} unique deal(s)\n`;
         logContent += `Sailings: ${state.syncCounts.offerRows} total sailing(s)\n`;
-        logContent += `Booked Cruises: ${state.syncCounts.upcomingCruises}\n`;
+        logContent += `Upcoming / In Progress: ${state.syncCounts.upcomingCruises}\n`;
+        logContent += `Completed Cruises: ${state.syncCounts.completedCruises || 0}\n`;
         logContent += `Courtesy Holds: ${state.syncCounts.courtesyHolds}\n`;
-        logContent += `Completed Cruises: ${state.syncCounts.completedCruises}\n`;
+        logContent += `Provider Records After Reconciliation: ${state.syncCounts.totalImportedCruises || 0}\n`;
       }
       logContent += `\n--- DETAILED LOG ---\n`;
-      state.logs.forEach(log => {
+      const completeLogs = getSyncLogs();
+      completeLogs.forEach(log => {
         const typeTag = log.type === 'error' ? '[ERROR]' : log.type === 'success' ? '[OK]' : log.type === 'warning' ? '[WARN]' : '[INFO]';
         logContent += `${log.timestamp} ${typeTag} ${log.message}\n`;
       });
@@ -251,38 +318,122 @@ function CarnivalSyncScreen() {
     }
   };
 
-  const canRunIngestion = state.status === 'logged_in' || state.status === 'complete' || state.status === 'partial' || state.status === 'cancelled';
+  const canRunIngestion = carnivalSyncAccess.enabled && webViewVisible && (state.status === 'logged_in' || state.status === 'complete' || state.status === 'complete_with_warnings' || state.status === 'partial');
   const isRunning = state.status.startsWith('running_') || state.status === 'syncing';
-  const showConfirmation = state.status === 'awaiting_confirmation';
+  // SYNC NOW is the user's authorization for the complete download-and-save
+  // workflow, so Carnival does not stop at a second confirmation modal.
+  const showConfirmation = false;
+  const canResume = state.status === 'resumable' || state.hasResumableCarnivalCheckpoint === true;
 
   const handleRunIngestion = useCallback(() => {
     if (isRunning || !canRunIngestion) {
       return;
     }
 
-    void runIngestion().catch((error) => {
-      const errorMessage = error instanceof Error ? error.message : 'Carnival sync could not start';
-      console.error('[CarnivalSync] Failed to start ingestion:', error);
-      addLog(`Unable to start Carnival sync: ${errorMessage}`, 'error');
-    });
+    // A user may press Sync Now in the small interval after authentication is
+    // confirmed but before Carnival's client-rendered account page publishes
+    // its ready probe. Preserve that explicit authorization and retry on this
+    // same mounted screen; the user must never back out and reopen the page.
+    authorizedStartPendingRef.current = true;
+    authorizedStartAttemptsRef.current = 0;
+    const attemptAuthorizedStart = () => {
+      if (!authorizedStartPendingRef.current) return;
+      const latestStatus = latestSyncStatusRef.current;
+      if (latestStatus.startsWith('running_') || latestStatus === 'syncing' || latestStatus === 'awaiting_confirmation') {
+        authorizedStartPendingRef.current = false;
+        return;
+      }
+      if (latestStatus !== 'logged_in' && authorizedStartAttemptsRef.current > 0) {
+        authorizedStartPendingRef.current = false;
+        return;
+      }
+      authorizedStartAttemptsRef.current += 1;
+      void runIngestion()
+        .then(() => {
+          if (!authorizedStartPendingRef.current) return;
+          if (latestSyncStatusRef.current === 'logged_in' && authorizedStartAttemptsRef.current < 30) {
+            authorizedStartTimerRef.current = setTimeout(attemptAuthorizedStart, 750);
+            return;
+          }
+          authorizedStartPendingRef.current = false;
+        })
+        .catch((error) => {
+          authorizedStartPendingRef.current = false;
+          const errorMessage = error instanceof Error ? error.message : 'Carnival sync could not start';
+          console.error('[CarnivalSync] Failed to start ingestion:', error);
+          addLog(`Unable to start Carnival sync: ${errorMessage}`, 'error');
+        });
+    };
+    attemptAuthorizedStart();
   }, [addLog, canRunIngestion, isRunning, runIngestion]);
+
+  const handleResumeSync = useCallback(() => {
+    if (isRunning) {
+      return;
+    }
+    void resumeCarnivalSync().catch((error) => {
+      const errorMessage = error instanceof Error ? error.message : 'Carnival sync could not resume';
+      addLog(`Unable to resume Carnival sync: ${errorMessage}`, 'error');
+    });
+  }, [addLog, isRunning, resumeCarnivalSync]);
+
+  const handleOpenLogin = useCallback(() => {
+    webProcessRestartCount.current = 0;
+    setWebViewVisible(true);
+    try {
+      openLogin();
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Carnival login could not open';
+      addLog(`Unable to open Carnival login: ${errorMessage}`, 'error');
+    }
+  }, [addLog, openLogin]);
+
+  const handleLeaveScreen = useCallback(() => {
+    // Navigation must never wait for WebView shutdown, an active capture, or
+    // checkpoint persistence. Detach the native surface and bridge first, then
+    // leave synchronously. Any resumable checkpoint can finish in background.
+    if (bridgeDrainTimerRef.current) {
+      clearTimeout(bridgeDrainTimerRef.current);
+      bridgeDrainTimerRef.current = null;
+    }
+    bridgeMessageQueueRef.current = [];
+    coalescedProgressMessageRef.current = null;
+    suppressedCosmeticMessageCountRef.current = 0;
+    authorizedStartPendingRef.current = false;
+    if (authorizedStartTimerRef.current) clearTimeout(authorizedStartTimerRef.current);
+    authorizedStartTimerRef.current = null;
+    webViewRef.current = null;
+    setWebViewVisible(false);
+    cancelSync();
+
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/settings');
+    }
+  }, [cancelSync, router, webViewRef]);
 
   const handleOpenImportTools = () => {
     router.push('/settings');
   };
 
-  const handleConfirmCarnivalLogin = useCallback(() => {
-    if (isRunning) return;
-    addLog('Verifying the active Carnival account before sync...', 'info');
-    void confirmCarnivalLogin().then((verified) => {
-      if (!verified) {
-        addLog('Carnival login could not be verified. Sign in in the browser, then verify again.', 'warning');
-      }
-    }).catch((error) => {
-      const message = error instanceof Error ? error.message : 'Carnival login verification failed';
-      addLog(message, 'error');
-    });
-  }, [addLog, confirmCarnivalLogin, isRunning]);
+  const forceMarkLoggedIn = () => {
+    console.log('[CarnivalSync] User manually confirmed login');
+    addLog('User manually confirmed login', 'success');
+    if (Platform.OS !== 'web' && webViewRef.current) {
+      webViewRef.current.injectJavaScript(`
+        (function() {
+          window.__easySeasForceLoggedIn = true;
+          try {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'auth_status', loggedIn: true }));
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'log', message: 'Manual login confirmation applied', logType: 'success' }));
+          } catch(e) {}
+        })();
+        true;
+      `);
+    }
+    handleWebViewMessage({ type: 'auth_status', loggedIn: true } as any);
+  };
 
   const handleConfirmSync = useCallback(() => {
     if (isConfirmingSync) {
@@ -301,37 +452,16 @@ function CarnivalSyncScreen() {
       });
   }, [addLog, coreData, isConfirmingSync, loyalty, syncToApp]);
 
-  if (isAuthLoading) {
-    return (
-      <>
-        <Stack.Screen options={{ title: 'Carnival Cruises Sync', headerStyle: { backgroundColor: CARNIVAL_DARK }, headerTintColor: '#fff' }} />
-        <View style={styles.adminGateContainer}>
-          <ActivityIndicator size="large" color={CARNIVAL_RED} />
-          <Text style={styles.adminGateSubtitle}>Checking administrator access…</Text>
-        </View>
-      </>
-    );
-  }
-
-  if (!isAdmin) {
-    return (
-      <>
-        <Stack.Screen options={{ title: 'Carnival Cruises Sync', headerStyle: { backgroundColor: CARNIVAL_DARK }, headerTintColor: '#fff' }} />
-        <View style={styles.adminGateContainer}>
-          <View style={styles.adminGateCard}>
-            <View style={styles.adminGateIcon}>
-              <Anchor size={30} color={CARNIVAL_RED} />
-            </View>
-            <Text style={styles.adminGateTitle}>Administrator access required</Text>
-            <Text style={styles.adminGateSubtitle}>Carnival synchronization is currently available only to Easy Seas administrators. No Carnival browser or sync process has been started.</Text>
-            <Pressable style={styles.adminGateButton} onPress={() => router.replace('/settings' as any)}>
-              <Text style={styles.adminGateButtonText}>Back to Settings</Text>
-            </Pressable>
-          </View>
-        </View>
-      </>
-    );
-  }
+  useEffect(() => {
+    if (state.status !== 'awaiting_confirmation') {
+      automaticFinalizeStartedRef.current = false;
+      return;
+    }
+    if (automaticFinalizeStartedRef.current || isConfirmingSync) return;
+    automaticFinalizeStartedRef.current = true;
+    addLog('All Carnival pages are verified. Saving the complete result to Easy Seas now...', 'success');
+    handleConfirmSync();
+  }, [addLog, handleConfirmSync, isConfirmingSync, state.status]);
 
   return (
     <>
@@ -340,6 +470,20 @@ function CarnivalSyncScreen() {
           title: 'Carnival Cruises Sync',
           headerStyle: { backgroundColor: CARNIVAL_DARK },
           headerTintColor: '#fff',
+          headerBackVisible: false,
+          gestureEnabled: true,
+          headerLeft: () => (
+            <Pressable
+              onPress={handleLeaveScreen}
+              style={styles.headerBackButton}
+              accessibilityRole="button"
+              accessibilityLabel="Back"
+              testID="carnival-sync-back-button"
+            >
+              <Text style={styles.headerBackGlyph}>‹</Text>
+              <Text style={styles.headerBackText}>Back</Text>
+            </Pressable>
+          ),
         }}
       />
 
@@ -350,6 +494,17 @@ function CarnivalSyncScreen() {
           showsVerticalScrollIndicator={true}
         >
           <View style={[styles.contentColumn, Platform.OS === 'web' && styles.contentColumnWeb]}>
+            {!carnivalSyncAccess.enabled && (
+              <View style={styles.accessNotice} testID="carnival-sync-access-notice">
+                <AlertCircle size={18} color="#f59e0b" />
+                <View style={styles.accessNoticeContent}>
+                  <Text style={styles.accessNoticeTitle}>Carnival Sync Unavailable</Text>
+                  <Text style={styles.accessNoticeText}>
+                    {carnivalSyncAccess.reason}
+                  </Text>
+                </View>
+              </View>
+            )}
             <View style={styles.brandBanner}>
             <View style={styles.brandIconWrap}>
               <Ship size={28} color={CARNIVAL_RED} />
@@ -385,7 +540,7 @@ function CarnivalSyncScreen() {
               </View>
             </View>
             <View style={styles.logsScrollTop}>
-              {state.logs.slice(-3).map((log, index) => (
+              {state.logs.slice(-2).map((log, index) => (
                 <View key={`${log.timestamp}-${index}`} style={[styles.logEntry, log.type === 'error' && styles.logError]}>
                   <Text style={styles.logTimestamp}>{log.timestamp}</Text>
                   <Text style={[
@@ -405,7 +560,15 @@ function CarnivalSyncScreen() {
 
           <Pressable
             style={styles.webViewToggle}
-            onPress={() => setWebViewVisible(!webViewVisible)}
+            onPress={() => {
+              if (!webViewVisible) {
+                webProcessRestartCount.current = 0;
+                setWebViewVisible(true);
+              } else {
+                webViewRef.current = null;
+                setWebViewVisible(false);
+              }
+            }}
           >
             <Text style={styles.webViewToggleText}>
               {webViewVisible ? 'Hide' : 'Show'} Browser
@@ -422,19 +585,35 @@ function CarnivalSyncScreen() {
                 <View style={[styles.webWorkspace, isCompactWindow && styles.webWorkspaceCompact]} testID="carnival-web-workspace">
                   <View style={styles.webWorkspaceHero}>
                     <View style={styles.webWorkspaceBadge}>
-                      <AlertCircle size={14} color={CARNIVAL_GOLD} />
-                      <Text style={styles.webWorkspaceBadgeText}>Legacy Carnival extension sync is disabled</Text>
+                      <Ship size={14} color={CARNIVAL_RED} />
+                      <Text style={styles.webWorkspaceBadgeText}>Carnival web sync uses a browser-assisted flow</Text>
                     </View>
-                    <Text style={styles.webWorkspaceTitle}>Use the authenticated mobile browser for live Carnival sync</Text>
+                    <Text style={styles.webWorkspaceTitle}>Use Carnival on desktop without the old blocker screen</Text>
                     <Text style={styles.webWorkspaceText}>
-                      The older desktop Carnival scraper was intentionally retired because it could produce results that differed from the protected native sync engine. Existing Carnival CSV exports can still be imported from Settings.
+                      Download the Easy Seas extension, open carnival.com in a new tab, sign in there, run the sync overlay on the website, then import the downloaded offers.csv and booked.csv files into Easy Seas. This is the web-safe Carnival path instead of the embedded mobile browser flow.
                     </Text>
                   </View>
 
                   <View style={[styles.webWorkspaceButtonRow, isCompactWindow && styles.webWorkspaceButtonRowCompact]}>
                     <Pressable
+                      style={[styles.webOpenButton, isDownloadingExtension && styles.buttonDisabled]}
+                      onPress={() => { void handleDownloadExtension(); }}
+                      disabled={isDownloadingExtension}
+                      testID="carnival-download-extension-button"
+                    >
+                      {isDownloadingExtension ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Download size={18} color="#fff" />
+                      )}
+                      <Text style={styles.webOpenButtonText}>
+                        {isDownloadingExtension ? 'Preparing Extension...' : 'Download Extension'}
+                      </Text>
+                    </Pressable>
+
+                    <Pressable
                       style={styles.webSecondaryButton}
-                      onPress={() => Linking.openURL(webViewUrl || 'https://www.carnival.com/')}
+                      onPress={() => Linking.openURL(safeWebViewUrl)}
                       testID="carnival-open-website-button"
                     >
                       <ExternalLink size={18} color="#e2e8f0" />
@@ -452,35 +631,79 @@ function CarnivalSyncScreen() {
                   </Pressable>
 
                   <Text style={styles.webWorkspaceFootnote}>
-                    Live Carnival extraction is available in the Easy Seas iOS and Android authenticated browser. Desktop users may import existing CSV exports from Settings.
+                    Best results: use Chrome, keep the Carnival tab signed in, run the overlay after the page fully loads, then import the downloaded CSV files from Settings.
                   </Text>
                 </View>
               ) : (
                 <WebView
                   ref={(ref) => {
-                    if (ref) {
-                      webViewRef.current = ref;
-                    }
+                    webViewRef.current = ref;
                   }}
-                  source={{ uri: webViewUrl || 'https://www.carnival.com/profilemanagement/profiles/cruises' }}
+                  source={{ uri: safeWebViewUrl }}
                   style={styles.webView}
                   onMessage={onMessage}
-                  onLoadStart={onPageLoadStarted}
                   onLoadEnd={(e) => {
                     onPageLoaded(e);
                     const url = e.nativeEvent.url || '';
                     console.log('[CarnivalSync] Page loaded, URL:', url);
-                    // Authentication is determined only by the hardened shared detector.
-                    // A public Carnival page without a password form is not proof of login.
+                    if (url.includes('carnival.com') && !url.includes('login') && !url.includes('sign-in') && !url.includes('okta') && !url.includes('auth0') && !url.includes('identitytoolkit')) {
+                      console.log('[CarnivalSync] On carnival.com (non-auth page) after load, injecting re-check');
+                      if (webViewRef.current) {
+                        webViewRef.current.injectJavaScript(`
+                          (function() {
+                            try {
+                              var password = document.querySelector('input[type="password"]');
+                              var visibleForm = !!(password && password.getClientRects && password.getClientRects().length);
+                              var body = document.body ? String(document.body.innerText || '') : '';
+                              var accountEvidence = /sign\s*out|log\s*out|welcome\s*back|my\s+profile|my\s+cruises|vifp\s*(?:club)?\s*#|manage\s+(?:my\s+)?booking/i.test(body);
+                              var protectedRoute = /\/profilemanagement\/profiles/i.test(String(window.location.href || ''));
+                              var isLoggedIn = !visibleForm && accountEvidence && protectedRoute;
+                              if (isLoggedIn || visibleForm) {
+                                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'auth_status', loggedIn: isLoggedIn, evidence: isLoggedIn ? 'protected_account_page' : 'visible_sign_in_form', url: window.location.href || '' }));
+                              }
+                              window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'log', message: 'Carnival page loaded: ' + (isLoggedIn ? 'authenticated account page detected' : (visibleForm ? 'sign-in form visible' : 'waiting for authenticated account evidence')), logType: isLoggedIn ? 'success' : 'info' }));
+                            } catch(e) {}
+                          })();
+                          true;
+                        `);
+                      }
+                    }
                   }}
                   onNavigationStateChange={(navState) => {
-                    console.log('[CarnivalSync] Navigation state change, URL:', navState.url || '');
+                    const url = navState.url || '';
+                    console.log('[CarnivalSync] Navigation state change, URL:', url);
+                    if (url.includes('carnival.com') && !url.includes('login') && !url.includes('sign-in') && !url.includes('okta') && !url.includes('auth0')) {
+                      setTimeout(() => {
+                        if (webViewRef.current) {
+                          webViewRef.current.injectJavaScript(`
+                            (function() {
+                              try {
+                                var password = document.querySelector('input[type="password"]');
+                                var visibleForm = !!(password && password.getClientRects && password.getClientRects().length);
+                                var body = document.body ? String(document.body.innerText || '') : '';
+                                var accountEvidence = /sign\s*out|log\s*out|welcome\s*back|my\s+profile|my\s+cruises|vifp\s*(?:club)?\s*#|manage\s+(?:my\s+)?booking/i.test(body);
+                                var protectedRoute = /\/profilemanagement\/profiles/i.test(String(window.location.href || ''));
+                                var isLoggedIn = !visibleForm && accountEvidence && protectedRoute;
+                                if (isLoggedIn || visibleForm) {
+                                  window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'auth_status', loggedIn: isLoggedIn, evidence: isLoggedIn ? 'protected_account_page' : 'visible_sign_in_form', url: window.location.href || '' }));
+                                }
+                                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'log', message: 'Carnival navigation: ' + (isLoggedIn ? 'authenticated account detected' : (visibleForm ? 'sign-in form visible' : 'waiting for account evidence')), logType: 'info' }));
+                              } catch(e) {}
+                            })();
+                            true;
+                          `);
+                        }
+                      }, 1500);
+                    }
                   }}
                   javaScriptEnabled={true}
                   domStorageEnabled={true}
                   sharedCookiesEnabled={true}
                   thirdPartyCookiesEnabled={true}
-                  injectedJavaScriptBeforeContentLoaded={AUTH_DETECTION_SCRIPT}
+                  injectedJavaScriptBeforeContentLoaded={`${CARNIVAL_SAFE_BRIDGE_SCRIPT}\n${AUTH_DETECTION_SCRIPT}`}
+                  setSupportMultipleWindows={false}
+                  cacheEnabled={false}
+                  incognito={false}
                   keyboardDisplayRequiresUserAction={false}
                   allowsInlineMediaPlayback={true}
                   mediaPlaybackRequiresUserAction={false}
@@ -500,23 +723,23 @@ function CarnivalSyncScreen() {
                     addLog(`⚠️ Browser HTTP ${String(nativeEvent.statusCode || 'error')} while loading Carnival`, 'warning');
                   }}
                   onContentProcessDidTerminate={() => {
+                    webProcessRestartCount.current += 1;
                     console.error('[CarnivalSync] WebView content process terminated');
-                    if (isRunning) {
-                      addLog('⚠️ Carnival browser process restarted during sync. The sync was stopped safely; existing Carnival data was not changed.', 'warning');
-                      cancelSync('iOS WebView content process terminated');
-                      setWebViewVisible(false);
-                      setTimeout(() => setWebViewVisible(true), 800);
+                    if (webProcessRestartCount.current <= 1 && webViewRef.current) {
+                      addLog('⚠️ Carnival browser process restarted once - reloading safely', 'warning');
+                      setTimeout(() => webViewRef.current?.reload(), 750);
                     } else {
-                      addLog('⚠️ Carnival browser process restarted - reloading the current page', 'warning');
-                      webViewRef.current?.reload();
+                      addLog('Carnival browser was stopped after repeated process failures. The EasySeas app remains open; reopen the browser panel to retry.', 'error');
+                      webViewRef.current = null;
+                      setWebViewVisible(false);
                     }
                   }}
-                  onRenderProcessGone={() => {
-                    console.error('[CarnivalSync] Android WebView render process exited');
-                    addLog('⚠️ Carnival browser render process exited. Existing data was preserved and the browser will restart.', 'warning');
-                    if (isRunning) cancelSync('Android WebView render process exited');
+                  onRenderProcessGone={(syntheticEvent) => {
+                    webProcessRestartCount.current += 1;
+                    console.error('[CarnivalSync] Android WebView render process ended:', syntheticEvent.nativeEvent);
+                    addLog('Carnival browser process ended unexpectedly. The sync screen was contained and the app remains open.', 'error');
+                    webViewRef.current = null;
                     setWebViewVisible(false);
-                    setTimeout(() => setWebViewVisible(true), 800);
                   }}
                 />
               )}
@@ -536,23 +759,31 @@ function CarnivalSyncScreen() {
                   </Text>
                 </View>
 
-                {(webSyncError || cookieSyncError) && (
-                  <View style={styles.webInlineError}>
-                    <AlertCircle size={16} color="#fca5a5" />
-                    <Text style={styles.webInlineErrorText}>{webSyncError || cookieSyncError}</Text>
-                  </View>
-                )}
-
                 <View style={styles.webSyncOptionsContainer}>
                   <View style={[styles.webSyncOptionCard, isCompactWindow && styles.webSyncOptionCardCompact]}>
-                    <View style={[styles.webSyncOptionIconContainer, { backgroundColor: `${CARNIVAL_GOLD}20` }]}>
-                      <AlertCircle size={24} color={CARNIVAL_GOLD} />
+                    <View style={[styles.webSyncOptionIconContainer, { backgroundColor: `${CARNIVAL_RED}20` }]}>
+                      <Download size={24} color={CARNIVAL_RED} />
                     </View>
                     <View style={styles.webSyncOptionContent}>
-                      <Text style={styles.webSyncOptionTitle}>Desktop Scraper Retired</Text>
+                      <Text style={styles.webSyncOptionTitle}>Desktop Browser Sync</Text>
                       <Text style={styles.webSyncOptionDesc}>
-                        The legacy Carnival extension is disabled until it can share the exact protected parser, request-correlation, checkpoint, and manifest engine used by the native app.
+                        Download the Easy Seas extension, run Carnival sync directly on carnival.com, then import the downloaded CSV files back into Easy Seas.
                       </Text>
+                      <Pressable
+                        style={[styles.webSyncButton, { marginTop: 12, backgroundColor: CARNIVAL_RED }, isDownloadingExtension && styles.buttonDisabled]}
+                        onPress={() => { void handleDownloadExtension(); }}
+                        disabled={isDownloadingExtension}
+                        testID="carnival-download-extension-card-button"
+                      >
+                        {isDownloadingExtension ? (
+                          <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                          <Download size={18} color="#fff" />
+                        )}
+                        <Text style={styles.webSyncButtonText}>
+                          {isDownloadingExtension ? 'Preparing Extension...' : 'Download Extension'}
+                        </Text>
+                      </Pressable>
                     </View>
                   </View>
 
@@ -583,7 +814,7 @@ function CarnivalSyncScreen() {
                     <View style={styles.webSyncOptionContent}>
                       <Text style={styles.webSyncOptionTitle}>Import Downloaded CSV Files</Text>
                       <Text style={styles.webSyncOptionDesc}>
-                        Import previously downloaded Carnival offers.csv and booked.csv files without overwriting Royal Caribbean or Celebrity data.
+                        Once the extension downloads offers.csv and booked.csv, open Easy Seas Settings and import them here without overwriting your other cruise lines.
                       </Text>
                       <Pressable
                         style={[styles.webSyncButton, { marginTop: 12, backgroundColor: '#0f766e' }]}
@@ -596,25 +827,6 @@ function CarnivalSyncScreen() {
                     </View>
                   </View>
 
-                  <View style={[styles.webSyncOptionCard, isCompactWindow && styles.webSyncOptionCardCompact]}>
-                    <View style={[styles.webSyncOptionIconContainer, { backgroundColor: '#8b5cf620' }]}>
-                      <Cookie size={24} color="#8b5cf6" />
-                    </View>
-                    <View style={styles.webSyncOptionContent}>
-                      <Text style={styles.webSyncOptionTitle}>Advanced Cookie Tools</Text>
-                      <Text style={styles.webSyncOptionDesc}>
-                        If cookie sync is enabled for this deployment later, you can paste a valid Carnival session here without changing the mobile flow.
-                      </Text>
-                      <Pressable
-                        style={[styles.webSyncButton, { marginTop: 12, backgroundColor: '#8b5cf6' }]}
-                        onPress={() => setShowCookieModal(true)}
-                        testID="carnival-cookie-sync-button"
-                      >
-                        <Cookie size={18} color="#fff" />
-                        <Text style={styles.webSyncButtonText}>Open Cookie Tools</Text>
-                      </Pressable>
-                    </View>
-                  </View>
                 </View>
               </View>
             ) : (
@@ -622,17 +834,18 @@ function CarnivalSyncScreen() {
                 {state.status === 'not_logged_in' && (
                   <View style={styles.loginHintBox}>
                     <Text style={styles.loginHintTitle}>How to sync Carnival:</Text>
-                    <Text style={styles.loginHintStep}>1. Press LOGIN below to open Carnival in the browser above</Text>
+                    <Text style={styles.loginHintStep}>1. The Carnival browser opens automatically above</Text>
                     <Text style={styles.loginHintStep}>2. Sign in to your Carnival account</Text>
-                    <Text style={styles.loginHintStep}>{"3. Once logged in, press \"VERIFY LOGIN\""}</Text>
-                    <Text style={styles.loginHintStep}>4. Press SYNC NOW to start syncing your data</Text>
+                    <Text style={styles.loginHintStep}>3. Wait for the green Logged In — Ready to Sync status</Text>
+                    <Text style={styles.loginHintStep}>4. Press SYNC NOW once when you are ready</Text>
                   </View>
                 )}
 
                 <View style={styles.quickActionsGrid}>
                   <Pressable
                     style={styles.quickActionButton}
-                    onPress={openLogin}
+                    onPress={handleOpenLogin}
+                    testID="carnival-login-button"
                   >
                     <ExternalLink size={20} color={CARNIVAL_GOLD} />
                     <Text style={styles.quickActionLabel}>LOGIN</Text>
@@ -660,19 +873,27 @@ function CarnivalSyncScreen() {
                 </View>
 
                 {!isRunning && state.status !== 'complete' && (
+                  state.status === 'logged_in' ? (
+                    <View style={styles.forceLoginButton} testID="carnival-login-ready-banner">
+                      <CheckCircle size={18} color="#fff" />
+                      <Text style={styles.forceLoginButtonText}>✓ Logged In — Ready to Sync</Text>
+                    </View>
+                  ) : (
+                    <Pressable style={styles.forceLoginButton} onPress={forceMarkLoggedIn}>
+                      <CheckCircle size={18} color="#fff" />
+                      <Text style={styles.forceLoginButtonText}>I&apos;m Logged In — Check Again</Text>
+                    </Pressable>
+                  )
+                )}
+
+                {canResume && !isRunning && (
                   <Pressable
                     style={styles.forceLoginButton}
-                    onPress={state.status === 'cancelled' || state.status === 'partial' ? handleRunIngestion : handleConfirmCarnivalLogin}
-                    testID="carnival-verify-login-button"
+                    onPress={handleResumeSync}
+                    testID="carnival-resume-sync-button"
                   >
-                    <CheckCircle size={18} color="#fff" />
-                    <Text style={styles.forceLoginButtonText}>
-                      {state.status === 'cancelled' || state.status === 'partial'
-                        ? 'Resume Carnival Sync'
-                        : state.status === 'logged_in'
-                          ? '✓ Carnival Login Verified'
-                          : 'VERIFY CARNIVAL LOGIN'}
-                    </Text>
+                    <RefreshCcw size={18} color="#fff" />
+                    <Text style={styles.forceLoginButtonText}>Resume Saved Carnival Sync</Text>
                   </Pressable>
                 )}
               </View>
@@ -735,17 +956,18 @@ function CarnivalSyncScreen() {
                     </View>
                   </View>
 
-
-                  <View style={styles.countCard}>
-                    <View style={[styles.countIconContainer, { backgroundColor: '#3b82f620' }]}>
-                      <Ship size={24} color="#3b82f6" />
+                  {(state.syncCounts?.completedCruises ?? 0) > 0 && (
+                    <View style={styles.countCard}>
+                      <View style={[styles.countIconContainer, { backgroundColor: '#64748b20' }]}>
+                        <Clock size={24} color="#94a3b8" />
+                      </View>
+                      <View style={styles.countInfo}>
+                        <Text style={styles.countNumber}>{state.syncCounts?.completedCruises || 0}</Text>
+                        <Text style={styles.countLabel}>Completed Cruises</Text>
+                        <Text style={styles.countDetail}>Stored in Carnival cruise history</Text>
+                      </View>
                     </View>
-                    <View style={styles.countInfo}>
-                      <Text style={styles.countNumber}>{state.syncCounts?.completedCruises || 0}</Text>
-                      <Text style={styles.countLabel}>Completed Cruises</Text>
-                      <Text style={styles.countDetail}>Will be added to Carnival cruise history</Text>
-                    </View>
-                  </View>
+                  )}
 
                   {(state.syncCounts?.courtesyHolds ?? 0) > 0 && (
                     <View style={styles.countCard}>
@@ -764,7 +986,7 @@ function CarnivalSyncScreen() {
                     <View style={styles.loyaltyCard}>
                       <Text style={styles.loyaltyTitle}>Loyalty Status</Text>
 
-                      {state.loyaltyData?.carnivalVifpTier && (
+                      {(state.loyaltyData?.crownAndAnchorLevel) && (
                         <View style={styles.loyaltySection}>
                           <View style={styles.loyaltySectionHeader}>
                             <Star size={16} color={CARNIVAL_RED} />
@@ -773,33 +995,23 @@ function CarnivalSyncScreen() {
                           <View style={styles.loyaltyRow}>
                             <Text style={styles.loyaltyLabel}>Tier:</Text>
                             <LoyaltyPill
-                              label={state.loyaltyData?.carnivalVifpTier || 'N/A'}
-                              color={getCarnivalVifpTierColor(state.loyaltyData?.carnivalVifpTier)}
+                              label={state.loyaltyData?.crownAndAnchorLevel || 'N/A'}
+                              color={getCarnivalVifpTierColor(state.loyaltyData?.crownAndAnchorLevel)}
                               size="small"
                             />
                           </View>
-                          {state.loyaltyData?.carnivalVifpNumber ? (
+                          {state.loyaltyData?.crownAndAnchorPoints ? (
                             <View style={styles.loyaltyRow}>
                               <Text style={styles.loyaltyLabel}>VIFP #:</Text>
-                              <Text style={styles.loyaltyValue}>{state.loyaltyData.carnivalVifpNumber}</Text>
-                            </View>
-                          ) : null}
-                          {state.loyaltyData?.carnivalVifpPoints ? (
-                            <View style={styles.loyaltyRow}>
-                              <Text style={styles.loyaltyLabel}>VIFP Points:</Text>
-                              <Text style={styles.loyaltyValue}>{state.loyaltyData.carnivalVifpPoints}</Text>
-                            </View>
-                          ) : null}
-                          {state.loyaltyData?.carnivalTotalCruises ? (
-                            <View style={styles.loyaltyRow}>
-                              <Text style={styles.loyaltyLabel}>Total Cruises:</Text>
-                              <Text style={styles.loyaltyValue}>{state.loyaltyData.carnivalTotalCruises}</Text>
+                              <Text style={styles.loyaltyValue}>
+                                {state.loyaltyData.crownAndAnchorPoints}
+                              </Text>
                             </View>
                           ) : null}
                         </View>
                       )}
 
-                      {state.loyaltyData?.carnivalPlayersClubTier && (
+                      {(state.loyaltyData?.clubRoyaleTier) && (
                         <View style={styles.loyaltySection}>
                           <View style={styles.loyaltySectionHeader}>
                             <Award size={16} color={CARNIVAL_GOLD} />
@@ -808,43 +1020,24 @@ function CarnivalSyncScreen() {
                           <View style={styles.loyaltyRow}>
                             <Text style={styles.loyaltyLabel}>Tier:</Text>
                             <LoyaltyPill
-                              label={state.loyaltyData.carnivalPlayersClubTier || 'N/A'}
-                              color={getCarnivalPlayersClubTierColor(state.loyaltyData.carnivalPlayersClubTier)}
+                              label={state.loyaltyData.clubRoyaleTier}
+                              color={getCarnivalPlayersClubTierColor(state.loyaltyData.clubRoyaleTier)}
                               size="small"
                             />
                           </View>
-                          {state.loyaltyData?.carnivalPlayersClubPoints ? (
-                            <View style={styles.loyaltyRow}>
-                              <Text style={styles.loyaltyLabel}>Points:</Text>
-                              <Text style={styles.loyaltyValue}>{state.loyaltyData.carnivalPlayersClubPoints}</Text>
-                            </View>
-                          ) : null}
                         </View>
                       )}
-                    </View>
-                  )}
-
-                  {(state.carnivalCodeLedger?.length ?? 0) > 0 && (
-                    <View style={styles.loyaltyCard}>
-                      <Text style={styles.loyaltyTitle}>Per-Code Result Ledger</Text>
-                      {(state.carnivalCodeLedger ?? []).map((entry) => (
-                        <View key={entry.code} style={styles.loyaltyRow}>
-                          <View style={{ flex: 1 }}>
-                            <Text style={styles.loyaltyLabel}>{entry.code}</Text>
-                            {entry.message ? <Text style={styles.countDetail}>{entry.message}</Text> : null}
-                          </View>
-                          <Text style={[styles.loyaltyValue, { textTransform: 'capitalize' }]}>
-                            {entry.status.replace(/_/g, ' ')}{entry.rowCount ? ` · ${entry.rowCount}` : ''}
-                          </Text>
-                        </View>
-                      ))}
                     </View>
                   )}
 
                   <View style={styles.warningBox}>
                     <AlertCircle size={16} color={CARNIVAL_GOLD} />
                     <Text style={styles.warningText}>
-                      Sync will update existing data. If conflicts exist, synced data wins.
+                      {state.syncCounts?.carnivalOutcome === 'complete'
+                        ? 'All requested Carnival categories have evidence. Existing data is reconciled by profile and provider.'
+                        : state.syncCounts?.carnivalOutcome === 'complete_with_warnings'
+                          ? 'Cruise and offer data can be saved, but some loyalty evidence is incomplete.'
+                          : 'This is a partial Carnival result. Missing categories will preserve existing stored data.'}
                     </Text>
                   </View>
                 </ScrollView>
@@ -868,14 +1061,14 @@ function CarnivalSyncScreen() {
             </View>
           </Modal>
 
-          {(state.status === 'complete' || state.status === 'partial') && state.lastSyncTimestamp && (
+          {(state.status === 'complete' || state.status === 'complete_with_warnings' || state.status === 'partial') && state.lastSyncTimestamp && (
             <View style={styles.successContainer}>
-              {state.status === 'partial' ? <AlertCircle size={24} color="#f59e0b" /> : <CheckCircle size={24} color="#10b981" />}
+              <CheckCircle size={24} color="#10b981" />
               <View style={styles.successContent}>
-                <Text style={styles.successTitle}>{state.status === 'partial' ? 'Partial Sync Saved' : 'Sync Complete!'}</Text>
+                <Text style={styles.successTitle}>{state.status === 'complete' ? 'Sync Complete!' : state.status === 'partial' ? 'Partial Sync Saved' : 'Sync Completed with Warnings'}</Text>
                 <Text style={styles.successMessage}>
                   {state.syncCounts
-                    ? `${state.status === 'partial' ? 'Saved' : 'Synced'} ${state.syncCounts.offerCount} deal${state.syncCounts.offerCount !== 1 ? 's' : ''} with ${state.syncCounts.offerRows} unique sailing${state.syncCounts.offerRows !== 1 ? 's' : ''} and ${state.syncCounts.upcomingCruises} booked cruise${state.syncCounts.upcomingCruises !== 1 ? 's' : ''}.${state.status === 'partial' ? ' One or more offer codes remain resumable.' : ''}`
+                    ? `Synced ${state.syncCounts.offerCount} deal${state.syncCounts.offerCount !== 1 ? 's' : ''} with ${state.syncCounts.offerRows} sailing${state.syncCounts.offerRows !== 1 ? 's' : ''} and ${state.syncCounts.upcomingCruises} booked cruise${state.syncCounts.upcomingCruises !== 1 ? 's' : ''}.`
                     : 'Carnival data synced successfully.'
                   }
                 </Text>
@@ -893,7 +1086,7 @@ function CarnivalSyncScreen() {
             </View>
           )}
 
-          {state.logs.length > 0 && state.status !== 'complete' && state.status !== 'partial' && (
+          {state.logs.length > 0 && state.status !== 'complete' && (
             <Pressable
               style={styles.exportLogFloatingButton}
               onPress={handleExportSyncLog}
@@ -907,23 +1100,6 @@ function CarnivalSyncScreen() {
           )}
           </View>
 
-          <WebSyncCredentialsModal
-            visible={showCredentialsModal}
-            onClose={() => { setShowCredentialsModal(false); setWebSyncError(null); }}
-            onSubmit={handleWebSync}
-            cruiseLine="carnival"
-            isLoading={webLoginMutation.isPending}
-            error={webSyncError}
-          />
-
-          <WebCookieSyncModal
-            visible={showCookieModal}
-            onClose={() => { setShowCookieModal(false); setCookieSyncError(null); }}
-            onSubmit={handleCookieSync}
-            cruiseLine="carnival"
-            isLoading={cookieSyncMutation.isPending}
-            error={cookieSyncError}
-          />
         </ScrollView>
       </View>
     </>
@@ -931,6 +1107,28 @@ function CarnivalSyncScreen() {
 }
 
 const styles = StyleSheet.create({
+  headerBackButton: {
+    minHeight: 42,
+    minWidth: 86,
+    paddingHorizontal: 12,
+    borderRadius: 22,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    backgroundColor: '#e2e8f0',
+    gap: 4,
+  },
+  headerBackGlyph: {
+    color: '#0f172a',
+    fontSize: 34,
+    lineHeight: 36,
+    marginTop: -2,
+  },
+  headerBackText: {
+    color: '#0f172a',
+    fontSize: 17,
+    fontWeight: '600' as const,
+  },
   container: {
     flex: 1,
     backgroundColor: CARNIVAL_DARK,
@@ -1566,6 +1764,32 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700' as const,
   },
+  accessNotice: {
+    flexDirection: 'row' as const,
+    alignItems: 'flex-start' as const,
+    gap: 10,
+    marginHorizontal: 12,
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: '#78350f22',
+    borderWidth: 1,
+    borderColor: '#f59e0b66',
+  },
+  accessNoticeContent: {
+    flex: 1,
+    gap: 3,
+  },
+  accessNoticeTitle: {
+    color: '#fde68a',
+    fontSize: 14,
+    fontWeight: '700' as const,
+  },
+  accessNoticeText: {
+    color: '#fef3c7',
+    fontSize: 12,
+    lineHeight: 17,
+  },
   webCredentialsContainer: {
     backgroundColor: CARNIVAL_CARD,
     borderRadius: 14,
@@ -1647,60 +1871,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '600' as const,
-  },
-  adminGateContainer: {
-    flex: 1,
-    backgroundColor: CARNIVAL_DARK,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    padding: 24,
-  },
-  adminGateCard: {
-    width: '100%',
-    maxWidth: 520,
-    backgroundColor: CARNIVAL_CARD,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: CARNIVAL_BORDER,
-    padding: 24,
-    alignItems: 'center' as const,
-  },
-  adminGateIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: `${CARNIVAL_RED}20`,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    marginBottom: 16,
-  },
-  adminGateTitle: {
-    color: '#fff',
-    fontSize: 22,
-    fontWeight: '800' as const,
-    textAlign: 'center' as const,
-    marginBottom: 10,
-  },
-  adminGateSubtitle: {
-    color: '#94a3b8',
-    fontSize: 14,
-    lineHeight: 21,
-    textAlign: 'center' as const,
-    marginTop: 10,
-  },
-  adminGateButton: {
-    marginTop: 22,
-    minWidth: 190,
-    backgroundColor: CARNIVAL_RED,
-    borderRadius: 12,
-    paddingVertical: 13,
-    paddingHorizontal: 20,
-    alignItems: 'center' as const,
-  },
-  adminGateButtonText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '700' as const,
   },
 });
 

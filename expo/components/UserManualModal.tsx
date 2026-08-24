@@ -546,7 +546,7 @@ export function UserManualModal({ visible, onClose }: UserManualModalProps) {
             <Subsection title="Quick Actions">
               <ButtonList items={[
                 { button: 'Sync Royal / Celebrity Casino', description: 'Opens Royal Caribbean/Celebrity casino sync.' },
-                { button: 'Sync Carnival Cruises', description: 'ADMIN ONLY — opens the isolated Carnival VIFP/Players Club offers, bookings, completed history, and loyalty sync.' },
+                { button: 'Sync Carnival Cruises', description: 'Admin-enabled Carnival sync.' },
                 { button: 'Pricing Summary & History', description: 'Opens pricing summaries and historical tracking.' },
                 { button: 'Load Import Offers.CSV', description: 'Shortcut to import an Offers CSV file.' },
                 { button: 'Save All', description: 'Shortcut to export all app data.' },

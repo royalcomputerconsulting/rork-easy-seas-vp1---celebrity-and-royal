@@ -12,7 +12,7 @@ import {
   Image,
   Platform,
   Modal,
-  FlatList,
+  Switch,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -47,11 +47,12 @@ import {
   Rss,
   MailQuestion,
   X,
+  Bell,
 } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, CLEAN_THEME, SHADOW } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
-import { isDateInPast } from '@/lib/date';
+import { addCalendarDateDays, isDateInPast, toCalendarDateOnly } from '@/lib/date';
 import { isActiveBookedCruise, isCompletedBookedCruise } from '@/lib/bookedCruiseStatus';
 import { useAppState } from '@/state/AppStateProvider';
 import { useUser } from '@/state/UserProvider';
@@ -64,6 +65,7 @@ import {
   generateCalendarICS,
   generateBookedCSV,
   exportFile,
+  exportBase64File,
   downloadFromURL,
   healImportedData
 } from '@/lib/importExport';
@@ -84,7 +86,11 @@ import {
   mergeImportedCruisesWithReconciliation,
   mergeImportedOffersWithReconciliation,
 } from '@/lib/importMerge';
-import { BACKEND_BASE_URL, isCloudBackupEnabled, trpc } from '@/lib/trpc';
+import { BACKEND_BASE_URL, isBackendReachable, isCloudBackupEnabled, resetBackendHealthCache, trpc } from '@/lib/trpc';
+import { buildDiagnosticExport, recordDiagnosticEvent } from '@/lib/diagnosticLogger';
+import { flushDiagnosticJournal, readDiagnosticJournal } from '@/lib/storage/diagnosticJournal';
+import { EASYSEAS_DIAGNOSTIC_VERSION } from '@/lib/appVersion';
+import { buildCurrentUserSessionLog } from '@/lib/sessionLogExport';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import * as XLSX from 'xlsx';
@@ -107,19 +113,19 @@ import { UserProfileCard } from '@/components/ui/UserProfileCard';
 
 import { useSlotMachineLibrary } from '@/state/SlotMachineLibraryProvider';
 import { useCasinoSessions } from '@/state/CasinoSessionProvider';
-import { saveMockData } from '@/lib/saveMockData';
-import { generateSampleData, SAMPLE_LOYALTY_POINTS } from '@/lib/sampleData';
 import { ADMIN_EMAILS, useAuth } from '@/state/AuthProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
 import { UserManualModal } from '@/components/UserManualModal';
 import { ResponsiveContainer } from '@/components/ResponsiveContainer';
 import { useEntitlement } from '@/state/EntitlementProvider';
 import { useCrewRecognition } from '@/state/CrewRecognitionProvider';
+import { emitAppDataEvent } from '@/lib/appDataEvents';
 import { useUserDataSync } from '@/state/UserDataSyncProvider';
 import { useIntelligenceFilters } from '@/state/IntelligenceFiltersProvider';
-import { getManagedSecondProfile } from '@/lib/intelligenceFilters';
-import { buildDiagnosticExport, clearDiagnosticEvents, recordDiagnosticEvent } from '@/lib/diagnosticLogger';
+import { getSecondProfileForUnassignedRecords } from '@/lib/intelligenceFilters';
 import { getDoubleOccupancyRoomRetailValue } from '@/lib/valueCalculator';
+import { beginPerformanceSpan, recordPerformanceCount, recordProviderRender } from '@/lib/performance/performanceDiagnostics';
+import { cancelAllVoyageNotifications, requestVoyageNotificationPermission } from '@/lib/notifications/localVoyageNotifications';
 
 function normalizeAccountEmail(email: string | null | undefined): string | null {
   if (!email) {
@@ -134,6 +140,23 @@ function isAdminAccountEmail(email: string): boolean {
   return ADMIN_EMAILS.includes(email.toLowerCase().trim() as typeof ADMIN_EMAILS[number]);
 }
 
+function getLocalCarnivalSyncAccess(
+  isAuthenticated: boolean,
+  profileId: string | null | undefined,
+): { enabled: boolean; reason: string } {
+  if (!isAuthenticated || !String(profileId ?? '').trim()) {
+    return {
+      enabled: false,
+      reason: 'Sign in and select an EasySeas profile to sync Carnival data.',
+    };
+  }
+
+  return {
+    enabled: true,
+    reason: 'Carnival sync is available for this signed-in profile.',
+  };
+}
+
 type PendingSmartImportReview = {
   title: string;
   fileName: string;
@@ -144,11 +167,12 @@ type PendingSmartImportReview = {
 };
 
 export default function SettingsScreen() {
+  recordProviderRender('SettingsScreen');
   const router = useRouter();
   const entitlement = useEntitlement();
-  const { clearLocalData, setLocalData, localData } = useAppState();
+  const { clearLocalData, setLocalData, localData, settings, updateSettings } = useAppState();
   const coreData = useCoreData();
-  const { clearAllData, bookedCruises, setCruises, casinoOffers, setBookedCruises, setCasinoOffers } = coreData;
+  const { clearAllData, bookedCruises, setCruises, casinoOffers, setBookedCruises, setCasinoOffers, cruiseInventoryCount, getAllCruises } = coreData;
   const cruises = coreData.cruises;
   const {
     currentUser,
@@ -164,12 +188,14 @@ export default function SettingsScreen() {
     crownAnchorPoints: loyaltyCrownAnchorPoints,
     crownAnchorLevel: loyaltyCrownAnchorLevel,
     clubRoyaleTier: loyaltyClubRoyaleTier,
+    clubRoyaleTierValidThrough: loyaltyClubRoyaleTierValidThrough,
     setManualClubRoyalePoints,
     setManualCrownAnchorPoints,
     syncFromStorage: syncLoyaltyFromStorage,
     extendedLoyalty,
     venetianSociety,
     captainsClub,
+    blueChip,
   } = useLoyalty();
   
   const [isImporting, setIsImporting] = useState(false);
@@ -181,7 +207,9 @@ export default function SettingsScreen() {
   const [isDownloadingExtension, setIsDownloadingExtension] = useState(false);
   const [isDownloadingTemplate, setIsDownloadingTemplate] = useState(false);
   const [isDownloadingSeaPass, setIsDownloadingSeaPass] = useState(false);
-  const [isExportingDiagnostics, setIsExportingDiagnostics] = useState(false);
+  const [isCheckingCloudSync, setIsCheckingCloudSync] = useState(false);
+  const [isExportingAppLog, setIsExportingAppLog] = useState(false);
+  const [isExportingSessionLog, setIsExportingSessionLog] = useState(false);
 
   const [isImportingMachines, setIsImportingMachines] = useState(false);
   const [isExportingMachines, setIsExportingMachines] = useState(false);
@@ -196,23 +224,37 @@ export default function SettingsScreen() {
   const [feedLastUpdated, setFeedLastUpdated] = useState<string | null>(null);
   const [isCopied, setIsCopied] = useState(false);
   const [pendingSmartImportReview, setPendingSmartImportReview] = useState<PendingSmartImportReview | null>(null);
+  const [isCredentialEnrollmentVisible, setIsCredentialEnrollmentVisible] = useState(false);
+  const [credentialPin, setCredentialPin] = useState('');
+  const [credentialPinConfirmation, setCredentialPinConfirmation] = useState('');
+  const [isEnrollingCredential, setIsEnrollingCredential] = useState(false);
+  const [isUpdatingNotificationPreference, setIsUpdatingNotificationPreference] = useState(false);
 
   const { myAtlasMachines, exportMachinesJSON, importMachinesJSON, reload: reloadMachines } = useSlotMachineLibrary();
   const { reload: reloadCasinoSessions } = useCasinoSessions();
-  const { isAdmin, getWhitelist, addToWhitelist, removeFromWhitelist, updateEmail, authenticatedEmail } = useAuth();
+  const {
+    isAuthenticated,
+    isAdmin,
+    getWhitelist,
+    addToWhitelist,
+    removeFromWhitelist,
+    updateEmail,
+    authenticatedEmail,
+    requiresCredentialEnrollment,
+    enrollDeviceCredential,
+  } = useAuth();
   const { stats: crewStats } = useCrewRecognition();
-  const { forceSyncNow: forceProfileSyncNow } = useUserDataSync();
+  const { forceSyncNow: forceProfileSyncNow, isSyncing: isCloudSyncing, lastSyncTime, syncError: cloudSyncError } = useUserDataSync();
   const { selectedProfileId, setSelectedProfileId } = useIntelligenceFilters();
   const linkedProfileEnsuredRef = useRef(false);
-  // Which profile the Edit Profile card in Settings is showing/editing. This is intentionally a
-  // dedicated, local piece of state -- it used to reuse the shared cross-tab `selectedProfileId`
-  // intelligence filter, which meant toggling "User" / "Second User" here also silently changed
-  // the data-filtering scope on the Offers/Cruises/Casino tabs, and the toggle itself was
-  // unreliable because it depended on that shared filter settling into the right value. Keeping
-  // it local guarantees the toggle always switches immediately and never leaks into other tabs.
-  const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
 
   const normalizedAuthenticatedEmail = useMemo(() => normalizeAccountEmail(authenticatedEmail), [authenticatedEmail]);
+  // Carnival sync is local to the signed-in EasySeas profile and must remain
+  // available while the optional backend is offline.
+  const carnivalSyncAccess = useMemo(
+    () => getLocalCarnivalSyncAccess(isAuthenticated, currentUser?.id),
+    [currentUser?.id, isAuthenticated],
+  );
   const activeUserProfiles = useMemo(() => users.filter((profile) => profile.active !== false), [users]);
   const primaryProfileUser = useMemo(() => {
     if (currentUser) {
@@ -223,17 +265,21 @@ export default function SettingsScreen() {
       ?? activeUserProfiles[0]
       ?? null;
   }, [activeUserProfiles, currentUser, normalizedAuthenticatedEmail]);
-  const linkedSecondProfile = useMemo(() => getManagedSecondProfile(activeUserProfiles), [activeUserProfiles]);
+  const linkedSecondProfile = useMemo(() => getSecondProfileForUnassignedRecords(activeUserProfiles), [activeUserProfiles]);
   const selectedSettingsProfile = useMemo(() => {
-    if (editingProfileId) {
-      const explicitProfile = activeUserProfiles.find((profile) => profile.id === editingProfileId);
+    if (selectedProfileId !== 'all' && selectedProfileId !== 'unassigned') {
+      const explicitProfile = activeUserProfiles.find((profile) => profile.id === selectedProfileId);
       if (explicitProfile) {
         return explicitProfile;
       }
     }
 
+    if (selectedProfileId === 'unassigned' && linkedSecondProfile) {
+      return linkedSecondProfile;
+    }
+
     return primaryProfileUser;
-  }, [activeUserProfiles, editingProfileId, primaryProfileUser]);
+  }, [activeUserProfiles, linkedSecondProfile, primaryProfileUser, selectedProfileId]);
   const normalizedSelectedProfileEmail = useMemo(() => normalizeAccountEmail(selectedSettingsProfile?.email), [selectedSettingsProfile?.email]);
   const profileDisplayUser = useMemo(() => {
     if (!selectedSettingsProfile) {
@@ -322,12 +368,14 @@ export default function SettingsScreen() {
 
   const handleProfileSlotPress = useCallback((slot: 'primary' | 'secondary') => {
     if (slot === 'secondary') {
-      setEditingProfileId(linkedSecondProfile?.id ?? null);
+      setSelectedProfileId(linkedSecondProfile?.id ?? 'unassigned');
       return;
     }
 
-    setEditingProfileId(primaryProfileUser?.id ?? null);
-  }, [linkedSecondProfile?.id, primaryProfileUser?.id]);
+    if (primaryProfileUser) {
+      setSelectedProfileId(primaryProfileUser.id);
+    }
+  }, [linkedSecondProfile?.id, primaryProfileUser, setSelectedProfileId]);
 
   const handleAddToWhitelist = async () => {
     if (!newWhitelistEmail.trim() || !newWhitelistEmail.includes('@')) {
@@ -370,23 +418,34 @@ export default function SettingsScreen() {
     );
   };
 
-  const currentProfileValues = useMemo(() => ({
+  const currentProfileValues = useMemo(() => {
+    const hasManualProfileLoyalty = Boolean(profileDisplayUser?.loyaltyManualOverrideAt);
+    const savedClubRoyalePoints = profileDisplayUser?.clubRoyalePoints ?? 0;
+    const savedCrownAnchorPoints = profileDisplayUser?.loyaltyPoints ?? 0;
+    const savedClubRoyaleTier = profileDisplayUser?.clubRoyaleTier || '';
+    const savedCrownAnchorLevel = profileDisplayUser?.crownAnchorLevel || '';
+
+    return {
     name: profileDisplayUser?.name || '',
     email: profileDisplayUser?.email || authenticatedEmail || '',
     crownAnchorNumber: profileDisplayUser?.crownAnchorNumber || '',
-    // Primary-profile loyalty is rendered from LoyaltyProvider because that provider commits only
-    // after AsyncStorage/profile readback succeeds. This prevents a one-render UserProvider lag from
-    // showing the old pre-sync totals after Apply Sync. Secondary profiles remain profile-scoped.
-    clubRoyalePoints: isPrimaryProfileSelected ? loyaltyClubRoyalePoints : (profileDisplayUser?.clubRoyalePoints ?? 0),
-    clubRoyaleTier: isPrimaryProfileSelected ? loyaltyClubRoyaleTier : (profileDisplayUser?.clubRoyaleTier || ''),
-    loyaltyPoints: isPrimaryProfileSelected ? loyaltyCrownAnchorPoints : (profileDisplayUser?.loyaltyPoints ?? 0),
-    crownAnchorLevel: isPrimaryProfileSelected ? loyaltyCrownAnchorLevel : (profileDisplayUser?.crownAnchorLevel || ''),
+    clubRoyalePoints: hasManualProfileLoyalty || savedClubRoyalePoints > 0 ? savedClubRoyalePoints : (isPrimaryProfileSelected ? loyaltyClubRoyalePoints : 0),
+    clubRoyaleTier: isPrimaryProfileSelected ? loyaltyClubRoyaleTier : savedClubRoyaleTier,
+    clubRoyaleTierValidThrough: isPrimaryProfileSelected
+      ? loyaltyClubRoyaleTierValidThrough || profileDisplayUser?.clubRoyaleTierValidThrough || ''
+      : profileDisplayUser?.clubRoyaleTierValidThrough || '',
+    loyaltyPoints: hasManualProfileLoyalty || savedCrownAnchorPoints > 0 ? savedCrownAnchorPoints : (isPrimaryProfileSelected ? loyaltyCrownAnchorPoints : 0),
+    crownAnchorLevel: savedCrownAnchorLevel || (isPrimaryProfileSelected ? loyaltyCrownAnchorLevel : ''),
     celebrityEmail: profileDisplayUser?.celebrityEmail || '',
     celebrityCaptainsClubNumber: profileDisplayUser?.celebrityCaptainsClubNumber || '',
-    celebrityCaptainsClubPoints: profileDisplayUser?.celebrityCaptainsClubPoints || 0,
-    celebrityBlueChipPoints: profileDisplayUser?.celebrityBlueChipPoints || 0,
-    celebrityBlueChipTier: profileDisplayUser?.celebrityBlueChipTier || 'Pearl',
-    celebrityCaptainsClubLevel: 'Preview',
+    celebrityCaptainsClubPoints: isPrimaryProfileSelected
+      ? Math.max(profileDisplayUser?.celebrityCaptainsClubPoints ?? 0, captainsClub?.points ?? 0)
+      : profileDisplayUser?.celebrityCaptainsClubPoints ?? 0,
+    celebrityBlueChipPoints: isPrimaryProfileSelected && !hasManualProfileLoyalty
+      ? (profileDisplayUser?.celebrityBlueChipPoints || blueChip?.points || 0)
+      : profileDisplayUser?.celebrityBlueChipPoints ?? 0,
+    celebrityBlueChipTier: profileDisplayUser?.celebrityBlueChipTier || blueChip?.tier || extendedLoyalty?.celebrityBlueChipTier || 'Pearl',
+    celebrityCaptainsClubLevel: profileDisplayUser?.celebrityCaptainsClubTier || captainsClub?.tier || extendedLoyalty?.captainsClubTier || 'Preview',
     preferredBrand: profileDisplayUser?.preferredBrand || 'royal',
     silverseaEmail: profileDisplayUser?.silverseaEmail || '',
     silverseaVenetianNumber: profileDisplayUser?.silverseaVenetianNumber || '',
@@ -394,16 +453,18 @@ export default function SettingsScreen() {
     silverseaVenetianPoints: profileDisplayUser?.silverseaVenetianPoints || 0,
     carnivalVifpNumber: profileDisplayUser?.carnivalVifpNumber || '',
     carnivalVifpTier: profileDisplayUser?.carnivalVifpTier || '',
-    carnivalVifpPoints: profileDisplayUser?.carnivalVifpPoints || 0,
-    carnivalCruiseDayPoints: profileDisplayUser?.carnivalCruiseDayPoints || 0,
-    carnivalTotalCruises: profileDisplayUser?.carnivalTotalCruises || 0,
     carnivalPlayersClubTier: profileDisplayUser?.carnivalPlayersClubTier || '',
     carnivalPlayersClubPoints: profileDisplayUser?.carnivalPlayersClubPoints || 0,
     birthdate: profileDisplayUser?.birthdate || '',
-  }), [
+  };
+  }, [
     authenticatedEmail,
+    blueChip,
+    captainsClub,
+    extendedLoyalty,
     loyaltyClubRoyalePoints,
     loyaltyClubRoyaleTier,
+    loyaltyClubRoyaleTierValidThrough,
     loyaltyCrownAnchorLevel,
     isPrimaryProfileSelected,
     loyaltyCrownAnchorPoints,
@@ -452,9 +513,6 @@ export default function SettingsScreen() {
 
       carnivalVifpTier: profileDisplayUser?.carnivalVifpTier,
       carnivalVifpNumber: profileDisplayUser?.carnivalVifpNumber,
-      carnivalVifpPoints: profileDisplayUser?.carnivalVifpPoints,
-      carnivalCruiseDayPoints: profileDisplayUser?.carnivalCruiseDayPoints,
-      carnivalTotalCruises: profileDisplayUser?.carnivalTotalCruises,
       carnivalPlayersClubTier: profileDisplayUser?.carnivalPlayersClubTier,
       carnivalPlayersClubPoints: profileDisplayUser?.carnivalPlayersClubPoints,
 
@@ -465,50 +523,72 @@ export default function SettingsScreen() {
   }, [captainsClub, extendedLoyalty, isPrimaryProfileSelected, isProfileDisplayReady, profileDisplayUser, venetianSociety]);
 
   const dataStats = useMemo(() => {
+    const finishDataStatsDiagnostic = beginPerformanceSpan('SettingsScreen.dataStats', {
+      cruisesLoadedIntoJS: cruises.length,
+      localCruisesLoadedIntoJS: localData.cruises?.length ?? 0,
+    });
     const allOffers = casinoOffers.length > 0 ? casinoOffers : (localData.offers || []);
-    // Count unique offers by offerCode - this is the true unique identifier for an offer
-    // Multiple sailings can share the same offerCode (e.g., 2601C05 applies to multiple cruises)
-    const uniqueOfferCodes = new Set(allOffers.map(o => o.offerCode).filter(Boolean));
-    const uniqueOfferCount = uniqueOfferCodes.size || allOffers.length;
+    const uniqueOfferInstances = new Set(allOffers.map((offer, index) =>
+      offer.playerOfferId || offer.carnivalOfferId || offer.offerInstanceId ||
+      [offer.offerCode, offer.offerName, offer.expiryDate || offer.expires || offer.offerExpiryDate, index].filter(Boolean).join('|')
+    ).filter(Boolean));
+    const uniqueOfferCount = uniqueOfferInstances.size || allOffers.length;
     
     console.log('[Settings] Data stats calculation:', {
       totalOffers: allOffers.length,
-      uniqueOfferCodes: Array.from(uniqueOfferCodes),
+      uniqueOfferInstances: Array.from(uniqueOfferInstances),
       uniqueCount: uniqueOfferCount,
     });
     
     const allBooked = bookedCruises.length > 0 ? bookedCruises : (localData.booked || []);
     const upcoming = allBooked.filter(c => isActiveBookedCruise(c)).length;
     const completed = allBooked.filter(c => isCompletedBookedCruise(c)).length;
+    const royalBookedRecords = allBooked.filter((c) => {
+      const source = String(c.cruiseSource ?? '').toLowerCase();
+      const shipName = String(c.shipName ?? '').toLowerCase();
+      return source === 'royal' || (!source && shipName.includes('of the seas'));
+    });
+    const royalBooked = royalBookedRecords.filter(c => isActiveBookedCruise(c)).length;
+    const royalCompleted = royalBookedRecords.filter(c => isCompletedBookedCruise(c)).length;
     const dayAgendaEventsThisYear = getDayAgendaEventCountForYear(
       allBooked,
       [...(localData.calendar || []), ...(localData.tripit || [])],
       new Date().getFullYear()
     );
 
-    return {
-      cruises: cruises.length || localData.cruises?.length || 0,
+    const result = {
+      cruises: cruiseInventoryCount || cruises.length || 0,
       booked: upcoming,
       upcoming,
       completed,
+      royalBooked,
+      royalCompleted,
+      royalImported: royalBookedRecords.length,
       sailings: allOffers.length,
       uniqueOffers: uniqueOfferCount,
       events: dayAgendaEventsThisYear,
       machines: myAtlasMachines.length || 0,
       crewMembers: crewStats?.crewMemberCount || 0,
     };
-  }, [cruises, bookedCruises, casinoOffers, localData, myAtlasMachines, crewStats]);
+    finishDataStatsDiagnostic({ aggregateCruiseCount: result.cruises });
+    recordPerformanceCount('SettingsScreen.databaseQueryRows', 0, {
+      note: 'legacy aggregate still derived from hydrated arrays',
+    });
+    return result;
+  }, [cruiseInventoryCount, cruises.length, bookedCruises, casinoOffers, localData.booked, localData.calendar, localData.offers, localData.tripit, myAtlasMachines.length, crewStats]);
 
   const importAssignmentReviewCount = useMemo(() => {
     const reviewItems = getImportAssignmentReviewItems({
       offers: casinoOffers.length > 0 ? casinoOffers : (localData.offers || []),
-      cruises: cruises.length > 0 ? cruises : (localData.cruises || []),
+      // Master inventory is owner-scoped in SQLite and no longer participates
+      // in a render-time assignment scan across every Settings render.
+      cruises: [],
       bookedCruises: bookedCruises.length > 0 ? bookedCruises : (localData.booked || []),
       calendarEvents: localData.calendar || [],
       users,
     });
     return reviewItems.length;
-  }, [bookedCruises, casinoOffers, cruises, localData.booked, localData.calendar, localData.cruises, localData.offers, users]);
+  }, [bookedCruises, casinoOffers, localData.booked, localData.calendar, localData.offers, users]);
 
   const handleImportOffersCSV = useCallback(async () => {
     try {
@@ -540,7 +620,7 @@ export default function SettingsScreen() {
         fieldsFixed: healingReport.fieldsFixed.length,
       });
 
-      const existingCruises = cruises.length > 0 ? cruises : (localData.cruises || []);
+      const existingCruises = await getAllCruises();
       const existingOffers = casinoOffers.length > 0 ? casinoOffers : (localData.offers || []);
       const importedSource = getImportedSource({ cruises: parsedCruises, offers: parsedOffers });
       const importOwnerOptions = {
@@ -600,7 +680,6 @@ export default function SettingsScreen() {
             console.log('[Settings] Applying reviewed offers import:', { fileName: result.fileName, cruises: parsedCruises.length, offers: parsedOffers.length });
             await setCruises(mergedCruises);
             await setCasinoOffers(mergedOffers);
-            await setLocalData({ cruises: mergedCruises, offers: mergedOffers });
             await AsyncStorage.setItem('easyseas_has_launched_before', 'true');
             setLastImportResult({ type: 'offers', count: parsedCruises.length });
             setPendingSmartImportReview(null);
@@ -646,7 +725,7 @@ export default function SettingsScreen() {
     } finally {
       setIsImporting(false);
     }
-  }, [authenticatedEmail, casinoOffers, cruises, currentUser?.email, currentUser?.id, localData.cruises, localData.offers, normalizedAuthenticatedEmail, router, setCruises, setCasinoOffers, setLocalData, users]);
+  }, [authenticatedEmail, casinoOffers, currentUser?.email, currentUser?.id, getAllCruises, localData.offers, normalizedAuthenticatedEmail, router, setCruises, setCasinoOffers, setLocalData, users]);
 
   const fetchICSMutation = trpc.calendar.fetchICS.useMutation();
   const saveCalendarFeedMutation = trpc.calendar.saveCalendarFeed.useMutation();
@@ -1264,34 +1343,63 @@ export default function SettingsScreen() {
         if (!shipName && !sailDateRaw) continue;
 
         const parseDate = (raw: string): string => {
-          if (!raw) return new Date().toISOString().split('T')[0];
+          if (!raw) return '';
           const num = Number(raw);
           if (!isNaN(num) && num > 10000 && num < 100000) {
             const d = new Date((num - 25569) * 86400 * 1000);
-            return d.toISOString().split('T')[0];
+            return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
           }
           const dateMatch = raw.match(/(\d{1,4})[/-](\d{1,2})[/-](\d{2,4})/);
           if (dateMatch) {
             let [, a, b, c] = dateMatch;
-            if (a.length === 4) return `${a}-${b.padStart(2,'0')}-${c.padStart(2,'0')}`;
-            return `${c.length === 2 ? '20'+c : c}-${a.padStart(2,'0')}-${b.padStart(2,'0')}`;
+            const normalized = a.length === 4
+              ? `${a}-${b.padStart(2,'0')}-${c.padStart(2,'0')}`
+              : `${c.length === 2 ? '20'+c : c}-${a.padStart(2,'0')}-${b.padStart(2,'0')}`;
+            return toCalendarDateOnly(normalized) ?? '';
           }
-          try { return new Date(raw).toISOString().split('T')[0]; } catch { return new Date().toISOString().split('T')[0]; }
+          return toCalendarDateOnly(raw) ?? '';
         };
 
         const sailDate = parseDate(sailDateRaw);
-        const nights = parseInt(nightsRaw) || 7;
+        const parsedNights = parseInt(nightsRaw, 10);
+        const nights = Number.isFinite(parsedNights) && parsedNights > 0 && parsedNights <= 365 ? parsedNights : 0;
         let returnDate = returnDateRaw ? parseDate(returnDateRaw) : '';
-        if (!returnDate) {
-          const sailObj = new Date(sailDate);
-          sailObj.setDate(sailObj.getDate() + nights);
-          returnDate = sailObj.toISOString().split('T')[0];
+        if (!returnDate && sailDate && nights > 0) {
+          returnDate = addCalendarDateDays(sailDate, nights) ?? '';
         }
 
+        const parsedGuests = parseInt(guests, 10);
+        const normalizedGuests = Number.isFinite(parsedGuests) && parsedGuests > 0 ? parsedGuests : undefined;
+        const materialIdentity = [
+          (reservationNumber || '').trim().toLowerCase(),
+          (shipName || '').trim().toLowerCase(),
+          sailDate,
+          returnDate,
+          (cabinType || '').trim().toLowerCase(),
+          normalizedGuests ?? '',
+          nights,
+        ].join('|');
+
         const isDuplicate = existingBooked.some(
-          c => c.shipName === (shipName || 'Unknown Ship') && c.sailDate === sailDate
+          c => [
+            (c.reservationNumber || '').trim().toLowerCase(),
+            c.shipName.trim().toLowerCase(),
+            c.sailDate,
+            c.returnDate || '',
+            (c.cabinType || '').trim().toLowerCase(),
+            c.guests ?? '',
+            c.nights,
+          ].join('|') === materialIdentity
         ) || importedCruises.some(
-          c => c.shipName === (shipName || 'Unknown Ship') && c.sailDate === sailDate
+          c => [
+            (c.reservationNumber || '').trim().toLowerCase(),
+            c.shipName.trim().toLowerCase(),
+            c.sailDate,
+            c.returnDate || '',
+            (c.cabinType || '').trim().toLowerCase(),
+            c.guests ?? '',
+            c.nights,
+          ].join('|') === materialIdentity
         );
 
         if (isDuplicate) {
@@ -1305,26 +1413,26 @@ export default function SettingsScreen() {
           brandLower.includes('carnival') ? 'carnival' : 'royal';
 
         const portsList = portsVisited ? portsVisited.split(',').map(p => p.trim()).filter(Boolean) : [];
-        const itineraryLabel = destination || fullItinerary || `${nights} Night Cruise`;
+        const itineraryLabel = destination || fullItinerary || (nights > 0 ? `${nights} Night Cruise` : '');
         const perPersonRetailPrice = price ? parseFloat(price.replace(/[^0-9.]/g, '')) || undefined : undefined;
         const roomRetailPrice = getDoubleOccupancyRoomRetailValue(perPersonRetailPrice);
         const paidAmount = paid ? parseFloat(paid.replace(/[^0-9.]/g, '')) || undefined : undefined;
         const taxesAmount = taxes ? parseFloat(taxes.replace(/[^0-9.]/g, '')) || undefined : undefined;
 
         const cruise: BookedCruise = {
-          id: `completed-xlsx-${Date.now()}-${i}`,
-          shipName: shipName || 'Unknown Ship',
+          id: reservationNumber || `completed-xlsx-${Date.now()}-${i}`,
+          shipName: shipName || '',
           sailDate,
           returnDate,
           nights,
-          destination: destination || fullItinerary || 'Caribbean',
+          destination: destination || fullItinerary || '',
           itineraryName: itineraryLabel,
           departurePort: departurePort || '',
           ports: portsList.length > 0 ? portsList : undefined,
           itineraryRaw: fullItinerary ? [fullItinerary] : undefined,
           reservationNumber: reservationNumber || undefined,
-          cabinType: cabinType || 'Balcony',
-          guests: parseInt(guests) || 2,
+          cabinType: cabinType || undefined,
+          guests: normalizedGuests,
           guestNames: [],
           price: perPersonRetailPrice,
           totalPrice: roomRetailPrice !== undefined ? roomRetailPrice + (taxesAmount ?? 0) : undefined,
@@ -1339,12 +1447,14 @@ export default function SettingsScreen() {
           totalCasinoDiscount: roomRetailPrice !== undefined && paidAmount !== undefined ? Math.max(0, roomRetailPrice + (taxesAmount ?? 0) - paidAmount) : undefined,
           winnings: winnings ? parseFloat(winnings.replace(/[^0-9.]/g, '')) || undefined : undefined,
           notes: notesVal || (program ? `Program: ${program}` : undefined),
-          status: 'completed',
-          completionState: 'completed',
+          status: sailDate && returnDate && nights > 0 ? 'completed' : 'reviewNeeded',
+          completionState: sailDate && returnDate && nights > 0 ? 'completed' : undefined,
           cruiseSource,
           sourceEmail,
           importStatus: sourceEmail ? 'unassigned' : undefined,
           reconciliationStatus: sourceEmail ? 'reviewNeeded' : undefined,
+          validationStatus: sailDate && returnDate && nights > 0 ? 'valid' : 'quarantined',
+          dataConfidence: sailDate && returnDate && nights > 0 ? 'verified' : 'partial',
           createdAt: new Date().toISOString(),
         };
 
@@ -1465,12 +1575,30 @@ export default function SettingsScreen() {
     }
   }, [localData.booked, bookedCruises]);
 
+  const handleExportBookedXLSX = useCallback(async () => {
+    try {
+      setIsExporting(true);
+      const source = localData.booked?.length > 0 ? localData.booked : bookedCruises;
+      const allBooked = source.filter(cruise => isActiveBookedCruise(cruise) || isCompletedBookedCruise(cruise));
+      if (!allBooked.length) return void Alert.alert('No Data', 'No booked or completed cruise data is available to export.');
+      const rows = allBooked.map(cruise => Object.fromEntries(Object.entries(cruise).map(([key,value]) => [key, value != null && typeof value === 'object' ? JSON.stringify(value) : value ?? ''])));
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(rows), 'Booked and Completed');
+      XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet([{ exportedAt:new Date().toISOString(), records:rows.length, scope:'All booked and completed cruises', source:'EasySeas local storage' }]), 'Export Metadata');
+      const base64 = XLSX.write(workbook, { type:'base64', bookType:'xlsx' });
+      const fileName=`easyseas_booked_completed_${new Date().toISOString().slice(0,10)}.xlsx`;
+      await exportBase64File(base64,fileName,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      Alert.alert('Export Successful',`Exported ${rows.length} booked/completed cruises with all saved fields to ${fileName}.`);
+    } catch(error){console.error('[Settings] Booked XLSX export error:',error);Alert.alert('Export Error','Could not create the booked/completed workbook.');}
+    finally{setIsExporting(false)}
+  },[bookedCruises,localData.booked]);
+
   const handleExportOffersCSV = useCallback(async () => {
     try {
       setIsExporting(true);
       console.log('[Settings] Starting offers CSV export');
       
-      const allCruises = localData.cruises.length > 0 ? localData.cruises : cruises;
+      const allCruises = await getAllCruises();
       const allOffers = localData.offers || casinoOffers;
       
       if (allCruises.length === 0) {
@@ -1495,7 +1623,7 @@ export default function SettingsScreen() {
     } finally {
       setIsExporting(false);
     }
-  }, [localData.cruises, localData.offers, cruises, casinoOffers]);
+  }, [localData.offers, casinoOffers, getAllCruises]);
 
   const handleExportCalendarICS = useCallback(async () => {
     try {
@@ -1538,7 +1666,7 @@ export default function SettingsScreen() {
   const handleClearData = useCallback(() => {
     Alert.alert(
       'Clear All Data',
-      'Are you sure you want to delete ALL app data including:\n\n• Cruises & Offers\n• Booked Cruises\n• Calendar Events\n• Certificates\n• User Profile (Name, C&A #)\n• Club Royale Points\n• Loyalty Points\n• Settings & Preferences\n\nSample demo data will be added so you can explore the app.\n\nThis action cannot be undone.',
+      'Are you sure you want to delete ALL app data including:\n\n• Cruises & Offers\n• Booked Cruises\n• Calendar Events\n• Certificates\n• User Profile (Name, C&A #)\n• Club Royale Points\n• Loyalty Points\n• Settings & Preferences\n\nThis action cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         { 
@@ -1562,39 +1690,23 @@ export default function SettingsScreen() {
                   crownAnchorNumber: '',
                   celebrityEmail: '',
                   celebrityCaptainsClubNumber: '',
-                  celebrityCaptainsClubPoints: SAMPLE_LOYALTY_POINTS.clubRoyale,
-                  celebrityBlueChipPoints: SAMPLE_LOYALTY_POINTS.clubRoyale,
+                  celebrityCaptainsClubPoints: 0,
+                  celebrityBlueChipPoints: 0,
                   silverseaEmail: '',
                   silverseaVenetianNumber: '',
                   silverseaVenetianTier: '',
-                  silverseaVenetianPoints: SAMPLE_LOYALTY_POINTS.clubRoyale,
+                  silverseaVenetianPoints: 0,
                 });
                 
-                console.log('[Settings] Setting loyalty points to 1 for all three cruise lines (sample data)...');
-                await setManualClubRoyalePoints(SAMPLE_LOYALTY_POINTS.clubRoyale);
-                await setManualCrownAnchorPoints(SAMPLE_LOYALTY_POINTS.crownAnchor);
-                console.log('[Settings] ✓ Royal Caribbean: Club Royale & Crown & Anchor reset to 1');
-                console.log('[Settings] ✓ Celebrity: Captain\'s Club & Blue Chip reset to 1');
-                console.log('[Settings] ✓ Silversea: Venetian Society reset to 1');
-                
-                console.log('[Settings] Generating sample demo data...');
-                const sampleData = generateSampleData();
-                
-                console.log('[Settings] Populating sample cruises, offers, and events...');
-                await setBookedCruises(sampleData.bookedCruises);
-                await setCasinoOffers(sampleData.casinoOffers);
-                await setLocalData({
-                  booked: sampleData.bookedCruises,
-                  offers: sampleData.casinoOffers,
-                  calendar: sampleData.calendarEvents,
-                });
+                await setManualClubRoyalePoints(0);
+                await setManualCrownAnchorPoints(0);
                 
                 console.log('[Settings] Re-syncing loyalty provider from storage...');
                 await syncLoyaltyFromStorage();
                 
                 Alert.alert(
                   'Data Reset Complete', 
-                  `Successfully cleared ${result.clearedKeys.length} data stores.\n\nSample demo data has been added:\n• 3 sample cruises (1 completed, 2 booked)\n• 2 sample casino offers\n• 1 sample calendar event\n• Crown & Anchor: 1 point\n• Club Royale: 1 point\n\nDelete the sample data and import your real data to get started!`
+                  `Successfully cleared ${result.clearedKeys.length} data stores. Import or enter data when you are ready.`
                 );
               } else {
                 Alert.alert(
@@ -1613,40 +1725,6 @@ export default function SettingsScreen() {
   }, [clearAllData, clearLocalData, syncUserFromStorage, ensureOwner, updateUser, setManualClubRoyalePoints, setManualCrownAnchorPoints, syncLoyaltyFromStorage, setBookedCruises, setCasinoOffers, setLocalData]);
 
 
-
-
-  const handleExportDiagnosticLogs = useCallback(async () => {
-    try {
-      setIsExportingDiagnostics(true);
-      const snapshot = {
-        version: '9.10.89',
-        exportedAt: new Date().toISOString(),
-        counts: {
-          availableCruises: cruises.length,
-          bookedCruises: bookedCruises.length,
-          offers: casinoOffers.length,
-          completedCruises: bookedCruises.filter(c => isCompletedBookedCruise(c)).length,
-        },
-        activeUser: currentUser?.email || authenticatedEmail || null,
-        dataMode: isCloudBackupEnabled() ? 'cloud-backup-enabled' : 'local-first-self-contained',
-      };
-      recordDiagnosticEvent({ level: 'info', category: 'ADMIN', event: 'EXPORT_DIAGNOSTIC_LOGS', message: 'Admin exported diagnostic logs', data: snapshot });
-      const content = await buildDiagnosticExport(snapshot);
-      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const success = await exportFile(content, `easyseas_diagnostic_logs_${stamp}.txt`);
-      Alert.alert(success ? 'Export Successful' : 'Export Info', success ? 'Diagnostic logs exported.' : 'Diagnostic log file was created, but sharing may not be available on this device.');
-    } catch (error) {
-      console.error('[Settings] Diagnostic log export error:', error);
-      Alert.alert('Export Error', 'Failed to export diagnostic logs.');
-    } finally {
-      setIsExportingDiagnostics(false);
-    }
-  }, [authenticatedEmail, bookedCruises, casinoOffers, cruises.length, currentUser?.email]);
-
-  const handleClearDiagnosticLogs = useCallback(async () => {
-    await clearDiagnosticEvents();
-    Alert.alert('Diagnostic Logs Cleared', 'The local diagnostic log buffer has been cleared.');
-  }, []);
 
   const handleExportAllData = useCallback(async () => {
     try {
@@ -1711,27 +1789,28 @@ export default function SettingsScreen() {
         
         const sk = (baseKey: string) => getUserScopedKey(baseKey, authenticatedEmail ?? null);
         console.log('[Settings] Re-reading from AsyncStorage using scoped keys for user:', authenticatedEmail);
-        const [cruisesData, bookedData, offersData, eventsData] = await Promise.all([
-          quotaSafeGetItem(sk(ALL_STORAGE_KEYS.CRUISES)),
+        const [bookedData, offersData, eventsData] = await Promise.all([
           quotaSafeGetItem(sk(ALL_STORAGE_KEYS.BOOKED_CRUISES)),
           quotaSafeGetItem(sk(ALL_STORAGE_KEYS.CASINO_OFFERS)),
           quotaSafeGetItem(sk(ALL_STORAGE_KEYS.CALENDAR_EVENTS)),
         ]);
         
-        const syncedCruises = cruisesData ? JSON.parse(cruisesData) : [];
         const syncedBooked = bookedData ? JSON.parse(bookedData) : [];
         const syncedOffers = offersData ? JSON.parse(offersData) : [];
         const syncedEvents = eventsData ? JSON.parse(eventsData) : [];
         
         console.log('[Settings] Read data counts from scoped storage:', {
-          cruises: syncedCruises.length,
+          cruises: importedCruises,
           booked: syncedBooked.length,
           offers: syncedOffers.length,
           events: syncedEvents.length,
         });
         
         await setLocalData({
-          cruises: syncedCruises,
+          // Available cruises remain query-backed in SQLite. Publishing the
+          // imported catalog here would block every mounted tab with a giant
+          // provider update.
+          cruises: [],
           booked: syncedBooked,
           offers: syncedOffers,
           calendar: syncedEvents,
@@ -1740,21 +1819,13 @@ export default function SettingsScreen() {
         console.log('[Settings] Triggering final refresh to propagate to UI...');
         await new Promise(resolve => setTimeout(resolve, 300));
         await coreData.refreshData();
-        await coreData.syncToBackend();
-        await forceProfileSyncNow();
         
-        try {
-          if (typeof window !== 'undefined' && typeof window.dispatchEvent !== 'undefined') {
-            window.dispatchEvent(new Event('cloudDataRestored'));
-            console.log('[Settings] Dispatched cloudDataRestored event for crew recognition reload');
-          }
-        } catch (e) {
-          console.log('[Settings] Could not dispatch cloudDataRestored event:', e);
-        }
+        emitAppDataEvent('cloudDataRestored');
+        console.log('[Settings] Dispatched cross-platform cloudDataRestored event for provider reload');
         
         Alert.alert(
           'Import Successful',
-          `Imported:\n• ${importedCruises} cruises\n• ${importedBooked} booked cruises\n• ${importedOffers} offers\n• ${calendarEvents} events\n• ${importedSessions} casino sessions\n• ${certificates} certificates\n• ${importedMachines} machines\n• Crew members\n• User profile (name, C&A #, playing hours)\n• Loyalty points\n\nData has been loaded successfully.`
+          `Imported:\n• ${importedCruises} cruises\n• ${importedBooked} booked cruises\n• ${importedOffers} offers\n• ${calendarEvents} events\n• ${importedSessions} casino sessions\n• ${certificates} certificates\n• ${importedMachines} machines\n• ${result.imported.crewRecognitionEntries ?? 0} crew recognition entries\n• User profile (name, C&A #, playing hours)\n• Loyalty points\n\nData has been loaded successfully.`
         );
       }
     } catch (error) {
@@ -1763,7 +1834,7 @@ export default function SettingsScreen() {
     } finally {
       setIsImportingAll(false);
     }
-  }, [authenticatedEmail, coreData, currentUser?.email, currentUser?.id, forceProfileSyncNow, reloadCasinoSessions, reloadMachines, setLocalData, syncLoyaltyFromStorage, syncUserFromStorage]);
+  }, [authenticatedEmail, coreData, currentUser?.email, currentUser?.id, reloadCasinoSessions, reloadMachines, setLocalData, syncLoyaltyFromStorage, syncUserFromStorage]);
 
   const handleDownloadExtension = useCallback(async () => {
     try {
@@ -1857,6 +1928,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
     crownAnchorNumber: string;
     clubRoyalePoints: number;
     clubRoyaleTier: string;
+    clubRoyaleTierValidThrough?: string;
     loyaltyPoints: number;
     crownAnchorLevel: string;
     celebrityEmail?: string;
@@ -1872,9 +1944,6 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
     silverseaVenetianPoints?: number;
     carnivalVifpNumber?: string;
     carnivalVifpTier?: string;
-    carnivalVifpPoints?: number;
-    carnivalCruiseDayPoints?: number;
-    carnivalTotalCruises?: number;
     carnivalPlayersClubTier?: string;
     carnivalPlayersClubPoints?: number;
     birthdate?: string;
@@ -1887,58 +1956,42 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
       const newEmail = profileData.email.toLowerCase().trim();
       const profileEmailChanged = Boolean(oldEmail && oldEmail !== newEmail);
       const emailChanged = isPrimaryProfileSelected && profileEmailChanged;
+      const isChangingToReservedAdminEmail = profileEmailChanged && isAdminAccountEmail(newEmail) && !isAdminAccountEmail(oldEmail ?? '');
+      const isChangingAdminAccountEmail = emailChanged && (isAdmin || isAdminAccountEmail(oldEmail ?? ''));
       
       console.log('[Settings] Email change check:', { oldEmail, newEmail, emailChanged });
+
+      if (!newEmail || !newEmail.includes('@')) {
+        Alert.alert('Invalid Email', 'Please enter a valid email address before saving your profile.');
+        setIsSaving(false);
+        return;
+      }
+
+      if (isChangingToReservedAdminEmail || isChangingAdminAccountEmail) {
+        Alert.alert(
+          'Admin Email Protected',
+          'Admin email addresses cannot be claimed or changed from the profile editor. Please sign out and log in with the admin email and password instead.'
+        );
+        setIsSaving(false);
+        return;
+      }
       
-      if (emailChanged) {
-        if (isAdmin) {
-          return new Promise<void>((resolve) => {
-            Alert.prompt(
-              'Admin Email Verification',
-              'You are an admin. Please enter the password to change your email:',
-              [
-                {
-                  text: 'Cancel',
-                  style: 'cancel',
-                  onPress: () => {
-                    setIsSaving(false);
-                    resolve();
-                  },
-                },
-                {
-                  text: 'Verify',
-                  onPress: async (password?: string) => {
-                    if (password !== 'a1') {
-                      Alert.alert('Invalid Password', 'The password you entered is incorrect.');
-                      setIsSaving(false);
-                      resolve();
-                      return;
-                    }
-                    await continueProfileSave(profileData, oldEmail, newEmail, !!emailChanged);
-                    resolve();
-                  },
-                },
-              ],
-              'secure-text'
+      if (profileEmailChanged) {
+        try {
+          const emailCheck = { exists: false };
+          if (emailCheck.exists) {
+            Alert.alert(
+              'Email Already Exists',
+              'This email is already associated with another account. Please use a different email address.'
             );
-          });
-        } else {
-          try {
-            const emailCheck = { exists: false };
-            if (emailCheck.exists) {
-              Alert.alert(
-                'Email Already Exists',
-                'This email is already associated with another account. Please use a different email address.'
-              );
-              setIsSaving(false);
-              return;
-            }
-          } catch (error) {
-            console.error('[Settings] Error checking email uniqueness:', error);
-            Alert.alert('Error', 'Failed to verify email. Please try again.');
             setIsSaving(false);
             return;
           }
+        } catch (error) {
+          console.error('[Settings] Error checking email uniqueness:', error);
+          Alert.alert('Error', 'Failed to verify email. Please try again.');
+          setIsSaving(false);
+          return;
         }
       }
       
@@ -1957,6 +2010,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
       crownAnchorNumber: string;
       clubRoyalePoints: number;
       clubRoyaleTier: string;
+      clubRoyaleTierValidThrough?: string;
       loyaltyPoints: number;
       crownAnchorLevel: string;
       celebrityEmail?: string;
@@ -1972,9 +2026,6 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
       silverseaVenetianPoints?: number;
       carnivalVifpNumber?: string;
       carnivalVifpTier?: string;
-      carnivalVifpPoints?: number;
-      carnivalCruiseDayPoints?: number;
-      carnivalTotalCruises?: number;
       carnivalPlayersClubTier?: string;
       carnivalPlayersClubPoints?: number;
       birthdate?: string;
@@ -1986,17 +2037,21 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
     try {
       const editableUser = profileDisplayUser ?? (await ensureOwner());
 
+      const loyaltyConfirmationTimestamp = new Date().toISOString();
       await updateUser(editableUser.id, { 
           name: profileData.name,
           email: profileData.email,
           crownAnchorNumber: profileData.crownAnchorNumber,
           clubRoyalePoints: profileData.clubRoyalePoints,
           clubRoyaleTier: profileData.clubRoyaleTier,
+          clubRoyaleTierValidThrough: profileData.clubRoyaleTierValidThrough,
+          clubRoyaleTierConfirmedAt: loyaltyConfirmationTimestamp,
           crownAnchorLevel: profileData.crownAnchorLevel,
           loyaltyPoints: profileData.loyaltyPoints,
           celebrityEmail: profileData.celebrityEmail,
           celebrityCaptainsClubNumber: profileData.celebrityCaptainsClubNumber,
           celebrityCaptainsClubPoints: profileData.celebrityCaptainsClubPoints,
+          celebrityCaptainsClubTier: profileData.celebrityCaptainsClubLevel,
           celebrityBlueChipPoints: profileData.celebrityBlueChipPoints,
           celebrityBlueChipTier: profileData.celebrityBlueChipTier,
           preferredBrand: profileData.preferredBrand,
@@ -2006,12 +2061,10 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
           silverseaVenetianPoints: profileData.silverseaVenetianPoints,
           carnivalVifpNumber: profileData.carnivalVifpNumber,
           carnivalVifpTier: profileData.carnivalVifpTier,
-          carnivalVifpPoints: profileData.carnivalVifpPoints,
-          carnivalCruiseDayPoints: profileData.carnivalCruiseDayPoints,
-          carnivalTotalCruises: profileData.carnivalTotalCruises,
           carnivalPlayersClubTier: profileData.carnivalPlayersClubTier,
           carnivalPlayersClubPoints: profileData.carnivalPlayersClubPoints,
           birthdate: profileData.birthdate || undefined,
+          loyaltyManualOverrideAt: loyaltyConfirmationTimestamp,
         });
       
       if (isPrimaryProfileSelected) {
@@ -2039,9 +2092,6 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
       console.log('[Settings] ✓ Updated Carnival loyalty:', {
         vifpNumber: profileData.carnivalVifpNumber,
         vifpTier: profileData.carnivalVifpTier,
-        vifpPoints: profileData.carnivalVifpPoints,
-        cruiseDayPoints: profileData.carnivalCruiseDayPoints,
-        totalCruises: profileData.carnivalTotalCruises,
         playersClubTier: profileData.carnivalPlayersClubTier,
         playersClubPoints: profileData.carnivalPlayersClubPoints
       });
@@ -2050,8 +2100,6 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
       if (isPrimaryProfileSelected) {
         await syncLoyaltyFromStorage();
       }
-      await forceProfileSyncNow();
-      
       if (emailChanged) {
         console.log('[Settings] Email changed - updating auth state and triggering re-login');
         await updateEmail(newEmail);
@@ -2185,27 +2233,213 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
   }, [myAtlasMachines, exportMachinesJSON]);
 
   const handleSaveMockData = useCallback(async () => {
-    try {
-      setIsSavingMockData(true);
-      console.log('[Settings] Starting mock data save...');
-      
-      const result = await saveMockData();
-      
-      if (result.success) {
-        Alert.alert(
-          'Mock Data Saved',
-          result.message
-        );
-      } else {
-        Alert.alert('Save Failed', result.message);
-      }
-    } catch (error) {
-      console.error('[Settings] Save mock data error:', error);
-      Alert.alert('Save Error', 'Failed to save mock data. Please try again.');
-    } finally {
-      setIsSavingMockData(false);
-    }
+    Alert.alert('Unavailable', 'Mock-data export is disabled in production data paths.');
   }, []);
+
+  const handleSyncToCloud = useCallback(async () => {
+    try {
+      setIsCheckingCloudSync(true);
+      const createCloudDriveBackup = async (reason: string) => {
+        const result = await exportAllDataToFile(authenticatedEmail, {
+          authenticatedEmail,
+          activeProfileId: currentUser?.id ?? null,
+          activeProfileEmail: currentUser?.email ?? authenticatedEmail ?? null,
+        });
+        if (!result.success) {
+          throw new Error(result.error || 'The local backup file could not be created.');
+        }
+        Alert.alert(
+          'Cloud Backup Ready',
+          `${reason}\n\nThe complete Easy Seas backup was created as ${result.fileName ?? 'a JSON backup'}. In the iOS share sheet, choose Save to Files and select iCloud Drive.`,
+        );
+      };
+
+      // Easy Seas remains fully local-first. When no service endpoint exists,
+      // the button still performs a real, backend-free cloud backup through
+      // iOS Files/iCloud Drive instead of presenting a permanently disabled
+      // error. A configured service remains an optional faster sync path.
+      if (!isCloudBackupEnabled() || !BACKEND_BASE_URL || !isAuthenticated || !authenticatedEmail) {
+        await createCloudDriveBackup('No Easy Seas cloud service is configured, so the backend-free iCloud Drive path was used.');
+        return;
+      }
+
+      // The user explicitly requested a new attempt; do not reuse a cached
+      // offline result from an earlier voyage/network transition.
+      resetBackendHealthCache();
+      const reachable = await isBackendReachable();
+      if (!reachable) {
+        await createCloudDriveBackup('The optional Easy Seas cloud service was offline, so the backend-free iCloud Drive path was used.');
+        return;
+      }
+      const synced = await forceProfileSyncNow();
+      if (!synced) {
+        Alert.alert('Cloud Sync Not Completed', cloudSyncError || 'The backup was not completed. Your local data remains unchanged.');
+        return;
+      }
+      Alert.alert('Cloud Sync Complete', 'Your current local Easy Seas data was backed up successfully.');
+    } catch (error) {
+      Alert.alert('Cloud Sync Failed', `${error instanceof Error ? error.message : 'The backup could not be completed.'}\n\nYour local data remains unchanged.`);
+    } finally {
+      setIsCheckingCloudSync(false);
+    }
+  }, [authenticatedEmail, cloudSyncError, currentUser?.email, currentUser?.id, forceProfileSyncNow, isAuthenticated]);
+
+  const handleExportOverallAppLog = useCallback(async () => {
+    try {
+      setIsExportingAppLog(true);
+      recordDiagnosticEvent({
+        level: 'info',
+        category: 'ADMIN',
+        event: 'OVERALL_APP_LOG_EXPORT',
+        message: 'Admin requested overall app diagnostic export',
+      });
+      await flushDiagnosticJournal();
+      const diagnostic = await buildDiagnosticExport({
+        diagnosticVersion: EASYSEAS_DIAGNOSTIC_VERSION,
+        platform: Platform.OS,
+        isAuthenticated,
+        isAdmin,
+        activeProfileId: currentUser?.id ?? null,
+        dataStats,
+        cloudBackupConfigured: Boolean(BACKEND_BASE_URL && isCloudBackupEnabled()),
+        cloudSyncInProgress: isCloudSyncing,
+        lastCloudSyncTime: lastSyncTime,
+        cloudSyncError,
+      });
+      const journal = await readDiagnosticJournal();
+      const exportedAt = new Date().toISOString();
+      const content = [
+        `Easy Seas Overall App Log — ${EASYSEAS_DIAGNOSTIC_VERSION}`,
+        `Exported: ${exportedAt}`,
+        '',
+        diagnostic,
+        '',
+        'Persistent Sync / Storage Journal:',
+        journal || '[No persistent journal entries in this installation.]',
+      ].join('\n');
+      const fileName = `easyseas_overall_app_log_${exportedAt.replace(/[:.]/g, '-')}.log`;
+      const success = await exportFile(content, fileName);
+      Alert.alert(success ? 'App Log Exported' : 'Export Unavailable', success ? 'The overall app diagnostic log is ready to save or share.' : 'The app log could not be exported on this device.');
+    } catch (error) {
+      Alert.alert('Export Error', error instanceof Error ? error.message : 'The overall app log could not be exported.');
+    } finally {
+      setIsExportingAppLog(false);
+    }
+  }, [cloudSyncError, currentUser?.id, dataStats, isAdmin, isAuthenticated, isCloudSyncing, lastSyncTime]);
+
+  const handleExportCurrentUserSessionLog = useCallback(async () => {
+    try {
+      setIsExportingSessionLog(true);
+      recordDiagnosticEvent({
+        level: 'info',
+        category: 'ADMIN',
+        event: 'CURRENT_USER_SESSION_LOG_EXPORT',
+        message: 'Admin requested the current user session JSON log',
+      });
+      await flushDiagnosticJournal();
+      const exportedAt = new Date().toISOString();
+      const content = buildCurrentUserSessionLog({
+        appVersion: EASYSEAS_DIAGNOSTIC_VERSION,
+        platform: Platform.OS,
+        user: {
+          profileId: currentUser?.id ?? null,
+          name: currentUser?.name ?? null,
+          email: authenticatedEmail,
+          isAdmin,
+        },
+        stateSnapshot: {
+          dataStats,
+          loyalty: {
+            crownAnchorPoints: loyaltyCrownAnchorPoints,
+            crownAnchorLevel: loyaltyCrownAnchorLevel,
+            clubRoyalePoints: loyaltyClubRoyalePoints,
+            clubRoyaleTier: loyaltyClubRoyaleTier,
+          },
+          sync: {
+            cloudBackupConfigured: Boolean(BACKEND_BASE_URL && isCloudBackupEnabled()),
+            isCloudSyncing,
+            lastSyncTime,
+            cloudSyncError,
+          },
+        },
+      });
+      // Verify the artifact is machine-readable before exposing it to sharing.
+      JSON.parse(content);
+      const fileName = `easyseas_user_session_${exportedAt.replace(/[:.]/g, '-')}.json`;
+      const success = await exportFile(content, fileName);
+      Alert.alert(
+        success ? 'Session Log Exported' : 'Export Unavailable',
+        success ? `The current user session log is ready to save or share.\n\nFile: ${fileName}` : 'The session log could not be exported on this device.',
+      );
+    } catch (error) {
+      Alert.alert('Export Error', error instanceof Error ? error.message : 'The current user session log could not be exported.');
+    } finally {
+      setIsExportingSessionLog(false);
+    }
+  }, [authenticatedEmail, cloudSyncError, currentUser?.id, currentUser?.name, dataStats, isAdmin, isCloudSyncing, lastSyncTime, loyaltyClubRoyalePoints, loyaltyClubRoyaleTier, loyaltyCrownAnchorLevel, loyaltyCrownAnchorPoints]);
+
+  const closeCredentialEnrollment = useCallback(() => {
+    if (isEnrollingCredential) return;
+    setCredentialPin('');
+    setCredentialPinConfirmation('');
+    setIsCredentialEnrollmentVisible(false);
+  }, [isEnrollingCredential]);
+
+  const handleCredentialEnrollment = useCallback(async () => {
+    if (!/^\d{6}$/.test(credentialPin)) {
+      Alert.alert('Six-Digit PIN Required', 'Enter exactly six numbers for your Easy Seas device PIN.');
+      return;
+    }
+    if (credentialPin !== credentialPinConfirmation) {
+      Alert.alert('PINs Do Not Match', 'Re-enter the same six-digit PIN in both fields.');
+      return;
+    }
+
+    setIsEnrollingCredential(true);
+    try {
+      const enrolled = await enrollDeviceCredential(credentialPin);
+      if (!enrolled) {
+        Alert.alert('Could Not Enable Secure Access', 'Your local data is unchanged. Please try again.');
+        return;
+      }
+      setCredentialPin('');
+      setCredentialPinConfirmation('');
+      setIsCredentialEnrollmentVisible(false);
+      Alert.alert('Secure Access Enabled', 'Easy Seas will require this PIN or your device biometrics after you sign out or restart.');
+    } finally {
+      setIsEnrollingCredential(false);
+    }
+  }, [credentialPin, credentialPinConfirmation, enrollDeviceCredential]);
+
+  const handleVoyageNotificationsToggle = useCallback(async (enabled: boolean) => {
+    if (isUpdatingNotificationPreference) return;
+    setIsUpdatingNotificationPreference(true);
+    try {
+      if (enabled) {
+        const granted = await requestVoyageNotificationPermission();
+        if (!granted) {
+          Alert.alert(
+            'Notifications Are Off',
+            'Easy Seas did not receive notification permission. Nothing was scheduled, and all app data remains available in the app.',
+          );
+          updateSettings({ dailySummaryNotifications: false });
+          return;
+        }
+        updateSettings({ dailySummaryNotifications: true });
+        Alert.alert('Voyage Reminders Enabled', 'Easy Seas will schedule a bounded, deduplicated set of local reminders for saved cruise deadlines.');
+        return;
+      }
+
+      updateSettings({ dailySummaryNotifications: false });
+      await cancelAllVoyageNotifications();
+    } catch (error) {
+      console.warn('[Settings] Could not update local voyage reminders:', error);
+      updateSettings({ dailySummaryNotifications: false });
+      Alert.alert('Could Not Update Reminders', 'No app data was changed. Please try again.');
+    } finally {
+      setIsUpdatingNotificationPreference(false);
+    }
+  }, [isUpdatingNotificationPreference, updateSettings]);
 
   const renderSettingRow = (
     icon: React.ReactNode,
@@ -2320,7 +2554,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
                 </View>
                 <View style={styles.dataOverviewTitleGroup}>
                   <Text style={styles.dataOverviewTitle}>Data Overview</Text>
-                  <Text style={styles.dataOverviewSubtitle}>{dataStats.cruises} canonical offer-sailing rows</Text>
+                  <Text style={styles.dataOverviewSubtitle}>{dataStats.cruises} cruises in system</Text>
                 </View>
               </View>
             </LinearGradient>
@@ -2329,7 +2563,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
                 <View style={styles.dataOverviewStatCard}>
                   <Anchor size={14} color="#0369A1" />
                   <Text style={styles.dataOverviewStatValue}>{dataStats.cruises}</Text>
-                  <Text style={styles.dataOverviewStatLabel}>Offer Sailings</Text>
+                  <Text style={styles.dataOverviewStatLabel}>Total Cruises</Text>
                 </View>
                 <View style={styles.dataOverviewStatCard}>
                   <View style={styles.dataOverviewUpcomingCompletedRow}>
@@ -2339,6 +2573,15 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
                   </View>
                   <Text style={styles.dataOverviewStatValue}>{dataStats.booked}</Text>
                   <Text style={styles.dataOverviewStatLabel}>Booked</Text>
+                </View>
+                <View style={styles.dataOverviewStatCard}>
+                  <View style={styles.dataOverviewUpcomingCompletedRow}>
+                    <Text style={styles.dataOverviewMiniStat}>{dataStats.royalBooked} booked</Text>
+                    <Text style={styles.dataOverviewMiniStatDivider}>/</Text>
+                    <Text style={styles.dataOverviewMiniStat}>{dataStats.royalCompleted} done</Text>
+                  </View>
+                  <Text style={styles.dataOverviewStatValue}>{dataStats.royalImported}</Text>
+                  <Text style={styles.dataOverviewStatLabel}>Royal</Text>
                 </View>
                 <View style={styles.dataOverviewStatCard}>
                   <Award size={14} color="#D97706" />
@@ -2372,7 +2615,55 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
             </View>
           </View>
 
-          <View style={[styles.sectionCard, { marginBottom: SPACING.md }]}>
+          <View style={[styles.sectionCard, { marginBottom: SPACING.md }]} testID="secure-access-settings-card">
+            {renderSectionHeader(<Shield size={18} color={COLORS.white} />, 'Secure Access', 'Protect local reservations, loyalty & casino data', ['#0F766E', '#0D9488'])}
+            {renderSettingRow(
+              <Shield size={18} color={requiresCredentialEnrollment ? '#B45309' : '#0F766E'} />,
+              requiresCredentialEnrollment ? 'Set Device PIN' : 'Device Protection',
+              requiresCredentialEnrollment ? (
+                <Text style={[styles.countBadge, styles.credentialEnrollmentBadge]}>Action needed</Text>
+              ) : (
+                <View style={styles.credentialProtectedStatus}>
+                  <CheckCircle size={14} color="#0F766E" />
+                  <Text style={styles.credentialProtectedText}>Protected</Text>
+                </View>
+              ),
+              requiresCredentialEnrollment ? () => setIsCredentialEnrollmentVisible(true) : undefined,
+            )}
+            <Text style={styles.secureAccessHint}>
+              Your Easy Seas data remains stored locally. The device PIN and biometric unlock protect access without requiring the optional cloud service.
+            </Text>
+          </View>
+
+          <View style={[styles.sectionCard, { marginBottom: SPACING.md }]} testID="voyage-notification-settings-card">
+            {renderSectionHeader(<Bell size={18} color={COLORS.white} />, 'Voyage Notifications', 'Local, actionable & deduplicated', ['#6D28D9', '#7C3AED'])}
+            <View style={styles.notificationPreferenceRow}>
+              <View style={styles.notificationPreferenceIcon}>
+                <Bell size={18} color="#6D28D9" />
+              </View>
+              <View style={styles.notificationPreferenceCopy}>
+                <Text style={styles.settingLabel}>Cruise Deadline Reminders</Text>
+                <Text style={styles.notificationPreferenceDetail}>Check-in, final payment, embarkation, offer expiry, and certificate expiry.</Text>
+              </View>
+              {isUpdatingNotificationPreference ? (
+                <ActivityIndicator size="small" color="#6D28D9" />
+              ) : (
+                <Switch
+                  value={settings.dailySummaryNotifications === true}
+                  onValueChange={(value) => { void handleVoyageNotificationsToggle(value); }}
+                  trackColor={{ false: '#CBD5E1', true: '#C4B5FD' }}
+                  thumbColor={settings.dailySummaryNotifications ? '#6D28D9' : '#F8FAFC'}
+                  accessibilityLabel="Enable cruise deadline reminders"
+                  testID="voyage-notifications-toggle"
+                />
+              )}
+            </View>
+            <Text style={styles.secureAccessHint}>
+              Opt-in only. Easy Seas schedules at most 32 local reminders for the next 180 days, never books anything, and removes stale reminders after your data changes.
+            </Text>
+          </View>
+
+          <View style={[styles.sectionCard, { marginBottom: SPACING.md }]}> 
             {renderSectionHeader(<Ship size={18} color={COLORS.white} />, 'Quick Actions', 'Sync, import & backup shortcuts')}
             <View style={styles.quickActionsBody}>
             <TouchableOpacity 
@@ -2386,23 +2677,50 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
               <Text style={styles.quickActionLabelInline}>Sync Royal / Celebrity Casino</Text>
               <ChevronRight size={16} color={CLEAN_THEME.text.secondary} />
             </TouchableOpacity>
-            {isAdmin && (
-              <TouchableOpacity 
-                style={styles.quickActionFullWidth} 
-                onPress={() => router.push('/carnival-sync' as any)}
-                activeOpacity={0.7}
-                testID="settings-admin-carnival-sync"
-              >
-                <View style={[styles.quickActionIconSmall, { backgroundColor: 'rgba(204, 34, 50, 0.1)' }]}>
-                  <Anchor size={16} color="#CC2232" />
-                </View>
-                <Text style={styles.quickActionLabelInline}>Sync Carnival Cruises</Text>
-                <View style={styles.adminOnlyPill}>
-                  <Text style={styles.adminOnlyPillText}>ADMIN</Text>
-                </View>
-                <ChevronRight size={16} color={CLEAN_THEME.text.secondary} />
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity 
+              style={[styles.quickActionFullWidth, !carnivalSyncAccess.enabled && { opacity: 0.55 }]} 
+              onPress={() => {
+                if (carnivalSyncAccess.enabled) {
+                  router.push('/carnival-sync' as any);
+                  return;
+                }
+                Alert.alert('Carnival Sync', carnivalSyncAccess.reason);
+              }}
+              activeOpacity={0.7}
+              accessibilityState={{ disabled: !carnivalSyncAccess.enabled }}
+            >
+              <View style={[styles.quickActionIconSmall, { backgroundColor: 'rgba(204, 34, 50, 0.1)' }]}>
+                <Anchor size={16} color="#CC2232" />
+              </View>
+              <Text style={styles.quickActionLabelInline}>Sync Carnival Cruises</Text>
+              <ChevronRight size={16} color={CLEAN_THEME.text.secondary} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.quickActionFullWidth, (isCheckingCloudSync || isCloudSyncing) && { opacity: 0.65 }]}
+              onPress={() => void handleSyncToCloud()}
+              activeOpacity={0.7}
+              disabled={isCheckingCloudSync || isCloudSyncing}
+              testID="settings-sync-to-cloud"
+            >
+              <View style={[styles.quickActionIconSmall, { backgroundColor: 'rgba(3, 105, 161, 0.1)' }]}>
+                {isCheckingCloudSync || isCloudSyncing ? (
+                  <ActivityIndicator size="small" color="#0369A1" />
+                ) : (
+                  <Upload size={16} color="#0369A1" />
+                )}
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.quickActionLabelInline}>SYNC TO CLOUD</Text>
+                <Text style={styles.subsectionHelper}>
+                  {lastSyncTime ? `Last backup ${new Date(lastSyncTime).toLocaleString()}` : 'Optional backup when internet and cloud service are available'}
+                </Text>
+              </View>
+              <ChevronRight size={16} color={CLEAN_THEME.text.secondary} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.quickActionFullWidth} onPress={() => router.push('/import-cruises' as any)} activeOpacity={0.7} testID="settings-get-all-current-pricing">
+              <View style={[styles.quickActionIconSmall,{backgroundColor:'rgba(5,150,105,.1)'}]}><TrendingDown size={16} color="#059669"/></View>
+              <View style={{flex:1}}><Text style={styles.quickActionLabelInline}>GET ALL CURRENT PRICING</Text><Text style={styles.subsectionHelper}>Booked and completed first, followed by saved offer sailings; verified results only</Text></View><ChevronRight size={16} color={CLEAN_THEME.text.secondary}/>
+            </TouchableOpacity>
             <TouchableOpacity 
               style={styles.quickActionFullWidth} 
               onPress={() => router.push('/pricing-summary' as any)}
@@ -2664,6 +2982,7 @@ booked-liberty-1,Liberty of the Seas,10-16-2025,10-25-2025,9,9 Night Canada & Ne
                 ),
                 handleExportBookedCSV
               )}
+              {renderSettingRow(<FileSpreadsheet size={18} color={COLORS.success} />,'Booked + Completed XLSX',isExporting?<ActivityIndicator size="small" color={COLORS.success}/>:<Text style={styles.countBadge}>All fields</Text>,handleExportBookedXLSX)}
               {renderSettingRow(
                 <Download size={18} color={COLORS.navyDeep} />,
                 'Calendar (.ics)',
@@ -2936,22 +3255,6 @@ STEP 4: Optional Calendar Import
                   </Text>
                 </View>
                 
-
-                <View style={styles.dataDivider} />
-                {renderSettingRow(
-                  <FileDown size={18} color={COLORS.navyDeep} />,
-                  isExportingDiagnostics ? 'Exporting Diagnostic Logs...' : 'Export Diagnostic Logs',
-                  <Text style={styles.countBadge}>Admin</Text>,
-                  handleExportDiagnosticLogs,
-                  isExportingDiagnostics
-                )}
-                {renderSettingRow(
-                  <Trash2 size={18} color="#EF4444" />,
-                  'Clear Diagnostic Logs',
-                  <ChevronRight size={14} color={CLEAN_THEME.text.secondary} />,
-                  handleClearDiagnosticLogs
-                )}
-
                 <View style={styles.addEmailContainer}>
                   <TextInput
                     style={styles.addEmailInput}
@@ -3003,6 +3306,12 @@ STEP 4: Optional Calendar Import
                   ),
                   handleExportMachinesJSON
                 )}
+                {renderSettingRow(
+                  <FileDown size={18} color="#FF5722" />,
+                  'Export Current User Session Log (.json)',
+                  isExportingSessionLog ? <ActivityIndicator size="small" color="#FF5722" /> : undefined,
+                  () => void handleExportCurrentUserSessionLog()
+                )}
 
                 <View style={styles.dataDivider} />
                 
@@ -3048,6 +3357,12 @@ STEP 4: Optional Calendar Import
                     </View>
                   ) : undefined,
                   handleImportCompletedCruisesXLSX
+                )}
+                {renderSettingRow(
+                  <FileDown size={18} color={COLORS.navyDeep} />,
+                  'Export Overall App Log',
+                  isExportingAppLog ? <ActivityIndicator size="small" color={COLORS.navyDeep} /> : undefined,
+                  () => void handleExportOverallAppLog()
                 )}
                 {renderSettingRow(
                   <RefreshCcw size={18} color={COLORS.error} />,
@@ -3178,6 +3493,68 @@ STEP 4: Optional Calendar Import
           </ResponsiveContainer>
         </ScrollView>
       </SafeAreaView>
+
+      <Modal
+        visible={isCredentialEnrollmentVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={closeCredentialEnrollment}
+      >
+        <View style={styles.credentialModalBackdrop}>
+          <View style={styles.credentialModalCard} testID="device-pin-enrollment-modal">
+            <View style={styles.credentialModalIcon}>
+              <Shield size={26} color="#0F766E" />
+            </View>
+            <Text style={styles.credentialModalTitle}>Protect Easy Seas</Text>
+            <Text style={styles.credentialModalCopy}>
+              Create a six-digit PIN for this device. Your cruises and casino records are not deleted or uploaded.
+            </Text>
+            <TextInput
+              style={styles.credentialPinInput}
+              value={credentialPin}
+              onChangeText={(value) => setCredentialPin(value.replace(/\D/g, '').slice(0, 6))}
+              placeholder="Enter six-digit PIN"
+              placeholderTextColor="#94A3B8"
+              keyboardType="number-pad"
+              secureTextEntry={true}
+              maxLength={6}
+              autoFocus={true}
+              testID="device-pin-enrollment-input"
+            />
+            <TextInput
+              style={styles.credentialPinInput}
+              value={credentialPinConfirmation}
+              onChangeText={(value) => setCredentialPinConfirmation(value.replace(/\D/g, '').slice(0, 6))}
+              placeholder="Confirm six-digit PIN"
+              placeholderTextColor="#94A3B8"
+              keyboardType="number-pad"
+              secureTextEntry={true}
+              maxLength={6}
+              testID="device-pin-enrollment-confirmation"
+            />
+            <View style={styles.credentialModalActions}>
+              <TouchableOpacity
+                style={styles.credentialModalCancel}
+                onPress={closeCredentialEnrollment}
+                disabled={isEnrollingCredential}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.credentialModalCancelText}>Not Now</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.credentialModalEnable, isEnrollingCredential && { opacity: 0.65 }]}
+                onPress={() => { void handleCredentialEnrollment(); }}
+                disabled={isEnrollingCredential}
+                activeOpacity={0.8}
+                testID="device-pin-enrollment-submit"
+              >
+                {isEnrollingCredential ? <ActivityIndicator size="small" color={COLORS.white} /> : <Shield size={16} color={COLORS.white} />}
+                <Text style={styles.credentialModalEnableText}>Enable</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
       
       <UserManualModal
         visible={isUserManualVisible}
@@ -3226,19 +3603,9 @@ STEP 4: Optional Calendar Import
 
             <Text style={styles.smartImportReviewIntro}>Review each imported row before applying. Nothing is written until you tap Apply.</Text>
 
-            <FlatList
-              style={styles.smartImportRowsScroll}
-              contentContainerStyle={styles.smartImportRowsContent}
-              data={pendingSmartImportReview?.rows ?? []}
-              renderItem={({ item }) => renderSmartImportReviewRow(item)}
-              keyExtractor={(item) => item.id}
-              showsVerticalScrollIndicator={true}
-              initialNumToRender={12}
-              maxToRenderPerBatch={12}
-              windowSize={8}
-              updateCellsBatchingPeriod={32}
-              removeClippedSubviews={Platform.OS !== 'web'}
-            />
+            <ScrollView style={styles.smartImportRowsScroll} contentContainerStyle={styles.smartImportRowsContent} showsVerticalScrollIndicator={true}>
+              {(pendingSmartImportReview?.rows ?? []).map(renderSmartImportReviewRow)}
+            </ScrollView>
 
             <View style={styles.smartImportFooter}>
               <TouchableOpacity style={styles.smartImportCancelButton} onPress={() => setPendingSmartImportReview(null)} activeOpacity={0.8} testID="smart-import-review-cancel">
@@ -3691,20 +4058,6 @@ const styles = StyleSheet.create({
     fontWeight: '600' as const,
     color: '#1E293B',
     letterSpacing: 0.1,
-  },
-  adminOnlyPill: {
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 999,
-    backgroundColor: 'rgba(204, 34, 50, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(204, 34, 50, 0.28)',
-  },
-  adminOnlyPillText: {
-    color: '#CC2232',
-    fontSize: 9,
-    fontWeight: '800' as const,
-    letterSpacing: 0.5,
   },
   adminHeader: {
     paddingHorizontal: SPACING.md,
@@ -4307,6 +4660,139 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   smartImportApplyText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.white,
+  },
+  credentialEnrollmentBadge: {
+    color: '#92400E',
+    backgroundColor: '#FEF3C7',
+  },
+  notificationPreferenceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.md,
+    gap: SPACING.sm,
+  },
+  notificationPreferenceIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EDE9FE',
+  },
+  notificationPreferenceCopy: {
+    flex: 1,
+  },
+  notificationPreferenceDetail: {
+    marginTop: 2,
+    color: '#64748B',
+    fontSize: 11,
+    lineHeight: 16,
+  },
+  credentialProtectedStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  credentialProtectedText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#0F766E',
+  },
+  secureAccessHint: {
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.xs,
+    paddingBottom: SPACING.md,
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    lineHeight: 17,
+    color: '#475569',
+  },
+  credentialModalBackdrop: {
+    flex: 1,
+    justifyContent: 'center',
+    padding: SPACING.lg,
+    backgroundColor: 'rgba(2, 6, 23, 0.72)',
+  },
+  credentialModalCard: {
+    alignSelf: 'center',
+    width: '100%',
+    maxWidth: 440,
+    padding: SPACING.lg,
+    borderRadius: BORDER_RADIUS.xl,
+    backgroundColor: COLORS.white,
+    ...SHADOW.lg,
+  },
+  credentialModalIcon: {
+    alignSelf: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#CCFBF1',
+  },
+  credentialModalTitle: {
+    marginTop: SPACING.sm,
+    textAlign: 'center',
+    fontSize: TYPOGRAPHY.fontSizeXL,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  credentialModalCopy: {
+    marginTop: SPACING.xs,
+    marginBottom: SPACING.md,
+    textAlign: 'center',
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    lineHeight: 20,
+    color: '#475569',
+  },
+  credentialPinInput: {
+    minHeight: 52,
+    marginBottom: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: '#F8FAFC',
+    textAlign: 'center',
+    fontSize: TYPOGRAPHY.fontSizeLG,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    letterSpacing: 4,
+    color: COLORS.navyDeep,
+  },
+  credentialModalActions: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    marginTop: SPACING.xs,
+  },
+  credentialModalCancel: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 48,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: BORDER_RADIUS.md,
+  },
+  credentialModalCancelText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#334155',
+  },
+  credentialModalEnable: {
+    flex: 1.25,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.xs,
+    minHeight: 48,
+    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: '#0F766E',
+  },
+  credentialModalEnableText: {
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: TYPOGRAPHY.fontWeightBold,
     color: COLORS.white,

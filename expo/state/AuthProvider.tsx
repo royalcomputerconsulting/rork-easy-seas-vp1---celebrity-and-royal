@@ -1,10 +1,20 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import createContextHook from "@nkzw/create-context-hook";
 import { STORAGE_KEYS } from "@/lib/storage/storageKeys";
-import { isCloudBackupEnabled, trpcClient } from "@/lib/trpc";
+import { trpcClient } from "@/lib/trpc";
+import {
+  authenticateDeviceCredentialWithBiometrics,
+  getDeviceCredentialMode,
+  getDeviceCredentialRole,
+  hasDeviceCredential,
+  moveDeviceCredential,
+  reserveLegacyOwner,
+  verifyOrCreateDeviceCredential,
+  type DeviceCredentialMode,
+  type DeviceCredentialRole,
+} from '@/lib/auth/deviceCredential';
 
-const ADMIN_PASSWORD = "a1";
 const AUTH_KEY = "easyseas_authenticated";
 const AUTH_EMAIL_KEY = "easyseas_auth_email";
 const FRESH_START_KEY = "easyseas_fresh_start";
@@ -15,6 +25,22 @@ const FREE_USE_SUBSCRIPTION_LEVEL = "Free Use of App" as const;
 const GLOBAL_WHITELIST_KEY = STORAGE_KEYS.EMAIL_WHITELIST_GLOBAL;
 const LEGACY_WHITELIST_KEY = STORAGE_KEYS.EMAIL_WHITELIST;
 const PENDING_WHITELIST_SYNC_KEY = STORAGE_KEYS.EMAIL_WHITELIST_PENDING;
+const AUTH_BOOTSTRAP_TIMEOUT_MS = 3500;
+const AUTH_BOOTSTRAP_WATCHDOG_MS = 4500;
+const AUTH_CLOUD_REFRESH_TIMEOUT_MS = 6500;
+const DEVICE_CREDENTIAL_TIMEOUT_MS = 1500;
+
+function withAuthTimeout<T>(operation: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_resolve, reject) => {
+    timeout = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
+  });
+
+  return Promise.race([operation, timeoutPromise]).finally(() => {
+    if (timeout) clearTimeout(timeout);
+  });
+}
+
 const WHITELIST_STORAGE_KEYS = [GLOBAL_WHITELIST_KEY, LEGACY_WHITELIST_KEY] as const;
 type WhitelistPendingAction = 'add' | 'remove';
 
@@ -33,7 +59,11 @@ interface AuthState {
   isAdmin: boolean;
   isWhitelisted: boolean;
   subscriptionLevel: string | null;
-  login: (email: string, password?: string) => Promise<boolean>;
+  requiresCredentialEnrollment: boolean;
+  login: (email: string, devicePin?: string) => Promise<boolean>;
+  enrollDeviceCredential: (devicePin: string) => Promise<boolean>;
+  getCredentialMode: (email: string) => Promise<DeviceCredentialMode>;
+  unlockWithBiometrics: (email: string) => Promise<boolean>;
   logout: () => Promise<void>;
   clearFreshStartFlag: () => Promise<void>;
   getWhitelist: () => Promise<string[]>;
@@ -182,10 +212,6 @@ function applyPendingWhitelistMutations(whitelist: string[], pending: WhitelistP
 }
 
 async function flushPendingWhitelistMutations(): Promise<void> {
-  if (!isCloudBackupEnabled()) {
-    return;
-  }
-
   const pending = await readPendingWhitelistMutations();
   if (pending.length === 0) {
     return;
@@ -217,85 +243,157 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [isWhitelisted, setIsWhitelisted] = useState<boolean>(false);
   const [subscriptionLevel, setSubscriptionLevel] = useState<string | null>(null);
+  const [requiresCredentialEnrollment, setRequiresCredentialEnrollment] = useState<boolean>(false);
+  const authenticatedEmailRef = useRef<string | null>(null);
 
-  const checkWhitelistStatus = useCallback(async (email: string | null): Promise<boolean> => {
-    if (!email) return false;
+  useEffect(() => {
+    authenticatedEmailRef.current = normalizeEmail(authenticatedEmail);
+  }, [authenticatedEmail]);
+
+  const getLocalWhitelistInternal = useCallback(async (): Promise<string[]> => {
     try {
-      const whitelist = await getWhitelistInternal();
-      const normalizedEmail = normalizeEmail(email);
-      return !!normalizedEmail && whitelist.some(e => normalizeEmail(e) === normalizedEmail);
+      const [localWhitelist, pendingMutations] = await Promise.all([
+        readStoredWhitelists(),
+        readPendingWhitelistMutations(),
+      ]);
+      return applyPendingWhitelistMutations(localWhitelist, pendingMutations);
     } catch (error) {
-      console.error('[AuthProvider] Error checking whitelist status:', error);
-      return false;
+      console.error('[AuthProvider] Failed loading local whitelist cache:', error);
+      return [...ADMIN_EMAILS];
     }
   }, []);
 
-  const getWhitelistInternal = async (): Promise<string[]> => {
+  const getWhitelistInternal = useCallback(async (): Promise<string[]> => {
+    const localWhitelist = await getLocalWhitelistInternal();
+
     try {
-      const localWhitelist = await readStoredWhitelists();
-      await flushPendingWhitelistMutations();
-      const pendingMutations = await readPendingWhitelistMutations();
-      let cloudWhitelist: string[] = [];
-
-      if (isCloudBackupEnabled()) {
-        try {
-          const cloudResult = await trpcClient.access.getWhitelist.query();
-          cloudWhitelist = cloudResult.whitelist;
-          console.log('[AuthProvider] Loaded cloud global whitelist:', { count: cloudWhitelist.length });
-        } catch (cloudError) {
-          console.warn('[AuthProvider] Cloud global whitelist unavailable, using local global whitelist cache:', cloudError);
-        }
-      } else {
-        console.log('[AuthProvider] Local-first mode: using local whitelist cache only');
-      }
-
-      const mergedWhitelist = applyPendingWhitelistMutations(mergeWhitelistEmails(localWhitelist, cloudWhitelist), pendingMutations);
-      await writeGlobalWhitelist(mergedWhitelist);
-      return mergedWhitelist;
-    } catch (error) {
-      console.error('[AuthProvider] Failed loading global whitelist:', error);
-      return [...ADMIN_EMAILS];
+      return await withAuthTimeout((async () => {
+        await flushPendingWhitelistMutations();
+        const pendingMutations = await readPendingWhitelistMutations();
+        const cloudResult = await trpcClient.access.getWhitelist.query();
+        const mergedWhitelist = applyPendingWhitelistMutations(
+          mergeWhitelistEmails(localWhitelist, cloudResult.whitelist),
+          pendingMutations,
+        );
+        await writeGlobalWhitelist(mergedWhitelist);
+        console.log('[AuthProvider] Loaded cloud global whitelist:', { count: cloudResult.whitelist.length });
+        return mergedWhitelist;
+      })(), AUTH_CLOUD_REFRESH_TIMEOUT_MS, '[AuthProvider] Cloud whitelist refresh');
+    } catch (cloudError) {
+      console.warn('[AuthProvider] Cloud global whitelist unavailable, using local global whitelist cache:', cloudError);
+      return localWhitelist;
     }
-  };
+  }, [getLocalWhitelistInternal]);
+
+  const applyWhitelistState = useCallback((email: string | null, whitelist: string[]) => {
+    const normalizedEmail = normalizeEmail(email);
+    const whitelisted = !!normalizedEmail && whitelist.some((entry) => normalizeEmail(entry) === normalizedEmail);
+    setIsWhitelisted(whitelisted);
+    setSubscriptionLevel(whitelisted ? FREE_USE_SUBSCRIPTION_LEVEL : null);
+    return whitelisted;
+  }, []);
+
 
   const checkAuthentication = useCallback(async () => {
+    let bootstrapEmail: string | null = null;
+
     try {
-      const auth = await AsyncStorage.getItem(AUTH_KEY);
-      const email = await AsyncStorage.getItem(AUTH_EMAIL_KEY);
-      const freshStart = await AsyncStorage.getItem(FRESH_START_KEY);
-      setIsAuthenticated(auth === "true");
-      setAuthenticatedEmail(email);
-      setIsFreshStart(freshStart === "true");
-      const admin = isAdminEmail(email);
+      const [auth, email, freshStart, localWhitelist] = await withAuthTimeout(
+        Promise.all([
+          AsyncStorage.getItem(AUTH_KEY),
+          AsyncStorage.getItem(AUTH_EMAIL_KEY),
+          AsyncStorage.getItem(FRESH_START_KEY),
+          getLocalWhitelistInternal(),
+        ]),
+        AUTH_BOOTSTRAP_TIMEOUT_MS,
+        '[AuthProvider] Local authentication bootstrap',
+      );
+
+      bootstrapEmail = normalizeEmail(email);
+      authenticatedEmailRef.current = bootstrapEmail;
+      const authenticated = auth === 'true';
+      let credentialPresent = false;
+      let credentialRole: DeviceCredentialRole | null = null;
+      if (bootstrapEmail) {
+        try {
+          const credentialState = await withAuthTimeout((async () => {
+            const present = await hasDeviceCredential(bootstrapEmail);
+            if (authenticated && !present) {
+              // Preserve existing Build 394 installations and reserve their
+              // local owner role until the user enrolls a device PIN.
+              await reserveLegacyOwner(bootstrapEmail);
+            }
+            return {
+              present,
+              role: await getDeviceCredentialRole(bootstrapEmail),
+            };
+          })(), DEVICE_CREDENTIAL_TIMEOUT_MS, '[AuthProvider] Device credential bootstrap');
+          credentialPresent = credentialState.present;
+          credentialRole = credentialState.role;
+        } catch (credentialError) {
+          // Secure storage must never delay navigation. Existing authenticated
+          // installations continue locally and can enroll from Settings later.
+          console.warn('[AuthProvider] Device credential bootstrap unavailable; continuing legacy local session:', credentialError);
+        }
+      }
+      const admin = authenticated && (credentialRole === 'owner' || (!credentialPresent && isAdminEmail(bootstrapEmail)));
+      const whitelisted = applyWhitelistState(bootstrapEmail, localWhitelist);
+      const authenticatedForThisLaunch = authenticated && !credentialPresent;
+
+      setIsAuthenticated(authenticatedForThisLaunch);
+      setRequiresCredentialEnrollment(authenticatedForThisLaunch && !!bootstrapEmail && !credentialPresent);
+      setAuthenticatedEmail(bootstrapEmail);
+      setIsFreshStart(freshStart === 'true');
       setIsAdmin(admin);
-      
-      const whitelisted = await checkWhitelistStatus(email);
-      setIsWhitelisted(whitelisted);
-      setSubscriptionLevel(whitelisted ? FREE_USE_SUBSCRIPTION_LEVEL : null);
-      console.log('[AuthProvider] Loaded auth state:', { authenticated: auth === "true", email, isAdmin: admin, isWhitelisted: whitelisted, subscriptionLevel: whitelisted ? FREE_USE_SUBSCRIPTION_LEVEL : null });
+      console.log('[AuthProvider] Loaded local auth state without waiting for the network:', {
+        authenticated: authenticatedForThisLaunch,
+        email: bootstrapEmail,
+        isAdmin: admin,
+        deviceCredentialRequired: credentialPresent,
+        isWhitelisted: whitelisted,
+        subscriptionLevel: whitelisted ? FREE_USE_SUBSCRIPTION_LEVEL : null,
+      });
     } catch (error) {
-      console.error("[AuthProvider] Error checking authentication:", error);
+      console.error('[AuthProvider] Local authentication bootstrap failed or timed out:', error);
+      authenticatedEmailRef.current = null;
       setIsAuthenticated(false);
       setAuthenticatedEmail(null);
       setIsFreshStart(false);
       setIsAdmin(false);
       setIsWhitelisted(false);
       setSubscriptionLevel(null);
+      setRequiresCredentialEnrollment(false);
     } finally {
       setIsLoading(false);
     }
-  }, [checkWhitelistStatus]);
+
+    console.log('[AuthProvider] Startup completed using local authentication and access data only; no backend refresh was started.');
+  }, [applyWhitelistState, getLocalWhitelistInternal]);
 
   const initializeAuth = useCallback(async () => {
-    console.log('[AuthProvider] Initializing auth - checking persisted state');
+    console.log('[AuthProvider] Initializing auth from local storage');
     await checkAuthentication();
   }, [checkAuthentication]);
 
   useEffect(() => {
-    initializeAuth();
+    let settled = false;
+    const watchdog = setTimeout(() => {
+      if (!settled) {
+        console.warn('[AuthProvider] Startup watchdog released the splash screen; local data will continue hydrating without blocking navigation.');
+        setIsLoading(false);
+      }
+    }, AUTH_BOOTSTRAP_WATCHDOG_MS);
+
+    void initializeAuth().finally(() => {
+      settled = true;
+      clearTimeout(watchdog);
+    });
+
+    return () => {
+      settled = true;
+      clearTimeout(watchdog);
+    };
   }, [initializeAuth]);
-
-
 
   const getWhitelist = async (): Promise<string[]> => {
     return getWhitelistInternal();
@@ -304,7 +402,7 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
   const addToWhitelist = async (email: string): Promise<void> => {
     try {
       const adminEmail = normalizeEmail(authenticatedEmail);
-      if (!isAdminEmail(adminEmail)) {
+      if (!isAdmin) {
         throw new Error('Only the admin account can manage free-use access.');
       }
 
@@ -318,14 +416,12 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
       await writeGlobalWhitelist(updated);
       await queueWhitelistMutation({ email: normalizedEmail, action: 'add', adminEmail: adminEmail ?? PRIMARY_ADMIN_EMAIL, createdAt: new Date().toISOString() });
 
-      if (isCloudBackupEnabled()) {
-        try {
-          await trpcClient.access.addToWhitelist.mutate({ adminEmail: adminEmail ?? PRIMARY_ADMIN_EMAIL, email: normalizedEmail });
-          await removeQueuedWhitelistMutation(normalizedEmail, 'add');
-          console.log('[AuthProvider] Cloud global whitelist add confirmed:', normalizedEmail);
-        } catch (cloudError) {
-          console.warn('[AuthProvider] Cloud global whitelist add pending retry:', cloudError);
-        }
+      try {
+        await trpcClient.access.addToWhitelist.mutate({ adminEmail: adminEmail ?? PRIMARY_ADMIN_EMAIL, email: normalizedEmail });
+        await removeQueuedWhitelistMutation(normalizedEmail, 'add');
+        console.log('[AuthProvider] Cloud global whitelist add confirmed:', normalizedEmail);
+      } catch (cloudError) {
+        console.warn('[AuthProvider] Cloud global whitelist add pending retry:', cloudError);
       }
 
       if (normalizeEmail(authenticatedEmail) === normalizedEmail) {
@@ -342,7 +438,7 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
   const removeFromWhitelist = async (email: string): Promise<void> => {
     try {
       const adminEmail = normalizeEmail(authenticatedEmail);
-      if (!isAdminEmail(adminEmail)) {
+      if (!isAdmin) {
         throw new Error('Only the admin account can manage free-use access.');
       }
 
@@ -358,14 +454,12 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
       await writeGlobalWhitelist(updated);
       await queueWhitelistMutation({ email: normalizedEmail, action: 'remove', adminEmail: adminEmail ?? PRIMARY_ADMIN_EMAIL, createdAt: new Date().toISOString() });
 
-      if (isCloudBackupEnabled()) {
-        try {
-          await trpcClient.access.removeFromWhitelist.mutate({ adminEmail: adminEmail ?? PRIMARY_ADMIN_EMAIL, email: normalizedEmail });
-          await removeQueuedWhitelistMutation(normalizedEmail, 'remove');
-          console.log('[AuthProvider] Cloud global whitelist remove confirmed:', normalizedEmail);
-        } catch (cloudError) {
-          console.warn('[AuthProvider] Cloud global whitelist remove pending retry:', cloudError);
-        }
+      try {
+        await trpcClient.access.removeFromWhitelist.mutate({ adminEmail: adminEmail ?? PRIMARY_ADMIN_EMAIL, email: normalizedEmail });
+        await removeQueuedWhitelistMutation(normalizedEmail, 'remove');
+        console.log('[AuthProvider] Cloud global whitelist remove confirmed:', normalizedEmail);
+      } catch (cloudError) {
+        console.warn('[AuthProvider] Cloud global whitelist remove pending retry:', cloudError);
       }
 
       if (normalizeEmail(authenticatedEmail) === normalizedEmail) {
@@ -390,38 +484,19 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
     }
   };
 
-  const login = async (email: string, password?: string): Promise<boolean> => {
-    const normalizedEmail = normalizeEmail(email) ?? '';
-    
-    if (!normalizedEmail || !email.includes('@')) {
-      console.error('[AuthProvider] Invalid email format');
-      return false;
-    }
-
-    const isAdminAccount = isAdminEmail(normalizedEmail);
-    
-    if (isAdminAccount) {
-      if (password !== ADMIN_PASSWORD) {
-        console.error('[AuthProvider] Invalid admin password');
-        return false;
-      }
-      console.log('[AuthProvider] Admin login with correct password');
-    } else {
-      console.log('[AuthProvider] Regular user login (no password required):', normalizedEmail);
-    }
-    
+  const completeLocalLogin = async (normalizedEmail: string, role: DeviceCredentialRole): Promise<boolean> => {
     const hasLaunchedBefore = await AsyncStorage.getItem(STORAGE_KEYS.HAS_LAUNCHED_BEFORE);
     const previousEmail = await AsyncStorage.getItem(AUTH_EMAIL_KEY);
     const isFirstEverLogin = !hasLaunchedBefore && !previousEmail;
-
     const isAccountSwitch = !!previousEmail && previousEmail.toLowerCase().trim() !== normalizedEmail;
 
-    console.log('[AuthProvider] Login context:', {
+    console.log('[AuthProvider] Secure local login context:', {
       normalizedEmail,
       previousEmail,
       hasLaunchedBefore: !!hasLaunchedBefore,
       isFirstEverLogin,
       isAccountSwitch,
+      role,
     });
 
     await AsyncStorage.setItem(AUTH_KEY, "true");
@@ -443,41 +518,96 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
       setIsFreshStart(false);
       console.log('[AuthProvider] Returning user login - preserving data');
     }
-    
-    const whitelisted = await checkWhitelistStatus(normalizedEmail);
-    
+
+    const localWhitelist = await getLocalWhitelistInternal();
+    const whitelisted = localWhitelist.some((entry) => normalizeEmail(entry) === normalizedEmail);
+
+    authenticatedEmailRef.current = normalizedEmail;
     setIsAuthenticated(true);
     setAuthenticatedEmail(normalizedEmail);
-    setIsAdmin(isAdminAccount);
+    setIsAdmin(role === 'owner');
     setIsWhitelisted(whitelisted);
     setSubscriptionLevel(whitelisted ? FREE_USE_SUBSCRIPTION_LEVEL : null);
-    console.log('[AuthProvider] Login successful for:', normalizedEmail, 'isAdmin:', isAdminAccount, 'isWhitelisted:', whitelisted, 'subscriptionLevel:', whitelisted ? FREE_USE_SUBSCRIPTION_LEVEL : null);
+    setRequiresCredentialEnrollment(false);
+    console.log('[AuthProvider] Device-protected login completed from local state:', {
+      email: normalizedEmail,
+      role,
+      isWhitelisted: whitelisted,
+    });
     return true;
+  };
+
+  const login = async (email: string, devicePin?: string): Promise<boolean> => {
+    const normalizedEmail = normalizeEmail(email) ?? '';
+    
+    if (!normalizedEmail || !email.includes('@')) {
+      console.error('[AuthProvider] Invalid email format');
+      return false;
+    }
+
+    const credentialResult = await verifyOrCreateDeviceCredential(normalizedEmail, devicePin ?? '');
+    if (!credentialResult.success || !credentialResult.role) {
+      console.warn('[AuthProvider] Device credential rejected:', {
+        email: normalizedEmail,
+        reason: credentialResult.error,
+        retryAfterSeconds: credentialResult.retryAfterSeconds,
+      });
+      return false;
+    }
+    return completeLocalLogin(normalizedEmail, credentialResult.role);
+  };
+
+  const enrollDeviceCredential = async (devicePin: string): Promise<boolean> => {
+    const normalizedEmail = normalizeEmail(authenticatedEmail) ?? '';
+    if (!isAuthenticated || !normalizedEmail.includes('@')) return false;
+    const result = await verifyOrCreateDeviceCredential(normalizedEmail, devicePin);
+    if (!result.success || !result.role) return false;
+    setIsAdmin(result.role === 'owner');
+    setRequiresCredentialEnrollment(false);
+    return true;
+  };
+
+  const unlockWithBiometrics = async (email: string): Promise<boolean> => {
+    const normalizedEmail = normalizeEmail(email) ?? '';
+    if (!normalizedEmail.includes('@')) return false;
+    const result = await authenticateDeviceCredentialWithBiometrics(normalizedEmail);
+    if (!result.success || !result.role) return false;
+    return completeLocalLogin(normalizedEmail, result.role);
   };
 
   const updateEmail = async (newEmail: string) => {
     const normalizedEmail = normalizeEmail(newEmail) ?? '';
+    const previousEmail = normalizeEmail(authenticatedEmail);
     console.log('[AuthProvider] Updating authenticated email to:', normalizedEmail);
+    if (previousEmail && previousEmail !== normalizedEmail) {
+      await moveDeviceCredential(previousEmail, normalizedEmail);
+    }
     await AsyncStorage.setItem(AUTH_EMAIL_KEY, normalizedEmail);
+    const localWhitelist = await getLocalWhitelistInternal();
+    const credentialRole = await getDeviceCredentialRole(normalizedEmail);
+    authenticatedEmailRef.current = normalizedEmail;
     setAuthenticatedEmail(normalizedEmail);
-    setIsAdmin(isAdminEmail(normalizedEmail));
-    const whitelisted = await checkWhitelistStatus(normalizedEmail);
-    setIsWhitelisted(whitelisted);
-    setSubscriptionLevel(whitelisted ? FREE_USE_SUBSCRIPTION_LEVEL : null);
+    setIsAdmin(credentialRole === 'owner');
+    applyWhitelistState(normalizedEmail, localWhitelist);
   };
 
   const logout = async () => {
-    console.log('[AuthProvider] Logging out and clearing local user data while preserving global free-use whitelist...');
-    const globalWhitelist = await readStoredWhitelists();
-    await AsyncStorage.clear();
-    await writeGlobalWhitelist(globalWhitelist);
+    console.log('[AuthProvider] Logging out without deleting locally stored user data...');
+    await AsyncStorage.multiRemove([
+      AUTH_KEY,
+      AUTH_EMAIL_KEY,
+      FRESH_START_KEY,
+      PENDING_ACCOUNT_SWITCH_KEY,
+    ]);
+    authenticatedEmailRef.current = null;
     setIsAuthenticated(false);
     setAuthenticatedEmail(null);
     setIsFreshStart(false);
     setIsAdmin(false);
     setIsWhitelisted(false);
     setSubscriptionLevel(null);
-    console.log('[AuthProvider] Logged out - local user data cleared and global whitelist restored');
+    setRequiresCredentialEnrollment(false);
+    console.log('[AuthProvider] Logged out; all scoped cruises, offers, certificates, sessions, and settings were preserved');
   };
 
   const clearFreshStartFlag = async () => {
@@ -493,7 +623,11 @@ export const [AuthProvider, useAuth] = createContextHook((): AuthState => {
     isAdmin,
     isWhitelisted,
     subscriptionLevel,
+    requiresCredentialEnrollment,
     login,
+    enrollDeviceCredential,
+    getCredentialMode: getDeviceCredentialMode,
+    unlockWithBiometrics,
     logout,
     clearFreshStartFlag,
     getWhitelist,

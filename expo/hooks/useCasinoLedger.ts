@@ -1,6 +1,8 @@
 import { useMemo } from 'react';
 import { useCasinoEconomicsData } from '@/hooks/useCasinoEconomicsData';
 import { useCasinoSessions } from '@/state/CasinoSessionProvider';
+import { useCertificates } from '@/state/CertificatesProvider';
+import { buildCasinoCruiseTruth, isGeneratedCasinoSession, type CasinoEvidenceKind } from '@/lib/casino/casinoTruthEngine';
 import {
   resolveFreePlayInclusion,
   resolveObcInclusion,
@@ -8,14 +10,15 @@ import {
   sumIncludedBenefits,
 } from '@/lib/casinoLedger/duplicateGuard';
 import { combineConfidence } from '@/lib/casinoLedger/confidence';
+import { buildCasinoCruiseIdentity } from '@/lib/casino/casinoCruiseIdentity';
 import type {
   CasinoLedger,
   CasinoLedgerConfidence,
+  CasinoLedgerDataQuality,
   CasinoLedgerCruiseEntry,
   CasinoLedgerValue,
 } from '@/types/casinoLedger';
 import type { CruiseEconomicsRow } from '@/lib/casinoCruiseEconomics';
-import type { BookedCruise } from '@/types/models';
 
 /** Maps the existing per-row 'actual'|'estimated'|'mixed' confidence onto the ledger vocabulary. */
 function rowConfidence(row: CruiseEconomicsRow): CasinoLedgerConfidence {
@@ -24,11 +27,29 @@ function rowConfidence(row: CruiseEconomicsRow): CasinoLedgerConfidence {
   return 'estimated';
 }
 
-function ledgerValue(value: number | null, confidence: CasinoLedgerConfidence, source: string): CasinoLedgerValue {
+function dataQuality(confidence: CasinoLedgerConfidence): CasinoLedgerDataQuality {
+  if (confidence === 'actual' || confidence === 'user-entered') return 'Actual';
+  if (confidence === 'imported') return 'Imported';
+  if (confidence === 'synced') return 'Synced';
+  if (confidence === 'derived' || confidence === 'generated') return 'Derived';
+  if (confidence === 'estimated' || confidence === 'mixed') return 'Estimated';
+  if (confidence === 'incomplete' || confidence === 'missing') return 'Incomplete';
+  return 'Unavailable';
+}
+
+function ledgerValue(value: number | null, confidence: CasinoLedgerConfidence, source: string, formula?: string): CasinoLedgerValue {
   if (value === null) {
-    return { value: 0, confidence: 'missing', source };
+    return { value: 0, confidence: 'unavailable', dataQuality: 'Unavailable', source, formula };
   }
-  return { value, confidence, source };
+  return { value, confidence, dataQuality: dataQuality(confidence), source, formula };
+}
+
+function evidenceConfidence(kind: CasinoEvidenceKind): CasinoLedgerConfidence {
+  if (kind === 'actual') return 'actual';
+  if (kind === 'provider_reported') return 'synced';
+  if (kind === 'user_entered') return 'user-entered';
+  if (kind === 'estimated') return 'estimated';
+  return 'unavailable';
 }
 
 /**
@@ -46,28 +67,29 @@ function ledgerValue(value: number | null, confidence: CasinoLedgerConfidence, s
  * migrate to this one field at a time in Stage 9.2-9.5.
  */
 export function useCasinoLedger(): CasinoLedger {
-  const { bookedCruises, cruiseEconomicsSummary } = useCasinoEconomicsData();
-  const { hasSessionsForCruise, getTotalPointsForCruise, sessions } = useCasinoSessions();
+  const { bookedCruises, allCruiseEconomicsSummary } = useCasinoEconomicsData();
+  const { sessions } = useCasinoSessions();
+  const { searchableCertificates } = useCertificates();
 
   return useMemo(() => {
-    const cruiseById = new Map<string, BookedCruise>(bookedCruises.map((c) => [c.id, c]));
+    const rowByCruiseId = new Map(allCruiseEconomicsSummary.rows.map((row) => [row.cruiseId, row]));
 
-    const entries: CasinoLedgerCruiseEntry[] = cruiseEconomicsSummary.rows.map((row) => {
-      const cruise = cruiseById.get(row.cruiseId);
-      const confidence = rowConfidence(row);
-      const sessionCount = sessions.filter((s) => s.cruiseId === row.cruiseId).length;
-      const hasSessionData = hasSessionsForCruise(row.cruiseId);
+    const entries: CasinoLedgerCruiseEntry[] = bookedCruises.map((cruise) => {
+      const row = rowByCruiseId.get(cruise.id);
+      const confidence = row ? rowConfidence(row) : 'missing';
+      const truth = buildCasinoCruiseTruth({ cruise, sessions, certificates: searchableCertificates });
+      const actualSessions = sessions.filter((session) => session.cruiseId === cruise.id && !isGeneratedCasinoSession(session));
+      const sessionCount = actualSessions.length;
+      const hasSessionData = sessionCount > 0;
 
-      const points = hasSessionData
-        ? ledgerValue(getTotalPointsForCruise(row.cruiseId), 'actual', 'Logged casino sessions for this cruise')
-        : ledgerValue(row.pointsEarned, confidence, 'Cruise Portfolio economics calculator');
-
-      const coinIn = ledgerValue(row.coinIn, confidence, 'Points \u00d7 $5 slot coin-in rule');
-      const winLoss = ledgerValue(row.cashResult, row.cashResult === null ? 'missing' : confidence, 'Recorded cruise cash result');
-      const retailValue = ledgerValue(row.retailValue, confidence, 'Retail cruise value source');
-      const cashPaid = ledgerValue(row.amountPaid, confidence, 'Recorded amount paid');
-      const cruiseValueCaptured = ledgerValue(row.cruiseValueCaptured, confidence, 'Retail value - cash paid');
-      const totalEconomicValue = ledgerValue(row.totalEconomicValue, confidence, 'Cruise value captured + cash result + benefits');
+      const identity = buildCasinoCruiseIdentity(cruise);
+      const points = ledgerValue(truth.points.value, evidenceConfidence(truth.points.kind), truth.points.source, truth.points.formula);
+      const coinIn = ledgerValue(truth.coinIn.value, evidenceConfidence(truth.coinIn.kind), truth.coinIn.source, truth.coinIn.formula);
+      const winLoss = ledgerValue(truth.netGamingResult.value, evidenceConfidence(truth.netGamingResult.kind), `${truth.netGamingResult.source}; cruise fare excluded`, truth.netGamingResult.formula);
+      const retailValue = ledgerValue(row?.retailValue ?? null, confidence, 'Retail cruise value source');
+      const cashPaid = ledgerValue(row?.amountPaid ?? null, confidence, 'Recorded amount paid');
+      const cruiseValueCaptured = ledgerValue(row?.cruiseValueCaptured ?? null, confidence, 'Retail value - cash paid');
+      const totalEconomicValue = ledgerValue(row?.totalEconomicValue ?? null, confidence, 'Cruise value captured + net gaming result + distinct benefits');
 
       const freePlay = cruise
         ? resolveFreePlayInclusion(cruise)
@@ -88,9 +110,15 @@ export function useCasinoLedger(): CasinoLedger {
       ]);
 
       return {
-        cruiseId: row.cruiseId,
-        shipName: row.ship,
-        sailDate: row.sailDate,
+        cruiseId: cruise.id,
+        ownerProfileId: identity.ownerProfileId,
+        sourceEmail: identity.sourceEmail,
+        reservationNumber: identity.reservationNumber,
+        bookingId: identity.bookingId,
+        matchKey: identity.matchKey,
+        matchSource: identity.matchSource,
+        shipName: cruise.shipName,
+        sailDate: cruise.sailDate,
         points,
         coinIn,
         winLoss,
@@ -148,5 +176,5 @@ export function useCasinoLedger(): CasinoLedger {
       },
       lastUpdated: new Date().toISOString(),
     };
-  }, [bookedCruises, cruiseEconomicsSummary, hasSessionsForCruise, getTotalPointsForCruise, sessions]);
+  }, [allCruiseEconomicsSummary, bookedCruises, searchableCertificates, sessions]);
 }

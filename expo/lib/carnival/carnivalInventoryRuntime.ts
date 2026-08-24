@@ -87,6 +87,31 @@ export interface CarnivalPaginationStepDecision {
   nextSignatureCount: number;
 }
 
+export interface CarnivalSearchRetryEvidence {
+  error?: string;
+  rowCount: number;
+  authoritativeEmpty?: boolean;
+  renderedTerminalProof?: boolean;
+  pageContextMatched?: boolean;
+  resultStable?: boolean;
+}
+
+/**
+ * A real navigation retry is useful only while the page/request is unsettled.
+ * Repeating an identical, stable, correctly scoped empty page cannot create
+ * stronger evidence and made a full offer catalog appear to download forever.
+ */
+export function shouldRetryCarnivalSearchPage(
+  evidence: CarnivalSearchRetryEvidence,
+  attempt: number,
+  maxAttempts = 2,
+): boolean {
+  if (attempt >= maxAttempts) return false;
+  if (evidence.rowCount > 0 || evidence.authoritativeEmpty || evidence.renderedTerminalProof) return false;
+  if (evidence.pageContextMatched && evidence.resultStable && !evidence.error) return false;
+  return true;
+}
+
 const RATE_CODE_KEYS = new Set(['ratecode', 'ratecodes', 'offercode', 'offercodes', 'promo', 'promocode']);
 const PAGE_KEYS = new Set(['page', 'pagenumber', 'page_number', 'pageindex', 'currentpage']);
 const PAGE_SIZE_KEYS = new Set(['pagesize', 'page_size', 'limit', 'perpage', 'itemsperpage']);
@@ -105,6 +130,7 @@ const EXPLICIT_INVENTORY_PATHS: Array<{ id: string; path: string[]; allowEmpty: 
   { id: 'root-cruises', path: ['cruises'], allowEmpty: true },
   { id: 'root-voyages', path: ['voyages'], allowEmpty: true },
   { id: 'root-departures', path: ['departures'], allowEmpty: true },
+  { id: 'current-carnival-results-itineraries', path: ['results', 'itineraries'], allowEmpty: true },
   { id: 'data-sailings', path: ['data', 'sailings'], allowEmpty: true },
   { id: 'data-cruises', path: ['data', 'cruises'], allowEmpty: true },
   { id: 'data-voyages', path: ['data', 'voyages'], allowEmpty: true },
@@ -265,7 +291,11 @@ function objectShip(value: Record<string, unknown>): string {
 
 function objectDate(value: Record<string, unknown>): string {
   const voyage = value.voyage && typeof value.voyage === 'object' ? value.voyage as Record<string, unknown> : null;
-  return String(value.sailDate || value.departureDate || value.startDate || value.embarkDate || value.sailingDate || value.departure || voyage?.departureDate || voyage?.sailDate || '').trim();
+  const leadSailing = value.leadSailing && typeof value.leadSailing === 'object' ? value.leadSailing as Record<string, unknown> : null;
+  const firstSailing = Array.isArray(value.sailings) && value.sailings[0] && typeof value.sailings[0] === 'object'
+    ? value.sailings[0] as Record<string, unknown>
+    : null;
+  return String(value.sailDate || value.departureDate || value.startDate || value.embarkDate || value.sailingDate || value.departure || voyage?.departureDate || voyage?.sailDate || leadSailing?.departureDate || firstSailing?.departureDate || '').trim();
 }
 
 export function isCarnivalSailingObject(value: unknown): boolean {
@@ -687,7 +717,23 @@ export function buildCarnivalNextPageUrl(input: {
     : undefined;
   const candidatePage = candidatePageRaw === undefined ? null : numberValue(candidatePageRaw);
 
-  url.searchParams.set('ratecodes', normalizeCode(input.offerCode));
+  // Carnival's client router treats query keys case-insensitively in some
+  // releases and case-sensitively in others. Sending both `rateCodes` and
+  // `ratecodes` can leave the results page permanently loading or cause one
+  // value to override the other. Preserve an official multi-code CTA when it
+  // includes the requested offer, but emit exactly one canonical key.
+  const existingRateCodes: string[] = [];
+  Array.from(url.searchParams.entries()).forEach(([key, value]) => {
+    if (!/^ratecodes?$/i.test(key)) return;
+    String(value || '').split(/[,;|]/).forEach((code) => {
+      const normalized = normalizeCode(code);
+      if (normalized && !existingRateCodes.includes(normalized)) existingRateCodes.push(normalized);
+    });
+    url.searchParams.delete(key);
+  });
+  const requestedCode = normalizeCode(input.offerCode);
+  const effectiveRateCodes = existingRateCodes.includes(requestedCode) ? existingRateCodes : [requestedCode];
+  url.searchParams.set('rateCodes', effectiveRateCodes.join(','));
   const effectiveCursor = input.nextCursor || candidateCursor;
   const effectiveOffset = input.nextOffset !== null && input.nextOffset !== undefined ? input.nextOffset : candidateOffset;
   if (effectiveCursor) {
@@ -720,12 +766,12 @@ export const CARNIVAL_CAPTURE_RUNTIME_SCRIPT = String.raw`
     walk(__esParseBody(body), 0); return out;
   }
   function __esRequestNumber(urlValue, body, pattern) { try { var url = new URL(String(urlValue || ''), window.location.href), found = null; url.searchParams.forEach(function(v, k) { if (found === null && pattern.test(k)) found = __esNum(v); }); if (found !== null) return found; } catch (e) {} var parsed = __esParseBody(body); var queue = parsed && typeof parsed === 'object' ? [parsed] : []; var visited = 0; while (queue.length && visited++ < 100) { var current = queue.shift(); if (!current || typeof current !== 'object' || Array.isArray(current)) continue; var keys = Object.keys(current); for (var i = 0; i < keys.length; i++) { var key = keys[i], value = current[key]; if (pattern.test(key)) { var n = __esNum(value); if (n !== null) return n; } if (value && typeof value === 'object') queue.push(value); } } return null; }
-  function __esSailingObject(value) { if (!value || typeof value !== 'object' || Array.isArray(value)) return false; var shipInfo = value.shipInfo && typeof value.shipInfo === 'object' ? value.shipInfo : {}; var vessel = value.vessel && typeof value.vessel === 'object' ? value.vessel : {}; var ship = value.shipName || value.ship || value.vesselName || value.shipCode || shipInfo.name || vessel.name || ''; var voyage = value.voyage && typeof value.voyage === 'object' ? value.voyage : {}; var date = value.sailDate || value.departureDate || value.startDate || value.embarkDate || value.sailingDate || value.departure || voyage.departureDate || voyage.sailDate || ''; return !!(ship && date) || !!(date && /voyage|itinerary|ship|vessel/i.test(Object.keys(value).join('|'))); }
+  function __esSailingObject(value) { if (!value || typeof value !== 'object' || Array.isArray(value)) return false; var shipInfo = value.shipInfo && typeof value.shipInfo === 'object' ? value.shipInfo : {}; var vessel = value.vessel && typeof value.vessel === 'object' ? value.vessel : {}; var ship = value.shipName || value.ship || value.vesselName || value.shipCode || shipInfo.name || vessel.name || ''; var voyage = value.voyage && typeof value.voyage === 'object' ? value.voyage : {}; var lead = value.leadSailing && typeof value.leadSailing === 'object' ? value.leadSailing : {}; var first = Array.isArray(value.sailings) && value.sailings[0] && typeof value.sailings[0] === 'object' ? value.sailings[0] : {}; var date = value.sailDate || value.departureDate || value.startDate || value.embarkDate || value.sailingDate || value.departure || voyage.departureDate || voyage.sailDate || lead.departureDate || first.departureDate || ''; return !!(ship && date) || !!(date && /voyage|itinerary|ship|vessel/i.test(Object.keys(value).join('|'))); }
   function __esGet(root, path) { var current = root; for (var i = 0; i < path.length; i++) { if (!current || typeof current !== 'object' || Array.isArray(current)) return undefined; current = current[path[i]]; } return current; }
   function __esObject(value) { return value && typeof value === 'object' && !Array.isArray(value) ? value : null; }
   function __esAdapter(data) {
     var paths = [
-      ['sailings'],['cruises'],['voyages'],['departures'],['data','sailings'],['data','cruises'],['data','voyages'],['data','departures'],['data','itineraries'],['data','results'],['data','records'],['data','search','sailings'],['data','search','results'],['data','cruiseSearch','sailings'],['data','cruiseSearch','results'],['data','searchCruises','results'],['data','searchCruises','sailings'],['payload','sailings'],['payload','results']
+      ['sailings'],['cruises'],['voyages'],['departures'],['results','itineraries'],['data','sailings'],['data','cruises'],['data','voyages'],['data','departures'],['data','itineraries'],['data','results'],['data','records'],['data','search','sailings'],['data','search','results'],['data','cruiseSearch','sailings'],['data','cruiseSearch','results'],['data','searchCruises','results'],['data','searchCruises','sailings'],['payload','sailings'],['payload','results']
     ];
     for (var pi = 0; pi < paths.length; pi++) { var path = paths[pi], value = __esGet(data, path); if (!Array.isArray(value)) continue; var parent = __esObject(__esGet(data, path.slice(0, path.length - 1))); var leaf = String(path[path.length - 1] || '').toLowerCase(); if (value.length === 0 && /^(results|records)$/.test(leaf)) { var siblingKeys = Object.keys(parent || {}).join('|').toLowerCase(); if (/facet|filter|aggregation|bucket|pricing|cabin|availability|config/.test(siblingKeys)) continue; } var valid = value.length === 0; for (var vi = 0; vi < value.length && !valid; vi++) valid = __esSailingObject(value[vi]); if (!valid) continue; var pagination = parent && (__esObject(parent.pagination) || __esObject(parent.pageInfo) || __esObject(parent.meta)); return { id: 'explicit:' + path.join('.'), path: path.join('.'), items: value, parent: parent, containers: [pagination, parent, __esObject(data && data.data), __esObject(data)].filter(Boolean), empty: value.length === 0 }; }
     var dataRoot = __esObject(data && data.data) || __esObject(data); if (!dataRoot) return null; var candidates = []; var fields = Object.keys(dataRoot).slice(0, 100); for (var fi = 0; fi < fields.length; fi++) { var field = fields[fi], object = __esObject(dataRoot[field]); if (object) candidates.push({ field: field, value: object }); if (object) { var nested = Object.keys(object).slice(0, 60); for (var ni = 0; ni < nested.length; ni++) { var nestedObject = __esObject(object[nested[ni]]); if (nestedObject) candidates.push({ field: field + '.' + nested[ni], value: nestedObject }); } } }

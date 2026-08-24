@@ -10,6 +10,7 @@ import { syncCruisePricing, SyncProgress, CruisePricing } from '@/lib/cruisePric
 import { generateCalendarFeed, generateFeedToken } from '@/lib/calendar/feedGenerator';
 import { exportFile } from '@/lib/fileIO/fileOperations';
 import { trpc, BACKEND_BASE_URL } from '@/lib/trpc';
+import { deriveReturnDateUtc, knownGuestCount, knownNightCount } from '@/lib/cruiseRecordIntegrity';
 
 type ScreenMode = 'auto' | 'manual' | 'calendar';
 
@@ -28,7 +29,7 @@ interface SyncedCruiseResult {
 
 export default function ImportCruisesScreen() {
   const router = useRouter();
-  const { addBookedCruise, bookedCruises, updateBookedCruise, calendarEvents } = useCoreData();
+  const { addBookedCruise, bookedCruises, cruises, updateBookedCruise, updateCruise, calendarEvents } = useCoreData();
   const { currentUser } = useUser();
 
   const [importing, setImporting] = useState(false);
@@ -51,6 +52,7 @@ export default function ImportCruisesScreen() {
 
   const upcomingCruises = bookedCruises.filter(c => c.completionState === 'upcoming');
   const completedCruises = bookedCruises.filter(c => c.completionState === 'completed' || c.status === 'completed');
+  const pricingCandidates = [...bookedCruises, ...cruises].filter((row,index,all)=>row.status!=='cancelled'&&all.findIndex(item=>item.id===row.id)===index).sort((a,b)=>{const bookedA=bookedCruises.some(row=>row.id===a.id)?0:1,bookedB=bookedCruises.some(row=>row.id===b.id)?0:1;return bookedA-bookedB||a.sailDate.localeCompare(b.sailDate)});
 
   useEffect(() => {
     const loadFeedToken = async () => {
@@ -214,15 +216,15 @@ export default function ImportCruisesScreen() {
     setSearchingDeals(true);
 
     try {
-      if (upcomingCruises.length === 0) {
-        addToLog('No upcoming cruises to sync');
+      if (pricingCandidates.length === 0) {
+        addToLog('No saved cruises require pricing');
         setSearchingDeals(false);
         return;
       }
 
-      addToLog(`Starting pricing sync for ${upcomingCruises.length} upcoming cruises...`);
+      addToLog(`Starting ordered pricing sync for ${pricingCandidates.length} booked/completed and offer sailings...`);
 
-      const cruiseSearchParams = upcomingCruises.map(cruise => ({
+      const cruiseSearchParams = pricingCandidates.map(cruise => ({
         id: cruise.id,
         shipName: cruise.shipName,
         sailDate: cruise.sailDate,
@@ -241,7 +243,7 @@ export default function ImportCruisesScreen() {
         } else if (progress.status === 'not_found') {
           addToLog(`No prices found for ${progress.shipName}`);
         }
-      });
+      }, { catalog: cruises as unknown as Record<string, unknown>[], concurrency: 3 });
 
       console.log('[ImportCruises] syncCruisePricing result:', JSON.stringify({
         pricingCount: result.pricing.length,
@@ -260,7 +262,7 @@ export default function ImportCruisesScreen() {
         let updateCount = 0;
 
         for (const pricing of result.pricing) {
-          const cruise = bookedCruises.find(c => c.id === pricing.bookingId);
+          const cruise = pricingCandidates.find(c => c.id === pricing.bookingId);
           if (!cruise) {
             console.log('[ImportCruises] Cruise not found for pricing:', pricing.bookingId);
             continue;
@@ -268,6 +270,9 @@ export default function ImportCruisesScreen() {
 
           const updatePayload: Partial<BookedCruise> = {
             updatedAt: new Date().toISOString(),
+            pricingVerified: pricing.confidence === 'high',
+            pricingVerifiedAt: pricing.lastUpdated,
+            pricingSource: pricing.source,
           };
 
           if (pricing.interiorPrice) updatePayload.interiorPrice = pricing.interiorPrice;
@@ -277,7 +282,8 @@ export default function ImportCruisesScreen() {
           if (pricing.portTaxesFees) updatePayload.taxes = pricing.portTaxesFees;
 
           console.log('[ImportCruises] Saving prices to cruise:', cruise.id, cruise.shipName, updatePayload);
-          updateBookedCruise(cruise.id, updatePayload);
+          if(bookedCruises.some(row=>row.id===cruise.id))updateBookedCruise(cruise.id, updatePayload);
+          else updateCruise(cruise.id, updatePayload);
           updateCount++;
 
           newSyncedResults.push({
@@ -296,7 +302,7 @@ export default function ImportCruisesScreen() {
           addToLog(`  Saved: ${cruise.shipName}: INT ${pricing.interiorPrice || '-'} | OV ${pricing.oceanviewPrice || '-'} | BAL ${pricing.balconyPrice || '-'} | STE ${pricing.suitePrice || '-'} | TAX ${pricing.portTaxesFees || '-'}`);
         }
 
-        const missingCruises = upcomingCruises.filter(
+        const missingCruises = pricingCandidates.filter(
           c => !result.pricing.some((p: CruisePricing) => p.bookingId === c.id)
         );
         missingCruises.forEach(c => {
@@ -309,10 +315,10 @@ export default function ImportCruisesScreen() {
         });
 
         setSyncedResults(newSyncedResults);
-        addToLog(`Saved pricing for ${updateCount} of ${upcomingCruises.length} cruises!`);
+        addToLog(`Saved pricing for ${updateCount} of ${pricingCandidates.length} cruises!`);
 
-        if (updateCount < upcomingCruises.length) {
-          addToLog(`${upcomingCruises.length - updateCount} cruises had no pricing data available`);
+        if (updateCount < pricingCandidates.length) {
+          addToLog(`${pricingCandidates.length - updateCount} cruises had no verified pricing data available`);
         }
       } else {
         addToLog('No pricing data found from any source.');
@@ -321,7 +327,7 @@ export default function ImportCruisesScreen() {
         }
         addToLog('Ensure your cruise details (ship name, sail date, port) are filled in correctly.');
 
-        setSyncedResults(upcomingCruises.map(c => ({
+        setSyncedResults(pricingCandidates.map(c => ({
           cruiseId: c.id,
           shipName: c.shipName,
           sailDate: c.sailDate,
@@ -424,9 +430,9 @@ export default function ImportCruisesScreen() {
           const shipName = shipIndex >= 0 ? values[shipIndex]?.trim() : '';
           const sailDateStr = dateIndex >= 0 ? values[dateIndex]?.trim() : '';
           const itinerary = itineraryIndex >= 0 ? values[itineraryIndex]?.trim() : '';
-          const nightsStr = nightsIndex >= 0 ? values[nightsIndex]?.trim() : '7';
+          const nightsStr = nightsIndex >= 0 ? values[nightsIndex]?.trim() : '';
           const departurePort = departureIndex >= 0 ? values[departureIndex]?.trim() : '';
-          const guestsStr = guestsIndex >= 0 ? values[guestsIndex]?.trim() : '2';
+          const guestsStr = guestsIndex >= 0 ? values[guestsIndex]?.trim() : '';
           const roomType = roomTypeIndex >= 0 ? values[roomTypeIndex]?.trim() : '';
 
           if (!shipName && !sailDateStr) continue;
@@ -443,13 +449,9 @@ export default function ImportCruisesScreen() {
             }
           }
 
-          const nights = parseInt(nightsStr) || 7;
-          const guests = parseInt(guestsStr.match(/\d+/)?.[0] || '2');
-
-          const sailDateObj = new Date(sailDate || new Date());
-          const returnDateObj = new Date(sailDateObj);
-          returnDateObj.setDate(sailDateObj.getDate() + nights);
-          const returnDate = returnDateObj.toISOString().split('T')[0];
+          const nights = knownNightCount(nightsStr);
+          const guests = knownGuestCount(guestsStr.match(/\d+/)?.[0]);
+          const returnDate = deriveReturnDateUtc(sailDate, nights) ?? '';
 
           const parsePrice = (val?: string): number | undefined => {
             if (!val) return undefined;
@@ -469,19 +471,19 @@ export default function ImportCruisesScreen() {
             roomType.match(/ocean|view/i) ? 'Oceanview' :
             roomType.match(/balcony/i) ? 'Balcony' :
             roomType.match(/suite/i) ? 'Suite' : 'Balcony'
-          ) : 'Balcony';
+          ) : undefined;
 
           const cruise: BookedCruise = {
             id: `imported-csv-${Date.now()}-${i}`,
-            shipName: shipName || 'Unknown Ship',
-            sailDate: sailDate || new Date().toISOString().split('T')[0],
+            shipName: shipName || 'Unknown ship',
+            sailDate,
             returnDate,
             departurePort: departurePort || 'Unknown Port',
-            destination: itinerary || 'Caribbean',
-            itineraryName: itinerary || `${nights} Night Cruise`,
-            nights,
+            destination: itinerary || 'Unknown destination',
+            itineraryName: itinerary || 'Unknown itinerary',
+            nights: nights ?? 0,
             cabinType,
-            status: 'available',
+            status: nights && sailDate ? 'available' : 'reviewNeeded',
             completionState: 'upcoming',
             guests,
             guestNames: [],
@@ -491,6 +493,8 @@ export default function ImportCruisesScreen() {
             suitePrice,
             taxes,
             cruiseSource: 'royal',
+            dataConfidence: nights && sailDate ? 'verified' : 'partial',
+            validationStatus: nights && sailDate ? 'valid' : 'partial',
             createdAt: new Date().toISOString(),
           };
 
@@ -513,11 +517,11 @@ export default function ImportCruisesScreen() {
           let shipName = '';
           let sailDate = '';
           let returnDate = '';
-          let nights = 7;
+          let nights: number | undefined;
           let departurePort = '';
           let destination = '';
           let price = 0;
-          let cabinType = 'Balcony';
+          let cabinType: string | undefined;
 
           const shipMatch = line.match(/Ship[:\s]+([^,\n]+)/i);
           if (shipMatch) shipName = shipMatch[1].trim();
@@ -529,7 +533,7 @@ export default function ImportCruisesScreen() {
           }
 
           const nightsMatch = line.match(/(\d+)[- ]night/i);
-          if (nightsMatch) nights = parseInt(nightsMatch[1]);
+          if (nightsMatch) nights = knownNightCount(nightsMatch[1]);
 
           const portMatch = line.match(/(?:from|departs?)[:\s]+([^,\n]+)/i);
           if (portMatch) departurePort = portMatch[1].trim();
@@ -543,30 +547,27 @@ export default function ImportCruisesScreen() {
           const cabinMatch = line.match(/(interior|oceanview|balcony|suite)/i);
           if (cabinMatch) cabinType = cabinMatch[1];
 
-          if (sailDate && !returnDate) {
-            const sailDateObj = new Date(sailDate);
-            const returnDateObj = new Date(sailDateObj);
-            returnDateObj.setDate(sailDateObj.getDate() + nights);
-            returnDate = returnDateObj.toISOString().split('T')[0];
-          }
+          if (sailDate && !returnDate) returnDate = deriveReturnDateUtc(sailDate, nights) ?? '';
 
           if (shipName || sailDate) {
             const cruise: BookedCruise = {
               id: `imported-${Date.now()}-${i}`,
               shipName: shipName || 'Unknown Ship',
-              sailDate: sailDate || new Date().toISOString().split('T')[0],
-              returnDate: returnDate || new Date().toISOString().split('T')[0],
+              sailDate,
+              returnDate,
               departurePort: departurePort || 'Unknown Port',
-              destination: destination || 'Caribbean',
-              itineraryName: `${nights} Night ${destination || 'Caribbean'}`,
-              nights: nights,
+              destination: destination || 'Unknown destination',
+              itineraryName: destination || 'Unknown itinerary',
+              nights: nights ?? 0,
               cabinType: cabinType,
-              status: 'available',
+              status: nights && sailDate ? 'available' : 'reviewNeeded',
               completionState: 'upcoming',
-              guests: 2,
+              guests: undefined,
               guestNames: [],
               price: price > 0 ? price : undefined,
               cruiseSource: 'royal',
+              dataConfidence: nights && sailDate ? 'verified' : 'partial',
+              validationStatus: nights && sailDate ? 'valid' : 'partial',
               createdAt: new Date().toISOString(),
             };
 
@@ -583,20 +584,22 @@ export default function ImportCruisesScreen() {
             jsonData.forEach((item, index) => {
               const cruise: BookedCruise = {
                 id: `imported-json-${Date.now()}-${index}`,
-                shipName: item.ship || item.shipName || 'Unknown Ship',
-                sailDate: item.sailDate || item.date || new Date().toISOString().split('T')[0],
-                returnDate: item.returnDate || new Date().toISOString().split('T')[0],
+                shipName: item.ship || item.shipName || 'Unknown ship',
+                sailDate: item.sailDate || item.date || '',
+                returnDate: item.returnDate || deriveReturnDateUtc(item.sailDate || item.date || '', knownNightCount(item.nights)) || '',
                 departurePort: item.port || item.departurePort || 'Unknown Port',
-                destination: item.destination || 'Caribbean',
-                itineraryName: item.itinerary || item.itineraryName || `Cruise`,
-                nights: item.nights || 7,
-                cabinType: item.cabin || item.cabinType || 'Balcony',
-                status: 'available',
+                destination: item.destination || 'Unknown destination',
+                itineraryName: item.itinerary || item.itineraryName || 'Unknown itinerary',
+                nights: knownNightCount(item.nights) ?? 0,
+                cabinType: item.cabin || item.cabinType || undefined,
+                status: knownNightCount(item.nights) && (item.sailDate || item.date) ? 'available' : 'reviewNeeded',
                 completionState: 'upcoming',
-                guests: item.guests || 2,
+                guests: knownGuestCount(item.guests),
                 guestNames: [],
                 price: item.price,
                 cruiseSource: 'royal',
+                dataConfidence: knownNightCount(item.nights) && (item.sailDate || item.date) ? 'verified' : 'partial',
+                validationStatus: knownNightCount(item.nights) && (item.sailDate || item.date) ? 'valid' : 'partial',
                 createdAt: new Date().toISOString(),
               };
               cruises.push(cruise);

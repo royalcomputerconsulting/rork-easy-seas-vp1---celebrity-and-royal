@@ -11,6 +11,7 @@ import { getUniqueImageForCruise, getImageForDestination, DEFAULT_CRUISE_IMAGE }
 import type { Cruise, BookedCruise, ItineraryDay } from '@/types/models';
 import { calculateSeaDayDensityScore } from '@/lib/cruisePlanningIntelligence';
 import { calculateCruiseValue } from '@/lib/valueCalculator';
+import { displayKnownCount, knownGuestCount } from '@/lib/cruiseRecordIntegrity';
 
 interface CruiseCardProps {
   cruise: Cruise | BookedCruise;
@@ -122,11 +123,6 @@ export const CruiseCard = React.memo(function CruiseCard({
   }, [cruise, showRetailValue]);
 
   const formatDateRange = (sailDate: string, returnDate?: string, nights?: number) => {
-    if (!sailDate?.trim()) {
-      // Never fabricate a "today" date for a cruise with no known sail date - that produces
-      // a misleading, real-looking date on what is actually missing/incomplete data.
-      return 'Date unavailable';
-    }
     const start = createDateFromString(sailDate);
     const startMonth = start.toLocaleDateString('en-US', { month: 'short' });
     const startDay = start.getDate();
@@ -246,7 +242,7 @@ export const CruiseCard = React.memo(function CruiseCard({
 
   if (mini) {
     const miniPorts = bookedCruise.itinerary?.map((day: ItineraryDay) => day.port).filter(Boolean) || bookedCruise.ports || [];
-    const guestCount = bookedCruise.guestNames?.length || bookedCruise.guests || 2;
+    const guestCount = bookedCruise.guestNames?.length || knownGuestCount(bookedCruise.guests);
     
     return (
       <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
@@ -256,6 +252,8 @@ export const CruiseCard = React.memo(function CruiseCard({
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         activeOpacity={1}
+        accessibilityRole="button"
+        accessibilityLabel={`Open ${cruise.shipName} cruise details`}
         testID="cruise-card-mini"
       >
         <LinearGradient
@@ -263,6 +261,7 @@ export const CruiseCard = React.memo(function CruiseCard({
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={StyleSheet.absoluteFill}
+          pointerEvents="none"
         />
         {showCompactImage ? (
           <Image 
@@ -272,7 +271,7 @@ export const CruiseCard = React.memo(function CruiseCard({
             onError={handleCompactImageError}
           />
         ) : null}
-        <View style={styles.miniImageOverlay} />
+        <View style={styles.miniImageOverlay} pointerEvents="none" />
         <View style={styles.miniContent}>
           <View style={styles.miniTopRow}>
             <View style={styles.miniShipRow}>
@@ -306,8 +305,8 @@ export const CruiseCard = React.memo(function CruiseCard({
           ) : null}
           <View style={styles.miniPlanningRow} testID="cruise-card-mini-sea-day-score">
             <Gauge size={10} color="#0F766E" />
-            <Text style={styles.miniPlanningText}>Casino Availability Score {seaDayDensity.casinoOpportunityScore}</Text>
-            <Text style={styles.miniPlanningMuted}>{seaDayDensity.seaDays} sea days • {seaDayDensity.portDays} port days</Text>
+            <Text style={styles.miniPlanningText}>Casino Opp {seaDayDensity.casinoOpportunityScore}</Text>
+            <Text style={styles.miniPlanningMuted}>{seaDayDensity.seaDays} sea • {seaDayDensity.portDays} port</Text>
           </View>
           <Text style={styles.miniDestination} numberOfLines={1}>
             {cruise.departurePort ? `From ${cruise.departurePort}` : cruise.destination}
@@ -473,7 +472,7 @@ export const CruiseCard = React.memo(function CruiseCard({
             </View>
           )}
         </View>
-        <ChevronRight size={20} color={COLORS.navyDeep} style={styles.miniChevron} />
+        <ChevronRight size={20} color={COLORS.navyDeep} style={styles.miniChevron} pointerEvents="none" />
       </TouchableOpacity>
       </Animated.View>
     );
@@ -615,9 +614,9 @@ export const CruiseCard = React.memo(function CruiseCard({
         <View style={styles.planningBadgeRow} testID="cruise-card-sea-day-score">
           <View style={styles.planningBadge}>
             <Gauge size={13} color="#0F766E" />
-            <Text style={styles.planningBadgeText}>Casino Availability Score {seaDayDensity.casinoOpportunityScore}</Text>
+            <Text style={styles.planningBadgeText}>Casino Opportunity {seaDayDensity.casinoOpportunityScore}</Text>
           </View>
-          <Text style={styles.planningBadgeMeta}>{seaDayDensity.seaDays} sea days • {seaDayDensity.portDays} port days</Text>
+          <Text style={styles.planningBadgeMeta}>{seaDayDensity.seaDays} sea • {seaDayDensity.portDays} port</Text>
         </View>
 
         <View style={styles.dateGuestRow}>
@@ -630,7 +629,7 @@ export const CruiseCard = React.memo(function CruiseCard({
           <View style={styles.guestInfo}>
             <Users size={14} color="#6B7280" />
             <Text style={styles.guestText}>
-              {bookedCruise.guestNames?.length || bookedCruise.guests || 2} Guests
+              {displayKnownCount(bookedCruise.guestNames?.length || knownGuestCount(bookedCruise.guests), 'Guest')}
             </Text>
           </View>
         </View>
@@ -708,29 +707,9 @@ export const CruiseCard = React.memo(function CruiseCard({
     </TouchableOpacity>
     </Animated.View>
   );
-}, (prevProps, nextProps) => {
-  const prevCruise = prevProps.cruise;
-  const nextCruise = nextProps.cruise;
-  return (
-    prevCruise.id === nextCruise.id &&
-    prevCruise.shipName === nextCruise.shipName &&
-    prevCruise.sailDate === nextCruise.sailDate &&
-    prevCruise.returnDate === nextCruise.returnDate &&
-    prevCruise.nights === nextCruise.nights &&
-    prevCruise.itineraryName === nextCruise.itineraryName &&
-    prevCruise.departurePort === nextCruise.departurePort &&
-    prevCruise.cabinType === nextCruise.cabinType &&
-    prevCruise.offerCode === nextCruise.offerCode &&
-    prevCruise.price === nextCruise.price &&
-    prevCruise.totalPrice === nextCruise.totalPrice &&
-    prevProps.compact === nextProps.compact &&
-    prevProps.mini === nextProps.mini &&
-    prevProps.variant === nextProps.variant &&
-    prevProps.showRetailValue === nextProps.showRetailValue &&
-    prevProps.conflictWarning === nextProps.conflictWarning &&
-    prevProps.onPress === nextProps.onPress
-  );
-});
+}
+
+);
 
 const styles = StyleSheet.create({
   container: {
@@ -843,7 +822,6 @@ const styles = StyleSheet.create({
   miniPlanningRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
     gap: 5,
     marginBottom: 3,
   },
@@ -854,8 +832,7 @@ const styles = StyleSheet.create({
   },
   miniPlanningMuted: {
     fontSize: 10,
-    color: '#0F766E',
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: '#64748B',
   },
   miniPorts: {
     fontSize: 11,
@@ -1293,8 +1270,7 @@ const styles = StyleSheet.create({
   },
   planningBadgeMeta: {
     fontSize: 11,
-    color: '#0F766E',
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: '#475569',
   },
   dateGuestRow: {
     flexDirection: 'row',

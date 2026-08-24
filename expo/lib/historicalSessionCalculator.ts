@@ -1,6 +1,7 @@
 import type { BookedCruise } from '@/types/models';
 import type { CasinoSession } from '@/state/CasinoSessionProvider';
 import { DOLLARS_PER_POINT } from '@/types/models';
+import { addCalendarDateDays } from '@/lib/date';
 
 export interface HistoricalSessionEstimate {
   cruiseId: string;
@@ -132,9 +133,8 @@ function generateSessionEstimates(
   const winLossPerDay = totalWinLoss / casinoDays.length;
 
   casinoDays.forEach((day, index) => {
-    const cruiseDateObj = new Date(cruise.sailDate);
-    cruiseDateObj.setDate(cruiseDateObj.getDate() + (day.day - 1));
-    const sessionDate = cruiseDateObj.toISOString().split('T')[0];
+    const sessionDate = addCalendarDateDays(cruise.sailDate, day.day - 1);
+    if (!sessionDate) return;
 
     const isSeaDay = day.isSeaDay;
     const isLastDay = day.day === cruise.itinerary!.length;
@@ -228,9 +228,8 @@ function generateSimpleSessionEstimates(
   ];
 
   for (let dayIndex = 0; dayIndex < casinoOpenDays; dayIndex++) {
-    const cruiseDateObj = new Date(cruise.sailDate);
-    cruiseDateObj.setDate(cruiseDateObj.getDate() + dayIndex + 1);
-    const sessionDate = cruiseDateObj.toISOString().split('T')[0];
+    const sessionDate = addCalendarDateDays(cruise.sailDate, dayIndex + 1);
+    if (!sessionDate) continue;
 
     for (let sessionIdx = 0; sessionIdx < sessionsPerDay && sessionIdx < startTimes.length; sessionIdx++) {
       const timeSlot = startTimes[sessionIdx];
@@ -273,6 +272,7 @@ export function convertEstimateToSession(
     pointsEarned: estimate.pointsEarned,
     winLoss: estimate.winLoss,
     notes: `${estimate.notes} (Auto-calculated)`,
+    recordKind: 'generated',
     machineType: 'penny-slots',
     denomination: 0.01,
   };

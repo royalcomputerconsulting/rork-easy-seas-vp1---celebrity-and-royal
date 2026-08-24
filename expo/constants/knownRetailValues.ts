@@ -14,7 +14,7 @@ export const KNOWN_RETAIL_VALUES: KnownRetailValue[] = [
   { cruiseId: '2656334', ship: 'Star of the Seas', departureDate: '2026-07-05', retailCabinValue: 5500 },
   { cruiseId: 'booked-navigator-2026-07-17', ship: 'Navigator of the Seas', departureDate: '2026-07-17', retailCabinValue: 3874 },
   { cruiseId: 'booked-navigator-2026-07-24', ship: 'Navigator of the Seas', departureDate: '2026-07-24', retailCabinValue: 3750 },
-  { cruiseId: 'booked-celebrity-equinox-2026-08-05', ship: 'Celebrity Equinox', departureDate: '2026-08-05', retailCabinValue: 5156 },
+  { cruiseId: 'booked-celebrity-equinox-2026-08-06', ship: 'Celebrity Equinox', departureDate: '2026-08-06', retailCabinValue: 5156 },
   { cruiseId: 'booked-navigator-2026-08-21', ship: 'Navigator of the Seas', departureDate: '2026-08-21', retailCabinValue: 3700 },
   { cruiseId: 'booked-ovation-2026-09-04', ship: 'Ovation of the Seas', departureDate: '2026-09-04', retailCabinValue: 2100 },
   { cruiseId: 'booked-ovation-2026-09-11', ship: 'Ovation of the Seas', departureDate: '2026-09-11', retailCabinValue: 1478 },

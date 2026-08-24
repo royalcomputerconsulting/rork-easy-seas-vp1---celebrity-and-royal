@@ -4,6 +4,7 @@ import {
   Alert,
   Animated,
   FlatList,
+  InteractionManager,
   PanResponder,
   Platform,
   StyleSheet,
@@ -14,10 +15,10 @@ import {
   Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Stack, useRouter, useFocusEffect } from 'expo-router';
+import { Stack, useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Database, Search, X, Star, ChevronDown, ChevronUp, Plus, Download } from 'lucide-react-native';
-import { COLORS, SPACING, BORDER_RADIUS, SHADOW } from '@/constants/theme';
+import { Database, Search, X, Star, ChevronDown, ChevronUp, Plus, Download, MapPinned } from 'lucide-react-native';
+import { COLORS, SPACING, BORDER_RADIUS } from '@/constants/theme';
 import { IMAGES } from '@/constants/images';
 import { useSlotMachineLibrary } from '@/state/SlotMachineLibraryProvider';
 import { useCasinoSessions, type CasinoSession } from '@/state/CasinoSessionProvider';
@@ -40,14 +41,15 @@ import { useCoreData } from '@/state/CoreDataProvider';
 import { useGamification } from '@/state/GamificationProvider';
 import type { MachineType, Denomination } from '@/state/CasinoSessionProvider';
 import type { MachineEncyclopediaEntry, SlotManufacturer, BookedCruise } from '@/types/models';
-import { createDateFromString } from '@/lib/date';
+import { createDateFromString, toLocalCalendarDateOnly } from '@/lib/date';
 
 type FilterOption = 'all' | 'favorites' | 'manufacturer' | 'ship';
 
 export default function AtlasScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ startSession?: string }>();
   const _entitlement = useEntitlement();
-  useAuth();
+  const { authenticatedEmail } = useAuth();
 
   const { currentUser, updateUser, ensureOwner } = useUser();
   const { bookedCruises } = useCoreData();
@@ -164,6 +166,30 @@ export default function AtlasScreen() {
     isLoadingIndex,
     reload,
   } = useSlotMachineLibrary();
+  const atlasLoadOwnerRef = useRef<string | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      const ownerKey = authenticatedEmail ?? '__no_user__';
+      if (atlasLoadOwnerRef.current === ownerKey) return;
+      atlasLoadOwnerRef.current = ownerKey;
+      let loadStarted = false;
+      const interaction = InteractionManager.runAfterInteractions(() => {
+        loadStarted = true;
+        void reload().catch((error) => {
+          atlasLoadOwnerRef.current = null;
+          console.error('[Atlas] On-demand local atlas load failed:', error);
+          setUiError(error instanceof Error ? error.message : 'Unable to load the local slot atlas');
+        });
+      });
+      return () => {
+        interaction.cancel();
+        if (!loadStarted && atlasLoadOwnerRef.current === ownerKey) {
+          atlasLoadOwnerRef.current = null;
+        }
+      };
+    }, [authenticatedEmail, reload])
+  );
 
   const { 
     sessions,
@@ -186,6 +212,12 @@ export default function AtlasScreen() {
   const [showSessionsSection, setShowSessionsSection] = useState(false);
   const [editingSession, setEditingSession] = useState<CasinoSession | null>(null);
   const [showQuickSessionModal, setShowQuickSessionModal] = useState(false);
+  const sessionStartHandledRef = useRef(false);
+  useEffect(() => {
+    if (params.startSession !== '1' || sessionStartHandledRef.current) return;
+    sessionStartHandledRef.current = true;
+    setShowQuickSessionModal(true);
+  }, [params.startSession]);
   const [showAddSessionModal, setShowAddSessionModal] = useState(false);
   const [casinoOpenHoursData, setCasinoOpenHoursData] = useState<CasinoOpenHoursData | null>(null);
   const allUpcomingCruises = useMemo((): BookedCruise[] => {
@@ -244,7 +276,7 @@ export default function AtlasScreen() {
   }, [currentUser?.playingHours]);
 
   const todayDateString = useMemo(() => {
-    return new Date().toISOString().split('T')[0];
+    return toLocalCalendarDateOnly(new Date()) ?? '';
   }, []);
 
   const goldenTimeSlots = useMemo(() => {
@@ -268,7 +300,7 @@ export default function AtlasScreen() {
       });
     }
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = toLocalCalendarDateOnly(new Date()) ?? '';
     const todayDay = casinoOpenHoursData.days.find(d => d.date === today);
     const currentDay = todayDay || casinoOpenHoursData.days[0];
 
@@ -627,14 +659,28 @@ export default function AtlasScreen() {
   const listHeader = useMemo(() => {
     return (
       <>
-        <View style={styles.heroCard} testID="slots-brand-logo-card">
-          <Image
-            source={require('../../assets/images/easyseas-scott-astin-logo.jpeg')}
-            style={styles.heroLogoImage}
-            resizeMode="cover"
-            accessibilityLabel="Easy Seas Scott Astin nautical lifestyle brand logo"
-            testID="slots-brand-logo-image"
+        <View style={styles.heroCard}>
+          <LinearGradient
+            colors={['#3AAFA9', '#2B7A78', '#17A398', '#1E8C82', '#3AAFA9']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
           />
+          <LinearGradient
+            colors={['rgba(255,255,255,0.18)', 'transparent', 'rgba(255,255,255,0.12)', 'transparent', 'rgba(255,255,255,0.08)']}
+            start={{ x: 0.2, y: 0 }}
+            end={{ x: 0.8, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={styles.heroOverlay}>
+            <Text style={styles.heroTitle}>Easy Seas™</Text>
+            <Text style={styles.heroSubtitle}>Manage your Nautical Lifestyle™</Text>
+            <Image
+              source={{ uri: IMAGES.signature }}
+              style={styles.heroSignature}
+              resizeMode="contain"
+            />
+          </View>
         </View>
 
         <View style={styles.header}>
@@ -642,6 +688,10 @@ export default function AtlasScreen() {
           <Text style={styles.subtitle}>
             {filteredMachines.length} machine{filteredMachines.length !== 1 ? 's' : ''}
           </Text>
+          <TouchableOpacity style={styles.verifiedAtlasButton} onPress={() => router.push('/verified-machine-atlas' as never)} testID="machines-open-verified-atlas">
+            <MapPinned size={17} color={COLORS.white} />
+            <Text style={styles.verifiedAtlasButtonText}>OPEN VERIFIED ONBOARD MAP</Text>
+          </TouchableOpacity>
         </View>
 
 
@@ -913,7 +963,7 @@ export default function AtlasScreen() {
             listRef.current = r;
           }}
           data={isLoading ? [] : filteredMachines}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item, index) => `${item.id?.trim() || 'atlas-machine'}-${item.globalMachineId || item.machineName || 'machine'}-${item.manufacturer || 'maker'}-${index}`}
           renderItem={({ item, index }) => {
             try {
               return renderMachineItem({ item, index } as any);
@@ -1211,15 +1261,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
-    height: 270,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 2,
-    borderColor: '#D4AF37',
-    ...SHADOW.card,
-  },
-  heroLogoImage: {
-    width: '100%',
-    height: '100%',
+    minHeight: 200,
   },
   heroOverlay: {
     alignItems: 'center',
@@ -1266,6 +1308,23 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 16,
     color: COLORS.textDarkGrey,
+  },
+  verifiedAtlasButton: {
+    marginTop: SPACING.md,
+    borderRadius: 10,
+    backgroundColor: COLORS.navyDeep,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  verifiedAtlasButtonText: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: '800' as const,
+    letterSpacing: 0.35,
   },
   hoursCardsSection: {
     paddingHorizontal: 20,

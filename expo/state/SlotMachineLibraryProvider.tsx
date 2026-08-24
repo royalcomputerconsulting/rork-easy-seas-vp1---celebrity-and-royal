@@ -9,11 +9,11 @@ import {
 import type { GlobalSlotMachine } from '@/constants/globalSlotMachinesDatabase';
 import { permanentDB } from '@/lib/permanentMachineDatabase';
 import { machineIndexHelper, type MachineFullDetails } from '@/lib/machineIndexHelper';
-import { isCloudBackupEnabled, trpcClient } from '@/lib/trpc';
+import { trpcClient } from '@/lib/trpc';
 import { useEntitlement } from '@/state/EntitlementProvider';
 import { useAuth } from '@/state/AuthProvider';
 import { getUserScopedKey } from '@/lib/storage/storageKeys';
-import { quotaSafeGetItem, quotaSafeSetJsonItem } from '@/lib/storage/quotaSafeStorage';
+import { quotaSafeGetJsonItem, quotaSafeSetJsonItem } from '@/lib/storage/quotaSafeStorage';
 
 const STORAGE_KEY_ENCYCLOPEDIA = 'easyseas_machine_encyclopedia_v2_262_only';
 const STORAGE_KEY_MY_ATLAS = 'easyseas_my_slot_atlas_v2_262_only';
@@ -130,13 +130,11 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
   const [isUserWhitelisted, setIsUserWhitelisted] = useState<boolean>(false);
   const encyclopediaKeyRef = useRef<string>(getUserScopedKey(STORAGE_KEY_ENCYCLOPEDIA, authenticatedEmail));
   const atlasKeyRef = useRef<string>(getUserScopedKey(STORAGE_KEY_MY_ATLAS, authenticatedEmail));
-  const sharedLibraryBackfillRef = useRef<string | null>(null);
 
   useEffect(() => {
     encyclopediaKeyRef.current = getUserScopedKey(STORAGE_KEY_ENCYCLOPEDIA, authenticatedEmail);
     atlasKeyRef.current = getUserScopedKey(STORAGE_KEY_MY_ATLAS, authenticatedEmail);
     proLoadTriggeredRef.current = false;
-    sharedLibraryBackfillRef.current = null;
     setEncyclopedia([]);
     setMyAtlasIds([]);
     setIndexLoadComplete(false);
@@ -282,22 +280,19 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
       setIsLoading(true);
       console.log('[SlotMachineLibrary] Loading user data from storage...');
 
-      let encyclopediaStr: string | null = null;
-      let atlasStr: string | null = null;
+      let loadedEncyclopedia: MachineEncyclopediaEntry[] = [];
+      let loadedAtlasIds: string[] = [];
       let indexLoaded: string | null = null;
 
       try {
-        [encyclopediaStr, atlasStr, indexLoaded] = await Promise.all([
-          quotaSafeGetItem(encyclopediaKeyRef.current),
-          quotaSafeGetItem(atlasKeyRef.current),
+        [loadedEncyclopedia, loadedAtlasIds, indexLoaded] = await Promise.all([
+          quotaSafeGetJsonItem<MachineEncyclopediaEntry[]>(encyclopediaKeyRef.current, [], Array.isArray),
+          quotaSafeGetJsonItem<string[]>(atlasKeyRef.current, [], Array.isArray),
           AsyncStorage.getItem(STORAGE_KEY_INDEX_LOADED),
         ]);
       } catch (storageError) {
-        console.error('[SlotMachineLibrary] AsyncStorage read failed:', storageError);
+        console.error('[SlotMachineLibrary] Local storage read failed:', storageError);
       }
-
-      const loadedEncyclopedia: MachineEncyclopediaEntry[] = encyclopediaStr ? JSON.parse(encyclopediaStr) : [];
-      const loadedAtlasIds: string[] = atlasStr ? JSON.parse(atlasStr) : [];
 
       console.log(`[SlotMachineLibrary] Loaded ${loadedEncyclopedia.length} encyclopedia, ${loadedAtlasIds.length} atlas, indexFlag=${indexLoaded}`);
 
@@ -332,15 +327,14 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
     }
   }, [loadMachinesFromIndex, authenticatedEmail]);
 
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      initializeAndLoadData();
-    }, 100);
-    return () => {
-      clearTimeout(timeout);
-      if (deferredLoadRef.current) clearTimeout(deferredLoadRef.current);
-    };
-  }, [initializeAndLoadData, authenticatedEmail]);
+  useEffect(() => () => {
+    if (deferredLoadRef.current) clearTimeout(deferredLoadRef.current);
+  }, []);
+
+  // The encyclopedia is intentionally hydrated on demand by the Slots or
+  // Easy Seas Agent screen. A retained atlas can be several megabytes, and
+  // parsing it 100ms after launch used to monopolize Hermes while the user was
+  // trying to open another tab.
 
 
   const saveEncyclopedia = async (data: MachineEncyclopediaEntry[]) => {
@@ -371,11 +365,6 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
       return;
     }
 
-    if (!isCloudBackupEnabled()) {
-      console.log('[SlotMachineLibrary] Local-first mode: shared slot machine cloud save skipped');
-      return;
-    }
-
     try {
       const uniqueMachines = Array.from(
         new Map(sharedMachines.map((machine) => [machine.globalMachineId ?? machine.id, machine])).values()
@@ -392,19 +381,8 @@ export const [SlotMachineLibraryProvider, useSlotMachineLibrary] = createContext
     }
   }, []);
 
-  useEffect(() => {
-    if (isLoading || encyclopedia.length === 0) return;
-
-    const backfillKey = `${authenticatedEmail ?? 'anonymous'}:${encyclopedia.length}`;
-    if (sharedLibraryBackfillRef.current === backfillKey) return;
-    sharedLibraryBackfillRef.current = backfillKey;
-
-    const timeout = setTimeout(() => {
-      void saveSharedMachineJSON(encyclopedia, 'import');
-    }, 1500);
-
-    return () => clearTimeout(timeout);
-  }, [authenticatedEmail, encyclopedia, isLoading, saveSharedMachineJSON]);
+  // Shared-library cloud backfill is intentionally manual. Loading a local
+  // encyclopedia must never serialize and upload the full dataset at startup.
 
   const addMachineFromGlobal = async (globalMachineId: string) => {
     const allGlobalMachines = permanentDB.getAllMachines();

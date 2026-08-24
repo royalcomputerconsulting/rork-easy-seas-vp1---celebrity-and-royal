@@ -22,8 +22,10 @@ interface ShipRow {
   retail: number;
   cashResult: number;
   totalEconomic: number;
+  coinIn: number;
+  coinInCruises: number;
   avgPointsPerCruise: number;
-  avgCoinInPerCruise: number;
+  avgCoinInPerCruise: number | null;
   avgValuePerCruise: number;
 }
 
@@ -34,7 +36,7 @@ interface ShipRow {
  */
 export default function ShipPerformanceScreen() {
   const router = useRouter();
-  const { cruiseEconomicsSummary } = useCasinoEconomicsData();
+  const { allCruiseEconomicsSummary } = useCasinoEconomicsData();
   const { clubRoyaleTier, clubRoyaleCurrentYearPoints } = useLoyalty();
   const { width } = useWindowDimensions();
   const showSidebar = Platform.OS === 'web' && width >= LARGE_SCREEN_BREAKPOINT;
@@ -46,21 +48,22 @@ export default function ShipPerformanceScreen() {
   const [showTimePicker, setShowTimePicker] = useState(false);
 
   const timeFilteredRows = useMemo(() => {
-    if (timeFilter === 'all') return cruiseEconomicsSummary.rows;
+    const completedRows = allCruiseEconomicsSummary.rows.filter((row) => row.status === 'completed');
+    if (timeFilter === 'all') return completedRows;
     const cutoff = new Date();
     cutoff.setMonth(cutoff.getMonth() - 12);
-    return cruiseEconomicsSummary.rows.filter((row) => {
+    return completedRows.filter((row) => {
       const parsed = row.sailDate ? new Date(row.sailDate) : null;
       return parsed && !Number.isNaN(parsed.getTime()) && parsed >= cutoff;
     });
-  }, [cruiseEconomicsSummary.rows, timeFilter]);
+  }, [allCruiseEconomicsSummary.rows, timeFilter]);
 
   const shipRows = useMemo((): ShipRow[] => {
     const map = new Map<string, ShipRow>();
     timeFilteredRows.forEach((row) => {
       const key = row.ship || 'Unknown Ship';
       const existing = map.get(key) ?? {
-        ship: key, cruises: 0, points: 0, paid: 0, retail: 0, cashResult: 0, totalEconomic: 0,
+        ship: key, cruises: 0, points: 0, paid: 0, retail: 0, cashResult: 0, totalEconomic: 0, coinIn: 0, coinInCruises: 0,
         avgPointsPerCruise: 0, avgCoinInPerCruise: 0, avgValuePerCruise: 0,
       };
       existing.cruises += 1;
@@ -69,13 +72,17 @@ export default function ShipPerformanceScreen() {
       existing.retail += row.retail;
       existing.cashResult += row.cashResult ?? 0;
       existing.totalEconomic += row.totalEconomic ?? 0;
+      if (row.coinIn != null) {
+        existing.coinIn += row.coinIn;
+        existing.coinInCruises += 1;
+      }
       map.set(key, existing);
     });
     return Array.from(map.values())
       .map((entry) => ({
         ...entry,
         avgPointsPerCruise: entry.cruises > 0 ? entry.points / entry.cruises : 0,
-        avgCoinInPerCruise: entry.cruises > 0 ? (entry.points * 5) / entry.cruises : 0,
+        avgCoinInPerCruise: entry.coinInCruises > 0 ? entry.coinIn / entry.coinInCruises : null,
         avgValuePerCruise: entry.cruises > 0 ? entry.totalEconomic / entry.cruises : 0,
       }))
       .sort((a, b) => b.totalEconomic - a.totalEconomic);
@@ -121,7 +128,7 @@ export default function ShipPerformanceScreen() {
         { label: 'Sailings', value: String(ship.cruises) },
         { label: 'Total points', value: formatNumber(ship.points) },
         { label: 'Avg points / cruise', value: formatNumber(Math.round(ship.avgPointsPerCruise)) },
-        { label: 'Avg coin-in / cruise', value: formatCurrencyDetailed(ship.avgCoinInPerCruise) },
+        { label: 'Avg coin-in / cruise', value: ship.avgCoinInPerCruise == null ? 'Not recorded' : formatCurrencyDetailed(ship.avgCoinInPerCruise) },
         { label: 'Avg value / cruise', value: formatCurrencyDetailed(ship.avgValuePerCruise) },
         { label: 'Win / loss (total)', value: formatCurrencyDetailed(ship.cashResult) },
         { label: 'Net make-out (total)', value: formatCurrencyDetailed(ship.totalEconomic) },

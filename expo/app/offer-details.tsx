@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useState } from 'react';
+import React, { useMemo, useCallback, useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   FlatList,
   TouchableOpacity,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -26,14 +27,12 @@ import {
   FileText,
   Layers,
   Calculator,
-  AlertCircle,
-  ChevronDown,
-  ChevronUp,
+  ClipboardCheck,
+  AlertTriangle,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { IMAGES } from '@/constants/images';
-import { buildCruiseDetailsParams } from '@/lib/navigation/cruiseDetails';
 import { calculateCruiseValue } from '@/lib/valueCalculator';
 import { useAppState } from '@/state/AppStateProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
@@ -42,36 +41,90 @@ import { useUser, DEFAULT_PLAYING_HOURS } from '@/state/UserProvider';
 import { createDateFromString, getDaysUntil, formatDate } from '@/lib/date';
 import { useCertificates } from '@/state/CertificatesProvider';
 import { formatCurrency } from '@/lib/format';
+import { knownGuestCount } from '@/lib/cruiseRecordIntegrity';
 import {
   buildCertificateStackingNotes,
   calculateOfferIntelligenceScore,
   decodeOffer,
 } from '@/lib/offerIntelligence';
-import { useDrillDown } from '@/components/casino-dashboard/CalculationDrillDownDrawer';
-import type { Cruise, BookedCruise, CasinoOffer, TravelBrand } from '@/types/models';
-import { inferRecordBrand } from '@/lib/intelligenceFilters';
+import type { Cruise, BookedCruise, CasinoOffer } from '@/types/models';
+import { useCruiseInventory } from '@/hooks/useCruiseInventory';
+import { getCruiseOfferInstanceKey } from '@/lib/cruiseInventory/cruiseCanonicalIdentity';
+import type { CruiseInventoryCursor } from '@/lib/cruiseInventory/CruiseInventoryRepository';
+import { evaluateBookTiming, evaluateShouldIBook } from '@/lib/shouldIBook';
 
 type SortOption = 'soonest' | 'highest-value' | 'lowest-price' | 'longest' | 'shortest';
 
 export default function OfferDetailsScreen() {
   const router = useRouter();
-  const { offerCode, offerSource } = useLocalSearchParams<{ offerCode: string; offerSource?: string }>();
-  const requestedOfferSource = useMemo<TravelBrand | 'unknown'>(() => {
-    const value = String(Array.isArray(offerSource) ? offerSource[0] : offerSource || '').toLowerCase();
-    if (value.includes('carnival')) return 'carnival';
-    if (value.includes('celebrity')) return 'celebrity';
-    if (value.includes('silversea')) return 'silversea';
-    if (value.includes('royal')) return 'royal';
-    return 'unknown';
-  }, [offerSource]);
+  const { offerCode, offerId } = useLocalSearchParams<{ offerCode?: string; offerId?: string }>();
   const { localData } = useAppState();
   const { cruises: storeCruises, bookedCruises: storeBookedCruises, casinoOffers: storeOffers, updateCasinoOffer, removeCasinoOffer } = useCoreData();
   const { currentUser } = useUser();
+  const { queryOfferSailings, totalCruises } = useCruiseInventory();
   const { certificates } = useCertificates();
   const [sortBy, setSortBy] = useState<SortOption>('soonest');
   const [showDecodedOffer, setShowDecodedOffer] = useState<boolean>(false);
-  const [showOfferSummary, setShowOfferSummary] = useState<boolean>(false);
-  const drill = useDrillDown();
+  const [showBookDecision, setShowBookDecision] = useState<boolean>(false);
+  const [inventoryOfferCruises, setInventoryOfferCruises] = useState<Cruise[]>([]);
+  const [inventoryOfferTotal, setInventoryOfferTotal] = useState(0);
+  const [inventoryOfferLoading, setInventoryOfferLoading] = useState(false);
+  const nextOfferCursorRef = useRef<CruiseInventoryCursor | null>(null);
+
+  const selectedOffer = useMemo(() => {
+    const allOffers = [...(storeOffers || []), ...(localData.offers || [])];
+    const uniqueOffers = allOffers.filter((candidate, index, self) =>
+      index === self.findIndex((offerCandidate) => offerCandidate.id === candidate.id)
+    );
+    return uniqueOffers.find((candidate) => candidate.id === offerId)
+      ?? uniqueOffers.find((candidate) => candidate.offerCode === offerCode);
+  }, [localData.offers, offerCode, offerId, storeOffers]);
+
+  const inventoryOfferQuery = useMemo(() => {
+    const strongInstance = String(selectedOffer?.playerOfferId || selectedOffer?.offerInstanceId || selectedOffer?.carnivalOfferId || '').trim();
+    return {
+      offerInstanceKey: strongInstance && selectedOffer
+        ? getCruiseOfferInstanceKey(selectedOffer as unknown as Cruise) ?? undefined
+        : undefined,
+      offerCode: strongInstance ? undefined : selectedOffer?.offerCode || offerCode,
+      sortBy: sortBy === 'longest' || sortBy === 'shortest' ? 'nights' as const
+        : sortBy === 'highest-value' || sortBy === 'lowest-price' ? 'value' as const
+          : 'sailDate' as const,
+      sortDirection: sortBy === 'highest-value' || sortBy === 'longest' ? 'desc' as const : 'asc' as const,
+    };
+  }, [offerCode, selectedOffer, sortBy]);
+
+  useEffect(() => {
+    if (totalCruises === 0 || (!inventoryOfferQuery.offerInstanceKey && !inventoryOfferQuery.offerCode)) return;
+    let cancelled = false;
+    setInventoryOfferLoading(true);
+    nextOfferCursorRef.current = null;
+    void queryOfferSailings({ ...inventoryOfferQuery, limit: 200 }).then((page) => {
+      if (cancelled) return;
+      setInventoryOfferCruises(page.rows);
+      setInventoryOfferTotal(page.total);
+      nextOfferCursorRef.current = page.nextCursor;
+    }).catch((error) => {
+      console.error('[OfferDetails] Offer sailing query failed:', error);
+    }).finally(() => {
+      if (!cancelled) setInventoryOfferLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [inventoryOfferQuery, queryOfferSailings, totalCruises]);
+
+  const loadMoreOfferSailings = useCallback(async () => {
+    const cursor = nextOfferCursorRef.current;
+    if (!cursor || inventoryOfferLoading) return;
+    setInventoryOfferLoading(true);
+    try {
+      const page = await queryOfferSailings({ ...inventoryOfferQuery, cursor, limit: 200 });
+      setInventoryOfferCruises((current) => [...current, ...page.rows]);
+      setInventoryOfferTotal(page.total);
+      nextOfferCursorRef.current = page.nextCursor;
+    } finally {
+      setInventoryOfferLoading(false);
+    }
+  }, [inventoryOfferLoading, inventoryOfferQuery, queryOfferSailings]);
 
   const playingHoursConfig = useMemo(() => {
     const userPlayingHours = currentUser?.playingHours || DEFAULT_PLAYING_HOURS;
@@ -88,7 +141,9 @@ export default function OfferDetailsScreen() {
 
   const offerData = useMemo(() => {
     // Combine CruiseStore data (primary) with localData (fallback)
-    const allCruises = [...(storeCruises || []), ...(localData.cruises || [])];
+    const allCruises = inventoryOfferCruises.length > 0
+      ? inventoryOfferCruises
+      : [...(storeCruises || []), ...(localData.cruises || [])];
     const allOffers = [...(storeOffers || []), ...(localData.offers || [])];
     
     console.log('[OfferDetails] Data sources:', {
@@ -97,7 +152,7 @@ export default function OfferDetailsScreen() {
       storeOffersCount: (storeOffers || []).length,
       localOffersCount: (localData.offers || []).length,
       targetOfferCode: offerCode,
-      targetOfferSource: requestedOfferSource,
+      targetOfferId: offerId,
     });
     
     // Remove duplicates by ID
@@ -105,19 +160,24 @@ export default function OfferDetailsScreen() {
       index === self.findIndex(c => c.id === cruise.id)
     );
     
-    const sourceMatches = (record: Cruise | CasinoOffer) => requestedOfferSource === 'unknown' || inferRecordBrand(record as any) === requestedOfferSource;
-
-    // Offer codes can overlap between cruise lines. Match both offer code and source/brand
-    // so Carnival, Royal Caribbean, Celebrity, and Silversea records never intermingle.
-    const matchingCruises = uniqueCruises.filter(
-      (c: Cruise) => c.offerCode === offerCode && sourceMatches(c)
+    const uniqueOffers = allOffers.filter((candidate, index, self) =>
+      index === self.findIndex((offerCandidate) => offerCandidate.id === candidate.id)
     );
-    
-    const offer = allOffers.find(
-      (o: CasinoOffer) => o.offerCode === offerCode && sourceMatches(o)
-    ) ?? (requestedOfferSource === 'unknown'
-      ? allOffers.find((o: CasinoOffer) => o.offerCode === offerCode)
-      : undefined);
+    const offer = selectedOffer;
+    const linkedCruiseIds = new Set(
+      offer ? [offer.cruiseId, ...(offer.cruiseIds ?? [])].filter((id): id is string => Boolean(id)) : [],
+    );
+    const offerInstanceId = String(offer?.playerOfferId || offer?.offerInstanceId || offer?.carnivalOfferId || '').trim().toLowerCase();
+
+    // Explicit cruiseIds are authoritative. Provider instance identity is the
+    // next-safe fallback. Code-only matching is retained solely for legacy
+    // single-instance records so separate offers sharing 26TOR403 never open a
+    // combined sailing list.
+    let matchingCruises = linkedCruiseIds.size > 0
+      ? uniqueCruises.filter((cruise) => linkedCruiseIds.has(cruise.id))
+      : offerInstanceId
+        ? uniqueCruises.filter((cruise) => String(cruise.playerOfferId || cruise.offerInstanceId || '').trim().toLowerCase() === offerInstanceId)
+        : uniqueCruises.filter((cruise) => cruise.offerCode === (offer?.offerCode || offerCode));
     
     console.log('[OfferDetails] Found offer:', offer?.offerCode, 'with pricing:', {
       interior: offer?.interiorPrice,
@@ -202,7 +262,7 @@ export default function OfferDetailsScreen() {
     });
     
     return { cruises, offer };
-  }, [storeCruises, storeOffers, localData.cruises, localData.offers, offerCode, requestedOfferSource, sortBy]);
+  }, [storeCruises, storeOffers, localData.cruises, localData.offers, offerCode, offerId, sortBy, inventoryOfferCruises, selectedOffer]);
 
   const offerInfo = useMemo(() => {
     const { cruises, offer } = offerData;
@@ -329,7 +389,6 @@ export default function OfferDetailsScreen() {
       clubRoyaleId: currentUser.clubRoyaleId,
       celebrityCaptainsClubNumber: currentUser.celebrityCaptainsClubNumber,
       blueChipId: currentUser.blueChipId,
-      carnivalVifpNumber: currentUser.carnivalVifpNumber,
       active: currentUser.active,
       defaultProfile: currentUser.defaultProfile,
       createdAt: currentUser.createdAt,
@@ -341,6 +400,18 @@ export default function OfferDetailsScreen() {
     if (!offerData.offer) return null;
     return calculateOfferIntelligenceScore(offerData.offer, offerData.cruises, certificates, currentTravelerProfile);
   }, [offerData.offer, offerData.cruises, certificates, currentTravelerProfile]);
+
+  const shouldBookResult = useMemo(() => {
+    const candidate = offerData.cruises[0];
+    if (!offerData.offer || !candidate) return null;
+    return evaluateShouldIBook({
+      offer: offerData.offer,
+      cruise: candidate,
+      bookedCruises: storeBookedCruises,
+      certificates,
+      profile: currentTravelerProfile,
+    });
+  }, [certificates, currentTravelerProfile, offerData.cruises, offerData.offer, storeBookedCruises]);
 
   const decodedOffer = useMemo(() => {
     if (!offerData.offer) return null;
@@ -354,57 +425,12 @@ export default function OfferDetailsScreen() {
 
   const daysUntilExpiry = offerInfo.expiryDate ? getDaysUntil(offerInfo.expiryDate) : null;
   const isExpiringSoon = daysUntilExpiry !== null && daysUntilExpiry > 0 && daysUntilExpiry <= 7;
-
-  const conflictRisk = useMemo(() => {
-    const { offer, cruises } = offerData;
-    const overlappingBooked = cruises.filter((c) => bookedCruiseIds.has(c.id)).length;
-    const isExpired = daysUntilExpiry !== null && daysUntilExpiry < 0;
-    const isUsed = offer?.status === 'used';
-    const notes: string[] = [];
-    let level: 'low' | 'medium' | 'high' = 'low';
-
-    if (isExpired) {
-      notes.push('This offer has already expired based on its expiry date.');
-      level = 'high';
-    }
-    if (isUsed) {
-      notes.push('This offer is already marked as used.');
-      level = 'high';
-    }
-    if (overlappingBooked > 0 && overlappingBooked === cruises.length && !isExpired && !isUsed) {
-      notes.push('Every matching sailing for this offer is already booked — low conflict risk.');
-    } else if (overlappingBooked > 0) {
-      notes.push(`${overlappingBooked} of ${cruises.length} matching sailing(s) are already booked on another offer/reservation.`);
-      if (level === 'low') level = 'medium';
-    }
-    if (isExpiringSoon) {
-      notes.push(`Expires in ${daysUntilExpiry} day(s) — use it soon or it will lapse.`);
-      if (level === 'low') level = 'medium';
-    }
-    if (notes.length === 0) {
-      notes.push('No known conflicts — this offer looks usable as-is.');
-    }
-
-    return {
-      level,
-      overlappingBooked,
-      notes,
-      summary: 'Conflict Risk flags offers that may not be realistically usable: already expired, already marked used, expiring very soon, or where matching sailings overlap with cruises you\'ve already booked elsewhere.',
-    };
-  }, [offerData, bookedCruiseIds, daysUntilExpiry, isExpiringSoon]);
+  const bookTimingResult = shouldBookResult ? evaluateBookTiming({ decision: shouldBookResult, daysUntilOfferExpiry: daysUntilExpiry, observedPriceChangePercent: offerData.cruises[0]?.priceDrop && offerData.cruises[0]?.originalPrice ? offerData.cruises[0].priceDrop / offerData.cruises[0].originalPrice * 100 : null, cabinAvailability: 'unknown', alternativeOfferCount: Math.max(0, offerData.cruises.length - 1) }) : null;
 
   const handleCruisePress = useCallback((cruiseId: string) => {
     console.log('[OfferDetails] Cruise pressed:', cruiseId);
-    const cruise = offerData.cruises.find((item: any) => item.id === cruiseId) as any;
-    router.push({
-      pathname: '/cruise-details' as any,
-      params: buildCruiseDetailsParams(cruise, {
-        id: cruiseId,
-        source: 'offer-details',
-        offerCode: offerData.offer?.offerCode || offerInfo.offerCode || '',
-      }),
-    });
-  }, [router, offerData.cruises, offerData.offer?.offerCode, offerInfo.offerCode]);
+    router.push(`/cruise-details?id=${cruiseId}` as any);
+  }, [router]);
 
   const handleClose = useCallback(() => {
     router.back();
@@ -486,58 +512,18 @@ export default function OfferDetailsScreen() {
 
         {/* Compact Summary Row - Top - White with Navy Text */}
         <View style={styles.summaryRow}>
-          <TouchableOpacity
-            style={styles.summaryStatBox}
-            activeOpacity={0.75}
-            testID={`offer-casino-days-drill-${item.id}`}
-            onPress={(e) => {
-              e.stopPropagation();
-              drill.open({
-                title: 'Casino Days',
-                subtitle: `${item.shipName} · ${item.nights} nights`,
-                summary: 'Casino Days counts every day this cruise\'s casino is expected to be open based on the itinerary — sea days count fully, port days are excluded (or partial for late-night departures), and overnight port stops are excluded entirely per maritime law.',
-                formula: 'Casino Days = Sea Days + Partial-Credit Late-Departure Port Days',
-                inputs: [
-                  { label: 'Casino Days', value: `${summary.casinoDays} of ${summary.totalDays}` },
-                  { label: 'Sea Days', value: String(summary.seaDays) },
-                  { label: 'Total Nights', value: String(item.nights) },
-                ],
-                sourceRecords: [{ label: 'Source', value: 'Itinerary-based assumption', confidence: 'estimated-default' }],
-              });
-            }}
-          >
+          <View style={styles.summaryStatBox}>
             <Dice5 size={16} color={summary.statusBadge.color} />
             <Text style={[styles.summaryStatValue, { color: summary.statusBadge.color }]}>
               {summary.casinoDays}
             </Text>
             <Text style={styles.summaryStatLabel}>Casino Days</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.summaryStatBox}
-            activeOpacity={0.75}
-            testID={`offer-expected-points-drill-${item.id}`}
-            onPress={(e) => {
-              e.stopPropagation();
-              drill.open({
-                title: 'Expected Points',
-                subtitle: `${item.shipName} · ${item.nights} nights`,
-                summary: 'Expected points project what you\'d likely earn on this sailing using your own playing-hours settings and casino-open days from the itinerary, times your historical points-per-hour rate.',
-                formula: 'Expected Points = Casino Days × Golden Hours per Day × Historical Points per Hour',
-                inputs: [
-                  { label: 'Casino Days', value: String(summary.casinoDays) },
-                  { label: 'Golden Hours', value: `${summary.goldenHours}h` },
-                  { label: 'Estimated Points', value: `${Math.round(summary.estimatedPoints).toLocaleString()} pts` },
-                  { label: 'Coin-In Equivalent', value: `$${Math.round(summary.estimatedPoints * 5).toLocaleString()}` },
-                ],
-                assumptions: ['Conservative/Base/Aggressive scenarios use your default points-per-hour from Casino Settings unless you\'ve logged enough real sessions to override it.'],
-                sourceRecords: [{ label: 'Source', value: 'Projected from your playing-hours settings + itinerary', confidence: 'estimated-default' }],
-              });
-            }}
-          >
+          </View>
+          <View style={styles.summaryStatBox}>
             <Star size={16} color={COLORS.goldDark} />
             <Text style={styles.summaryStatValue}>~{(summary.estimatedPoints / 1000).toFixed(1)}k</Text>
             <Text style={styles.summaryStatLabel}>Est. Points</Text>
-          </TouchableOpacity>
+          </View>
           <View style={styles.summaryStatBox}>
             <Clock size={16} color={COLORS.goldDark} />
             <Text style={styles.summaryStatValue}>{summary.goldenHours}h</Text>
@@ -589,7 +575,10 @@ export default function OfferDetailsScreen() {
                 <View style={styles.guestBadge}>
                   <Users size={13} color="#7C3AED" />
                   <Text style={styles.guestBadgeText}>
-                    {item.guestsInfo || offerData.offer?.guestsInfo || `${item.guests || offerData.offer?.guests || 2} Guest${(item.guests || offerData.offer?.guests || 2) === 1 ? '' : 's'}`}
+                    {item.guestsInfo || offerData.offer?.guestsInfo || (() => {
+                      const guests = knownGuestCount(item.guests) ?? knownGuestCount(offerData.offer?.guests);
+                      return guests ? `${guests} Guest${guests === 1 ? '' : 's'}` : 'Guest count unavailable';
+                    })()}
                   </Text>
                 </View>
               )}
@@ -655,314 +644,272 @@ export default function OfferDetailsScreen() {
       />
 
       <SafeAreaView style={styles.safeArea} edges={['top']}>
-        {/* Merged Header - Offer Name, Code, Expiry, Value, Cruises */}
-        <LinearGradient
-          colors={['#E0F2FE', '#DBEAFE', '#E0F7FA']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.mergedHeader}
-        >
-          {/* Close Button */}
-          <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
-            <X size={24} color={COLORS.navyDeep} />
-          </TouchableOpacity>
-
-          {/* Featured Offer Name & Code */}
-          <View style={styles.featuredOfferSection}>
-            <View style={styles.offerLogoGroup}>
-              <Image 
-                source={require('../assets/images/easyseas-scott-astin-logo.jpeg')}
-                style={styles.offerLogo}
-                resizeMode="contain"
-              />
-
-            </View>
-            <View style={styles.offerNameRow}>
-              <Text style={styles.featuredOfferName} numberOfLines={2}>{offerInfo.offerName}</Text>
-              {offerInfo.totalValue > 0 && (
-                <TouchableOpacity
-                  style={styles.totalValueBadge}
-                  activeOpacity={0.8}
-                  testID="offer-value-drill-trigger"
-                  onPress={() => drill.open({
-                    title: 'Offer Value',
-                    subtitle: offerInfo.offerName,
-                    summary: 'The total value of this offer is the retail room price (interior/oceanview/balcony/suite as available) plus taxes and fees, averaged across every cruise this offer applies to, plus any FreePlay, OBC, or trade-in value attached to the offer itself.',
-                    formula: 'Offer Value = Room Retail Price + Taxes/Fees + FreePlay + OBC + Trade-In Value',
-                    inputs: [
-                      { label: 'Room Type', value: offerInfo.roomType || 'Not specified' },
-                      { label: 'Retail Price Range', value: offerInfo.minRetailValue && offerInfo.maxRetailValue ? `$${Math.round(offerInfo.minRetailValue).toLocaleString()} – $${Math.round(offerInfo.maxRetailValue).toLocaleString()}` : 'Not available' },
-                      { label: 'Taxes/Fees', value: offerInfo.taxesFees ? `$${offerInfo.taxesFees.toLocaleString()}` : '$0' },
-                      { label: 'FreePlay', value: `$${(offerInfo.freePlay ?? 0).toLocaleString()}` },
-                      { label: 'Onboard Credit', value: `$${(offerInfo.obc ?? 0).toLocaleString()}` },
-                      { label: 'Trade-In Value', value: `$${(offerInfo.tradeInValue ?? 0).toLocaleString()}` },
-                    ],
-                    sourceRecords: [{ label: 'Matching Cruises Used', value: `${offerData.cruises.length} sailing(s)`, confidence: offerData.cruises.length > 0 ? 'verified-invoice' : 'needs-review' }],
-                    missing: offerData.cruises.length === 0 ? ['No matching cruises found for this offer code — value is based on the offer record alone.'] : [],
-                  })}
-                >
-                  <DollarSign size={18} color="#166534" />
-                  <View>
-                    <Text style={styles.totalValueLabel}>Total Value</Text>
-                    <Text style={styles.totalValueAmount}>${Math.round(offerInfo.totalValue).toLocaleString()}</Text>
-                  </View>
-                </TouchableOpacity>
-              )}
-            </View>
-            <View style={styles.offerCodeBadge}>
-              <Text style={styles.offerCodeText}>{offerInfo.offerCode}</Text>
-            </View>
-          </View>
-
-          <TouchableOpacity
-            style={styles.summaryToggle}
-            onPress={() => setShowOfferSummary((value) => !value)}
-            activeOpacity={0.8}
-            testID="offer-summary-toggle"
-          >
-            <Text style={styles.summaryToggleText}>{showOfferSummary ? 'Hide offer summary' : 'Show offer summary'}</Text>
-            {showOfferSummary ? <ChevronUp size={17} color={COLORS.navyDeep} /> : <ChevronDown size={17} color={COLORS.navyDeep} />}
-          </TouchableOpacity>
-
-          {showOfferSummary ? <>
-          {/* FP/OBC Highlight Row */}
-          {((offerInfo.freePlay ?? 0) > 0 || (offerInfo.obc ?? 0) > 0) && (
-            <View style={styles.fpObcRow}>
-              {(offerInfo.freePlay ?? 0) > 0 && (
-                <TouchableOpacity
-                  style={styles.fpBadgeOffer}
-                  activeOpacity={0.8}
-                  testID="offer-freeplay-drill-trigger"
-                  onPress={() => drill.open({
-                    title: 'FreePlay',
-                    subtitle: offerInfo.offerCode,
-                    summary: 'FreePlay is casino credit loaded onto your SeaPass card that can only be wagered, not withdrawn directly — winnings from it are yours to keep or cash out.',
-                    inputs: [
-                      { label: 'FreePlay Amount', value: `$${(offerInfo.freePlay ?? 0).toLocaleString()}` },
-                      { label: 'Source Offer Code', value: offerInfo.offerCode },
-                      { label: 'Used?', value: offerData.offer?.status === 'used' ? 'Yes — marked used' : 'Not yet marked used' },
-                    ],
-                    sourceRecords: [
-                      { label: 'Included in Win/Loss?', value: 'No — FreePlay wagers/results are tracked in your casino sessions, not added again here to avoid double-counting.' },
-                      { label: 'Included in Total Value?', value: 'Yes, unless the Comp Value Calculator or a cruise edit already counted it — check the Duplicate-Counting note on that cruise\'s value breakdown.' },
-                    ],
-                  })}
-                >
-                  <Text style={styles.fpLabelOffer}>FreePlay</Text>
-                  <Text style={styles.fpValueOffer}>${(offerInfo.freePlay ?? 0).toLocaleString()}</Text>
-                </TouchableOpacity>
-              )}
-              {(offerInfo.obc ?? 0) > 0 && (
-                <TouchableOpacity
-                  style={styles.obcBadgeOffer}
-                  activeOpacity={0.8}
-                  testID="offer-obc-drill-trigger"
-                  onPress={() => drill.open({
-                    title: 'Onboard Credit & Trade-In',
-                    subtitle: offerInfo.offerCode,
-                    summary: 'Onboard Credit (OBC) reduces what you spend onboard for drinks, dining, shore excursions, and more. Trade-In value is what this offer is worth if exchanged for a different sailing instead of used as-is.',
-                    inputs: [
-                      { label: 'Onboard Credit', value: `$${(offerInfo.obc ?? 0).toLocaleString()}` },
-                      { label: 'Trade-In Value', value: `$${(offerInfo.tradeInValue ?? 0).toLocaleString()}` },
-                      { label: 'Expires', value: offerInfo.expiryDate ? formatDate(offerInfo.expiryDate, 'short') : 'No expiry on file' },
-                    ],
-                    missing: !offerInfo.tradeInValue ? ['No trade-in value on file for this offer.'] : [],
-                  })}
-                >
-                  <Text style={styles.obcLabelOffer}>Onboard Credit</Text>
-                  <Text style={styles.obcValueOffer}>${(offerInfo.obc ?? 0).toLocaleString()}</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
-
-          <View style={styles.statsRow}>
-            {offerInfo.expiryDate ? (
-              <View style={styles.statItem}>
-                <Clock size={16} color={isExpiringSoon ? COLORS.warning : COLORS.navyDeep} />
-                <View style={styles.statTextGroup}>
-                  <Text style={styles.statLabel}>Expires</Text>
-                  <Text style={[styles.statValue, isExpiringSoon && styles.statValueWarning]}>
-                    {formatDate(offerInfo.expiryDate, 'short')}
-                    {isExpiringSoon && ` (${daysUntilExpiry}d)`}
-                  </Text>
-                </View>
-              </View>
-            ) : null}
-            <View style={styles.statItem}>
-              <Ship size={16} color={COLORS.navyDeep} />
-              <View style={styles.statTextGroup}>
-                <Text style={styles.statLabel}>Cruises</Text>
-                <Text style={styles.statValue}>{offerData.cruises.length}</Text>
-              </View>
-            </View>
-            <TouchableOpacity
-              style={[styles.statItem, styles.statItemHighlight, conflictRisk.level !== 'low' && { backgroundColor: 'rgba(217, 119, 6, 0.12)' }]}
-              activeOpacity={0.75}
-              testID="offer-conflict-risk-drill-trigger"
-              onPress={() => drill.open({
-                title: 'Conflict Risk',
-                subtitle: offerInfo.offerCode,
-                summary: conflictRisk.summary,
-                inputs: [
-                  { label: 'Risk Level', value: conflictRisk.level === 'low' ? 'Low' : conflictRisk.level === 'medium' ? 'Medium' : 'High' },
-                  { label: 'Overlapping Booked Cruises', value: String(conflictRisk.overlappingBooked) },
-                  { label: 'Offer Status', value: offerData.offer?.status ?? 'available' },
-                  { label: 'Expired?', value: daysUntilExpiry !== null && daysUntilExpiry < 0 ? 'Yes — expired' : 'No' },
-                ],
-                sourceRecords: conflictRisk.notes.map((note) => ({ label: 'Note', value: note })),
-                missing: conflictRisk.overlappingBooked === 0 && offerData.cruises.length === 0 ? ['No matching sailings found for this offer code yet — conflict risk cannot be fully assessed.'] : [],
-              })}
-            >
-              <AlertCircle size={16} color={conflictRisk.level === 'low' ? COLORS.navyDeep : COLORS.warning} />
-              <View style={styles.statTextGroup}>
-                <Text style={styles.statLabel}>Conflict Risk</Text>
-                <Text style={[styles.statValue, conflictRisk.level !== 'low' && styles.statValueWarning]}>
-                  {conflictRisk.level === 'low' ? 'Low' : conflictRisk.level === 'medium' ? 'Medium' : 'High'}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          </View>
-
-          {offerIntelligence ? (
-            <View style={styles.intelligencePanel} testID="offer-details-intelligence-panel">
-              <View style={styles.intelligenceHeaderRow}>
-                <View style={styles.intelligenceScoreBadge}>
-                  <Gauge size={18} color="#0F766E" />
-                  <Text style={styles.intelligenceScoreText}>{offerIntelligence.score}</Text>
-                </View>
-                <View style={styles.intelligenceCopy}>
-                  <Text style={styles.intelligenceTitle}>Offer Intelligence Score</Text>
-                  <Text style={styles.intelligenceSubtitle}>{offerIntelligence.rating} · {offerIntelligence.brandLabel}</Text>
-                </View>
-              </View>
-              <Text style={styles.intelligenceExplanation}>{offerIntelligence.explanation}</Text>
-              <View style={styles.calculatorGrid} testID="casino-pays-for-calculator">
-                <View style={styles.calculatorCell}>
-                  <Text style={styles.calculatorLabel}>Casino Pays</Text>
-                  <Text style={styles.calculatorValue}>{formatCurrency(offerIntelligence.casinoPaysFor.casinoCoveredValue)}</Text>
-                </View>
-                <View style={styles.calculatorCell}>
-                  <Text style={styles.calculatorLabel}>You Pay</Text>
-                  <Text style={styles.calculatorValue}>{formatCurrency(offerIntelligence.casinoPaysFor.userOutOfPocket)}</Text>
-                </View>
-                <View style={styles.calculatorCell}>
-                  <Text style={styles.calculatorLabel}>Savings</Text>
-                  <Text style={styles.calculatorValue}>{offerIntelligence.casinoPaysFor.effectiveSavingsPercentage}%</Text>
-                </View>
-              </View>
-              <TouchableOpacity
-                style={styles.decodeButton}
-                onPress={() => setShowDecodedOffer((current) => !current)}
-                activeOpacity={0.8}
-                testID="offer-details-decode-offer"
-              >
-                <FileText size={16} color={COLORS.white} />
-                <Text style={styles.decodeButtonText}>{showDecodedOffer ? 'Hide Decoded Offer' : 'Decode Offer'}</Text>
-              </TouchableOpacity>
-              {showDecodedOffer && decodedOffer ? (
-                <View style={styles.decodedPanel}>
-                  {decodedOffer.bullets.map((bullet, index) => (
-                    <View key={`${bullet}-${index}`} style={styles.decodedBulletRow}>
-                      <Calculator size={14} color="#0F766E" />
-                      <Text style={styles.decodedBulletText}>{bullet}</Text>
-                    </View>
-                  ))}
-                  <Text style={styles.decodedDisclaimer}>{decodedOffer.disclaimer}</Text>
-                </View>
-              ) : null}
-            </View>
-          ) : null}
-
-          {certificateStackingNotes.length > 0 ? (
-            <View style={styles.stackingPanel} testID="certificate-stacking-notes">
-              <View style={styles.stackingHeaderRow}>
-                <Layers size={17} color={COLORS.navyDeep} />
-                <Text style={styles.stackingTitle}>Certificate Stacking Notes</Text>
-              </View>
-              {certificateStackingNotes.map((note) => (
-                <View key={note.certificateId} style={styles.stackingItem}>
-                  <Text style={styles.stackingLabel}>{note.label}</Text>
-                  <Text style={styles.stackingAction}>{note.recommendedAction}</Text>
-                  <Text style={styles.stackingWarning}>{note.poorUseWarnings[0]}</Text>
-                </View>
-              ))}
-            </View>
-          ) : null}
-
-          {offerInfo.offerCode && offerData.offer && offerData.offer.status !== 'used' && offerData.offer.status !== 'booked' && (
-            <View style={styles.statusActionsRow}>
-              <TouchableOpacity
-                style={styles.statusActionButton}
-                onPress={handleMarkAsInProgress}
-                activeOpacity={0.7}
-              >
-                <Archive size={16} color={COLORS.white} />
-                <Text style={styles.statusActionText}>Mark In Progress</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.statusActionButton, styles.statusActionButtonUsed]}
-                onPress={handleMarkAsUsed}
-                activeOpacity={0.7}
-              >
-                <Ban size={16} color={COLORS.white} />
-                <Text style={styles.statusActionText}>Mark as Used</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* Status Badge if already marked */}
-          {offerData.offer && (offerData.offer.status === 'used' || offerData.offer.status === 'booked') && (
-            <View style={styles.statusBadgeContainer}>
-              <View style={[styles.statusBadge, offerData.offer.status === 'used' && styles.statusBadgeUsed]}>
-                {offerData.offer.status === 'used' ? (
-                  <Ban size={16} color={COLORS.white} />
-                ) : (
-                  <Archive size={16} color={COLORS.white} />
-                )}
-                <Text style={styles.statusBadgeText}>
-                  {offerData.offer.status === 'used' ? 'Used' : 'In Progress'}
-                </Text>
-              </View>
-            </View>
-          )}
-          </> : null}
-        </LinearGradient>
-
-        {/* Sort Controls */}
-        <View style={styles.sortSection}>
-          <Text style={styles.sortLabel} testID="offer-sort-label">Sort by:</Text>
-          <View style={styles.sortRowCentered}>
-            <TouchableOpacity
-              style={[styles.sortPillMain, sortBy === 'soonest' && styles.sortPillMainActive]}
-              onPress={() => setSortBy('soonest')}
-              activeOpacity={0.7}
-              testID="sort-soonest"
-            >
-              <Text style={[styles.sortPillMainText, sortBy === 'soonest' && styles.sortPillMainTextActive]}>Soonest Expiring</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.sortPillMain, sortBy === 'highest-value' && styles.sortPillMainActive]}
-              onPress={() => setSortBy('highest-value')}
-              activeOpacity={0.7}
-              testID="sort-highest-value"
-            >
-              <Text style={[styles.sortPillMainText, sortBy === 'highest-value' && styles.sortPillMainTextActive]}>Highest Value</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
         <FlatList
           data={offerData.cruises}
           renderItem={renderCruiseCard}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item, index) => `${item.id?.trim() || 'offer-cruise'}-${item.shipName || 'ship'}-${item.sailDate || 'date'}-${index}`}
           extraData={sortBy}
+          onEndReached={() => { void loadMoreOfferSailings(); }}
+          onEndReachedThreshold={0.6}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
+          ListHeaderComponent={
+            <>
+              <LinearGradient
+                colors={['#E0F2FE', '#DBEAFE', '#E0F7FA']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.mergedHeader}
+              >
+                <View style={styles.compactHeaderTopRow}>
+                  <Image
+                    source={{ uri: IMAGES.logo }}
+                    style={styles.compactOfferLogo}
+                    resizeMode="contain"
+                  />
+                  <View style={styles.compactOfferTextGroup}>
+                    <Text style={styles.featuredOfferName} numberOfLines={1}>{offerInfo.offerName}</Text>
+                    <View style={styles.compactCodeRow}>
+                      <View style={styles.offerCodeBadge}>
+                        <Text style={styles.offerCodeText}>{offerInfo.offerCode}</Text>
+                      </View>
+                      {offerData.offer && (offerData.offer.status === 'used' || offerData.offer.status === 'booked') ? (
+                        <View style={[styles.statusMiniBadge, offerData.offer.status === 'used' && styles.statusBadgeUsed]}>
+                          {offerData.offer.status === 'used' ? (
+                            <Ban size={12} color={COLORS.white} />
+                          ) : (
+                            <Archive size={12} color={COLORS.white} />
+                          )}
+                          <Text style={styles.statusMiniBadgeText}>{offerData.offer.status === 'used' ? 'Used' : 'In Progress'}</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                  </View>
+                  <TouchableOpacity style={styles.closeButton} onPress={handleClose} activeOpacity={0.75}>
+                    <X size={22} color={COLORS.navyDeep} />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.compactMetricRow}>
+                  {offerInfo.totalValue > 0 ? (
+                    <View style={[styles.compactMetricPill, styles.compactMetricPillMoney]}>
+                      <DollarSign size={14} color="#166534" />
+                      <Text style={styles.compactMetricLabel}>Value</Text>
+                      <Text style={[styles.compactMetricValue, styles.compactMetricValueMoney]}>${Math.round(offerInfo.totalValue).toLocaleString()}</Text>
+                    </View>
+                  ) : null}
+                  {offerInfo.expiryDate ? (
+                    <View style={styles.compactMetricPill}>
+                      <Clock size={14} color={isExpiringSoon ? COLORS.warning : COLORS.navyDeep} />
+                      <Text style={styles.compactMetricLabel}>Expires</Text>
+                      <Text style={[styles.compactMetricValue, isExpiringSoon && styles.statValueWarning]}>
+                        {formatDate(offerInfo.expiryDate, 'short')}{isExpiringSoon && ` · ${daysUntilExpiry}d`}
+                      </Text>
+                    </View>
+                  ) : null}
+                  <View style={styles.compactMetricPill}>
+                    <Ship size={14} color={COLORS.navyDeep} />
+                    <Text style={styles.compactMetricLabel}>Cruises</Text>
+                    <Text style={styles.compactMetricValue}>{(inventoryOfferTotal || offerData.cruises.length).toLocaleString()}</Text>
+                  </View>
+                </View>
+
+                {((offerInfo.freePlay ?? 0) > 0 || (offerInfo.obc ?? 0) > 0) && (
+                  <View style={styles.fpObcRow}>
+                    {(offerInfo.freePlay ?? 0) > 0 && (
+                      <View style={styles.fpBadgeOffer}>
+                        <Text style={styles.fpLabelOffer}>FreePlay</Text>
+                        <Text style={styles.fpValueOffer}>${(offerInfo.freePlay ?? 0).toLocaleString()}</Text>
+                      </View>
+                    )}
+                    {(offerInfo.obc ?? 0) > 0 && (
+                      <View style={styles.obcBadgeOffer}>
+                        <Text style={styles.obcLabelOffer}>OBC</Text>
+                        <Text style={styles.obcValueOffer}>${(offerInfo.obc ?? 0).toLocaleString()}</Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+
+                {offerIntelligence ? (
+                  <View style={styles.intelligencePanel} testID="offer-details-intelligence-panel">
+                    <View style={styles.intelligenceHeaderRow}>
+                      <View style={styles.intelligenceScoreBadge}>
+                        <Gauge size={15} color="#0F766E" />
+                        <Text style={styles.intelligenceScoreText}>{offerIntelligence.score}</Text>
+                      </View>
+                      <View style={styles.intelligenceCopy}>
+                        <Text style={styles.intelligenceTitle}>Offer Intelligence</Text>
+                        <Text style={styles.intelligenceSubtitle}>{offerIntelligence.rating} · {offerIntelligence.brandLabel}</Text>
+                        <Text style={styles.intelligenceExplanation} numberOfLines={2}>{offerIntelligence.explanation}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.intelligenceBottomRow}>
+                      <View style={styles.calculatorGrid} testID="casino-pays-for-calculator">
+                        <View style={styles.calculatorCell}>
+                          <Text style={styles.calculatorLabel}>Casino</Text>
+                          <Text style={styles.calculatorValue}>{formatCurrency(offerIntelligence.casinoPaysFor.casinoCoveredValue)}</Text>
+                        </View>
+                        <View style={styles.calculatorCell}>
+                          <Text style={styles.calculatorLabel}>You Pay</Text>
+                          <Text style={styles.calculatorValue}>{formatCurrency(offerIntelligence.casinoPaysFor.userOutOfPocket)}</Text>
+                        </View>
+                        <View style={styles.calculatorCell}>
+                          <Text style={styles.calculatorLabel}>Save</Text>
+                          <Text style={styles.calculatorValue}>{offerIntelligence.casinoPaysFor.effectiveSavingsPercentage}%</Text>
+                        </View>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.decodeButton}
+                        onPress={() => setShowDecodedOffer((current) => !current)}
+                        activeOpacity={0.8}
+                        testID="offer-details-decode-offer"
+                      >
+                        <FileText size={14} color={COLORS.white} />
+                        <Text style={styles.decodeButtonText}>{showDecodedOffer ? 'Hide' : 'Decode'}</Text>
+                      </TouchableOpacity>
+                    </View>
+                    {shouldBookResult ? (
+                      <>
+                        <TouchableOpacity
+                          style={styles.shouldBookButton}
+                          onPress={() => setShowBookDecision((current) => !current)}
+                          activeOpacity={0.8}
+                          testID="offer-details-should-i-book"
+                        >
+                          <ClipboardCheck size={16} color="#FFFFFF" />
+                          <View style={styles.shouldBookButtonCopy}>
+                            <Text style={styles.shouldBookButtonTitle}>Should I Book?</Text>
+                            <Text style={styles.shouldBookButtonSubtitle}>{shouldBookResult.verdictLabel} · {shouldBookResult.score}/100 · {shouldBookResult.confidence} confidence</Text>
+                          </View>
+                          <ChevronRight size={17} color="#FFFFFF" />
+                        </TouchableOpacity>
+                        {showBookDecision ? (
+                          <View style={styles.shouldBookPanel} testID="should-i-book-transparent-breakdown">
+                            <Text style={styles.shouldBookHeadline}>{shouldBookResult.headline}</Text>
+                            {bookTimingResult ? <View style={styles.shouldBookFactor}><View style={styles.shouldBookFactorTop}><Text style={styles.shouldBookFactorLabel}>Book now or wait?</Text><Text style={styles.shouldBookFactorScore}>{bookTimingResult.recommendation.replaceAll('_', ' ').toUpperCase()}</Text></View>{bookTimingResult.reasons.map((reason)=><Text key={reason} style={styles.shouldBookFactorExplanation}>• {reason}</Text>)}{bookTimingResult.missingEvidence.length?<Text style={styles.shouldBookFactorExplanation}>Could change this: {bookTimingResult.missingEvidence.join(', ')}</Text>:null}</View> : null}
+                            <View style={styles.shouldBookMetricRow}>
+                              <View style={styles.shouldBookMetric}><Text style={styles.shouldBookMetricLabel}>Casino value</Text><Text style={styles.shouldBookMetricValue}>{formatCurrency(shouldBookResult.estimatedCasinoValue)}</Text></View>
+                              <View style={styles.shouldBookMetric}><Text style={styles.shouldBookMetricLabel}>Cash cost</Text><Text style={styles.shouldBookMetricValue}>{formatCurrency(shouldBookResult.estimatedCashCost)}</Text></View>
+                              <View style={styles.shouldBookMetric}><Text style={styles.shouldBookMetricLabel}>Net value</Text><Text style={styles.shouldBookMetricValue}>{formatCurrency(shouldBookResult.estimatedNetVacationValue)}</Text></View>
+                            </View>
+                            {shouldBookResult.factors.map((factor) => (
+                              <View key={factor.id} style={styles.shouldBookFactor}>
+                                <View style={styles.shouldBookFactorTop}>
+                                  <Text style={styles.shouldBookFactorLabel}>{factor.label}</Text>
+                                  <Text style={styles.shouldBookFactorScore}>{factor.score}/{factor.maxScore}</Text>
+                                </View>
+                                <Text style={styles.shouldBookFactorExplanation}>{factor.explanation}</Text>
+                              </View>
+                            ))}
+                            <View style={styles.shouldBookVerifyBox}>
+                              <AlertTriangle size={15} color="#92400E" />
+                              <View style={styles.shouldBookVerifyCopy}>
+                                <Text style={styles.shouldBookVerifyTitle}>Verify before booking</Text>
+                                {shouldBookResult.verifyBeforeBooking.map((item) => <Text key={item} style={styles.shouldBookVerifyText}>• {item}</Text>)}
+                              </View>
+                            </View>
+                            <Text style={styles.shouldBookDisclaimer}>{shouldBookResult.disclaimer}</Text>
+                          </View>
+                        ) : null}
+                      </>
+                    ) : null}
+                    {showDecodedOffer && decodedOffer ? (
+                      <View style={styles.decodedPanel}>
+                        {decodedOffer.bullets.map((bullet, index) => (
+                          <View key={`${bullet}-${index}`} style={styles.decodedBulletRow}>
+                            <Calculator size={14} color="#0F766E" />
+                            <Text style={styles.decodedBulletText}>{bullet}</Text>
+                          </View>
+                        ))}
+                        <Text style={styles.decodedDisclaimer}>{decodedOffer.disclaimer}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null}
+
+                {certificateStackingNotes.length > 0 ? (
+                  <View style={styles.stackingPanel} testID="certificate-stacking-notes">
+                    <View style={styles.stackingHeaderRow}>
+                      <Layers size={15} color={COLORS.navyDeep} />
+                      <Text style={styles.stackingTitle}>Certificate Notes</Text>
+                    </View>
+                    {certificateStackingNotes.map((note) => (
+                      <View key={note.certificateId} style={styles.stackingItem}>
+                        <Text style={styles.stackingLabel}>{note.label}</Text>
+                        <Text style={styles.stackingAction} numberOfLines={2}>{note.recommendedAction}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+
+                <TouchableOpacity
+                  style={styles.certificateLookupButton}
+                  onPress={() => router.push({ pathname: '/certificate-lookup', params: { query: '' } })}
+                  activeOpacity={0.8}
+                  testID="offer-details-view-certificates"
+                >
+                  <FileText size={16} color="#FFFFFF" />
+                  <View style={styles.certificateLookupCopy}>
+                    <Text style={styles.certificateLookupTitle}>View this month’s certificates</Text>
+                    <Text style={styles.certificateLookupSubtitle}>Download every current A/C certificate or open one official PDF</Text>
+                  </View>
+                  <ChevronRight size={17} color="#FFFFFF" />
+                </TouchableOpacity>
+              </LinearGradient>
+
+              <View style={styles.sortSection}>
+                <Text style={styles.sortLabel} testID="offer-sort-label">Sort by:</Text>
+                <View style={styles.sortRowCentered}>
+                  <TouchableOpacity
+                    style={[styles.sortPillMain, sortBy === 'soonest' && styles.sortPillMainActive]}
+                    onPress={() => setSortBy('soonest')}
+                    activeOpacity={0.7}
+                    testID="sort-soonest"
+                  >
+                    <Text style={[styles.sortPillMainText, sortBy === 'soonest' && styles.sortPillMainTextActive]}>Soonest Expiring</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.sortPillMain, sortBy === 'highest-value' && styles.sortPillMainActive]}
+                    onPress={() => setSortBy('highest-value')}
+                    activeOpacity={0.7}
+                    testID="sort-highest-value"
+                  >
+                    <Text style={[styles.sortPillMainText, sortBy === 'highest-value' && styles.sortPillMainTextActive]}>Highest Value</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </>
+          }
           ListEmptyComponent={
             <View style={styles.emptyState}>
               <Ship size={48} color={COLORS.textSecondary} />
               <Text style={styles.emptyText}>No cruises found for this offer</Text>
+            </View>
+          }
+          ListFooterComponent={
+            <View style={styles.footerActionsContainer}>
+              {inventoryOfferLoading ? <ActivityIndicator color={COLORS.navyDeep} /> : null}
+              {offerInfo.offerCode && offerData.offer && offerData.offer.status !== 'used' && offerData.offer.status !== 'booked' ? (
+                <View style={styles.statusActionsRow}>
+                  <TouchableOpacity
+                    style={styles.statusActionButton}
+                    onPress={handleMarkAsInProgress}
+                    activeOpacity={0.7}
+                  >
+                    <Archive size={16} color={COLORS.white} />
+                    <Text style={styles.statusActionText}>Mark In Progress</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.statusActionButton, styles.statusActionButtonUsed]}
+                    onPress={handleMarkAsUsed}
+                    activeOpacity={0.7}
+                  >
+                    <Ban size={16} color={COLORS.white} />
+                    <Text style={styles.statusActionText}>Mark as Used</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
             </View>
           }
         />
@@ -993,27 +940,45 @@ const styles = StyleSheet.create({
   },
   mergedHeader: {
     paddingHorizontal: SPACING.md,
-    paddingTop: SPACING.sm,
+    paddingTop: SPACING.md,
     paddingBottom: SPACING.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 31, 63, 0.1)',
+    borderRadius: BORDER_RADIUS.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 31, 63, 0.08)',
+  },
+  compactHeaderTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  compactOfferLogo: {
+    width: 34,
+    height: 34,
+    borderRadius: 9,
+  },
+  compactOfferTextGroup: {
+    flex: 1,
+    minWidth: 0,
+  },
+  compactCodeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    marginTop: 5,
+    flexWrap: 'wrap',
   },
   closeButton: {
-    position: 'absolute' as const,
-    top: SPACING.sm,
-    right: SPACING.md,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: 'rgba(0, 31, 63, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 10,
   },
   featuredOfferSection: {
     alignItems: 'center',
     paddingTop: SPACING.xs,
-    paddingBottom: SPACING.xs,
+    paddingBottom: SPACING.md,
   },
   offerNameRow: {
     flexDirection: 'row',
@@ -1026,20 +991,19 @@ const styles = StyleSheet.create({
   },
   offerLogoGroup: {
     alignItems: 'center',
-    marginBottom: 2,
+    marginBottom: SPACING.sm,
   },
   offerLogo: {
-    width: 32,
-    height: 32,
+    width: 60,
+    height: 60,
     borderRadius: 12,
   },
 
   featuredOfferName: {
-    fontSize: 20,
-    fontWeight: '700' as const,
+    fontSize: 17,
+    fontWeight: '800' as const,
     color: COLORS.navyDeep,
     textAlign: 'left' as const,
-    flex: 1,
   },
   totalValueBadge: {
     flexDirection: 'row',
@@ -1064,18 +1028,66 @@ const styles = StyleSheet.create({
   },
   offerCodeBadge: {
     backgroundColor: COLORS.navyDeep,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
     borderRadius: BORDER_RADIUS.round,
   },
   offerCodeText: {
-    fontSize: 16,
-    fontWeight: '700' as const,
+    fontSize: 11,
+    fontWeight: '800' as const,
     color: COLORS.white,
-    letterSpacing: 1,
+    letterSpacing: 0.8,
   },
-  summaryToggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, alignSelf: 'center', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 18, backgroundColor: 'rgba(0,31,63,0.08)', marginTop: 4 },
-  summaryToggleText: { color: COLORS.navyDeep, fontSize: 13, fontWeight: '800' },
+  statusMiniBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#0EA5E9',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+    borderRadius: BORDER_RADIUS.round,
+  },
+  statusMiniBadgeText: {
+    fontSize: 11,
+    fontWeight: '800' as const,
+    color: COLORS.white,
+  },
+  compactMetricRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: SPACING.xs,
+    marginTop: SPACING.sm,
+  },
+  compactMetricPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.76)',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 6,
+    borderRadius: BORDER_RADIUS.round,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 31, 63, 0.08)',
+  },
+  compactMetricPillMoney: {
+    backgroundColor: 'rgba(220, 252, 231, 0.9)',
+    borderColor: 'rgba(22, 101, 52, 0.16)',
+  },
+  compactMetricLabel: {
+    fontSize: 10,
+    fontWeight: '700' as const,
+    color: COLORS.navyDeep,
+    opacity: 0.65,
+  },
+  compactMetricValue: {
+    fontSize: 12,
+    fontWeight: '900' as const,
+    color: COLORS.navyDeep,
+  },
+  compactMetricValueMoney: {
+    color: '#166534',
+  },
   statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
@@ -1120,7 +1132,6 @@ const styles = StyleSheet.create({
     color: '#166534',
   },
   sortSection: {
-    marginHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     gap: SPACING.xs,
   },
@@ -1160,7 +1171,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: SPACING.md,
-    paddingBottom: 100,
+    paddingBottom: 28,
   },
   cruiseCard: {
     backgroundColor: COLORS.white,
@@ -1444,74 +1455,71 @@ const styles = StyleSheet.create({
   },
   fpObcRow: {
     flexDirection: 'row',
-    gap: SPACING.md,
-    marginTop: SPACING.md,
+    gap: SPACING.sm,
+    marginTop: SPACING.sm,
     marginBottom: SPACING.xs,
   },
   fpBadgeOffer: {
     flex: 1,
     backgroundColor: '#DCFCE7',
-    paddingVertical: SPACING.md,
+    paddingVertical: 7,
     paddingHorizontal: SPACING.sm,
     borderRadius: BORDER_RADIUS.md,
-    borderWidth: 2,
+    borderWidth: 1,
     borderColor: '#86EFAC',
     alignItems: 'center',
-    ...SHADOW.sm,
   },
   fpLabelOffer: {
-    fontSize: 11,
-    fontWeight: '600' as const,
+    fontSize: 10,
+    fontWeight: '700' as const,
     color: '#15803D',
-    letterSpacing: 0.5,
-    marginBottom: 4,
+    letterSpacing: 0.4,
+    marginBottom: 2,
   },
   fpValueOffer: {
-    fontSize: 20,
-    fontWeight: '700' as const,
+    fontSize: 15,
+    fontWeight: '900' as const,
     color: '#15803D',
   },
   obcBadgeOffer: {
     flex: 1,
     backgroundColor: '#DBEAFE',
-    paddingVertical: SPACING.md,
+    paddingVertical: 7,
     paddingHorizontal: SPACING.sm,
     borderRadius: BORDER_RADIUS.md,
-    borderWidth: 2,
+    borderWidth: 1,
     borderColor: '#93C5FD',
     alignItems: 'center',
-    ...SHADOW.sm,
   },
   obcLabelOffer: {
-    fontSize: 11,
-    fontWeight: '600' as const,
+    fontSize: 10,
+    fontWeight: '700' as const,
     color: '#1E40AF',
-    letterSpacing: 0.5,
-    marginBottom: 4,
+    letterSpacing: 0.4,
+    marginBottom: 2,
   },
   obcValueOffer: {
-    fontSize: 20,
-    fontWeight: '700' as const,
+    fontSize: 15,
+    fontWeight: '900' as const,
     color: '#1E40AF',
   },
   intelligencePanel: {
-    marginTop: SPACING.md,
-    backgroundColor: 'rgba(255,255,255,0.86)',
-    borderRadius: BORDER_RADIUS.lg,
-    padding: SPACING.md,
+    marginTop: SPACING.sm,
+    backgroundColor: 'rgba(255,255,255,0.82)',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
     borderWidth: 1,
-    borderColor: 'rgba(15, 118, 110, 0.18)',
+    borderColor: 'rgba(15, 118, 110, 0.16)',
   },
   intelligenceHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.sm,
-    marginBottom: SPACING.sm,
   },
   intelligenceScoreBadge: {
-    width: 58,
-    minHeight: 58,
-    borderRadius: 18,
+    width: 46,
+    minHeight: 46,
+    borderRadius: 14,
     backgroundColor: '#ECFDF5',
     borderWidth: 1,
     borderColor: '#99F6E4',
@@ -1519,54 +1527,61 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   intelligenceScoreText: {
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: '900' as const,
     color: '#0F766E',
-    marginTop: 2,
+    marginTop: 1,
   },
   intelligenceCopy: {
     flex: 1,
   },
   intelligenceTitle: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '900' as const,
     color: COLORS.navyDeep,
     letterSpacing: 0.5,
     textTransform: 'uppercase' as const,
   },
   intelligenceSubtitle: {
-    fontSize: 13,
-    fontWeight: '700' as const,
+    fontSize: 12,
+    fontWeight: '800' as const,
     color: '#0F766E',
-    marginTop: 2,
+    marginTop: 1,
   },
   intelligenceExplanation: {
-    fontSize: 13,
+    fontSize: 11,
     color: '#334155',
-    lineHeight: 19,
-    marginBottom: SPACING.sm,
+    lineHeight: 15,
+    marginTop: 2,
+  },
+  intelligenceBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: SPACING.sm,
+    marginTop: SPACING.sm,
   },
   calculatorGrid: {
+    flex: 1,
     flexDirection: 'row',
-    gap: SPACING.sm,
-    marginBottom: SPACING.sm,
+    gap: SPACING.xs,
   },
   calculatorCell: {
     flex: 1,
     backgroundColor: '#FFFFFF',
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.sm,
+    borderRadius: BORDER_RADIUS.sm,
+    paddingHorizontal: SPACING.xs,
+    paddingVertical: 6,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
   calculatorLabel: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '800' as const,
     color: '#64748B',
-    marginBottom: 3,
+    marginBottom: 2,
   },
   calculatorValue: {
-    fontSize: 14,
+    fontSize: 11,
     fontWeight: '900' as const,
     color: COLORS.navyDeep,
   },
@@ -1574,16 +1589,133 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: SPACING.xs,
+    gap: 4,
     backgroundColor: COLORS.navyDeep,
     borderRadius: BORDER_RADIUS.md,
-    paddingVertical: SPACING.sm,
-    marginTop: SPACING.xs,
+    paddingVertical: 6,
+    paddingHorizontal: SPACING.sm,
   },
   decodeButtonText: {
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '900' as const,
     color: COLORS.white,
+  },
+  shouldBookButton: {
+    marginTop: SPACING.sm,
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: '#0F766E',
+  },
+  shouldBookButtonCopy: {
+    flex: 1,
+  },
+  shouldBookButtonTitle: {
+    color: COLORS.white,
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: '900' as const,
+  },
+  shouldBookButtonSubtitle: {
+    marginTop: 1,
+    color: '#CCFBF1',
+    fontSize: 10,
+    fontWeight: '700' as const,
+  },
+  shouldBookPanel: {
+    marginTop: SPACING.sm,
+    padding: SPACING.sm,
+    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  shouldBookHeadline: {
+    color: COLORS.navyDeep,
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: '900' as const,
+    lineHeight: 20,
+  },
+  shouldBookMetricRow: {
+    flexDirection: 'row',
+    gap: SPACING.xs,
+    marginTop: SPACING.sm,
+  },
+  shouldBookMetric: {
+    flex: 1,
+    padding: SPACING.xs,
+    borderRadius: BORDER_RADIUS.sm,
+    backgroundColor: '#ECFDF5',
+  },
+  shouldBookMetricLabel: {
+    color: '#64748B',
+    fontSize: 9,
+    fontWeight: '800' as const,
+  },
+  shouldBookMetricValue: {
+    marginTop: 2,
+    color: '#065F46',
+    fontSize: 12,
+    fontWeight: '900' as const,
+  },
+  shouldBookFactor: {
+    marginTop: SPACING.xs,
+    paddingTop: SPACING.xs,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+  },
+  shouldBookFactorTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  shouldBookFactorLabel: {
+    color: COLORS.navyDeep,
+    fontSize: 11,
+    fontWeight: '900' as const,
+  },
+  shouldBookFactorScore: {
+    color: '#0F766E',
+    fontSize: 11,
+    fontWeight: '900' as const,
+  },
+  shouldBookFactorExplanation: {
+    marginTop: 2,
+    color: '#475569',
+    fontSize: 10,
+    lineHeight: 15,
+  },
+  shouldBookVerifyBox: {
+    marginTop: SPACING.sm,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING.xs,
+    padding: SPACING.sm,
+    borderRadius: BORDER_RADIUS.sm,
+    backgroundColor: '#FEF3C7',
+  },
+  shouldBookVerifyCopy: {
+    flex: 1,
+  },
+  shouldBookVerifyTitle: {
+    color: '#78350F',
+    fontSize: 11,
+    fontWeight: '900' as const,
+  },
+  shouldBookVerifyText: {
+    marginTop: 3,
+    color: '#78350F',
+    fontSize: 10,
+    lineHeight: 14,
+  },
+  shouldBookDisclaimer: {
+    marginTop: SPACING.sm,
+    color: '#64748B',
+    fontSize: 9,
+    lineHeight: 14,
   },
   decodedPanel: {
     marginTop: SPACING.sm,
@@ -1610,10 +1742,10 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xs,
   },
   stackingPanel: {
-    marginTop: SPACING.md,
-    backgroundColor: 'rgba(255,255,255,0.76)',
-    borderRadius: BORDER_RADIUS.lg,
-    padding: SPACING.md,
+    marginTop: SPACING.sm,
+    backgroundColor: 'rgba(255,255,255,0.72)',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
     borderWidth: 1,
     borderColor: 'rgba(30, 64, 175, 0.14)',
   },
@@ -1621,7 +1753,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.xs,
-    marginBottom: SPACING.sm,
+    marginBottom: SPACING.xs,
   },
   stackingTitle: {
     fontSize: 13,
@@ -1630,8 +1762,8 @@ const styles = StyleSheet.create({
   },
   stackingItem: {
     backgroundColor: '#FFFFFF',
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.sm,
+    borderRadius: BORDER_RADIUS.sm,
+    padding: SPACING.xs,
     marginTop: SPACING.xs,
     borderWidth: 1,
     borderColor: '#E2E8F0',
@@ -1653,10 +1785,38 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     marginTop: 3,
   },
+  certificateLookupButton: {
+    marginTop: SPACING.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    backgroundColor: COLORS.navyDeep,
+    borderRadius: BORDER_RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+  },
+  certificateLookupCopy: {
+    flex: 1,
+  },
+  certificateLookupTitle: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '900' as const,
+  },
+  certificateLookupSubtitle: {
+    color: 'rgba(255,255,255,0.78)',
+    fontSize: 11,
+    lineHeight: 15,
+    marginTop: 2,
+  },
+  footerActionsContainer: {
+    paddingTop: SPACING.sm,
+    paddingBottom: SPACING.lg,
+  },
   statusActionsRow: {
     flexDirection: 'row',
     gap: SPACING.md,
-    marginTop: SPACING.md,
+    marginTop: SPACING.sm,
   },
   statusActionButton: {
     flex: 1,

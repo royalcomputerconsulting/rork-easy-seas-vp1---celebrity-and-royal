@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { quotaSafeGetJsonItem, quotaSafeRemoveItem, quotaSafeSetJsonItem } from '@/lib/storage/quotaSafeStorage';
 import createContextHook from '@nkzw/create-context-hook';
 import { useAuth } from './AuthProvider';
 import { getUserScopedKey } from '@/lib/storage/storageKeys';
@@ -12,6 +12,7 @@ import type {
 } from '@/types/models';
 import { generateCruiseKey } from '@/types/models';
 import { getCabinTier, getHigherCabinTypes } from '@/lib/upgradeMonitor';
+import { getDaysBetween, isDateInFuture } from '@/lib/date';
 
 const BASE_PRICE_HISTORY_STORAGE_KEY = '@easy_seas_price_history';
 const BASE_PRICE_DROP_ALERTS_STORAGE_KEY = '@easy_seas_price_drop_alerts';
@@ -83,6 +84,9 @@ export const [PriceHistoryProvider, usePriceHistory] = createContextHook((): Pri
   const [priceDropAlerts, setPriceDropAlerts] = useState<PriceDropAlert[]>([]);
   const [upgradePrices, setUpgradePrices] = useState<Map<string, number>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
+  const storageReadyRef = useRef(false);
+  const loadedHistorySnapshotRef = useRef<PriceHistoryRecord[] | null>(null);
+  const loadedAlertsSnapshotRef = useRef<PriceDropAlert[] | null>(null);
 
   useEffect(() => {
     storageKeysRef.current = getScopedPriceHistoryKeys(authenticatedEmail);
@@ -94,35 +98,40 @@ export const [PriceHistoryProvider, usePriceHistory] = createContextHook((): Pri
       setIsLoading(true);
       const scopedKeys = getScopedPriceHistoryKeys(authenticatedEmail);
       storageKeysRef.current = scopedKeys;
-      const [storedHistory, storedAlerts, storedUpgradePrices] = await Promise.all([
-        AsyncStorage.getItem(scopedKeys.PRICE_HISTORY),
-        AsyncStorage.getItem(scopedKeys.PRICE_DROP_ALERTS),
-        AsyncStorage.getItem(scopedKeys.UPGRADE_PRICES),
+      const [parsedHistory, parsedAlerts, parsedUpgradePrices] = await Promise.all([
+        quotaSafeGetJsonItem<PriceHistoryRecord[]>(scopedKeys.PRICE_HISTORY, [], Array.isArray),
+        quotaSafeGetJsonItem<PriceDropAlert[]>(scopedKeys.PRICE_DROP_ALERTS, [], Array.isArray),
+        quotaSafeGetJsonItem<Record<string, number>>(scopedKeys.UPGRADE_PRICES, {}, (value): value is Record<string, number> => Boolean(value) && typeof value === 'object' && !Array.isArray(value)),
       ]);
 
-      const parsedHistory = storedHistory ? JSON.parse(storedHistory) as PriceHistoryRecord[] : [];
+      loadedHistorySnapshotRef.current = parsedHistory;
       setPriceHistory(parsedHistory);
       console.log('[PriceHistoryProvider] Loaded scoped price history:', { email: authenticatedEmail, count: parsedHistory.length });
 
-      const parsedAlerts = storedAlerts ? JSON.parse(storedAlerts) as PriceDropAlert[] : [];
+      loadedAlertsSnapshotRef.current = parsedAlerts;
       setPriceDropAlerts(parsedAlerts);
       console.log('[PriceHistoryProvider] Loaded scoped price drop alerts:', { email: authenticatedEmail, count: parsedAlerts.length });
 
-      const parsedUpgradePrices = storedUpgradePrices ? JSON.parse(storedUpgradePrices) as Record<string, number> : {};
       const map = new Map<string, number>(Object.entries(parsedUpgradePrices));
       setUpgradePrices(map);
       console.log('[PriceHistoryProvider] Loaded scoped upgrade prices:', { email: authenticatedEmail, count: map.size });
     } catch (error) {
       console.error('[PriceHistoryProvider] Error loading scoped stored data:', error);
-      setPriceHistory([]);
-      setPriceDropAlerts([]);
+      const emptyHistory: PriceHistoryRecord[] = [];
+      const emptyAlerts: PriceDropAlert[] = [];
+      loadedHistorySnapshotRef.current = emptyHistory;
+      loadedAlertsSnapshotRef.current = emptyAlerts;
+      setPriceHistory(emptyHistory);
+      setPriceDropAlerts(emptyAlerts);
       setUpgradePrices(new Map());
     } finally {
+      storageReadyRef.current = true;
       setIsLoading(false);
     }
   }, [authenticatedEmail]);
 
   useEffect(() => {
+    storageReadyRef.current = false;
     setPriceHistory([]);
     setPriceDropAlerts([]);
     setUpgradePrices(new Map());
@@ -158,9 +167,14 @@ export const [PriceHistoryProvider, usePriceHistory] = createContextHook((): Pri
   }, [loadStoredData]);
 
   useEffect(() => {
+    if (!storageReadyRef.current) return;
+    if (loadedHistorySnapshotRef.current === priceHistory) {
+      loadedHistorySnapshotRef.current = null;
+      return;
+    }
     const saveHistory = async () => {
       try {
-        await AsyncStorage.setItem(storageKeysRef.current.PRICE_HISTORY, JSON.stringify(priceHistory));
+        await quotaSafeSetJsonItem(storageKeysRef.current.PRICE_HISTORY, priceHistory);
       } catch (error) {
         console.error('[PriceHistoryProvider] Error saving price history:', error);
       }
@@ -172,9 +186,14 @@ export const [PriceHistoryProvider, usePriceHistory] = createContextHook((): Pri
   }, [priceHistory]);
 
   useEffect(() => {
+    if (!storageReadyRef.current) return;
+    if (loadedAlertsSnapshotRef.current === priceDropAlerts) {
+      loadedAlertsSnapshotRef.current = null;
+      return;
+    }
     const saveAlerts = async () => {
       try {
-        await AsyncStorage.setItem(storageKeysRef.current.PRICE_DROP_ALERTS, JSON.stringify(priceDropAlerts));
+        await quotaSafeSetJsonItem(storageKeysRef.current.PRICE_DROP_ALERTS, priceDropAlerts);
       } catch (error) {
         console.error('[PriceHistoryProvider] Error saving price drop alerts:', error);
       }
@@ -354,35 +373,105 @@ export const [PriceHistoryProvider, usePriceHistory] = createContextHook((): Pri
   }, [recordPrice]);
 
   const bulkRecordFromOffers = useCallback((offers: CasinoOffer[]): PriceDropAlert[] => {
-    const priceDrops: PriceDropAlert[] = [];
-    
-    const cabinTypes = ['Interior', 'Oceanview', 'Balcony', 'Suite'];
-    
-    offers.forEach(offer => {
-      cabinTypes.forEach(cabinType => {
-        const price = extractCabinPrice(offer, cabinType);
-        if (price > 0) {
-          const drop = recordPriceFromOffer(offer, cabinType);
-          if (drop) {
-            priceDrops.push(drop);
-          }
-        }
-      });
-    });
+    const now = new Date();
+    const nowIso = now.toISOString();
+    const latestByCruiseKey = new Map<string, PriceHistoryRecord>();
+    const recentPriceKeys = new Set<string>();
+    for (const record of priceHistory) {
+      const existingLatest = latestByCruiseKey.get(record.cruiseKey);
+      if (!existingLatest || record.recordedAt > existingLatest.recordedAt) {
+        latestByCruiseKey.set(record.cruiseKey, record);
+      }
+      const ageMs = now.getTime() - new Date(record.recordedAt).getTime();
+      if (ageMs >= 0 && ageMs < 24 * 60 * 60 * 1000) {
+        recentPriceKeys.add(`${record.cruiseKey}:${Math.round(record.totalPrice)}`);
+      }
+    }
 
-    console.log('[PriceHistoryProvider] Bulk recorded prices from', offers.length, 'offers, found', priceDrops.length, 'price drops');
+    const recordsToAdd: PriceHistoryRecord[] = [];
+    const priceDrops: PriceDropAlert[] = [];
+    const cabinTypes = ['Interior', 'Oceanview', 'Balcony', 'Suite'];
+
+    for (const offer of offers) {
+      if (!offer.shipName || !offer.sailingDate) continue;
+      for (const cabinType of cabinTypes) {
+        const price = extractCabinPrice(offer, cabinType);
+        const taxes = offer.taxesFees || offer.portCharges || 0;
+        if (price <= 0 && taxes <= 0) continue;
+
+        const cruiseKey = generateCruiseKey(offer.shipName, offer.sailingDate, cabinType);
+        const totalPrice = price + taxes;
+        const recentKey = `${cruiseKey}:${Math.round(totalPrice)}`;
+        if (recentPriceKeys.has(recentKey)) continue;
+        recentPriceKeys.add(recentKey);
+
+        const record: PriceHistoryRecord = {
+          id: generateRecordId(),
+          cruiseKey,
+          shipName: offer.shipName,
+          sailDate: offer.sailingDate,
+          nights: offer.nights || 0,
+          destination: offer.itineraryName || 'Unknown',
+          cabinType,
+          price,
+          taxesFees: taxes,
+          totalPrice,
+          freePlay: offer.freePlay || offer.freeplayAmount,
+          obc: offer.OBC || offer.obcAmount,
+          offerCode: offer.offerCode,
+          offerName: offer.offerName || offer.title,
+          offerId: offer.id,
+          recordedAt: nowIso,
+          source: 'offer',
+        };
+        recordsToAdd.push(record);
+
+        const previousRecord = latestByCruiseKey.get(cruiseKey);
+        if (previousRecord && totalPrice < previousRecord.totalPrice) {
+          const priceDrop = previousRecord.totalPrice - totalPrice;
+          priceDrops.push({
+            cruiseKey,
+            shipName: record.shipName,
+            sailDate: record.sailDate,
+            destination: record.destination,
+            cabinType,
+            previousPrice: previousRecord.totalPrice,
+            currentPrice: totalPrice,
+            priceDrop,
+            priceDropPercent: (priceDrop / previousRecord.totalPrice) * 100,
+            previousRecordedAt: previousRecord.recordedAt,
+            currentRecordedAt: nowIso,
+            offerId: offer.id,
+            offerName: record.offerName,
+          });
+        }
+        latestByCruiseKey.set(cruiseKey, record);
+      }
+    }
+
+    // One provider publication and one persistence effect replace hundreds of
+    // per-price state updates that previously blocked tab presses after launch.
+    if (recordsToAdd.length > 0) {
+      setPriceHistory((previous) => [...previous, ...recordsToAdd]);
+    }
+    if (priceDrops.length > 0) {
+      setPriceDropAlerts((previous) => {
+        const droppedKeys = new Set(priceDrops.map((drop) => drop.cruiseKey));
+        return [...previous.filter((alert) => !droppedKeys.has(alert.cruiseKey)), ...priceDrops];
+      });
+    }
+
+    if (__DEV__) console.log('[PriceHistoryProvider] Bulk recorded prices from', offers.length, 'offers:', recordsToAdd.length, 'records and', priceDrops.length, 'price drops');
     return priceDrops;
-  }, [recordPriceFromOffer]);
+  }, [priceHistory]);
 
   const getPriceDrops = useCallback((): PriceDropAlert[] => {
     return [...priceDropAlerts].sort((a, b) => b.priceDropPercent - a.priceDropPercent);
   }, [priceDropAlerts]);
 
   const getActivePriceDrops = useCallback((): PriceDropAlert[] => {
-    const now = new Date();
     return priceDropAlerts.filter(alert => {
-      const sailDate = new Date(alert.sailDate);
-      return sailDate > now;
+      return isDateInFuture(alert.sailDate);
     }).sort((a, b) => b.priceDropPercent - a.priceDropPercent);
   }, [priceDropAlerts]);
 
@@ -392,10 +481,8 @@ export const [PriceHistoryProvider, usePriceHistory] = createContextHook((): Pri
   }, []);
 
   const trackUpgradePricesForBooked = useCallback((bookedCruises: BookedCruise[], offers: CasinoOffer[]) => {
-    const now = new Date();
     const upcomingBooked = bookedCruises.filter(c => {
-      const sailDate = new Date(c.sailDate);
-      return sailDate > now && (c.status === 'booked' || c.completionState === 'upcoming' || c.status === 'Courtesy Hold');
+      return isDateInFuture(c.sailDate) && (c.status === 'booked' || c.completionState === 'upcoming' || c.status === 'Courtesy Hold');
     });
 
     if (upcomingBooked.length === 0 || offers.length === 0) return;
@@ -413,10 +500,8 @@ export const [PriceHistoryProvider, usePriceHistory] = createContextHook((): Pri
         const dateMatch = offer.sailingDate === booked.sailDate;
         if (shipMatch && dateMatch) return true;
         if (!shipMatch) return false;
-        const offerDate = new Date(offer.sailingDate);
-        const bookedDate = new Date(booked.sailDate);
-        const daysDiff = Math.abs(offerDate.getTime() - bookedDate.getTime()) / (1000 * 60 * 60 * 24);
-        return daysDiff <= 3;
+        const daysDiff = getDaysBetween(offer.sailingDate, booked.sailDate);
+        return !Number.isNaN(daysDiff) && daysDiff <= 3;
       });
 
       for (const offer of matchingOffers) {
@@ -444,7 +529,7 @@ export const [PriceHistoryProvider, usePriceHistory] = createContextHook((): Pri
     if (updatedCount > 0) {
       setUpgradePrices(newPrices);
       const obj = Object.fromEntries(newPrices);
-      AsyncStorage.setItem(storageKeysRef.current.UPGRADE_PRICES, JSON.stringify(obj)).catch(err => {
+      quotaSafeSetJsonItem(storageKeysRef.current.UPGRADE_PRICES, obj).catch(err => {
         console.error('[PriceHistoryProvider] Error saving upgrade prices:', err);
       });
       console.log('[PriceHistoryProvider] Updated', updatedCount, 'upgrade price entries, total tracked:', newPrices.size);
@@ -454,9 +539,9 @@ export const [PriceHistoryProvider, usePriceHistory] = createContextHook((): Pri
   const clearPriceHistory = useCallback(async () => {
     try {
       await Promise.all([
-        AsyncStorage.removeItem(storageKeysRef.current.PRICE_HISTORY),
-        AsyncStorage.removeItem(storageKeysRef.current.PRICE_DROP_ALERTS),
-        AsyncStorage.removeItem(storageKeysRef.current.UPGRADE_PRICES),
+        quotaSafeRemoveItem(storageKeysRef.current.PRICE_HISTORY),
+        quotaSafeRemoveItem(storageKeysRef.current.PRICE_DROP_ALERTS),
+        quotaSafeRemoveItem(storageKeysRef.current.UPGRADE_PRICES),
       ]);
       setPriceHistory([]);
       setPriceDropAlerts([]);
@@ -471,7 +556,7 @@ export const [PriceHistoryProvider, usePriceHistory] = createContextHook((): Pri
     return [...new Set(priceHistory.map(r => r.cruiseKey))];
   }, [priceHistory]);
 
-  console.log('[PriceHistoryProvider] Tracking', uniqueCruiseKeys.length, 'unique cruises with', priceHistory.length, 'price records');
+  if (__DEV__) console.log('[PriceHistoryProvider] Tracking', uniqueCruiseKeys.length, 'unique cruises with', priceHistory.length, 'price records');
 
   return useMemo(() => ({
     priceHistory,

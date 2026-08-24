@@ -3,7 +3,7 @@ import { ConfidenceBandSchema, OptimizationCasinoBrandSchema, OptimizationCasino
 import { CertificateFamilySchema } from '../value/zodSchemas';
 
 export const CertificateRecommendationActionSchema = z.enum([
-  'DATA_UNAVAILABLE','HARD_STOP','STOP_NOW','BANK_YOUR_WIN','DO_NOT_CHASE','PLAY_ONE_MORE_SESSION','CONTINUE_UNTIL_TARGET','PROFIT_PROTECTED_PUSH','EXCELLENT_OPPORTUNITY',
+  'DATA_UNAVAILABLE','HARD_STOP','STOP_NOW','BANK_YOUR_WIN','DO_NOT_CHASE','PLAY_ONE_MORE_SESSION','CONTINUE_NORMALLY','WAIT_UNTIL_TOMORROW','LOWER_VOLATILITY','SAVE_BANKROLL_FOR_NEXT_CRUISE','CONTINUE_UNTIL_TARGET','PROFIT_PROTECTED_PUSH','EXCELLENT_OPPORTUNITY',
 ]);
 export const LiveOptimizationStateSchema = z.object({
   ownerProfileId: z.string(), program: OptimizationCasinoProgramSchema, brand: OptimizationCasinoBrandSchema, certificateFamily: CertificateFamilySchema,

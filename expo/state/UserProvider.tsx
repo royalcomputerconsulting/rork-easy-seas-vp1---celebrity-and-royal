@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { quotaSafeGetItem, quotaSafeSetItem, quotaSafeSetJsonItem, quotaSafeRemoveItem } from "@/lib/storage/quotaSafeStorage";
 import createContextHook from "@nkzw/create-context-hook";
 import { useAuth } from "./AuthProvider";
 import { ALL_STORAGE_KEYS, getUserScopedKey } from "@/lib/storage/storageKeys";
@@ -51,10 +51,8 @@ export interface UserProfile {
   clubRoyaleId?: string;
   clubRoyalePoints?: number;
   clubRoyaleTier?: string;
-  clubRoyaleRelationshipPoints?: number;
-  clubRoyaleEvaluationPeriodStartDate?: string;
-  clubRoyaleEvaluationPeriodEndDate?: string;
-  crownAnchorRelationshipPoints?: number;
+  clubRoyaleTierValidThrough?: string;
+  clubRoyaleTierConfirmedAt?: string;
   crownAnchorLevel?: string;
   loyaltyPoints?: number;
   playingHours?: PlayingHours;
@@ -62,6 +60,7 @@ export interface UserProfile {
   celebrityCaptainsClubNumber?: string;
   blueChipId?: string;
   celebrityCaptainsClubPoints?: number;
+  celebrityCaptainsClubTier?: string;
   celebrityBlueChipPoints?: number;
   celebrityBlueChipTier?: string;
   preferredBrand?: 'royal' | 'celebrity' | 'silversea' | 'carnival';
@@ -73,10 +72,11 @@ export interface UserProfile {
   carnivalVifpTier?: string;
   carnivalVifpPoints?: number;
   carnivalCruiseDayPoints?: number;
-  carnivalTotalCruises?: number;
+  carnivalCruiseCount?: number;
   carnivalPlayersClubTier?: string;
   carnivalPlayersClubPoints?: number;
   birthdate?: string;
+  loyaltyManualOverrideAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -107,13 +107,11 @@ const DEFAULT_OWNER = {
   loyaltyPoints: 0,
   clubRoyalePoints: 0,
   clubRoyaleTier: '',
-  clubRoyaleRelationshipPoints: 0,
-  clubRoyaleEvaluationPeriodStartDate: '',
-  clubRoyaleEvaluationPeriodEndDate: '',
-  crownAnchorRelationshipPoints: 0,
+  clubRoyaleTierValidThrough: '',
   celebrityEmail: '',
   celebrityCaptainsClubNumber: '',
   celebrityCaptainsClubPoints: 0,
+  celebrityCaptainsClubTier: '',
   celebrityBlueChipPoints: 0,
   celebrityBlueChipTier: '',
   preferredBrand: 'royal' as const,
@@ -122,21 +120,6 @@ const DEFAULT_OWNER = {
   silverseaVenetianTier: '',
   silverseaVenetianPoints: 0,
 };
-
-let uniqueIdCounter = 0;
-
-/**
- * Generates a collision-proof id. `Date.now()` alone can produce the exact same value if two
- * profiles are created within the same millisecond (e.g. an auto-created "Second User" profile
- * racing with an import-review profile creation), which previously caused duplicate React keys
- * and silently-merged profiles. Adding a monotonically increasing counter plus a random suffix
- * guarantees every generated id is unique even when created back-to-back synchronously.
- */
-function generateUniqueUserId(prefix: string): string {
-  uniqueIdCounter += 1;
-  const randomSuffix = Math.random().toString(36).slice(2, 8);
-  return `${prefix}_${Date.now()}_${uniqueIdCounter}_${randomSuffix}`;
-}
 
 function normalizeEmail(email: string | null | undefined): string | null {
   if (!email) {
@@ -154,11 +137,50 @@ function getScopedUserKeys(email: string | null) {
   } as const;
 }
 
+function createUserProfileId(index?: number): string {
+  const randomToken = Math.random().toString(36).slice(2, 8);
+  return typeof index === 'number' ? `user_${Date.now()}_${index}_${randomToken}` : `user_${Date.now()}_${randomToken}`;
+}
+
+function ensureUniqueUserProfileIds(userProfiles: UserProfile[]): UserProfile[] {
+  const seenIds = new Set<string>();
+  let changed = false;
+
+  const uniqueProfiles = userProfiles.map((profile, index) => {
+    const trimmedId = typeof profile.id === 'string' ? profile.id.trim() : '';
+    let nextId = trimmedId;
+
+    if (!nextId || seenIds.has(nextId)) {
+      nextId = createUserProfileId(index);
+      changed = true;
+      console.warn('[UserProvider] Repaired duplicate or missing user profile id:', {
+        previousId: trimmedId || '(missing)',
+        nextId,
+        index,
+      });
+    }
+
+    seenIds.add(nextId);
+
+    if (nextId === profile.id) {
+      return profile;
+    }
+
+    return {
+      ...profile,
+      id: nextId,
+      updatedAt: new Date().toISOString(),
+    };
+  });
+
+  return changed ? uniqueProfiles : userProfiles;
+}
+
 function createOwnerProfile(email: string | null): UserProfile {
   const now = new Date().toISOString();
 
   return {
-    id: generateUniqueUserId('user'),
+    id: createUserProfileId(),
     name: DEFAULT_OWNER.name,
     displayName: DEFAULT_OWNER.name,
     relationshipLabel: 'Self',
@@ -171,16 +193,14 @@ function createOwnerProfile(email: string | null): UserProfile {
     clubRoyaleId: '',
     clubRoyalePoints: DEFAULT_OWNER.clubRoyalePoints,
     clubRoyaleTier: DEFAULT_OWNER.clubRoyaleTier,
-    clubRoyaleRelationshipPoints: DEFAULT_OWNER.clubRoyaleRelationshipPoints,
-    clubRoyaleEvaluationPeriodStartDate: DEFAULT_OWNER.clubRoyaleEvaluationPeriodStartDate,
-    clubRoyaleEvaluationPeriodEndDate: DEFAULT_OWNER.clubRoyaleEvaluationPeriodEndDate,
-    crownAnchorRelationshipPoints: DEFAULT_OWNER.crownAnchorRelationshipPoints,
+    clubRoyaleTierValidThrough: DEFAULT_OWNER.clubRoyaleTierValidThrough,
     crownAnchorLevel: DEFAULT_OWNER.crownAnchorLevel,
     loyaltyPoints: DEFAULT_OWNER.loyaltyPoints,
     celebrityEmail: DEFAULT_OWNER.celebrityEmail,
     celebrityCaptainsClubNumber: DEFAULT_OWNER.celebrityCaptainsClubNumber,
     blueChipId: '',
     celebrityCaptainsClubPoints: DEFAULT_OWNER.celebrityCaptainsClubPoints,
+    celebrityCaptainsClubTier: DEFAULT_OWNER.celebrityCaptainsClubTier,
     celebrityBlueChipPoints: DEFAULT_OWNER.celebrityBlueChipPoints,
     celebrityBlueChipTier: DEFAULT_OWNER.celebrityBlueChipTier,
     preferredBrand: DEFAULT_OWNER.preferredBrand,
@@ -242,7 +262,7 @@ function sanitizeUserProfile(user: unknown, fallbackEmail: string | null, index:
   const normalizedEmail = normalizeEmail(userRecord.email) ?? fallbackEmail ?? DEFAULT_OWNER.email;
 
   return {
-    id: typeof userRecord.id === 'string' && userRecord.id.trim().length > 0 ? userRecord.id : generateUniqueUserId(`user_${index}`),
+    id: typeof userRecord.id === 'string' && userRecord.id.trim().length > 0 ? userRecord.id.trim() : createUserProfileId(index),
     name: typeof userRecord.name === 'string' && userRecord.name.trim().length > 0 ? userRecord.name : DEFAULT_OWNER.name,
     displayName: typeof userRecord.displayName === 'string' && userRecord.displayName.trim().length > 0 ? userRecord.displayName : (typeof userRecord.name === 'string' && userRecord.name.trim().length > 0 ? userRecord.name : DEFAULT_OWNER.name),
     relationshipLabel: typeof userRecord.relationshipLabel === 'string' ? userRecord.relationshipLabel : (userRecord.isOwner === true ? 'Self' : ''),
@@ -256,10 +276,8 @@ function sanitizeUserProfile(user: unknown, fallbackEmail: string | null, index:
     clubRoyaleId: typeof userRecord.clubRoyaleId === 'string' ? userRecord.clubRoyaleId : '',
     clubRoyalePoints: typeof userRecord.clubRoyalePoints === 'number' ? userRecord.clubRoyalePoints : DEFAULT_OWNER.clubRoyalePoints,
     clubRoyaleTier: typeof userRecord.clubRoyaleTier === 'string' ? userRecord.clubRoyaleTier : DEFAULT_OWNER.clubRoyaleTier,
-    clubRoyaleRelationshipPoints: typeof userRecord.clubRoyaleRelationshipPoints === 'number' ? userRecord.clubRoyaleRelationshipPoints : DEFAULT_OWNER.clubRoyaleRelationshipPoints,
-    clubRoyaleEvaluationPeriodStartDate: typeof userRecord.clubRoyaleEvaluationPeriodStartDate === 'string' ? userRecord.clubRoyaleEvaluationPeriodStartDate : DEFAULT_OWNER.clubRoyaleEvaluationPeriodStartDate,
-    clubRoyaleEvaluationPeriodEndDate: typeof userRecord.clubRoyaleEvaluationPeriodEndDate === 'string' ? userRecord.clubRoyaleEvaluationPeriodEndDate : DEFAULT_OWNER.clubRoyaleEvaluationPeriodEndDate,
-    crownAnchorRelationshipPoints: typeof userRecord.crownAnchorRelationshipPoints === 'number' ? userRecord.crownAnchorRelationshipPoints : DEFAULT_OWNER.crownAnchorRelationshipPoints,
+    clubRoyaleTierValidThrough: typeof userRecord.clubRoyaleTierValidThrough === 'string' ? userRecord.clubRoyaleTierValidThrough : DEFAULT_OWNER.clubRoyaleTierValidThrough,
+    clubRoyaleTierConfirmedAt: typeof userRecord.clubRoyaleTierConfirmedAt === 'string' ? userRecord.clubRoyaleTierConfirmedAt : undefined,
     crownAnchorLevel: typeof userRecord.crownAnchorLevel === 'string' ? userRecord.crownAnchorLevel : DEFAULT_OWNER.crownAnchorLevel,
     loyaltyPoints: typeof userRecord.loyaltyPoints === 'number' ? userRecord.loyaltyPoints : DEFAULT_OWNER.loyaltyPoints,
     playingHours: sanitizePlayingHours(userRecord.playingHours),
@@ -267,6 +285,7 @@ function sanitizeUserProfile(user: unknown, fallbackEmail: string | null, index:
     celebrityCaptainsClubNumber: typeof userRecord.celebrityCaptainsClubNumber === 'string' ? userRecord.celebrityCaptainsClubNumber : DEFAULT_OWNER.celebrityCaptainsClubNumber,
     blueChipId: typeof userRecord.blueChipId === 'string' ? userRecord.blueChipId : '',
     celebrityCaptainsClubPoints: typeof userRecord.celebrityCaptainsClubPoints === 'number' ? userRecord.celebrityCaptainsClubPoints : DEFAULT_OWNER.celebrityCaptainsClubPoints,
+    celebrityCaptainsClubTier: typeof userRecord.celebrityCaptainsClubTier === 'string' ? userRecord.celebrityCaptainsClubTier : DEFAULT_OWNER.celebrityCaptainsClubTier,
     celebrityBlueChipPoints: typeof userRecord.celebrityBlueChipPoints === 'number' ? userRecord.celebrityBlueChipPoints : DEFAULT_OWNER.celebrityBlueChipPoints,
     celebrityBlueChipTier: typeof userRecord.celebrityBlueChipTier === 'string' ? userRecord.celebrityBlueChipTier : DEFAULT_OWNER.celebrityBlueChipTier,
     preferredBrand: userRecord.preferredBrand === 'royal' || userRecord.preferredBrand === 'celebrity' || userRecord.preferredBrand === 'silversea' || userRecord.preferredBrand === 'carnival'
@@ -278,104 +297,13 @@ function sanitizeUserProfile(user: unknown, fallbackEmail: string | null, index:
     silverseaVenetianPoints: typeof userRecord.silverseaVenetianPoints === 'number' ? userRecord.silverseaVenetianPoints : DEFAULT_OWNER.silverseaVenetianPoints,
     carnivalVifpNumber: typeof userRecord.carnivalVifpNumber === 'string' ? userRecord.carnivalVifpNumber : '',
     carnivalVifpTier: typeof userRecord.carnivalVifpTier === 'string' ? userRecord.carnivalVifpTier : '',
-    carnivalVifpPoints: typeof userRecord.carnivalVifpPoints === 'number' ? userRecord.carnivalVifpPoints : 0,
-    carnivalCruiseDayPoints: typeof userRecord.carnivalCruiseDayPoints === 'number' ? userRecord.carnivalCruiseDayPoints : 0,
-    carnivalTotalCruises: typeof userRecord.carnivalTotalCruises === 'number' ? userRecord.carnivalTotalCruises : 0,
     carnivalPlayersClubTier: typeof userRecord.carnivalPlayersClubTier === 'string' ? userRecord.carnivalPlayersClubTier : '',
     carnivalPlayersClubPoints: typeof userRecord.carnivalPlayersClubPoints === 'number' ? userRecord.carnivalPlayersClubPoints : 0,
     birthdate: typeof userRecord.birthdate === 'string' ? userRecord.birthdate : undefined,
+    loyaltyManualOverrideAt: typeof userRecord.loyaltyManualOverrideAt === 'string' ? userRecord.loyaltyManualOverrideAt : undefined,
     createdAt: typeof userRecord.createdAt === 'string' ? userRecord.createdAt : now,
     updatedAt: typeof userRecord.updatedAt === 'string' ? userRecord.updatedAt : now,
   };
-}
-
-/**
- * Collapses duplicate non-owner ("second user") profiles into a single one.
- * A past bug could repeatedly auto-create a profile named "Second User" on
- * every Settings screen mount, leaving several duplicate profiles behind in
- * storage. This keeps the earliest-created non-owner profile (preferring one
- * that actually has synced loyalty data over an empty duplicate) and drops
- * the rest so the app only ever shows one "Second User" going forward.
- */
-function dedupeSecondProfiles(profiles: UserProfile[]): UserProfile[] {
-  const ownerProfiles = profiles.filter((profile) => profile.isOwner);
-  const nonOwnerProfiles = profiles.filter((profile) => !profile.isOwner);
-
-  if (nonOwnerProfiles.length <= 1) {
-    return profiles;
-  }
-
-  const hasSyncedData = (profile: UserProfile) => Boolean(profile.crownAnchorNumber || profile.clubRoyaleId || (profile.clubRoyalePoints ?? 0) > 0 || (profile.loyaltyPoints ?? 0) > 0);
-
-  const sorted = [...nonOwnerProfiles].sort((a, b) => {
-    const aSynced = hasSyncedData(a) ? 1 : 0;
-    const bSynced = hasSyncedData(b) ? 1 : 0;
-    if (aSynced !== bSynced) return bSynced - aSynced;
-    return (a.createdAt || '').localeCompare(b.createdAt || '');
-  });
-
-  const [keptSecondProfile] = sorted;
-  return [...ownerProfiles, ...(keptSecondProfile ? [keptSecondProfile] : [])];
-}
-
-/**
- * Guarantees every profile in the list has a globally-unique id, even if corrupted data from
- * before the collision-proof id generator (see `generateUniqueUserId`) left two profiles sharing
- * the exact same id in storage. A shared id between two different profile objects (e.g. the real
- * owner and a blank auto-created "Second User" stub) causes React lists that key off `profile.id`
- * to throw "two children with the same key" and, worse, makes `users.find(u => u.id === x)` return
- * whichever of the two happens to appear first -- which can silently resolve `currentUser` to the
- * wrong (blank/stale) profile and make every screen that reads loyalty/profile data look unsynced.
- * When a collision is found, the more "authoritative" profile (owner, has real loyalty data, etc.)
- * keeps the original id and the other one is assigned a brand-new unique id.
- */
-function ensureUniqueProfileIds(profiles: UserProfile[]): UserProfile[] {
-  const scoreOf = (candidate: UserProfile): number => {
-    let value = 0;
-    if (candidate.isOwner) value += 100;
-    if (candidate.defaultProfile) value += 50;
-    if ((candidate.crownAnchorNumber ?? '').trim().length > 0) value += 10;
-    if ((candidate.clubRoyaleId ?? '').trim().length > 0) value += 10;
-    if ((candidate.clubRoyalePoints ?? 0) > 0) value += 5;
-    if ((candidate.loyaltyPoints ?? 0) > 0) value += 5;
-    if ((candidate.name ?? '').trim().length > 0 && candidate.name !== 'Second User') value += 2;
-    return value;
-  };
-
-  const byId = new Map<string, UserProfile>();
-  let repaired = false;
-
-  for (const profile of profiles) {
-    const existing = byId.get(profile.id);
-    if (!existing) {
-      byId.set(profile.id, profile);
-      continue;
-    }
-
-    repaired = true;
-    const keepExisting = scoreOf(existing) >= scoreOf(profile);
-    const keep = keepExisting ? existing : profile;
-    const rename = keepExisting ? profile : existing;
-    const newId = generateUniqueUserId(rename.isOwner ? 'user_owner' : 'user_second');
-
-    console.warn('[UserProvider] Repairing duplicate profile id collision so no two profiles ever share an id:', {
-      collidingId: profile.id,
-      keptProfileName: keep.name,
-      keptProfileIsOwner: keep.isOwner === true,
-      renamedProfileOldId: rename.id,
-      renamedProfileNewId: newId,
-      renamedProfileName: rename.name,
-    });
-
-    byId.set(keep.id, keep);
-    byId.set(newId, { ...rename, id: newId });
-  }
-
-  if (!repaired) {
-    return profiles;
-  }
-
-  return Array.from(byId.values());
 }
 
 function parseStoredUsers(rawValue: string | null, fallbackEmail: string | null): UserProfile[] {
@@ -391,11 +319,9 @@ function parseStoredUsers(rawValue: string | null, fallbackEmail: string | null)
       return [];
     }
 
-    const sanitizedUsers = parsedValue
+    return ensureUniqueUserProfileIds(parsedValue
       .map((user, index) => sanitizeUserProfile(user, fallbackEmail, index))
-      .filter((user): user is UserProfile => user !== null);
-
-    return ensureUniqueProfileIds(sanitizedUsers);
+      .filter((user): user is UserProfile => user !== null));
   } catch (error) {
     console.error('[UserProvider] Failed to parse stored users payload:', error);
     return [];
@@ -419,50 +345,16 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
 
     const resolvedEmail = normalizeEmail(resolvedUser.email);
     if (resolvedEmail !== normalizedAuthenticatedEmail) {
-      // Only actually hide the profile if there is a DIFFERENT profile in storage that genuinely
-      // belongs to the authenticated account -- that's the real "just switched accounts, still
-      // loading the other account's data" case this guard exists for. If no such profile exists,
-      // this is just email drift on the same single profile (e.g. it was created before the
-      // authenticated email settled), so keep showing it instead of blacking out every screen
-      // that depends on the current profile (loyalty header, portfolio, etc. all read this).
-      const matchingProfileForAuthenticatedEmail = users.find((user) => user.id !== resolvedUser.id && normalizeEmail(user.email) === normalizedAuthenticatedEmail);
-      if (matchingProfileForAuthenticatedEmail) {
-        console.log('[UserProvider] Suppressing stale user during account transition:', {
-          authenticatedEmail: normalizedAuthenticatedEmail,
-          resolvedEmail,
-          userId: resolvedUser.id,
-        });
-        return null;
-      }
-
-      console.log('[UserProvider] Profile email differs from authenticated email but no alternate profile exists -- showing it anyway instead of blacking out the app:', {
+      console.log('[UserProvider] Suppressing stale user during account transition:', {
         authenticatedEmail: normalizedAuthenticatedEmail,
         resolvedEmail,
         userId: resolvedUser.id,
       });
+      return null;
     }
 
     return resolvedUser;
   }, [currentUserId, normalizedAuthenticatedEmail, users]);
-
-  useEffect(() => {
-    if (!currentUser || !normalizedAuthenticatedEmail) {
-      return;
-    }
-
-    const resolvedEmail = normalizeEmail(currentUser.email);
-    if (resolvedEmail === normalizedAuthenticatedEmail) {
-      return;
-    }
-
-    // Self-heal the drifted email so future renders don't keep re-detecting the same mismatch.
-    console.log('[UserProvider] Self-healing profile email drift to match authenticated email:', {
-      profileId: currentUser.id,
-      oldEmail: currentUser.email,
-      newEmail: normalizedAuthenticatedEmail,
-    });
-    void updateUser(currentUser.id, { email: normalizedAuthenticatedEmail });
-  }, [currentUser, normalizedAuthenticatedEmail]);
 
   useEffect(() => {
     if (lastAuthenticatedEmailRef.current === normalizedAuthenticatedEmail) {
@@ -482,12 +374,13 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
 
   const persistUsers = useCallback(async (newUsers: UserProfile[]) => {
     const scopedKeys = getScopedUserKeys(normalizedAuthenticatedEmail);
+    const uniqueUsers = ensureUniqueUserProfileIds(newUsers);
 
     try {
-      await AsyncStorage.setItem(scopedKeys.USERS, JSON.stringify(newUsers));
+      await quotaSafeSetJsonItem(scopedKeys.USERS, uniqueUsers);
       console.log('[UserProvider] Persisted scoped users:', {
         email: normalizedAuthenticatedEmail,
-        count: newUsers.length,
+        count: uniqueUsers.length,
         key: scopedKeys.USERS,
       });
     } catch (error) {
@@ -500,9 +393,9 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
 
     try {
       if (userId) {
-        await AsyncStorage.setItem(scopedKeys.CURRENT_USER, userId);
+        await quotaSafeSetItem(scopedKeys.CURRENT_USER, userId);
       } else {
-        await AsyncStorage.removeItem(scopedKeys.CURRENT_USER);
+        await quotaSafeRemoveItem(scopedKeys.CURRENT_USER);
       }
 
       console.log('[UserProvider] Persisted scoped current user:', {
@@ -522,8 +415,8 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
 
     try {
       const [legacyUsersRaw, legacyCurrentUserId] = await Promise.all([
-        AsyncStorage.getItem(KEYS.USERS),
-        AsyncStorage.getItem(KEYS.CURRENT_USER),
+        quotaSafeGetItem(KEYS.USERS),
+        quotaSafeGetItem(KEYS.CURRENT_USER),
       ]);
 
       if (!legacyUsersRaw) {
@@ -547,16 +440,16 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
         return null;
       }
 
-      const migratedUsers = matchingUsers.map((user) => ({
+      const migratedUsers = ensureUniqueUserProfileIds(matchingUsers.map((user) => ({
         ...user,
         email: normalizeEmail(user.email) ?? normalizedAuthenticatedEmail,
         isOwner: user.id === selectedCurrentUser.id,
-      }));
+      })));
 
       const scopedKeys = getScopedUserKeys(normalizedAuthenticatedEmail);
       await Promise.all([
-        AsyncStorage.setItem(scopedKeys.USERS, JSON.stringify(migratedUsers)),
-        AsyncStorage.setItem(scopedKeys.CURRENT_USER, selectedCurrentUser.id),
+        quotaSafeSetJsonItem(scopedKeys.USERS, migratedUsers),
+        quotaSafeSetItem(scopedKeys.CURRENT_USER, selectedCurrentUser.id),
       ]);
 
       console.log('[UserProvider] Migrated legacy profile data into scoped storage for:', normalizedAuthenticatedEmail);
@@ -591,8 +484,8 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
       });
 
       let [storedUsersRaw, storedCurrentUserId] = await Promise.all([
-        AsyncStorage.getItem(scopedKeys.USERS),
-        AsyncStorage.getItem(scopedKeys.CURRENT_USER),
+        quotaSafeGetItem(scopedKeys.USERS),
+        quotaSafeGetItem(scopedKeys.CURRENT_USER),
       ]);
 
       if (!storedUsersRaw) {
@@ -605,32 +498,22 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
         }
       }
 
-      storedUsersRaw = storedUsersRaw ?? await AsyncStorage.getItem(scopedKeys.USERS);
-      storedCurrentUserId = storedCurrentUserId ?? await AsyncStorage.getItem(scopedKeys.CURRENT_USER);
+      storedUsersRaw = storedUsersRaw ?? await quotaSafeGetItem(scopedKeys.USERS);
+      storedCurrentUserId = storedCurrentUserId ?? await quotaSafeGetItem(scopedKeys.CURRENT_USER);
 
       if (storedUsersRaw) {
         const parsedUsers = parseStoredUsers(storedUsersRaw, normalizedAuthenticatedEmail);
-        const normalizedUsers = parsedUsers.map((user) => ({
+        const normalizedUsers = ensureUniqueUserProfileIds(parsedUsers.map((user) => ({
           ...user,
           email: normalizeEmail(user.email) ?? normalizedAuthenticatedEmail,
-        }));
+        })));
 
-        const dedupedUsers = dedupeSecondProfiles(normalizedUsers);
-        if (dedupedUsers.length !== normalizedUsers.length) {
-          console.log('[UserProvider] Collapsed duplicate "Second User" profiles into one on load:', {
-            email: normalizedAuthenticatedEmail,
-            before: normalizedUsers.length,
-            after: dedupedUsers.length,
-          });
-          await AsyncStorage.setItem(scopedKeys.USERS, JSON.stringify(dedupedUsers));
-        }
-
-        const owner = dedupedUsers.find((user) => user.isOwner) ?? dedupedUsers[0] ?? null;
-        const resolvedCurrentUserId = storedCurrentUserId && dedupedUsers.some((user) => user.id === storedCurrentUserId)
+        const owner = normalizedUsers.find((user) => user.isOwner) ?? normalizedUsers[0] ?? null;
+        const resolvedCurrentUserId = storedCurrentUserId && normalizedUsers.some((user) => user.id === storedCurrentUserId)
           ? storedCurrentUserId
           : owner?.id ?? null;
 
-        setUsers(dedupedUsers);
+        setUsers(normalizedUsers);
         setCurrentUserId(resolvedCurrentUserId);
 
         if (resolvedCurrentUserId !== storedCurrentUserId) {
@@ -639,7 +522,7 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
 
         console.log('[UserProvider] Loaded scoped users:', {
           email: normalizedAuthenticatedEmail,
-          count: dedupedUsers.length,
+          count: normalizedUsers.length,
           currentUserId: resolvedCurrentUserId,
         });
         return;
@@ -650,8 +533,8 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
       setUsers(newUsers);
       setCurrentUserId(owner.id);
       await Promise.all([
-        AsyncStorage.setItem(scopedKeys.USERS, JSON.stringify(newUsers)),
-        AsyncStorage.setItem(scopedKeys.CURRENT_USER, owner.id),
+        quotaSafeSetJsonItem(scopedKeys.USERS, newUsers),
+        quotaSafeSetItem(scopedKeys.CURRENT_USER, owner.id),
       ]);
 
       console.log('[UserProvider] Created new scoped owner profile:', {
@@ -676,20 +559,8 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
     const normalizedEmail = normalizeEmail(user.email) ?? normalizedAuthenticatedEmail ?? DEFAULT_OWNER.email;
 
     const isFirstUser = users.length === 0;
-
-    // Each account can only ever have ONE non-owner "second traveler" slot. If a caller (e.g. the
-    // Settings screen's auto-create effect) races and asks to create another one while one already
-    // exists, return the existing profile instead of creating a duplicate "Second User" entry.
-    if (!isFirstUser && !user.id) {
-      const existingNonOwner = users.find((candidate) => candidate.active !== false && !candidate.isOwner && !candidate.defaultProfile);
-      if (existingNonOwner) {
-        console.log('[UserProvider] Reusing existing second-traveler profile instead of creating a duplicate:', existingNonOwner.id);
-        return existingNonOwner;
-      }
-    }
-
     const newUser: UserProfile = {
-      id: user.id || generateUniqueUserId('user'),
+      id: typeof user.id === 'string' && user.id.trim().length > 0 && !users.some((existingUser) => existingUser.id === user.id?.trim()) ? user.id.trim() : createUserProfileId(),
       name: user.name,
       displayName: user.name,
       relationshipLabel: isFirstUser ? 'Self' : '',
@@ -702,7 +573,7 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
       updatedAt: now,
     };
 
-    const newUsers = [...users, newUser];
+    const newUsers = ensureUniqueUserProfileIds([...users, newUser]);
     setUsers(newUsers);
     await persistUsers(newUsers);
 
@@ -764,7 +635,7 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
   const updateUser = useCallback(async (userId: string, updates: Partial<UserProfile>) => {
     try {
       const scopedKeys = getScopedUserKeys(normalizedAuthenticatedEmail);
-      const storedUsersRaw = await AsyncStorage.getItem(scopedKeys.USERS);
+      const storedUsersRaw = await quotaSafeGetItem(scopedKeys.USERS);
       const inMemoryScopedUsers = users.filter((user) => normalizeEmail(user.email) === normalizedAuthenticatedEmail);
       let currentUsers: UserProfile[] = storedUsersRaw ? parseStoredUsers(storedUsersRaw, normalizedAuthenticatedEmail) : inMemoryScopedUsers;
 
@@ -778,13 +649,13 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
       };
 
       const targetUserBeforeUpdate = currentUsers.find((user) => user.id === userId) ?? null;
-      const updatedUsers = currentUsers.map((user) => (
+      const updatedUsers = ensureUniqueUserProfileIds(currentUsers.map((user) => (
         user.id === userId
           ? { ...user, ...normalizedUpdates, updatedAt: new Date().toISOString() }
           : user
-      ));
+      )));
 
-      await AsyncStorage.setItem(scopedKeys.USERS, JSON.stringify(updatedUsers));
+      await quotaSafeSetJsonItem(scopedKeys.USERS, updatedUsers);
 
       const normalizedTargetEmail = updates.email !== undefined ? normalizeEmail(updates.email) : normalizedAuthenticatedEmail;
       if (targetUserBeforeUpdate?.isOwner === true && normalizedTargetEmail && normalizedTargetEmail !== normalizedAuthenticatedEmail) {
@@ -795,8 +666,8 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
             : { ...user, email: normalizeEmail(user.email) ?? normalizedTargetEmail }
         ));
         await Promise.all([
-          AsyncStorage.setItem(targetScopedKeys.USERS, JSON.stringify(targetScopedUsers)),
-          AsyncStorage.setItem(targetScopedKeys.CURRENT_USER, userId),
+          quotaSafeSetJsonItem(targetScopedKeys.USERS, targetScopedUsers),
+          quotaSafeSetItem(targetScopedKeys.CURRENT_USER, userId),
         ]);
         console.log('[UserProvider] Mirrored profile update into new email scope:', {
           previousEmail: normalizedAuthenticatedEmail,
@@ -852,9 +723,9 @@ export const [UserProvider, useUser] = createContextHook((): UserState => {
     const scopedKeys = getScopedUserKeys(normalizedAuthenticatedEmail);
 
     try {
-      const storedUsersRaw = await AsyncStorage.getItem(scopedKeys.USERS);
+      const storedUsersRaw = await quotaSafeGetItem(scopedKeys.USERS);
       if (storedUsersRaw) {
-        const parsedUsers = parseStoredUsers(storedUsersRaw, normalizedAuthenticatedEmail);
+        const parsedUsers = ensureUniqueUserProfileIds(parseStoredUsers(storedUsersRaw, normalizedAuthenticatedEmail));
         const storedOwner = parsedUsers.find((user) => user.isOwner) ?? parsedUsers[0] ?? null;
 
         if (storedOwner) {

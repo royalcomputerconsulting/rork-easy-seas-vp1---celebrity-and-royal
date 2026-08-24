@@ -1,15 +1,9 @@
 const fs = require('fs');
 const path = require('path');
-
-let ts;
-try {
-  ts = require('typescript');
-} catch {
-  ts = require('/opt/nvm/versions/node/v22.16.0/lib/node_modules/typescript');
-}
+const ts = require('typescript');
 
 const root = process.cwd();
-const ignoredDirectories = new Set(['node_modules', '.git', '.expo', 'dist', 'build']);
+const ignoredDirectories = new Set(['node_modules', '.git', '.expo', 'dist', 'build', 'outputs']);
 const files = [];
 
 function walk(directory) {
@@ -23,33 +17,35 @@ function walk(directory) {
 
 walk(root);
 const errors = [];
-for (const file of files) {
+for (let fileIndex = 0; fileIndex < files.length; fileIndex += 1) {
+  const file = files[fileIndex];
   const source = fs.readFileSync(file, 'utf8');
-  const result = ts.transpileModule(source, {
-    compilerOptions: {
-      target: ts.ScriptTarget.ES2020,
-      module: ts.ModuleKind.ESNext,
-      jsx: ts.JsxEmit.ReactJSX,
-      isolatedModules: true,
-    },
-    fileName: file,
-    reportDiagnostics: true,
-  });
-  for (const diagnostic of result.diagnostics || []) {
-    if (diagnostic.category !== ts.DiagnosticCategory.Error) continue;
-    const position = diagnostic.file && typeof diagnostic.start === 'number'
-      ? diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start)
-      : null;
-    errors.push(
-      `${path.relative(root, file)}${position ? `:${position.line + 1}:${position.character + 1}` : ''} `
-      + `TS${diagnostic.code} ${ts.flattenDiagnosticMessageText(diagnostic.messageText, ' ')}`,
-    );
+  try {
+    const result = ts.transpileModule(source, {
+      compilerOptions: {
+        jsx: ts.JsxEmit.React,
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.ES2022,
+      },
+      fileName: file,
+      reportDiagnostics: true,
+    });
+    for (const diagnostic of result.diagnostics ?? []) {
+      if (diagnostic.category === ts.DiagnosticCategory.Error) {
+        errors.push(`${path.relative(root, file)} ${ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')}`);
+      }
+    }
+  } catch (error) {
+    errors.push(`${path.relative(root, file)} ${error instanceof Error ? error.message : String(error)}`);
+  }
+  if ((fileIndex + 1) % 50 === 0) {
+    console.log(`Syntax scan progress: ${fileIndex + 1}/${files.length}`);
   }
 }
 
 console.log(`Scanned ${files.length} TypeScript/TSX files.`);
 if (errors.length > 0) {
-  console.error(`FAIL ${errors.length} TypeScript syntax diagnostics`);
+  console.error(`FAIL ${errors.length} TypeScript/TSX syntax diagnostics`);
   console.error(errors.join('\n'));
   process.exit(1);
 }

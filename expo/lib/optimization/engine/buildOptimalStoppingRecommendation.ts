@@ -1,5 +1,5 @@
 import type { CertificateCandidateEvaluation, BuildOptimalStoppingRecommendationInput, CertificateRecommendationAction, CertificateRecommendationSnapshot } from './types';
-import { assessFatigueAndPerformance, hardStopReasons } from './assessSafetyModes';
+import { assessFatigueAndPerformance, availableRiskBudget, hardStopReasons } from './assessSafetyModes';
 import { determineCurrentLockedCertificate, selectApplicableThresholds } from './determineCurrentLockedCertificate';
 import { evaluateCandidateTargets } from './evaluateCandidateTargets';
 import { round, stableModelFingerprint } from '../models/statistics';
@@ -13,6 +13,10 @@ function actionLabel(action: CertificateRecommendationAction, target: number | n
   if (action === 'BANK_YOUR_WIN') return 'Bank Your Win';
   if (action === 'DO_NOT_CHASE') return 'Do Not Chase';
   if (action === 'PLAY_ONE_MORE_SESSION') return 'Play One More Session';
+  if (action === 'CONTINUE_NORMALLY') return 'Continue Normally — Do Not Increase Play Yet';
+  if (action === 'WAIT_UNTIL_TOMORROW') return 'Wait Until Tomorrow';
+  if (action === 'LOWER_VOLATILITY') return 'Switch to Lower Volatility';
+  if (action === 'SAVE_BANKROLL_FOR_NEXT_CRUISE') return 'Stop and Save Bankroll for the Next Cruise';
   if (action === 'CONTINUE_UNTIL_TARGET') return `Continue Until ${target?.toLocaleString() ?? 'Target'}`;
   if (action === 'PROFIT_PROTECTED_PUSH') return `Profit-Protected Push to ${target?.toLocaleString() ?? 'Target'}`;
   return 'Excellent Opportunity';
@@ -36,13 +40,33 @@ function selectedAction(input: {
   const { state } = input.request;
   const overrides: string[] = [];
   if (input.hardStops.length > 0) return { action: 'HARD_STOP', selected: null, overrides: input.hardStops };
+  const fatigueHigh = (state.fatigueRating ?? 0) >= 7 || (state.sameDayPlayMinutes ?? 0) >= 240;
+  if (fatigueHigh && (state.remainingCasinoDays ?? 0) > 0) {
+    return { action: 'WAIT_UNTIL_TOMORROW', selected: strongestCandidate(input.candidates), overrides: ['Fatigue or same-day play duration is elevated and another casino day remains.'] };
+  }
+  const performanceDegraded = state.currentLossPerPoint !== null && state.currentLossPerPoint !== undefined
+    && state.baselineLossPerPoint !== null && state.baselineLossPerPoint !== undefined
+    && state.baselineLossPerPoint > 0 && state.currentLossPerPoint > state.baselineLossPerPoint * 1.5;
+  if (performanceDegraded && input.candidates.some(candidate => candidate.reachable)) {
+    return { action: 'LOWER_VOLATILITY', selected: strongestCandidate(input.candidates), overrides: ['Current loss per point is materially worse than the personal baseline.'] };
+  }
   if (input.candidates.length === 0) return { action: 'STOP_NOW', selected: null, overrides: ['No higher applicable certificate threshold remains.'] };
   const best = bestPositive(input.candidates);
   const strongest = strongestCandidate(input.candidates);
   if (!best) {
+    const available = availableRiskBudget(state).ordinary;
+    if ((state.remainingCasinoDays ?? 0) > 0 && available !== null && available < state.dailyBankrollBudget * 0.35) {
+      return { action: 'SAVE_BANKROLL_FOR_NEXT_CRUISE', selected: strongest, overrides: ['Remaining risk budget is too small to justify chasing a target on this cruise.'] };
+    }
     if (state.currentResult > 0) return { action: 'BANK_YOUR_WIN', selected: strongest, overrides: ['Current profit is exposed and no remaining target has positive risk-adjusted expected value.'] };
     if (input.candidates.every(candidate => candidate.rawIncrementalExpectedValue < 0)) return { action: 'STOP_NOW', selected: strongest, overrides: ['All remaining targets have negative raw incremental expected value.'] };
     return { action: 'DO_NOT_CHASE', selected: strongest, overrides: ['No remaining target passes risk-adjusted value, bankroll, and time gates.'] };
+  }
+  const normalProgressTarget = [...input.candidates]
+    .filter(candidate => candidate.projectedEndOfCruisePoints >= candidate.targetPoints && candidate.probabilityOfSuccess >= 0.8)
+    .sort((a, b) => a.targetPoints - b.targetPoints)[0] ?? null;
+  if (normalProgressTarget && normalProgressTarget.pointsRequired > 250) {
+    return { action: 'CONTINUE_NORMALLY', selected: normalProgressTarget, overrides: ['Normal remaining-cruise play is already likely to reach this target; increased play is not justified yet.'] };
   }
   const isProfitProtected = state.currentResult > 0 && state.lockedProfitFloor !== null
     && best.profitProtectedRiskBudget !== null
@@ -130,6 +154,14 @@ export function buildOptimalStoppingRecommendation(input: BuildOptimalStoppingRe
     expectedAdditionalLoss: selected?.expectedAdditionalLoss ?? 0,
     downsideRange: selected ? { low: selected.downsideLow, high: selected.downsideHigh } : null,
     incrementalCertificateValue: selected?.incrementalCertificateValue ?? 0,
+    incrementalFutureOfferValue: selected?.incrementalFutureOfferValue ?? 0,
+    incrementalTierValue: selected?.incrementalTierValue ?? 0,
+    incrementalAncillaryValue: selected?.incrementalAncillaryValue ?? 0,
+    incrementalTravelCost: selected?.incrementalTravelCost ?? 0,
+    incrementalCruiseCost: selected?.incrementalCruiseCost ?? 0,
+    expectedUnredeemedValueLoss: selected?.expectedUnredeemedValueLoss ?? 0,
+    riskPenalty: selected?.riskPenalty ?? 0,
+    expectedNetVacationValue: selected?.expectedNetVacationValue ?? 0,
     rawIncrementalExpectedValue: selected?.rawIncrementalExpectedValue ?? 0,
     riskAdjustedIncrementalExpectedValue: selected?.riskAdjustedIncrementalExpectedValue ?? 0,
     bankrollImpact: {
@@ -138,6 +170,11 @@ export function buildOptimalStoppingRecommendation(input: BuildOptimalStoppingRe
       lockedProfitFloor: input.state.lockedProfitFloor,
       profitProtectedRiskBudget: selected?.profitProtectedRiskBudget ?? null,
       probabilityOfExceedingRemainingBankroll: selected?.probabilityOfExceedingRemainingBankroll ?? null,
+      bankrollSurvivalProbability: selected?.bankrollSurvivalProbability ?? null,
+      requiredBankrollP50: selected?.requiredBankrollP50 ?? null,
+      requiredBankrollP75: selected?.requiredBankrollP75 ?? null,
+      requiredBankrollP90: selected?.requiredBankrollP90 ?? null,
+      recommendedBankrollBuffer: selected?.recommendedBankrollBuffer ?? null,
     },
     confidence: selected?.confidence ?? 'missing',
     topReasons: [...(selected?.reasons ?? []), ...choice.overrides].slice(0, 6),

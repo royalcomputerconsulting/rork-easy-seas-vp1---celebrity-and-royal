@@ -1,8 +1,8 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, Dimensions, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import { Trophy, TrendingUp, Calendar, Target, CheckCircle } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
-import { CLUB_ROYALE_TIERS, TIER_ORDER, getNextTier, getTierProgress } from '@/constants/clubRoyaleTiers';
+import { CLUB_ROYALE_TIERS, TIER_ORDER, getNextTier, getTierProgress, normalizeClubRoyaleTier } from '@/constants/clubRoyaleTiers';
 import { CLUB_ROYALE_SIGNATURE_RETAIN_POINTS } from '@/lib/casinoPointTruth';
 import { generateTimelineProjections, PlayerContext } from '@/lib/whatIfSimulator';
 import type { BookedCruise } from '@/types/models';
@@ -16,18 +16,12 @@ interface TierProgressionChartProps {
   playerContext: PlayerContext;
   bookedCruises: BookedCruise[];
   monthsAhead?: number;
-  /** Stage 9.2 checklist item 19: tapping a tier threshold/reference line opens its drill-down. */
-  onThresholdPress?: (tier: string, threshold: number) => void;
-  /** Tapping the current-position marker opens a drill-down for where the player stands right now. */
-  onCurrentPositionPress?: () => void;
 }
 
 export function TierProgressionChart({
   playerContext,
   bookedCruises,
   monthsAhead = 24,
-  onThresholdPress,
-  onCurrentPositionPress,
 }: TierProgressionChartProps) {
   const projections = useMemo(
     () => generateTimelineProjections(playerContext, bookedCruises, monthsAhead),
@@ -60,7 +54,7 @@ export function TierProgressionChart({
     const logScale = (value: number, max: number): number => {
       if (value <= 0) return 0;
       const minLog = Math.log10(100);
-      const maxLog = Math.log10(Math.max(max, 100000));
+      const maxLog = Math.log10(Math.max(max, 100001));
       const valueLog = Math.log10(Math.max(value, 100));
       return (valueLog - minLog) / (maxLog - minLog);
     };
@@ -95,9 +89,10 @@ export function TierProgressionChart({
     return { points, tierLines, maxPoints, chartWidth, chartHeight };
   }, [projections]);
 
-  const currentTierIndex = TIER_ORDER.indexOf(playerContext.currentTier);
+  const normalizedCurrentTier = normalizeClubRoyaleTier(playerContext.currentTier) ?? 'Choice';
+  const currentTierIndex = TIER_ORDER.indexOf(normalizedCurrentTier);
   const nextTier = getNextTier(playerContext.currentTier);
-  const nextMilestone = tierMilestones.find((m) => TIER_ORDER.indexOf(m.tier) > currentTierIndex);
+  const nextMilestone = tierMilestones.find((m) => TIER_ORDER.indexOf(normalizeClubRoyaleTier(m.tier) ?? 'Choice') > currentTierIndex);
   
   const tierProgress = getTierProgress(playerContext.currentPoints, playerContext.currentTier);
   const isAtHighestTier = playerContext.currentTier === 'Masters';
@@ -131,15 +126,7 @@ export function TierProgressionChart({
         <View style={styles.chartSection}>
           <View style={[styles.chart, { height: CHART_HEIGHT }]}>
             {chartData.tierLines.map((line) => (
-              <TouchableOpacity
-                key={line.tier}
-                style={styles.tierLineContainer}
-                activeOpacity={onThresholdPress ? 0.6 : 1}
-                disabled={!onThresholdPress}
-                hitSlop={{ top: 16, bottom: 16, left: 8, right: 8 }}
-                onPress={() => onThresholdPress?.(line.tier, line.threshold)}
-                testID={`tier-threshold-${line.tier}`}
-              >
+              <View key={line.tier} style={styles.tierLineContainer}>
                 <View
                   style={[
                     styles.tierLine,
@@ -151,7 +138,7 @@ export function TierProgressionChart({
                     {line.tier}
                   </Text>
                 </View>
-              </TouchableOpacity>
+              </View>
             ))}
 
             <View style={styles.progressLine}>
@@ -183,18 +170,12 @@ export function TierProgressionChart({
               })}
             </View>
 
-            <TouchableOpacity
+            <View
               style={[
-                styles.currentPointMarkerHit,
-                { left: chartData.points[0].x - 16, top: chartData.points[0].y - 16 },
+                styles.currentPointMarker,
+                { left: chartData.points[0].x - 6, top: chartData.points[0].y - 6 },
               ]}
-              activeOpacity={onCurrentPositionPress ? 0.6 : 1}
-              disabled={!onCurrentPositionPress}
-              onPress={onCurrentPositionPress}
-              testID="tier-current-position-marker"
-            >
-              <View style={styles.currentPointMarker} />
-            </TouchableOpacity>
+            />
 
             {chartData.points.map((point, index) => {
               if (index === 0) return null;
@@ -271,7 +252,7 @@ export function TierProgressionChart({
               {isSignatureRetainMode ? (
                 <>
                   <Text style={{ color: CLUB_ROYALE_TIERS.Signature.color, fontWeight: '700' as const }}>Signature</Text>{' '}
-                  is active. Target {formatNumber(CLUB_ROYALE_SIGNATURE_RETAIN_POINTS)} points to keep Signature ({signatureRetainProgress.toFixed(0)}% complete); {formatNumber(signatureRetainGap)} more needed, then Masters becomes the next chase.
+                  is active. Target 25,000 points to keep Signature ({signatureRetainProgress.toFixed(0)}% complete); {formatNumber(signatureRetainGap)} more needed, then Masters becomes the next chase.
                 </>
               ) : (
                 <>
@@ -439,14 +420,8 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     transformOrigin: 'left center',
   },
-  currentPointMarkerHit: {
-    position: 'absolute',
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   currentPointMarker: {
+    position: 'absolute',
     width: 12,
     height: 12,
     borderRadius: 6,

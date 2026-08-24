@@ -1,4 +1,5 @@
 import type { Cruise, CasinoOffer } from '@/types/models';
+import { findSingleMaterialOffer } from './itineraryIntegrity';
 
 export interface HealingReport {
   cruisesHealed: number;
@@ -75,6 +76,19 @@ function buildCruiseKey(shipName: string, sailDate: string): string {
   return `${normalizeShipForMatching(shipName)}|${normalizeDateForMatching(sailDate)}`;
 }
 
+function hasKnownTextConflict(left: unknown, right: unknown): boolean {
+  const normalizedLeft = String(left ?? '').trim().toLowerCase();
+  const normalizedRight = String(right ?? '').trim().toLowerCase();
+  return Boolean(normalizedLeft && normalizedRight && normalizedLeft !== normalizedRight);
+}
+
+function hasKnownNumberConflict(left: unknown, right: unknown): boolean {
+  if (left === undefined || left === null || right === undefined || right === null) return false;
+  const leftNumber = Number(left);
+  const rightNumber = Number(right);
+  return Number.isFinite(leftNumber) && Number.isFinite(rightNumber) && leftNumber !== rightNumber;
+}
+
 export function healImportedData(
   cruises: Cruise[],
   offers: CasinoOffer[]
@@ -90,39 +104,30 @@ export function healImportedData(
     orphanedOffers: 0,
   };
 
-  const offerByCode = new Map<string, CasinoOffer>();
-  const offersByCruiseKey = new Map<string, CasinoOffer[]>();
+  const normalizeOfferCode = (value: unknown) => String(value ?? '').trim().toUpperCase();
+  const offersByCode = new Map<string, CasinoOffer[]>();
+  const offersByCruiseId = new Map<string, CasinoOffer[]>();
+  offers.forEach((offer) => {
+    const code = normalizeOfferCode(offer.offerCode);
+    if (code) offersByCode.set(code, [...(offersByCode.get(code) ?? []), offer]);
+    const linkedIds = new Set([offer.cruiseId, ...(offer.cruiseIds ?? [])].filter((id): id is string => Boolean(id)));
+    linkedIds.forEach((id) => offersByCruiseId.set(id, [...(offersByCruiseId.get(id) ?? []), offer]));
+  });
 
-  for (const offer of offers) {
-    if (offer.offerCode) {
-      offerByCode.set(offer.offerCode.trim().toUpperCase(), offer);
-    }
-    if (offer.shipName && offer.sailingDate) {
-      const key = buildCruiseKey(offer.shipName, offer.sailingDate);
-      if (!offersByCruiseKey.has(key)) offersByCruiseKey.set(key, []);
-      offersByCruiseKey.get(key)!.push(offer);
-    }
-  }
-
-  const cruisesByOfferCode = new Map<string, Cruise[]>();
-  for (const cruise of cruises) {
-    if (cruise.offerCode) {
-      const code = cruise.offerCode.trim().toUpperCase();
-      if (!cruisesByOfferCode.has(code)) cruisesByOfferCode.set(code, []);
-      cruisesByOfferCode.get(code)!.push(cruise);
-    }
-  }
+  const findIndexedMaterialOffer = (cruise: Cruise): CasinoOffer | undefined => {
+    const directLinks = offersByCruiseId.get(cruise.id) ?? [];
+    if (directLinks.length === 1) return directLinks[0];
+    if (directLinks.length > 1) return undefined;
+    return findSingleMaterialOffer(cruise, offersByCode.get(normalizeOfferCode(cruise.offerCode)) ?? []);
+  };
 
   const healedCruises = cruises.map(cruise => {
     const healed = { ...cruise };
     let wasHealed = false;
+    const bestOffer = findIndexedMaterialOffer(healed);
 
     if (!healed.offerCode || !healed.offerName) {
-      const cruiseKey = buildCruiseKey(healed.shipName, healed.sailDate);
-      const matchingOffers = offersByCruiseKey.get(cruiseKey);
-
-      if (matchingOffers && matchingOffers.length > 0) {
-        const bestOffer = matchingOffers[0];
+      if (bestOffer) {
 
         if (!healed.offerCode && bestOffer.offerCode) {
           const oldVal = healed.offerCode || '';
@@ -149,16 +154,6 @@ export function healImportedData(
         report.fieldsFixed.push({ entity: `cruise:${healed.id}`, field: 'offerCode', from: '', to: extracted });
         wasHealed = true;
         console.log(`[DataHealing] Cruise ${healed.shipName}: extracted offerCode from offerName -> ${extracted}`);
-      }
-    }
-
-    if (!healed.offerName && healed.offerCode) {
-      const offer = offerByCode.get(healed.offerCode.trim().toUpperCase());
-      if (offer && (offer.offerName || offer.title)) {
-        healed.offerName = offer.offerName || offer.title;
-        report.fieldsFixed.push({ entity: `cruise:${healed.id}`, field: 'offerName', from: '', to: healed.offerName || '' });
-        wasHealed = true;
-        console.log(`[DataHealing] Cruise ${healed.shipName}: filled offerName from offer registry -> ${healed.offerName}`);
       }
     }
 
@@ -198,10 +193,9 @@ export function healImportedData(
     }
 
     if (!healed.offerExpiry) {
-      const cruiseKey = buildCruiseKey(healed.shipName, healed.sailDate);
-      const matchingOffers = offersByCruiseKey.get(cruiseKey);
-      if (matchingOffers && matchingOffers.length > 0) {
-        const expiry = matchingOffers[0].expiryDate || matchingOffers[0].expires || matchingOffers[0].offerExpiryDate;
+      const matchingOffer = bestOffer;
+      if (matchingOffer) {
+        const expiry = matchingOffer.expiryDate || matchingOffer.expires || matchingOffer.offerExpiryDate;
         if (expiry) {
           healed.offerExpiry = expiry;
           report.fieldsFixed.push({ entity: `cruise:${healed.id}`, field: 'offerExpiry', from: '', to: expiry });
@@ -211,10 +205,8 @@ export function healImportedData(
     }
 
     if (!healed.interiorPrice && !healed.oceanviewPrice && !healed.balconyPrice && !healed.suitePrice) {
-      const cruiseKey = buildCruiseKey(healed.shipName, healed.sailDate);
-      const matchingOffers = offersByCruiseKey.get(cruiseKey);
-      if (matchingOffers && matchingOffers.length > 0) {
-        const o = matchingOffers[0];
+      const o = bestOffer;
+      if (o) {
         if (o.interiorPrice) healed.interiorPrice = o.interiorPrice;
         if (o.oceanviewPrice) healed.oceanviewPrice = o.oceanviewPrice;
         if (o.balconyPrice) healed.balconyPrice = o.balconyPrice;
@@ -230,6 +222,8 @@ export function healImportedData(
     if (wasHealed) report.cruisesHealed++;
     return healed;
   });
+
+  const healedCruisesById = new Map(healedCruises.map((cruise) => [cruise.id, cruise]));
 
   const healedOffers = offers.map(offer => {
     const healed = { ...offer };
@@ -248,25 +242,26 @@ export function healImportedData(
     }
 
     if (!healed.offerName || healed.offerName === healed.offerCode) {
-      if (healed.offerCode) {
-        const matchingCruises = cruisesByOfferCode.get(healed.offerCode.trim().toUpperCase());
-        if (matchingCruises && matchingCruises.length > 0) {
-          const c = matchingCruises[0];
-          if (c.offerName && c.offerName !== c.offerCode) {
-            healed.offerName = c.offerName;
-            healed.title = c.offerName;
-            report.fieldsFixed.push({ entity: `offer:${healed.id}`, field: 'offerName', from: '', to: c.offerName });
-            wasHealed = true;
-            console.log(`[DataHealing] Offer ${healed.offerCode}: filled offerName from cruise -> ${c.offerName}`);
-          }
-        }
+      const explicitlyLinkedCruises = healed.cruiseIds?.length
+        ? healed.cruiseIds.map((id) => healedCruisesById.get(id)).filter((cruise): cruise is Cruise => Boolean(cruise))
+        : [];
+      const candidateNames = Array.from(new Set(explicitlyLinkedCruises
+        .map((cruise) => cruise.offerName)
+        .filter((name): name is string => Boolean(name && name !== healed.offerCode))));
+      if (candidateNames.length === 1) {
+        healed.offerName = candidateNames[0];
+        healed.title = candidateNames[0];
+        report.fieldsFixed.push({ entity: `offer:${healed.id}`, field: 'offerName', from: '', to: candidateNames[0] });
+        wasHealed = true;
+        console.log(`[DataHealing] Offer ${healed.offerCode}: filled offerName from explicitly linked cruise -> ${candidateNames[0]}`);
       }
     }
 
     if (!healed.shipName || !healed.sailingDate) {
       if (healed.cruiseIds && healed.cruiseIds.length > 0) {
-        const linkedCruise = healedCruises.find(c => healed.cruiseIds?.includes(c.id));
-        if (linkedCruise) {
+        const linkedCruises = healed.cruiseIds.map((id) => healedCruisesById.get(id)).filter((cruise): cruise is Cruise => Boolean(cruise));
+        if (linkedCruises.length === 1) {
+          const linkedCruise = linkedCruises[0];
           if (!healed.shipName && linkedCruise.shipName) {
             healed.shipName = linkedCruise.shipName;
             wasHealed = true;
@@ -280,19 +275,19 @@ export function healImportedData(
     }
 
     if (!healed.interiorPrice && !healed.oceanviewPrice && !healed.balconyPrice && !healed.suitePrice) {
-      if (healed.offerCode) {
-        const matchingCruises = cruisesByOfferCode.get(healed.offerCode.trim().toUpperCase());
-        if (matchingCruises && matchingCruises.length > 0) {
-          const c = matchingCruises[0];
-          if (c.interiorPrice) healed.interiorPrice = c.interiorPrice;
-          if (c.oceanviewPrice) healed.oceanviewPrice = c.oceanviewPrice;
-          if (c.balconyPrice) healed.balconyPrice = c.balconyPrice;
-          if (c.suitePrice) healed.suitePrice = c.suitePrice;
-          if (c.taxes) healed.taxesFees = c.taxes;
-          if (healed.interiorPrice || healed.balconyPrice) {
-            wasHealed = true;
-            console.log(`[DataHealing] Offer ${healed.offerCode}: filled pricing from cruise`);
-          }
+      const linkedCruises = healed.cruiseIds?.length
+        ? healed.cruiseIds.map((id) => healedCruisesById.get(id)).filter((cruise): cruise is Cruise => Boolean(cruise))
+        : [];
+      if (linkedCruises.length === 1) {
+        const linkedCruise = linkedCruises[0];
+        if (linkedCruise.interiorPrice) healed.interiorPrice = linkedCruise.interiorPrice;
+        if (linkedCruise.oceanviewPrice) healed.oceanviewPrice = linkedCruise.oceanviewPrice;
+        if (linkedCruise.balconyPrice) healed.balconyPrice = linkedCruise.balconyPrice;
+        if (linkedCruise.suitePrice) healed.suitePrice = linkedCruise.suitePrice;
+        if (linkedCruise.taxes) healed.taxesFees = linkedCruise.taxes;
+        if (healed.interiorPrice || healed.balconyPrice) {
+          wasHealed = true;
+          console.log(`[DataHealing] Offer ${healed.offerCode}: filled pricing from explicitly linked cruise`);
         }
       }
     }

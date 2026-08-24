@@ -86,9 +86,7 @@ export const SEA_PASS_LEGAL_LINES = [
 
 export const SEA_PASS_PREVIEW_BACKGROUND = '#EFF3F8';
 export const SEA_PASS_EXPORT_BACKGROUND = '#FFFFFF';
-// v_seapass_font_unify: Helvetica Neue is the closest native match to the
-// approved shell's own typeface; Arial is kept only as a distant fallback.
-export const SEA_PASS_FONT_STACK = "Helvetica Neue, Helvetica, Arial, sans-serif";
+export const SEA_PASS_FONT_STACK = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 export const SEA_PASS_APPROVED_SCREENSHOT_SOURCE_URL = 'https://r2-pub.rork.com/attachments/vvcelze4prvyhmkje7pah.png';
 export const SEA_PASS_APPROVED_SCREENSHOT_CORS_PROXY_URL = 'https://images.weserv.nl/?url=r2-pub.rork.com/attachments/vvcelze4prvyhmkje7pah.png&output=png';
 
@@ -154,12 +152,13 @@ export const BOARDING_KEY_RING_PATH = 'M42 76C22 76 6 60 6 40C6 20 22 4 42 4C61 
 
 const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDynamicOverlayDefinition> = {
   time: {
-    x: 644,
+    x: 956,
     y: 106,
     fill: '#FFFFFF',
     fontSize: 46,
     fontWeight: '400',
     letterSpacing: -1.1,
+    textAnchor: 'end',
     mask: {
       x: 632,
       y: 36,
@@ -172,35 +171,22 @@ const SEA_PASS_DYNAMIC_OVERLAY_DEFINITIONS: Record<SeaPassOverlayKey, SeaPassDyn
     },
   },
   date: {
-    x: 644,
-    y: 159,
+    x: 958,
+    y: 178,
     fill: '#FFFFFF',
-    fontSize: 46,
-    fontWeight: '400',
-    letterSpacing: -1.1,
+    fontSize: 62,
+    fontWeight: '300',
+    letterSpacing: -1.6,
+    textAnchor: 'end',
     mask: {
-      // v_seapass_date_gap_fix: the date erase/redraw rectangle used to start
-      // at y=104, which was ABOVE the time field's own mask bottom (y=120).
-      // That 16px overlap meant the date's background repaint ran back over
-      // the very bottom edge of the freshly-drawn time text, visually
-      // "biting into" the bottom of "10:30 am". Starting the date mask right
-      // at the time mask's bottom removes the overlap entirely while still
-      // fully covering the date glyph's ascender/descender bounds.
-      //
-      // v_seapass_line_spacing_tighten: the date text baseline was then moved
-      // up from y=178 to y=159 to close the overly loose gap between the two
-      // lines (previously ~72px baseline-to-baseline, noticeably more than a
-      // normal single-line gap). y=159 is the tightest position that keeps the
-      // date glyph's ascender from rising above the time mask's bottom edge
-      // (y=120), so the two lines now sit close together without touching.
       x: 632,
-      y: 120,
+      y: 104,
       width: 336,
-      height: 112,
+      height: 128,
       fill: '#6B459A',
       radius: 0,
       sampleX: 414,
-      sampleY: 190,
+      sampleY: 170,
     },
   },
   deck: {
@@ -397,12 +383,12 @@ function getDefaultOverlayValue(key: SeaPassOverlayKey): string {
 }
 
 function getSeaPassOverlayEraseMode(key: SeaPassOverlayKey): SeaPassOverlayEraseMode {
-  // v942: use solid field masks for every editable text overlay.
-  // The previous text-erasing mask could leave duplicated/garbled glyphs when
-  // iOS/WebKit substituted fonts during SVG -> PNG/PDF export. A plain rect
-  // mask is deterministic and keeps preview/PNG/PDF words readable.
   if (key === 'terminal') {
     return 'none';
+  }
+
+  if (key === 'time' || key === 'date' || key === 'port') {
+    return 'text';
   }
 
   return 'rect';
@@ -468,21 +454,15 @@ function getSeaPassTextEraseOffsets(key: SeaPassOverlayKey): { x: number; y: num
 }
 
 function shouldRenderDynamicOverlay(key: SeaPassOverlayKey, value: string, data: SeaPassWebPassData): boolean {
+  if (key === 'barcodeCaption') {
+    return value !== getSeaPassBarcodeCaption(SEA_PASS_DEFAULTS);
+  }
+
   if (key === 'terminal') {
     return shouldShowSeaPassTerminal(data) && value.trim().length > 0;
   }
 
-  // v_seapass_font_unify: this used to only draw the overlay when a field's
-  // value differed from the hardcoded SEA_PASS_DEFAULTS. That meant any field
-  // left at its default (e.g. reservation #, port) kept showing the ORIGINAL
-  // baked-in text from the approved shell image (its true design font), while
-  // any edited field (stateroom, muster, ship, etc.) got redrawn with this
-  // module's overlay font -- producing a visible font/weight mismatch between
-  // edited and untouched fields on the very same card. Always rendering every
-  // field through the identical overlay path guarantees every value on the
-  // card uses the exact same font, regardless of whether it was changed from
-  // the default.
-  return true;
+  return value !== SEA_PASS_DEFAULTS[key];
 }
 
 async function fetchImageAsDataUrl(url: string): Promise<string> {
@@ -580,7 +560,7 @@ function buildSeaPassOverlaySvgMarkup(
       const mask = overlay.mask;
       const clipPathId = `overlay-clip-${overlay.key}`;
       const textAnchor = overlay.textAnchor ? ` text-anchor="${overlay.textAnchor}"` : '';
-      const letterSpacing = ''; // v942: no SVG letter-spacing; prevents garbled glyph rendering on iOS/PDF
+      const letterSpacing = typeof overlay.letterSpacing === 'number' ? ` letter-spacing="${overlay.letterSpacing}"` : '';
       const value = escapeXml(getDynamicOverlayValue(overlay.key, data, barcodeCaption));
       const eraseMode = getSeaPassOverlayEraseMode(overlay.key);
       const hasSampleBackground = eraseMode === 'rect' && typeof mask.sampleX === 'number' && typeof mask.sampleY === 'number';
@@ -591,7 +571,7 @@ function buildSeaPassOverlaySvgMarkup(
       if (eraseMode === 'text') {
         const defaultValue = escapeXml(getDefaultOverlayValue(overlay.key));
         const defaultTextAnchor = definition.textAnchor ? ` text-anchor="${definition.textAnchor}"` : '';
-        const defaultLetterSpacing = ''; // v942: no SVG letter-spacing in erase masks
+        const defaultLetterSpacing = typeof definition.letterSpacing === 'number' ? ` letter-spacing="${definition.letterSpacing}"` : '';
         const eraseStrokeWidth = getSeaPassTextEraseStrokeWidth(overlay.key);
         const eraseTextMarkup = getSeaPassTextEraseOffsets(overlay.key)
           .map((offset) => `<text x="${definition.x + offset.x}" y="${definition.y + offset.y}"${defaultTextAnchor}${defaultLetterSpacing} font-family="${SEA_PASS_FONT_STACK}" font-size="${definition.fontSize}" font-weight="${definition.fontWeight}" fill="{fill}" stroke="{fill}" stroke-width="${eraseStrokeWidth}" stroke-linecap="round" stroke-linejoin="round">${defaultValue}</text>`)

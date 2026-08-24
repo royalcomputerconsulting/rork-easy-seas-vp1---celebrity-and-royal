@@ -1,8 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
+import type { LoyaltyCardBrand } from '@/lib/loyalty/loyaltyCardBrandPreference';
 
-export type BrandType = 'royal' | 'celebrity' | 'silversea' | 'carnival';
+export type BrandType = LoyaltyCardBrand;
 
 interface BrandToggleProps {
   activeBrand: BrandType;
@@ -12,7 +13,6 @@ interface BrandToggleProps {
   customFourthLabel?: string;
   customFourthActive?: boolean;
   onCustomFourthPress?: () => void;
-  noActiveSelection?: boolean;
 }
 
 export function BrandToggle({
@@ -23,7 +23,6 @@ export function BrandToggle({
   customFourthLabel,
   customFourthActive = false,
   onCustomFourthPress,
-  noActiveSelection = false,
 }: BrandToggleProps) {
   return (
     <View style={styles.container}>
@@ -32,7 +31,7 @@ export function BrandToggle({
           style={[
             styles.toggleButton,
             styles.leftButton,
-            !noActiveSelection && !customFourthActive && activeBrand === 'royal' && styles.activeButton,
+            !customFourthActive && activeBrand === 'royal' && styles.activeButton,
           ]}
           onPress={() => onToggle('royal')}
           activeOpacity={0.7}
@@ -40,7 +39,7 @@ export function BrandToggle({
           <Text
             style={[
               styles.toggleText,
-              !noActiveSelection && !customFourthActive && activeBrand === 'royal' && styles.activeText,
+              !customFourthActive && activeBrand === 'royal' && styles.activeText,
             ]}
             numberOfLines={1}
           >
@@ -52,7 +51,7 @@ export function BrandToggle({
           style={[
             styles.toggleButton,
             styles.middleButton,
-            !noActiveSelection && !customFourthActive && activeBrand === 'celebrity' && styles.activeButton,
+            !customFourthActive && activeBrand === 'celebrity' && styles.activeButton,
           ]}
           onPress={() => onToggle('celebrity')}
           activeOpacity={0.7}
@@ -60,7 +59,7 @@ export function BrandToggle({
           <Text
             style={[
               styles.toggleText,
-              !noActiveSelection && !customFourthActive && activeBrand === 'celebrity' && styles.activeText,
+              !customFourthActive && activeBrand === 'celebrity' && styles.activeText,
             ]}
             numberOfLines={1}
           >
@@ -73,7 +72,7 @@ export function BrandToggle({
             style={[
               styles.toggleButton,
               styles.middleButton,
-              !noActiveSelection && !customFourthActive && activeBrand === 'silversea' && styles.activeButton,
+              !customFourthActive && activeBrand === 'silversea' && styles.activeButton,
             ]}
             onPress={() => onToggle('silversea')}
             activeOpacity={0.7}
@@ -81,7 +80,7 @@ export function BrandToggle({
             <Text
               style={[
                 styles.toggleText,
-                !noActiveSelection && !customFourthActive && activeBrand === 'silversea' && styles.activeText,
+                !customFourthActive && activeBrand === 'silversea' && styles.activeText,
               ]}
               numberOfLines={1}
             >
@@ -115,7 +114,7 @@ export function BrandToggle({
             style={[
               styles.toggleButton,
               styles.rightButton,
-              !noActiveSelection && activeBrand === 'carnival' && styles.carnivalActiveButton,
+              activeBrand === 'carnival' && styles.carnivalActiveButton,
             ]}
             onPress={() => onToggle('carnival')}
             activeOpacity={0.7}
@@ -123,7 +122,7 @@ export function BrandToggle({
             <Text
               style={[
                 styles.toggleText,
-                !noActiveSelection && activeBrand === 'carnival' && styles.activeText,
+                activeBrand === 'carnival' && styles.activeText,
               ]}
               numberOfLines={1}
             >

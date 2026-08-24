@@ -1,4 +1,6 @@
 import type { BookedCruise, CalendarEvent, CasinoOffer, Cruise } from '@/types/models';
+import { getRecordAuthority, isAtLeastAsAuthoritative, isRecordIncomplete } from './dataAuthority';
+import { toCalendarDateOnly } from './date';
 
 function normalizeKeyPart(value: unknown): string {
   if (value === null || value === undefined) return '';
@@ -10,11 +12,32 @@ function normalizeOfferCode(value: unknown): string {
   return String(value).trim().toUpperCase();
 }
 
+function normalizeProviderOfferInstance(value: {
+  playerOfferId?: string;
+  offerInstanceId?: string;
+  carnivalOfferId?: string;
+}): string {
+  return [value.playerOfferId, value.offerInstanceId, value.carnivalOfferId]
+    .map((candidate) => normalizeKeyPart(candidate))
+    .find(Boolean) ?? '';
+}
+
+function normalizeMaterialList(value: unknown): string {
+  if (!Array.isArray(value)) return normalizeKeyPart(value);
+  return value.map((item) => normalizeKeyPart(item)).filter(Boolean).join('>');
+}
+
 function normalizeDateKey(value: unknown): string {
   const normalized = normalizeKeyPart(value);
   if (!normalized) return '';
 
+  const calendarDate = toCalendarDateOnly(normalized);
+  if (calendarDate) return calendarDate;
+
   const dateOnly = normalized.includes('t') ? normalized.split('t')[0] : normalized;
+  if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(dateOnly) || /^\d{8}$/.test(dateOnly)) {
+    return '';
+  }
   const compactMatch = dateOnly.match(/^(\d{4})(\d{2})(\d{2})$/);
   if (compactMatch) {
     const [, year, month, day] = compactMatch;
@@ -37,7 +60,7 @@ function normalizeDateKey(value: unknown): string {
   return dateOnly;
 }
 
-function getSourceKey(value: { cruiseSource?: Cruise['cruiseSource']; offerSource?: CasinoOffer['offerSource']; brand?: string }): string {
+function getSourceKey(value: { cruiseSource?: Cruise['cruiseSource']; offerSource?: string; brand?: string }): string {
   return normalizeKeyPart(value.brand ?? value.cruiseSource ?? value.offerSource);
 }
 
@@ -48,7 +71,7 @@ function getOwnerKey(value: { ownerProfileId?: string; sourceEmail?: string; dat
   ].join('|');
 }
 
-function hasOwnerOrSource(value: { ownerProfileId?: string; sourceEmail?: string; dataOwnerEmail?: string; dataOwnerScopeId?: string; cruiseSource?: Cruise['cruiseSource']; brand?: string }): boolean {
+function hasOwnerOrSource(value: { ownerProfileId?: string; sourceEmail?: string; dataOwnerEmail?: string; dataOwnerScopeId?: string; cruiseSource?: Cruise['cruiseSource']; offerSource?: string; brand?: string }): boolean {
   return Boolean(
     normalizeKeyPart(value.ownerProfileId ?? value.dataOwnerScopeId) ||
     normalizeKeyPart(value.sourceEmail ?? value.dataOwnerEmail) ||
@@ -56,48 +79,16 @@ function hasOwnerOrSource(value: { ownerProfileId?: string; sourceEmail?: string
   );
 }
 
-function isPlaceholderBookedIdentifier(value: unknown): boolean {
-  const normalized = normalizeKeyPart(value);
-  if (!normalized) return true;
-  // v13.1: earlier this only matched a bare `rc_123` / `booking_1` shape. The app's own
-  // legacy synthetic-ID generator (`rc_${Date.now()}_${randomSuffix}`) always appends a
-  // non-numeric random suffix after the timestamp, which this pattern did NOT match - so
-  // those generated IDs were being treated as real, stable reservation numbers instead of
-  // placeholders. That let two extractions of the exact same cruise (each minting its own
-  // fresh random rc_ id) look like two distinct bookings forever, and let generated IDs leak
-  // into UI list keys as if they were authoritative, non-colliding identifiers. Matching any
-  // trailing suffix (like bookedExtractionIdentity.ts's PLACEHOLDER_BOOKING_ID already does)
-  // closes that gap.
-  return /^(?:unconfirmed:|(?:booking|rc|cruise|row|temp(?:orary)?|unknown)[_:-]?\d*(?:[_:-].*)?)$/i.test(normalized);
-}
-
 function getBookedReservationKey(cruise: BookedCruise): string {
-  const candidates = [cruise.reservationNumber, cruise.bookingId, cruise.bwoNumber];
-  for (const candidate of candidates) {
-    const normalized = normalizeKeyPart(candidate);
-    if (normalized && !isPlaceholderBookedIdentifier(normalized)) return normalized;
-  }
-  return '';
+  // Provider booking IDs are the strongest reservation identity. Older EasySeas
+  // builds sometimes generated a sailing-based reservationNumber before the
+  // Royal booking ID arrived; preferring that synthetic value can collapse two
+  // real reservations on the same sailing (for example, two cabins booked on
+  // the same Harmony departure).
+  return normalizeKeyPart(cruise.bookingId ?? cruise.reservationNumber ?? cruise.bwoNumber);
 }
 
-function getBookedCabinKey(cruise: BookedCruise): string {
-  return normalizeKeyPart(
-    cruise.cabinNumber ??
-    cruise.stateroomNumber ??
-    cruise.cabinCategory ??
-    cruise.stateroomCategoryCode ??
-    cruise.cabinType
-  );
-}
-
-function getBookedGuestKey(cruise: BookedCruise): string {
-  const guests = Array.isArray(cruise.guestNames)
-    ? cruise.guestNames.map(normalizeKeyPart).filter(Boolean).sort()
-    : [];
-  return guests.join('|');
-}
-
-function getBookedSailingKey(cruise: BookedCruise, includeStrongDiscriminators: boolean): string {
+function getBookedSailingKey(cruise: BookedCruise, includeOwnerAndSource: boolean): string {
   const ship = normalizeKeyPart(cruise.shipName);
   const sailDate = normalizeDateKey(cruise.sailDate);
   const returnDate = normalizeDateKey(cruise.returnDate);
@@ -106,27 +97,12 @@ function getBookedSailingKey(cruise: BookedCruise, includeStrongDiscriminators: 
     return '';
   }
 
-  if (!includeStrongDiscriminators) {
-    return `sailing:${[getSourceKey(cruise), ship, sailDate].join('|')}`;
+  const baseParts = includeOwnerAndSource ? [ship, sailDate, returnDate] : [ship, sailDate];
+  if (!includeOwnerAndSource) {
+    return `sailing:${baseParts.join('|')}`;
   }
 
-  // Booked/completed cruises are shared travel inventory, so owner/profile is never part
-  // of their identity. Cabin and guest signatures prevent one couple/room from collapsing
-  // into another when a reservation number is omitted; otherwise the stable record ID is used.
-  const cabin = getBookedCabinKey(cruise);
-  const guests = getBookedGuestKey(cruise);
-  if (!cabin && !guests) {
-    return '';
-  }
-
-  return `sailing:${[
-    getSourceKey(cruise),
-    ship,
-    sailDate,
-    returnDate,
-    cabin,
-    guests,
-  ].join('|')}`;
+  return `sailing:${[getOwnerKey(cruise), getSourceKey(cruise), ...baseParts].join('|')}`;
 }
 
 function isMeaningfulValue(value: unknown): boolean {
@@ -138,13 +114,35 @@ function isMeaningfulValue(value: unknown): boolean {
 
 function mergeRecordPreferIncoming<T extends Record<string, unknown>>(existing: T, incoming: T): T {
   const merged: Record<string, unknown> = { ...existing };
+  const existingAuthority = getRecordAuthority(existing);
+  const incomingAuthority = getRecordAuthority(incoming);
+  const incomingCanReplaceExisting =
+    isAtLeastAsAuthoritative(incomingAuthority, existingAuthority) && !isRecordIncomplete(incoming);
   Object.entries(incoming).forEach(([key, value]) => {
-    if (isMeaningfulValue(value)) {
+    const preservesExisting = (CRITICAL_RECONCILIATION_FIELDS.has(key) || AUTHORITY_CONTROLLED_FIELDS.has(key))
+      && isMeaningfulValue(existing[key])
+      && !incomingCanReplaceExisting;
+    if (isMeaningfulValue(value) && !preservesExisting) {
       merged[key] = value;
     }
   });
   return merged as T;
 }
+
+const CRITICAL_RECONCILIATION_FIELDS = new Set([
+  'sailDate', 'returnDate', 'nights', 'shipName', 'departurePort', 'destination',
+  'itinerary', 'ports', 'portsAndTimes', 'reservationNumber', 'bookingId',
+  'offerCode', 'roomType', 'cabinType', 'guests', 'freePlay', 'freeOBC',
+  'tradeInValue', 'interiorPrice', 'oceanviewPrice', 'balconyPrice', 'suitePrice',
+]);
+
+// Provenance and validation must travel with the authoritative record. A lower
+// authority response cannot relabel a verified record while its core fields remain.
+const AUTHORITY_CONTROLLED_FIELDS = new Set([
+  'sourceAuthority', 'sourceEvidence', 'dataConfidence', 'validationStatus',
+  'isFallback', 'isStale', 'sourceProvider', 'sourceEndpoint', 'sourceRecordId',
+  'sourceRetrievedAt', 'parserVersion', 'syncRunId',
+]);
 
 function shouldMergeBookedByLooseSailing(existing: BookedCruise, incoming: BookedCruise): boolean {
   const existingLooseSailing = getBookedSailingKey(existing, false);
@@ -158,49 +156,49 @@ function shouldMergeBookedByLooseSailing(existing: BookedCruise, incoming: Booke
   if (existingReservation && incomingReservation && existingReservation !== incomingReservation) {
     return false;
   }
+  const sameOwner = getOwnerKey(existing) === getOwnerKey(incoming);
+  const oneRecordIsIncomplete =
+    !existingReservation ||
+    !incomingReservation ||
+    !hasOwnerOrSource(existing) ||
+    !hasOwnerOrSource(incoming);
 
-  const existingCabin = getBookedCabinKey(existing);
-  const incomingCabin = getBookedCabinKey(incoming);
-  if (existingCabin && incomingCabin && existingCabin !== incomingCabin) {
-    return false;
+  return (sameOwner && (!existingReservation || !incomingReservation)) || oneRecordIsIncomplete;
+}
+
+function canMergeBookedRecords(existing: BookedCruise, incoming: BookedCruise): boolean {
+  const existingReservation = getBookedReservationKey(existing);
+  const incomingReservation = getBookedReservationKey(incoming);
+
+  // Never use a shared sailing, owner, or generated row ID to combine two
+  // provider-confirmed reservations. Multiple cabins commonly share a ship and
+  // departure date and must remain independently actionable.
+  if (existingReservation && incomingReservation) {
+    return existingReservation === incomingReservation;
   }
 
-  const existingGuests = getBookedGuestKey(existing);
-  const incomingGuests = getBookedGuestKey(incoming);
-  if (existingGuests && incomingGuests && existingGuests !== incomingGuests) {
-    return false;
-  }
-
-  if (existingReservation || incomingReservation) {
-    // One payload may omit a reservation number that another payload supplies. Only merge
-    // that partial row when a strong cabin or guest signature agrees; ship/date alone is
-    // never sufficient proof.
-    return Boolean(
-      (existingCabin && incomingCabin && existingCabin === incomingCabin) ||
-      (existingGuests && incomingGuests && existingGuests === incomingGuests)
-    );
-  }
-
-  // With no reservation numbers, require a strong matching discriminator. Exact IDs and
-  // strict identities are handled before this loose-sailing fallback.
-  return Boolean(
-    (existingCabin && incomingCabin && existingCabin === incomingCabin) ||
-    (existingGuests && incomingGuests && existingGuests === incomingGuests)
-  );
+  return true;
 }
 
 export function getCruiseIdentityKey(cruise: Cruise): string {
   const naturalParts = [
     getOwnerKey(cruise),
     getSourceKey(cruise),
+    normalizeProviderOfferInstance(cruise),
     normalizeKeyPart(cruise.shipName),
     normalizeDateKey(cruise.sailDate),
     normalizeDateKey(cruise.returnDate),
     normalizeOfferCode(cruise.offerCode),
     normalizeKeyPart(cruise.cabinType),
+    normalizeKeyPart(cruise.guests),
+    normalizeKeyPart(cruise.guestsInfo),
+    normalizeKeyPart(cruise.offerCategory ?? cruise.category),
+    normalizeKeyPart(cruise.itineraryName ?? cruise.destination),
+    normalizeMaterialList(cruise.ports),
+    normalizeMaterialList(cruise.perks),
   ];
 
-  if (naturalParts[2] && naturalParts[3]) {
+  if (naturalParts[3] && naturalParts[4]) {
     return `sailing:${naturalParts.join('|')}`;
   }
 
@@ -209,10 +207,11 @@ export function getCruiseIdentityKey(cruise: Cruise): string {
 }
 
 export function getBookedCruiseIdentityKey(cruise: BookedCruise): string {
+  const ownerKey = getOwnerKey(cruise);
   const sourceKey = getSourceKey(cruise);
   const reservation = getBookedReservationKey(cruise);
   if (reservation) {
-    return `reservation:${sourceKey}|${reservation}`;
+    return `reservation:${ownerKey}|${sourceKey}|${reservation}`;
   }
 
   const sailingKey = getBookedSailingKey(cruise, true);
@@ -220,24 +219,30 @@ export function getBookedCruiseIdentityKey(cruise: BookedCruise): string {
     return sailingKey;
   }
 
-  // Without a reservation, cabin, or guest signature, ship/date is not unique enough to
-  // merge safely. Prefer the stable record ID so two real same-date trips cannot disappear.
   const id = normalizeKeyPart(cruise.id);
-  return id ? `id:${sourceKey}|${id}` : `payload:${sourceKey}|${normalizeKeyPart(JSON.stringify(cruise))}`;
+  return id ? `id:${ownerKey}|${sourceKey}|${id}` : `payload:${normalizeKeyPart(JSON.stringify(cruise))}`;
 }
 
 export function getOfferIdentityKey(offer: CasinoOffer): string {
   const naturalParts = [
     getOwnerKey(offer),
     getSourceKey(offer),
+    normalizeProviderOfferInstance(offer),
     normalizeOfferCode(offer.offerCode),
     normalizeKeyPart(offer.shipName),
     normalizeDateKey(offer.sailingDate),
     normalizeKeyPart(offer.roomType),
     normalizeKeyPart(offer.offerName ?? offer.title),
+    normalizeKeyPart(offer.guests),
+    normalizeKeyPart(offer.guestsInfo),
+    normalizeKeyPart(offer.offerType),
+    normalizeKeyPart(offer.category),
+    normalizeKeyPart(offer.itineraryName),
+    normalizeMaterialList(offer.ports),
+    normalizeMaterialList(offer.perks),
   ];
 
-  if (naturalParts[2] || (naturalParts[3] && naturalParts[4])) {
+  if (naturalParts[3] || (naturalParts[4] && naturalParts[5])) {
     return `offer:${naturalParts.join('|')}`;
   }
 
@@ -268,13 +273,19 @@ export function getCalendarEventIdentityKey(event: CalendarEvent): string {
 
 export function dedupeByIdentity<T>(items: T[], getKey: (item: T) => string, label: string): T[] {
   const keyedItems = new Map<string, T>();
+  let duplicateCount = 0;
+  const duplicateSamples: string[] = [];
   items.forEach((item) => {
     const key = getKey(item);
     if (keyedItems.has(key)) {
-      console.log('[DataIdentity] Deduped duplicate record:', { label, key });
+      duplicateCount += 1;
+      if (duplicateSamples.length < 3) duplicateSamples.push(key);
     }
     keyedItems.set(key, item);
   });
+  if (duplicateCount > 0) {
+    console.log('[DataIdentity] Deduped records:', { label, duplicateCount, samples: duplicateSamples });
+  }
   return Array.from(keyedItems.values());
 }
 
@@ -282,68 +293,47 @@ export function dedupeCruises(items: Cruise[], label = 'cruises'): Cruise[] {
   return dedupeByIdentity(items, getCruiseIdentityKey, label);
 }
 
-export interface BookedCruiseDedupeLedgerEntry {
-  inputIndex: number;
-  inputIdentity: string;
-  outputIndex: number;
-  outputIdentity: string;
-  action: 'kept' | 'merged';
-  reason: 'new' | 'exact_identity' | 'stable_id' | 'reservation' | 'strict_sailing' | 'loose_sailing';
-  reservationNumber?: string;
-  shipName?: string;
-  sailDate?: string;
-}
-
-export interface BookedCruiseDedupeResult {
-  cruises: BookedCruise[];
-  ledger: BookedCruiseDedupeLedgerEntry[];
-}
-
-/**
- * Deduplicates booked/history rows while retaining a complete input-to-output ledger.
- *
- * A row that gains a reservation number from a more complete duplicate legitimately changes
- * identity during the merge. The ledger records its final output index/identity so persistence
- * validation can prove that the row was represented without falsely treating that identity
- * upgrade as data loss.
- */
-export function dedupeBookedCruisesWithLedger(
-  items: BookedCruise[],
-  label = 'booked cruises',
-  mergeFn: (existing: BookedCruise, incoming: BookedCruise) => BookedCruise = (existing, incoming) =>
-    mergeRecordPreferIncoming(
-      existing as unknown as Record<string, unknown>,
-      incoming as unknown as Record<string, unknown>,
-    ) as unknown as BookedCruise,
-): BookedCruiseDedupeResult {
+export function dedupeBookedCruises(items: BookedCruise[], label = 'booked cruises'): BookedCruise[] {
   const result: BookedCruise[] = [];
-  const ledger: BookedCruiseDedupeLedgerEntry[] = [];
   const identityToIndex = new Map<string, number>();
   const idToIndex = new Map<string, number>();
   const reservationToIndex = new Map<string, number>();
-  const strictSailingToIndex = new Map<string, number>();
+  const strictSailingToIndexes = new Map<string, number[]>();
   const looseSailingToIndexes = new Map<string, number[]>();
+  let duplicateCount = 0;
+  const duplicateSamples: string[] = [];
 
   const rememberIndexes = (cruise: BookedCruise, index: number) => {
     identityToIndex.set(getBookedCruiseIdentityKey(cruise), index);
 
     const id = normalizeKeyPart(cruise.id);
-    if (id) idToIndex.set(id, index);
+    if (id) {
+      idToIndex.set(id, index);
+    }
 
     const reservation = getBookedReservationKey(cruise);
-    if (reservation) reservationToIndex.set(reservation, index);
+    if (reservation) {
+      reservationToIndex.set(reservation, index);
+    }
 
     const strictSailing = getBookedSailingKey(cruise, true);
-    if (strictSailing) strictSailingToIndex.set(strictSailing, index);
+    if (strictSailing) {
+      const indexes = strictSailingToIndexes.get(strictSailing) ?? [];
+      if (!indexes.includes(index)) {
+        strictSailingToIndexes.set(strictSailing, [...indexes, index]);
+      }
+    }
 
     const looseSailing = getBookedSailingKey(cruise, false);
     if (looseSailing) {
       const indexes = looseSailingToIndexes.get(looseSailing) ?? [];
-      if (!indexes.includes(index)) looseSailingToIndexes.set(looseSailing, [...indexes, index]);
+      if (!indexes.includes(index)) {
+        looseSailingToIndexes.set(looseSailing, [...indexes, index]);
+      }
     }
   };
 
-  items.forEach((item, inputIndex) => {
+  items.forEach((item) => {
     const identityKey = getBookedCruiseIdentityKey(item);
     const idKey = normalizeKeyPart(item.id);
     const reservationKey = getBookedReservationKey(item);
@@ -351,95 +341,50 @@ export function dedupeBookedCruisesWithLedger(
     const looseSailingKey = getBookedSailingKey(item, false);
 
     let matchedIndex = identityToIndex.get(identityKey);
-    let matchReason: BookedCruiseDedupeLedgerEntry['reason'] = matchedIndex !== undefined ? 'exact_identity' : 'new';
+
+    if (matchedIndex !== undefined && !canMergeBookedRecords(result[matchedIndex], item)) {
+      matchedIndex = undefined;
+    }
 
     if (matchedIndex === undefined && idKey) {
-      const idCandidate = idToIndex.get(idKey);
-      if (idCandidate !== undefined) {
-        const candidateReservation = getBookedReservationKey(result[idCandidate]);
-        // A recycled/stale record ID can never override two different real reservation numbers.
-        if (!(candidateReservation && reservationKey && candidateReservation !== reservationKey)) {
-          matchedIndex = idCandidate;
-          matchReason = 'stable_id';
-        }
+      const idMatch = idToIndex.get(idKey);
+      if (idMatch !== undefined && canMergeBookedRecords(result[idMatch], item)) {
+        matchedIndex = idMatch;
       }
     }
 
     if (matchedIndex === undefined && reservationKey) {
       matchedIndex = reservationToIndex.get(reservationKey);
-      if (matchedIndex !== undefined) matchReason = 'reservation';
     }
 
     if (matchedIndex === undefined && strictSailingKey) {
-      const strictCandidate = strictSailingToIndex.get(strictSailingKey);
-      if (strictCandidate !== undefined && shouldMergeBookedByLooseSailing(result[strictCandidate], item)) {
-        matchedIndex = strictCandidate;
-        matchReason = 'strict_sailing';
-      }
+      const candidates = strictSailingToIndexes.get(strictSailingKey) ?? [];
+      matchedIndex = candidates.find((candidateIndex) => canMergeBookedRecords(result[candidateIndex], item));
     }
 
     if (matchedIndex === undefined && looseSailingKey) {
       const candidates = looseSailingToIndexes.get(looseSailingKey) ?? [];
-      const looseCandidate = candidates.find((candidateIndex) => shouldMergeBookedByLooseSailing(result[candidateIndex], item));
-      if (looseCandidate !== undefined) {
-        matchedIndex = looseCandidate;
-        matchReason = 'loose_sailing';
-      }
+      matchedIndex = candidates.find((candidateIndex) => shouldMergeBookedByLooseSailing(result[candidateIndex], item));
     }
 
     if (matchedIndex !== undefined) {
-      console.log('[DataIdentity] Deduped duplicate booked cruise:', {
-        label,
-        reason: matchReason,
-        identityKey,
-        idKey,
-        reservationKey,
-        sailingKey: looseSailingKey,
-        shipName: item.shipName,
-        sailDate: item.sailDate,
-      });
-      result[matchedIndex] = mergeFn(result[matchedIndex], item);
+      duplicateCount += 1;
+      if (duplicateSamples.length < 3) duplicateSamples.push(identityKey || idKey || reservationKey || looseSailingKey);
+      result[matchedIndex] = mergeRecordPreferIncoming(result[matchedIndex] as unknown as Record<string, unknown>, item as unknown as Record<string, unknown>) as unknown as BookedCruise;
       rememberIndexes(result[matchedIndex], matchedIndex);
-      ledger.push({
-        inputIndex,
-        inputIdentity: identityKey,
-        outputIndex: matchedIndex,
-        outputIdentity: '',
-        action: 'merged',
-        reason: matchReason,
-        reservationNumber: reservationKey || undefined,
-        shipName: item.shipName,
-        sailDate: item.sailDate,
-      });
       return;
     }
 
     const nextIndex = result.length;
     result.push(item);
     rememberIndexes(item, nextIndex);
-    ledger.push({
-      inputIndex,
-      inputIdentity: identityKey,
-      outputIndex: nextIndex,
-      outputIdentity: '',
-      action: 'kept',
-      reason: 'new',
-      reservationNumber: reservationKey || undefined,
-      shipName: item.shipName,
-      sailDate: item.sailDate,
-    });
   });
 
-  const finalizedLedger = ledger.map((entry) => ({
-    ...entry,
-    outputIdentity: getBookedCruiseIdentityKey(result[entry.outputIndex]),
-  }));
+  if (duplicateCount > 0) {
+    console.log('[DataIdentity] Deduped booked cruises:', { label, duplicateCount, samples: duplicateSamples });
+  }
 
-  return { cruises: result, ledger: finalizedLedger };
-}
-
-export function dedupeBookedCruises(items: BookedCruise[], label = 'booked cruises'): BookedCruise[] {
-  return dedupeBookedCruisesWithLedger(items, label).cruises;
+  return result;
 }
 
 export function dedupeCasinoOffers(items: CasinoOffer[], label = 'casino offers'): CasinoOffer[] {

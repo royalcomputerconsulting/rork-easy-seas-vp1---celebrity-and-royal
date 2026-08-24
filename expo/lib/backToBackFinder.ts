@@ -1,5 +1,12 @@
 import type { Cruise, CasinoOffer } from '@/types/models';
-import { createDateFromString, isDateInPast } from '@/lib/date';
+import { addCalendarDateDays, createDateFromString, isDateInPast, toLocalCalendarDateOnly } from '@/lib/date';
+import { knownGuestCount, knownNightCount } from '@/lib/cruiseRecordIntegrity';
+
+const B2B_DEBUG = typeof __DEV__ !== 'undefined' && __DEV__;
+
+function debugB2B(...args: unknown[]): void {
+  if (B2B_DEBUG) console.log(...args);
+}
 
 export interface SailingSlot {
   key: string;
@@ -102,13 +109,7 @@ function getDaysDifference(date1: string | undefined, date2: string | undefined)
 }
 
 function calculateReturnDate(sailDate: string, nights: number): string {
-  try {
-    const sail = createDateFromString(sailDate);
-    sail.setDate(sail.getDate() + nights);
-    return sail.toISOString().split('T')[0];
-  } catch {
-    return sailDate;
-  }
+  return addCalendarDateDays(sailDate, nights) ?? sailDate;
 }
 
 function normalizeShipName(name: string | undefined): string {
@@ -144,23 +145,28 @@ function groupCruisesIntoSlots(cruises: Cruise[]): SailingSlot[] {
     
     // Skip MGM Gold% offers entirely
     if (isMGMGoldOffer(cruise.offerName, cruise.offerCode)) {
-      console.log('[B2B Finder] Skipping MGM Gold offer:', cruise.offerCode, cruise.offerName, 'for', cruise.shipName, cruise.sailDate);
+      debugB2B('[B2B Finder] Skipping MGM Gold offer:', cruise.offerCode, cruise.offerName, 'for', cruise.shipName, cruise.sailDate);
       continue;
     }
     
     const normalizedShip = normalizeShipName(cruise.shipName);
     const key = `${normalizedShip}_${cruise.sailDate}`;
     
-    const nights = cruise.nights || 7;
-    const returnDate = cruise.returnDate || calculateReturnDate(cruise.sailDate, nights);
+    const nights = knownNightCount(cruise.nights);
+    const returnDate = cruise.returnDate || (nights ? calculateReturnDate(cruise.sailDate, nights) : '');
+    if (!nights || !returnDate) {
+      debugB2B('[B2B Finder] Skipping sailing without an authoritative duration:', cruise.id, cruise.shipName, cruise.sailDate);
+      continue;
+    }
+    const guests = knownGuestCount(cruise.guests);
     
     const offer: CruiseOffer = {
       cruiseId: cruise.id,
       offerCode: cruise.offerCode || '',
       offerName: cruise.offerName || '',
       cabinType: cruise.cabinType || '',
-      guests: cruise.guests || 1,
-      guestsInfo: cruise.guestsInfo || `${cruise.guests || 1} Guest${(cruise.guests || 1) > 1 ? 's' : ''}`,
+      guests: guests ?? 0,
+      guestsInfo: cruise.guestsInfo || (guests ? `${guests} Guest${guests > 1 ? 's' : ''}` : 'Unknown guests'),
       price: cruise.price,
       freePlay: cruise.freePlay,
       cruise,
@@ -197,18 +203,20 @@ function slotConflictsWithBookedDates(slot: SailingSlot, bookedDates: Set<string
   
   try {
     const sailDate = createDateFromString(slot.sailDate);
-    const returnDateStr = slot.returnDate || calculateReturnDate(slot.sailDate, slot.nights || 7);
+    const returnDateStr = slot.returnDate || (knownNightCount(slot.nights) ? calculateReturnDate(slot.sailDate, slot.nights) : '');
+    if (!returnDateStr) return false;
     const returnDate = createDateFromString(returnDateStr);
     let currentDate = new Date(sailDate);
     
     while (currentDate <= returnDate) {
-      if (bookedDates.has(currentDate.toISOString().split('T')[0])) {
+      const currentDateKey = toLocalCalendarDateOnly(currentDate);
+      if (currentDateKey && bookedDates.has(currentDateKey)) {
         return true;
       }
       currentDate.setDate(currentDate.getDate() + 1);
     }
   } catch (e) {
-    console.log('[B2B Finder] Error checking conflicts for slot:', slot.key, e);
+    debugB2B('[B2B Finder] Error checking conflicts for slot:', slot.key, e);
   }
   
   return false;
@@ -237,11 +245,11 @@ export function findBackToBackSets(
     casinoOffers = [],
   } = options;
 
-  console.log('[B2B Finder] Starting search with', cruises.length, 'cruise records');
-  console.log('[B2B Finder] Options:', { maxGapDays, excludeConflicts, minChainLength });
-  console.log('[B2B Finder] Booked dates count:', bookedDates.size);
-  console.log('[B2B Finder] Booked cruises count:', bookedCruises.length);
-  console.log('[B2B Finder] Casino offers count:', casinoOffers.length);
+  debugB2B('[B2B Finder] Starting search with', cruises.length, 'cruise records');
+  debugB2B('[B2B Finder] Options:', { maxGapDays, excludeConflicts, minChainLength });
+  debugB2B('[B2B Finder] Booked dates count:', bookedDates.size);
+  debugB2B('[B2B Finder] Booked cruises count:', bookedCruises.length);
+  debugB2B('[B2B Finder] Casino offers count:', casinoOffers.length);
 
   const offerStatusMap = new Map<string, string>();
   casinoOffers.forEach(offer => {
@@ -249,7 +257,7 @@ export function findBackToBackSets(
       offerStatusMap.set(offer.offerCode, offer.status);
     }
   });
-  console.log('[B2B Finder] Offer status map size:', offerStatusMap.size);
+  debugB2B('[B2B Finder] Offer status map size:', offerStatusMap.size);
 
   const validCruises = cruises.filter(cruise => {
     if (!cruise.sailDate) return false;
@@ -258,7 +266,7 @@ export function findBackToBackSets(
     if (cruise.offerCode) {
       const offerStatus = offerStatusMap.get(cruise.offerCode);
       if (offerStatus === 'booked') {
-        console.log('[B2B Finder] Excluding cruise with in-progress offer:', cruise.offerCode, cruise.shipName, cruise.sailDate);
+        debugB2B('[B2B Finder] Excluding cruise with in-progress offer:', cruise.offerCode, cruise.shipName, cruise.sailDate);
         return false;
       }
     }
@@ -266,7 +274,7 @@ export function findBackToBackSets(
     return true;
   });
 
-  console.log('[B2B Finder] Valid future cruises:', validCruises.length);
+  debugB2B('[B2B Finder] Valid future cruises:', validCruises.length);
 
   const validBookedCruises = bookedCruises.filter(cruise => {
     if (!cruise.sailDate) return false;
@@ -274,40 +282,40 @@ export function findBackToBackSets(
     return true;
   });
 
-  console.log('[B2B Finder] Valid future booked cruises:', validBookedCruises.length);
+  debugB2B('[B2B Finder] Valid future booked cruises:', validBookedCruises.length);
 
   const combinedCruises = [...validCruises, ...validBookedCruises];
-  console.log('[B2B Finder] Combined total (available + booked):', combinedCruises.length);
+  debugB2B('[B2B Finder] Combined total (available + booked):', combinedCruises.length);
 
   const allSlots = groupCruisesIntoSlots(combinedCruises);
-  console.log('[B2B Finder] Unique sailing slots (ship+date combinations):', allSlots.length);
+  debugB2B('[B2B Finder] Unique sailing slots (ship+date combinations):', allSlots.length);
 
   const bookedSlotKeys = new Set(
     validBookedCruises
       .filter(c => c.shipName && c.sailDate)
       .map(c => `${normalizeShipName(c.shipName)}_${c.sailDate}`)
   );
-  console.log('[B2B Finder] Booked slot keys:', Array.from(bookedSlotKeys));
+  debugB2B('[B2B Finder] Booked slot keys:', Array.from(bookedSlotKeys));
 
   const availableSlots = allSlots;
 
-  console.log('[B2B Finder] Total slots for matching:', availableSlots.length);
+  debugB2B('[B2B Finder] Total slots for matching:', availableSlots.length);
 
   if (availableSlots.length < 2) {
-    console.log('[B2B Finder] Not enough slots to form back-to-back sets');
-    console.log('[B2B Finder] Need at least 2 slots but only have', availableSlots.length);
+    debugB2B('[B2B Finder] Not enough slots to form back-to-back sets');
+    debugB2B('[B2B Finder] Need at least 2 slots but only have', availableSlots.length);
     return [];
   }
   
   // Log sample of filtered cruises to understand what's being excluded
   const mgmGoldCount = validCruises.filter(c => isMGMGoldOffer(c.offerName, c.offerCode)).length;
-  console.log('[B2B Finder] MGM Gold offers filtered out:', mgmGoldCount, 'out of', validCruises.length, 'valid cruises');
+  debugB2B('[B2B Finder] MGM Gold offers filtered out:', mgmGoldCount, 'out of', validCruises.length, 'valid cruises');
 
   const sortedSlots = [...availableSlots].sort((a, b) => 
     createDateFromString(a.sailDate).getTime() - createDateFromString(b.sailDate).getTime()
   );
 
-  console.log('[B2B Finder] Sample slots:', sortedSlots.slice(0, 10).map(s => ({
+  debugB2B('[B2B Finder] Sample slots:', sortedSlots.slice(0, 10).map(s => ({
     ship: s.shipName,
     sailDate: s.sailDate,
     returnDate: s.returnDate,
@@ -326,8 +334,8 @@ export function findBackToBackSets(
     shipGroups.get(shipKey)!.push(slot);
   }
 
-  console.log('[B2B Finder] Ships found:', Array.from(shipGroups.keys()));
-  console.log('[B2B Finder] Slots per ship:', Array.from(shipGroups.entries()).map(([ship, slots]) => `${ship}: ${slots.length}`));
+  debugB2B('[B2B Finder] Ships found:', Array.from(shipGroups.keys()));
+  debugB2B('[B2B Finder] Slots per ship:', Array.from(shipGroups.entries()).map(([ship, slots]) => `${ship}: ${slots.length}`));
 
   const adjacencyMap = new Map<string, { slot: SailingSlot; gapDays: number }[]>();
   
@@ -336,7 +344,7 @@ export function findBackToBackSets(
       createDateFromString(a.sailDate).getTime() - createDateFromString(b.sailDate).getTime()
     );
     
-    console.log(`[B2B Finder] Processing ${shipKey} with ${sortedShipSlots.length} sailings`);
+    debugB2B(`[B2B Finder] Processing ${shipKey} with ${sortedShipSlots.length} sailings`);
     
     for (let i = 0; i < sortedShipSlots.length; i++) {
       const slot = sortedShipSlots[i];
@@ -348,7 +356,7 @@ export function findBackToBackSets(
         const daysDiff = getDaysDifference(slot.returnDate, candidate.sailDate);
         
         if (daysDiff < 0) {
-          console.log(`[B2B Finder] OVERLAP: ${slot.sailDate}→${slot.returnDate} overlaps with ${candidate.sailDate}, gap=${daysDiff}`);
+          debugB2B(`[B2B Finder] OVERLAP: ${slot.sailDate}→${slot.returnDate} overlaps with ${candidate.sailDate}, gap=${daysDiff}`);
           continue;
         }
         
@@ -358,11 +366,11 @@ export function findBackToBackSets(
         
         const samePort = areSamePort(slot.departurePort, candidate.departurePort);
         if (!samePort) {
-          console.log(`[B2B Finder] Port mismatch: ${slot.departurePort} vs ${candidate.departurePort}`);
+          debugB2B(`[B2B Finder] Port mismatch: ${slot.departurePort} vs ${candidate.departurePort}`);
           continue;
         }
         
-        console.log(`[B2B Finder] MATCH: ${slot.shipName} ${slot.sailDate}→${slot.returnDate} can chain to ${candidate.sailDate} (gap=${daysDiff}d)`);
+        debugB2B(`[B2B Finder] MATCH: ${slot.shipName} ${slot.sailDate}→${slot.returnDate} can chain to ${candidate.sailDate} (gap=${daysDiff}d)`);
         followers.push({ slot: candidate, gapDays: daysDiff });
       }
       
@@ -372,21 +380,21 @@ export function findBackToBackSets(
     }
   }
 
-  console.log('[B2B Finder] Slots with potential followers:', adjacencyMap.size);
+  debugB2B('[B2B Finder] Slots with potential followers:', adjacencyMap.size);
   
   if (adjacencyMap.size === 0) {
-    console.log('[B2B Finder] No adjacent slot pairs found. Possible reasons:');
-    console.log('  - Sailings have overlapping dates');
-    console.log('  - Gap between sailings exceeds', maxGapDays, 'days');
-    console.log('  - Departure ports don\'t match');
-    console.log('  - Not enough sailings on the same ship');
+    debugB2B('[B2B Finder] No adjacent slot pairs found. Possible reasons:');
+    debugB2B('  - Sailings have overlapping dates');
+    debugB2B('  - Gap between sailings exceeds', maxGapDays, 'days');
+    debugB2B('  - Departure ports don\'t match');
+    debugB2B('  - Not enough sailings on the same ship');
     
     // Sample diagnostics
     const shipCounts = Array.from(shipGroups.entries())
       .map(([ship, slots]) => ({ ship, count: slots.length }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
-    console.log('[B2B Finder] Top ships by sailing count:', shipCounts);
+    debugB2B('[B2B Finder] Top ships by sailing count:', shipCounts);
   }
 
   const allChains: { slots: SailingSlot[]; gapDays: number[]; usedOfferCodes: Set<string> }[] = [];
@@ -411,7 +419,7 @@ export function findBackToBackSets(
   ) {
     // Check if slot has any offers
     if (currentSlot.offers.length === 0 && currentChain.length > 0) {
-      console.log('[B2B Finder] No offers for slot', currentSlot.key);
+      debugB2B('[B2B Finder] No offers for slot', currentSlot.key);
       return;
     }
     
@@ -419,7 +427,7 @@ export function findBackToBackSets(
     if (requireDifferentOffers) {
       const availableCodes = getAvailableOfferCodes(currentSlot, usedOfferCodes);
       if (availableCodes.length === 0 && currentChain.length > 0) {
-        console.log('[B2B Finder] No unique offer codes left for slot', currentSlot.key);
+        debugB2B('[B2B Finder] No unique offer codes left for slot', currentSlot.key);
         return;
       }
     }
@@ -443,14 +451,14 @@ export function findBackToBackSets(
       
       // Check if next slot has offers and unique codes if required
       if (nextSlot.offers.length === 0) {
-        console.log('[B2B Finder] Next slot', nextSlot.key, 'has no offers, skipping');
+        debugB2B('[B2B Finder] Next slot', nextSlot.key, 'has no offers, skipping');
         continue;
       }
       
       if (requireDifferentOffers) {
         const nextAvailableCodes = getAvailableOfferCodes(nextSlot, newUsedCodes);
         if (nextAvailableCodes.length === 0) {
-          console.log('[B2B Finder] Next slot', nextSlot.key, 'has no unique codes, skipping chain extension');
+          debugB2B('[B2B Finder] Next slot', nextSlot.key, 'has no unique codes, skipping chain extension');
           continue;
         }
       }
@@ -473,7 +481,7 @@ export function findBackToBackSets(
     findChains(slot, [], [], new Set());
   }
 
-  console.log('[B2B Finder] Found', allChains.length, 'total chains before deduplication');
+  debugB2B('[B2B Finder] Found', allChains.length, 'total chains before deduplication');
 
   const uniqueChains = allChains.filter((chain, index) => {
     const chainKeys = chain.slots.map(s => s.key).join('|');
@@ -546,8 +554,8 @@ export function findBackToBackSets(
     chain.slots.every(slot => slot.offers.length > 0)
   );
 
-  console.log('[B2B Finder] Unique chains after deduplication:', longestChains.length);
-  console.log('[B2B Finder] Valid chains with unique offer codes:', validChains.length);
+  debugB2B('[B2B Finder] Unique chains after deduplication:', longestChains.length);
+  debugB2B('[B2B Finder] Valid chains with unique offer codes:', validChains.length);
 
   const b2bSets: BackToBackSet[] = validChains.map((chain, index) => {
     const setSlots = chain.slots;
@@ -578,12 +586,12 @@ export function findBackToBackSets(
     const firstSlot = setSlots[0];
     const lastSlot = setSlots[setSlots.length - 1];
 
-    console.log(`[B2B Finder] Set ${index + 1}: ${setSlots.length} sailings, ${totalNights} nights, ${firstSlot.sailDate} to ${lastSlot.returnDate}${hasBookedCruise ? ' (includes booked cruise)' : ''}`);
+    debugB2B(`[B2B Finder] Set ${index + 1}: ${setSlots.length} sailings, ${totalNights} nights, ${firstSlot.sailDate} to ${lastSlot.returnDate}${hasBookedCruise ? ' (includes booked cruise)' : ''}`);
     setSlots.forEach((slot, i) => {
       const isBooked = bookedSlotKeys.has(slot.key);
-      console.log(`  ${i + 1}. ${slot.shipName} ${slot.sailDate}-${slot.returnDate} (${slot.nights}N)${isBooked ? ' [BOOKED]' : ''} - ${slot.offers.length} offer options`);
+      debugB2B(`  ${i + 1}. ${slot.shipName} ${slot.sailDate}-${slot.returnDate} (${slot.nights}N)${isBooked ? ' [BOOKED]' : ''} - ${slot.offers.length} offer options`);
       slot.offers.forEach(o => {
-        console.log(`     - ${o.offerCode || 'No code'} | ${o.cabinType} | ${o.guestsInfo}`);
+        debugB2B(`     - ${o.offerCode || 'No code'} | ${o.cabinType} | ${o.guestsInfo}`);
       });
     });
 
@@ -603,11 +611,11 @@ export function findBackToBackSets(
 
   const filteredSets = b2bSets.filter(set => set.totalNights <= 14);
 
-  console.log('[B2B Finder] Final result before 14-night filter:', b2bSets.length, 'back-to-back sets');
-  console.log('[B2B Finder] Filtered sets (≤14 nights):', filteredSets.length, 'back-to-back sets');
+  debugB2B('[B2B Finder] Final result before 14-night filter:', b2bSets.length, 'back-to-back sets');
+  debugB2B('[B2B Finder] Filtered sets (≤14 nights):', filteredSets.length, 'back-to-back sets');
   
   if (b2bSets.length > filteredSets.length) {
-    console.log('[B2B Finder] Excluded', b2bSets.length - filteredSets.length, 'sets exceeding 14 nights');
+    debugB2B('[B2B Finder] Excluded', b2bSets.length - filteredSets.length, 'sets exceeding 14 nights');
   }
 
   const sortedSets = filteredSets.sort((a, b) => {
@@ -632,20 +640,20 @@ export function findBackToBackSets(
       const daysBetweenStart = getDaysDifference(set.endDate, existingSet.startDate);
       
       if (daysBetweenEnd >= 0 && daysBetweenEnd < minDaysBetweenBatches) {
-        console.log(`[B2B Finder] Excluding set ${set.id}: only ${daysBetweenEnd} days after ${existingSet.id} (need ${minDaysBetweenBatches})`);
+        debugB2B(`[B2B Finder] Excluding set ${set.id}: only ${daysBetweenEnd} days after ${existingSet.id} (need ${minDaysBetweenBatches})`);
         hasConflict = true;
         break;
       }
       
       if (daysBetweenStart >= 0 && daysBetweenStart < minDaysBetweenBatches) {
-        console.log(`[B2B Finder] Excluding set ${set.id}: only ${daysBetweenStart} days before ${existingSet.id} (need ${minDaysBetweenBatches})`);
+        debugB2B(`[B2B Finder] Excluding set ${set.id}: only ${daysBetweenStart} days before ${existingSet.id} (need ${minDaysBetweenBatches})`);
         hasConflict = true;
         break;
       }
       
       const datesOverlap = setStartDate <= existingEndDate && setEndDate >= existingStartDate;
       if (datesOverlap) {
-        console.log(`[B2B Finder] Excluding set ${set.id}: overlaps with ${existingSet.id}`);
+        debugB2B(`[B2B Finder] Excluding set ${set.id}: overlaps with ${existingSet.id}`);
         hasConflict = true;
         break;
       }
@@ -656,9 +664,9 @@ export function findBackToBackSets(
     }
   }
 
-  console.log('[B2B Finder] Final sets with adequate spacing:', spacedSets.length);
+  debugB2B('[B2B Finder] Final sets with adequate spacing:', spacedSets.length);
   if (sortedSets.length > spacedSets.length) {
-    console.log('[B2B Finder] Excluded', sortedSets.length - spacedSets.length, 'sets for insufficient spacing');
+    debugB2B('[B2B Finder] Excluded', sortedSets.length - spacedSets.length, 'sets for insufficient spacing');
   }
 
   return spacedSets;

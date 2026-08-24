@@ -1,27 +1,35 @@
 /**
  * Direct, on-device certificate PDF fetch + parse engine.
  *
- * The app's own backend (expo/backend/trpc/routes/certificate-explorer.ts)
- * does the same work server-side. That is still the primary path because it
- * can cache PDFs across users and shields the device from CDN blocking. But
- * a certificate PDF is just a public, unauthenticated file on
- * royalcaribbean.com - there is no reason a phone or browser with internet
- * access cannot fetch and read it directly. This module is the fallback
- * that certificateBatchDownload.ts reaches for whenever the backend call
- * fails (backend outage, 503/capacity error, timeout) so certificate
- * downloads keep working even when our own backend does not.
+ * Certificate PDFs are public Royal Caribbean resources, so the app fetches,
+ * parses, and stores them directly without an Easy Seas backend dependency.
  *
  * Native (iOS/Android) has no CORS restriction, so this works exactly like
  * a normal app request. On web, royalcaribbean.com may not send permissive
  * CORS headers for a cross-origin fetch; if that happens the fetch below
  * throws and the caller reports the failure like any other network error.
  */
-import pako from 'pako';
+import { archiveCertificatePdfBytes, type CertificateDocumentEvidence, type CertificatePdfArchiveInput } from '@/lib/certificates/certificateDocumentStore';
+import { extractCertificatePdfText, parseCertificateExtractedTextOnDevice } from '@/lib/certificates/certificatePdfPipeline';
+import type { CertificateParseResult } from '@/lib/certificates/certificatePdfPipeline';
+import { downloadPublicCertificatePdf, type DownloadedCertificatePdf } from '@/lib/certificates/certificatePdfPipeline';
+import {
+  parseCertificateSailingsFromText,
+  groupCertificateSailings,
+  parseCertificateCode,
+  getCertificateFamilyFromCode as coreGetCertificateFamilyFromCode,
+  getCertificateLevelCode as coreGetCertificateLevelCode,
+  getDefaultPointsForCertificate as coreGetDefaultPointsForCertificate,
+  extractExplicitPointsForCode,
+  buildCertificateVariantId,
+  type CertificateFamily,
+  type ParsedCertificateSailing,
+} from '@/lib/certificates/certificatePdfParserCore';
 
-export const CLIENT_CERTIFICATE_PDF_ENGINE_VERSION = 'v1.0.0-direct-on-device-fallback';
+export const CLIENT_CERTIFICATE_PDF_ENGINE_VERSION = 'v2.4.0-hermes-explicit-date-dual-row-parser-completeness-authority';
 
 const CERTIFICATE_PDF_BASE_URL = 'https://www.royalcaribbean.com/content/dam/royal/resources/pdf/casino/offers';
-const DATE_TEXT_REGEX = /(?<![a-zA-Z])(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2},\s+\d{4}\b/gi;
+const DATE_TEXT_REGEX = /\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2},\s+\d{4}\b/gi;
 
 const ROYAL_SHIP_NAMES = [
   'Adventure Of The Seas',
@@ -58,23 +66,28 @@ const ROYAL_SHIP_NAMES = [
 
 interface IndexEntry {
   certificateCode: string;
-  certificateType: 'A' | 'C';
+  certificateType: CertificateFamily;
   points: number | null;
   pdfUrl: string;
   monthlyIndexUrl: string;
+  pointsSource?: 'pdf-explicit' | 'known-level-fallback' | 'missing';
+  variantId?: string;
 }
+
 
 interface CertificateBenefitSnapshot {
   cabinLabel: string | null;
   cabinRank: number | null;
   freePlay: number | null;
   onBoardCredit: number | null;
+  guestCount: number | null;
   benefitSummary: string[];
+  benefitEvidence?: string[];
 }
 
 interface SailingEntry extends CertificateBenefitSnapshot {
   certificateCode: string;
-  certificateType: 'A' | 'C';
+  certificateType: CertificateFamily;
   level: string;
   points: number | null;
   shipName: string;
@@ -82,6 +95,8 @@ interface SailingEntry extends CertificateBenefitSnapshot {
   departurePort: string | null;
   itinerary: string | null;
   offerTypeLabel: string | null;
+  variantId?: string;
+  pointsSource?: 'pdf-explicit' | 'known-level-fallback' | 'missing';
   nextCruiseBonusLabel: string | null;
   pdfUrl: string;
   monthlyIndexUrl: string;
@@ -89,7 +104,7 @@ interface SailingEntry extends CertificateBenefitSnapshot {
 
 interface CertificateMatchLevel extends CertificateBenefitSnapshot {
   certificateCode: string;
-  certificateType: 'A' | 'C';
+  certificateType: CertificateFamily;
   level: string;
   points: number | null;
   departurePort: string | null;
@@ -379,7 +394,7 @@ function extractStructuredBenefitSnapshot(segment: string, nextCruiseBonusLabel:
   const benefitSummary: string[] = [];
   if (cabinLabel) benefitSummary.push(cabinLabel);
   if (normalizedBonusText) benefitSummary.push(normalizedBonusText);
-  return { cabinLabel, cabinRank, freePlay, onBoardCredit, benefitSummary };
+  return { cabinLabel, cabinRank, freePlay, onBoardCredit, guestCount: null, benefitSummary };
 }
 
 function splitStructuredRowSegments(indexEntry: IndexEntry, pdfText: string): string[] {
@@ -608,35 +623,11 @@ function stringToUint8(str: string): Uint8Array {
 }
 
 function extractPdfText(pdfBytes: Uint8Array): string {
-  const raw = uint8ToLatin1(pdfBytes);
-  const streamRegex = /(<<[\s\S]*?>>)\s*stream\r?\n([\s\S]*?)\r?\nendstream/g;
-  const extracted: string[] = [];
-
-  for (const match of raw.matchAll(streamRegex)) {
-    const dictionary = match[1] ?? '';
-    const streamBinary = stringToUint8(match[2] ?? '');
-    let decodedStream: string | null = null;
-
-    if (dictionary.includes('/FlateDecode')) {
-      try {
-        decodedStream = uint8ToLatin1(pako.inflate(streamBinary));
-      } catch {
-        try {
-          decodedStream = uint8ToLatin1(pako.inflateRaw(streamBinary));
-        } catch {
-          decodedStream = null;
-        }
-      }
-    } else {
-      decodedStream = uint8ToLatin1(streamBinary);
-    }
-
-    if (!decodedStream) continue;
-    const text = extractTextFromContentStream(decodedStream);
-    if (text.trim()) extracted.push(text.trim());
-  }
-
-  return sanitizePdfText(extracted.join(' ')).replace(/\s+/g, ' ').trim();
+  // One authoritative compressed-PDF stream walker is used by fixture tests
+  // and the live direct-device downloader. Keeping a second
+  // broad binary regex here caused current Royal July PDFs to download but
+  // produce zero rows on device.
+  return extractCertificatePdfText(pdfBytes);
 }
 
 async function sleep(ms: number): Promise<void> {
@@ -647,120 +638,86 @@ function jitteredDelay(baseMs: number): number {
   return baseMs + Math.floor(Math.random() * baseMs * 0.5);
 }
 
-async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, { ...options, signal: controller.signal });
-  } finally {
-    clearTimeout(timeoutId);
+const MAX_RETRIES = 2;
+const BASE_RETRY_DELAY_MS = 600;
+
+interface DirectPdfReadResult {
+  text: string;
+  bytes: number;
+  contentType: string | null;
+  pdfBytes: Uint8Array | null;
+  documentEvidence: CertificateDocumentEvidence | null;
+  binaryTransport: string | null;
+  download: DownloadedCertificatePdf | null;
+}
+
+const pdfTextCache = new Map<string, { result: DirectPdfReadResult; fetchedAt: number }>();
+const PDF_TEXT_CACHE_TTL_MS = 1000 * 60 * 15;
+const PDF_TEXT_CACHE_MAX_ENTRIES = 6;
+
+function cachePdfText(cacheKey: string, result: DirectPdfReadResult): void {
+  pdfTextCache.delete(cacheKey);
+  pdfTextCache.set(cacheKey, { result, fetchedAt: Date.now() });
+  while (pdfTextCache.size > PDF_TEXT_CACHE_MAX_ENTRIES) {
+    const oldestKey = pdfTextCache.keys().next().value as string | undefined;
+    if (!oldestKey) break;
+    pdfTextCache.delete(oldestKey);
   }
 }
 
-// Shorter than the backend's budget: this only ever runs as a fallback for a
-// code that already failed once, so it should fail fast rather than make the
-// user stare at the download screen for another 45s per code.
-const MAX_RETRIES = 2;
-const FETCH_TIMEOUT_MS = 12000;
-const BASE_RETRY_DELAY_MS = 600;
-
-const pdfTextCache = new Map<string, { text: string; fetchedAt: number }>();
-const PDF_TEXT_CACHE_TTL_MS = 1000 * 60 * 15;
-
-async function fetchPdfTextDirect(url: string): Promise<string> {
-  const cached = pdfTextCache.get(url);
-  if (cached && Date.now() - cached.fetchedAt < PDF_TEXT_CACHE_TTL_MS) {
-    return cached.text;
-  }
-
-  const HEADERS: Record<string, string> = {
-    Accept: 'application/pdf,application/octet-stream,*/*;q=0.8',
-    'Accept-Language': 'en-US,en;q=0.9',
-    'Cache-Control': 'no-cache',
-  };
+async function fetchPdfTextDirect(url: string, documentStorageKey?: string): Promise<DirectPdfReadResult> {
+  const cacheKey = `${documentStorageKey ?? 'legacy'}|${url}`;
+  const cached = pdfTextCache.get(cacheKey);
+  if (cached && Date.now() - cached.fetchedAt < PDF_TEXT_CACHE_TTL_MS) return cached.result;
 
   let lastError: Error | null = null;
-
   for (let attempt = 0; attempt < MAX_RETRIES; attempt += 1) {
-    if (attempt > 0) {
-      await sleep(jitteredDelay(BASE_RETRY_DELAY_MS * attempt));
-    }
-
+    if (attempt > 0) await sleep(jitteredDelay(BASE_RETRY_DELAY_MS * attempt));
     try {
-      const response = await fetchWithTimeout(url, { headers: HEADERS }, FETCH_TIMEOUT_MS);
-
-      if (response.status === 404) {
-        pdfTextCache.set(url, { text: '', fetchedAt: Date.now() });
-        return '';
+      const download = await downloadPublicCertificatePdf(url);
+      if (download.status !== 'downloaded' || !download.bytes) {
+        if (/HTTP 404/i.test(download.errorMessage ?? '')) {
+          const result: DirectPdfReadResult = { text: '', bytes: 0, contentType: download.provenance.contentType ?? null, pdfBytes: null, documentEvidence: null, binaryTransport: download.provenance.binaryTransport ?? null, download: null };
+          cachePdfText(cacheKey, result);
+          return result;
+        }
+        throw new Error(download.errorMessage || `Direct certificate PDF download failed with status ${download.status}.`);
       }
 
-      if (!response.ok) {
-        lastError = new Error(`Direct fetch failed with ${response.status} for ${url}`);
-        continue;
-      }
-
-      const pdfBytes = new Uint8Array(await response.arrayBuffer());
-      if (pdfBytes.length === 0) {
-        lastError = new Error(`Empty response body for ${url}`);
-        continue;
-      }
-
+      const pdfBytes = download.bytes;
       const extractedText = extractPdfText(pdfBytes);
-      pdfTextCache.set(url, { text: extractedText, fetchedAt: Date.now() });
-      return extractedText;
+      const result: DirectPdfReadResult = {
+        text: extractedText,
+        bytes: pdfBytes.length,
+        contentType: download.provenance.contentType ?? null,
+        pdfBytes,
+        documentEvidence: null,
+        binaryTransport: download.provenance.binaryTransport ?? null,
+        download,
+      };
+      cachePdfText(cacheKey, result);
+      return result;
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
     }
   }
-
-  throw lastError ?? new Error(`Direct PDF fetch exhausted retries for ${url}`);
+  throw lastError ?? new Error(`Direct PDF download exhausted retries for ${url}`);
 }
 
 function getCertificateLevelCode(certificateCode: string): string {
-  const cleaned = certificateCode.toUpperCase().trim();
-  const match = cleaned.match(/^\d{4}[AC](VIP2|\d{2}A?|\d{2})$/);
-  return match?.[1] ?? cleaned.slice(5);
+  return coreGetCertificateLevelCode(certificateCode);
 }
-
-const DEFAULT_CERTIFICATE_POINTS: Record<string, number> = {
-  VIP2: 40000,
-  '01': 25000,
-  '02': 15000,
-  '02A': 9000,
-  '03': 6500,
-  '03A': 4000,
-  '04': 3000,
-  '05': 2000,
-  '06': 1500,
-  '07': 1200,
-  '08': 800,
-  '09': 600,
-  '10': 400,
-};
 
 function getDefaultPointsForCertificate(certificateCode: string): number | null {
-  return DEFAULT_CERTIFICATE_POINTS[getCertificateLevelCode(certificateCode)] ?? null;
+  return coreGetDefaultPointsForCertificate(certificateCode);
 }
 
-function getCertificateTypeFromCode(code: string): 'A' | 'C' {
-  return code.toUpperCase().charAt(4) === 'A' ? 'A' : 'C';
+function getCertificateTypeFromCode(code: string): CertificateFamily {
+  return coreGetCertificateFamilyFromCode(code);
 }
 
 function extractPointsFromPdfText(certificateCode: string, pdfText: string): number | null {
-  const normalizedText = pdfText.replace(/®/g, ' ').replace(/\s+/g, ' ').trim();
-  const pointsPatterns = [
-    new RegExp(`${escapeRegExp(certificateCode)}\\s*(?:[–—\\-]\\s*)?([\\d,]+)\\s*points`, 'i'),
-    new RegExp(`${escapeRegExp(certificateCode)}\\s*(?:[–—\\-]\\s*)?\\$\\s*([\\d,]+)`, 'i'),
-    new RegExp(`\\$\\s*([\\d,]+)\\s*(?:[–—\\-]\\s*)?${escapeRegExp(certificateCode)}`, 'i'),
-  ];
-  for (const pattern of pointsPatterns) {
-    const match = normalizedText.match(pattern);
-    if (match?.[1]) {
-      const pts = parseInt(match[1].replace(/,/g, ''), 10);
-      if (Number.isFinite(pts)) return pts;
-    }
-  }
-  return null;
+  return extractExplicitPointsForCode(certificateCode, pdfText);
 }
 
 function resolveShipTargets(shipQuery: string): string[] {
@@ -809,73 +766,119 @@ function extractCertificateBenefits(pdfText: string): CertificateBenefitSnapshot
   if (cabinLabel) benefitSummary.push(cabinLabel);
   if (freePlay !== null) benefitSummary.push(`${freePlay.toLocaleString()} free play`);
   if (onBoardCredit !== null) benefitSummary.push(`${onBoardCredit.toLocaleString()} OBC`);
-  return { cabinLabel, cabinRank, freePlay, onBoardCredit, benefitSummary };
+  return { cabinLabel, cabinRank, freePlay, onBoardCredit, guestCount: null, benefitSummary };
 }
 
 function extractSailingsFromCertificatePdf(indexEntry: IndexEntry, pdfText: string): SailingEntry[] {
-  const normalizedText = pdfText.replace(/®/g, '').replace(/\s+/g, ' ').trim();
-  const structuredRows = extractStructuredRowsFromCertificatePdf(indexEntry, normalizedText);
+  return parseCertificateSailingsFromText(indexEntry, pdfText) as SailingEntry[];
+}
 
-  if (structuredRows.length > 0) {
-    return structuredRows.map((row) => ({
-      certificateCode: indexEntry.certificateCode,
-      certificateType: indexEntry.certificateType,
-      level: getCertificateLevelCode(indexEntry.certificateCode),
-      points: indexEntry.points,
-      shipName: row.shipName,
-      sailDate: row.sailDate,
-      departurePort: row.departurePort,
-      itinerary: row.itinerary,
-      offerTypeLabel: row.offerTypeLabel,
-      nextCruiseBonusLabel: row.nextCruiseBonusLabel,
-      pdfUrl: indexEntry.pdfUrl,
-      monthlyIndexUrl: indexEntry.monthlyIndexUrl,
-      cabinLabel: row.benefits.cabinLabel,
-      cabinRank: row.benefits.cabinRank,
-      freePlay: row.benefits.freePlay,
-      onBoardCredit: row.benefits.onBoardCredit,
-      benefitSummary: row.benefits.benefitSummary,
-    }));
+interface CertificateSailingExtraction {
+  sailings: SailingEntry[];
+  parserAuthority: 'structured-text' | 'shared-device-pdf-fallback' | 'shared-device-pdf-completeness-recovery';
+  warnings: string[];
+  parsedResult?: CertificateParseResult;
+}
+
+function finiteNumberOrNull(value: unknown): number | null {
+  if (value === null || value === undefined || String(value).trim() === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function mapSharedDeviceSailing(indexEntry: IndexEntry, sailing: any): SailingEntry {
+  const cabin = extractCabinBenefit(String(sailing?.cabinCategory ?? ''));
+  const occupancyGuestCount = finiteNumberOrNull(String(sailing?.occupancy ?? '').match(/\d+/)?.[0]);
+  const guestCount = finiteNumberOrNull(sailing?.guestCount) ?? occupancyGuestCount;
+  const freePlay = finiteNumberOrNull(sailing?.freePlay);
+  const onBoardCredit = finiteNumberOrNull(sailing?.onboardCredit);
+  const explicitPoints = finiteNumberOrNull(sailing?.pointRequirement);
+  const points = explicitPoints ?? indexEntry.points;
+  const benefitEvidence = Array.isArray(sailing?.benefits)
+    ? sailing.benefits.map((benefit: any) => String(benefit?.evidence ?? '')).filter(Boolean)
+    : [];
+  const benefitSummary = [
+    cabin.cabinLabel,
+    guestCount === null ? null : `${guestCount} guest${guestCount === 1 ? '' : 's'}`,
+    freePlay === null ? null : `$${freePlay.toLocaleString()} free play`,
+    onBoardCredit === null ? null : `$${onBoardCredit.toLocaleString()} OBC`,
+  ].filter((value): value is string => Boolean(value));
+  const row: SailingEntry = {
+    certificateCode: indexEntry.certificateCode,
+    certificateType: indexEntry.certificateType,
+    level: getCertificateLevelCode(indexEntry.certificateCode),
+    points,
+    pointsSource: explicitPoints !== null
+      ? 'pdf-explicit'
+      : points !== null ? 'known-level-fallback' : 'missing',
+    shipName: String(sailing?.shipName ?? '').trim(),
+    sailDate: String(sailing?.sailingDate ?? '').trim(),
+    departurePort: String(sailing?.departurePort ?? '').trim() || null,
+    itinerary: String(sailing?.itinerary ?? '').trim() || null,
+    offerTypeLabel: String(sailing?.offerTypeLabel ?? '').trim() || null,
+    nextCruiseBonusLabel: String(sailing?.nextCruiseBonusLabel ?? '').trim() || null,
+    pdfUrl: indexEntry.pdfUrl,
+    monthlyIndexUrl: indexEntry.monthlyIndexUrl,
+    cabinLabel: cabin.cabinLabel,
+    cabinRank: cabin.cabinRank,
+    guestCount,
+    freePlay,
+    onBoardCredit,
+    benefitSummary,
+    benefitEvidence,
+  };
+  return { ...row, variantId: buildCertificateVariantId(row) };
+}
+
+function extractSailingsFromCertificateDownload(
+  indexEntry: IndexEntry,
+  pdfText: string,
+  download: DownloadedCertificatePdf | null,
+  forceSharedDeviceAuthority = false,
+): CertificateSailingExtraction {
+  const structuredRows = forceSharedDeviceAuthority ? [] : extractSailingsFromCertificatePdf(indexEntry, pdfText);
+  if (!download?.bytes || download.status !== 'downloaded') {
+    return {
+      sailings: structuredRows,
+      parserAuthority: 'structured-text',
+      warnings: structuredRows.length > 0
+        ? []
+        : ['The structured parser returned zero rows and no downloaded PDF bytes were available for the shared device parser.'],
+    };
   }
 
-  const benefits = extractCertificateBenefits(normalizedText);
-  const sailings = new Map<string, SailingEntry>();
+  // Run both independent row analyzers over the one already-extracted text.
+  // This preserves the shared device fallback without decompressing the PDF a
+  // second time, and it prevents a partially successful parser from hiding a
+  // more complete set of valid ship/date rows.
+  const sharedResult = parseCertificateExtractedTextOnDevice(
+    pdfText,
+    indexEntry.certificateCode,
+    download.provenance,
+  );
+  const sharedRows = sharedResult.sailings
+    .map((sailing) => mapSharedDeviceSailing(indexEntry, sailing))
+    .filter((sailing) => Boolean(sailing.shipName && sailing.sailDate));
 
-  ROYAL_SHIP_NAMES.forEach((shipName) => {
-    const shipRegex = new RegExp(escapeRegExp(shipName.replace(/®/g, '')), 'gi');
-    for (const match of normalizedText.matchAll(shipRegex)) {
-      const matchIndex = match.index ?? -1;
-      if (matchIndex < 0) continue;
-      const searchWindow = normalizedText.slice(matchIndex, matchIndex + 220);
-      const dateMatch = searchWindow.match(DATE_TEXT_REGEX)?.[0];
-      if (!dateMatch) continue;
-      const sailDate = parseDateToIso(dateMatch);
-      if (!sailDate) continue;
-      const key = `${shipName}__${sailDate}`;
-      if (sailings.has(key)) continue;
-      sailings.set(key, {
-        certificateCode: indexEntry.certificateCode,
-        certificateType: indexEntry.certificateType,
-        level: getCertificateLevelCode(indexEntry.certificateCode),
-        points: indexEntry.points,
-        shipName,
-        sailDate,
-        departurePort: null,
-        itinerary: null,
-        offerTypeLabel: null,
-        nextCruiseBonusLabel: null,
-        pdfUrl: indexEntry.pdfUrl,
-        monthlyIndexUrl: indexEntry.monthlyIndexUrl,
-        cabinLabel: benefits.cabinLabel,
-        cabinRank: benefits.cabinRank,
-        freePlay: benefits.freePlay,
-        onBoardCredit: benefits.onBoardCredit,
-        benefitSummary: benefits.benefitSummary,
-      });
-    }
-  });
-
-  return Array.from(sailings.values());
+  const countWarning = structuredRows.length !== sharedRows.length && !forceSharedDeviceAuthority
+    ? [`Independent row analyzers found ${structuredRows.length} and ${sharedRows.length} sailing references; retained the more complete verified result.`]
+    : [];
+  if (!forceSharedDeviceAuthority && structuredRows.length >= sharedRows.length && structuredRows.length > 0) {
+    return {
+      sailings: structuredRows,
+      parserAuthority: 'structured-text',
+      warnings: [...countWarning, ...sharedResult.warnings],
+      parsedResult: sharedResult,
+    };
+  }
+  return {
+    sailings: sharedRows,
+    parserAuthority: structuredRows.length > 0
+      ? 'shared-device-pdf-completeness-recovery'
+      : 'shared-device-pdf-fallback',
+    warnings: [...countWarning, ...sharedResult.warnings],
+    parsedResult: sharedResult,
+  };
 }
 
 export interface ClientCertificateFallbackInput {
@@ -883,19 +886,22 @@ export interface ClientCertificateFallbackInput {
   certificateCodes: string[];
   shipQuery?: string;
   sailDate?: string;
+  documentStorageKey?: string;
+  deferDocumentStorage?: boolean;
 }
 
 export interface ClientCertificateFallbackResult {
   catalog: any[];
   matches: any[];
   source: 'direct-royal-caribbean';
+  parserVersion?: string;
+  documentArtifacts?: CertificatePdfArchiveInput[];
 }
 
 /**
  * Fetches + parses the given certificate codes directly from
  * royalcaribbean.com from the device, with no backend involved at all.
- * Mirrors the shape of the backend's certificateExplorer.examine mutation
- * (catalog + matches) so it drops straight into certificateBatchDownload.ts.
+ * Returns the shared catalog + matches shape used by the certificate screens.
  */
 export async function fetchCertificatesDirectFromRoyalCaribbean(
   input: ClientCertificateFallbackInput
@@ -919,10 +925,12 @@ export async function fetchCertificatesDirectFromRoyalCaribbean(
 
   const catalog: any[] = [];
   const allSailings: SailingEntry[] = [];
+  const documentArtifacts: CertificatePdfArchiveInput[] = [];
 
   for (const entry of indexEntries) {
     try {
-      const pdfText = await fetchPdfTextDirect(entry.pdfUrl);
+      const pdfRead = await fetchPdfTextDirect(entry.pdfUrl, input.documentStorageKey);
+      const pdfText = pdfRead.text;
 
       if (!pdfText || pdfText.length < 20) {
         catalog.push({
@@ -932,7 +940,14 @@ export async function fetchCertificatesDirectFromRoyalCaribbean(
           points: entry.points,
           pdfUrl: entry.pdfUrl,
           monthlyIndexUrl: entry.monthlyIndexUrl,
-          status: pdfText.length === 0 ? 'empty' : 'empty',
+          status: pdfRead.bytes > 0 ? 'unsupported_pdf' : 'network_error',
+          parserSource: 'direct-device',
+          downloadedBytes: pdfRead.bytes,
+          extractedTextLength: pdfText.length,
+          parsedSailingReferences: 0,
+          sailingGroups: 0,
+          evidence: pdfRead.bytes > 0 ? ['PDF bytes downloaded but readable sailing text was not extracted'] : [],
+          errorMessage: pdfRead.bytes > 0 ? 'PDF text was empty or too short to contain a sailing table' : 'PDF was unavailable',
           sailingsFound: 0,
         });
         continue;
@@ -941,8 +956,24 @@ export async function fetchCertificatesDirectFromRoyalCaribbean(
       const detectedPoints = extractPointsFromPdfText(entry.certificateCode, pdfText);
       entry.points = detectedPoints ?? entry.points ?? getDefaultPointsForCertificate(entry.certificateCode);
 
-      const sailings = extractSailingsFromCertificatePdf(entry, pdfText);
+      const extraction = extractSailingsFromCertificateDownload(entry, pdfText, pdfRead.download);
+      const sailings = extraction.sailings;
       allSailings.push(...sailings);
+      const archiveInput: CertificatePdfArchiveInput = {
+        certificateCode: entry.certificateCode,
+        sourceUrl: entry.pdfUrl,
+        bytes: pdfRead.pdfBytes as Uint8Array,
+        parserSource: 'direct-device',
+        provenance: pdfRead.download?.provenance,
+        storageKey: input.documentStorageKey,
+        materialSailings: sailings,
+        parsedResult: extraction.parsedResult,
+      };
+      if (input.deferDocumentStorage) {
+        documentArtifacts.push(archiveInput);
+      } else {
+        pdfRead.documentEvidence = await archiveCertificatePdfBytes(archiveInput);
+      }
 
       catalog.push({
         certificateCode: entry.certificateCode,
@@ -951,7 +982,25 @@ export async function fetchCertificatesDirectFromRoyalCaribbean(
         points: entry.points,
         pdfUrl: entry.pdfUrl,
         monthlyIndexUrl: entry.monthlyIndexUrl,
-        status: sailings.length > 0 ? 'ok' : 'no_sailings',
+        status: sailings.length > 0 ? 'parsed' : 'parse_failed',
+        parserSource: 'direct-device',
+        downloadedBytes: pdfRead.bytes,
+        extractedTextLength: pdfText.length,
+        parsedSailingReferences: sailings.length,
+        sailingGroups: sailings.length,
+        evidence: [
+          `Downloaded bytes: ${pdfRead.bytes}`,
+          `Binary transport: ${pdfRead.binaryTransport ?? 'unknown'}`,
+          `Extracted text characters: ${pdfText.length}`,
+          `Parser authority: ${extraction.parserAuthority}`,
+          `Parsed sailing references: ${sailings.length}`,
+          ...extraction.warnings.map((warning) => `Parser warning: ${warning}`),
+          ...(pdfRead.documentEvidence ? [`Archived original PDF SHA-256: ${pdfRead.documentEvidence.sha256}`] : []),
+        ],
+        documentSha256: pdfRead.documentEvidence?.sha256 ?? null,
+        documentArchiveUri: pdfRead.documentEvidence?.archiveUri ?? null,
+        documentStorageStatus: input.deferDocumentStorage ? 'pending' : pdfRead.documentEvidence?.storageStatus ?? null,
+        errorMessage: sailings.length === 0 ? 'Readable PDF text contained no recognized ship/date sailing rows' : null,
         sailingsFound: sailings.length,
       });
     } catch (error) {
@@ -963,7 +1012,14 @@ export async function fetchCertificatesDirectFromRoyalCaribbean(
         points: entry.points,
         pdfUrl: entry.pdfUrl,
         monthlyIndexUrl: entry.monthlyIndexUrl,
-        status: 'error',
+        status: /pdf|content-type|header|extract|unreadable/i.test(error instanceof Error ? error.message : String(error)) ? 'unsupported_pdf' : 'network_error',
+        parserSource: 'direct-device',
+        downloadedBytes: null,
+        extractedTextLength: 0,
+        parsedSailingReferences: 0,
+        sailingGroups: 0,
+        evidence: [],
+        errorMessage: error instanceof Error ? error.message : String(error),
         sailingsFound: 0,
       });
       throw error instanceof Error ? error : new Error(String(error));
@@ -985,7 +1041,8 @@ export async function fetchCertificatesDirectFromRoyalCaribbean(
     if (!groupedMatches.has(key)) {
       groupedMatches.set(key, { shipName: sailing.shipName, sailDate: sailing.sailDate, levels: [], decisionGuide: [], opportunities: [] });
     }
-    groupedMatches.get(key)?.levels.push({
+    const targetGroup = groupedMatches.get(key);
+    const candidateLevel: any = {
       certificateCode: sailing.certificateCode,
       certificateType: sailing.certificateType,
       level: sailing.level,
@@ -1000,8 +1057,13 @@ export async function fetchCertificatesDirectFromRoyalCaribbean(
       cabinRank: sailing.cabinRank,
       freePlay: sailing.freePlay,
       onBoardCredit: sailing.onBoardCredit,
+      guestCount: sailing.guestCount,
       benefitSummary: sailing.benefitSummary,
-    });
+      benefitEvidence: sailing.benefitEvidence ?? [],
+      variantId: sailing.variantId,
+      pointsSource: sailing.pointsSource,
+    };
+    if (targetGroup && !targetGroup.levels.some((level: any) => level.variantId === candidateLevel.variantId)) targetGroup.levels.push(candidateLevel);
   });
 
   const matches = Array.from(groupedMatches.values())
@@ -1020,5 +1082,158 @@ export async function fetchCertificatesDirectFromRoyalCaribbean(
       return left.sailDate.localeCompare(right.sailDate);
     });
 
-  return { catalog, matches, source: 'direct-royal-caribbean' };
+  return { catalog, matches, source: 'direct-royal-caribbean', parserVersion: CLIENT_CERTIFICATE_PDF_ENGINE_VERSION, documentArtifacts };
+}
+
+/**
+ * Deterministic parser-fixture entry point used by regression tests. It runs
+ * the exact production extraction functions without performing a network
+ * request or weakening the PDF download path.
+ */
+export function parseCertificatePdfTextFixture(input: {
+  certificateCode: string;
+  pdfText: string;
+}): { catalog: any[]; matches: any[] } {
+  const certificateCode = input.certificateCode.toUpperCase().trim();
+  const certificateType = getCertificateTypeFromCode(certificateCode);
+  const monthPrefix = certificateCode.slice(0, 4);
+  const entry: IndexEntry = {
+    certificateCode,
+    certificateType,
+    points: getDefaultPointsForCertificate(certificateCode),
+    pdfUrl: buildPdfUrl(certificateCode),
+    monthlyIndexUrl: buildPdfUrl(`${monthPrefix}${certificateType}`),
+  };
+  const text = input.pdfText.replace(/\s+/g, ' ').trim();
+  const sailings = text.length >= 20 ? extractSailingsFromCertificatePdf(entry, text) : [];
+  const grouped = new Map<string, SailingMatch>();
+  sailings.forEach((sailing) => {
+    const key = `${sailing.shipName}__${sailing.sailDate}`;
+    if (!grouped.has(key)) grouped.set(key, { shipName: sailing.shipName, sailDate: sailing.sailDate, levels: [], decisionGuide: [], opportunities: [] });
+    const targetGroup = grouped.get(key);
+    const candidateLevel: any = {
+      certificateCode: sailing.certificateCode,
+      certificateType: sailing.certificateType,
+      level: sailing.level,
+      points: sailing.points,
+      departurePort: sailing.departurePort,
+      itinerary: sailing.itinerary,
+      offerTypeLabel: sailing.offerTypeLabel,
+      nextCruiseBonusLabel: sailing.nextCruiseBonusLabel,
+      pdfUrl: sailing.pdfUrl,
+      monthlyIndexUrl: sailing.monthlyIndexUrl,
+      cabinLabel: sailing.cabinLabel,
+      cabinRank: sailing.cabinRank,
+      freePlay: sailing.freePlay,
+      onBoardCredit: sailing.onBoardCredit,
+      guestCount: sailing.guestCount,
+      benefitSummary: sailing.benefitSummary,
+      benefitEvidence: sailing.benefitEvidence ?? [],
+      variantId: sailing.variantId,
+      pointsSource: sailing.pointsSource,
+    };
+    if (targetGroup && !targetGroup.levels.some((level: any) => level.variantId === candidateLevel.variantId)) targetGroup.levels.push(candidateLevel);
+  });
+  const matches = Array.from(grouped.values());
+  return {
+    catalog: [{
+      certificateCode,
+      certificateType,
+      level: getCertificateLevelCode(certificateCode),
+      points: entry.points,
+      pdfUrl: entry.pdfUrl,
+      monthlyIndexUrl: entry.monthlyIndexUrl,
+      status: sailings.length > 0 ? 'parsed' : 'parse_failed',
+      parserSource: 'direct-device',
+      downloadedBytes: null,
+      extractedTextLength: text.length,
+      parsedSailingReferences: sailings.length,
+      sailingGroups: matches.length,
+      evidence: [`Fixture text characters: ${text.length}`, `Parsed sailing references: ${sailings.length}`],
+      errorMessage: sailings.length === 0 ? 'Fixture contained no recognized ship/date sailing rows' : null,
+      sailingsFound: sailings.length,
+    }],
+    matches,
+  };
+}
+
+export function parseCertificatePdfBytesFixture(input: { certificateCode: string; pdfBytes: Uint8Array }): { catalog: any[]; matches: any[] } {
+  const header = String.fromCharCode(...input.pdfBytes.slice(0, 5));
+  if (header !== '%PDF-') throw new Error('Unsupported PDF fixture: missing %PDF header');
+  return parseCertificatePdfTextFixture({ certificateCode: input.certificateCode, pdfText: extractPdfText(input.pdfBytes) });
+}
+
+/**
+ * Exercises the same byte-level recovery branch used when the richer text
+ * parser returns zero rows on Hermes. Kept as a deterministic release gate so
+ * a future refactor cannot silently disconnect the working shared PDF parser
+ * from the certificate download screen again.
+ */
+export function parseCertificatePdfBytesWithDeviceFallbackFixture(input: {
+  certificateCode: string;
+  pdfBytes: Uint8Array;
+}): { sailingCount: number; parserAuthority: string; firstSailing: any | null; lastSailing: any | null } {
+  const certificateCode = input.certificateCode.toUpperCase().trim();
+  const certificateType = getCertificateTypeFromCode(certificateCode);
+  const entry: IndexEntry = {
+    certificateCode,
+    certificateType,
+    points: getDefaultPointsForCertificate(certificateCode),
+    pdfUrl: buildPdfUrl(certificateCode),
+    monthlyIndexUrl: buildPdfUrl(`${certificateCode.slice(0, 4)}${certificateType}`),
+  };
+  const download: DownloadedCertificatePdf = {
+    status: 'downloaded',
+    bytes: input.pdfBytes,
+    provenance: { originalUrl: entry.pdfUrl, retrievedAt: new Date(0).toISOString() },
+  };
+  const extraction = extractSailingsFromCertificateDownload(
+    entry,
+    extractPdfText(input.pdfBytes),
+    download,
+    true,
+  );
+  return {
+    sailingCount: extraction.sailings.length,
+    parserAuthority: extraction.parserAuthority,
+    firstSailing: extraction.sailings[0] ?? null,
+    lastSailing: extraction.sailings[extraction.sailings.length - 1] ?? null,
+  };
+}
+
+/**
+ * Exercises the exact production parser-selection path against retained Royal
+ * PDF fixtures. This is intentionally separate from the forced fallback gate:
+ * it verifies that a partially successful parser cannot suppress a richer set
+ * of independently recognized sailing rows.
+ */
+export function parseCertificatePdfBytesBestAvailableFixture(input: {
+  certificateCode: string;
+  pdfBytes: Uint8Array;
+}): { sailingCount: number; parserAuthority: string; firstSailing: any | null; lastSailing: any | null } {
+  const certificateCode = input.certificateCode.toUpperCase().trim();
+  const certificateType = getCertificateTypeFromCode(certificateCode);
+  const entry: IndexEntry = {
+    certificateCode,
+    certificateType,
+    points: getDefaultPointsForCertificate(certificateCode),
+    pdfUrl: buildPdfUrl(certificateCode),
+    monthlyIndexUrl: buildPdfUrl(`${certificateCode.slice(0, 4)}${certificateType}`),
+  };
+  const download: DownloadedCertificatePdf = {
+    status: 'downloaded',
+    bytes: input.pdfBytes,
+    provenance: { originalUrl: entry.pdfUrl, retrievedAt: new Date(0).toISOString() },
+  };
+  const extraction = extractSailingsFromCertificateDownload(
+    entry,
+    extractPdfText(input.pdfBytes),
+    download,
+  );
+  return {
+    sailingCount: extraction.sailings.length,
+    parserAuthority: extraction.parserAuthority,
+    firstSailing: extraction.sailings[0] ?? null,
+    lastSailing: extraction.sailings[extraction.sailings.length - 1] ?? null,
+  };
 }

@@ -6,26 +6,27 @@ function assert(condition, message) { if (!condition) throw new Error(message); 
 
 const app = JSON.parse(read('app.json'));
 const pkg = JSON.parse(read('package.json'));
-assert(app.expo.version === '12.4.2', 'Expo app version must be 12.4.2');
-assert(app.expo.ios.buildNumber === '314', 'iOS build number must remain 314');
-assert(app.expo.android.versionCode === 120405, 'Android versionCode must remain 120405');
-assert(pkg.version === '12.4.2', 'package version must be 12.4.2');
+assert(app.expo.version === '12.4.4', 'Expo app version must be 12.4.4');
+assert(app.expo.ios.buildNumber === '319', 'iOS build number must remain 319');
+assert(app.expo.android.versionCode === 120410, 'Android versionCode must remain 120410');
+assert(pkg.version === '12.4.4', 'package version must be 12.4.4');
 
 const carnivalScreen = read('app/carnival-sync.tsx');
 assert(carnivalScreen.includes("import { useAuth } from '@/state/AuthProvider';"), 'Carnival screen must use AuthProvider');
-assert(carnivalScreen.includes('Administrator access required'), 'Direct Carnival route must block non-admin users');
-assert(carnivalScreen.includes('No Carnival browser or sync process has been started'), 'Admin gate must confirm no sync has started');
+assert(!carnivalScreen.includes('Administrator access required'), 'Carnival route must no longer be admin-only');
+assert(carnivalScreen.includes('No Carnival browser or sync process has been started'), 'Unavailable access gate must confirm no sync has started');
 assert(carnivalScreen.includes('MAX_WEBVIEW_MESSAGE_SIZE'), 'Carnival WebView message size guard is missing');
 assert(carnivalScreen.includes('onContentProcessDidTerminate'), 'iOS WebContent crash recovery is missing');
 assert(carnivalScreen.includes('onRenderProcessGone'), 'Android WebView render-process recovery is missing');
 
 const settings = read('app/(tabs)/settings.tsx');
-assert(settings.includes('settings-admin-carnival-sync'), 'Admin-only Carnival Settings action is missing');
-assert(settings.includes('{isAdmin && ('), 'Carnival Settings entry must be hidden from non-admin users');
+assert(settings.includes('settings-carnival-sync'), 'General-user Carnival Settings action is missing');
+assert(settings.includes('carnivalSyncAccess.eligible'), 'Carnival Settings entry must use the authenticated feature gate');
+assert(!settings.includes('testID="settings-admin-carnival-sync"'), 'Carnival Settings action must not retain the admin-only identity');
 
 const provider = read('state/RoyalCaribbeanSyncProvider.tsx');
 for (const marker of [
-  'v12.4.2-build313-carnival-integrity-stage1 active',
+  'v12.4.4-build319-carnival-integrity active',
   'runCarnivalSafeIngestion',
   'await runCarnivalSafeIngestion();',
   'Carnival data is isolated from Royal Caribbean and Celebrity',
@@ -67,7 +68,7 @@ assert(manifest.content_scripts[0].js.includes('carnival-sync.js'), 'Extension m
 assert(manifest.host_permissions.includes('https://*.carnival.com/*'), 'Extension must have Carnival host permission');
 const extensionCarnival = read('assets/easy-seas-extension/carnival-sync.js');
 const extensionContent = read('assets/easy-seas-extension/content.js');
-assert(extensionCarnival.includes("version: '12.4.2-deprecated'"), 'Retired Carnival extension helper must identify its deprecated status');
+assert(extensionCarnival.includes("version: '12.4.4-deprecated'"), 'Retired Carnival extension helper must identify its deprecated status');
 assert(extensionCarnival.includes('disabled: true'), 'Retired Carnival extension helper must be formally disabled');
 assert(extensionCarnival.includes('Legacy Carnival extension sync is disabled'), 'Retired extension must explain that the legacy path is disabled');
 assert(extensionCarnival.includes("code: 'EXTENSION_DISABLED'"), 'Retired extension must return a terminal disabled result instead of extracting');
@@ -78,4 +79,4 @@ for (const marker of ['carnivalVifpNumber', 'carnivalVifpTier', 'carnivalVifpPoi
   assert(userProvider.includes(marker), `User profile model/storage missing Carnival field: ${marker}`);
 }
 
-console.log('PASS testV9160CarnivalAdminSync (extension path formally retired)');
+console.log('PASS testV9160CarnivalGeneralUserSync (extension path formally retired)');

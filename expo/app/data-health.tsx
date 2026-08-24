@@ -9,6 +9,8 @@ import { buildDataHealthSummary } from '@/lib/easySeasAdvisor';
 import { useCasinoLedger } from '@/hooks/useCasinoLedger';
 import { runCasinoDataHealthCheck, type CasinoHealthIssue, type CasinoHealthSeverity } from '@/lib/casinoDataHealthCheck';
 import { buildCruiseDetailsParams } from '@/lib/navigation/cruiseDetails';
+import { useCruiseInventory } from '@/hooks/useCruiseInventory';
+import { scanForSafeRepairs } from '@/lib/dataRepair/selfHealingDataFabric';
 
 const SEVERITY_COLOR: Record<CasinoHealthSeverity, string> = {
   critical: '#DC2626',
@@ -18,9 +20,18 @@ const SEVERITY_COLOR: Record<CasinoHealthSeverity, string> = {
 
 export default function DataHealthScreen() {
   const router = useRouter();
-  const { cruises, bookedCruises, casinoOffers } = useCoreData();
-  const summary = useMemo(() => buildDataHealthSummary(cruises, bookedCruises, casinoOffers), [cruises, bookedCruises, casinoOffers]);
+  const { bookedCruises, casinoOffers } = useCoreData();
+  const { counts } = useCruiseInventory();
+  const summary = useMemo(() => {
+    const base = buildDataHealthSummary([], bookedCruises, casinoOffers);
+    return {
+      ...base,
+      royalAvailableCruises: counts.byProvider.royal ?? 0,
+      celebrityAvailableCruises: counts.byProvider.celebrity ?? 0,
+    };
+  }, [bookedCruises, casinoOffers, counts.byProvider]);
   const issueCount = summary.duplicateAvailableRows + summary.duplicateOfferCodes + summary.possiblyMisclassifiedUpcoming;
+  const repairScan = useMemo(() => scanForSafeRepairs(bookedCruises as unknown as Record<string, unknown>[], 'booked-cruise'), [bookedCruises]);
 
   const casinoLedger = useCasinoLedger();
   const casinoIssues = useMemo(
@@ -64,6 +75,12 @@ export default function DataHealthScreen() {
           ['Duplicate offers', summary.duplicateOfferCodes],
           ['Misclassified upcoming', summary.possiblyMisclassifiedUpcoming],
         ]} />
+
+        <View style={styles.sectionCard}>
+          <View style={styles.sectionHeader}><ShieldCheck size={18} color={COLORS.navyDeep} /><Text style={styles.sectionTitle}>Guarded self-healing preview</Text></View>
+          <RepairLine good={repairScan.proposals.length === 0} text={repairScan.proposals.length === 0 ? 'No safe normalization repairs are currently proposed.' : `${repairScan.automaticCount} high-confidence repair(s) and ${repairScan.reviewCount} review-required repair(s) found. Nothing is changed until explicitly approved.`} />
+          {repairScan.proposals.slice(0,5).map(proposal => <Text key={proposal.id} style={styles.casinoIssueDetail}>• {proposal.recordId}: {proposal.field} · {proposal.confidence} · {proposal.reason}</Text>)}
+        </View>
 
         <View style={styles.sectionCard}>
           <View style={styles.sectionHeader}>

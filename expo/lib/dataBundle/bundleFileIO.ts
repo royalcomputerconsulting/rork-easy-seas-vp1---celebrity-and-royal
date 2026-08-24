@@ -3,6 +3,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { File as ExpoFile, Paths as ExpoPaths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { getAllStoredData, importAllData, type DataProfileGate, type FullAppDataBundle } from '../dataBundle/bundleOperations';
+import { isDateInPast, toCalendarDateOnly } from '@/lib/date';
 
 type LegacyFullDataBundle = Partial<FullAppDataBundle> & {
   offers?: unknown;
@@ -167,9 +168,7 @@ export function formatExportAllDataSummary(summary: ExportAllDataSummary, fileNa
 
 function normalizeImportedDateOnly(value: unknown): string {
   if (typeof value !== 'string') return '';
-  const trimmed = value.trim();
-  if (!trimmed) return '';
-  return trimmed.includes('T') ? trimmed.split('T')[0] : trimmed;
+  return toCalendarDateOnly(value) ?? '';
 }
 
 function dateOnlyTime(value: string): number | null {
@@ -239,8 +238,7 @@ function inferCruiseDateRange(events: ImportedCalendarEvent[]): { sailDate: stri
 }
 
 function inferCruiseStatus(returnDate: string): Pick<ImportedBookedCruise, 'status' | 'completionState'> {
-  const today = new Date().toISOString().split('T')[0];
-  if (returnDate && returnDate < today) {
+  if (returnDate && isDateInPast(returnDate)) {
     return { status: 'completed', completionState: 'completed' };
   }
   return { status: 'booked', completionState: 'upcoming' };

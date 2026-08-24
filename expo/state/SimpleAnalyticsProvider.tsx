@@ -18,6 +18,7 @@ import {
 import { buildCruiseEconomicsSummary } from "@/lib/casinoCruiseEconomics";
 import { getBookedCruiseCasinoPoints, getBookedCruiseWinningsBroughtHome } from "@/lib/casinoPointTruth";
 import { CONFIRMED_CLUB_ROYALE_2025_POINTS, isKnownCasinoProfile } from "@/lib/knownProfileFallback";
+import { createDateFromString, isDateInPast } from "@/lib/date";
 
 export interface CasinoAnalytics {
   totalCoinIn: number;
@@ -114,7 +115,7 @@ const DEFAULT_PORTFOLIO_METRICS: PortfolioValueMetrics = {
 const DOLLARS_PER_POINT = 5;
 
 export const [SimpleAnalyticsProvider, useSimpleAnalytics] = createContextHook((): SimpleAnalyticsState => {
-  const { bookedCruises: storedBookedCruises, cruises, casinoOffers, isLoading } = useCoreData();
+  const { bookedCruises: storedBookedCruises, casinoOffers, isLoading } = useCoreData();
   const { authenticatedEmail } = useAuth();
   const usesKnownCasinoProfile = isKnownCasinoProfile(authenticatedEmail);
   const {
@@ -136,15 +137,11 @@ export const [SimpleAnalyticsProvider, useSimpleAnalytics] = createContextHook((
   }, [storedBookedCruises]);
 
   const completedCruises = useMemo((): BookedCruise[] => {
-    const today = new Date();
     const completed = bookedCruises.filter(cruise => {
       if (cruise.completionState === 'completed' || cruise.status === 'completed') {
         return true;
       }
-      if (cruise.returnDate) {
-        const returnDate = new Date(cruise.returnDate);
-        return returnDate < today;
-      }
+      if (cruise.returnDate) return isDateInPast(cruise.returnDate);
       return false;
     });
     console.log('[SimpleAnalytics] Completed cruises:', completed.length, 'of', bookedCruises.length);
@@ -288,7 +285,8 @@ export const [SimpleAnalyticsProvider, useSimpleAnalytics] = createContextHook((
       totalRetailValue += retailValue;
 
       if (cruise.sailDate) {
-        const date = new Date(cruise.sailDate);
+        const date = createDateFromString(cruise.sailDate);
+        if (Number.isNaN(date.getTime())) return;
         const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
         const yearKey = `${date.getFullYear()}`;
         
@@ -400,7 +398,7 @@ export const [SimpleAnalyticsProvider, useSimpleAnalytics] = createContextHook((
   }, [casinoOffers]);
   
   const calculateCruiseROI = useCallback((cruiseId: string, winnings?: number): { roi: number; roiPercentage: number } => {
-    const cruise = bookedCruises.find(c => c.id === cruiseId) || cruises.find(c => c.id === cruiseId);
+    const cruise = bookedCruises.find(c => c.id === cruiseId);
     if (!cruise) {
       return { roi: 0, roiPercentage: 0 };
     }
@@ -413,7 +411,7 @@ export const [SimpleAnalyticsProvider, useSimpleAnalytics] = createContextHook((
       cruiseWinnings,
       breakdown.amountPaid
     );
-  }, [bookedCruises, cruises]);
+  }, [bookedCruises]);
 
   return useMemo(() => ({
     analytics,

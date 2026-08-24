@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { quotaSafeGetJsonItem, quotaSafeSetJsonItem, quotaSafeRemoveItem } from '@/lib/storage/quotaSafeStorage';
 import createContextHook from '@nkzw/create-context-hook';
 import { useCoreData } from './CoreDataProvider';
 import type { PriceHistoryRecord, PriceDropAlert, BookedCruise, CasinoOffer } from '@/types/models';
 import { generateCruiseKey } from '@/types/models';
+import { isDateInPast } from '@/lib/date';
 
 const STORAGE_KEY = 'easyseas_price_history';
 const PRICE_DROPS_KEY = 'easyseas_price_drops';
@@ -39,21 +40,14 @@ export const [PriceTrackingProvider, usePriceTracking] = createContextHook((): P
     try {
       console.log('[PriceTracking] Loading price history...');
       const [historyData, dropsData] = await Promise.all([
-        AsyncStorage.getItem(STORAGE_KEY),
-        AsyncStorage.getItem(PRICE_DROPS_KEY),
+        quotaSafeGetJsonItem<PriceHistoryRecord[]>(STORAGE_KEY, [], Array.isArray),
+        quotaSafeGetJsonItem<PriceDropAlert[]>(PRICE_DROPS_KEY, [], Array.isArray),
       ]);
 
-      if (historyData) {
-        const parsed = JSON.parse(historyData);
-        setPriceHistory(parsed);
-        console.log('[PriceTracking] Loaded', parsed.length, 'price records');
-      }
-
-      if (dropsData) {
-        const parsed = JSON.parse(dropsData);
-        setPriceDrops(parsed);
-        console.log('[PriceTracking] Loaded', parsed.length, 'price drops');
-      }
+      setPriceHistory(historyData);
+      setPriceDrops(dropsData);
+      console.log('[PriceTracking] Loaded', historyData.length, 'price records');
+      console.log('[PriceTracking] Loaded', dropsData.length, 'price drops');
     } catch (error) {
       console.error('[PriceTracking] Failed to load price data:', error);
     } finally {
@@ -67,7 +61,7 @@ export const [PriceTrackingProvider, usePriceTracking] = createContextHook((): P
 
   const savePriceHistory = useCallback(async (history: PriceHistoryRecord[]) => {
     try {
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+      await quotaSafeSetJsonItem(STORAGE_KEY, history);
       console.log('[PriceTracking] Saved', history.length, 'price records');
     } catch (error) {
       console.error('[PriceTracking] Failed to save price history:', error);
@@ -76,7 +70,7 @@ export const [PriceTrackingProvider, usePriceTracking] = createContextHook((): P
 
   const savePriceDrops = useCallback(async (drops: PriceDropAlert[]) => {
     try {
-      await AsyncStorage.setItem(PRICE_DROPS_KEY, JSON.stringify(drops));
+      await quotaSafeSetJsonItem(PRICE_DROPS_KEY, drops);
       console.log('[PriceTracking] Saved', drops.length, 'price drops');
     } catch (error) {
       console.error('[PriceTracking] Failed to save price drops:', error);
@@ -208,8 +202,8 @@ export const [PriceTrackingProvider, usePriceTracking] = createContextHook((): P
   const clearPriceHistory = useCallback(async () => {
     try {
       await Promise.all([
-        AsyncStorage.removeItem(STORAGE_KEY),
-        AsyncStorage.removeItem(PRICE_DROPS_KEY),
+        quotaSafeRemoveItem(STORAGE_KEY),
+        quotaSafeRemoveItem(PRICE_DROPS_KEY),
       ]);
       setPriceHistory([]);
       setPriceDrops([]);
@@ -293,12 +287,9 @@ export const [PriceTrackingProvider, usePriceTracking] = createContextHook((): P
     if (isLoading) return;
 
     const autoTrack = async () => {
-      const upcomingCruises = bookedCruises.filter(cruise => {
-        const sailDate = new Date(cruise.sailDate);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        return sailDate >= today && cruise.completionState !== 'completed';
-      });
+      const upcomingCruises = bookedCruises.filter(cruise =>
+        !isDateInPast(cruise.sailDate) && cruise.completionState !== 'completed'
+      );
 
       console.log('[PriceTracking] Auto-tracking prices for', upcomingCruises.length, 'upcoming cruises (filtered from', bookedCruises.length, 'total)');
       

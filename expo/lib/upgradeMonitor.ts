@@ -1,4 +1,5 @@
 import type { BookedCruise, CasinoOffer, Anomaly, AlertPriority } from '@/types/models';
+import { getDaysBetween, isDateInFuture } from '@/lib/date';
 
 const CABIN_TIER_ORDER: { pattern: RegExp; tier: number; label: string }[] = [
   { pattern: /interior\s*gty/i, tier: 1, label: 'Interior GTY' },
@@ -93,11 +94,8 @@ export function findUpgradeOpportunities(
   previousUpgradePrices?: Map<string, number>
 ): UpgradeOpportunity[] {
   const opportunities: UpgradeOpportunity[] = [];
-  const now = new Date();
-
   const upcomingBooked = bookedCruises.filter(c => {
-    const sailDate = new Date(c.sailDate);
-    return sailDate > now && (c.status === 'booked' || c.completionState === 'upcoming' || c.status === 'Courtesy Hold');
+    return isDateInFuture(c.sailDate) && (c.status === 'booked' || c.completionState === 'upcoming' || c.status === 'Courtesy Hold');
   });
 
   console.log('[UpgradeMonitor] Checking', upcomingBooked.length, 'upcoming booked cruises against', casinoOffers.length, 'offers');
@@ -155,11 +153,9 @@ export function findUpgradeOpportunities(
         const shipMatch = offer.shipName.toLowerCase().trim() === booked.shipName.toLowerCase().trim();
         if (!shipMatch) continue;
 
-        const offerDate = new Date(offer.sailingDate);
-        const bookedDate = new Date(booked.sailDate);
-        const daysDiff = Math.abs(offerDate.getTime() - bookedDate.getTime()) / (1000 * 60 * 60 * 24);
+        const daysDiff = getDaysBetween(offer.sailingDate, booked.sailDate);
 
-        if (daysDiff > 3) continue;
+        if (Number.isNaN(daysDiff) || daysDiff > 3) continue;
 
         for (const higherTier of higherTiers) {
           const upgradePrice = getOfferPriceForTier(offer, higherTier.label);

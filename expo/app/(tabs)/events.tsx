@@ -1,9 +1,8 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { buildCruiseDetailsParams } from '@/lib/navigation/cruiseDetails';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { CalendarDays, ChevronLeft, ChevronRight, Ship, Plane, User, Users, Plus, AlertTriangle, Ban, Gift, Award, MapPin, Clock, Sparkles } from 'lucide-react-native';
+import { CalendarDays, ChevronLeft, ChevronRight, Ship, Plane, User, Users, Plus, AlertTriangle, Ban, Gift, Award, MapPin, Clock } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { IMAGES } from '@/constants/images';
 import { useAppState } from '@/state/AppStateProvider';
@@ -12,11 +11,10 @@ import type { CalendarEvent, BookedCruise, CasinoOffer } from '@/types/models';
 import { createDateFromString } from '@/lib/date';
 import { CrewRecognitionSection } from '@/components/crew-recognition/CrewRecognitionSection';
 import { TimeZoneConverter } from '@/components/TimeZoneConverter';
-import { getCalendarEventsWithGeneratedCruiseEvents, getNormalizedCruiseDateRange } from '@/lib/calendar/cruiseEvents';
+import { getCalendarEligibleCruises, getCalendarEventsWithGeneratedCruiseEvents, getDisplayCalendarEvents, getNormalizedCruiseDateRange } from '@/lib/calendar/cruiseEvents';
 import { getBookedCruiseCasinoPoints } from '@/lib/casinoPointTruth';
 import { ResponsiveContainer } from '@/components/ResponsiveContainer';
 import { useCertificates } from '@/state/CertificatesProvider';
-import type { Certificate } from '@/components/CertificateManagerModal';
 import { IntelligenceFilterStrip } from '@/components/IntelligenceFilterStrip';
 import { useIntelligenceFilters } from '@/state/IntelligenceFiltersProvider';
 import { useUser } from '@/state/UserProvider';
@@ -25,36 +23,6 @@ import { deriveCruiseDayPlan } from '@/lib/cruisePlanningIntelligence';
 
 type ViewMode = 'events' | 'week' | 'month' | '90days' | 'passenger';
 type PassengerDayKind = 'sea' | 'port' | 'land' | 'gap' | 'expiration' | 'tier' | 'personal';
-
-/**
- * Deterministic 1-9 "luck score" for a given calendar day. Seeded from the
- * date itself so the same day always renders the same score/color for a
- * user, without requiring a network call for every day in a month.
- */
-function getLuckScoreForDate(date: Date): number {
-  const dateKey = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
-  let hash = 0;
-  for (let i = 0; i < dateKey.length; i++) {
-    hash = (hash * 31 + dateKey.charCodeAt(i)) >>> 0;
-  }
-  return (hash % 9) + 1;
-}
-
-const LUCK_SCORE_COLORS: Record<number, string> = {
-  1: '#B91C1C',
-  2: '#DC2626',
-  3: '#EA580C',
-  4: '#D97706',
-  5: '#CA8A04',
-  6: '#65A30D',
-  7: '#16A34A',
-  8: '#059669',
-  9: '#0D9488',
-};
-
-function getLuckColor(score: number): string {
-  return LUCK_SCORE_COLORS[score] || LUCK_SCORE_COLORS[5];
-}
 
 interface DayData {
   date: Date;
@@ -103,7 +71,6 @@ export default function EventsScreen() {
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [refreshKey, setRefreshKey] = useState(0);
-  const [luckCalendarMode, setLuckCalendarMode] = useState(false);
 
   const intelligenceFilterSnapshot = useMemo(() => ({
     selectedProfileId,
@@ -116,7 +83,7 @@ export default function EventsScreen() {
   }, [bookedCruises, intelligenceFilterSnapshot, users]);
 
   const filteredCertificates = useMemo(() => {
-    return filterRecordsByIntelligence(certificates as unknown as Array<Certificate & { ownerProfileId?: string; sourceEmail?: string; brand?: string; casinoProgram?: any }>, intelligenceFilterSnapshot, users);
+    return filterRecordsByIntelligence(certificates, intelligenceFilterSnapshot, users);
   }, [certificates, intelligenceFilterSnapshot, users]);
 
   const filteredOffers = useMemo(() => {
@@ -124,7 +91,7 @@ export default function EventsScreen() {
   }, [intelligenceFilterSnapshot, localData.offers, users]);
 
   const normalizedBookedCruises = useMemo((): BookedCruise[] => {
-    return filteredBookedCruises
+    return getCalendarEligibleCruises(filteredBookedCruises)
       .map((cruise) => {
         const cruiseDateRange = getNormalizedCruiseDateRange(cruise);
         if (!cruiseDateRange) return null;
@@ -153,6 +120,11 @@ export default function EventsScreen() {
     });
     return mergedEvents;
   }, [normalizedBookedCruises, sourceCalendarEvents]);
+
+  const visibleSourceCalendarEvents = useMemo(
+    () => getDisplayCalendarEvents(normalizedBookedCruises, sourceCalendarEvents),
+    [normalizedBookedCruises, sourceCalendarEvents],
+  );
 
   useEffect(() => {
     console.log('[Events] Data changed - calendar:', calendarEvents.length, 'cruises:', normalizedBookedCruises.length);
@@ -423,32 +395,8 @@ export default function EventsScreen() {
 
   const renderDayCell = useCallback((day: DayData) => {
     const hasEvents = day.events.cruise > 0 || day.events.travel > 0 || day.events.personal > 0;
-
-    if (luckCalendarMode) {
-      const luckScore = getLuckScoreForDate(day.date);
-      const luckColor = getLuckColor(luckScore);
-      return (
-        <TouchableOpacity
-          key={day.date.toISOString()}
-          style={[
-            styles.dayCell,
-            { backgroundColor: luckColor, opacity: day.isCurrentMonth ? 1 : 0.35 },
-            day.isToday && styles.todayCell,
-          ]}
-          activeOpacity={0.7}
-          onPress={() => handleDayPress(day)}
-          testID={`luck-day-cell-${day.date.getDate()}`}
-        >
-          <Text style={[styles.dayNumber, styles.luckDayNumber, day.isToday && styles.todayNumber]}>
-            {day.dayNumber}
-          </Text>
-          <Text style={styles.luckScoreText}>{luckScore}</Text>
-        </TouchableOpacity>
-      );
-    }
-
     const bgColor = getDayBackgroundColor(day);
-
+    
     return (
       <TouchableOpacity
         key={day.date.toISOString()}
@@ -476,7 +424,7 @@ export default function EventsScreen() {
         )}
       </TouchableOpacity>
     );
-  }, [renderEventDots, handleDayPress, getDayBackgroundColor, luckCalendarMode]);
+  }, [renderEventDots, handleDayPress, getDayBackgroundColor]);
 
   const allEventItems = useMemo(() => {
     const allEvents: { event: CalendarEvent | BookedCruise; type: 'calendar' | 'cruise'; date: Date }[] = [];
@@ -592,7 +540,7 @@ export default function EventsScreen() {
       }
     });
 
-    sourceCalendarEvents.forEach((event) => {
+    visibleSourceCalendarEvents.forEach((event) => {
       const date = (event.startDate || event.start || '').split('T')[0];
       if (!date) return;
       addItem({
@@ -668,7 +616,7 @@ export default function EventsScreen() {
       expirations: sortedItems.filter((item) => item.kind === 'expiration').length,
     });
     return sortedItems;
-  }, [filteredCertificates, filteredOffers, formatDateOnly, normalizedBookedCruises, sourceCalendarEvents]);
+  }, [filteredCertificates, filteredOffers, formatDateOnly, normalizedBookedCruises, visibleSourceCalendarEvents]);
 
   const passengerSummary = useMemo(() => {
     return {
@@ -694,8 +642,8 @@ export default function EventsScreen() {
           style={styles.eventCard}
           activeOpacity={0.85}
           onPress={() => router.push({
-            pathname: '/cruise-details' as any,
-            params: buildCruiseDetailsParams(cruise, { source: 'events' }),
+            pathname: '/(tabs)/(overview)/cruise-details' as any,
+            params: { id: cruise.id },
           })}
         >
           <View style={[styles.eventTypeIndicator, { backgroundColor: EVENT_COLORS.cruise }]} />
@@ -769,7 +717,7 @@ export default function EventsScreen() {
             </View>
           </View>
 
-          <IntelligenceFilterStrip contextLabel="Calendar" variant="bookedCruises" />
+          <IntelligenceFilterStrip contextLabel="Calendar" variant="bookedCruises" compact />
 
           <TouchableOpacity
             style={styles.passengerPermanentButton}
@@ -778,14 +726,12 @@ export default function EventsScreen() {
             testID="open-passenger-calendar-drilldown"
           >
             <View style={styles.passengerPermanentIcon}>
-              <Users size={20} color="#A7F3D0" />
+              <Users size={16} color="#A7F3D0" />
             </View>
             <View style={styles.passengerPermanentCopy}>
-              <Text style={styles.passengerPermanentEyebrow}>Calendar</Text>
-              <Text style={styles.passengerPermanentTitle}>Calendar Drill Down</Text>
-              <Text style={styles.passengerPermanentSubtitle}>Sea days, port days, gaps, expirations, shared/solo travel</Text>
+              <Text style={styles.passengerPermanentTitle}>Sea View Calendar → Sea Days. Port Days Gaps, Expirations etc.</Text>
             </View>
-            <ChevronRight size={20} color={COLORS.white} />
+            <ChevronRight size={18} color={COLORS.white} />
           </TouchableOpacity>
 
           <View style={styles.viewToggleContainer}>
@@ -803,7 +749,7 @@ export default function EventsScreen() {
                   styles.viewToggleText,
                   viewMode === mode && styles.viewToggleTextActive,
                 ]}>
-                  {mode === 'events' ? 'Events' : mode === 'week' ? 'Week' : mode === 'month' ? 'Month' : mode === '90days' ? '90 Days' : 'History'}
+                  {mode === 'events' ? 'Events' : mode === 'week' ? 'Week' : mode === 'month' ? 'Month' : mode === '90days' ? '90 Days' : 'Passenger'}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -825,15 +771,7 @@ export default function EventsScreen() {
                 activeOpacity={0.7}
               >
                 <Text style={styles.monthYearText}>{formatMonthYear(currentDate)}</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.luckToggleButton, luckCalendarMode && styles.luckToggleButtonActive]}
-                onPress={() => setLuckCalendarMode((prev) => !prev)}
-                activeOpacity={0.7}
-                testID="luck-calendar-toggle-button"
-              >
-                <Sparkles size={18} color={luckCalendarMode ? COLORS.white : '#7C3AED'} />
+                <Text style={styles.eventCountText}>{totalEventsThisMonth} events • Tap to go to today</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -874,19 +812,15 @@ export default function EventsScreen() {
             </TouchableOpacity>
           )}
 
+          {totalEventsThisMonth > 10 && viewMode === 'month' && (
+            <View style={styles.alertBadge}>
+              <AlertTriangle size={14} color={COLORS.white} />
+              <Text style={styles.alertBadgeText}>{totalEventsThisMonth}</Text>
+            </View>
+          )}
+
           {viewMode === 'month' && (
             <View style={styles.calendarContainer}>
-              {luckCalendarMode && (
-                <View style={styles.luckLegendRow} testID="luck-calendar-legend">
-                  <Text style={styles.luckLegendLabel}>Luck Calendar</Text>
-                  <View style={styles.luckLegendScale}>
-                    {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((score) => (
-                      <View key={score} style={[styles.luckLegendSwatch, { backgroundColor: getLuckColor(score) }]} />
-                    ))}
-                  </View>
-                  <Text style={styles.luckLegendMeta}>Low → High</Text>
-                </View>
-              )}
               <View style={styles.weekDaysHeader}>
                 {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
                   <Text key={day} style={styles.weekDayLabel}>{day}</Text>
@@ -952,8 +886,8 @@ export default function EventsScreen() {
             <View style={styles.passengerViewCard} testID="permanent-passenger-calendar-view">
               <View style={styles.passengerHeaderRow}>
                 <View style={styles.passengerHeaderCopy}>
-                  <Text style={styles.passengerTitle}>Historical</Text>
-                  <Text style={styles.passengerSubtitle}>Life at sea timeline for this year</Text>
+                  <Text style={styles.passengerTitle}>Permanent Passenger View</Text>
+                  <Text style={styles.passengerSubtitle}>Life-at-sea timeline for this year</Text>
                 </View>
                 <TouchableOpacity
                   style={styles.passengerDrillButton}
@@ -982,19 +916,7 @@ export default function EventsScreen() {
                       key={item.id}
                       style={styles.passengerItem}
                       activeOpacity={0.75}
-                      onPress={() => {
-                        if (!item.cruiseId) return undefined;
-                        const cruise = filteredBookedCruises.find((entry: any) => entry.id === item.cruiseId) as any;
-                        return router.push({
-                          pathname: '/cruise-details' as any,
-                          params: buildCruiseDetailsParams(cruise, {
-                            id: item.cruiseId,
-                            source: 'events-passenger',
-                            shipName: item.title,
-                            sailDate: item.date,
-                          }),
-                        });
-                      }}
+                      onPress={() => item.cruiseId ? router.push({ pathname: '/(tabs)/(overview)/cruise-details' as any, params: { id: item.cruiseId } }) : undefined}
                     >
                       <View style={[styles.passengerItemRail, { backgroundColor: item.color }]} />
                       <View style={[styles.passengerIconBadge, { backgroundColor: `${item.color}22` }]}>
@@ -1114,62 +1036,66 @@ const styles = StyleSheet.create({
   },
   heroHeader: {
     backgroundColor: COLORS.navyDeep,
-    borderBottomLeftRadius: BORDER_RADIUS.xl,
-    borderBottomRightRadius: BORDER_RADIUS.xl,
+    borderRadius: BORDER_RADIUS.lg,
     marginHorizontal: SPACING.md,
-    marginBottom: SPACING.md,
+    marginBottom: 6,
     marginTop: SPACING.xs,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 200,
-    ...SHADOW.lg,
+    minHeight: 66,
+    ...SHADOW.sm,
   },
 
   heroOverlay: {
+    width: '100%',
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: SPACING.xl,
-    paddingHorizontal: SPACING.lg,
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    paddingHorizontal: SPACING.md,
+    gap: SPACING.sm,
   },
   heroTitle: {
-    fontSize: 32,
+    fontSize: 19,
     fontWeight: '800' as const,
     color: COLORS.white,
-    letterSpacing: 1,
-    textAlign: 'center' as const,
+    letterSpacing: 0.4,
+    textAlign: 'left' as const,
   },
   heroSubtitle: {
-    fontSize: 15,
-    fontWeight: '500' as const,
-    color: 'rgba(255, 255, 255, 0.82)',
-    marginTop: 6,
-    letterSpacing: 0.3,
-    textAlign: 'center' as const,
+    flex: 1,
+    fontSize: 11,
+    fontWeight: '600' as const,
+    color: 'rgba(255, 255, 255, 0.78)',
+    marginTop: 2,
+    letterSpacing: 0.1,
+    textAlign: 'left' as const,
   },
   heroSignature: {
-    width: 240,
-    height: 100,
-    marginTop: 14,
-    opacity: 0.8,
+    width: 86,
+    height: 34,
+    marginTop: 0,
+    opacity: 0.74,
   },
   passengerPermanentButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.sm,
+    gap: 8,
     marginHorizontal: SPACING.md,
-    marginBottom: SPACING.md,
-    padding: SPACING.md,
-    borderRadius: 22,
+    marginBottom: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 16,
     backgroundColor: COLORS.navyDeep,
     borderWidth: 1,
     borderColor: 'rgba(167, 243, 208, 0.24)',
-    ...SHADOW.md,
+    ...SHADOW.sm,
   },
   passengerPermanentIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 16,
+    width: 30,
+    height: 30,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(167, 243, 208, 0.12)',
@@ -1185,8 +1111,8 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase' as const,
   },
   passengerPermanentTitle: {
-    marginTop: 2,
-    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontSize: 13,
+    lineHeight: 17,
     fontWeight: '900' as const,
     color: COLORS.white,
   },
@@ -1252,60 +1178,6 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: 'rgba(220, 38, 38, 0.3)',
     marginLeft: 6,
-  },
-  luckToggleButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: 'rgba(124, 58, 237, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: 'rgba(124, 58, 237, 0.3)',
-    marginLeft: 6,
-  },
-  luckToggleButtonActive: {
-    backgroundColor: '#7C3AED',
-    borderColor: '#7C3AED',
-  },
-  luckDayNumber: {
-    color: '#FFFFFF',
-  },
-  luckScoreText: {
-    marginTop: 2,
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: 'rgba(255,255,255,0.92)',
-  },
-  luckLegendRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.xs,
-    paddingBottom: SPACING.sm,
-    marginBottom: SPACING.xs,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 31, 63, 0.08)',
-  },
-  luckLegendLabel: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    fontWeight: TYPOGRAPHY.fontWeightBold,
-    color: '#7C3AED',
-    textTransform: 'uppercase',
-  },
-  luckLegendScale: {
-    flexDirection: 'row',
-    gap: 2,
-  },
-  luckLegendSwatch: {
-    width: 10,
-    height: 10,
-    borderRadius: 2,
-  },
-  luckLegendMeta: {
-    fontSize: TYPOGRAPHY.fontSizeXS,
-    color: COLORS.navyDeep,
-    opacity: 0.6,
   },
   jumpBanner: {
     flexDirection: 'row',

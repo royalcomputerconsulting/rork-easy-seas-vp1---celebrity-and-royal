@@ -8,7 +8,7 @@ import {
   validateOffer,
   ValidationIssue,
 } from './dataValidators';
-import { createDateFromString } from './date';
+import { addCalendarDateDays, createDateFromString, getDaysBetween } from './date';
 import type { Cruise, BookedCruise, CasinoOffer } from '@/types/models';
 
 export interface RepairAction {
@@ -73,10 +73,11 @@ export function repairCruise(cruise: Cruise): RepairResult<Cruise> {
   }
 
   if (repaired.sailDate && repaired.nights && !repaired.returnDate) {
-    const sailDate = createDateFromString(repaired.sailDate);
-    const returnDate = new Date(sailDate);
-    returnDate.setDate(returnDate.getDate() + repaired.nights);
-    const returnDateStr = returnDate.toISOString().split('T')[0];
+    const returnDateStr = addCalendarDateDays(repaired.sailDate, repaired.nights);
+    if (!returnDateStr) {
+      const failedValidation = validateCruise(repaired);
+      return { original: cruise, repaired, actions, remainingIssues: failedValidation.issues, fullyRepaired: false };
+    }
     
     actions.push({
       field: 'returnDate',
@@ -89,26 +90,23 @@ export function repairCruise(cruise: Cruise): RepairResult<Cruise> {
   }
 
   if (repaired.sailDate && repaired.returnDate && !repaired.nights) {
-    const sailDate = createDateFromString(repaired.sailDate);
-    const returnDate = createDateFromString(repaired.returnDate);
-    const nights = Math.round((returnDate.getTime() - sailDate.getTime()) / (1000 * 60 * 60 * 24));
-    
-    actions.push({
-      field: 'nights',
-      originalValue: repaired.nights,
-      repairedValue: nights,
-      repairType: 'calculate',
-      description: 'Calculated nights from date range',
-    });
-    repaired.nights = nights;
+    const nights = getDaysBetween(repaired.sailDate, repaired.returnDate);
+    if (Number.isFinite(nights) && nights > 0) {
+      actions.push({
+        field: 'nights',
+        originalValue: repaired.nights,
+        repairedValue: nights,
+        repairType: 'calculate',
+        description: 'Calculated nights from date range',
+      });
+      repaired.nights = nights;
+    }
   }
 
   if (repaired.sailDate && repaired.returnDate && repaired.nights) {
-    const sailDate = createDateFromString(repaired.sailDate);
-    const returnDate = createDateFromString(repaired.returnDate);
-    const calculatedNights = Math.round((returnDate.getTime() - sailDate.getTime()) / (1000 * 60 * 60 * 24));
+    const calculatedNights = getDaysBetween(repaired.sailDate, repaired.returnDate);
     
-    if (Math.abs(calculatedNights - repaired.nights) > 1) {
+    if (Number.isFinite(calculatedNights) && Math.abs(calculatedNights - repaired.nights) > 1) {
       actions.push({
         field: 'nights',
         originalValue: repaired.nights,

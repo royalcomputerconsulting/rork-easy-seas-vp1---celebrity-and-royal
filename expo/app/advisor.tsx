@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -8,13 +8,25 @@ import { useCoreData } from '@/state/CoreDataProvider';
 import { buildCruiseDetailsParams } from '@/lib/navigation/cruiseDetails';
 import { buildOfferRecommendations, buildTripStackCandidates, buildUpgradeMath, getCasinoPaysForLabel } from '@/lib/easySeasAdvisor';
 import { usePersonalCertificateOptimizer } from '@/state/PersonalCertificateOptimizerProvider';
+import { useCruiseInventory } from '@/hooks/useCruiseInventory';
+import type { Cruise } from '@/types/models';
 
 export default function AdvisorScreen() {
   const router = useRouter();
-  const { cruises, bookedCruises, casinoOffers } = useCoreData();
+  const { bookedCruises, casinoOffers } = useCoreData();
+  const { queryCruises, totalCruises } = useCruiseInventory();
+  const [candidateCruises, setCandidateCruises] = useState<Cruise[]>([]);
+  useEffect(() => {
+    if (totalCruises === 0) return;
+    let cancelled = false;
+    void queryCruises({ sailDateFrom: new Date().toISOString().slice(0, 10), limit: 200 }).then((page) => {
+      if (!cancelled) setCandidateCruises(page.rows);
+    });
+    return () => { cancelled = true; };
+  }, [queryCruises, totalCruises]);
   const { bundle: optimizationBundle } = usePersonalCertificateOptimizer();
-  const recommendations = useMemo(() => buildOfferRecommendations(cruises, bookedCruises, casinoOffers), [cruises, bookedCruises, casinoOffers]);
-  const tripStacks = useMemo(() => buildTripStackCandidates(cruises, bookedCruises), [cruises, bookedCruises]);
+  const recommendations = useMemo(() => buildOfferRecommendations(candidateCruises, bookedCruises, casinoOffers), [candidateCruises, bookedCruises, casinoOffers]);
+  const tripStacks = useMemo(() => buildTripStackCandidates(candidateCruises, bookedCruises), [candidateCruises, bookedCruises]);
   const top = recommendations[0];
 
   return (

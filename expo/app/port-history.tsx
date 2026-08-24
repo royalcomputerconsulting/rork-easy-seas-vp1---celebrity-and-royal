@@ -1,7 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { buildCruiseDetailsParams } from '@/lib/navigation/cruiseDetails';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Anchor, ChevronRight, Flag, Globe2, MapPin, Ship } from 'lucide-react-native';
 
@@ -16,6 +15,7 @@ import { createDateFromString, formatDate } from '@/lib/date';
 import { buildPortTracker, deriveCruiseDayPlan } from '@/lib/cruisePlanningIntelligence';
 import { filterRecordsByIntelligence, getProfileDisplayName } from '@/lib/intelligenceFilters';
 import type { Cruise, TravelerProfile } from '@/types/models';
+import { useCruiseInventory } from '@/hooks/useCruiseInventory';
 
 type PortScope = 'individual' | 'household';
 
@@ -47,7 +47,6 @@ function buildTravelerProfile(user: ReturnType<typeof useUser>['currentUser']): 
     clubRoyaleId: user.clubRoyaleId,
     celebrityCaptainsClubNumber: user.celebrityCaptainsClubNumber,
     blueChipId: user.blueChipId,
-    carnivalVifpNumber: user.carnivalVifpNumber,
   };
 }
 
@@ -55,19 +54,29 @@ export default function PortHistoryScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ cruiseId?: string }>();
   const { localData } = useAppState();
-  const { cruises, bookedCruises } = useCoreData();
+  const { bookedCruises } = useCoreData();
+  const { getCruiseById } = useCruiseInventory();
   const { currentUser, users } = useUser();
   const { selectedProfileId, selectedBrand, selectedProgram } = useIntelligenceFilters();
   const [scope, setScope] = useState<PortScope>('individual');
+  const [catalogTargetCruise, setCatalogTargetCruise] = useState<Cruise | null>(null);
+
+  useEffect(() => {
+    if (!params.cruiseId || bookedCruises.some((cruise) => cruise.id === params.cruiseId)) return;
+    let cancelled = false;
+    void getCruiseById(params.cruiseId).then((cruise) => {
+      if (!cancelled) setCatalogTargetCruise(cruise);
+    });
+    return () => { cancelled = true; };
+  }, [bookedCruises, getCruiseById, params.cruiseId]);
 
   const filterSnapshot = useMemo(() => ({ selectedProfileId, selectedBrand, selectedProgram }), [selectedBrand, selectedProfileId, selectedProgram]);
 
   const allCruises = useMemo((): Cruise[] => {
     const combined = [
       ...(bookedCruises || []),
-      ...(cruises || []),
       ...((localData.booked || []) as Cruise[]),
-      ...((localData.cruises || []) as Cruise[]),
+      ...(catalogTargetCruise ? [catalogTargetCruise] : []),
     ];
     const scopeFilter = scope === 'household'
       ? { ...filterSnapshot, selectedProfileId: 'all' as const }
@@ -78,7 +87,7 @@ export default function PortHistoryScreen() {
       seen.add(cruise.id);
       return true;
     });
-  }, [bookedCruises, cruises, filterSnapshot, localData.booked, localData.cruises, scope, users]);
+  }, [bookedCruises, catalogTargetCruise, filterSnapshot, localData.booked, scope, users]);
 
   const targetCruise = useMemo(() => {
     if (!params.cruiseId) return undefined;
@@ -231,7 +240,7 @@ export default function PortHistoryScreen() {
             </View>
 
             {targetCruise ? (
-              <TouchableOpacity style={styles.openCruiseButton} onPress={() => router.push({ pathname: '/cruise-details' as any, params: buildCruiseDetailsParams(targetCruise, { source: 'port-history' }) })} activeOpacity={0.82}>
+              <TouchableOpacity style={styles.openCruiseButton} onPress={() => router.push({ pathname: '/(tabs)/(overview)/cruise-details' as any, params: { id: targetCruise.id } })} activeOpacity={0.82}>
                 <Text style={styles.openCruiseText}>Back to cruise planning intelligence</Text>
                 <ChevronRight size={18} color={COLORS.white} />
               </TouchableOpacity>

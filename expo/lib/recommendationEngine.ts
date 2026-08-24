@@ -1,6 +1,7 @@
 import type { Cruise, BookedCruise, CasinoOffer } from '@/types/models';
-import { getDaysUntil, createDateFromString, isDateInPast } from '@/lib/date';
+import { getDaysUntil, createDateFromString, isDateInPast, toLocalCalendarDateOnly } from '@/lib/date';
 import { calculateCruiseValue } from '@/lib/valueCalculator';
+import { knownGuestCount } from '@/lib/cruiseRecordIntegrity';
 
 export interface RecommendationScore {
   cruise: Cruise;
@@ -136,7 +137,8 @@ export function getCabinValueScore(cabinType: string): number {
 }
 
 export function getGuestEfficiencyScore(cruise: Cruise): number {
-  const guests = cruise.guests || 2;
+  const guests = knownGuestCount(cruise.guests);
+  if (!guests) return 0;
   
   if (guests === 2) return 100;
   if (guests === 1) return 50;
@@ -350,7 +352,8 @@ export function getRecommendedCruises(
       const returnDate = createDateFromString(cruise.returnDate);
       let currentDate = new Date(sailDate);
       while (currentDate <= returnDate) {
-        if (bookedDates.has(currentDate.toISOString().split('T')[0])) {
+        const currentDateKey = toLocalCalendarDateOnly(currentDate);
+        if (currentDateKey && bookedDates.has(currentDateKey)) {
           return false;
         }
         currentDate.setDate(currentDate.getDate() + 1);

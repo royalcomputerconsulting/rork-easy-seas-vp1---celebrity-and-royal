@@ -71,7 +71,7 @@ export function EasySeasHero({
             <Image 
               source={require('../assets/images/easyseas-scott-astin-logo.jpeg')}
               style={styles.logoImage}
-              resizeMode="contain"
+              resizeMode="cover"
             />
 
           </View>

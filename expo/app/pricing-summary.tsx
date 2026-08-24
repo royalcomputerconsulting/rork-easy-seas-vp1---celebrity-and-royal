@@ -13,6 +13,7 @@ import { useCoreData } from '@/state/CoreDataProvider';
 import { usePriceTracking } from '@/state/PriceTrackingProvider';
 import { COLORS, SPACING } from '@/constants/theme';
 import { generateCruiseKey } from '@/types/models';
+import { formatDate as formatCalendarDate, isDateInPast } from '@/lib/date';
 
 export default function PricingSummaryScreen() {
   const router = useRouter();
@@ -21,12 +22,7 @@ export default function PricingSummaryScreen() {
   const [selectedView, setSelectedView] = useState<'summary' | 'drops' | 'history'>('summary');
 
   const upcomingCruises = useMemo(() => {
-    return bookedCruises.filter(cruise => {
-      const sailDate = new Date(cruise.sailDate);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      return sailDate >= today && cruise.completionState !== 'completed';
-    });
+    return bookedCruises.filter(cruise => !isDateInPast(cruise.sailDate) && cruise.completionState !== 'completed');
   }, [bookedCruises]);
 
   const pricingStats = useMemo(() => {
@@ -87,10 +83,7 @@ export default function PricingSummaryScreen() {
     }).format(price);
   };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  };
+  const formatDate = (dateString: string) => formatCalendarDate(dateString, 'medium');
 
   const renderSummaryView = () => (
     <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
@@ -200,6 +193,9 @@ export default function PricingSummaryScreen() {
                 </View>
               )}
             </View>
+            <TouchableOpacity style={styles.monitorButton} onPress={() => router.push({ pathname: '/price-upgrade-monitor' as any, params: { cruiseId: cruise.id } })} testID="pricing-open-actionable-monitor">
+              <Text style={styles.monitorButtonText}>OPEN ACTIONABLE PRICE & UPGRADE MONITOR</Text>
+            </TouchableOpacity>
           </View>
         ))}
       </View>
@@ -704,6 +700,23 @@ const styles = StyleSheet.create({
   historyMetaDate: {
     fontSize: 11,
     color: COLORS.textSecondary,
+  },
+  monitorButton: {
+    marginTop: SPACING.md,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.gold,
+    backgroundColor: COLORS.navy,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    alignItems: 'center',
+  },
+  monitorButtonText: {
+    color: COLORS.gold,
+    fontSize: 12,
+    fontWeight: '700' as const,
+    letterSpacing: 0.4,
+    textAlign: 'center',
   },
   emptyState: {
     alignItems: 'center',

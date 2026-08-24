@@ -1,5 +1,6 @@
 import type { BookedCruise, Cruise } from '@/types/models';
 import { DOLLARS_PER_POINT } from '@/types/models';
+import { knownNightCount } from '@/lib/cruiseRecordIntegrity';
 
 export interface CasinoHoursEstimate {
   totalCasinoHours: number;
@@ -96,9 +97,19 @@ export function estimateCasinoHours(
   let totalPortDays = 0;
   let totalCasinoOpenDays = 0;
   let totalNights = 0;
+  const assumptions = [
+    `Average ${avgSessionHoursPerDay} hours of play per active casino day`,
+    playOnPortDays
+      ? 'Playing on port days at 50% of sea day rate'
+      : 'No casino play on port days',
+  ];
 
   cruises.forEach(cruise => {
-    const nights = cruise.nights || 7;
+    const nights = knownNightCount(cruise.nights);
+    if (!nights) {
+      assumptions.push(`${cruise.shipName || 'Cruise'} was excluded because its duration is unknown.`);
+      return;
+    }
     totalNights += nights;
     
     const seaDays = cruise.seaDays ?? Math.ceil(nights * 0.4);
@@ -119,14 +130,10 @@ export function estimateCasinoHours(
   const avgHoursPerDay = totalNights > 0 ? totalCasinoHours / totalNights : 0;
   const estimatedSessionCount = Math.round(totalCasinoHours / avgSessionHoursPerDay);
 
-  const assumptions = [
-    `Average ${avgSessionHoursPerDay} hours of play per active casino day`,
-    playOnPortDays 
-      ? 'Playing on port days at 50% of sea day rate' 
-      : 'No casino play on port days',
+  assumptions.push(
     `${totalSeaDays} sea days, ${totalPortDays} port days across ${cruises.length} cruise(s)`,
     'Casino typically operates 16+ hours per day at sea',
-  ];
+  );
 
   console.log('[CasinoCalculator] Hours estimate:', { totalCasinoHours, hoursPerCruise, avgHoursPerDay });
 

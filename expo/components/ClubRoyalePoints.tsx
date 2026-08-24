@@ -50,7 +50,7 @@ export function ClubRoyalePoints({
   const signatureThreshold = CLUB_ROYALE_TIERS.Signature.threshold;
   const mastersThreshold = CLUB_ROYALE_TIERS.Masters.threshold;
   
-  // Only show Signature progress if user has exceeded the Signature threshold (25,000+)
+  // Only show Signature progress if user has exceeded the Signature threshold (25,001+)
   const hasAchievedSignature = clubRoyalePoints >= signatureThreshold;
   // Calculate actual progress to Signature for users who haven't achieved it yet
   const primeThreshold = CLUB_ROYALE_TIERS.Prime.threshold;
@@ -75,7 +75,7 @@ export function ClubRoyalePoints({
           <View>
             <Text style={styles.title}>Casino & Cruise Loyalty</Text>
             <Text style={styles.pointsText}>
-              {clubRoyalePoints.toLocaleString()} Casino pts • {crownAnchorPoints} C&A points
+              {clubRoyalePoints.toLocaleString()} Casino pts • {crownAnchorPoints} C&A nights
             </Text>
           </View>
         </View>
@@ -92,7 +92,7 @@ export function ClubRoyalePoints({
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
               <Text style={styles.statValue}>{pinnacleProgress.currentPointsNeeded}</Text>
-              <Text style={styles.statLabel}>Points to Pinnacle</Text>
+              <Text style={styles.statLabel}>Pts to Pinnacle</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>

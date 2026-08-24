@@ -1,5 +1,6 @@
 import type { CasinoOffer, Cruise, PriceHistoryRecord, PriceDropAlert } from '@/types/models';
 import { generateCruiseKey } from '@/types/models';
+import { formatDate, isDateInFuture } from './date';
 
 export interface PriceTrackingResult {
   recordsAdded: number;
@@ -181,11 +182,7 @@ export function processOffersForPriceTracking(
 }
 
 export function formatPriceDrop(drop: PriceDropAlert): string {
-  const sailDate = new Date(drop.sailDate).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
+  const sailDate = formatDate(drop.sailDate, 'medium');
   
   return `${drop.cabinType} on ${drop.shipName} (${sailDate}): $${drop.previousPrice.toFixed(0)} → $${drop.currentPrice.toFixed(0)} (Save $${drop.priceDrop.toFixed(0)}, ${drop.priceDropPercent.toFixed(1)}% off)`;
 }
@@ -207,9 +204,5 @@ export function sortPriceDropsByPercent(drops: PriceDropAlert[]): PriceDropAlert
 }
 
 export function filterActivePriceDrops(drops: PriceDropAlert[]): PriceDropAlert[] {
-  const now = new Date();
-  return drops.filter(drop => {
-    const sailDate = new Date(drop.sailDate);
-    return sailDate > now;
-  });
+  return drops.filter(drop => isDateInFuture(drop.sailDate));
 }

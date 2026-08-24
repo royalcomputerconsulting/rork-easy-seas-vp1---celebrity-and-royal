@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -68,6 +68,10 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
     entries,
     entriesTotal,
     entriesLoading,
+    page,
+    pageSize,
+    nextPage,
+    previousPage,
     sailings,
     filters,
     updateFilters,
@@ -77,6 +81,7 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
     deleteRecognitionEntry,
     syncFromCSVLocally,
     importFromTextLocally,
+    ensureLocalDataLoaded,
   } = useCrewRecognition();
 
   const { bookedCruises } = useCoreData();
@@ -88,6 +93,12 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
   const [showFilters, setShowFilters] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState<{ current: number; total: number } | null>(null);
+
+  useEffect(() => {
+    // Hydrate the large registry only after the user intentionally opens this
+    // section, keeping ordinary startup and tab switches responsive.
+    void ensureLocalDataLoaded();
+  }, [ensureLocalDataLoaded]);
 
   const handleSync = useCallback(async () => {
     setIsSyncing(true);
@@ -196,7 +207,7 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
         </TouchableOpacity>
         <TouchableOpacity style={styles.importTextButton} onPress={() => setShowImportTextModal(true)}>
           <Plus size={18} color="#059669" />
-          <Text style={styles.importTextButtonText}>Import List</Text>
+          <Text style={styles.importTextButtonText}>Import CSV/Text</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.syncButton, isSyncing && styles.syncButtonDisabled]}
@@ -455,8 +466,19 @@ export const CrewRecognitionSection = React.memo(function CrewRecognitionSection
                   </View>
                 </TouchableOpacity>
               ))}
-            </View>
+          </View>
         )}
+        {!showMockData && entriesTotal > pageSize ? (
+          <View style={styles.paginationRow} testID="crew-recognition.pagination">
+            <TouchableOpacity style={[styles.pageButton, page <= 1 && styles.pageButtonDisabled]} onPress={previousPage} disabled={page <= 1}>
+              <Text style={styles.pageButtonText}>Previous</Text>
+            </TouchableOpacity>
+            <Text style={styles.pageLabel}>Page {page} of {Math.ceil(entriesTotal / pageSize)} · showing at most {pageSize}</Text>
+            <TouchableOpacity style={[styles.pageButton, page * pageSize >= entriesTotal && styles.pageButtonDisabled]} onPress={nextPage} disabled={page * pageSize >= entriesTotal}>
+              <Text style={styles.pageButtonText}>Next</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
       </View>
 
       <AddCrewMemberModal
@@ -676,6 +698,11 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeSM,
     fontWeight: '600' as const,
   },
+  paginationRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingTop: 12 },
+  pageButton: { borderRadius: 9, backgroundColor: '#0369A1', paddingHorizontal: 12, paddingVertical: 8 },
+  pageButtonDisabled: { opacity: 0.35 },
+  pageButtonText: { color: '#FFFFFF', fontWeight: '700', fontSize: 12 },
+  pageLabel: { flex: 1, textAlign: 'center', color: '#475569', fontSize: 11, fontWeight: '600' },
   filterBar: {
     flexDirection: 'row',
     gap: SPACING.sm,

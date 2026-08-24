@@ -69,9 +69,9 @@ async function executeProbe(probeSource, input) {
 
 async function main() {
   const app = readJson('app.json');
-  assert(app.expo.version === '12.4.2', 'Marketing version must remain 12.4.2');
-  assert(app.expo.ios.buildNumber === '314', 'Original iOS buildNumber must remain 314');
-  assert(app.expo.android.versionCode === 120405, 'Original Android versionCode must remain 120405');
+  assert(app.expo.version === '12.4.4', 'Marketing version must remain 12.4.4');
+  assert(app.expo.ios.buildNumber === '319', 'Original iOS buildNumber must remain 319');
+  assert(app.expo.android.versionCode === 120410, 'Original Android versionCode must remain 120410');
 
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'easyseas-carnival-auth-fix-'));
   for (const relative of [
@@ -107,13 +107,13 @@ async function main() {
   const rejected = await executeProbe(probe, {
     response: {
       ok: false,
-      status: 401,
+      status: 402,
       url: 'https://www.carnival.com/profilemanagement/api/v1.0/Profiles',
       headers: { get: () => 'application/json' },
       text: async () => JSON.stringify({ message: 'Unauthorized' }),
     },
   });
-  assert(!rejected.authenticated && rejected.source === 'protected_profile_api_rejected', 'HTTP 401 from protected Profiles API must remain login expired');
+  assert(!rejected.authenticated && rejected.source === 'protected_profile_api_rejected', 'HTTP 402 from protected Profiles API must remain login expired');
 
   const visibleLogin = await executeProbe(probe, {
     url: 'https://www.carnival.com/login',

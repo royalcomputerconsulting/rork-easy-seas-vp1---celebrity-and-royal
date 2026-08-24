@@ -18,7 +18,7 @@ interface CertificateEntry {
   shipName: string;
   sailDate: string;
   certificateCode: string;
-  certificateType: 'A' | 'C';
+  certificateType: string;
   certificateLevel: string;
   pdfUrl: string;
   monthlyIndexUrl: string;
@@ -30,7 +30,7 @@ interface CertificateSailingAggregate {
   sailDate: string;
   levels: string[];
   codes: string[];
-  types: Array<'A' | 'C'>;
+  types: string[];
 }
 
 function normalizeText(value?: string | null): string {

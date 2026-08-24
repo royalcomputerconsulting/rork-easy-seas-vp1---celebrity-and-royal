@@ -18,6 +18,7 @@ import {
   findCruiseReplacementCandidates,
   type ReplacementCandidate,
 } from '@/lib/cruisePlanningIntelligence';
+import { knownNightCount } from '@/lib/cruiseRecordIntegrity';
 
 export interface AgentToolContext {
   cruises: Cruise[];
@@ -80,9 +81,9 @@ export interface OfferAnalysisInput {
 
 const CLUB_ROYALE_TIER_SEQUENCE: { tier: ClubRoyaleTier; threshold: number }[] = [
   { tier: 'Choice', threshold: 0 },
-  { tier: 'Prime', threshold: 2500 },
-  { tier: 'Signature', threshold: 25000 },
-  { tier: 'Masters', threshold: 100000 },
+  { tier: 'Prime', threshold: 2501 },
+  { tier: 'Signature', threshold: 25001 },
+  { tier: 'Masters', threshold: 100001 },
 ];
 
 function getClubRoyaleTierByPoints(points: number): ClubRoyaleTier {
@@ -356,7 +357,7 @@ export function executePortfolioOptimizer(input: PortfolioOptimizerInput, contex
   const currentPoints = context.userPoints;
   const currentTier = context.currentTier;
   const targetTier = input.targetTier || 'Signature';
-  const targetPoints = CLUB_ROYALE_TIERS[targetTier as ClubRoyaleTier]?.threshold || 25000;
+  const targetPoints = CLUB_ROYALE_TIERS[targetTier as ClubRoyaleTier]?.threshold || 25001;
   const pointsNeeded = Math.max(0, targetPoints - currentPoints);
   
   const bookedIds = new Set(context.bookedCruises.map(b => b.id));
@@ -683,7 +684,8 @@ function findOfferForReplacementCruise(cruise: Cruise, offers: CasinoOffer[]): C
 
 function estimateReplacementOutOfPocketForAgent(cruise: Cruise, offers: CasinoOffer[]): number {
   const offer = findOfferForReplacementCruise(cruise, offers);
-  const taxes = cruise.taxes ?? offer?.taxesFees ?? offer?.portCharges ?? Math.round((cruise.nights || offer?.nights || 7) * 60);
+  const nights = knownNightCount(cruise.nights) ?? knownNightCount(offer?.nights);
+  const taxes = cruise.taxes ?? offer?.taxesFees ?? offer?.portCharges ?? (nights ? Math.round(nights * 60) : 0);
   const cabin = cruise.price ?? cruise.totalPrice ?? 0;
   return Math.max(0, taxes + cabin);
 }

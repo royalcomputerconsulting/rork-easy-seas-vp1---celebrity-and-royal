@@ -6,13 +6,14 @@ void function() {
   console.log('[Easy Seas] Content script v5 loaded on', window.location.href);
 
   var overlayElement = null;
+  // Identity metadata is kept only for this tab. Provider tokens, cookies,
+  // and app keys are never persisted by the extension.
   var authContext = null;
   var pricingCache = {};
-  var pageCruiseLine = window.location.hostname.includes('carnival') ? 'carnival' : window.location.hostname.includes('celebrity') ? 'celebrity' : 'royal';
   var capturedData = {
     offers: null, upcomingCruises: null, courtesyHolds: null, loyalty: null,
     isLoggedIn: false,
-    cruiseLine: pageCruiseLine
+    cruiseLine: window.location.hostname.includes('carnival') ? 'carnival' : window.location.hostname.includes('celebrity') ? 'celebrity' : 'royal'
   };
 
   var SYNC_STEPS = {
@@ -39,7 +40,7 @@ void function() {
     var base = getBaseUrl();
     if (capturedData.cruiseLine === 'carnival') {
       return {
-        offers: base + '/profilemanagement/profiles/offers',
+        offers: base + '/cruise-deals',
         upcoming: base + '/profilemanagement/profiles/cruises',
         courtesy: base + '/profilemanagement/profiles/cruises',
         loyalty: base + '/profilemanagement/profiles/cruises'
@@ -65,13 +66,11 @@ void function() {
   window.addEventListener('message', function(e) {
     if (!e.data || e.data.source !== 'easy-seas-page') return;
     if (e.data.type === 'auth_data') {
-      if (e.data.auth && e.data.auth.token && e.data.auth.accountId) {
+      if (e.data.auth && e.data.auth.accountId) {
         authContext = {
-          token: e.data.auth.token,
           accountId: e.data.auth.accountId,
           loyaltyId: e.data.auth.loyaltyId || '',
-          firstName: e.data.auth.firstName || '',
-          appKey: e.data.appKey || ''
+          firstName: e.data.auth.firstName || ''
         };
         capturedData.isLoggedIn = true;
         addLog('User logged in' + (authContext.firstName ? ' as ' + authContext.firstName : ''), 'success');
@@ -97,10 +96,8 @@ void function() {
       if (capturedData.upcomingCruises) toSave.es_upcomingCruises = capturedData.upcomingCruises;
       if (capturedData.courtesyHolds) toSave.es_courtesyHolds = capturedData.courtesyHolds;
       if (capturedData.loyalty) toSave.es_loyalty = capturedData.loyalty;
-      if (authContext) toSave.es_auth = authContext;
       if (Object.keys(pricingCache).length) toSave.es_pricingCache = pricingCache;
       toSave.es_cruiseLine = capturedData.cruiseLine;
-      toSave.es_isLoggedIn = capturedData.isLoggedIn;
       chrome.storage.local.set(toSave);
     } catch(ex) { console.error('[Easy Seas] Storage save error:', ex); }
   }
@@ -109,36 +106,21 @@ void function() {
     try {
       var r = await chrome.storage.local.get([
         'es_offers', 'es_upcomingCruises', 'es_courtesyHolds', 'es_loyalty',
-        'es_auth', 'es_cruiseLine', 'es_isLoggedIn', 'es_pricingCache'
+        'es_cruiseLine', 'es_pricingCache'
       ]);
-      // Never restore Royal/Celebrity data into Carnival (or vice versa). The extension
-      // navigates among pages during a sync, so storage is useful only when the saved
-      // brand matches the domain currently running this content script.
-      if (r.es_cruiseLine && r.es_cruiseLine !== pageCruiseLine) {
-        capturedData.cruiseLine = pageCruiseLine;
-        capturedData.isLoggedIn = false;
-        authContext = null;
-        pricingCache = {};
-        console.log('[Easy Seas] Ignored stored ' + r.es_cruiseLine + ' data on ' + pageCruiseLine + ' domain');
-        return;
-      }
       if (r.es_offers) capturedData.offers = r.es_offers;
       if (r.es_upcomingCruises) capturedData.upcomingCruises = r.es_upcomingCruises;
       if (r.es_courtesyHolds) capturedData.courtesyHolds = r.es_courtesyHolds;
       if (r.es_loyalty) capturedData.loyalty = r.es_loyalty;
-      if (r.es_auth) { authContext = r.es_auth; capturedData.isLoggedIn = true; }
-      capturedData.cruiseLine = pageCruiseLine;
-      if (r.es_isLoggedIn) capturedData.isLoggedIn = r.es_isLoggedIn;
+      if (r.es_cruiseLine) capturedData.cruiseLine = r.es_cruiseLine;
+      capturedData.isLoggedIn = false;
       if (r.es_pricingCache) pricingCache = r.es_pricingCache;
     } catch(ex) { console.error('[Easy Seas] Storage load error:', ex); }
   }
 
   async function getSyncState() {
     try {
-      var r = await chrome.storage.local.get(['es_syncStep', 'es_syncBounceCount', 'es_syncLogs', 'es_syncCruiseLine']);
-      if (r.es_syncCruiseLine && r.es_syncCruiseLine !== pageCruiseLine) {
-        return { step: SYNC_STEPS.IDLE, bounceCount: 0, logs: [] };
-      }
+      var r = await chrome.storage.local.get(['es_syncStep', 'es_syncBounceCount', 'es_syncLogs']);
       return {
         step: r.es_syncStep || SYNC_STEPS.IDLE,
         bounceCount: r.es_syncBounceCount || 0,
@@ -149,7 +131,7 @@ void function() {
 
   async function setSyncState(step, bounceCount) {
     try {
-      var toSave = { es_syncStep: step, es_syncCruiseLine: pageCruiseLine };
+      var toSave = { es_syncStep: step };
       if (bounceCount !== undefined) toSave.es_syncBounceCount = bounceCount;
       await chrome.storage.local.set(toSave);
     } catch(ex) {}
@@ -157,7 +139,7 @@ void function() {
 
   async function clearSyncState() {
     try {
-      await chrome.storage.local.remove(['es_syncStep', 'es_syncBounceCount', 'es_syncLogs', 'es_navTarget', 'es_navFrom', 'es_navAttemptTs', 'es_syncCruiseLine']);
+      await chrome.storage.local.remove(['es_syncStep', 'es_syncBounceCount', 'es_syncLogs', 'es_navTarget']);
     } catch(ex) {}
   }
 
@@ -172,17 +154,9 @@ void function() {
     return [];
   }
 
-  function getOfferCount(data) {
-    if (!data) return 0;
-    if (capturedData.cruiseLine === 'carnival' && window.EasySeasCarnivalSync) {
-      return window.EasySeasCarnivalSync.getOfferCount(data);
-    }
-    return (data.offers && data.offers.length) || 0;
-  }
-
   function countItems(key, data) {
     if (!data) return 0;
-    if (key === 'offers') return getOfferCount(data);
+    if (key === 'offers') return (data.offers && data.offers.length) || 0;
     if (key === 'upcomingCruises') return extractBookings(data).length;
     if (key === 'courtesyHolds') {
       if (data.payload && data.payload.sailingInfo) return data.payload.sailingInfo.length;
@@ -243,7 +217,6 @@ void function() {
         capturedData.isLoggedIn = true;
         if (!authContext) {
           authContext = {
-            token: 'carnival_cookie_auth',
             accountId: cookieVifp || 'carnival_user',
             loyaltyId: cookieVifp || '',
             firstName: cookieFirstName || ''
@@ -288,11 +261,7 @@ void function() {
         bodyTextUpper.indexOf('TIER DIAMOND') !== -1 || bodyHTMLUpper.indexOf('TIER RED') !== -1 ||
         bodyHTMLUpper.indexOf('TIER BLUE') !== -1 || bodyHTMLUpper.indexOf('TIER GOLD') !== -1 ||
         bodyHTMLUpper.indexOf('TIER PLATINUM') !== -1 || bodyHTMLUpper.indexOf('TIER DIAMOND') !== -1;
-      // Public Carnival pages contain VIFP text, tier marketing, profile links, and Manage Bookings.
-      // Only accept strong member identity signals so START SYNC cannot run from a public page.
-      capturedData.isLoggedIn = !!hasVIFPNumber || !!hasLogout ||
-        !!(hasWelcome && (isProfilePage || hasManageBookings || hasManageBookingsText || hasVIFPEl)) ||
-        !!(isProfilePage && hasVIFPInHTML);
+      capturedData.isLoggedIn = hasWelcome || hasVIFP || hasVIFPEl || hasLogout || isProfilePage || hasCookie || hasManageBookings || hasManageBookingsText || hasVIFPNumber || hasVIFPInHTML || hasTierText;
       console.log('[Easy Seas] Carnival login check:', JSON.stringify({
         hasWelcome: hasWelcome, hasVIFP: hasVIFP, hasVIFPEl: hasVIFPEl, hasLogout: hasLogout,
         isProfilePage: isProfilePage, hasManageBookings: hasManageBookings, hasManageBookingsText: hasManageBookingsText,
@@ -304,7 +273,8 @@ void function() {
         var vifpNum = '';
         var vifpM = bodyText.match(/(?:VIFP\s*Club[#:\s]+|Club\s*#\s*:?\s*)(\d{6,12})/i) ||
                     bodyHTML.match(/(?:VIFP|vifp|Club)[^>]*?>\s*(\d{9,12})/i) ||
-                    bodyHTML.match(/(?:vifp|VIFP|loyalty|member)[^"]*?["'][^"]*?(\d{9,12})/i);
+                    bodyHTML.match(/(?:vifp|VIFP|loyalty|member)[^"]*?["'][^"]*?(\d{9,12})/i) ||
+                    bodyText.match(/(\d{9,12})/);
         if (vifpM) vifpNum = vifpM[1];
         var firstName = '';
         var nameM = bodyText.match(/WELCOME\s+BACK[,\s]+([A-Z]+)/i) ||
@@ -312,7 +282,6 @@ void function() {
         if (nameM) firstName = nameM[1];
         if (!authContext) {
           authContext = {
-            token: 'carnival_dom_auth',
             accountId: vifpNum || 'carnival_user',
             loyaltyId: vifpNum || '',
             firstName: firstName || ''
@@ -402,7 +371,7 @@ void function() {
       loginEl.className = capturedData.isLoggedIn ? 'es-badge es-badge-success' : 'es-badge es-badge-warning';
     }
     var offerEl = document.getElementById('offer-count');
-    if (offerEl) offerEl.textContent = getOfferCount(capturedData.offers);
+    if (offerEl) offerEl.textContent = (capturedData.offers && capturedData.offers.offers && capturedData.offers.offers.length) || 0;
 
     var pricingEl = document.getElementById('pricing-count');
     if (pricingEl) {
@@ -440,7 +409,7 @@ void function() {
 
       var dlBtn = document.getElementById('download-btn');
       if (dlBtn) {
-        var hasData = getOfferCount(capturedData.offers) > 0 || getBookingsCount() > 0;
+        var hasData = (capturedData.offers && capturedData.offers.offers && capturedData.offers.offers.length > 0) || getBookingsCount() > 0;
         dlBtn.disabled = !hasData || isRunning;
       }
     });
@@ -499,17 +468,34 @@ void function() {
     });
   }
 
+  function getCookieValue(name) {
+    var target = String(name || '').toLowerCase();
+    var parts = String(document.cookie || '').split(';');
+    for (var i = 0; i < parts.length; i++) {
+      var pair = parts[i];
+      var separator = pair.indexOf('=');
+      var key = (separator >= 0 ? pair.slice(0, separator) : pair).trim().toLowerCase();
+      if (key !== target) continue;
+      var value = separator >= 0 ? pair.slice(separator + 1).trim() : '';
+      try { return decodeURIComponent(value); } catch (e) { return value; }
+    }
+    return '';
+  }
+
   function buildHeaders() {
+    var accountId = (authContext && authContext.accountId) || getCookieValue('VDS_ID');
+    var loyaltyId = (authContext && authContext.loyaltyId) || getCookieValue('loyalty_ID');
     var headers = {
       'accept': 'application/json',
       'content-type': 'application/json',
-      'account-id': authContext.accountId,
-      'authorization': authContext.token
+      'cache-control': 'no-cache',
+      'pragma': 'no-cache'
     };
-    if (authContext.appKey) {
-      headers['appkey'] = authContext.appKey;
-      headers['x-api-key'] = authContext.appKey;
+    if (accountId) {
+      headers['account-id'] = accountId;
+      headers['x-account-id'] = accountId;
     }
+    if (loyaltyId) headers['x-loyalty-id'] = loyaltyId;
     return headers;
   }
 
@@ -517,7 +503,8 @@ void function() {
     retries = retries || 2;
     for (var i = 0; i <= retries; i++) {
       try {
-        var resp = await fetch(url, options);
+        var requestOptions = Object.assign({ credentials: 'include' }, options || {});
+        var resp = await fetch(url, requestOptions);
         if (resp.ok) return resp;
         if (resp.status === 403 || resp.status === 401) {
           addLog('Auth error (' + resp.status + ') on attempt ' + (i + 1), 'warning');
@@ -534,7 +521,7 @@ void function() {
     var shortUrl = url.replace(/https:\/\/www\.[^/]+/, '');
     addLog('Navigating to ' + shortUrl, 'info');
     console.log('[Easy Seas] navigateTo:', url, '| from:', window.location.href);
-    chrome.storage.local.set({ es_navTarget: url, es_navFrom: window.location.href, es_navAttemptTs: Date.now(), es_syncCruiseLine: pageCruiseLine });
+    chrome.storage.local.set({ es_navTarget: url, es_navFrom: window.location.href, es_navAttemptTs: Date.now() });
     var beforeUrl = window.location.href;
 
     var bgNavSent = false;
@@ -778,13 +765,24 @@ void function() {
   }
 
   async function startCarnivalSync() {
-    var reason = window.EasySeasCarnivalSync && window.EasySeasCarnivalSync.deprecationReason
-      ? window.EasySeasCarnivalSync.deprecationReason
-      : 'Legacy Carnival extension sync is disabled. Use the authenticated Easy Seas mobile sync engine or import an existing Carnival CSV export.';
-    addLog(reason, 'warning');
-    updateProgress(0, 0, 'Carnival desktop sync disabled');
-    await setSyncState(SYNC_STEPS.DONE, 0);
-    updateUI();
+    addLog('Starting Carnival sync...', 'info');
+
+    await chrome.storage.local.remove([
+      'es_offers', 'es_upcomingCruises', 'es_courtesyHolds', 'es_loyalty', 'es_pricingCache'
+    ]);
+    capturedData.offers = null;
+    capturedData.upcomingCruises = null;
+    capturedData.courtesyHolds = null;
+    capturedData.loyalty = null;
+    pricingCache = {};
+
+    saveCapturedToStorage();
+
+    var urls = getPageUrls();
+    updateProgress(1, 3, 'Step 1/3: Navigating to cruise deals...');
+    addLog('Step 1: Navigating to Carnival cruise deals page to capture offers...', 'info');
+    await setSyncState(SYNC_STEPS.OFFERS, 0);
+    navigateTo(urls.offers);
   }
 
   async function startSync() {
@@ -814,61 +812,62 @@ void function() {
     addLog('Step 1: Calling casino offers API...', 'info');
 
     try {
-      var offersUrl = baseUrl + (brand === 'C' ? '/api/casino/casino-offers/v2' : '/api/casino/casino-offers/v1');
-      var offersResp = await fetchWithRetry(offersUrl, {
-        method: 'POST',
-        headers: headers,
-        credentials: 'omit',
-        body: JSON.stringify({ cruiseLoyaltyId: authContext.loyaltyId, offerCode: '', brand: brand })
-      });
-
-      if (offersResp) {
-        var offersData = await offersResp.json();
-        capturedData.offers = offersData;
-        var offerCount = (offersData.offers && offersData.offers.length) || 0;
-        addLog('Captured ' + offerCount + ' casino offers', 'success');
-
-        if (offersData.offers) {
-          var emptyOffers = offersData.offers.filter(function(o) {
-            return o && o.campaignOffer && o.campaignOffer.offerCode &&
-              Array.isArray(o.campaignOffer.sailings) &&
-              (o.campaignOffer.sailings.length === 0 || (o.campaignOffer.sailings[0] && o.campaignOffer.sailings[0].itineraryCode === null));
-          });
-
-          if (emptyOffers.length > 0) {
-            addLog('Re-fetching ' + emptyOffers.length + ' offers with empty sailings...', 'info');
-            for (var ei = 0; ei < emptyOffers.length; ei++) {
-              var code = emptyOffers[ei].campaignOffer.offerCode.trim();
-              try {
-                var rfResp = await fetch(offersUrl, {
-                  method: 'POST', headers: headers, credentials: 'omit',
-                  body: JSON.stringify({ cruiseLoyaltyId: authContext.loyaltyId, offerCode: code, brand: brand })
-                });
-                if (rfResp.ok) {
-                  var rfData = await rfResp.json();
-                  var refreshed = rfData.offers && rfData.offers.find(function(o) { return o && o.campaignOffer && o.campaignOffer.offerCode === code; });
-                  if (refreshed && refreshed.campaignOffer.sailings && refreshed.campaignOffer.sailings.length > 0) {
-                    var origIdx = offersData.offers.findIndex(function(o) { return o && o.campaignOffer && o.campaignOffer.offerCode === code; });
-                    if (origIdx !== -1) {
-                      offersData.offers[origIdx].campaignOffer.sailings = refreshed.campaignOffer.sailings;
-                      addLog('  ' + (offersData.offers[origIdx].campaignOffer.name || code) + ': ' + refreshed.campaignOffer.sailings.length + ' sailings', 'success');
-                    }
-                  }
-                }
-              } catch(rfe) {}
-              await new Promise(function(r) { setTimeout(r, 300); });
-            }
-            capturedData.offers = offersData;
-          }
-
-          offersData.offers.forEach(function(offer) {
-            var co = offer.campaignOffer || offer;
-            addLog('  ' + (co.name || 'Offer') + ': ' + (co.sailings || []).length + ' sailings', 'info');
-          });
-        }
-      } else {
-        addLog('Offers API failed after retries', 'warning');
+      var partnerUrl = baseUrl + '/api/casino/v1/partners/player';
+      var partnerResp = await fetchWithRetry(partnerUrl, { method: 'GET', headers: headers, credentials: 'include' });
+      var partnershipIds = [];
+      if (partnerResp) {
+        var partnerData = await partnerResp.json();
+        var partners = Array.isArray(partnerData) ? partnerData : (Array.isArray(partnerData && partnerData.data) ? partnerData.data : []);
+        partnershipIds = partners.map(function(partner) { return String((partner && (partner.partnershipId || partner.id)) || partner || ''); }).filter(Boolean);
       }
+
+      var listParams = new URLSearchParams();
+      if (partnershipIds.length) listParams.append('partnershipIds', partnershipIds.join(','));
+      listParams.append('sortBy', 'offer.reserveByDate');
+      listParams.append('sortDirection', 'asc');
+      listParams.append('limit', '100');
+      listParams.append('page', '1');
+      listParams.append('digitalRedemption', 'true');
+      var listUrl = baseUrl + '/api/casino/v2/offers/list?' + listParams.toString();
+      var listResp = await fetchWithRetry(listUrl, { method: 'GET', headers: headers, credentials: 'include' });
+      if (!listResp) throw new Error('Current offers list failed after retries');
+      var listData = await listResp.json();
+      var initialOffers = Array.isArray(listData && listData.offers) ? listData.offers : (Array.isArray(listData) ? listData : []);
+      if (!initialOffers.length) throw new Error('Current offers list returned zero offers');
+
+      var detailedOffers = [];
+      for (var oi = 0; oi < initialOffers.length; oi++) {
+        var initial = initialOffers[oi];
+        var campaign = (initial && initial.campaignOffer) || initial || {};
+        var offerCode = String(campaign.offerCode || '').trim();
+        var playerOfferId = String((initial && initial.playerOfferId) || campaign.playerOfferId || '').trim();
+        var merged = initial;
+        if (offerCode && playerOfferId) {
+          var detailParams = new URLSearchParams();
+          detailParams.append('offerCode', offerCode);
+          detailParams.append('playerOfferId', playerOfferId);
+          detailParams.append('limit', '999');
+          detailParams.append('page', '1');
+          detailParams.append('sortBy', 'offer.reserveByDate');
+          detailParams.append('sortDirection', 'asc');
+          var detailResp = await fetchWithRetry(baseUrl + '/api/casino/v2/offers/details?' + detailParams.toString(), { method: 'GET', headers: headers, credentials: 'include' }, 1);
+          if (detailResp) {
+            var detailData = await detailResp.json();
+            var detailOffer = null;
+            if (Array.isArray(detailData && detailData.offers) && detailData.offers.length) {
+              detailOffer = detailData.offers.find(function(item) { return ((item.campaignOffer || item).offerCode || '').trim() === offerCode; }) || detailData.offers[0];
+              detailOffer = detailOffer.campaignOffer || detailOffer;
+            } else if (detailData && detailData.campaignOffer) detailOffer = detailData.campaignOffer;
+            else if (detailData && (detailData.sailings || detailData.offerCode)) detailOffer = detailData;
+            if (detailOffer) merged = Object.assign({}, initial, { campaignOffer: Object.assign({}, campaign, detailOffer) });
+          }
+        }
+        detailedOffers.push(merged);
+        var count = merged && merged.campaignOffer && Array.isArray(merged.campaignOffer.sailings) ? merged.campaignOffer.sailings.length : 0;
+        addLog('  ' + ((merged.campaignOffer && merged.campaignOffer.name) || offerCode || 'Offer') + ': ' + count + ' sailings', 'info');
+      }
+      capturedData.offers = Object.assign({}, listData, { offers: detailedOffers });
+      addLog('Captured ' + detailedOffers.length + ' casino offers using the current Royal API flow', 'success');
     } catch(oe) {
       addLog('Offers fetch error: ' + oe.message, 'warning');
     }
@@ -975,7 +974,7 @@ void function() {
 
   function getMissingSections() {
     var missing = [];
-    if (getOfferCount(capturedData.offers) === 0 && !(capturedData.offers && capturedData.offers.noOffersConfirmed)) missing.push('offers');
+    if (!capturedData.offers || !capturedData.offers.offers || capturedData.offers.offers.length === 0) missing.push('offers');
     if (extractBookings(capturedData.upcomingCruises).length === 0) missing.push('upcomingCruises');
     if (!capturedData.loyalty) missing.push('loyalty');
     return missing;
@@ -996,126 +995,59 @@ void function() {
   }
 
   async function resumeCarnivalSync(state, urls) {
-    var carnival = window.EasySeasCarnivalSync;
-    if (carnival && carnival.disabled) {
-      addLog(carnival.deprecationReason, 'warning');
-      await setSyncState(SYNC_STEPS.DONE, 0);
-      updateProgress(0, 0, 'Carnival desktop sync disabled');
-      updateUI();
-      return;
-    }
     addLog('Resuming Carnival sync step: ' + state.step, 'info');
-
-    if (!carnival) {
-      addLog('Carnival sync helper did not load. Reload the page and try again.', 'error');
-      await setSyncState(SYNC_STEPS.DONE);
-      updateUI();
-      return;
-    }
 
     if (state.step === SYNC_STEPS.OFFERS) {
       if (!isOnExpectedPage(urls.offers)) {
-        addLog('Not on Carnival My Offers yet, navigating...', 'warning');
+        addLog('Not on cruise deals page yet, navigating...', 'warning');
         navigateTo(urls.offers);
         return;
       }
+      updateProgress(1, 3, 'Step 1/3: Waiting for offers data...');
+      addLog('On cruise deals page, waiting for offers to load...', 'info');
 
-      updateProgress(1, 3, 'Step 1/3: Discovering personalized Carnival offers...');
-      addLog('Reading Carnival My Offers, personalized URLs, VIFP payloads, ratecodes, and tgo catalog...', 'info');
-      await new Promise(function(resolve) { setTimeout(resolve, 3500); });
-
-      var catalog = carnival.discoverCatalog(capturedData.offers, authContext);
-      if (catalog.rateCodes.length === 0 && !catalog.noOffersConfirmed) {
-        addLog('No rate codes found yet; waiting for Carnival offer API/card rendering...', 'warning');
-        await waitForPassiveCapture('offers', 10000);
-        await new Promise(function(resolve) { setTimeout(resolve, 2000); });
-        catalog = carnival.discoverCatalog(capturedData.offers, authContext);
-      }
-
-      addLog('Discovered ' + catalog.rateCodes.length + ' Carnival rate code(s)' +
-        (catalog.actionCards && catalog.actionCards.length ? ' across ' + catalog.actionCards.length + ' visible offer action(s)' : ''),
-        catalog.rateCodes.length > 0 || catalog.noOffersConfirmed ? 'success' : 'warning');
-
-      if (catalog.rateCodes.length === 0) {
-        capturedData.offers = { offers: [], catalog: catalog, source: 'carnival', noOffersConfirmed: !!catalog.noOffersConfirmed };
-        saveCapturedToStorage();
-        if (!catalog.noOffersConfirmed) {
-          addLog('Carnival did not expose a usable personalized rate code. Existing app data will not be replaced by this extension run.', 'error');
-        } else {
-          addLog('Carnival explicitly reports no active offers for this profile.', 'success');
-        }
+      var gotOffers = await waitForPassiveCapture('offers', 12000);
+      if (gotOffers) {
+        var offerCount = (capturedData.offers && capturedData.offers.offers && capturedData.offers.offers.length) || 0;
+        addLog('Captured ' + offerCount + ' Carnival offers', 'success');
       } else {
-        var scraped = await carnival.scrapeAllOffers(catalog, function(progress) {
-          if (progress.stage === 'offer-start') {
-            updateProgress(1, 3, 'Downloading Carnival offer ' + progress.index + '/' + progress.total + ': ' + progress.code);
-            addLog('Downloading offer ' + progress.index + '/' + progress.total + ': ' + progress.code +
-              (progress.title ? ' — ' + progress.title : ''), 'info');
-          } else if (progress.stage === 'offer-page') {
-            addLog('  ' + progress.code + ': reading result page ' + progress.page + (progress.pages > 1 ? '/' + progress.pages : ''), 'info');
-          } else if (progress.stage === 'offer-complete') {
-            addLog('  ' + progress.code + ': ' + progress.rows + ' sailing(s)' +
-              (progress.error ? ' — ' + progress.error : ''), progress.rows > 0 ? 'success' : 'warning');
-          }
-        });
-        capturedData.offers = scraped;
-        saveCapturedToStorage();
-        var sailingCount = scraped.rows ? scraped.rows.length : 0;
-        addLog('Carnival offers captured: ' + scraped.offers.length + ' offer(s), ' + sailingCount + ' unique sailing(s)', 'success');
-        if (scraped.failures && scraped.failures.length) {
-          addLog('Some Carnival offer pages could not be read: ' + scraped.failures.map(function(f) { return f.code; }).join(', ') + '. Successful offers remain available.', 'warning');
-        }
+        addLog('No offers captured passively on deals page', 'warning');
       }
 
       updateUI();
       await setSyncState(SYNC_STEPS.UPCOMING, state.bounceCount);
-      updateProgress(2, 3, 'Step 2/3: Navigating to My Cruises and VIFP history...');
-      addLog('Step 2: Navigating to Carnival My Cruises for booked, completed, and loyalty data...', 'info');
+      updateProgress(2, 3, 'Step 2/3: Navigating to your cruises...');
+      addLog('Step 2: Navigating to Carnival profile/cruises page...', 'info');
       navigateTo(urls.upcoming);
       return;
     }
 
     if (state.step === SYNC_STEPS.UPCOMING || state.step === SYNC_STEPS.LOYALTY) {
       if (!isOnExpectedPage(urls.upcoming)) {
-        addLog('Not on Carnival My Cruises yet, navigating...', 'warning');
+        addLog('Not on profile/cruises page yet, navigating...', 'warning');
         navigateTo(urls.upcoming);
         return;
       }
+      updateProgress(2, 3, 'Step 2/3: Waiting for cruise bookings data...');
+      addLog('On profile/cruises page, waiting for bookings to load...', 'info');
 
-      updateProgress(2, 3, 'Step 2/3: Reading booked cruises, history, and VIFP status...');
-      addLog('Reading Carnival My Cruises and waiting for authenticated profile APIs...', 'info');
-      await waitForPassiveCapture('upcomingCruises', 10000);
-      await waitForPassiveCapture('loyalty', 5000);
-      await new Promise(function(resolve) { setTimeout(resolve, 2500); });
-
-      var profileResult = carnival.parseProfileDocument();
-      var mergedBookings = carnival.mergeBookings(capturedData.upcomingCruises, profileResult.bookings);
-      capturedData.upcomingCruises = { bookings: mergedBookings, source: 'carnival' };
-      capturedData.loyalty = Object.assign({}, capturedData.loyalty || {}, {
-        source: 'carnival',
-        profile: profileResult.profile,
-        carnival: profileResult.profile
-      });
-      saveCapturedToStorage();
-
-      var completedCount = mergedBookings.filter(function(row) {
-        var status = String(row.completionState || row.status || row.bookingStatus || '').toLowerCase();
-        return status.indexOf('completed') >= 0 || status.indexOf('past') >= 0;
-      }).length;
-      var upcomingCount = Math.max(0, mergedBookings.length - completedCount);
-      addLog('Captured ' + upcomingCount + ' upcoming/booked and ' + completedCount + ' completed Carnival cruise(s)',
-        mergedBookings.length > 0 ? 'success' : 'warning');
-      if (profileResult.profile && (profileResult.profile.vifpNumber || profileResult.profile.vifpTier || profileResult.profile.cruiseDayPoints)) {
-        addLog('Captured Carnival VIFP profile and loyalty status', 'success');
+      var gotBookings = await waitForPassiveCapture('upcomingCruises', 12000);
+      if (gotBookings) {
+        addLog('Captured ' + extractBookings(capturedData.upcomingCruises).length + ' Carnival bookings', 'success');
       } else {
-        addLog('Carnival loyalty fields were not visible in the current profile response; existing app loyalty should be preserved.', 'warning');
+        addLog('No bookings captured (you may have no upcoming cruises)', 'warning');
+      }
+
+      var gotLoyalty = await waitForPassiveCapture('loyalty', 5000);
+      if (gotLoyalty) {
+        addLog('Captured Carnival loyalty data', 'success');
       }
 
       updateUI();
       updateProgress(3, 3, 'Step 3/3: Carnival sync complete!');
-      var offers = getOfferCount(capturedData.offers);
-      var sailings = capturedData.offers && capturedData.offers.rows ? capturedData.offers.rows.length : 0;
-      addLog('Carnival sync complete: ' + offers + ' offer(s), ' + sailings + ' available sailing(s), ' +
-        upcomingCount + ' booked/upcoming, ' + completedCount + ' completed', 'success');
+      var offers = (capturedData.offers && capturedData.offers.offers) ? capturedData.offers.offers.length : 0;
+      var bookings = extractBookings(capturedData.upcomingCruises).length;
+      addLog('Carnival sync complete! ' + offers + ' offers, ' + bookings + ' bookings', 'success');
       await setSyncState(SYNC_STEPS.DONE);
       updateUI();
       return;
@@ -1137,8 +1069,7 @@ void function() {
     addLog('Resuming sync step: ' + state.step + ' (on: ' + window.location.pathname + ')', 'info');
 
     try {
-      var navState = await chrome.storage.local.get(['es_navTarget', 'es_syncCruiseLine']);
-      var navTarget = navState.es_syncCruiseLine && navState.es_syncCruiseLine !== pageCruiseLine ? '' : navState.es_navTarget;
+      var navTarget = (await chrome.storage.local.get(['es_navTarget'])).es_navTarget;
       if (navTarget) {
         await chrome.storage.local.remove(['es_navTarget']);
         if (!isOnExpectedPage(navTarget)) {
@@ -1223,7 +1154,7 @@ void function() {
       }
 
       updateProgress(6, 6, 'Step 6/6: Sync complete!');
-      var offers = getOfferCount(capturedData.offers);
+      var offers = capturedData.offers && capturedData.offers.offers ? capturedData.offers.offers.length : 0;
       var bookings = getBookingsCount();
       var pricedCount = Object.keys(pricingCache).length;
       var hasLoyalty = !!capturedData.loyalty;
@@ -1339,122 +1270,7 @@ void function() {
     return m ? m[1] : '';
   }
 
-  function getCarnivalLoyaltyExportInfo() {
-    var raw = capturedData.loyalty || {};
-    var profile = raw.profile || raw.carnival || raw.payload || raw;
-    return {
-      level: profile.vifpTier || profile.tier || profile.tierName || '',
-      points: profile.cruiseDayPoints || profile.vifpPoints || profile.points || '',
-      number: profile.vifpNumber || profile.loyaltyNumber || (authContext && authContext.loyaltyId) || ''
-    };
-  }
-
-  function buildCarnivalOffersCSV() {
-    if (!capturedData.offers || !Array.isArray(capturedData.offers.offers) || capturedData.offers.offers.length === 0) return null;
-    var loyalty = getCarnivalLoyaltyExportInfo();
-    var rows = [];
-    rows.push([
-      'Source Page', 'Offer Name', 'Offer Code', 'Offer Expiration Date', 'Offer Type',
-      'Ship Name', 'Sailing Date', 'Nights', 'Itinerary', 'Departure Port',
-      'Room Type', 'Guests Info', 'Perks', 'Loyalty Level', 'Loyalty Points',
-      'Interior Price', 'Oceanview Price', 'Balcony Price', 'Suite Price',
-      'Port Taxes & Fees', 'Ports & Times'
-    ].map(esc).join(','));
-
-    var totalRows = 0;
-    capturedData.offers.offers.forEach(function(offer) {
-      var co = offer.campaignOffer || offer;
-      var sailings = Array.isArray(co.sailings) ? co.sailings : [];
-      sailings.forEach(function(sailing) {
-        var departurePort = sailing.departurePort && typeof sailing.departurePort === 'object'
-          ? (sailing.departurePort.name || '') : (sailing.departurePort || '');
-        var nights = sailing.totalNights || sailing.numberOfNights || getNightsFromItinerary(sailing.itineraryDescription || sailing.itinerary || '') || '';
-        var perks = co.perks || '';
-        if (!perks && Array.isArray(co.perkCodes)) {
-          perks = co.perkCodes.map(function(item) { return item.perkName || item.perkCode || ''; }).filter(Boolean).join(' | ');
-        }
-        rows.push([
-          esc('Carnival Players Club Offers'),
-          esc(co.name || co.offerName || ''),
-          esc(co.offerCode || sailing.offerCode || ''),
-          esc(fmtDate(co.reserveByDate || co.expirationDate || '')),
-          esc('Carnival Players Club'),
-          esc(sailing.shipName || sailing.ship || sailing.vesselName || ''),
-          esc(fmtDate(sailing.sailDate || sailing.sailingDate || sailing.departureDate || '')),
-          esc(nights),
-          esc(sailing.itineraryDescription || sailing.itinerary || sailing.destinationName || ''),
-          esc(departurePort),
-          esc(sailing.roomType || sailing.cabinType || sailing.stateroomType || ''),
-          esc('2 Guests'),
-          esc(perks || '-'),
-          esc(loyalty.level),
-          esc(loyalty.points),
-          esc(fmtPrice(sailing.interiorPrice || sailing.price || sailing.totalPrice || '')),
-          esc(fmtPrice(sailing.oceanviewPrice || '')),
-          esc(fmtPrice(sailing.balconyPrice || '')),
-          esc(fmtPrice(sailing.suitePrice || '')),
-          esc(fmtPrice(sailing.taxesAndFees || sailing.taxes || '')),
-          esc(sailing.portsAndTimes || sailing.portList || '')
-        ].join(','));
-        totalRows++;
-      });
-    });
-    if (rows.length <= 1) return null;
-    addLog('Built Carnival offers CSV: ' + totalRows + ' sailing row(s) across ' + capturedData.offers.offers.length + ' offer(s)', 'info');
-    return rows.join('\n');
-  }
-
-  function buildCarnivalBookedCSV() {
-    var bookings = extractBookings(capturedData.upcomingCruises);
-    if (!bookings.length) return null;
-    var loyalty = getCarnivalLoyaltyExportInfo();
-    var rows = [];
-    rows.push(['Source', 'Ship Name', 'Sail Date', 'Return Date', 'Nights', 'Itinerary', 'Departure Port', 'Cabin Type', 'Cabin #', 'Booking ID', 'Status', 'Loyalty Level', 'Loyalty Points', 'Interior Price', 'Oceanview Price', 'Balcony Price', 'Suite Price', 'Port Taxes & Fees'].map(esc).join(','));
-    bookings.forEach(function(b) {
-      var rawStatus = String(b.completionState || b.status || b.bookingStatus || '').toLowerCase();
-      var completed = rawStatus.indexOf('completed') >= 0 || rawStatus.indexOf('past') >= 0;
-      var status = completed ? 'Completed' : 'Upcoming';
-      var source = completed ? 'Carnival Completed Cruise History' : 'Carnival Upcoming Booked Cruise';
-      var nights = b.numberOfNights || b.nights || '';
-      var returnDate = b.returnDate || b.endDate || '';
-      if (!returnDate && (b.sailDate || b.departureDate) && nights) {
-        try {
-          var d = new Date(b.sailDate || b.departureDate);
-          if (!isNaN(d.getTime())) {
-            d.setDate(d.getDate() + parseInt(nights, 10));
-            returnDate = d.toISOString().split('T')[0];
-          }
-        } catch (e) {}
-      }
-      var departurePort = b.departurePort && typeof b.departurePort === 'object'
-        ? (b.departurePort.name || '') : (b.departurePort || b.homePort || '');
-      rows.push([
-        esc(source),
-        esc(b.shipName || b.ship || b.vesselName || ''),
-        esc(fmtDate(b.sailDate || b.departureDate || b.startDate || '')),
-        esc(fmtDate(returnDate)),
-        esc(nights),
-        esc(b.cruiseTitle || b.itineraryDescription || b.destination || ''),
-        esc(departurePort),
-        esc(b.cabinType || b.stateroomType || ''),
-        esc(b.stateroomNumber || b.cabinNumber || ''),
-        esc(b.bookingId || b.reservationNumber || b.confirmationNumber || ''),
-        esc(status),
-        esc(loyalty.level),
-        esc(loyalty.points),
-        esc(fmtPrice(b.interiorPrice || '')),
-        esc(fmtPrice(b.oceanviewPrice || '')),
-        esc(fmtPrice(b.balconyPrice || '')),
-        esc(fmtPrice(b.suitePrice || '')),
-        esc(fmtPrice(b.taxesAndFees || b.taxes || ''))
-      ].join(','));
-    });
-    addLog('Built Carnival booked/history CSV: ' + bookings.length + ' cruise row(s)', 'info');
-    return rows.join('\n');
-  }
-
   function buildOffersCSV() {
-    if (capturedData.cruiseLine === 'carnival') return buildCarnivalOffersCSV();
     if (!capturedData.offers || !capturedData.offers.offers || capturedData.offers.offers.length === 0) return null;
 
     var loyaltyInfo = capturedData.loyalty && capturedData.loyalty.payload && capturedData.loyalty.payload.loyaltyInformation
@@ -1547,7 +1363,6 @@ void function() {
   }
 
   function buildBookedCSV() {
-    if (capturedData.cruiseLine === 'carnival') return buildCarnivalBookedCSV();
     var bookings = extractBookings(capturedData.upcomingCruises);
     var courtesyBookings = [];
     if (capturedData.courtesyHolds) {

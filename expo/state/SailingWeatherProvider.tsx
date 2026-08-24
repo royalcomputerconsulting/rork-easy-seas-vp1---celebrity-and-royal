@@ -1,29 +1,29 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AppState, InteractionManager } from 'react-native';
 import createContextHook from '@nkzw/create-context-hook';
 import type { ItineraryDay } from '@/types/models';
+import { buildCruiseDayPlan, getCruiseDayForDate, isWithinForecastWindow } from '@/lib/cruiseDayPipeline';
+import { isOperationallyAuthoritative } from '@/lib/dataAuthority';
+import { getItineraryFingerprint } from '@/lib/itineraryIntegrity';
 import { getUserScopedKey } from '@/lib/storage/storageKeys';
-import { quotaSafeGetItem, quotaSafeSetJsonItem, quotaSafeRemoveItem } from '@/lib/storage/quotaSafeStorage';
+import { quotaSafeGetJsonItem, quotaSafeSetJsonItem, quotaSafeRemoveItem } from '@/lib/storage/quotaSafeStorage';
 import { useAuth } from './AuthProvider';
+import { useCoreData } from './CoreDataProvider';
+import { subscribeToCruiseRecordChanges } from '@/lib/cruiseRecordChangeEvents';
 
 const BASE_STORAGE_KEY = '@easy_seas_sailing_weather_cache_v1';
-const PORT_GEOCODE_CACHE_STORAGE_KEY = '@easy_seas_sailing_weather_port_geocode_cache_v1';
-const CACHE_REFRESH_MS = 1000 * 60 * 60 * 6;
-const CACHE_RETENTION_MS = 1000 * 60 * 60 * 24 * 10;
-/**
- * Open-Meteo's weather + marine forecast models are only valid up to 16 days
- * out. We prefetch right up to that ceiling so guests get the earliest
- * possible advance notice of building seas/big waves before their cruise
- * even starts, not just once they're a few days from sailing.
- */
-const FORECAST_MODEL_MAX_HORIZON_DAYS = 16;
-const FORECAST_PREFETCH_HORIZON_DAYS = FORECAST_MODEL_MAX_HORIZON_DAYS;
-const FORECAST_PREFETCH_START_SOON_DAYS = 3;
-const FORECAST_PREFETCH_WINDOW_DAYS = 2;
-const FORECAST_PREFETCH_MAX_CRUISE_DAYS = 8;
-/** Wave-height tiers (feet) used to classify how big the seas are expected to be. */
-const BIG_WAVE_WARNING_FT = 12;
-const ROUGH_SEAS_WATCH_FT = 8;
-const BUILDING_SEAS_INFO_FT = 6;
+export const SAILING_WEATHER_REFRESH_MS = 1000 * 60 * 60 * 4;
+const CACHE_REFRESH_MS = SAILING_WEATHER_REFRESH_MS;
+const CACHE_RETENTION_MS = 1000 * 60 * 60 * 24 * 45;
+// Open-Meteo's official weather and marine endpoints publish up to 16 days.
+// Day zero is today, so this covers today plus the following 15 calendar days.
+const FORECAST_PREFETCH_HORIZON_DAYS = 16;
+const FORECAST_PREFETCH_CONCURRENCY = 3;
+const BACKGROUND_PREFETCH_DELAY_MS = 8000;
+const MARINE_BEST_MATCH_HORIZON_DAYS = 7;
+const MARINE_LONG_RANGE_MODEL = 'ncep_gfswave025';
+const MARINE_STRATEGY_VERSION = 3;
+const DAY_MS = 1000 * 60 * 60 * 24;
 
 const PORT_COORDINATES: Record<string, { latitude: number; longitude: number; label: string }> = {
   miami: { latitude: 25.7781, longitude: -80.1794, label: 'Miami' },
@@ -31,7 +31,29 @@ const PORT_COORDINATES: Record<string, { latitude: number; longitude: number; la
   'fort lauderdale': { latitude: 26.0956, longitude: -80.1217, label: 'Fort Lauderdale' },
   'port everglades': { latitude: 26.0906, longitude: -80.1186, label: 'Port Everglades' },
   'port canaveral': { latitude: 28.4102, longitude: -80.631, label: 'Port Canaveral' },
-  orlando: { latitude: 28.4102, longitude: -80.631, label: 'Port Canaveral' },
+  'port canaveral florida': { latitude: 28.4102, longitude: -80.631, label: 'Port Canaveral' },
+  orlando: { latitude: 28.4102, longitude: -80.631, label: 'Port Canaveral / Atlantic waters off Brevard County (Orlando-area embarkation)' },
+  'orlando florida': { latitude: 28.4102, longitude: -80.631, label: 'Port Canaveral / Atlantic waters off Brevard County (Orlando-area embarkation)' },
+  'miami florida': { latitude: 25.7781, longitude: -80.1794, label: 'Miami' },
+  'fort lauderdale florida': { latitude: 26.0956, longitude: -80.1217, label: 'Fort Lauderdale' },
+  'los angeles california': { latitude: 33.7405, longitude: -118.2775, label: 'Los Angeles' },
+  'tampa florida': { latitude: 27.9513, longitude: -82.4572, label: 'Tampa' },
+  'galveston texas': { latitude: 29.3013, longitude: -94.7977, label: 'Galveston' },
+  'seattle washington': { latitude: 47.6062, longitude: -122.3321, label: 'Seattle' },
+  'vancouver british columbia': { latitude: 49.2827, longitude: -123.1207, label: 'Vancouver' },
+  'cape liberty new jersey': { latitude: 40.6728, longitude: -74.0722, label: 'Cape Liberty' },
+  'baltimore maryland': { latitude: 39.2667, longitude: -76.579, label: 'Baltimore' },
+  'san juan puerto rico': { latitude: 18.4655, longitude: -66.1057, label: 'San Juan' },
+  'barcelona spain': { latitude: 41.3851, longitude: 2.1734, label: 'Barcelona' },
+  'rome italy': { latitude: 42.0933, longitude: 11.7956, label: 'Civitavecchia' },
+  'venice italy': { latitude: 45.4408, longitude: 12.3155, label: 'Venice' },
+  'athens greece': { latitude: 37.942, longitude: 23.6465, label: 'Piraeus' },
+  'southampton england': { latitude: 50.8998, longitude: -1.4132, label: 'Southampton' },
+  'seward alaska': { latitude: 60.1042, longitude: -149.4422, label: 'Seward' },
+  'honolulu oahu hawaii': { latitude: 21.3069, longitude: -157.8583, label: 'Honolulu' },
+  'shanghai china': { latitude: 31.2304, longitude: 121.4737, label: 'Shanghai' },
+  'cartagena colombia': { latitude: 10.391, longitude: -75.4794, label: 'Cartagena' },
+  'colon panama': { latitude: 9.3592, longitude: -79.9014, label: 'Colón' },
   tampa: { latitude: 27.9513, longitude: -82.4572, label: 'Tampa' },
   galveston: { latitude: 29.3013, longitude: -94.7977, label: 'Galveston' },
   'new orleans': { latitude: 29.947, longitude: -90.0628, label: 'New Orleans' },
@@ -46,7 +68,6 @@ const PORT_COORDINATES: Record<string, { latitude: number; longitude: number; la
   ensenada: { latitude: 31.8667, longitude: -116.6167, label: 'Ensenada' },
   'ensenada mexico': { latitude: 31.8667, longitude: -116.6167, label: 'Ensenada' },
   'cabo san lucas': { latitude: 22.8905, longitude: -109.9167, label: 'Cabo San Lucas' },
-  cabo: { latitude: 22.8905, longitude: -109.9167, label: 'Cabo San Lucas' },
   mazatlan: { latitude: 23.2494, longitude: -106.4111, label: 'Mazatlán' },
   'puerto vallarta': { latitude: 20.6534, longitude: -105.2253, label: 'Puerto Vallarta' },
   'la paz': { latitude: 24.1426, longitude: -110.3128, label: 'La Paz' },
@@ -77,11 +98,26 @@ const PORT_COORDINATES: Record<string, { latitude: number; longitude: number; la
   keywest: { latitude: 24.5551, longitude: -81.78, label: 'Key West' },
   'key west': { latitude: 24.5551, longitude: -81.78, label: 'Key West' },
   civitavecchia: { latitude: 42.0933, longitude: 11.7956, label: 'Civitavecchia' },
-  rome: { latitude: 42.0933, longitude: 11.7956, label: 'Civitavecchia' },
   barcelona: { latitude: 41.3851, longitude: 2.1734, label: 'Barcelona' },
+  'ibiza spain': { latitude: 38.912, longitude: 1.447, label: 'Ibiza' },
+  ibiza: { latitude: 38.912, longitude: 1.447, label: 'Ibiza' },
+  'eivissa spain': { latitude: 38.912, longitude: 1.447, label: 'Ibiza' },
+  eivissa: { latitude: 38.912, longitude: 1.447, label: 'Ibiza' },
+  'tangier morocco': { latitude: 35.789, longitude: -5.8, label: 'Tangier' },
+  tangier: { latitude: 35.789, longitude: -5.8, label: 'Tangier' },
+  'tanger morocco': { latitude: 35.789, longitude: -5.8, label: 'Tangier' },
+  tanger: { latitude: 35.789, longitude: -5.8, label: 'Tangier' },
+  'lisbon portugal': { latitude: 38.707, longitude: -9.136, label: 'Lisbon' },
+  lisbon: { latitude: 38.707, longitude: -9.136, label: 'Lisbon' },
+  'porto leixoes portugal': { latitude: 41.185, longitude: -8.705, label: 'Porto (Leixoes)' },
+  'porto portugal': { latitude: 41.185, longitude: -8.705, label: 'Porto (Leixoes)' },
+  porto: { latitude: 41.185, longitude: -8.705, label: 'Porto (Leixoes)' },
+  leixoes: { latitude: 41.185, longitude: -8.705, label: 'Porto (Leixoes)' },
+  'a coruna spain': { latitude: 43.368, longitude: -8.391, label: 'A Coruna' },
+  'a coruna': { latitude: 43.368, longitude: -8.391, label: 'A Coruna' },
+  coruna: { latitude: 43.368, longitude: -8.391, label: 'A Coruna' },
   marseille: { latitude: 43.2965, longitude: 5.3698, label: 'Marseille' },
   naples: { latitude: 40.8518, longitude: 14.2681, label: 'Naples' },
-  athens: { latitude: 37.942, longitude: 23.6465, label: 'Piraeus' },
   piraeus: { latitude: 37.942, longitude: 23.6465, label: 'Piraeus' },
   santorini: { latitude: 36.3932, longitude: 25.4615, label: 'Santorini' },
   mykonos: { latitude: 37.4467, longitude: 25.3289, label: 'Mykonos' },
@@ -92,9 +128,7 @@ const PORT_COORDINATES: Record<string, { latitude: number; longitude: number; la
   victoria: { latitude: 48.4284, longitude: -123.3656, label: 'Victoria' },
 };
 
-const SORTED_PORT_COORDINATE_KEYS = Object.keys(PORT_COORDINATES).sort((left, right) => right.length - left.length);
-
-type SailingWeatherSource = 'live' | 'cache-fresh' | 'cache-stale';
+type SailingWeatherSource = 'live' | 'historical' | 'cache-fresh' | 'cache-stale';
 
 interface SailingWeatherPoint {
   isoTime: string;
@@ -118,6 +152,7 @@ interface SailingWeatherAdvisory {
   severity: 'info' | 'watch' | 'warning';
   title: string;
   detail: string;
+  source: 'easyseas_model';
 }
 
 export interface SailingWeatherForecast {
@@ -125,6 +160,7 @@ export interface SailingWeatherForecast {
   cruiseId: string;
   shipName: string;
   dateKey: string;
+  itineraryFingerprint: string;
   locationName: string;
   zoneLabel: string;
   latitude: number;
@@ -135,6 +171,11 @@ export interface SailingWeatherForecast {
   source: SailingWeatherSource;
   isStale: boolean;
   isSeaDay: boolean;
+  isFallback: boolean;
+  dataConfidence: 'verified' | 'partial';
+  /** Optional for backward compatibility with weather already cached by older builds. */
+  marineStrategyVersion?: number;
+  marineSourceLabel?: string;
   summary: string;
   headline: string;
   advisories: SailingWeatherAdvisory[];
@@ -151,6 +192,8 @@ export interface SailingWeatherForecast {
     dominantSwellDirectionDegrees: number | null;
     precipitationChance: number | null;
     conditionLabel: string;
+    /** Sea-state claims are valid only when the marine provider returned wave data. */
+    marineDataStatus: 'verified' | 'pending' | 'unavailable';
   };
   snapshots: SailingWeatherPoint[];
   hourly: SailingWeatherPoint[];
@@ -160,18 +203,27 @@ export interface SailingWeatherCruiseInput {
   id: string;
   shipName: string;
   sailDate: string;
-  returnDate: string;
+  returnDate?: string;
   departurePort?: string;
   destination?: string;
   itineraryName?: string;
   nights: number;
   itinerary?: ItineraryDay[];
+  dataConfidence?: 'verified' | 'partial' | 'enriched' | 'unknown';
+}
+
+export interface SailingWeatherPrefetchReport {
+  cruiseId: string;
+  voyageDates: string[];
+  eligibleDates: string[];
+  refreshedDates: string[];
+  unavailableDates: string[];
+  forecastAvailableFrom: string | null;
 }
 
 interface SailingWeatherState {
   isHydrated: boolean;
-  isSyncing: boolean;
-  syncStatusMessage: string | null;
+  cachedForecasts: SailingWeatherForecast[];
   getForecastForCruiseDay: (
     cruise: SailingWeatherCruiseInput,
     targetDate: Date,
@@ -180,8 +232,9 @@ interface SailingWeatherState {
   prefetchCruiseForecastWindow: (
     cruise: SailingWeatherCruiseInput,
     options?: { anchorDate?: Date; force?: boolean }
-  ) => Promise<void>;
+  ) => Promise<SailingWeatherPrefetchReport>;
   clearWeatherCache: () => Promise<void>;
+  clearWeatherCacheForCruise: (cruiseId: string) => Promise<void>;
 }
 
 interface PortCoordinates {
@@ -192,6 +245,7 @@ interface PortCoordinates {
 
 interface ResolvedCruiseWeatherPoint extends PortCoordinates {
   isSeaDay: boolean;
+  isFallback: boolean;
   zoneLabel: string;
 }
 
@@ -237,6 +291,17 @@ interface MarineApiResponse {
   };
 }
 
+function marineResponseHasWaveData(response: MarineApiResponse | null): boolean {
+  if (!response) return false;
+  const candidates: unknown[] = [
+    ...(response.daily?.wave_height_max ?? []),
+    ...(response.daily?.swell_wave_height_max ?? []),
+    ...(response.hourly?.wave_height ?? []),
+    ...(response.hourly?.swell_wave_height ?? []),
+  ];
+  return candidates.some(isNumber);
+}
+
 function normalizePortName(value: string): string {
   return value
     .toLowerCase()
@@ -254,43 +319,18 @@ function buildPortLookupCandidates(rawValue: string): string[] {
     return [];
   }
 
-  const candidates = new Set<string>([normalized]);
-
-  rawValue
-    .split(/[,&/;]|→|->/)
-    .map((segment) => normalizePortName(segment))
-    .filter(Boolean)
-    .forEach((segment) => {
-      candidates.add(segment);
-    });
-
-  normalized
-    .split(/\b(?:and|to|via)\b/)
-    .map((segment) => segment.trim())
-    .filter(Boolean)
-    .forEach((segment) => {
-      candidates.add(segment);
-    });
-
-  return Array.from(candidates);
+  // Keep the complete identifier first, then allow the city portion of a
+  // comma-separated port label. Open-Meteo returns `Tangier` for the query
+  // `Tangier, Morocco`; requiring the country suffix in the result name made
+  // valid itinerary ports fall back to the embarkation city.
+  const cityName = normalizePortName(rawValue.split(',')[0] ?? '');
+  return Array.from(new Set([normalized, cityName].filter(Boolean)));
 }
 
 function matchKnownPortCoordinates(normalizedValue: string): PortCoordinates | null {
   const directMatch = PORT_COORDINATES[normalizedValue];
   if (directMatch) {
     return directMatch;
-  }
-
-  for (const key of SORTED_PORT_COORDINATE_KEYS) {
-    if (
-      normalizedValue.startsWith(`${key} `)
-      || normalizedValue.endsWith(` ${key}`)
-      || normalizedValue.includes(` ${key} `)
-      || key.startsWith(`${normalizedValue} `)
-      || key.endsWith(` ${normalizedValue}`)
-    ) {
-      return PORT_COORDINATES[key] ?? null;
-    }
   }
 
   return null;
@@ -307,96 +347,83 @@ function resolveKnownPortCoordinates(rawValue: string): PortCoordinates | null {
   return null;
 }
 
+/** Shared read-only port lookup for route-scoped official weather alerts. */
+export function resolveKnownWeatherPortCoordinates(rawValue: string): PortCoordinates | null {
+  return resolveKnownPortCoordinates(rawValue);
+}
+
 function roundNumber(value: number, decimals = 1): number {
   const factor = 10 ** decimals;
   return Math.round(value * factor) / factor;
 }
 
 function formatDateKey(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 }
 
 function startOfDay(date: Date): Date {
-  const normalized = new Date(date);
-  normalized.setHours(0, 0, 0, 0);
-  return normalized;
-}
-
-/**
- * Parses a cruise date string as a LOCAL calendar date, avoiding the classic
- * off-by-one-day bug where `new Date("YYYY-MM-DD")` is parsed as UTC midnight
- * and then shifts to the previous day once converted to local time in any
- * timezone west of UTC. This matters for marine/weather alert timing since a
- * shifted day can point the forecast lookup at the wrong port or sea day.
- */
-function parseLocalDate(value: string): Date {
-  const dateOnlyMatch = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})(?:T00:00:00(?:\.000)?Z?)?$/);
-  if (dateOnlyMatch) {
-    const year = Number(dateOnlyMatch[1]);
-    const month = Number(dateOnlyMatch[2]);
-    const day = Number(dateOnlyMatch[3]);
-    return new Date(year, month - 1, day);
-  }
-  return new Date(value);
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 }
 
 function addDays(date: Date, days: number): Date {
-  const nextDate = new Date(date);
-  nextDate.setDate(nextDate.getDate() + days);
-  return nextDate;
-}
-
-function isSameDay(left: Date, right: Date): boolean {
-  return formatDateKey(left) === formatDateKey(right);
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + days));
 }
 
 function buildCruiseDateRange(cruise: SailingWeatherCruiseInput): Date[] {
-  const start = startOfDay(parseLocalDate(cruise.sailDate));
-  const end = startOfDay(parseLocalDate(cruise.returnDate));
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
-    return [];
-  }
+  const plan = buildCruiseDayPlan(cruise);
+  return plan?.days.map((day) => new Date(`${day.date}T00:00:00.000Z`)) ?? [];
+}
 
-  const dates: Date[] = [];
-  const cursor = new Date(start);
-  while (cursor <= end) {
-    dates.push(new Date(cursor));
-    cursor.setDate(cursor.getDate() + 1);
-  }
-
-  return dates;
+async function runWithConcurrency<T>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T) => Promise<void>,
+): Promise<void> {
+  if (items.length === 0) return;
+  let nextIndex = 0;
+  const workerCount = Math.min(Math.max(1, concurrency), items.length);
+  await Promise.all(Array.from({ length: workerCount }, async () => {
+    while (nextIndex < items.length) {
+      const item = items[nextIndex];
+      nextIndex += 1;
+      await worker(item);
+    }
+  }));
 }
 
 function buildPrefetchDates(cruise: SailingWeatherCruiseInput, anchorDate?: Date): Date[] {
   const today = startOfDay(new Date());
-  const anchor = startOfDay(anchorDate ?? today);
   const horizonEnd = addDays(today, FORECAST_PREFETCH_HORIZON_DAYS);
-  const cruiseDates = buildCruiseDateRange(cruise).filter((date) => date <= horizonEnd);
-  if (cruiseDates.length === 0) {
-    return [];
-  }
-
-  const cruiseStart = cruiseDates[0];
-  const startsSoon = cruiseStart >= today && cruiseStart <= addDays(today, FORECAST_PREFETCH_START_SOON_DAYS);
-  if (startsSoon && cruiseDates.length <= FORECAST_PREFETCH_MAX_CRUISE_DAYS) {
-    return cruiseDates.filter((date) => date >= today);
-  }
-
-  const remainingCruiseDates = cruiseDates.filter((date) => date >= anchor && date >= today);
-  if (remainingCruiseDates.length > 0 && remainingCruiseDates.length <= FORECAST_PREFETCH_MAX_CRUISE_DAYS) {
-    return remainingCruiseDates;
-  }
-
-  const windowStart = addDays(anchor, -1);
-  const windowEnd = addDays(anchor, FORECAST_PREFETCH_WINDOW_DAYS);
-  return cruiseDates.filter((date) => date >= windowStart && date <= windowEnd && (date >= today || isSameDay(date, today)));
+  void anchorDate;
+  return buildCruiseDateRange(cruise).filter((date) => date >= today && date <= horizonEnd);
 }
 
-function createCacheKey(cruiseId: string, dateKey: string, latitude: number, longitude: number): string {
-  return `${cruiseId}:${dateKey}:${latitude.toFixed(3)}:${longitude.toFixed(3)}`;
+function createCacheKey(cruiseId: string, itineraryFingerprint: string, dateKey: string, latitude: number, longitude: number): string {
+  return `${cruiseId}:${itineraryFingerprint}:${dateKey}:${latitude.toFixed(3)}:${longitude.toFixed(3)}`;
+}
+
+/**
+ * Find a saved cruise-day forecast without first resolving coordinates.
+ *
+ * Coordinate resolution can require the network for an unfamiliar port. On an
+ * offline voyage the saved forecast is still useful, so the cache lookup must
+ * happen before geocoding. The itinerary fingerprint prevents an old itinerary
+ * for the same booking from being reused after its ports or dates change.
+ */
+export function findCachedForecastForCruiseDay(
+  cache: Record<string, SailingWeatherForecast>,
+  cruiseId: string,
+  itineraryFingerprint: string,
+  dateKey: string,
+): SailingWeatherForecast | undefined {
+  return Object.values(cache).find((forecast) => (
+    forecast.cruiseId === cruiseId
+    && forecast.dateKey === dateKey
+    && forecast.itineraryFingerprint === itineraryFingerprint
+  ));
 }
 
 function isNumber(value: unknown): value is number {
@@ -407,25 +434,10 @@ function toNullableNumber(value: unknown): number | null {
   return isNumber(value) ? value : null;
 }
 
-/**
- * Near-term sailing days (today/tomorrow) get a shorter cache refresh window
- * since marine conditions can shift quickly and guests need the freshest
- * possible read before sailaway; forecasts further out stay on the standard
- * 6-hour refresh since model guidance that far ahead doesn't change as often.
- */
-function getCacheRefreshMsForDateKey(dateKey: string): number {
-  const target = parseLocalDate(dateKey);
-  if (Number.isNaN(target.getTime())) return CACHE_REFRESH_MS;
-  const daysUntil = Math.floor((startOfDay(target).getTime() - startOfDay(new Date()).getTime()) / (1000 * 60 * 60 * 24));
-  if (daysUntil <= 1) return 1000 * 60 * 60 * 2;
-  if (daysUntil <= 3) return 1000 * 60 * 60 * 4;
-  return CACHE_REFRESH_MS;
-}
-
-function isCacheExpired(updatedAt: string, dateKey: string): boolean {
+function isCacheExpired(updatedAt: string): boolean {
   const updatedTime = new Date(updatedAt).getTime();
   if (!Number.isFinite(updatedTime)) return true;
-  return Date.now() - updatedTime > getCacheRefreshMsForDateKey(dateKey);
+  return Date.now() - updatedTime > CACHE_REFRESH_MS;
 }
 
 function pruneCacheEntries(cache: Record<string, SailingWeatherForecast>): Record<string, SailingWeatherForecast> {
@@ -435,13 +447,6 @@ function pruneCacheEntries(cache: Record<string, SailingWeatherForecast>): Recor
     return Number.isFinite(updatedTime) && updatedTime >= cutoff;
   });
   return Object.fromEntries(nextEntries);
-}
-
-function getDayOfCruise(cruise: SailingWeatherCruiseInput, targetDate: Date): number {
-  const start = startOfDay(parseLocalDate(cruise.sailDate));
-  const target = startOfDay(new Date(targetDate));
-  const diffMs = target.getTime() - start.getTime();
-  return Math.max(1, Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1);
 }
 
 function findNearestPortDay(itinerary: ItineraryDay[] | undefined, startDay: number, direction: -1 | 1): ItineraryDay | undefined {
@@ -562,29 +567,24 @@ function buildSummary(metrics: SailingWeatherForecast['metrics'], isSeaDay: bool
   const swellLabel = metrics.maxSwellHeightFt !== null ? `${roundNumber(metrics.maxSwellHeightFt, 1)} ft swell` : waveLabel;
   const precipLabel = metrics.precipitationChance !== null ? `${Math.round(metrics.precipitationChance)}% precip` : 'precip pending';
 
+  if (metrics.marineDataStatus === 'pending') {
+    return {
+      headline: `${condition} · ${tempLabel}`,
+      summary: `${windLabel} · NOAA wave forecast is pending publication; EasySeas will retry automatically online.`,
+    };
+  }
+
+  if (metrics.marineDataStatus === 'unavailable') {
+    return {
+      headline: `${condition} · ${tempLabel}`,
+      summary: `${windLabel} · Marine data unavailable: EasySeas cannot assess sea state for this cruise day.`,
+    };
+  }
+
   return {
     headline: `${condition} · ${tempLabel}`,
     summary: isSeaDay ? `${waveLabel} · ${gustLabel} · ${precipLabel}` : `${windLabel} · ${swellLabel} · ${precipLabel}`,
   };
-}
-
-/**
- * Classifies forecast wave height into a rider-facing severity tier so "big
- * wave" notice is driven purely by sea state, independent of wind — a long-
- * period swell can build big waves with little local wind to show for it.
- */
-function classifyWaveTier(maxWaveHeightFt: number | null): { severity: SailingWeatherAdvisory['severity']; title: string } | null {
-  if (!isNumber(maxWaveHeightFt)) return null;
-  if (maxWaveHeightFt >= BIG_WAVE_WARNING_FT) {
-    return { severity: 'warning', title: 'Big wave warning' };
-  }
-  if (maxWaveHeightFt >= ROUGH_SEAS_WATCH_FT) {
-    return { severity: 'watch', title: 'Rough seas expected' };
-  }
-  if (maxWaveHeightFt >= BUILDING_SEAS_INFO_FT) {
-    return { severity: 'info', title: 'Building seas' };
-  }
-  return null;
 }
 
 function buildMarineAdvisories(
@@ -600,48 +600,36 @@ function buildMarineAdvisories(
   const inBajaZone = withinRange(resolvedPoint.latitude, 22, 32.6) && withinRange(resolvedPoint.longitude, -118.8, -105);
   const inTehuantepecZone = withinRange(resolvedPoint.latitude, 13.2, 17.6) && withinRange(resolvedPoint.longitude, -97.8, -91.8);
   const severeWind = Math.max(metrics.maxWindMph ?? 0, metrics.maxWindGustMph ?? 0) >= 28;
-  const waveTier = classifyWaveTier(metrics.maxWaveHeightFt);
+  const severeSeas = (metrics.maxWaveHeightFt ?? 0) >= 8;
   const stormRisk = metrics.conditionLabel === 'Storm risk' || (metrics.precipitationChance ?? 0) >= 70;
 
-  if (inTehuantepecZone || normalizedContext.includes('tehuantepec') || normalizedContext.includes('huatulco') || normalizedContext.includes('puerto chiapas')) {
+  if (metrics.marineDataStatus === 'verified' && (inTehuantepecZone || normalizedContext.includes('tehuantepec') || normalizedContext.includes('huatulco') || normalizedContext.includes('puerto chiapas'))) {
     advisories.push({
       id: 'tehuantepec-gap-wind',
-      severity: severeWind || (waveTier?.severity === 'warning') ? 'warning' : 'watch',
+      severity: severeWind || severeSeas ? 'warning' : 'watch',
       title: 'Gulf of Tehuantepec watch',
       detail: 'Gap-wind events here can ramp quickly and build steep seas. Recheck the latest forecast before sailaway and tender operations.',
+      source: 'easyseas_model',
     });
   }
 
-  if (inBajaZone || normalizedContext.includes('ensenada') || normalizedContext.includes('cabo') || normalizedContext.includes('mazatlan') || normalizedContext.includes('vallarta') || normalizedContext.includes('baja')) {
+  if (metrics.marineDataStatus === 'verified' && (inBajaZone || normalizedContext.includes('ensenada') || normalizedContext.includes('cabo') || normalizedContext.includes('mazatlan') || normalizedContext.includes('vallarta') || normalizedContext.includes('baja'))) {
     advisories.push({
       id: 'baja-pacific-pattern',
       severity: severeWind ? 'watch' : 'info',
       title: 'Baja / Mexican Riviera pattern',
       detail: 'The outer Baja and Riviera corridor often sees fresh NW flow and building swell. North of Punta Eugenia can turn choppier than the port forecast suggests.',
+      source: 'easyseas_model',
     });
   }
 
-  if (waveTier) {
-    const waveHeightLabel = `${roundNumber(metrics.maxWaveHeightFt ?? 0, 1)} ft`;
-    const detail = waveTier.severity === 'warning'
-      ? `Model guidance is showing seas up to ${waveHeightLabel} on this cruise day — expect a noticeably rougher ride. Secure loose items in your stateroom and consider motion-sickness remedies ahead of time.`
-      : waveTier.severity === 'watch'
-        ? `Seas are trending up to ${waveHeightLabel} on this cruise day. Not extreme, but you may feel the ship's motion more than usual.`
-        : `Seas are building toward ${waveHeightLabel} on this cruise day — worth a recheck as it gets closer.`;
+  if (metrics.marineDataStatus === 'verified' && (severeWind || severeSeas)) {
     advisories.push({
-      id: 'big-wave-tier',
-      severity: waveTier.severity,
-      title: waveTier.title,
-      detail,
-    });
-  }
-
-  if (severeWind) {
-    advisories.push({
-      id: 'high-wind-advisory',
-      severity: 'watch',
-      title: 'High wind advisory',
-      detail: `Model guidance is showing wind gusts up to ${Math.round(metrics.maxWindGustMph ?? metrics.maxWindMph ?? 0)} mph for this cruise day, which can add chop on top of the base swell.`,
+      id: 'rougher-marine-window',
+      severity: severeWind && severeSeas ? 'warning' : 'watch',
+      title: 'Rougher marine window',
+      detail: `Model guidance is showing up to ${Math.round(metrics.maxWindGustMph ?? metrics.maxWindMph ?? 0)} mph wind and ${roundNumber(metrics.maxWaveHeightFt ?? 0, 1)} ft seas for this cruise day.`,
+      source: 'easyseas_model',
     });
   }
 
@@ -651,13 +639,11 @@ function buildMarineAdvisories(
       severity: 'watch',
       title: 'Squall / rain risk',
       detail: 'Rain bands or squalls may shift timing quickly. Download the forecast early so you still have it offline when service drops.',
+      source: 'easyseas_model',
     });
   }
 
-  const severityOrder: Record<SailingWeatherAdvisory['severity'], number> = { warning: 3, watch: 2, info: 1 };
-  return advisories
-    .sort((left, right) => severityOrder[right.severity] - severityOrder[left.severity])
-    .slice(0, 4);
+  return advisories.slice(0, 3);
 }
 
 function sleep(ms: number): Promise<void> {
@@ -787,58 +773,65 @@ async function fetchJson<T>(url: string, options?: { retries?: number; timeoutMs
 
 export const [SailingWeatherProvider, useSailingWeather] = createContextHook((): SailingWeatherState => {
   const { authenticatedEmail } = useAuth();
+  const { bookedCruises, isLoading: isCoreDataLoading } = useCoreData();
   const storageKeyRef = useRef<string>(getUserScopedKey(BASE_STORAGE_KEY, authenticatedEmail));
-  const portCacheStorageKeyRef = useRef<string>(getUserScopedKey(PORT_GEOCODE_CACHE_STORAGE_KEY, authenticatedEmail));
   const geocodeCacheRef = useRef<Map<string, PortCoordinates>>(new Map());
   const inFlightRef = useRef<Partial<Record<string, Promise<SailingWeatherForecast | null>>>>({});
   const [cache, setCache] = useState<Record<string, SailingWeatherForecast>>({});
   const [isHydrated, setIsHydrated] = useState<boolean>(false);
-  const [isPortCacheHydrated, setIsPortCacheHydrated] = useState<boolean>(false);
-  const [portCache, setPortCache] = useState<Record<string, PortCoordinates>>({});
   const cacheRef = useRef<Record<string, SailingWeatherForecast>>({});
-  const [activeSyncCount, setActiveSyncCount] = useState<number>(0);
-  const [lastSyncLabel, setLastSyncLabel] = useState<string | null>(null);
-
-  const beginSync = useCallback((label: string) => {
-    setLastSyncLabel(label);
-    setActiveSyncCount((count) => count + 1);
-  }, []);
-
-  const endSync = useCallback(() => {
-    setActiveSyncCount((count) => Math.max(0, count - 1));
-  }, []);
+  const loadedCacheSnapshotRef = useRef<Record<string, SailingWeatherForecast> | null>(null);
+  const sessionRef = useRef({ key: storageKeyRef.current, generation: 0 });
+  const backgroundRefreshInFlightRef = useRef(false);
 
   useEffect(() => {
     cacheRef.current = cache;
   }, [cache]);
 
   useEffect(() => {
-    storageKeyRef.current = getUserScopedKey(BASE_STORAGE_KEY, authenticatedEmail);
+    const storageKey = getUserScopedKey(BASE_STORAGE_KEY, authenticatedEmail);
+    storageKeyRef.current = storageKey;
+    sessionRef.current = { key: storageKey, generation: sessionRef.current.generation + 1 };
+    const session = sessionRef.current;
     setIsHydrated(false);
+    setCache({});
+    cacheRef.current = {};
+    inFlightRef.current = {};
 
     const loadCache = async () => {
       try {
-        const stored = await quotaSafeGetItem(storageKeyRef.current);
-        if (!stored) {
-          setCache({});
+        const stored = await quotaSafeGetJsonItem<Record<string, SailingWeatherForecast>>(
+          storageKey,
+          {},
+          (value): value is Record<string, SailingWeatherForecast> => Boolean(value) && typeof value === 'object' && !Array.isArray(value),
+        );
+        if (sessionRef.current.generation !== session.generation || sessionRef.current.key !== session.key) return;
+        if (Object.keys(stored).length === 0) {
+          const emptyCache: Record<string, SailingWeatherForecast> = {};
+          loadedCacheSnapshotRef.current = emptyCache;
+          setCache(emptyCache);
           setIsHydrated(true);
           console.log('[SailingWeather] No stored weather cache found');
           return;
         }
 
-        const parsed = JSON.parse(stored) as Record<string, SailingWeatherForecast>;
-        const pruned = pruneCacheEntries(parsed);
+        const pruned = pruneCacheEntries(stored);
+        if (sessionRef.current.generation !== session.generation || sessionRef.current.key !== session.key) return;
+        loadedCacheSnapshotRef.current = pruned;
         setCache(pruned);
         cacheRef.current = pruned;
         console.log('[SailingWeather] Loaded cached forecasts:', Object.keys(pruned).length);
       } catch (error) {
+        if (sessionRef.current.generation !== session.generation || sessionRef.current.key !== session.key) return;
         logSailingWeather('error', '[SailingWeather] Failed to load stored weather cache', {
           error: serializeError(error),
         });
         setCache({});
         cacheRef.current = {};
       } finally {
-        setIsHydrated(true);
+        if (sessionRef.current.generation === session.generation && sessionRef.current.key === session.key) {
+          setIsHydrated(true);
+        }
       }
     };
 
@@ -847,8 +840,13 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
 
   useEffect(() => {
     if (!isHydrated) return;
+    if (loadedCacheSnapshotRef.current === cache) {
+      loadedCacheSnapshotRef.current = null;
+      return;
+    }
 
     const persistCache = async () => {
+      const session = sessionRef.current;
       try {
         const pruned = pruneCacheEntries(cache);
         if (Object.keys(pruned).length !== Object.keys(cache).length) {
@@ -856,7 +854,8 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
           cacheRef.current = pruned;
           return;
         }
-        await quotaSafeSetJsonItem(storageKeyRef.current, pruned);
+        await quotaSafeSetJsonItem(session.key, pruned);
+        if (sessionRef.current.generation !== session.generation || sessionRef.current.key !== session.key) return;
         console.log('[SailingWeather] Persisted cached forecasts:', Object.keys(pruned).length);
       } catch (error) {
         logSailingWeather('error', '[SailingWeather] Failed to persist weather cache', {
@@ -865,59 +864,15 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
       }
     };
 
-    void persistCache();
+    // A full sailing preload can complete several dates close together. One
+    // short debounce turns that burst into a single transactional local write
+    // instead of making the UI contend with a write for every forecast day.
+    const persistTimer = setTimeout(() => {
+      void persistCache();
+    }, 500);
+
+    return () => clearTimeout(persistTimer);
   }, [cache, isHydrated]);
-
-  /**
-   * Persists resolved port -> lat/lon lookups (from bundled data or geocoding)
-   * separately from the forecast cache. This lets the app resolve a cruise
-   * day's exact coordinates entirely offline once a port has been looked up
-   * at least once, instead of needing network access every session just to
-   * figure out WHERE to fetch marine data for.
-   */
-  useEffect(() => {
-    portCacheStorageKeyRef.current = getUserScopedKey(PORT_GEOCODE_CACHE_STORAGE_KEY, authenticatedEmail);
-    setIsPortCacheHydrated(false);
-
-    const loadPortCache = async () => {
-      try {
-        const stored = await quotaSafeGetItem(portCacheStorageKeyRef.current);
-        if (!stored) {
-          setPortCache({});
-          return;
-        }
-        const parsed = JSON.parse(stored) as Record<string, PortCoordinates>;
-        setPortCache(parsed);
-        geocodeCacheRef.current = new Map(Object.entries(parsed));
-        console.log('[SailingWeather] Loaded cached port coordinates:', Object.keys(parsed).length);
-      } catch (error) {
-        logSailingWeather('error', '[SailingWeather] Failed to load stored port coordinate cache', {
-          error: serializeError(error),
-        });
-        setPortCache({});
-      } finally {
-        setIsPortCacheHydrated(true);
-      }
-    };
-
-    void loadPortCache();
-  }, [authenticatedEmail]);
-
-  useEffect(() => {
-    if (!isPortCacheHydrated) return;
-
-    const persistPortCache = async () => {
-      try {
-        await quotaSafeSetJsonItem(portCacheStorageKeyRef.current, portCache);
-      } catch (error) {
-        logSailingWeather('error', '[SailingWeather] Failed to persist port coordinate cache', {
-          error: serializeError(error),
-        });
-      }
-    };
-
-    void persistPortCache();
-  }, [portCache, isPortCacheHydrated]);
 
   const resolvePortCoordinates = useCallback(async (rawPortName: string | undefined): Promise<PortCoordinates | null> => {
     const portName = rawPortName?.trim();
@@ -943,36 +898,32 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
       return cached;
     }
 
-    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-      logSailingWeather('warn', '[SailingWeather] Skipping port geocoding while device appears offline', { portName });
-      return null;
-    }
-
     const candidates = buildPortLookupCandidates(portName);
 
     for (const candidate of candidates) {
       const searchName = encodeURIComponent(candidate.replace(/\bport\b/gi, '').trim());
-      if (!searchName) {
-        continue;
-      }
-
-      const url = `https://geocoding-api.open-meteo.com/v1/search?name=${searchName}&count=1&language=en&format=json`;
+      if (!searchName) continue;
+      const url = `https://geocoding-api.open-meteo.com/v1/search?name=${searchName}&count=10&language=en&format=json`;
 
       try {
         const json = await fetchJson<{ results?: Array<{ name?: string; latitude?: number; longitude?: number; country?: string; admin1?: string }> }>(url);
-        const first = json.results?.[0];
-        if (!first || !isNumber(first.latitude) || !isNumber(first.longitude)) {
+        const exact = json.results?.find((result) => normalizePortName(result.name ?? '') === candidate)
+          ?? json.results?.find((result) => {
+            const resultName = normalizePortName(result.name ?? '');
+            return resultName.length >= 3 && (candidate.startsWith(resultName) || resultName.startsWith(candidate));
+          });
+        if (!exact || !isNumber(exact.latitude) || !isNumber(exact.longitude)) {
+          logSailingWeather('warn', '[SailingWeather] Refused ambiguous geocoding result', { portName, candidate });
           continue;
         }
 
-        const labelParts = [first.name, first.admin1, first.country].filter(Boolean);
+        const labelParts = [exact.name, exact.admin1, exact.country].filter(Boolean);
         const resolved: PortCoordinates = {
-          latitude: first.latitude,
-          longitude: first.longitude,
+          latitude: exact.latitude,
+          longitude: exact.longitude,
           label: labelParts.join(', ') || portName,
         };
         geocodeCacheRef.current.set(normalized, resolved);
-        setPortCache((previous) => ({ ...previous, [normalized]: resolved }));
         console.log('[SailingWeather] Resolved port via geocoding', {
           portName,
           candidate,
@@ -998,55 +949,95 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
   }, []);
 
   const resolveCruiseWeatherPoint = useCallback(async (cruise: SailingWeatherCruiseInput, targetDate: Date): Promise<ResolvedCruiseWeatherPoint | null> => {
-    const dayOfCruise = getDayOfCruise(cruise, targetDate);
-    const itineraryDay = cruise.itinerary?.find((item) => item.day === dayOfCruise);
-    const isSeaDay = itineraryDay?.isSeaDay ?? false;
+    const cruiseDayPlan = buildCruiseDayPlan(cruise);
+    const canonicalDay = getCruiseDayForDate(cruise, targetDate);
+    if (!canonicalDay) {
+      return null;
+    }
+    const isSeaDay = canonicalDay.isSeaDay === true;
 
     if (!isSeaDay) {
-      const portName = itineraryDay?.port || cruise.departurePort || cruise.destination || cruise.itineraryName;
+      const portName = canonicalDay.port || (canonicalDay.day === 1 ? cruise.departurePort : undefined);
       const coordinates = await resolvePortCoordinates(portName);
-      if (!coordinates) return null;
+      if (coordinates) {
+        return {
+          ...coordinates,
+          isSeaDay: false,
+          isFallback: false,
+          zoneLabel: `Forecast near ${coordinates.label}`,
+        };
+      }
+
+      // A number of Royal booking payloads arrive before voyage enrichment.
+      // When the exact cruise-day port is missing, show a clearly labeled
+      // departure-port reference instead of a blank card. This is not treated
+      // as the ship's position and never receives a marine/sea-state claim.
+      const departureReference = await resolvePortCoordinates(cruise.departurePort);
+      if (departureReference) {
+        return {
+          ...departureReference,
+          isSeaDay: false,
+          isFallback: true,
+          zoneLabel: `Departure-port reference: ${departureReference.label}`,
+        };
+      }
+      return null;
+    }
+
+    if (
+      isOperationallyAuthoritative(canonicalDay.source)
+      && isNumber(canonicalDay.latitude)
+      && isNumber(canonicalDay.longitude)
+    ) {
       return {
-        ...coordinates,
-        isSeaDay: false,
-        zoneLabel: `Forecast near ${coordinates.label}`,
+        latitude: canonicalDay.latitude,
+        longitude: canonicalDay.longitude,
+        label: canonicalDay.port || 'Verified itinerary coordinates',
+        isSeaDay: true,
+        isFallback: false,
+        zoneLabel: 'Forecast at verified itinerary coordinates',
       };
     }
 
-    const previousPortDay = findNearestPortDay(cruise.itinerary, dayOfCruise, -1);
-    const nextPortDay = findNearestPortDay(cruise.itinerary, dayOfCruise, 1);
-
+    // Most provider itineraries identify the ports around a sea day but do not
+    // publish a noon ship coordinate. Resolve both surrounding ports and use
+    // the sea day's proportional position along that route. This gives every
+    // itinerary day its own marine grid point instead of incorrectly reusing
+    // the embarkation port (the previous behavior that repeated wave heights).
+    const previousPortDay = findNearestPortDay(cruiseDayPlan?.days, canonicalDay.day, -1);
+    const nextPortDay = findNearestPortDay(cruiseDayPlan?.days, canonicalDay.day, 1);
+    const previousPortName = previousPortDay?.port || (canonicalDay.day > 1 ? cruise.departurePort : undefined);
+    const nextPortName = nextPortDay?.port;
     const [previousCoordinates, nextCoordinates] = await Promise.all([
-      resolvePortCoordinates(previousPortDay?.port || cruise.departurePort),
-      resolvePortCoordinates(nextPortDay?.port || cruise.destination || cruise.itineraryName),
+      resolvePortCoordinates(previousPortName),
+      resolvePortCoordinates(nextPortName),
     ]);
-
     if (previousCoordinates && nextCoordinates) {
+      const previousDayNumber = previousPortDay?.day ?? 1;
+      const nextDayNumber = nextPortDay?.day ?? canonicalDay.day + 1;
+      const span = Math.max(1, nextDayNumber - previousDayNumber);
+      const progress = Math.min(1, Math.max(0, (canonicalDay.day - previousDayNumber) / span));
       return {
-        latitude: roundNumber((previousCoordinates.latitude + nextCoordinates.latitude) / 2, 4),
-        longitude: roundNumber((previousCoordinates.longitude + nextCoordinates.longitude) / 2, 4),
-        label: `${previousCoordinates.label} → ${nextCoordinates.label}`,
+        latitude: roundNumber(previousCoordinates.latitude + ((nextCoordinates.latitude - previousCoordinates.latitude) * progress), 4),
+        longitude: roundNumber(previousCoordinates.longitude + ((nextCoordinates.longitude - previousCoordinates.longitude) * progress), 4),
+        label: `Route position: ${previousCoordinates.label} to ${nextCoordinates.label}`,
         isSeaDay: true,
-        zoneLabel: `Sea-day midpoint between ${previousCoordinates.label} and ${nextCoordinates.label}`,
+        isFallback: false,
+        zoneLabel: `Marine forecast along day ${canonicalDay.day} itinerary position`,
       };
     }
 
-    if (previousCoordinates) {
+    // If the route cannot be resolved, retain the explicitly labeled land
+    // reference and suppress marine claims rather than inventing coordinates.
+    const departureReference = await resolvePortCoordinates(cruise.departurePort);
+    if (departureReference) {
       return {
-        ...previousCoordinates,
+        ...departureReference,
         isSeaDay: true,
-        zoneLabel: `Sea-day fallback near ${previousCoordinates.label}`,
+        isFallback: true,
+        zoneLabel: `Departure-port reference: ${departureReference.label}`,
       };
     }
-
-    if (nextCoordinates) {
-      return {
-        ...nextCoordinates,
-        isSeaDay: true,
-        zoneLabel: `Sea-day fallback near ${nextCoordinates.label}`,
-      };
-    }
-
     return null;
   }, [resolvePortCoordinates]);
 
@@ -1061,9 +1052,22 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
     const weatherApiHost = targetDay < today
       ? 'https://archive-api.open-meteo.com/v1/archive'
       : 'https://api.open-meteo.com/v1/forecast';
-    const query = `latitude=${resolvedPoint.latitude}&longitude=${resolvedPoint.longitude}&timezone=auto&temperature_unit=fahrenheit&wind_speed_unit=mph&start_date=${dateKey}&end_date=${dateKey}`;
+    const isHistoricalDate = targetDay < today;
+    const query = `latitude=${resolvedPoint.latitude}&longitude=${resolvedPoint.longitude}&timezone=auto&temperature_unit=fahrenheit&wind_speed_unit=mph&forecast_days=16&start_date=${dateKey}&end_date=${dateKey}`;
     const weatherUrl = `${weatherApiHost}?${query}&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,weather_code&hourly=temperature_2m,precipitation_probability,wind_speed_10m,wind_gusts_10m,wind_direction_10m,weather_code`;
-    const marineUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${resolvedPoint.latitude}&longitude=${resolvedPoint.longitude}&timezone=auto&start_date=${dateKey}&end_date=${dateKey}&daily=wave_height_max,wave_direction_dominant,wave_period_max,swell_wave_height_max,swell_wave_direction_dominant&hourly=wave_height,wave_direction,wave_period,swell_wave_height,swell_wave_direction,swell_wave_period`;
+    const gfsWeatherUrl = `https://api.open-meteo.com/v1/gfs?${query}&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,weather_code&hourly=temperature_2m,precipitation_probability,wind_speed_10m,wind_gusts_10m,wind_direction_10m,weather_code`;
+    // Port coordinates are often a few kilometres inland. Explicit sea-cell
+    // selection prevents a valid published marine forecast from coming back as
+    // all-null simply because the nearest grid point was on land.
+    const marineQuery = `latitude=${resolvedPoint.latitude}&longitude=${resolvedPoint.longitude}&timezone=auto&cell_selection=sea&forecast_days=16&start_date=${dateKey}&end_date=${dateKey}&daily=wave_height_max,wave_direction_dominant,wave_period_max,swell_wave_height_max,swell_wave_direction_dominant&hourly=wave_height,wave_direction,wave_period,swell_wave_height,swell_wave_direction,swell_wave_period`;
+    const bestMatchMarineUrl = `https://marine-api.open-meteo.com/v1/marine?${marineQuery}`;
+    const noaaGfsMarineUrl = `${bestMatchMarineUrl}&models=${MARINE_LONG_RANGE_MODEL}`;
+    const daysAhead = Math.max(0, Math.round((targetDay.getTime() - today.getTime()) / DAY_MS));
+    const preferLongRangeMarineModel = daysAhead > MARINE_BEST_MATCH_HORIZON_DAYS;
+    const marineUrl = preferLongRangeMarineModel ? noaaGfsMarineUrl : bestMatchMarineUrl;
+    let marineSourceLabel = preferLongRangeMarineModel
+      ? 'NOAA GFS Wave via Open-Meteo'
+      : 'Open-Meteo marine best match';
 
     console.log('[SailingWeather] Fetching live forecast', {
       cruiseId: cruise.id,
@@ -1074,20 +1078,58 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
       longitude: resolvedPoint.longitude,
       isSeaDay: resolvedPoint.isSeaDay,
       weatherApiHost,
-      marineUrl,
+      marineUrl: (isHistoricalDate || resolvedPoint.isFallback) ? 'skipped for historical weather/reference fallback' : marineUrl,
     });
 
-    const weatherJson = await fetchJson<ForecastApiResponse>(weatherUrl);
-    const marineJson = await fetchJson<MarineApiResponse>(marineUrl, { retries: 1 }).catch((error: unknown) => {
-      logSailingWeather('warn', '[SailingWeather] Marine forecast request failed, continuing with weather-only data', {
-        cruiseId: cruise.id,
-        shipName: cruise.shipName,
-        dateKey,
-        url: marineUrl,
-        error: serializeError(error),
-      });
-      return null;
-    });
+    const [weatherJson, marineJson] = await Promise.all([
+      (async () => {
+        try {
+          return await fetchJson<ForecastApiResponse>(weatherUrl);
+        } catch (primaryError) {
+          if (isHistoricalDate) throw primaryError;
+          logSailingWeather('warn', '[SailingWeather] Best-match weather failed; retrying NOAA GFS', {
+            cruiseId: cruise.id, dateKey, error: serializeError(primaryError),
+          });
+          return fetchJson<ForecastApiResponse>(gfsWeatherUrl, { retries: 1 });
+        }
+      })(),
+      (isHistoricalDate || resolvedPoint.isFallback)
+        ? Promise.resolve<MarineApiResponse | null>(null)
+        : (async (): Promise<MarineApiResponse | null> => {
+            const fetchMarineCandidate = async (url: string, sourceLabel: string): Promise<MarineApiResponse | null> => {
+              try {
+                const response = await fetchJson<MarineApiResponse>(url, { retries: 1 });
+                if (marineResponseHasWaveData(response)) marineSourceLabel = sourceLabel;
+                return response;
+              } catch (error) {
+                logSailingWeather('warn', '[SailingWeather] Marine forecast request failed, continuing with the next safe source', {
+                  cruiseId: cruise.id,
+                  shipName: cruise.shipName,
+                  dateKey,
+                  sourceLabel,
+                  url,
+                  error: serializeError(error),
+                });
+                return null;
+              }
+            };
+
+            const primaryMarine = await fetchMarineCandidate(
+              marineUrl,
+              preferLongRangeMarineModel ? 'NOAA GFS Wave via Open-Meteo' : 'Open-Meteo marine best match',
+            );
+            if (marineResponseHasWaveData(primaryMarine)) return primaryMarine;
+
+            // Long-range NOAA and Open-Meteo's best-match blend have different
+            // publication windows. Always try the other safe source before
+            // reporting "pending"; the old early return skipped ECMWF/MFWAM
+            // best-match data whenever the NOAA grid had not populated yet.
+            const secondaryMarine = preferLongRangeMarineModel
+              ? await fetchMarineCandidate(bestMatchMarineUrl, 'Open-Meteo marine best match')
+              : await fetchMarineCandidate(noaaGfsMarineUrl, 'NOAA GFS Wave via Open-Meteo');
+            return marineResponseHasWaveData(secondaryMarine) ? secondaryMarine : primaryMarine ?? secondaryMarine;
+          })(),
+    ]);
 
     const marineTimeIndex = new Map<string, number>();
     (marineJson?.hourly?.time ?? []).forEach((time, index) => {
@@ -1129,6 +1171,12 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
     const precipitationChance = toNullableNumber(weatherJson.daily?.precipitation_probability_max?.[0]) ?? getMaxValue(hourly.map((item) => item.precipitationProbability));
     const weatherCode = toNullableNumber(weatherJson.daily?.weather_code?.[0]) ?? hourly.find((item) => item.weatherCode !== null)?.weatherCode ?? null;
 
+    const marineDataStatus: SailingWeatherForecast['metrics']['marineDataStatus'] = maxWave !== null || maxSwellHeightFt !== null
+      ? 'verified'
+      : (!isHistoricalDate && !resolvedPoint.isFallback && targetDay > today ? 'pending' : 'unavailable');
+    if (marineDataStatus === 'pending') marineSourceLabel = 'NOAA GFS Wave publication pending';
+    if (marineDataStatus === 'unavailable') marineSourceLabel = 'Marine data unavailable';
+
     const metrics = {
       highTempF: dailyHigh,
       lowTempF: dailyLow,
@@ -1142,6 +1190,7 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
       dominantSwellDirectionDegrees,
       precipitationChance,
       conditionLabel: describeWeatherCode(weatherCode),
+      marineDataStatus,
     };
 
     const summary = buildSummary(metrics, resolvedPoint.isSeaDay);
@@ -1149,20 +1198,25 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
     const advisories = buildMarineAdvisories(cruise, resolvedPoint, metrics);
 
     return {
-      cacheKey: createCacheKey(cruise.id, dateKey, resolvedPoint.latitude, resolvedPoint.longitude),
+      cacheKey: createCacheKey(cruise.id, getItineraryFingerprint(cruise), dateKey, resolvedPoint.latitude, resolvedPoint.longitude),
       cruiseId: cruise.id,
       shipName: cruise.shipName,
       dateKey,
+      itineraryFingerprint: getItineraryFingerprint(cruise),
       locationName: resolvedPoint.label,
       zoneLabel: resolvedPoint.zoneLabel,
       latitude: resolvedPoint.latitude,
       longitude: resolvedPoint.longitude,
       timezone: weatherJson.timezone_abbreviation ?? weatherJson.timezone ?? 'Local',
       updatedAt,
-      nextRefreshAt: new Date(Date.now() + getCacheRefreshMsForDateKey(dateKey)).toISOString(),
-      source: 'live',
+      nextRefreshAt: new Date(Date.now() + CACHE_REFRESH_MS).toISOString(),
+      source: isHistoricalDate ? 'historical' : 'live',
       isStale: false,
       isSeaDay: resolvedPoint.isSeaDay,
+      isFallback: resolvedPoint.isFallback,
+      dataConfidence: metrics.marineDataStatus === 'verified' ? 'verified' : 'partial',
+      marineStrategyVersion: MARINE_STRATEGY_VERSION,
+      marineSourceLabel,
       summary: summary.summary,
       headline: summary.headline,
       advisories,
@@ -1172,26 +1226,61 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
     };
   }, []);
 
-  const findAnyCachedForecastForCruiseDay = useCallback((cruiseId: string, dateKey: string): SailingWeatherForecast | null => {
-    const matches = Object.values(cacheRef.current).filter(
-      (entry) => entry.cruiseId === cruiseId && entry.dateKey === dateKey,
-    );
-    if (matches.length === 0) return null;
-    matches.sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime());
-    return matches[0] ?? null;
-  }, []);
-
-  const getForecastForResolvedPoint = useCallback(async (
+  const getForecastForCruiseDay = useCallback(async (
     cruise: SailingWeatherCruiseInput,
     targetDate: Date,
-    resolvedPoint: ResolvedCruiseWeatherPoint,
-    options: { force?: boolean } | undefined,
+    options?: { force?: boolean },
   ): Promise<SailingWeatherForecast | null> => {
+    const targetDay = startOfDay(targetDate);
+    const today = startOfDay(new Date());
     const dateKey = formatDateKey(targetDate);
-    const cacheKey = createCacheKey(cruise.id, dateKey, resolvedPoint.latitude, resolvedPoint.longitude);
-    const rawCached = cacheRef.current[cacheKey];
-    const cached = rawCached && rawCached.dateKey === dateKey && rawCached.cacheKey === cacheKey ? rawCached : undefined;
+    const itineraryFingerprint = getItineraryFingerprint(cruise);
+    const cachedByCruiseDay = findCachedForecastForCruiseDay(
+      cacheRef.current,
+      cruise.id,
+      itineraryFingerprint,
+      dateKey,
+    );
     const shouldForce = options?.force === true;
+
+    // Saved forecasts are the offline contract. Serve them before any network
+    // dependent coordinate lookup, including days that have moved outside the
+    // provider's current live-forecast window.
+    if (!shouldForce && cachedByCruiseDay && !isCacheExpired(cachedByCruiseDay.updatedAt)) {
+      return {
+        ...cachedByCruiseDay,
+        source: cachedByCruiseDay.source === 'historical' ? 'historical' : 'cache-fresh',
+        isStale: false,
+      };
+    }
+
+    if (targetDay >= today && !isWithinForecastWindow(targetDay, FORECAST_PREFETCH_HORIZON_DAYS)) {
+      logSailingWeather('warn', '[SailingWeather] Forecast date is outside the provider availability window', {
+        cruiseId: cruise.id,
+        shipName: cruise.shipName,
+        date: dateKey,
+      });
+      return cachedByCruiseDay
+        ? { ...cachedByCruiseDay, source: 'cache-stale', isStale: true }
+        : null;
+    }
+
+    const resolvedPoint = await resolveCruiseWeatherPoint(cruise, targetDate);
+    if (!resolvedPoint) {
+      console.log('[SailingWeather] Unable to resolve coordinates for cruise day', {
+        cruiseId: cruise.id,
+        shipName: cruise.shipName,
+        date: dateKey,
+      });
+      return cachedByCruiseDay
+        ? { ...cachedByCruiseDay, source: 'cache-stale', isStale: true }
+        : null;
+    }
+
+    const cacheKey = createCacheKey(cruise.id, itineraryFingerprint, dateKey, resolvedPoint.latitude, resolvedPoint.longitude);
+    const rawCached = cacheRef.current[cacheKey];
+    const exactCached = rawCached && rawCached.dateKey === dateKey && rawCached.cacheKey === cacheKey && rawCached.itineraryFingerprint === itineraryFingerprint ? rawCached : undefined;
+    const cached = exactCached ?? cachedByCruiseDay;
 
     if (rawCached && !cached) {
       logSailingWeather('warn', '[SailingWeather] Ignoring cached forecast with mismatched date/key', {
@@ -1208,11 +1297,19 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
       });
     }
 
-    if (!shouldForce && cached && !isCacheExpired(cached.updatedAt, dateKey)) {
+    const needsMarineStrategyUpgrade = Boolean(
+      cached
+      && targetDay >= today
+      && !resolvedPoint.isFallback
+      && cached.metrics.marineDataStatus !== 'verified'
+      && cached.marineStrategyVersion !== MARINE_STRATEGY_VERSION,
+    );
+
+    if (!shouldForce && cached && !needsMarineStrategyUpgrade && !isCacheExpired(cached.updatedAt)) {
       console.log('[SailingWeather] Serving fresh cached forecast', { cacheKey, source: 'cache-fresh' });
       const freshForecast: SailingWeatherForecast = {
         ...cached,
-        source: 'cache-fresh',
+        source: cached.source === 'historical' ? 'historical' : 'cache-fresh',
         isStale: false,
       };
       return freshForecast;
@@ -1220,13 +1317,25 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
 
     const inFlightRequest = inFlightRef.current[cacheKey];
     if (!shouldForce && inFlightRequest) {
+      if (cached) {
+        return {
+          ...cached,
+          source: cached.source === 'historical' ? 'historical' : 'cache-stale',
+          isStale: cached.source === 'historical' ? false : true,
+        };
+      }
       console.log('[SailingWeather] Awaiting in-flight forecast request', { cacheKey });
       return inFlightRequest;
     }
 
+    const session = sessionRef.current;
     const forecastPromise: Promise<SailingWeatherForecast | null> = (async (): Promise<SailingWeatherForecast | null> => {
       try {
         const liveForecast = await fetchForecast(cruise, targetDate, resolvedPoint);
+        if (sessionRef.current.generation !== session.generation || sessionRef.current.key !== session.key) {
+          logSailingWeather('warn', '[SailingWeather] Discarded forecast from a previous account session', { cruiseId: cruise.id, dateKey });
+          return null;
+        }
         setCache((previousCache) => {
           const nextCache = {
             ...previousCache,
@@ -1244,10 +1353,9 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
           dateKey,
           error: serializeError(error),
         });
-        const fallback = cached ?? findAnyCachedForecastForCruiseDay(cruise.id, dateKey);
-        if (fallback) {
+        if (cached) {
           const staleForecast: SailingWeatherForecast = {
-            ...fallback,
+            ...cached,
             source: 'cache-stale',
             isStale: true,
           };
@@ -1260,62 +1368,48 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
     })();
 
     inFlightRef.current[cacheKey] = forecastPromise;
-    return forecastPromise;
-  }, [fetchForecast, findAnyCachedForecastForCruiseDay]);
-
-  const getForecastForCruiseDay = useCallback(async (
-    cruise: SailingWeatherCruiseInput,
-    targetDate: Date,
-    options?: { force?: boolean },
-  ): Promise<SailingWeatherForecast | null> => {
-    const dateKeyForSync = formatDateKey(targetDate);
-    const syncLabel = `${cruise.shipName} · ${dateKeyForSync}`;
-    beginSync(syncLabel);
-
-    try {
-      const resolvedPoint = await resolveCruiseWeatherPoint(cruise, targetDate);
-      if (!resolvedPoint) {
-        const offlineFallback = findAnyCachedForecastForCruiseDay(cruise.id, dateKeyForSync);
-        if (offlineFallback) {
-          logSailingWeather('warn', '[SailingWeather] Coordinates unresolved (likely offline); serving last saved forecast', {
-            cruiseId: cruise.id,
-            shipName: cruise.shipName,
-            date: dateKeyForSync,
-            savedAt: offlineFallback.updatedAt,
-          });
-          return {
-            ...offlineFallback,
-            source: 'cache-stale',
-            isStale: true,
-          };
-        }
-
-        console.log('[SailingWeather] Unable to resolve coordinates for cruise day', {
-          cruiseId: cruise.id,
-          shipName: cruise.shipName,
-          date: dateKeyForSync,
-        });
-        return null;
-      }
-
-      return await getForecastForResolvedPoint(cruise, targetDate, resolvedPoint, options);
-    } finally {
-      endSync();
+    if (!shouldForce && cached) {
+      // Stale-while-revalidate keeps tab changes responsive and makes offline
+      // use immediate. The in-flight request updates the transactional cache
+      // when connectivity is available; failures are already contained above.
+      void forecastPromise.catch(() => undefined);
+      return {
+        ...cached,
+        source: cached.source === 'historical' ? 'historical' : 'cache-stale',
+        isStale: cached.source === 'historical' ? false : true,
+      };
     }
-  }, [beginSync, endSync, resolveCruiseWeatherPoint, findAnyCachedForecastForCruiseDay, getForecastForResolvedPoint]);
+    return forecastPromise;
+  }, [fetchForecast, resolveCruiseWeatherPoint]);
 
   const prefetchCruiseForecastWindow = useCallback(async (
     cruise: SailingWeatherCruiseInput,
     options?: { anchorDate?: Date; force?: boolean },
-  ): Promise<void> => {
+  ): Promise<SailingWeatherPrefetchReport> => {
+    const voyageDates = buildCruiseDateRange(cruise);
     const datesToPrefetch = buildPrefetchDates(cruise, options?.anchorDate);
+    const voyageDateKeys = voyageDates.map((date) => formatDateKey(date));
+    const eligibleDateKeys = datesToPrefetch.map((date) => formatDateKey(date));
+    const eligibleSet = new Set(eligibleDateKeys);
+    const unavailableDates = voyageDateKeys.filter((date) => !eligibleSet.has(date));
+    const firstFutureVoyageDate = voyageDates.find((date) => date >= startOfDay(new Date()));
+    const forecastAvailableFrom = firstFutureVoyageDate && unavailableDates.length > 0
+      ? formatDateKey(addDays(firstFutureVoyageDate, -FORECAST_PREFETCH_HORIZON_DAYS))
+      : null;
     if (datesToPrefetch.length === 0) {
       console.log('[SailingWeather] No prefetchable forecast dates for cruise window', {
         cruiseId: cruise.id,
         shipName: cruise.shipName,
         anchorDate: options?.anchorDate ? formatDateKey(options.anchorDate) : null,
       });
-      return;
+      return {
+        cruiseId: cruise.id,
+        voyageDates: voyageDateKeys,
+        eligibleDates: [],
+        refreshedDates: [],
+        unavailableDates,
+        forecastAvailableFrom,
+      };
     }
 
     console.log('[SailingWeather] Prefetching forecast window', {
@@ -1325,9 +1419,11 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
       force: options?.force === true,
     });
 
-    for (const forecastDate of datesToPrefetch) {
+    const refreshedDates: string[] = [];
+    await runWithConcurrency(datesToPrefetch, FORECAST_PREFETCH_CONCURRENCY, async (forecastDate) => {
       try {
-        await getForecastForCruiseDay(cruise, forecastDate, { force: options?.force === true });
+        const forecast = await getForecastForCruiseDay(cruise, forecastDate, { force: options?.force === true });
+        if (forecast) refreshedDates.push(formatDateKey(forecastDate));
       } catch (error) {
         logSailingWeather('error', '[SailingWeather] Failed to prefetch cruise forecast date', {
           cruiseId: cruise.id,
@@ -1336,20 +1432,95 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
           error: serializeError(error),
         });
       }
-    }
+    });
+    return {
+      cruiseId: cruise.id,
+      voyageDates: voyageDateKeys,
+      eligibleDates: eligibleDateKeys,
+      refreshedDates: Array.from(new Set(refreshedDates)).sort(),
+      unavailableDates,
+      forecastAvailableFrom,
+    };
   }, [getForecastForCruiseDay]);
+
+  const upcomingCruisesForBackgroundWeather = useMemo((): SailingWeatherCruiseInput[] => {
+    const todayKey = formatDateKey(startOfDay(new Date()));
+    const horizonKey = formatDateKey(addDays(startOfDay(new Date()), FORECAST_PREFETCH_HORIZON_DAYS));
+    return bookedCruises
+      .filter((cruise) => {
+        const status = String(cruise.status ?? '').trim().toLowerCase();
+        if (['completed', 'cancelled', 'canceled', 'archived'].includes(status) || cruise.completionState === 'completed') {
+          return false;
+        }
+        const plan = buildCruiseDayPlan(cruise);
+        if (!plan) return false;
+        return plan.returnDate >= todayKey && plan.sailDate <= horizonKey;
+      })
+      .map((cruise) => ({
+        id: cruise.id,
+        shipName: cruise.shipName,
+        sailDate: cruise.sailDate,
+        returnDate: cruise.returnDate,
+        departurePort: cruise.departurePort,
+        destination: cruise.destination,
+        itineraryName: cruise.itineraryName,
+        nights: cruise.nights,
+        itinerary: cruise.itinerary,
+        dataConfidence: cruise.dataConfidence,
+      }));
+  }, [bookedCruises]);
+
+  useEffect(() => {
+    if (!isHydrated || isCoreDataLoading || upcomingCruisesForBackgroundWeather.length === 0) {
+      return;
+    }
+
+    let isCancelled = false;
+    const refreshUpcomingCruises = async () => {
+      if (isCancelled || backgroundRefreshInFlightRef.current) return;
+      backgroundRefreshInFlightRef.current = true;
+      try {
+        for (const cruise of upcomingCruisesForBackgroundWeather) {
+          if (isCancelled) break;
+          await prefetchCruiseForecastWindow(cruise);
+        }
+      } finally {
+        backgroundRefreshInFlightRef.current = false;
+      }
+    };
+
+    // Delay network work until after the local-first provider tree has painted.
+    // Forecast refreshes are never awaited by startup or tab navigation.
+    let initialTimer: ReturnType<typeof setTimeout> | null = null;
+    const initialInteraction = InteractionManager.runAfterInteractions(() => {
+      initialTimer = setTimeout(() => {
+        void refreshUpcomingCruises();
+      }, BACKGROUND_PREFETCH_DELAY_MS);
+    });
+    const interval = setInterval(() => {
+      void refreshUpcomingCruises();
+    }, SAILING_WEATHER_REFRESH_MS);
+    const appStateSubscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        void refreshUpcomingCruises();
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+      initialInteraction.cancel();
+      if (initialTimer) clearTimeout(initialTimer);
+      clearInterval(interval);
+      appStateSubscription.remove();
+    };
+  }, [isCoreDataLoading, isHydrated, prefetchCruiseForecastWindow, upcomingCruisesForBackgroundWeather]);
 
   const clearWeatherCache = useCallback(async () => {
     setCache({});
     cacheRef.current = {};
-    setPortCache({});
-    geocodeCacheRef.current = new Map();
     try {
-      await Promise.all([
-        quotaSafeRemoveItem(storageKeyRef.current),
-        quotaSafeRemoveItem(portCacheStorageKeyRef.current),
-      ]);
-      console.log('[SailingWeather] Cleared all cached forecasts and saved port coordinates');
+      await quotaSafeRemoveItem(storageKeyRef.current);
+      console.log('[SailingWeather] Cleared all cached forecasts');
     } catch (error) {
       logSailingWeather('error', '[SailingWeather] Failed to clear weather cache', {
         error: serializeError(error),
@@ -1357,17 +1528,22 @@ export const [SailingWeatherProvider, useSailingWeather] = createContextHook(():
     }
   }, []);
 
-  const isSyncing = activeSyncCount > 0;
-  const syncStatusMessage = isSyncing
-    ? (lastSyncLabel ? `Syncing marine forecast — ${lastSyncLabel}…` : 'Syncing marine forecast…')
-    : null;
+  const clearWeatherCacheForCruise = useCallback(async (cruiseId: string) => {
+    const nextCache = Object.fromEntries(Object.entries(cacheRef.current).filter(([, forecast]) => forecast.cruiseId !== cruiseId));
+    setCache(nextCache);
+    cacheRef.current = nextCache;
+  }, []);
+
+  useEffect(() => subscribeToCruiseRecordChanges((change) => {
+    void clearWeatherCacheForCruise(change.cruiseId);
+  }), [clearWeatherCacheForCruise]);
 
   return useMemo(() => ({
     isHydrated,
-    isSyncing,
-    syncStatusMessage,
+    cachedForecasts: Object.values(cache),
     getForecastForCruiseDay,
     prefetchCruiseForecastWindow,
     clearWeatherCache,
-  }), [clearWeatherCache, getForecastForCruiseDay, isHydrated, isSyncing, syncStatusMessage, prefetchCruiseForecastWindow]);
+    clearWeatherCacheForCruise,
+  }), [cache, clearWeatherCache, clearWeatherCacheForCruise, getForecastForCruiseDay, isHydrated, prefetchCruiseForecastWindow]);
 });

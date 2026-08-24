@@ -11,7 +11,6 @@ import {
   Image,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { buildCruiseDetailsParams } from '@/lib/navigation/cruiseDetails';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   Ship,
@@ -32,11 +31,16 @@ import {
   DollarSign,
   Crown,
   Globe2,
+  CalendarDays,
+  ChevronRight,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useQueryClient } from '@tanstack/react-query';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
 import { withAlpha } from '@/constants/loyaltyColors';
-import { createLoyaltyCardTheme, getClubRoyaleTierColor } from '@/constants/loyaltyTheme';
+import { getPlayerCardTheme, type SupportedBrand } from '@/constants/loyaltyTheme';
+import { getEffectiveCelebrityCaptainsClubLevel } from '@/constants/celebrityCaptainsClub';
+import { getSilverseaTierByDays } from '@/constants/silverseaVenetianSociety';
 import { LoyaltyPill } from '@/components/ui/LoyaltyPill';
 import { useAppState } from '@/state/AppStateProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
@@ -45,11 +49,14 @@ import { useAuth } from '@/state/AuthProvider';
 import { MinimalistFilterBar } from '@/components/ui/MinimalistFilterBar';
 import { createDateFromString } from '@/lib/date';
 import { CruiseCard } from '@/components/CruiseCard';
-import { DOLLARS_PER_POINT, type BookedCruise, type Cruise } from '@/types/models';
+import { DOLLARS_PER_POINT, type BookedCruise } from '@/types/models';
 import { dedupeBookedCruises } from '@/lib/dataIdentity';
 import { AddBookedCruiseModal } from '@/components/AddBookedCruiseModal';
 import { MarineAlertsPanel } from '@/components/MarineAlertsPanel';
+import { VoyageWeatherSection } from '@/components/VoyageWeatherSection';
 import { ResponsiveContainer } from '@/components/ResponsiveContainer';
+import { buildCruiseDayPlan, getCruiseDayForDate } from '@/lib/cruiseDayPipeline';
+import { useSailingWeather } from '@/state/SailingWeatherProvider';
 
 import { getImageForDestination, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
 import { useSimpleAnalytics } from '@/state/SimpleAnalyticsProvider';
@@ -64,15 +71,12 @@ import { getBookedCruiseCasinoPoints } from '@/lib/casinoPointTruth';
 import { CONFIRMED_CLUB_ROYALE_2025_POINTS, isKnownCasinoProfile } from '@/lib/knownProfileFallback';
 import { applyKnownBookingCorrections, findOverlappingBookedCruises } from '@/lib/cruiseOverlapGuards';
 import { isActiveBookedCruise, isCompletedBookedCruise } from '@/lib/bookedCruiseStatus';
-import { resolveFullCruiseItinerary } from '@/lib/casinoAvailability';
+import { buildCruiseDetailsParams } from '@/lib/navigation/cruiseDetails';
 
 type FilterType = 'all' | 'upcoming' | 'completed' | 'celebrity';
 type SortType = 'next' | 'newest' | 'oldest' | 'ship' | 'nights';
 type ViewMode = 'list' | 'timeline' | 'points';
 
-// Matches the marine/weather model's maximum forecast horizon (Open-Meteo: 16 days),
-// so the next upcoming cruise's rough-seas / big-wave outlook surfaces as far in
-// advance of sailing as real forecast data is available — not just once it's imminent.
 const BOOKED_MARINE_ALERT_FORECAST_DAYS = 16;
 const BOOKED_MARINE_ALERT_DAYS_AHEAD = BOOKED_MARINE_ALERT_FORECAST_DAYS - 1;
 
@@ -90,25 +94,20 @@ function startOfLocalDay(date: Date): Date {
   return normalized;
 }
 
-function getCruiseForecastEndDate(cruise: BookedCruise, sailStart: Date): Date {
-  if (cruise.returnDate) {
-    const parsedReturnDate = createDateFromString(cruise.returnDate);
-    if (!Number.isNaN(parsedReturnDate.getTime())) {
-      return startOfLocalDay(parsedReturnDate);
-    }
-  }
-
-  const nights = typeof cruise.nights === 'number' && Number.isFinite(cruise.nights) && cruise.nights > 0 ? cruise.nights : 0;
-  const estimatedReturnDate = new Date(sailStart);
-  estimatedReturnDate.setDate(estimatedReturnDate.getDate() + nights);
-  return startOfLocalDay(estimatedReturnDate);
+function getCruiseForecastEndDate(cruise: BookedCruise): Date | null {
+  const plan = buildCruiseDayPlan(cruise);
+  const finalDay = plan && plan.days.length > 0 ? plan.days[plan.days.length - 1] : undefined;
+  if (!finalDay) return null;
+  const parsed = createDateFromString(finalDay.date);
+  return Number.isNaN(parsed.getTime()) ? null : startOfLocalDay(parsed);
 }
 
 function isCruiseInsideForecastWindow(cruise: BookedCruise, windowStart: Date, windowEnd: Date): boolean {
   if (!cruise.sailDate) return false;
   const sailStart = startOfLocalDay(createDateFromString(cruise.sailDate));
   if (Number.isNaN(sailStart.getTime())) return false;
-  const cruiseEnd = getCruiseForecastEndDate(cruise, sailStart);
+  const cruiseEnd = getCruiseForecastEndDate(cruise);
+  if (!cruiseEnd) return false;
   return cruiseEnd >= windowStart && sailStart <= windowEnd;
 }
 
@@ -131,6 +130,14 @@ function mergeCruiseData(primaryCruises: BookedCruise[], fallbackCruises: Booked
   return applyKnownBookingCorrections(dedupeBookedCruises([...fallbackCruises, ...primaryCruises], 'booked screen merged cruises'));
 }
 
+function resolveCasinoThemeBrand(selectedBrand: string, preferredBrand?: SupportedBrand): SupportedBrand {
+  if (selectedBrand === 'royal' || selectedBrand === 'celebrity' || selectedBrand === 'silversea' || selectedBrand === 'carnival') {
+    return selectedBrand;
+  }
+
+  return preferredBrand ?? 'royal';
+}
+
 function getBookedCruiseRenderKey(cruise: BookedCruise, index: number): string {
   const keyParts = [
     cruise.id,
@@ -149,10 +156,12 @@ function getBookedCruiseRenderKey(cruise: BookedCruise, index: number): string {
 
 export default function BookedScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const sailingWeather = useSailingWeather();
   const { localData, clubRoyaleProfile, isLoading: appLoading, refreshData } = useAppState();
-  const { addCruise, addBookedCruise, bookedCruises: storedBooked } = useCoreData();
+  const { addBookedCruise, bookedCruises: storedBooked } = useCoreData();
   const { authenticatedEmail } = useAuth();
-  const { users } = useUser();
+  const { users, currentUser } = useUser();
   const { selectedProfileId, selectedBrand, selectedProgram } = useIntelligenceFilters();
   const { casinoAnalytics } = useSimpleAnalytics();
   const {
@@ -160,6 +169,8 @@ export default function BookedScreen() {
     clubRoyaleCurrentYearPoints,
     clubRoyaleHistoricalPoints,
     crownAnchorPoints,
+    crownAnchorLevel,
+    captainsClub,
   } = useLoyalty();
 
   const [refreshing, setRefreshing] = useState(false);
@@ -170,6 +181,7 @@ export default function BookedScreen() {
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedMarineDayByCruise, setSelectedMarineDayByCruise] = useState<Record<string, string>>({});
 
   const intelligenceFilterSnapshot = useMemo(() => ({
     selectedProfileId,
@@ -256,8 +268,22 @@ export default function BookedScreen() {
   const historicalPoints = casinoAnalytics.historicalPointsEarned || clubRoyaleHistoricalPoints;
   const usesKnownCasinoProfile = isKnownCasinoProfile(authenticatedEmail);
   const clubRoyaleTier = loyaltyClubRoyaleTier || clubRoyaleProfile?.tier || 'Choice';
-  const clubRoyaleTierColor = getClubRoyaleTierColor(clubRoyaleTier);
-  const casinoCardTheme = useMemo(() => createLoyaltyCardTheme(clubRoyaleTierColor), [clubRoyaleTierColor]);
+  const casinoThemeBrand = useMemo(() => resolveCasinoThemeBrand(selectedBrand, currentUser?.preferredBrand), [currentUser?.preferredBrand, selectedBrand]);
+  const celebrityLevel = useMemo(() => (
+    getEffectiveCelebrityCaptainsClubLevel(
+      currentUser?.celebrityCaptainsClubPoints ?? captainsClub.points ?? 0,
+      crownAnchorLevel || currentUser?.crownAnchorLevel,
+      captainsClub.tier,
+    )
+  ), [captainsClub.points, captainsClub.tier, crownAnchorLevel, currentUser?.celebrityCaptainsClubPoints, currentUser?.crownAnchorLevel]);
+  const silverseaTier = useMemo(() => currentUser?.silverseaVenetianTier || getSilverseaTierByDays(currentUser?.silverseaVenetianPoints ?? 0), [currentUser?.silverseaVenetianPoints, currentUser?.silverseaVenetianTier]);
+  const casinoCardTheme = useMemo(() => getPlayerCardTheme({
+    brand: casinoThemeBrand,
+    crownAnchorLevel: crownAnchorLevel || currentUser?.crownAnchorLevel,
+    celebrityLevel,
+    silverseaTier,
+    carnivalVifpTier: currentUser?.carnivalVifpTier || 'Blue',
+  }), [casinoThemeBrand, celebrityLevel, crownAnchorLevel, currentUser?.carnivalVifpTier, currentUser?.crownAnchorLevel, silverseaTier]);
 
   const stats = useMemo(() => {
     const activeCruises = bookedCruises.filter((cruise) => isCruiseUpcomingBooking(cruise) || isCruiseCompleted(cruise));
@@ -338,24 +364,7 @@ export default function BookedScreen() {
       .filter((cruise) => isCruiseInsideForecastWindow(cruise, forecastWindowStart, forecastWindowEnd))
       .sort((a, b) => createDateFromString(a.sailDate).getTime() - createDateFromString(b.sailDate).getTime())[0];
 
-    if (!nextForecastCruise) return [];
-
-    // The marine alerts panel needs a real returnDate to build its day-by-day forecast
-    // window. Many booked cruises only carry sailDate + nights (returnDate is derived
-    // elsewhere on demand), so backfill it here the same way the rest of this screen
-    // already estimates a forecast end date - otherwise the panel silently requests zero
-    // forecast days and shows "Forecast not loaded yet" even though the itinerary/ports
-    // resolve just fine.
-    const sailStart = startOfLocalDay(createDateFromString(nextForecastCruise.sailDate));
-    const normalizedReturnDate = nextForecastCruise.returnDate?.trim()
-      ? nextForecastCruise.returnDate
-      : getCruiseForecastEndDate(nextForecastCruise, sailStart).toISOString().slice(0, 10);
-
-    return [{
-      ...nextForecastCruise,
-      returnDate: normalizedReturnDate,
-      itinerary: resolveFullCruiseItinerary(nextForecastCruise),
-    }];
+    return nextForecastCruise ? [nextForecastCruise] : [];
   }, [bookedCruises]);
 
   const nextCruise = useMemo(() => {
@@ -365,13 +374,37 @@ export default function BookedScreen() {
     return upcomingCruises[0] || null;
   }, [bookedCruises]);
 
+  const nextCruiseWeatherDate = useMemo(() => {
+    if (!nextCruise) return null;
+    const plan = buildCruiseDayPlan(nextCruise);
+    const selectedDateKey = selectedMarineDayByCruise[nextCruise.id];
+    if (selectedDateKey && plan?.days.some((day) => day.date === selectedDateKey)) {
+      return createDateFromString(selectedDateKey);
+    }
+    const today = startOfLocalDay(new Date());
+    if (getCruiseDayForDate(nextCruise, today)) {
+      return today;
+    }
+    return plan ? createDateFromString(plan.sailDate) : null;
+  }, [nextCruise, selectedMarineDayByCruise]);
+
+  const handleMarineDaySelect = useCallback((cruiseId: string, dateKey: string) => {
+    setSelectedMarineDayByCruise((current) => ({ ...current, [cruiseId]: dateKey }));
+  }, []);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     console.log('[Booked] Refreshing data...');
-    await refreshData();
-    await new Promise(resolve => setTimeout(resolve, 500));
-    setRefreshing(false);
-  }, [refreshData]);
+    try {
+      await refreshData();
+      if (nextCruise) {
+        await sailingWeather.prefetchCruiseForecastWindow(nextCruise, { force: true });
+        await queryClient.invalidateQueries({ queryKey: ['sailing-weather', nextCruise.id] });
+      }
+    } finally {
+      setRefreshing(false);
+    }
+  }, [nextCruise, queryClient, refreshData, sailingWeather]);
 
   const clearFilters = useCallback(() => {
     setFilter('all');
@@ -400,16 +433,10 @@ export default function BookedScreen() {
   }, [filter, router]);
 
   const handleSaveNewCruise = useCallback(async (cruise: BookedCruise) => {
-    console.log('[Booked] Saving new booked cruise:', cruise);
+    console.log('[Booked] Saving new cruise:', cruise);
     addBookedCruise(cruise);
     await refreshData();
   }, [addBookedCruise, refreshData]);
-
-  const handleSaveAvailableCruise = useCallback(async (cruise: Cruise) => {
-    console.log('[Booked] Saving new available cruise:', cruise);
-    addCruise(cruise);
-    await refreshData();
-  }, [addCruise, refreshData]);
 
   const getDaysUntilCruise = useCallback((sailDate: string | undefined): number | null => {
     if (!sailDate) return null;
@@ -556,6 +583,7 @@ export default function BookedScreen() {
         <LinearGradient
           colors={['rgba(0, 31, 63, 0.3)', 'rgba(0, 31, 63, 0.85)', 'rgba(0, 31, 63, 0.95)']}
           style={styles.heroOverlay}
+          pointerEvents="none"
         />
         <View style={styles.heroContent}>
           <View style={styles.heroTitleRow}>
@@ -569,19 +597,40 @@ export default function BookedScreen() {
           </View>
           
           {nextCruise && (
-            <View style={styles.nextCruiseCard}>
-              <View style={styles.nextCruiseHeader}>
-                <Clock size={14} color={COLORS.beigeWarm} />
-                <Text style={styles.nextCruiseLabel}>NEXT VOYAGE</Text>
-              </View>
-              <Text style={styles.nextCruiseShip}>{nextCruise.shipName}</Text>
-              <Text style={styles.nextCruiseDest}>
-                {nextCruise.nights}N • {nextCruise.destination || nextCruise.itineraryName || 'Caribbean'}
-              </Text>
-              <Text style={styles.nextCruiseDate}>
-                {createDateFromString(nextCruise.sailDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}
-              </Text>
-            </View>
+            <>
+              <TouchableOpacity
+                style={styles.nextCruiseCard}
+                onPress={() => handleCruisePress(nextCruise)}
+                activeOpacity={0.78}
+                accessibilityRole="button"
+                accessibilityLabel={`Open ${nextCruise.shipName} cruise details`}
+                testID="booked-next-cruise-card"
+              >
+                <View style={styles.nextCruiseHeader}>
+                  <Clock size={14} color={COLORS.beigeWarm} />
+                  <Text style={styles.nextCruiseLabel}>NEXT VOYAGE</Text>
+                </View>
+                <Text style={styles.nextCruiseShip}>{nextCruise.shipName}</Text>
+                <Text style={styles.nextCruiseDest}>
+                  {nextCruise.nights}N • {nextCruise.destination || nextCruise.itineraryName || 'Caribbean'}
+                </Text>
+                <Text style={styles.nextCruiseDate}>
+                  {createDateFromString(nextCruise.sailDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.todayOnCruiseButton}
+                onPress={() => router.push({ pathname: '/today-on-cruise' as any, params: { cruiseId: nextCruise.id } })}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel={`Open today on my cruise for ${nextCruise.shipName}`}
+                testID="booked-today-on-cruise-button"
+              >
+                <CalendarDays size={17} color="#082F49" />
+                <Text style={styles.todayOnCruiseButtonText}>TODAY ON MY CRUISE</Text>
+                <ChevronRight size={17} color="#082F49" />
+              </TouchableOpacity>
+            </>
           )}
           
           <View style={styles.heroStatsRow}>
@@ -612,11 +661,18 @@ export default function BookedScreen() {
           startDate={new Date()}
           daysAhead={BOOKED_MARINE_ALERT_DAYS_AHEAD}
           maxItems={3}
-          title="Rough seas / big-wave alerts"
-          description="Up to 16-day advance outlook for your next sailing, with big-wave, rough-seas, squall, and bad-weather watchouts before you even leave the dock and every day you're at sea."
+          title="Rough seas / weather alerts"
+          description="Full provider-window outlook for the next sailing, with daily wind, wave height, and weather saved locally for offline reading."
           testID="booked-marine-alerts-panel"
+          onSelectForecastDay={handleMarineDaySelect}
         />
       </View>
+
+      {nextCruise && nextCruiseWeatherDate ? (
+        <View style={styles.marineAlertsSection} testID="booked-sailing-weather-section">
+          <VoyageWeatherSection cruise={nextCruise} />
+        </View>
+      ) : null}
 
       {/* Combined Casino Section */}
       <View style={styles.casinoSection}>
@@ -628,28 +684,28 @@ export default function BookedScreen() {
         >
           <View style={styles.casinoHeader}>
             <View style={[styles.casinoIconBadge, {
-              backgroundColor: withAlpha(casinoCardTheme.accentColor, 0.28),
+              backgroundColor: casinoCardTheme.surfaceColor,
               borderWidth: 1,
-              borderColor: withAlpha('#FFFFFF', 0.18),
+              borderColor: casinoCardTheme.borderColor,
             }]}> 
-              <Dice5 size={20} color={COLORS.white} />
+              <Dice5 size={20} color={casinoCardTheme.accentColor} />
             </View>
             <Text style={[styles.casinoTitle, { color: casinoCardTheme.topTextColor }]}>Casino</Text>
-            <LoyaltyPill label={clubRoyaleTier} color={clubRoyaleTierColor} size="small" testID="booked-casino-tier-pill" />
+            <LoyaltyPill label={clubRoyaleTier} color={casinoCardTheme.accentColor} size="small" testID="booked-casino-tier-pill" />
           </View>
           
           <View style={styles.casinoMetricsGrid}>
-            <View style={[styles.casinoMetricCard, { backgroundColor: casinoCardTheme.surfaceColor, borderWidth: 1, borderColor: withAlpha(casinoCardTheme.accentColor, 0.24) }]}>
+            <View style={[styles.casinoMetricCard, { backgroundColor: casinoCardTheme.surfaceColor, borderWidth: 1, borderColor: casinoCardTheme.borderColor }]}>
               <View style={[styles.casinoMetricIcon, { backgroundColor: casinoCardTheme.surfaceColorMuted }]}>
-                <Coins size={16} color={COLORS.goldLight} />
+                <Coins size={16} color={casinoCardTheme.accentColor} />
               </View>
               <Text style={[styles.casinoMetricValue, { color: casinoCardTheme.topTextColor }]}>{formatCurrency(casinoStats.totalCoinIn)}</Text>
               <Text style={[styles.casinoMetricLabel, { color: casinoCardTheme.secondaryTextColor }]}>Total Coin-In</Text>
             </View>
             
-            <View style={[styles.casinoMetricCard, { backgroundColor: casinoCardTheme.surfaceColor, borderWidth: 1, borderColor: withAlpha(casinoCardTheme.accentColor, 0.24) }]}>
+            <View style={[styles.casinoMetricCard, { backgroundColor: casinoCardTheme.surfaceColor, borderWidth: 1, borderColor: casinoCardTheme.borderColor }]}>
               <View style={[styles.casinoMetricIcon, { backgroundColor: casinoCardTheme.surfaceColorMuted }]}>
-                <Target size={16} color={casinoStats.netResult >= 0 ? COLORS.success : COLORS.error} />
+                <Target size={16} color={casinoCardTheme.accentColor} />
               </View>
               <Text style={[styles.casinoMetricValue, { color: casinoCardTheme.topTextColor }]}>
                 {casinoStats.netResult >= 0 ? '+' : ''}{formatCurrency(casinoStats.netResult)}
@@ -657,18 +713,18 @@ export default function BookedScreen() {
               <Text style={[styles.casinoMetricLabel, { color: casinoCardTheme.secondaryTextColor }]}>Cash Result</Text>
             </View>
             
-            <View style={[styles.casinoMetricCard, { backgroundColor: casinoCardTheme.surfaceColor, borderWidth: 1, borderColor: withAlpha(casinoCardTheme.accentColor, 0.24) }]}>
+            <View style={[styles.casinoMetricCard, { backgroundColor: casinoCardTheme.surfaceColor, borderWidth: 1, borderColor: casinoCardTheme.borderColor }]}>
               <View style={[styles.casinoMetricIcon, { backgroundColor: casinoCardTheme.surfaceColorMuted }]}>
-                <Award size={16} color={clubRoyaleTierColor} />
+                <Award size={16} color={casinoCardTheme.accentColor} />
               </View>
               <Text style={[styles.casinoMetricValue, { color: casinoCardTheme.topTextColor }]}>{formatNumber(currentYearPoints)}</Text>
               <Text style={[styles.casinoMetricLabel, { color: casinoCardTheme.secondaryTextColor }]}>Current Season</Text>
             </View>
           </View>
           
-          <View style={[styles.casinoFinancialsRow, { backgroundColor: casinoCardTheme.surfaceColor, borderWidth: 1, borderColor: withAlpha(casinoCardTheme.accentColor, 0.24) }]}>
+          <View style={[styles.casinoFinancialsRow, { backgroundColor: casinoCardTheme.surfaceColor, borderWidth: 1, borderColor: casinoCardTheme.borderColor }]}>
             <View style={styles.casinoFinancialItem}>
-              <Ship size={14} color={casinoCardTheme.topTextColor} />
+              <Ship size={14} color={casinoCardTheme.accentColor} />
               <View style={styles.casinoFinancialText}>
                 <Text style={[styles.casinoFinancialLabel, { color: casinoCardTheme.secondaryTextColor }]}>Retail Value</Text>
                 <Text style={[styles.casinoFinancialValue, { color: casinoCardTheme.topTextColor }]}>
@@ -678,7 +734,7 @@ export default function BookedScreen() {
             </View>
             <View style={[styles.casinoFinancialDivider, { backgroundColor: withAlpha(casinoCardTheme.topTextColor, 0.12) }]} />
             <View style={styles.casinoFinancialItem}>
-              <DollarSign size={14} color={casinoCardTheme.topTextColor} />
+              <DollarSign size={14} color={casinoCardTheme.accentColor} />
               <View style={styles.casinoFinancialText}>
                 <Text style={[styles.casinoFinancialLabel, { color: casinoCardTheme.secondaryTextColor }]}>Amount Paid</Text>
                 <Text style={[styles.casinoFinancialValue, { color: casinoCardTheme.topTextColor }]}>
@@ -688,7 +744,7 @@ export default function BookedScreen() {
             </View>
             <View style={[styles.casinoFinancialDivider, { backgroundColor: withAlpha(casinoCardTheme.topTextColor, 0.12) }]} />
             <View style={styles.casinoFinancialItem}>
-              <TrendingUp size={14} color={casinoCardTheme.topTextColor} />
+              <TrendingUp size={14} color={casinoCardTheme.accentColor} />
               <View style={styles.casinoFinancialText}>
                 <Text style={[styles.casinoFinancialLabel, { color: casinoCardTheme.secondaryTextColor }]}>Total Economic Value</Text>
                 <Text style={[styles.casinoFinancialValue, { color: casinoCardTheme.topTextColor }]}> 
@@ -698,7 +754,7 @@ export default function BookedScreen() {
             </View>
           </View>
           
-          <View style={[styles.casinoAvgRow, { backgroundColor: casinoCardTheme.surfaceColorMuted, borderWidth: 1, borderColor: withAlpha(casinoCardTheme.accentColor, 0.2), marginBottom: SPACING.sm }]}>
+          <View style={[styles.casinoAvgRow, { backgroundColor: casinoCardTheme.surfaceColorMuted, borderWidth: 1, borderColor: casinoCardTheme.borderColor, marginBottom: SPACING.sm }]}>
             <View style={styles.casinoAvgItem}>
               <Text style={[styles.casinoAvgLabel, { color: casinoCardTheme.secondaryTextColor }]}>Historical Points</Text>
               <Text style={[styles.casinoAvgValue, { color: casinoCardTheme.topTextColor }]}>{formatNumber(historicalPoints)}</Text>
@@ -711,7 +767,7 @@ export default function BookedScreen() {
           </View>
 
           {casinoStats.completedCount > 0 && (
-            <View style={[styles.casinoAvgRow, { backgroundColor: casinoCardTheme.surfaceColorMuted, borderWidth: 1, borderColor: withAlpha(casinoCardTheme.accentColor, 0.2) }]}>
+            <View style={[styles.casinoAvgRow, { backgroundColor: casinoCardTheme.surfaceColorMuted, borderWidth: 1, borderColor: casinoCardTheme.borderColor }]}>
               <View style={styles.casinoAvgItem}>
                 <Text style={[styles.casinoAvgLabel, { color: casinoCardTheme.secondaryTextColor }]}>Avg Coin-In/Cruise</Text>
                 <Text style={[styles.casinoAvgValue, { color: casinoCardTheme.topTextColor }]}>{formatCurrency(casinoStats.avgCoinInPerCruise)}</Text>
@@ -904,7 +960,6 @@ export default function BookedScreen() {
         visible={showAddModal}
         onClose={() => setShowAddModal(false)}
         onSave={handleSaveNewCruise}
-        onSaveAvailable={handleSaveAvailableCruise}
       />
     </View>
   );
@@ -1020,6 +1075,27 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontWeight: '600' as const,
   },
+  todayOnCruiseButton: {
+    marginTop: SPACING.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    minHeight: 46,
+    paddingHorizontal: SPACING.md,
+    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: '#FDE68A',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.58)',
+  },
+  todayOnCruiseButtonText: {
+    flex: 1,
+    textAlign: 'center',
+    color: '#082F49',
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: '900',
+    letterSpacing: 0.55,
+  },
   heroStatsRow: {
     flexDirection: 'row',
     backgroundColor: 'rgba(255, 255, 255, 0.15)',
@@ -1046,6 +1122,7 @@ const styles = StyleSheet.create({
   },
   marineAlertsSection: {
     marginBottom: SPACING.md,
+    gap: SPACING.md,
   },
   casinoSection: {
     marginBottom: SPACING.md,

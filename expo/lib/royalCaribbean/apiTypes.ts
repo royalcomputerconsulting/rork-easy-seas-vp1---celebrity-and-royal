@@ -286,22 +286,6 @@ export const SHIP_CODE_TO_NAME: Record<string, string> = {
   'SG': 'Star of the Seas',
   'ST': 'Star of the Seas',
   'SN': 'Star of the Seas',
-  'BY': 'Celebrity Beyond',
-  'AX': 'Celebrity Apex',
-  'AP': 'Celebrity Apex',
-  'RF': 'Celebrity Reflection',
-  'SM': 'Celebrity Summit',
-  'SU': 'Celebrity Summit',
-  'AS': 'Celebrity Ascent',
-  'EG': 'Celebrity Edge',
-  'EC': 'Celebrity Eclipse',
-  'EQ': 'Celebrity Equinox',
-  'SL': 'Celebrity Silhouette',
-  'CS': 'Celebrity Constellation',
-  'ML': 'Celebrity Millennium',
-  'IN': 'Celebrity Infinity',
-  'FL': 'Celebrity Flora',
-  'XC': 'Celebrity Xcel',
 };
 
 export const STATEROOM_TYPE_MAP: Record<string, string> = {

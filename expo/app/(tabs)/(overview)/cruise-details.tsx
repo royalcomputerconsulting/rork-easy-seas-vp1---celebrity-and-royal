@@ -1,38 +1,37 @@
 import React, { memo, useCallback, useMemo, useState, useEffect } from 'react';
 import { ShipMachinesPanel } from '@/components/ShipMachinesPanel';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, Switch, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, Switch, Image, ActivityIndicator, InteractionManager } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import type { ItineraryDay, BookedCruise, CasinoOffer, Cruise } from '@/types/models';
-import { Ship, Calendar, MapPin, Clock, DollarSign, Gift, Star, Users, Anchor, Tag, ArrowLeft, Edit3, X, Save, TrendingUp, Dice5, AlertCircle, Target, Trash2, Sparkles, ChevronRight } from 'lucide-react-native';
+import { Ship, Calendar, MapPin, Clock, DollarSign, Gift, Star, Users, Anchor, Tag, ArrowLeft, Edit3, FileUp, X, Save, TrendingUp, Dice5, AlertCircle, Target, Trash2, Sparkles, ChevronRight } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { formatCurrency, formatNights, formatTime12Hour } from '@/lib/format';
 import { formatDate, getDaysUntil, createDateFromString } from '@/lib/date';
+import { buildCruiseDayPlan } from '@/lib/cruiseDayPipeline';
+import { findSingleMaterialOffer, isExplicitSeaDay, parsePortsAndTimes } from '@/lib/itineraryIntegrity';
 import { useAppState } from '@/state/AppStateProvider';
 import { useSimpleAnalytics } from '@/state/SimpleAnalyticsProvider';
 import { useCoreData } from '@/state/CoreDataProvider';
-import { ADMIN_EMAILS, useAuth } from '@/state/AuthProvider';
 import { useUser, DEFAULT_PLAYING_HOURS } from '@/state/UserProvider';
 
 import { getCasinoStatusBadge, calculatePersonalizedPlayEstimate, PersonalizedPlayEstimate, PlayingHoursConfig, type CasinoAvailability } from '@/lib/casinoAvailability';
 import { getBookedCruiseCasinoPoints } from '@/lib/casinoPointTruth';
-import { useCasinoLedger } from '@/hooks/useCasinoLedger';
-import { useDrillDown, SourceConfidenceBadge } from '@/components/casino-dashboard/CalculationDrillDownDrawer';
-import { toSourceConfidence } from '@/lib/casinoLedger/confidence';
 import { getEstimatedCabinPrices } from '@/lib/valueCalculator';
 import { getUniqueImageForCruise, DEFAULT_CRUISE_IMAGE } from '@/constants/cruiseImages';
-import { buildCruiseDetailsParams } from '@/lib/navigation/cruiseDetails';
 import {
   buildPortTracker,
   calculateSeaDayDensityScore,
   calculateShipFamiliarityScore,
   findCruiseReplacementCandidates,
+  type PortTrackerResult,
   type ReplacementCandidate,
+  type ShipFamiliarityResult,
 } from '@/lib/cruisePlanningIntelligence';
 import { applyKnownBookingCorrections, applyKnownBookingCorrectionsToCruise, findOverlappingBookedCruises } from '@/lib/cruiseOverlapGuards';
-import { BOOKED_CRUISES_DATA } from '@/mocks/bookedCruises';
-import { COMPLETED_CRUISES_DATA } from '@/mocks/completedCruises';
-import { CRUISE_HISTORY_SUPPLEMENT_DATA } from '@/mocks/cruiseHistorySupplement';
+import { displayKnownCount, knownGuestCount, knownNightCount } from '@/lib/cruiseRecordIntegrity';
+import { buildCruiseDetailsParams, resolveCruiseDetailsRecord } from '@/lib/navigation/cruiseDetails';
+import { useCruiseInventory } from '@/hooks/useCruiseInventory';
 
 type ReplacementGoalId = 'bestValue' | 'lowerCost' | 'seaDays' | 'backToBack' | 'expiringOffer' | 'newPorts' | 'shipFamiliarity' | 'tierProgress';
 
@@ -40,6 +39,13 @@ type ReplacementGoal = {
   id: ReplacementGoalId;
   label: string;
   subtitle: string;
+};
+
+type DeferredPlanningIntelligence = {
+  cruiseId: string;
+  portTracker: PortTrackerResult;
+  shipFamiliarity: ShipFamiliarityResult;
+  replacementCandidates: ReplacementCandidate[];
 };
 
 const REPLACEMENT_GOALS: ReplacementGoal[] = [
@@ -64,112 +70,6 @@ function formatPortWindow(day: CasinoAvailability): string {
   return `${arrival} - ${departure}`;
 }
 
-
-
-const DETAIL_INTELLIGENCE_RECORD_LIMIT = 160;
-const DETAIL_OFFER_RECORD_LIMIT = 60;
-const EXPECTED_POINTS_HISTORY_LIMIT = 80;
-
-function stableCruiseIdentity(record: Cruise | BookedCruise): string {
-  const anyRecord = record as any;
-  const booking = normalizeRouteText(anyRecord.bookingId || anyRecord.reservationNumber);
-  if (booking) return `booking:${booking}`;
-  const offer = normalizeRouteText(anyRecord.offerCode);
-  const ship = normalizeRouteText(record.shipName);
-  const date = cruiseRouteDate(record);
-  const cabin = normalizeRouteText(anyRecord.cabinType || anyRecord.stateroomNumber || anyRecord.stateroom);
-  return `${offer}|${ship}|${date}|${cabin}`;
-}
-
-function dedupeCruiseRecordsForDetail(records: Cruise[]): Cruise[] {
-  const seen = new Set<string>();
-  const result: Cruise[] = [];
-  for (const record of records) {
-    const key = stableCruiseIdentity(record);
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
-    result.push(record);
-  }
-  return result;
-}
-
-function hasBookingIdentityForDetail(record: Cruise): boolean {
-  const anyRecord = record as any;
-  return Boolean(anyRecord.bookingId || anyRecord.reservationNumber || anyRecord.bwoNumber);
-}
-
-function isCompletedTripForDetail(record: Cruise): boolean {
-  const anyRecord = record as any;
-  const status = String(anyRecord.status || '').toLowerCase();
-  const completionState = String(anyRecord.completionState || '').toLowerCase();
-  return status === 'completed' || completionState === 'completed';
-}
-
-function isAvailableOfferCatalogRowForDetail(record: Cruise): boolean {
-  const anyRecord = record as any;
-  if (hasBookingIdentityForDetail(record) || isCompletedTripForDetail(record)) return false;
-  const status = String(anyRecord.status || '').toLowerCase();
-  const completionState = String(anyRecord.completionState || '').toLowerCase();
-  if (status === 'booked' || status === 'upcoming' || completionState === 'upcoming') return false;
-  const source = String(anyRecord.source || anyRecord.cruiseSource || anyRecord.sourceType || '').toLowerCase();
-  return status === 'available' || status === 'active' || source.includes('offer') || Boolean(anyRecord.offerCode);
-}
-
-function isActiveOrHistoricalTrip(record: Cruise): boolean {
-  const status = String((record as any).status || '').toLowerCase();
-  const completionState = String((record as any).completionState || '').toLowerCase();
-  return (status === 'booked' || status === 'upcoming' || status === 'completed' || completionState === 'completed' || hasBookingIdentityForDetail(record)) && !isAvailableOfferCatalogRowForDetail(record);
-}
-
-function getSafeDetailContextRecords(records: Cruise[], currentCruise?: Cruise | null): Cruise[] {
-  const deduped = dedupeCruiseRecordsForDetail(records);
-  const currentId = currentCruise?.id;
-  const currentShip = normalizeRouteText(currentCruise?.shipName);
-
-  const activeAndHistory = deduped.filter((record) => {
-    if (record.id === currentId) return true;
-    return isActiveOrHistoricalTrip(record);
-  });
-
-  const sameShipTrips = currentShip
-    ? activeAndHistory.filter((record) => normalizeRouteText(record.shipName) === currentShip)
-    : [];
-  const currentRecord = currentCruise ? [currentCruise as Cruise] : [];
-
-  // Cruise detail must never analyze the full offer catalog. Keep only real booked/completed trips
-  // plus the current cruise and a small same-ship context. This prevents single taps from freezing
-  // after a large Royal/Celebrity offer sync.
-  return dedupeCruiseRecordsForDetail([
-    ...currentRecord,
-    ...sameShipTrips,
-    ...activeAndHistory,
-  ]).slice(0, DETAIL_INTELLIGENCE_RECORD_LIMIT);
-}
-
-function getSafeDetailOfferRecords(offers: CasinoOffer[], currentCruise?: Cruise | null): CasinoOffer[] {
-  if (!currentCruise) return [];
-  const currentOffer = normalizeRouteText((currentCruise as any).offerCode);
-  const currentShip = normalizeRouteText(currentCruise.shipName);
-  const currentDate = cruiseRouteDate(currentCruise);
-  const seen = new Set<string>();
-  const matches = offers.filter((offer) => {
-    const anyOffer = offer as any;
-    const offerCode = normalizeRouteText(anyOffer.offerCode || anyOffer.id);
-    const offerShip = normalizeRouteText(anyOffer.shipName);
-    const offerDate = normalizeRouteDate(anyOffer.sailingDate || anyOffer.sailDate || anyOffer.departureDate);
-    return (
-      (currentOffer && offerCode === currentOffer) ||
-      (currentShip && offerShip === currentShip && (!currentDate || !offerDate || offerDate === currentDate))
-    );
-  });
-  return matches.filter((offer) => {
-    const key = `${normalizeRouteText((offer as any).offerCode || offer.id)}|${normalizeRouteText(offer.shipName)}|${normalizeRouteDate((offer as any).sailingDate || (offer as any).sailDate)}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  }).slice(0, DETAIL_OFFER_RECORD_LIMIT);
-}
-
 function formatCasinoWindow(day: CasinoAvailability): string {
   if (!day.casinoOpen) return 'Casino closed';
   if (day.casinoOpenTime) {
@@ -185,39 +85,32 @@ function formatPointEstimate(points: number): string {
   return Math.round(points).toLocaleString();
 }
 
+function normalizedEvidence(value: unknown): string {
+  return String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function findSingleMaterialCruise(cruise: Cruise, candidates: Cruise[]): Cruise | undefined {
+  const cruiseShip = normalizedEvidence(cruise.shipName);
+  const cruiseDate = String(cruise.sailDate ?? '').trim();
+  const cruiseCabin = normalizedEvidence(cruise.cabinType);
+  const matches = candidates.filter((candidate) => {
+    if (candidate.id === cruise.id) return false;
+    if (normalizedEvidence(candidate.shipName) !== cruiseShip || String(candidate.sailDate ?? '').trim() !== cruiseDate) return false;
+    const candidateCabin = normalizedEvidence(candidate.cabinType);
+    return !candidateCabin || !cruiseCabin || candidateCabin === cruiseCabin;
+  });
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
 function estimateReplacementOutOfPocket(cruise: Cruise, offers: CasinoOffer[]): number {
-  const matchingOffer = offers.find((offer) => offer.cruiseId === cruise.id || offer.cruiseIds?.includes(cruise.id) || (offer.offerCode && cruise.offerCode && offer.offerCode === cruise.offerCode) || (offer.shipName === cruise.shipName && offer.sailingDate === cruise.sailDate));
-  const taxes = cruise.taxes ?? matchingOffer?.taxesFees ?? matchingOffer?.portCharges ?? Math.round((cruise.nights || matchingOffer?.nights || 7) * 60);
+  const matchingOffer = findSingleMaterialOffer(cruise, offers);
+  const taxes = cruise.taxes ?? matchingOffer?.taxesFees ?? matchingOffer?.portCharges ?? 0;
   const cabin = cruise.price ?? cruise.totalPrice ?? 0;
   return Math.max(0, taxes + cabin);
 }
 
 function getReplacementOffer(cruise: Cruise, offers: CasinoOffer[]): CasinoOffer | undefined {
-  return offers.find((offer) => offer.cruiseId === cruise.id || offer.cruiseIds?.includes(cruise.id) || (offer.offerCode && cruise.offerCode && offer.offerCode === cruise.offerCode) || (offer.shipName === cruise.shipName && offer.sailingDate === cruise.sailDate));
-}
-
-
-function normalizeRouteDate(value: string | undefined): string {
-  const raw = String(value ?? '').trim();
-  if (!raw) return '';
-  let m = raw.match(/^(20\d{2})[-\/](\d{1,2})[-\/](\d{1,2})/);
-  if (m) return `${m[1]}-${String(m[2]).padStart(2, '0')}-${String(m[3]).padStart(2, '0')}`;
-  m = raw.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](20\d{2})/);
-  if (m) return `${m[3]}-${String(m[1]).padStart(2, '0')}-${String(m[2]).padStart(2, '0')}`;
-  const parsed = createDateFromString(raw);
-  if (!Number.isNaN(parsed.getTime())) {
-    return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`;
-  }
-  return raw.toLowerCase();
-}
-
-function normalizeRouteText(value: unknown): string {
-  return String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
-}
-
-function cruiseRouteDate(cruise: Cruise | BookedCruise): string {
-  const anyCruise = cruise as any;
-  return normalizeRouteDate(anyCruise.sailDate || anyCruise.sailingDate || anyCruise.sailingStartDate || anyCruise.departureDate || anyCruise.startDate);
+  return findSingleMaterialOffer(cruise, offers);
 }
 
 function getDateGapDays(first: string | undefined, second: string | undefined): number | null {
@@ -301,17 +194,29 @@ interface EditFormData {
 }
 
 export default function CruiseDetailsScreen() {
-  const { id, source, shipName: routeShipName, sailDate: routeSailDate, bookingId: routeBookingId, offerCode: routeOfferCode } = useLocalSearchParams<{ id: string; source?: string; shipName?: string; sailDate?: string; bookingId?: string; offerCode?: string }>();
+  const routeParams = useLocalSearchParams<{
+    id?: string | string[];
+    source?: string | string[];
+    shipName?: string | string[];
+    sailDate?: string | string[];
+    returnDate?: string | string[];
+    offerCode?: string | string[];
+    bookingId?: string | string[];
+    brand?: string | string[];
+  }>();
+  const source = Array.isArray(routeParams.source) ? routeParams.source[0] : routeParams.source;
   const router = useRouter();
 
   const handleBack = useCallback(() => {
-    if (source === 'booked') {
-      router.push('/(tabs)/booked' as any);
-    } else {
+    if (router.canGoBack()) {
       router.back();
+      return;
     }
+    router.replace(source === 'booked' ? '/(tabs)/booked' as any : '/(tabs)/(overview)' as any);
   }, [router, source]);
   const { localData } = useAppState();
+  const { getCruiseById } = useCruiseInventory();
+  const [loadedCatalogCruise, setLoadedCatalogCruise] = useState<Cruise | null>(null);
   const { getCruiseValueBreakdown, getCruiseCasinoAvailability, completedCruises } = useSimpleAnalytics();
 
   const [editModalVisible, setEditModalVisible] = useState<boolean>(false);
@@ -348,12 +253,25 @@ export default function CruiseDetailsScreen() {
 
   const { bookedCruises: storeBookedCruises, cruises: storeCruises, casinoOffers: storeOffers, updateBookedCruise: updateCruiseInStore, updateCruise: updateCruiseInCruisesStore, removeBookedCruise, addBookedCruise } = useCoreData();
   const { currentUser } = useUser();
-  const { authenticatedEmail } = useAuth();
   
   const [heroImageUri, setHeroImageUri] = useState<string>(DEFAULT_CRUISE_IMAGE);
   const [unbookModalVisible, setUnbookModalVisible] = useState<boolean>(false);
   const [selectedReplacementGoal, setSelectedReplacementGoal] = useState<ReplacementGoalId>('bestValue');
-  const [detailIntelligenceReady, setDetailIntelligenceReady] = useState<boolean>(false);
+
+  useEffect(() => {
+    const id = Array.isArray(routeParams.id) ? routeParams.id[0] : routeParams.id;
+    if (!id) {
+      setLoadedCatalogCruise(null);
+      return;
+    }
+    let cancelled = false;
+    void getCruiseById(id).then((record) => {
+      if (!cancelled) setLoadedCatalogCruise(record);
+    }).catch((error) => {
+      console.warn('[CruiseDetails] Catalog lookup failed without blocking booked-cruise details:', error);
+    });
+    return () => { cancelled = true; };
+  }, [getCruiseById, routeParams.id]);
   
   const playingHoursConfig: PlayingHoursConfig = useMemo(() => {
     const userPlayingHours = currentUser?.playingHours || DEFAULT_PLAYING_HOURS;
@@ -362,17 +280,6 @@ export default function CruiseDetailsScreen() {
       sessions: userPlayingHours.sessions,
     };
   }, [currentUser?.playingHours]);
-
-  useEffect(() => {
-    setDetailIntelligenceReady(false);
-    const timer = setTimeout(() => setDetailIntelligenceReady(true), 350);
-    return () => clearTimeout(timer);
-  }, [id, routeShipName, routeSailDate, routeBookingId, routeOfferCode]);
-
-
-  const casinoLedger = useCasinoLedger();
-  const ledgerDrill = useDrillDown();
-  const [showAttachOfferModal, setShowAttachOfferModal] = useState<boolean>(false);
 
   const updateCruise = (updatedCruise: any) => {
     console.log('[CruiseDetails] Updating cruise:', updatedCruise);
@@ -383,7 +290,7 @@ export default function CruiseDetailsScreen() {
     
     updateCruiseInStore(updatedCruise.id, updatedCruise);
     
-    const existsInCruises = (storeCruises || []).some(c => c.id === updatedCruise.id);
+    const existsInCruises = loadedCatalogCruise?.id === updatedCruise.id || (storeCruises || []).some(c => c.id === updatedCruise.id);
     if (existsInCruises) {
       console.log('[CruiseDetails] Also updating in non-booked cruises store');
       updateCruiseInCruisesStore(updatedCruise.id, updatedCruise);
@@ -392,106 +299,37 @@ export default function CruiseDetailsScreen() {
     console.log('[CruiseDetails] Cruise updated in store. LoyaltyProvider will recalculate automatically.');
   };
 
-  const knownAdminCruises = useMemo((): BookedCruise[] => {
-    const normalizedEmail = authenticatedEmail?.toLowerCase().trim() ?? null;
-    const hasStoredCruiseData = (storeBookedCruises?.length ?? 0) > 0 || ((localData.booked || []) as BookedCruise[]).length > 0;
-    if (!normalizedEmail || !ADMIN_EMAILS.includes(normalizedEmail as typeof ADMIN_EMAILS[number]) || hasStoredCruiseData) {
-      return [];
-    }
-    return applyKnownBookingCorrections([...COMPLETED_CRUISES_DATA, ...BOOKED_CRUISES_DATA, ...CRUISE_HISTORY_SUPPLEMENT_DATA]);
-  }, [authenticatedEmail, localData.booked, storeBookedCruises]);
-
   const cruise = useMemo(() => {
-    const bookedCandidates = [
+    const allCruises = [
       ...(storeBookedCruises || []).map(applyKnownBookingCorrectionsToCruise),
-      ...(localData.booked || []).map((bookedCruise) => applyKnownBookingCorrectionsToCruise(bookedCruise as BookedCruise)),
-      ...knownAdminCruises,
-    ];
-    const catalogCandidates = [
       ...(storeCruises || []),
+      ...(loadedCatalogCruise ? [loadedCatalogCruise] : []),
+      ...(localData.booked || []).map((bookedCruise) => applyKnownBookingCorrectionsToCruise(bookedCruise as BookedCruise)),
       ...(localData.cruises || []),
     ];
-    const allCruises = source === 'booked'
-      ? [...bookedCandidates, ...catalogCandidates]
-      : [...catalogCandidates, ...bookedCandidates];
     
-    const routeShip = Array.isArray(routeShipName) ? routeShipName[0] : routeShipName;
-    const routeSail = Array.isArray(routeSailDate) ? routeSailDate[0] : routeSailDate;
-    const routeBooking = Array.isArray(routeBookingId) ? routeBookingId[0] : routeBookingId;
-    const routeOffer = Array.isArray(routeOfferCode) ? routeOfferCode[0] : routeOfferCode;
-    const routeId = Array.isArray(id) ? id[0] : id;
-    const routeSailIso = normalizeRouteDate(routeSail);
-    const routeShipKey = normalizeRouteText(routeShip);
-    const routeOfferKey = normalizeRouteText(routeOffer);
-    const routeBookingKey = normalizeRouteText(routeBooking);
-
-    const findIn = (records: Cruise[]) => {
-      let match = records.find(c => c.id === routeId);
-      if (!match && routeBookingKey) {
-        match = records.find(c => normalizeRouteText((c as any).bookingId) === routeBookingKey || normalizeRouteText((c as any).reservationNumber) === routeBookingKey);
-      }
-      if (!match && routeOfferKey && routeShipKey && routeSailIso) {
-        match = records.find(c => normalizeRouteText((c as any).offerCode) === routeOfferKey && normalizeRouteText(c.shipName) === routeShipKey && cruiseRouteDate(c) === routeSailIso);
-      }
-      if (!match && routeShipKey && routeSailIso) {
-        match = records.find(c => normalizeRouteText(c.shipName) === routeShipKey && cruiseRouteDate(c) === routeSailIso);
-      }
-      if (!match && routeId) {
-        const fuzzyId = normalizeRouteText(routeId).replace(/[^a-z0-9]/g, '');
-        match = records.find(c => {
-          const candidates = [c.id, (c as any).bookingId, (c as any).reservationNumber, `${c.shipName}-${cruiseRouteDate(c)}`, `${(c as any).offerCode}-${c.shipName}-${cruiseRouteDate(c)}`];
-          return candidates.some(candidate => normalizeRouteText(candidate).replace(/[^a-z0-9]/g, '') === fuzzyId);
-        });
-      }
-      return match;
-    };
-
-    let found = source === 'booked'
-      ? findIn(bookedCandidates) || findIn(catalogCandidates)
-      : findIn(allCruises);
-
-    if (found && source === 'booked' && isAvailableOfferCatalogRowForDetail(found as Cruise)) {
-      const bookedFallback = findIn(bookedCandidates);
-      if (bookedFallback) found = bookedFallback;
-    }
-
-    if (!found) {
-      console.warn('[CruiseDetails] Could not resolve cruise by id; route fallback params:', { id, routeShip, routeSail, routeBooking, routeOffer, source });
-    }
+    let found = resolveCruiseDetailsRecord(allCruises, routeParams);
     
     if (found) {
       const allOffers = [...(storeOffers || []), ...(localData.offers || [])];
-      const allAvailableCruises = [...(storeCruises || []), ...(localData.cruises || [])];
+      const allAvailableCruises = [...(storeCruises || []), ...(loadedCatalogCruise ? [loadedCatalogCruise] : []), ...(localData.cruises || [])];
       
-      let linkedOff: CasinoOffer | undefined;
-      if (found.offerCode) {
-        linkedOff = allOffers.find(o => 
-          o.offerCode === found!.offerCode || 
-          o.id === found!.offerCode ||
-          o.cruiseId === found!.id
-        );
-      }
-      
-      if (!linkedOff) {
-        linkedOff = allOffers.find(o =>
-          o.shipName === found!.shipName && o.sailingDate === found!.sailDate
-        );
-      }
+      const linkedOff = findSingleMaterialOffer(found, allOffers);
       
       if (linkedOff && (!found.itinerary?.length || !found.portsAndTimes || !found.ports?.length)) {
         found = {
           ...found,
           portsAndTimes: found.portsAndTimes || linkedOff.portsAndTimes,
           ports: found.ports || linkedOff.ports,
+          dataConfidence: found.dataConfidence ?? 'enriched',
+          sourceProvider: found.sourceProvider ?? 'material-offer-link',
           itineraryNeedsManualEntry: found.itineraryNeedsManualEntry && !(linkedOff.portsAndTimes || linkedOff.ports?.length),
         };
       }
       
-      const matchingCsvCruise = allAvailableCruises.find(c =>
-        c.id !== found!.id &&
-        c.shipName === found!.shipName &&
-        c.sailDate === found!.sailDate &&
-        (c.interiorPrice || c.oceanviewPrice || c.balconyPrice || c.suitePrice)
+      const matchingCsvCruise = findSingleMaterialCruise(
+        found,
+        allAvailableCruises.filter((candidate) => Boolean(candidate.interiorPrice || candidate.oceanviewPrice || candidate.balconyPrice || candidate.suitePrice)),
       );
       
       const hasMissingPrices = !found.interiorPrice || !found.oceanviewPrice || !found.balconyPrice || !found.suitePrice;
@@ -509,6 +347,8 @@ export default function CruiseDetailsScreen() {
             taxes: found.taxes || (linkedOff?.taxesFees ?? (priceSource as any).taxes),
             portsAndTimes: found.portsAndTimes || (linkedOff?.portsAndTimes ?? (priceSource as any).portsAndTimes),
             ports: found.ports || (linkedOff?.ports ?? (priceSource as any).ports),
+            dataConfidence: found.dataConfidence ?? 'enriched',
+            sourceProvider: found.sourceProvider ?? 'material-sailing-link',
           };
         }
       }
@@ -522,7 +362,21 @@ export default function CruiseDetailsScreen() {
       taxes: found?.taxes,
     });
     return found;
-  }, [storeCruises, storeBookedCruises, storeOffers, localData.cruises, localData.booked, localData.offers, knownAdminCruises, id, source, routeShipName, routeSailDate, routeBookingId, routeOfferCode]);
+  }, [
+    storeCruises,
+    loadedCatalogCruise,
+    storeBookedCruises,
+    storeOffers,
+    localData.cruises,
+    localData.booked,
+    localData.offers,
+    routeParams.id,
+    routeParams.bookingId,
+    routeParams.shipName,
+    routeParams.sailDate,
+    routeParams.returnDate,
+    routeParams.brand,
+  ]);
 
   useEffect(() => {
     if (cruise) {
@@ -537,45 +391,24 @@ export default function CruiseDetailsScreen() {
   }, [cruise]);
 
   const linkedOffer = useMemo((): CasinoOffer | undefined => {
-    if (!cruise?.offerCode) return undefined;
-    
-    // Check CruiseStore offers first (primary), then localData offers (fallback)
-    const allOffers = [...(storeOffers || []), ...(localData.offers || [])];
-    
-    return allOffers.find(o => 
-      o.offerCode === cruise.offerCode || 
-      o.id === cruise.offerCode ||
-      o.cruiseId === cruise.id
-    );
+    if (!cruise) return undefined;
+    return findSingleMaterialOffer(cruise, [...(storeOffers || []), ...(localData.offers || [])]);
   }, [cruise, storeOffers, localData.offers]);
 
-  // Calculate accurate nights from sailDate and returnDate
+  const cruiseDayPlan = useMemo(() => cruise ? buildCruiseDayPlan(cruise) : null, [cruise]);
+
+  // Dates are authoritative when present; a declared duration only derives the end date when it is known.
   const accurateNights = useMemo(() => {
     if (!cruise) return 0;
-    
-    if (cruise.sailDate && (cruise as BookedCruise).returnDate) {
-      try {
-        const sailDateObj = createDateFromString(cruise.sailDate);
-        const returnDateObj = createDateFromString((cruise as BookedCruise).returnDate);
-        const daysBetween = Math.round((returnDateObj.getTime() - sailDateObj.getTime()) / (1000 * 60 * 60 * 24));
-        
-        if (daysBetween > 0 && daysBetween < 365) {
-          console.log('[CruiseDetails] Calculated accurate nights from dates:', daysBetween, 'sailDate:', cruise.sailDate, 'returnDate:', (cruise as BookedCruise).returnDate);
-          return daysBetween;
-        }
-      } catch (e) {
-        console.warn('[CruiseDetails] Error calculating nights from dates:', e);
-      }
-    }
-    
-    return cruise.nights || 0;
-  }, [cruise]);
+    if (cruiseDayPlan) return Math.max(0, cruiseDayPlan.days.length - 1);
+    return Number.isFinite(cruise.nights) && cruise.nights > 0 ? cruise.nights : 0;
+  }, [cruise, cruiseDayPlan]);
 
-  const itineraryDisplay = useMemo((): { days: { day: number; port: string; isSeaDay: boolean; arrival?: string; departure?: string }[]; needsManualEntry: boolean; source: string } => {
+  const itineraryDisplay = useMemo((): { days: ItineraryDay[]; needsManualEntry: boolean; source: string } => {
     if (!cruise) return { days: [], needsManualEntry: true, source: 'none' };
     
-    const totalDays = accurateNights + 1;
-    const result: { day: number; port: string; isSeaDay: boolean; arrival?: string; departure?: string }[] = [];
+    const totalDays = cruiseDayPlan?.days.length ?? accurateNights + 1;
+    const result: ItineraryDay[] = [];
     let source = 'none';
     let needsManualEntry = false;
     
@@ -591,34 +424,6 @@ export default function CruiseDetailsScreen() {
       linkedOfferHasPorts: !!linkedOffer?.ports?.length,
     });
     
-    const determineSeaDay = (port: string): boolean => {
-      const normalizedPort = port.toLowerCase().trim();
-      return normalizedPort === 'at sea' || 
-             normalizedPort === 'sea day' ||
-             normalizedPort === 'cruising' ||
-             normalizedPort.includes('sea day') ||
-             normalizedPort.includes('at sea');
-    };
-    
-    const parsePortsAndTimes = (portsAndTimes: string): { day: number; port: string; isSeaDay: boolean; arrival?: string; departure?: string }[] => {
-      const parsed: { day: number; port: string; isSeaDay: boolean; arrival?: string; departure?: string }[] = [];
-      const lines = portsAndTimes.split(/\r?\n|>/).filter((line: string) => line.trim());
-      lines.forEach((line: string, index: number) => {
-        const parts = line.split(/[;,|\t]/).map((p: string) => p.trim()).filter(Boolean);
-        const port = parts[0] || '';
-        if (port) {
-          parsed.push({
-            day: index + 1,
-            port,
-            arrival: parts[1],
-            departure: parts[2],
-            isSeaDay: determineSeaDay(port),
-          });
-        }
-      });
-      return parsed;
-    };
-    
     // Check cruise.itinerary first (structured data)
     if (cruise.itinerary && cruise.itinerary.length > 0) {
       source = 'cruise.itinerary';
@@ -628,20 +433,24 @@ export default function CruiseDetailsScreen() {
           port: day.port,
           arrival: day.arrival,
           departure: day.departure,
-          isSeaDay: day.isSeaDay || determineSeaDay(day.port),
+          isSeaDay: isExplicitSeaDay(day),
+          source: day.source ?? 'unknown',
+          dataConfidence: day.dataConfidence,
+          latitude: day.latitude,
+          longitude: day.longitude,
         });
       });
     } 
     // Check cruise.portsAndTimes (raw string)
     else if (cruise.portsAndTimes) {
       source = 'cruise.portsAndTimes';
-      const parsed = parsePortsAndTimes(cruise.portsAndTimes);
+      const parsed = parsePortsAndTimes(cruise.portsAndTimes, 'unknown');
       result.push(...parsed);
     } 
     // Check linkedOffer.portsAndTimes
     else if (linkedOffer?.portsAndTimes) {
       source = 'linkedOffer.portsAndTimes';
-      const parsed = parsePortsAndTimes(linkedOffer.portsAndTimes);
+      const parsed = parsePortsAndTimes(linkedOffer.portsAndTimes, 'enriched');
       result.push(...parsed);
     } 
     // Check cruise.itineraryRaw (array of strings)
@@ -651,7 +460,8 @@ export default function CruiseDetailsScreen() {
         result.push({
           day: index + 1,
           port,
-          isSeaDay: determineSeaDay(port),
+          isSeaDay: /^(?:at sea|sea day)$/i.test(port.trim()),
+          source: 'unknown',
         });
       });
     } 
@@ -662,7 +472,8 @@ export default function CruiseDetailsScreen() {
         result.push({
           day: index + 1,
           port,
-          isSeaDay: determineSeaDay(port),
+          isSeaDay: /^(?:at sea|sea day)$/i.test(port.trim()),
+          source: 'unknown',
         });
       });
     } 
@@ -673,7 +484,8 @@ export default function CruiseDetailsScreen() {
         result.push({
           day: index + 1,
           port,
-          isSeaDay: determineSeaDay(port),
+          isSeaDay: /^(?:at sea|sea day)$/i.test(port.trim()),
+          source: 'enriched',
         });
       });
     } 
@@ -682,25 +494,14 @@ export default function CruiseDetailsScreen() {
       // Combine all offers from both sources
       const allOffers = [...(storeOffers || []), ...(localData.offers || [])];
       
-      // Try to find an offer matching ship and date
-      const matchingOffer = allOffers.find(o => {
-        const shipMatch = o.shipName === cruise.shipName || 
-                         o.shipName?.toLowerCase().includes(cruise.shipName?.toLowerCase().split(' ')[0] || '');
-        const dateMatch = o.sailingDate === cruise.sailDate;
-        const hasItineraryData = o.portsAndTimes || (o.ports && o.ports.length > 0);
-        return shipMatch && dateMatch && hasItineraryData;
-      });
-      
-      // Also try matching by offer code
-      const offerByCode = cruise.offerCode ? allOffers.find(o => 
-        o.offerCode === cruise.offerCode && (o.portsAndTimes || (o.ports && o.ports.length > 0))
-      ) : null;
-      
-      const fallbackOffer = matchingOffer || offerByCode;
+      const fallbackOffer = findSingleMaterialOffer(
+        cruise,
+        allOffers.filter((offer) => Boolean(offer.portsAndTimes || offer.ports?.length)),
+      );
       
       if (fallbackOffer?.portsAndTimes) {
         source = 'fallbackOffer.portsAndTimes';
-        const parsed = parsePortsAndTimes(fallbackOffer.portsAndTimes);
+        const parsed = parsePortsAndTimes(fallbackOffer.portsAndTimes, 'enriched');
         result.push(...parsed);
         console.log('[CruiseDetails] Found itinerary in fallback offer:', fallbackOffer.offerCode);
       } else if (fallbackOffer?.ports && fallbackOffer.ports.length > 0) {
@@ -709,7 +510,8 @@ export default function CruiseDetailsScreen() {
           result.push({
             day: index + 1,
             port,
-            isSeaDay: determineSeaDay(port),
+            isSeaDay: /^(?:at sea|sea day)$/i.test(port.trim()),
+            source: 'enriched',
           });
         });
         console.log('[CruiseDetails] Found ports in fallback offer:', fallbackOffer.offerCode);
@@ -734,9 +536,11 @@ export default function CruiseDetailsScreen() {
       });
     }
     
-    console.log('[CruiseDetails] Itinerary resolved:', { source, days: result.length, needsManualEntry });
-    return { days: result, needsManualEntry, source };
-  }, [cruise, linkedOffer, storeOffers, localData.offers, accurateNights]);
+    const resolvedItineraryPlan = result.length > 0 ? buildCruiseDayPlan({ ...cruise, itinerary: result }) : null;
+    const canonicalDays = resolvedItineraryPlan?.days ?? result;
+    console.log('[CruiseDetails] Itinerary resolved:', { source, days: canonicalDays.length, needsManualEntry, integrity: resolvedItineraryPlan?.integrity });
+    return { days: canonicalDays, needsManualEntry, source };
+  }, [cruise, linkedOffer, storeOffers, localData.offers, accurateNights, cruiseDayPlan]);
 
   const cruiseDetails = useMemo(() => {
     if (!cruise) return null;
@@ -748,6 +552,11 @@ export default function CruiseDetailsScreen() {
     const isBooked = 'reservationNumber' in cruise || 'bookingId' in cruise;
     return { displayPrice, retailPrice, daysUntil, savings, hasPerks, isBooked };
   }, [cruise]);
+
+  const needsEvidenceReview = cruise?.validationStatus === 'partial'
+    || cruise?.validationStatus === 'quarantined'
+    || cruise?.dataConfidence === 'partial'
+    || cruise?.dataConfidence === 'unknown';
 
   const valueBreakdown = useMemo(() => {
     if (!cruise) return null;
@@ -774,71 +583,92 @@ export default function CruiseDetailsScreen() {
       clubRoyaleId: currentUser.clubRoyaleId,
       celebrityCaptainsClubNumber: currentUser.celebrityCaptainsClubNumber,
       blueChipId: currentUser.blueChipId,
-      carnivalVifpNumber: currentUser.carnivalVifpNumber,
     };
   }, [currentUser]);
 
-  const allCruiseRecords = useMemo(() => {
-    const records = [
+  const bookedHistoryRecords = useMemo(() => {
+    return [
       ...(storeBookedCruises || []).map(applyKnownBookingCorrectionsToCruise),
-      ...(storeCruises || []),
       ...(localData.booked || []).map((bookedCruise) => applyKnownBookingCorrectionsToCruise(bookedCruise as BookedCruise)),
-      ...(localData.cruises || []),
-      ...knownAdminCruises,
     ] as Cruise[];
-    return dedupeCruiseRecordsForDetail(records);
-  }, [knownAdminCruises, localData.booked, localData.cruises, storeBookedCruises, storeCruises]);
+  }, [localData.booked, storeBookedCruises]);
 
-  const detailContextCruiseRecords = useMemo(() => {
-    return getSafeDetailContextRecords(allCruiseRecords, cruise as Cruise | null);
-  }, [allCruiseRecords, cruise]);
+  const availableCruiseRecords = useMemo(() => [
+    ...(storeCruises || []),
+    ...(loadedCatalogCruise ? [loadedCatalogCruise] : []),
+    ...(localData.cruises || []),
+  ] as Cruise[], [loadedCatalogCruise, localData.cruises, storeCruises]);
 
   const allOfferRecords = useMemo(() => {
-    return getSafeDetailOfferRecords([...(storeOffers || []), ...(localData.offers || [])], cruise as Cruise | null);
-  }, [localData.offers, storeOffers, cruise]);
+    return [...(storeOffers || []), ...(localData.offers || [])];
+  }, [localData.offers, storeOffers]);
 
   const seaDayDensity = useMemo(() => {
     if (!cruise) return null;
     return calculateSeaDayDensityScore(cruise);
   }, [cruise]);
 
-  const portTracker = useMemo(() => {
-    if (!cruise) return null;
-    if (!detailIntelligenceReady) return null;
-    if (detailContextCruiseRecords.length > DETAIL_INTELLIGENCE_RECORD_LIMIT) return null;
-    return buildPortTracker(detailContextCruiseRecords, cruise, currentTravelerProfile);
-  }, [detailContextCruiseRecords, detailIntelligenceReady, cruise, currentTravelerProfile]);
+  const [deferredPlanning, setDeferredPlanning] = useState<DeferredPlanningIntelligence | null>(null);
+  useEffect(() => {
+    setDeferredPlanning(null);
+    if (!cruise) return undefined;
 
-  const shipFamiliarity = useMemo(() => {
-    if (!cruise) return null;
-    if (!detailIntelligenceReady) return null;
-    if (detailContextCruiseRecords.length > DETAIL_INTELLIGENCE_RECORD_LIMIT) return null;
-    return calculateShipFamiliarityScore(cruise.shipName, detailContextCruiseRecords, allOfferRecords, currentTravelerProfile);
-  }, [detailContextCruiseRecords, allOfferRecords, detailIntelligenceReady, cruise, currentTravelerProfile]);
+    let cancelled = false;
+    let calculationTimer: ReturnType<typeof setTimeout> | undefined;
+    const interactionTask = InteractionManager.runAfterInteractions(() => {
+      calculationTimer = setTimeout(() => {
+        if (cancelled) return;
+        const startedAt = Date.now();
+        const portTracker = buildPortTracker(bookedHistoryRecords, cruise, currentTravelerProfile);
+        const shipFamiliarity = calculateShipFamiliarityScore(cruise.shipName, bookedHistoryRecords, allOfferRecords, currentTravelerProfile);
+        const replacementCandidates = findCruiseReplacementCandidates(
+          cruise,
+          availableCruiseRecords,
+          allOfferRecords,
+          bookedHistoryRecords,
+          currentTravelerProfile,
+        );
+        if (cancelled) return;
+        console.log('[CruiseDetails] Deferred planning intelligence ready:', {
+          cruiseId: cruise.id,
+          durationMs: Date.now() - startedAt,
+          bookedHistory: bookedHistoryRecords.length,
+          alternatives: availableCruiseRecords.length,
+          offers: allOfferRecords.length,
+        });
+        setDeferredPlanning({ cruiseId: cruise.id, portTracker, shipFamiliarity, replacementCandidates });
+      }, 0);
+    });
+
+    return () => {
+      cancelled = true;
+      interactionTask.cancel();
+      if (calculationTimer) clearTimeout(calculationTimer);
+    };
+  }, [allOfferRecords, availableCruiseRecords, bookedHistoryRecords, cruise, currentTravelerProfile]);
+
+  const hasCurrentPlanning = deferredPlanning !== null && deferredPlanning.cruiseId === cruise?.id;
+  const portTracker = hasCurrentPlanning ? deferredPlanning!.portTracker : null;
+  const shipFamiliarity = hasCurrentPlanning ? deferredPlanning!.shipFamiliarity : null;
 
   const overlapWarning = useMemo(() => {
     if (!cruise || !('reservationNumber' in cruise || 'bookingId' in cruise)) return null;
-    const warnings = findOverlappingBookedCruises(detailContextCruiseRecords.filter((record): record is BookedCruise => 'reservationNumber' in record || 'bookingId' in record));
+    const warnings = findOverlappingBookedCruises(bookedHistoryRecords.filter((record): record is BookedCruise => 'reservationNumber' in record || 'bookingId' in record));
     return warnings.find((warning) => warning.cruiseId === cruise.id)?.message ?? null;
-  }, [detailContextCruiseRecords, cruise]);
+  }, [bookedHistoryRecords, cruise]);
 
   const replacementCandidates = useMemo(() => {
-    if (!cruise || !detailIntelligenceReady) return [];
-    if (allCruiseRecords.length > DETAIL_INTELLIGENCE_RECORD_LIMIT && detailContextCruiseRecords.length >= DETAIL_INTELLIGENCE_RECORD_LIMIT) {
-      console.log('[CruiseDetails] Replacement Finder deferred for large catalog:', { totalRecords: allCruiseRecords.length, contextRecords: detailContextCruiseRecords.length });
-      return [];
-    }
-    const candidates = findCruiseReplacementCandidates(cruise, detailContextCruiseRecords, allOfferRecords, detailContextCruiseRecords, currentTravelerProfile);
-    const ranked = candidates
+    if (!cruise || deferredPlanning?.cruiseId !== cruise.id) return [];
+    const ranked = deferredPlanning.replacementCandidates
       .map((candidate) => ({
         candidate,
-        goalScore: scoreReplacementForGoal(candidate, cruise, selectedReplacementGoal, allOfferRecords, detailContextCruiseRecords, currentTravelerProfile),
+        goalScore: scoreReplacementForGoal(candidate, cruise, selectedReplacementGoal, allOfferRecords, bookedHistoryRecords, currentTravelerProfile),
       }))
       .sort((left, right) => right.goalScore - left.goalScore || right.candidate.rankScore - left.candidate.rankScore)
       .map((entry) => entry.candidate);
     console.log('[CruiseDetails] Replacement Finder goal ranking:', { selectedReplacementGoal, candidates: ranked.length });
     return ranked.slice(0, 3);
-  }, [allCruiseRecords.length, detailContextCruiseRecords, allOfferRecords, cruise, currentTravelerProfile, selectedReplacementGoal, detailIntelligenceReady]);
+  }, [allOfferRecords, bookedHistoryRecords, cruise, currentTravelerProfile, deferredPlanning, selectedReplacementGoal]);
 
   const casinoStatusBadge = useMemo(() => {
     if (!casinoAvailability) return null;
@@ -851,7 +681,7 @@ export default function CruiseDetailsScreen() {
   }, [casinoAvailability, playingHoursConfig]);
 
   const expectedPointsCalculation = useMemo(() => {
-    if (!cruise || !casinoAvailability || completedCruises.length === 0 || !detailIntelligenceReady) {
+    if (!cruise || !casinoAvailability || completedCruises.length === 0) {
       return null;
     }
 
@@ -861,11 +691,7 @@ export default function CruiseDetailsScreen() {
     let totalCasinoHours = 0;
     let cruisesWithPoints = 0;
 
-    const relevantCompletedCruises = completedCruises
-      .filter((c: BookedCruise) => getBookedCruiseCasinoPoints(c) > 0)
-      .slice(-EXPECTED_POINTS_HISTORY_LIMIT);
-
-    relevantCompletedCruises.forEach((c: BookedCruise) => {
+    completedCruises.forEach((c: BookedCruise) => {
       const points = getBookedCruiseCasinoPoints(c);
       if (points > 0) {
         totalPoints += points;
@@ -915,7 +741,7 @@ export default function CruiseDetailsScreen() {
       expectedPointsByHours,
       basedOnCruises: cruisesWithPoints,
     };
-  }, [cruise, casinoAvailability, completedCruises, getCruiseCasinoAvailability, detailIntelligenceReady]);
+  }, [cruise, casinoAvailability, completedCruises, getCruiseCasinoAvailability]);
 
   const openFullEditModal = () => {
     if (!cruise) return;
@@ -926,7 +752,7 @@ export default function CruiseDetailsScreen() {
       nights: String(cruise.nights || ''),
       sailDate: cruise.sailDate || '',
       cabinType: cruise.cabinType || '',
-      guests: String(cruise.guests || 2),
+      guests: String(cruise.guests ?? ''),
       interiorPrice: String(cruise.interiorPrice || ''),
       oceanviewPrice: String(cruise.oceanviewPrice || ''),
       balconyPrice: String(cruise.balconyPrice || ''),
@@ -952,11 +778,11 @@ export default function CruiseDetailsScreen() {
   const saveFullEdit = () => {
     if (!cruise) return;
     
-    const newNights = parseInt(editForm.nights) || cruise.nights;
+    const newNights = knownNightCount(editForm.nights) ?? knownNightCount(cruise.nights) ?? 0;
     const newSailDate = editForm.sailDate || cruise.sailDate;
     
     let newReturnDate = cruise.returnDate;
-    if (newSailDate !== cruise.sailDate || newNights !== cruise.nights) {
+    if (newNights > 0 && (newSailDate !== cruise.sailDate || newNights !== cruise.nights)) {
       try {
         const sailDateObj = createDateFromString(newSailDate);
         if (sailDateObj && !isNaN(sailDateObj.getTime())) {
@@ -983,7 +809,7 @@ export default function CruiseDetailsScreen() {
       sailDate: newSailDate,
       returnDate: newReturnDate,
       cabinType: editForm.cabinType || cruise.cabinType,
-      guests: parseInt(editForm.guests) || cruise.guests || 2,
+      guests: knownGuestCount(editForm.guests) ?? knownGuestCount(cruise.guests),
       interiorPrice: parseFloat(editForm.interiorPrice) || 0,
       oceanviewPrice: parseFloat(editForm.oceanviewPrice) || 0,
       balconyPrice: parseFloat(editForm.balconyPrice) || 0,
@@ -1016,9 +842,7 @@ export default function CruiseDetailsScreen() {
     
     const bookedCruise = {
       ...cruise,
-      id: cruise.id || `booked-${Date.now()}`,
-      bookingId: `booking-${Date.now()}`,
-      reservationNumber: `RES-${Date.now().toString().slice(-6)}`,
+      id: cruise.id || `local-booked-${Date.now()}`,
       status: 'booked' as const,
       isBooked: true,
       earnedPoints: 0,
@@ -1042,9 +866,6 @@ export default function CruiseDetailsScreen() {
           <Ship size={64} color={COLORS.beigeWarm} />
           <Text style={styles.notFoundTitle}>Cruise Not Found</Text>
           <Text style={styles.notFoundText}>The cruise you are looking for could not be found.</Text>
-          <Text style={styles.notFoundText}>
-            Received: id={String(Array.isArray(id) ? id[0] : id || '—')} • ship={String(Array.isArray(routeShipName) ? routeShipName[0] : routeShipName || '—')} • sail={String(Array.isArray(routeSailDate) ? routeSailDate[0] : routeSailDate || '—')} • booking={String(Array.isArray(routeBookingId) ? routeBookingId[0] : routeBookingId || '—')} • offer={String(Array.isArray(routeOfferCode) ? routeOfferCode[0] : routeOfferCode || '—')}
-          </Text>
           <TouchableOpacity style={styles.backButton} onPress={handleBack}>
             <ArrowLeft size={20} color={COLORS.white} />
             <Text style={styles.backButtonText}>Go Back</Text>
@@ -1065,6 +886,8 @@ export default function CruiseDetailsScreen() {
         <TouchableOpacity
           style={styles.editValueButton}
           onPress={openFullEditModal}
+          testID="edit-cruise-pricing"
+          accessibilityLabel="Edit cruise pricing and financial values"
         >
           <Edit3 size={14} color={COLORS.beigeWarm} />
         </TouchableOpacity>
@@ -1207,15 +1030,6 @@ export default function CruiseDetailsScreen() {
             </View>
           )}
           <View style={styles.heroButtonsContainer}>
-            <TouchableOpacity 
-              style={styles.editAllButton} 
-              onPress={openFullEditModal}
-              activeOpacity={0.7}
-            >
-              <Edit3 size={18} color={COLORS.beigeWarm} />
-              <Text style={styles.editAllButtonText}>Edit</Text>
-            </TouchableOpacity>
-            
             {!isBooked ? (
               <TouchableOpacity 
                 style={styles.bookHeaderButton} 
@@ -1277,12 +1091,22 @@ export default function CruiseDetailsScreen() {
             <CompactFact icon={MapPin} value={cruise.departurePort || 'TBD'} />
           </View>
           <View style={styles.compactFactsRow}>
-            <CompactFact icon={Users} value={`${cruise.guests || 2} guests`} />
+            <CompactFact icon={Users} value={displayKnownCount(cruise.guests, 'guest')} />
             <Text style={styles.factDivider}>•</Text>
             <CompactFact icon={Anchor} value={cruise.cabinType || 'TBD'} />
             <Text style={styles.factDivider}>•</Text>
             <CompactFact icon={Dice5} value={casinoAvailability ? `${casinoAvailability.casinoOpenDays}/${casinoAvailability.totalDays} casino` : '—'} />
           </View>
+
+          {needsEvidenceReview ? (
+            <View style={styles.overlapWarningCard} testID="cruise-evidence-review">
+              <AlertCircle size={18} color="#B45309" />
+              <View style={styles.overlapWarningCopy}>
+                <Text style={styles.overlapWarningTitle}>Cruise details need verification</Text>
+                <Text style={styles.overlapWarningText}>Some dates, duration, cabin, guest, or itinerary evidence was not returned by the source. EasySeas is preserving those values as unknown.</Text>
+              </View>
+            </View>
+          ) : null}
 
           {valueSummarySection}
 
@@ -1409,11 +1233,13 @@ export default function CruiseDetailsScreen() {
 
 
           {isBooked && (
+            <>
             <TouchableOpacity 
               style={styles.bwoFpObcCard} 
               onPress={openFullEditModal}
               activeOpacity={0.7}
               testID="bwo-fp-obc-section"
+              accessibilityLabel="Edit receipt financials"
             >
               <View style={styles.bwoFpObcHeader}>
                 <Text style={styles.bwoFpObcTitle}>Cruise Receipt Details</Text>
@@ -1446,9 +1272,11 @@ export default function CruiseDetailsScreen() {
                   </View>
                 </View>
               ) : (
-                <Text style={styles.bwoFpObcPlaceholder}>Tap to add BWO#, FreePlay, or OBC from your receipt</Text>
+                <Text style={styles.bwoFpObcPlaceholder}>Receipt not loaded — add details manually or upload the Royal PDF below</Text>
               )}
             </TouchableOpacity>
+            <TouchableOpacity style={styles.invoiceUploadButton} onPress={() => router.push({ pathname: '/casino/invoice-import' as never, params: { cruiseId: cruise.id } } as never)} testID="cruise-details-upload-invoice"><FileUp size={17} color={COLORS.navyDeep} /><Text style={styles.invoiceUploadText}>{(cruise as BookedCruise).invoiceImportedAt ? `Receipt verified · ${(cruise as BookedCruise).invoiceFileName ?? 'View or replace'}` : 'Upload Royal Cruise Vacation Receipt PDF'}</Text></TouchableOpacity>
+            </>
           )}
 
           {isBooked && (
@@ -1471,14 +1299,9 @@ export default function CruiseDetailsScreen() {
                 </View>
                 <TouchableOpacity
                   style={styles.casinoEditButton}
-                  onPress={() => {
-                    console.log('[CruiseDetails] Opening edit modal for cruise:', cruise);
-                    const bookedCruise = cruise as any;
-                    setEditWinnings(String(bookedCruise.winnings || 0));
-                    setEditPoints(String(bookedCruise.earnedPoints || bookedCruise.casinoPoints || 0));
-                    setEditModalVisible(true);
-                  }}
+                  onPress={openFullEditModal}
                   testID="edit-casino-stats-button"
+                  accessibilityLabel="Edit casino financials and points"
                 >
                   <Edit3 size={16} color={COLORS.navyDeep} />
                 </TouchableOpacity>
@@ -1721,6 +1544,16 @@ export default function CruiseDetailsScreen() {
             </View>
           )}
 
+          {seaDayDensity && !portTracker && !shipFamiliarity ? (
+            <View style={styles.planningIntelligenceCard} testID="cruise-details-planning-loading">
+              <View style={styles.sectionHeaderCompact}>
+                <ActivityIndicator size="small" color={COLORS.beigeWarm} />
+                <Text style={styles.sectionTitleCompact}>Preparing planning insights…</Text>
+              </View>
+              <Text style={styles.planningMuted}>Cruise details are ready. Optional comparisons are loading without blocking navigation.</Text>
+            </View>
+          ) : null}
+
           {seaDayDensity && portTracker && shipFamiliarity && (
             <View style={styles.planningIntelligenceCard} testID="cruise-details-phase3-planning-intelligence">
               <View style={styles.sectionHeaderCompact}>
@@ -1811,14 +1644,17 @@ export default function CruiseDetailsScreen() {
                     <TouchableOpacity
                       key={candidate.cruise.id}
                       style={styles.replacementItem}
-                      onPress={() => router.push({ pathname: '/cruise-details' as any, params: buildCruiseDetailsParams(candidate.cruise, { source: 'replacement-finder' }) })}
+                      onPress={() => router.push({
+                        pathname: '/cruise-details' as any,
+                        params: buildCruiseDetailsParams(candidate.cruise, { source: 'replacement-finder' }),
+                      })}
                       activeOpacity={0.75}
                     >
                       <View style={styles.replacementTopRow}>
                         <Text style={styles.replacementShip} numberOfLines={1}>{candidate.cruise.shipName}</Text>
                         <View style={styles.replacementScoreBadge}>
                           <Text style={styles.replacementScoreLabel}>{selectedReplacementGoalLabel}</Text>
-                          <Text style={styles.replacementScore}>{Math.round(scoreReplacementForGoal(candidate, cruise, selectedReplacementGoal, allOfferRecords, detailContextCruiseRecords, currentTravelerProfile))}/100</Text>
+                          <Text style={styles.replacementScore}>{Math.round(scoreReplacementForGoal(candidate, cruise, selectedReplacementGoal, allOfferRecords, bookedHistoryRecords, currentTravelerProfile))}/100</Text>
                         </View>
                       </View>
                       <Text style={styles.replacementMeta} numberOfLines={2}>{candidate.offerCode} · Offer Intelligence {candidate.offerScore}/100 · Sea-Day Density {candidate.seaDayDensityScore}/100</Text>
@@ -1882,7 +1718,7 @@ export default function CruiseDetailsScreen() {
                       <Text style={styles.itineraryDayNumber}>D{day.day}</Text>
                       <View style={styles.itineraryDayDetails}>
                         <Text style={styles.itineraryDayPortCompact} numberOfLines={1}>
-                          {day.isSeaDay ? 'At Sea' : day.port}
+                          {day.isSeaDay ? 'At Sea' : day.port || 'Unknown port'}
                         </Text>
                         <Text style={styles.itineraryDayPortTime}>{formatDate(day.date, 'short')} · {formatPortWindow(day)}</Text>
                         <Text style={styles.itineraryDayCasinoTime}>Casino: {formatCasinoWindow(day)} · ~{day.estimatedCasinoHours} hrs</Text>
@@ -1898,279 +1734,7 @@ export default function CruiseDetailsScreen() {
             </View>
           )}
 
-          {(() => {
-            const ledgerEntry = casinoLedger.entries.find((e) => e.cruiseId === cruise.id);
-            const bc = cruise as BookedCruise;
-            const actualPoints = bc.earnedPoints ?? bc.casinoPoints ?? null;
-            const expectedPoints = personalizedPlayEstimate?.estimatedPoints ?? null;
-            const unusedOffers: CasinoOffer[] = [...(storeOffers || []), ...(localData.offers || [])].filter((o) =>
-              o.status !== 'used' && o.status !== 'archived' && o.status !== 'expired'
-              && (!o.shipName || o.shipName.toLowerCase() === (cruise.shipName ?? '').toLowerCase()),
-            );
-
-            return (
-              <View style={styles.casinoSectionCompact} testID="cruise-detail-casino-ledger-panel">
-                <View style={styles.sectionHeaderCompact}>
-                  <Dice5 size={16} color={COLORS.beigeWarm} />
-                  <Text style={styles.sectionTitleCompact}>Casino Ledger</Text>
-                </View>
-
-                <View style={styles.casinoStatsRow}>
-                  <TouchableOpacity
-                    style={styles.casinoStatBox}
-                    activeOpacity={0.75}
-                    onPress={() => ledgerDrill.open({
-                      title: 'Casino Points',
-                      subtitle: `${cruise.shipName} · ${formatDate(cruise.sailDate, 'short')}`,
-                      summary: 'Casino points earned on this sailing, from logged sessions when available, otherwise from the cruise record.',
-                      inputs: [
-                        { label: 'Points', value: ledgerEntry ? ledgerEntry.points.value.toLocaleString() : 'No data' },
-                        { label: 'Source', value: ledgerEntry?.points.source ?? 'Not found in ledger' },
-                      ],
-                      sourceRecords: ledgerEntry ? [{ label: 'Confidence', value: ledgerEntry.points.confidence, confidence: toSourceConfidence(ledgerEntry.points.confidence) }] : [],
-                    })}
-                  >
-                    <Text style={styles.casinoStatBoxLabel}>Points</Text>
-                    <Text style={styles.casinoStatBoxValue}>{ledgerEntry ? ledgerEntry.points.value.toLocaleString() : '—'}</Text>
-                    {ledgerEntry ? <SourceConfidenceBadge confidence={toSourceConfidence(ledgerEntry.points.confidence)} /> : null}
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.casinoStatBox}
-                    activeOpacity={0.75}
-                    onPress={() => ledgerDrill.open({
-                      title: 'Coin-In',
-                      subtitle: `${cruise.shipName} · ${formatDate(cruise.sailDate, 'short')}`,
-                      summary: 'Coin-in is total wagering volume, estimated from Royal Caribbean\'s slot rule of $5 wagered per casino point earned. It is NOT your cost or loss.',
-                      formula: 'Coin-In = Casino Points × $5',
-                      inputs: [{ label: 'Coin-In', value: ledgerEntry ? `$${ledgerEntry.coinIn.value.toLocaleString()}` : 'No data' }],
-                    })}
-                  >
-                    <Text style={styles.casinoStatBoxLabel}>Coin-In</Text>
-                    <Text style={styles.casinoStatBoxValue}>{ledgerEntry ? `$${Math.round(ledgerEntry.coinIn.value).toLocaleString()}` : '—'}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.casinoStatBox}
-                    activeOpacity={0.75}
-                    onPress={() => ledgerDrill.open({
-                      title: 'Win / Loss',
-                      subtitle: `${cruise.shipName} · ${formatDate(cruise.sailDate, 'short')}`,
-                      summary: 'Your recorded cash result for this cruise\'s casino play.',
-                      inputs: [{ label: 'Win/Loss', value: ledgerEntry ? `$${ledgerEntry.winLoss.value.toLocaleString()}` : 'No data' }],
-                      sourceRecords: ledgerEntry ? [{ label: 'Confidence', value: ledgerEntry.winLoss.confidence, confidence: toSourceConfidence(ledgerEntry.winLoss.confidence) }] : [],
-                    })}
-                  >
-                    <Text style={styles.casinoStatBoxLabel}>Win/Loss</Text>
-                    <Text style={[styles.casinoStatBoxValue, ledgerEntry && ledgerEntry.winLoss.value < 0 ? { color: COLORS.error } : null]}>
-                      {ledgerEntry ? `${ledgerEntry.winLoss.value >= 0 ? '+' : ''}$${Math.round(ledgerEntry.winLoss.value).toLocaleString()}` : '—'}
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.casinoStatBox}
-                    activeOpacity={0.75}
-                    onPress={() => ledgerDrill.open({
-                      title: 'Total Economic Value',
-                      subtitle: `${cruise.shipName} · ${formatDate(cruise.sailDate, 'short')}`,
-                      summary: 'Cruise value captured (retail minus what you paid) plus your cash result plus any FreePlay/OBC/certificate value that is not already counted elsewhere.',
-                      inputs: [{ label: 'Total Economic Value', value: ledgerEntry ? `$${ledgerEntry.totalEconomicValue.value.toLocaleString()}` : 'No data' }],
-                      missing: ledgerEntry?.freePlay.includedInTotal === false ? [`FreePlay excluded: ${ledgerEntry.freePlay.reason}`] : [],
-                    })}
-                  >
-                    <Text style={styles.casinoStatBoxLabel}>Total Value</Text>
-                    <Text style={styles.casinoStatBoxValue}>{ledgerEntry ? `$${Math.round(ledgerEntry.totalEconomicValue.value).toLocaleString()}` : '—'}</Text>
-                  </TouchableOpacity>
-                </View>
-
-                <TouchableOpacity
-                  style={styles.itineraryMissingCard}
-                  activeOpacity={0.8}
-                  onPress={() => ledgerDrill.open({
-                    title: 'Expected vs. Actual',
-                    subtitle: `${cruise.shipName} · ${formatDate(cruise.sailDate, 'short')}`,
-                    summary: 'Expected points project what you\'d likely earn based on your playing-hours settings and this itinerary\'s casino-open days. Actual is what was recorded on the cruise (or from logged sessions).',
-                    inputs: [
-                      { label: 'Expected Points', value: expectedPoints != null ? expectedPoints.toLocaleString() : 'Not available' },
-                      { label: 'Actual Points', value: actualPoints != null ? actualPoints.toLocaleString() : 'Not recorded yet' },
-                      { label: 'Variance', value: (expectedPoints != null && actualPoints != null) ? `${actualPoints - expectedPoints >= 0 ? '+' : ''}${(actualPoints - expectedPoints).toLocaleString()} pts` : 'N/A' },
-                      { label: 'Expected Casino Hours', value: casinoAvailability ? `~${casinoAvailability.estimatedCasinoHours}h` : 'Not available' },
-                    ],
-                    missing: actualPoints == null ? ['Actual points have not been recorded for this cruise yet — edit casino stats to add them.'] : [],
-                  })}
-                >
-                  <Target size={16} color={COLORS.beigeWarm} />
-                  <Text style={styles.itineraryMissingText}>
-                    Expected {expectedPoints != null ? Math.round(expectedPoints).toLocaleString() : '—'} pts vs. Actual {actualPoints != null ? actualPoints.toLocaleString() : 'not recorded'} — tap for the full comparison
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.casinoEditButton}
-                  activeOpacity={0.8}
-                  onPress={() => setShowAttachOfferModal(true)}
-                  testID="cruise-detail-attach-offer-button"
-                >
-                  <Gift size={14} color={COLORS.beigeWarm} />
-                  <Text style={{ color: COLORS.beigeWarm, fontWeight: '700' as const, fontSize: 13, marginLeft: 6 }}>
-                    {cruise.offerCode ? `Offer: ${cruise.offerCode} — Change` : 'Attach Offer'}
-                  </Text>
-                </TouchableOpacity>
-
-                <Modal visible={showAttachOfferModal} transparent animationType="slide" onRequestClose={() => setShowAttachOfferModal(false)}>
-                  <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
-                    <View style={{ backgroundColor: COLORS.navyDeep, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: SPACING.lg, maxHeight: '75%' }}>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.md }}>
-                        <Text style={{ color: COLORS.white, fontSize: 17, fontWeight: '700' as const }}>Attach an Offer</Text>
-                        <TouchableOpacity onPress={() => setShowAttachOfferModal(false)}><X size={22} color={COLORS.white} /></TouchableOpacity>
-                      </View>
-                      <ScrollView>
-                        {unusedOffers.length === 0 ? (
-                          <Text style={{ color: COLORS.beigeWarm, fontSize: 13 }}>No available (unused, non-expired) offers found{cruise.shipName ? ` for ${cruise.shipName}` : ''}.</Text>
-                        ) : unusedOffers.map((offer) => (
-                          <TouchableOpacity
-                            key={offer.id}
-                            style={{ backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: SPACING.md, marginBottom: SPACING.sm }}
-                            activeOpacity={0.8}
-                            onPress={() => {
-                              updateCruise({
-                                ...cruise,
-                                offerCode: offer.offerCode ?? cruise.offerCode,
-                                freePlay: cruise.freePlay || offer.freePlay || offer.freeplayAmount || 0,
-                                freeOBC: cruise.freeOBC || offer.OBC || offer.obcAmount || 0,
-                                tradeInValue: cruise.tradeInValue || offer.tradeInValue || 0,
-                              });
-                              setShowAttachOfferModal(false);
-                            }}
-                            testID={`attach-offer-option-${offer.id}`}
-                          >
-                            <Text style={{ color: COLORS.white, fontWeight: '700' as const, fontSize: 14 }}>{offer.offerCode || offer.title}</Text>
-                            <Text style={{ color: COLORS.beigeWarm, fontSize: 12, marginTop: 2 }}>
-                              {offer.title}{offer.freePlay || offer.freeplayAmount ? ` · FreePlay $${offer.freePlay || offer.freeplayAmount}` : ''}{offer.OBC || offer.obcAmount ? ` · OBC $${offer.OBC || offer.obcAmount}` : ''}
-                            </Text>
-                          </TouchableOpacity>
-                        ))}
-                      </ScrollView>
-                    </View>
-                  </View>
-                </Modal>
-              </View>
-            );
-          })()}
-
           <ShipMachinesPanel shipName={cruise.shipName ?? ''} />
-
-          {false && valueBreakdown && (
-            <View style={styles.valueSection}>
-              <View style={styles.sectionHeader}>
-                <DollarSign size={20} color={COLORS.beigeWarm} />
-                <Text style={styles.sectionTitle}>Value Summary</Text>
-                <TouchableOpacity
-                  style={styles.editValueButton}
-                  onPress={openFullEditModal}
-                >
-                  <Edit3 size={14} color={COLORS.beigeWarm} />
-                </TouchableOpacity>
-              </View>
-
-              {estimatedPrices && (
-                <View style={styles.cabinPricesGrid}>
-                  <View style={[
-                    styles.cabinPriceCell,
-                    cruise?.cabinType?.toLowerCase().includes('interior') && styles.cabinPriceCellActive,
-                  ]}>
-                    <Text style={styles.cabinPriceCellLabel}>Interior</Text>
-                    <Text style={styles.cabinPriceCellValue}>{formatCurrency(estimatedPrices?.interior ?? 0)}</Text>
-                  </View>
-                  <View style={[
-                    styles.cabinPriceCell,
-                    cruise?.cabinType?.toLowerCase().includes('ocean') && styles.cabinPriceCellActive,
-                  ]}>
-                    <Text style={styles.cabinPriceCellLabel}>Oceanview</Text>
-                    <Text style={styles.cabinPriceCellValue}>{formatCurrency(estimatedPrices?.oceanview ?? 0)}</Text>
-                  </View>
-                  <View style={[
-                    styles.cabinPriceCell,
-                    (cruise?.cabinType?.toLowerCase().includes('balcony') || cruise?.cabinType?.toLowerCase() === 'balcony gty') && styles.cabinPriceCellActive,
-                  ]}>
-                    <Text style={styles.cabinPriceCellLabel}>Balcony</Text>
-                    <Text style={styles.cabinPriceCellValue}>{formatCurrency(estimatedPrices?.balcony ?? 0)}</Text>
-                  </View>
-                  <View style={[
-                    styles.cabinPriceCell,
-                    cruise?.cabinType?.toLowerCase().includes('suite') && styles.cabinPriceCellActive,
-                  ]}>
-                    <Text style={styles.cabinPriceCellLabel}>Suite</Text>
-                    <Text style={styles.cabinPriceCellValue}>{formatCurrency(estimatedPrices?.suite ?? 0)}</Text>
-                  </View>
-                  {estimatedPrices?.source === 'estimated' && (
-                    <Text style={styles.cabinPriceCellLabel}>Estimated prices based on cabin type</Text>
-                  )}
-                </View>
-              )}
-
-              {(cruise?.taxes ?? 0) > 0 && (
-                <View style={styles.valueTaxesRow}>
-                  <Text style={styles.valueCompactLabel}>Port Taxes & Fees</Text>
-                  <Text style={styles.valueCompactValue}>{formatCurrency(cruise?.taxes ?? 0)}</Text>
-                </View>
-              )}
-
-              <View style={styles.valueCompactGrid}>
-                <View style={styles.valueCompactRow}>
-                  <Text style={styles.valueCompactLabel}>Retail Value</Text>
-                  <Text style={styles.valueCompactValue}>{formatCurrency(valueBreakdown?.totalRetailValue ?? 0)}</Text>
-                </View>
-                {(valueBreakdown?.freePlayValue ?? 0) > 0 && (
-                  <View style={styles.valueCompactRow}>
-                    <Text style={styles.valueCompactLabel}>FreePlay</Text>
-                    <Text style={[styles.valueCompactValue, { color: COLORS.success }]}>+{formatCurrency(valueBreakdown?.freePlayValue ?? 0)}</Text>
-                  </View>
-                )}
-                {(valueBreakdown?.obcValue ?? 0) > 0 && (
-                  <View style={styles.valueCompactRow}>
-                    <Text style={styles.valueCompactLabel}>OBC</Text>
-                    <Text style={[styles.valueCompactValue, { color: COLORS.success }]}>+{formatCurrency(valueBreakdown?.obcValue ?? 0)}</Text>
-                  </View>
-                )}
-                {(valueBreakdown?.tradeInValue ?? 0) > 0 && (
-                  <View style={styles.valueCompactRow}>
-                    <Text style={styles.valueCompactLabel}>Trade-In</Text>
-                    <Text style={[styles.valueCompactValue, { color: COLORS.success }]}>+{formatCurrency(valueBreakdown?.tradeInValue ?? 0)}</Text>
-                  </View>
-                )}
-                <TouchableOpacity
-                  style={styles.valueCompactRow}
-                  onPress={openFullEditModal}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.valueCompactLabelWithIcon}>
-                    <Text style={styles.valueCompactLabel}>Paid (Taxes/Fees)</Text>
-                    <Edit3 size={10} color={COLORS.textSecondary} />
-                  </View>
-                  <Text style={styles.valueCompactValue}>{formatCurrency(valueBreakdown?.amountPaid ?? 0)}</Text>
-                </TouchableOpacity>
-              </View>
-              
-              <View style={styles.valueNetRow}>
-                <Text style={styles.valueNetLabel}>Net Value</Text>
-                <Text style={[styles.valueNetAmount, { color: (valueBreakdown?.netValue ?? 0) >= 0 ? COLORS.success : COLORS.error }]}>
-                  {(valueBreakdown?.netValue ?? 0) >= 0 ? '+' : ''}{formatCurrency(valueBreakdown?.netValue ?? 0)}
-                </Text>
-              </View>
-              
-              <View style={styles.coverageBar}>
-                <View 
-                  style={[
-                    styles.coverageFill, 
-                    { width: `${Math.min(100, (valueBreakdown?.coverageFraction ?? 0) * 100)}%` }
-                  ]} 
-                />
-              </View>
-              <Text style={styles.coverageText}>
-                {((valueBreakdown?.coverageFraction ?? 0) * 100).toFixed(0)}% Coverage
-                {valueBreakdown?.isFullyComped && ' • Fully Comped!'}
-              </Text>
-            </View>
-          )}
-
 
         </View>
       </ScrollView>
@@ -3467,6 +3031,10 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.xs,
     borderRadius: BORDER_RADIUS.sm,
   },
+  casinoStatusText: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
   casinoStatsGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -4476,6 +4044,20 @@ const styles = StyleSheet.create({
     textAlign: 'center' as const,
     paddingVertical: SPACING.sm,
   },
+  invoiceUploadButton: {
+    backgroundColor: '#FFF7D6',
+    borderColor: '#D8AA32',
+    borderWidth: 1,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.md,
+    marginTop: -SPACING.sm,
+    marginBottom: SPACING.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+  },
+  invoiceUploadText: { color: COLORS.navyDeep, fontWeight: TYPOGRAPHY.fontWeightBold, fontSize: TYPOGRAPHY.fontSizeSM, flexShrink: 1 },
   bwoChipEmpty: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -4807,11 +4389,6 @@ const styles = StyleSheet.create({
   },
   casinoStatusPillClosed: {
     backgroundColor: '#FEE2E2',
-  },
-  casinoStatusText: {
-    fontSize: 10,
-    color: COLORS.navyDeep,
-    fontWeight: '900' as const,
   },
   casinoDotIndicator: {
     width: 8,

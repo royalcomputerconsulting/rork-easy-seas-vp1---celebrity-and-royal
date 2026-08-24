@@ -9,7 +9,7 @@ import { useRouter } from 'expo-router';
 export default function HistoryInsightsRoute() {
   const router = useRouter();
   useEffect(() => {
-    router.replace({ pathname: '/(tabs)/analytics', params: { tab: 'history' } } as any);
+    router.replace({ pathname: '/(tabs)/analytics', params: { tab: 'trips' } } as any);
   }, [router]);
   return null;
 }

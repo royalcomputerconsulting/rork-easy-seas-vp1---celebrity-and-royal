@@ -4,9 +4,19 @@ import { Save, CheckCircle, AlertCircle, Star, Anchor, Ship, Edit2, X, User } fr
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getLevelByNights, getLevelProgress, CROWN_ANCHOR_LEVELS } from '@/constants/crownAnchor';
-import { getTierByPoints, getTierProgress, CLUB_ROYALE_TIERS } from '@/constants/clubRoyaleTiers';
-import { getCelebrityCaptainsClubLevelByPoints, getCelebrityCaptainsClubLevelProgress, CELEBRITY_CAPTAINS_CLUB_LEVELS } from '@/constants/celebrityCaptainsClub';
-import { getCelebrityBlueChipTierByLevel, CELEBRITY_BLUE_CHIP_TIERS } from '@/constants/celebrityBlueChipClub';
+import {
+  getTierByPoints,
+  getTierProgress,
+  CLUB_ROYALE_TIERS,
+  TIER_ORDER,
+  formatClubRoyaleValidThrough,
+  inferClubRoyaleTierValidThrough,
+  normalizeClubRoyaleTier,
+  normalizeClubRoyaleValidThrough,
+  resolveClubRoyaleStatus,
+} from '@/constants/clubRoyaleTiers';
+import { getCelebrityCaptainsClubLevelProgress, getCelebrityCaptainsClubStatus, CELEBRITY_CAPTAINS_CLUB_LEVELS } from '@/constants/celebrityCaptainsClub';
+import { getCelebrityBlueChipProgress, getCelebrityBlueChipStatus, CELEBRITY_BLUE_CHIP_TIERS } from '@/constants/celebrityBlueChipClub';
 import { BrandToggle, BrandType } from './BrandToggle';
 import { LoyaltyPill } from '@/components/ui/LoyaltyPill';
 import { useEntitlement } from '@/state/EntitlementProvider';
@@ -17,6 +27,7 @@ interface UserProfileData {
   crownAnchorNumber: string;
   clubRoyalePoints: number;
   clubRoyaleTier: string;
+  clubRoyaleTierValidThrough?: string;
   loyaltyPoints: number;
   crownAnchorLevel: string;
   celebrityEmail?: string;
@@ -32,9 +43,6 @@ interface UserProfileData {
   silverseaVenetianPoints?: number;
   carnivalVifpNumber?: string;
   carnivalVifpTier?: string;
-  carnivalVifpPoints?: number;
-  carnivalCruiseDayPoints?: number;
-  carnivalTotalCruises?: number;
   carnivalPlayersClubTier?: string;
   carnivalPlayersClubPoints?: number;
   birthdate?: string;
@@ -70,9 +78,6 @@ interface EnrichmentData {
   venetianSocietyLoyaltyMatchTier?: string;
   carnivalVifpTier?: string;
   carnivalVifpNumber?: string;
-  carnivalVifpPoints?: number;
-  carnivalCruiseDayPoints?: number;
-  carnivalTotalCruises?: number;
   carnivalPlayersClubTier?: string;
   carnivalPlayersClubPoints?: number;
   hasCoBrandCard?: boolean;
@@ -93,6 +98,22 @@ interface UserProfileCardProps {
   showProfileSwitch?: boolean;
 }
 
+function parsePointInput(text: string): number {
+  const cleanedText = text.replace(/[^0-9]/g, '');
+  return cleanedText.length > 0 ? parseInt(cleanedText, 10) : 0;
+}
+
+function prepareProfileFormData(values: UserProfileData): UserProfileData {
+  const selectedTier = normalizeClubRoyaleTier(values.clubRoyaleTier) ?? getTierByPoints(values.clubRoyalePoints);
+  const validThrough = normalizeClubRoyaleValidThrough(values.clubRoyaleTierValidThrough)
+    ?? inferClubRoyaleTierValidThrough(selectedTier, values.clubRoyalePoints);
+  return {
+    ...values,
+    clubRoyaleTier: selectedTier,
+    clubRoyaleTierValidThrough: formatClubRoyaleValidThrough(validThrough),
+  };
+}
+
 export function UserProfileCard({
   currentValues,
   enrichmentData,
@@ -105,56 +126,89 @@ export function UserProfileCard({
   showProfileSwitch = false,
 }: UserProfileCardProps) {
   const entitlement = useEntitlement();
-  const [formData, setFormData] = useState<UserProfileData>(currentValues);
+  const [formData, setFormData] = useState<UserProfileData>(() => prepareProfileFormData(currentValues));
   const [activeBrand, setActiveBrand] = useState<BrandType>(
     (currentValues.preferredBrand as BrandType) || 'royal'
   );
   const [isModalVisible, setIsModalVisible] = useState(false);
 
   useEffect(() => {
-    setFormData(currentValues);
+    setFormData(prepareProfileFormData(currentValues));
     setActiveBrand((currentValues.preferredBrand as BrandType) || 'royal');
   }, [currentValues]);
 
-  const calculatedLevel = getLevelByNights(formData.loyaltyPoints);
-  const calculatedLevelInfo = CROWN_ANCHOR_LEVELS[calculatedLevel];
-  const displayedCrownAnchorLevel = currentValues.crownAnchorLevel || enrichmentData?.crownAndAnchorTier || calculatedLevel;
-  const displayedCrownAnchorLevelInfo = CROWN_ANCHOR_LEVELS[displayedCrownAnchorLevel] || calculatedLevelInfo;
-  // Calculate progress from the displayed authoritative tier, not a lower tier inferred from
-  // stale points. This prevents impossible cards such as current Diamond / next Diamond.
-  const calculatedLevelProgress = getLevelProgress(currentValues.loyaltyPoints, displayedCrownAnchorLevel);
+  const formCrownAnchorLevel = getLevelByNights(formData.loyaltyPoints);
+  const formCrownAnchorLevelInfo = CROWN_ANCHOR_LEVELS[formCrownAnchorLevel];
+  const savedCrownAnchorLevel = getLevelByNights(currentValues.loyaltyPoints);
+  const savedCrownAnchorLevelInfo = CROWN_ANCHOR_LEVELS[savedCrownAnchorLevel];
+  const savedCrownAnchorProgress = getLevelProgress(currentValues.loyaltyPoints, savedCrownAnchorLevel);
   
-  // currentValues.clubRoyalePoints is already the fully-resolved, authoritative number
-  // (LoyaltyProvider prioritizes a manual Settings entry over a possibly-stale synced
-  // value). Preferring `enrichmentData?.clubRoyalePointsFromApi` here instead undid that
-  // priority and made this card silently fall back to an old synced total even after you
-  // corrected it in Settings -- so currentValues must win first.
-  const authoritativeClubRoyalePoints = Number(currentValues.clubRoyalePoints ?? enrichmentData?.clubRoyalePointsFromApi ?? formData.clubRoyalePoints ?? 0);
-  const calculatedTier = getTierByPoints(authoritativeClubRoyalePoints);
-  const displayedClubRoyaleTier = currentValues.clubRoyaleTier || enrichmentData?.clubRoyaleTierFromApi || calculatedTier;
-  const displayedClubRoyaleTierInfo = CLUB_ROYALE_TIERS[displayedClubRoyaleTier] || CLUB_ROYALE_TIERS[calculatedTier];
-  const calculatedTierInfo = CLUB_ROYALE_TIERS[calculatedTier];
-  const calculatedTierProgress = getTierProgress(authoritativeClubRoyalePoints, calculatedTier);
-  const nextClubRoyaleTierInfo = calculatedTierProgress.nextTier ? CLUB_ROYALE_TIERS[calculatedTierProgress.nextTier] : undefined;
-  const displayedTierRank = Object.keys(CLUB_ROYALE_TIERS).indexOf(displayedClubRoyaleTier);
-  const calculatedTierRank = Object.keys(CLUB_ROYALE_TIERS).indexOf(calculatedTier);
-  const isClubRoyaleRequalification = displayedTierRank > calculatedTierRank && calculatedTierProgress.nextTier === displayedClubRoyaleTier;
+  const selectedFormClubRoyaleTier = normalizeClubRoyaleTier(formData.clubRoyaleTier) ?? getTierByPoints(formData.clubRoyalePoints);
+  const formClubRoyaleValidThrough = normalizeClubRoyaleValidThrough(formData.clubRoyaleTierValidThrough)
+    ?? inferClubRoyaleTierValidThrough(selectedFormClubRoyaleTier, formData.clubRoyalePoints);
+  const formClubRoyaleStatus = resolveClubRoyaleStatus({
+    currentSeasonPoints: formData.clubRoyalePoints,
+    confirmedTier: selectedFormClubRoyaleTier,
+    confirmedValidThrough: formClubRoyaleValidThrough,
+  });
+  const formClubRoyaleTier = formClubRoyaleStatus.effectiveTier;
+  const formClubRoyaleTierInfo = CLUB_ROYALE_TIERS[formClubRoyaleTier];
+  const savedClubRoyaleStatus = resolveClubRoyaleStatus({
+    currentSeasonPoints: currentValues.clubRoyalePoints,
+    confirmedTier: currentValues.clubRoyaleTier,
+    confirmedValidThrough: currentValues.clubRoyaleTierValidThrough,
+  });
+  const savedClubRoyaleTier = savedClubRoyaleStatus.effectiveTier;
+  const savedClubRoyaleTierInfo = CLUB_ROYALE_TIERS[savedClubRoyaleTier];
+  const savedClubRoyaleProgress = getTierProgress(currentValues.clubRoyalePoints, savedClubRoyaleStatus.pointsTier);
 
-  const calculatedCelebrityLevel = getCelebrityCaptainsClubLevelByPoints(formData.celebrityCaptainsClubPoints || 0);
-  const calculatedCelebrityLevelInfo = CELEBRITY_CAPTAINS_CLUB_LEVELS[calculatedCelebrityLevel];
-  const calculatedCelebrityProgress = getCelebrityCaptainsClubLevelProgress(currentValues.celebrityCaptainsClubPoints || 0, getCelebrityCaptainsClubLevelByPoints(currentValues.celebrityCaptainsClubPoints || 0));
+  const formCelebrityStatus = getCelebrityCaptainsClubStatus(
+    formData.celebrityCaptainsClubPoints || 0,
+    formCrownAnchorLevel,
+    formData.celebrityCaptainsClubLevel || enrichmentData?.captainsClubTier,
+  );
+  const formCelebrityLevel = formCelebrityStatus.effectiveLevel;
+  const formCelebrityLevelInfo = CELEBRITY_CAPTAINS_CLUB_LEVELS[formCelebrityLevel];
+  const savedCelebrityStatus = getCelebrityCaptainsClubStatus(
+    currentValues.celebrityCaptainsClubPoints || 0,
+    savedCrownAnchorLevel,
+    currentValues.celebrityCaptainsClubLevel || enrichmentData?.captainsClubTier,
+  );
+  const savedCelebrityLevel = savedCelebrityStatus.effectiveLevel;
+  const savedCelebrityLevelInfo = CELEBRITY_CAPTAINS_CLUB_LEVELS[savedCelebrityLevel];
+  const savedCelebrityProgress = getCelebrityCaptainsClubLevelProgress(
+    currentValues.celebrityCaptainsClubPoints || 0,
+    savedCelebrityStatus.earnedLevel,
+  );
   
-  const celebrityBlueChipLevel = 1;
-  const calculatedCelebrityTier = formData.celebrityBlueChipTier?.trim() || getCelebrityBlueChipTierByLevel(celebrityBlueChipLevel);
-  const calculatedCelebrityTierInfo = CELEBRITY_BLUE_CHIP_TIERS[calculatedCelebrityTier] ?? CELEBRITY_BLUE_CHIP_TIERS.Pearl;
+  const formCelebrityBlueChipStatus = getCelebrityBlueChipStatus(
+    formData.celebrityBlueChipPoints || 0,
+    formData.celebrityBlueChipTier || enrichmentData?.celebrityBlueChipTier,
+  );
+  const formCelebrityBlueChipTier = formCelebrityBlueChipStatus.effectiveTier;
+  const formCelebrityBlueChipTierInfo = CELEBRITY_BLUE_CHIP_TIERS[formCelebrityBlueChipTier] ?? CELEBRITY_BLUE_CHIP_TIERS.Pearl;
+  const savedCelebrityBlueChipStatus = getCelebrityBlueChipStatus(
+    currentValues.celebrityBlueChipPoints || 0,
+    currentValues.celebrityBlueChipTier || enrichmentData?.celebrityBlueChipTier,
+  );
+  const savedCelebrityBlueChipTier = savedCelebrityBlueChipStatus.effectiveTier;
+  const savedCelebrityBlueChipTierInfo = CELEBRITY_BLUE_CHIP_TIERS[savedCelebrityBlueChipTier] ?? CELEBRITY_BLUE_CHIP_TIERS.Pearl;
+  const savedCelebrityBlueChipProgress = getCelebrityBlueChipProgress(
+    currentValues.celebrityBlueChipPoints || 0,
+    savedCelebrityBlueChipStatus.earnedTier,
+  );
 
   const handleSave = async () => {
+    const confirmedClubRoyaleTier = normalizeClubRoyaleTier(formData.clubRoyaleTier) ?? formClubRoyaleTier;
+    const confirmedClubRoyaleValidThrough = normalizeClubRoyaleValidThrough(formData.clubRoyaleTierValidThrough)
+      ?? inferClubRoyaleTierValidThrough(confirmedClubRoyaleTier, formData.clubRoyalePoints);
     await onSave({
       ...formData,
-      clubRoyaleTier: displayedClubRoyaleTier,
-      crownAnchorLevel: displayedCrownAnchorLevel,
-      celebrityBlueChipTier: calculatedCelebrityTier,
-      celebrityCaptainsClubLevel: calculatedCelebrityLevel,
+      clubRoyaleTier: confirmedClubRoyaleTier,
+      clubRoyaleTierValidThrough: confirmedClubRoyaleValidThrough ?? undefined,
+      crownAnchorLevel: formCrownAnchorLevel,
+      celebrityBlueChipTier: formCelebrityBlueChipTier,
+      celebrityCaptainsClubLevel: formCelebrityLevel,
       preferredBrand: activeBrand,
     });
     setIsModalVisible(false);
@@ -280,15 +334,16 @@ export function UserProfileCard({
         {renderValueCard('Name', currentValues.name, undefined, true)}
         {renderValueCard('Email', currentValues.email, undefined, true)}
         {!!currentValues.birthdate && renderValueCard('Date of Birth', currentValues.birthdate, undefined, true)}
-        {renderValueCard('Crown & Anchor #', currentValues.crownAnchorNumber || enrichmentData?.crownAndAnchorId, undefined, true)}
-        {renderValueCard('C&A Level', displayedCrownAnchorLevel, displayedCrownAnchorLevelInfo?.color, false, true)}
+        {renderValueCard('Crown & Anchor #', enrichmentData?.crownAndAnchorId || currentValues.crownAnchorNumber, undefined, true)}
+        {renderValueCard('C&A Level', savedCrownAnchorLevel, savedCrownAnchorLevelInfo?.color, false, true)}
         {renderValueCard('Loyalty Points', currentValues.loyaltyPoints, COLORS.loyalty)}
-        {renderValueCard('Club Royale Tier', displayedClubRoyaleTier, displayedClubRoyaleTierInfo?.color, false, true)}
-        {renderValueCard('Casino Points', authoritativeClubRoyalePoints, COLORS.points)}
-        {calculatedLevelProgress.nextLevel && renderValueCard('Next C&A Level', calculatedLevelProgress.nextLevel, calculatedLevelInfo?.color, false, true)}
-        {renderValueCard('Points to Next', calculatedLevelProgress.nightsToNext)}
-        {calculatedTierProgress.nextTier && renderValueCard(isClubRoyaleRequalification ? `Requalify ${displayedClubRoyaleTier}` : 'Next Club Royale Tier', calculatedTierProgress.nextTier, nextClubRoyaleTierInfo?.color, false, true)}
-        {renderValueCard(isClubRoyaleRequalification ? 'Casino Points to Requalify' : 'Casino Points to Next', calculatedTierProgress.pointsToNext, COLORS.points)}
+        {renderValueCard('Club Royale Tier', savedClubRoyaleTier, savedClubRoyaleTierInfo?.color, false, true)}
+        {!!savedClubRoyaleStatus.validThrough && renderValueCard('Status Retained Through', formatClubRoyaleValidThrough(savedClubRoyaleStatus.validThrough))}
+        {renderValueCard('Casino Points', currentValues.clubRoyalePoints, COLORS.points)}
+        {savedCrownAnchorProgress.nextLevel && renderValueCard('Next C&A Level', savedCrownAnchorProgress.nextLevel, savedCrownAnchorLevelInfo?.color, false, true)}
+        {renderValueCard('Points to Next', savedCrownAnchorProgress.nightsToNext)}
+        {savedClubRoyaleProgress.nextTier && renderValueCard('Current-Season Next Tier', savedClubRoyaleProgress.nextTier, savedClubRoyaleTierInfo?.color, false, true)}
+        {renderValueCard('Current-Season Points to Next', savedClubRoyaleProgress.pointsToNext, COLORS.points)}
       </View>
     );
   };
@@ -301,12 +356,17 @@ export function UserProfileCard({
         {renderValueCard('Name', currentValues.name, undefined, true)}
         {renderValueCard('Email', currentValues.celebrityEmail, undefined, true)}
         {renderValueCard("Captain's Club #", enrichmentData?.captainsClubId || currentValues.celebrityCaptainsClubNumber, undefined, true)}
-        {renderValueCard("Captain's Level", enrichmentData?.captainsClubTier || calculatedCelebrityLevel, calculatedCelebrityLevelInfo?.color, false, true)}
-        {renderValueCard('Club Points', enrichmentData?.captainsClubPoints ?? currentValues.celebrityCaptainsClubPoints, COLORS.loyalty)}
-        {renderValueCard('Blue Chip Tier', enrichmentData?.celebrityBlueChipTier || calculatedCelebrityTier, calculatedCelebrityTierInfo?.color, false, true)}
-        {renderValueCard('Casino Points', enrichmentData?.celebrityBlueChipPoints ?? currentValues.celebrityBlueChipPoints, COLORS.points)}
-        {calculatedCelebrityProgress.nextLevel && renderValueCard('Next Level', calculatedCelebrityProgress.nextLevel, calculatedCelebrityLevelInfo?.color, false, true)}
-        {renderValueCard('Points to Next', calculatedCelebrityProgress.pointsToNext)}
+        {renderValueCard("Captain's Level", savedCelebrityLevel, savedCelebrityLevelInfo?.color, false, true)}
+        {savedCelebrityStatus.isStatusMatched && renderValueCard('Status Match', `${savedCrownAnchorLevel} → ${savedCelebrityStatus.statusMatchLevel}`, savedCelebrityLevelInfo?.color, false, true)}
+        {savedCelebrityStatus.isStatusMatched && renderValueCard('Earned from Club Points', savedCelebrityStatus.earnedLevel, CELEBRITY_CAPTAINS_CLUB_LEVELS[savedCelebrityStatus.earnedLevel]?.color, false, true)}
+        {renderValueCard('Club Points', currentValues.celebrityCaptainsClubPoints, COLORS.loyalty)}
+        {renderValueCard('Blue Chip Tier', savedCelebrityBlueChipTier, savedCelebrityBlueChipTierInfo?.color, false, true)}
+        {savedCelebrityBlueChipStatus.isReportedTierRetained && renderValueCard('Blue Chip Earned Tier', savedCelebrityBlueChipStatus.earnedTier, CELEBRITY_BLUE_CHIP_TIERS[savedCelebrityBlueChipStatus.earnedTier]?.color, false, true)}
+        {renderValueCard('Casino Points', currentValues.celebrityBlueChipPoints, COLORS.points)}
+        {savedCelebrityBlueChipProgress.nextTier && renderValueCard('Next Blue Chip Tier', savedCelebrityBlueChipProgress.nextTier, savedCelebrityBlueChipTierInfo?.color, false, true)}
+        {renderValueCard('Blue Chip Points to Next', savedCelebrityBlueChipProgress.pointsToNext)}
+        {savedCelebrityProgress.nextLevel && renderValueCard('Next Earned Level', savedCelebrityProgress.nextLevel, CELEBRITY_CAPTAINS_CLUB_LEVELS[savedCelebrityStatus.earnedLevel]?.color, false, true)}
+        {renderValueCard('Points to Next Earned Level', savedCelebrityProgress.pointsToNext)}
       </View>
     );
   };
@@ -335,8 +395,6 @@ export function UserProfileCard({
         {renderValueCard('Name', currentValues.name, undefined, true)}
         {renderValueCard('VIFP Club #', enrichmentData?.carnivalVifpNumber || currentValues.carnivalVifpNumber, undefined, true)}
         {renderValueCard('VIFP Tier', enrichmentData?.carnivalVifpTier || currentValues.carnivalVifpTier, '#CC2232', false, true)}
-        {renderValueCard('VIFP Points', enrichmentData?.carnivalVifpPoints ?? currentValues.carnivalVifpPoints ?? currentValues.carnivalCruiseDayPoints, COLORS.loyalty)}
-        {renderValueCard('Total Cruises', enrichmentData?.carnivalTotalCruises ?? currentValues.carnivalTotalCruises, COLORS.money)}
         {renderValueCard('Players Club Tier', enrichmentData?.carnivalPlayersClubTier || currentValues.carnivalPlayersClubTier, '#FFB400', false, true)}
         {renderValueCard('Players Club Points', enrichmentData?.carnivalPlayersClubPoints ?? currentValues.carnivalPlayersClubPoints, COLORS.points)}
       </View>
@@ -397,15 +455,15 @@ export function UserProfileCard({
             <TextInput
               style={styles.input}
               value={formData.loyaltyPoints.toString()}
-              onChangeText={(text) => setFormData(prev => ({ ...prev, loyaltyPoints: parseInt(text) || 0 }))}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, loyaltyPoints: parsePointInput(text) }))}
               placeholder="Enter loyalty nights"
               placeholderTextColor="#9CA3AF"
               keyboardType="numeric"
             />
             <View style={styles.levelHint}>
-              <View style={[styles.levelHintDot, { backgroundColor: calculatedLevelInfo?.color || COLORS.points }]} />
+              <View style={[styles.levelHintDot, { backgroundColor: formCrownAnchorLevelInfo?.color || COLORS.points }]} />
               <Text style={styles.levelHintText}>
-                Level: <Text style={[styles.levelHintLevel, { color: calculatedLevelInfo?.color || COLORS.points }]}>{calculatedLevel}</Text>
+                Level: <Text style={[styles.levelHintLevel, { color: formCrownAnchorLevelInfo?.color || COLORS.points }]}>{formCrownAnchorLevel}</Text>
               </Text>
             </View>
           </View>
@@ -414,17 +472,75 @@ export function UserProfileCard({
             <TextInput
               style={styles.input}
               value={formData.clubRoyalePoints.toString()}
-              onChangeText={(text) => setFormData(prev => ({ ...prev, clubRoyalePoints: parseInt(text) || 0 }))}
+              onChangeText={(text) => setFormData(prev => {
+                const clubRoyalePoints = parsePointInput(text);
+                const confirmedTier = normalizeClubRoyaleTier(prev.clubRoyaleTier) ?? getTierByPoints(clubRoyalePoints);
+                return {
+                  ...prev,
+                  clubRoyalePoints,
+                  clubRoyaleTier: confirmedTier,
+                  clubRoyaleTierValidThrough: formatClubRoyaleValidThrough(
+                    inferClubRoyaleTierValidThrough(confirmedTier, clubRoyalePoints),
+                  ),
+                };
+              })}
               placeholder="Enter current points"
               placeholderTextColor="#9CA3AF"
               keyboardType="numeric"
             />
             <View style={styles.levelHint}>
-              <View style={[styles.levelHintDot, { backgroundColor: calculatedTierInfo?.color || COLORS.loyalty }]} />
+              <View style={[styles.levelHintDot, { backgroundColor: formClubRoyaleTierInfo?.color || COLORS.loyalty }]} />
               <Text style={styles.levelHintText}>
-                Tier: <Text style={[styles.levelHintLevel, { color: calculatedTierInfo?.color || COLORS.loyalty }]}>{calculatedTier}</Text>
+                Tier: <Text style={[styles.levelHintLevel, { color: formClubRoyaleTierInfo?.color || COLORS.loyalty }]}>{formClubRoyaleTier}</Text>
               </Text>
             </View>
+          </View>
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Confirmed Club Royale Status</Text>
+            <View style={styles.tierSelector}>
+              {TIER_ORDER.map((tier) => {
+                const isSelected = selectedFormClubRoyaleTier === tier;
+                const tierColor = CLUB_ROYALE_TIERS[tier].color;
+                return (
+                  <TouchableOpacity
+                    key={tier}
+                    style={[
+                      styles.tierSelectorButton,
+                      { borderColor: tierColor },
+                      isSelected && { backgroundColor: tierColor },
+                    ]}
+                    onPress={() => setFormData(prev => ({
+                      ...prev,
+                      clubRoyaleTier: tier,
+                      clubRoyaleTierValidThrough: formatClubRoyaleValidThrough(
+                        inferClubRoyaleTierValidThrough(tier, prev.clubRoyalePoints),
+                      ),
+                    }))}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
+                  >
+                    <Text style={[styles.tierSelectorText, isSelected && styles.tierSelectorTextSelected]}>{tier}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <Text style={styles.fieldHelpText}>
+              Status and current-cycle points are tracked separately. A previously earned tier stays active through its retained-until date.
+            </Text>
+          </View>
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Status Retained Through</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.clubRoyaleTierValidThrough || ''}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, clubRoyaleTierValidThrough: text }))}
+              placeholder="MM/DD/YYYY"
+              placeholderTextColor="#9CA3AF"
+              keyboardType="numbers-and-punctuation"
+            />
+            <Text style={styles.fieldHelpText}>
+              For Signature earned in the 04/01/2025–03/31/2026 casino year, enter 04/01/2027.
+            </Text>
           </View>
         </>
       );
@@ -470,15 +586,16 @@ export function UserProfileCard({
             <TextInput
               style={styles.input}
               value={(formData.celebrityCaptainsClubPoints || 0).toString()}
-              onChangeText={(text) => setFormData(prev => ({ ...prev, celebrityCaptainsClubPoints: parseInt(text) || 0 }))}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, celebrityCaptainsClubPoints: parsePointInput(text) }))}
               placeholder="Enter Captain's Club points"
               placeholderTextColor="#9CA3AF"
               keyboardType="numeric"
             />
             <View style={styles.levelHint}>
-              <View style={[styles.levelHintDot, { backgroundColor: calculatedCelebrityLevelInfo?.color || COLORS.points }]} />
+              <View style={[styles.levelHintDot, { backgroundColor: formCelebrityLevelInfo?.color || COLORS.points }]} />
               <Text style={styles.levelHintText}>
-                Level: <Text style={[styles.levelHintLevel, { color: calculatedCelebrityLevelInfo?.color || COLORS.points }]}>{calculatedCelebrityLevel}</Text>
+                Level: <Text style={[styles.levelHintLevel, { color: formCelebrityLevelInfo?.color || COLORS.points }]}>{formCelebrityLevel}</Text>
+                {formCelebrityStatus.isStatusMatched ? ` via ${formCrownAnchorLevel} status match (earned: ${formCelebrityStatus.earnedLevel})` : ''}
               </Text>
             </View>
           </View>
@@ -497,15 +614,16 @@ export function UserProfileCard({
             <TextInput
               style={styles.input}
               value={(formData.celebrityBlueChipPoints || 0).toString()}
-              onChangeText={(text) => setFormData(prev => ({ ...prev, celebrityBlueChipPoints: parseInt(text) || 0 }))}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, celebrityBlueChipPoints: parsePointInput(text) }))}
               placeholder="Enter Blue Chip points"
               placeholderTextColor="#9CA3AF"
               keyboardType="numeric"
             />
             <View style={styles.levelHint}>
-              <View style={[styles.levelHintDot, { backgroundColor: calculatedCelebrityTierInfo?.color || COLORS.loyalty }]} />
+              <View style={[styles.levelHintDot, { backgroundColor: formCelebrityBlueChipTierInfo?.color || COLORS.loyalty }]} />
               <Text style={styles.levelHintText}>
-                Tier: <Text style={[styles.levelHintLevel, { color: calculatedCelebrityTierInfo?.color || COLORS.loyalty }]}>{calculatedCelebrityTier}</Text>
+                Tier: <Text style={[styles.levelHintLevel, { color: formCelebrityBlueChipTierInfo?.color || COLORS.loyalty }]}>{formCelebrityBlueChipTier}</Text>
+                {formCelebrityBlueChipStatus.isReportedTierRetained ? ` (earned from points: ${formCelebrityBlueChipStatus.earnedTier})` : ''}
               </Text>
             </View>
           </View>
@@ -546,28 +664,6 @@ export function UserProfileCard({
             />
           </View>
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>VIFP Points / Cruise Days</Text>
-            <TextInput
-              style={styles.input}
-              value={(formData.carnivalVifpPoints ?? formData.carnivalCruiseDayPoints ?? 0).toString()}
-              onChangeText={(text) => setFormData(prev => ({ ...prev, carnivalVifpPoints: parseInt(text, 10) || 0, carnivalCruiseDayPoints: parseInt(text, 10) || 0 }))}
-              placeholder="Enter VIFP points"
-              placeholderTextColor="#9CA3AF"
-              keyboardType="numeric"
-            />
-          </View>
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Total Carnival Cruises</Text>
-            <TextInput
-              style={styles.input}
-              value={(formData.carnivalTotalCruises || 0).toString()}
-              onChangeText={(text) => setFormData(prev => ({ ...prev, carnivalTotalCruises: parseInt(text, 10) || 0 }))}
-              placeholder="Enter total cruises"
-              placeholderTextColor="#9CA3AF"
-              keyboardType="numeric"
-            />
-          </View>
-          <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Players Club Tier</Text>
             <TextInput
               style={styles.input}
@@ -582,7 +678,7 @@ export function UserProfileCard({
             <TextInput
               style={styles.input}
               value={(formData.carnivalPlayersClubPoints || 0).toString()}
-              onChangeText={(text) => setFormData(prev => ({ ...prev, carnivalPlayersClubPoints: parseInt(text) || 0 }))}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, carnivalPlayersClubPoints: parsePointInput(text) }))}
               placeholder="Enter points"
               placeholderTextColor="#9CA3AF"
               keyboardType="numeric"
@@ -642,7 +738,7 @@ export function UserProfileCard({
             <TextInput
               style={styles.input}
               value={(formData.silverseaVenetianPoints || 0).toString()}
-              onChangeText={(text) => setFormData(prev => ({ ...prev, silverseaVenetianPoints: parseInt(text) || 0 }))}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, silverseaVenetianPoints: parsePointInput(text) }))}
               placeholder="Enter points"
               placeholderTextColor="#9CA3AF"
               keyboardType="numeric"
@@ -1041,6 +1137,37 @@ const styles = StyleSheet.create({
   },
   levelHintLevel: {
     fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  tierSelector: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.xs,
+  },
+  tierSelectorButton: {
+    minWidth: '47%',
+    flexGrow: 1,
+    minHeight: 42,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 2,
+    backgroundColor: COLORS.white,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+  },
+  tierSelectorText: {
+    color: '#0F172A',
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+  },
+  tierSelectorTextSelected: {
+    color: COLORS.white,
+  },
+  fieldHelpText: {
+    marginTop: SPACING.xs,
+    color: '#475569',
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    lineHeight: 17,
   },
   modalActions: {
     flexDirection: 'row',

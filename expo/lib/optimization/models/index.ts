@@ -2,6 +2,7 @@ export * from './types';
 export * from './statistics';
 export * from './buildThresholdStatistics';
 export * from './selectComparableHistory';
+export * from './estimatePersonalPlayRates';
 export * from './estimateExpectedLoss';
 export * from './estimateSuccessProbability';
 export * from './classifyPersonalTargets';

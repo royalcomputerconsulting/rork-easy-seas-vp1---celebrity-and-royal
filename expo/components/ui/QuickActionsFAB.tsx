@@ -8,7 +8,7 @@ import {
   Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Plus, X, Bot, UserPlus, Gamepad2 } from 'lucide-react-native';
+import { Plus, X, Ship, FileUp, Calendar, UserPlus, Gamepad2 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 
@@ -21,13 +21,17 @@ interface QuickAction {
 }
 
 interface QuickActionsFABProps {
-  onAskEasySeas?: () => void;
+  onBrowseCruises?: () => void;
+  onImportData?: () => void;
+  onViewCalendar?: () => void;
   onAddCrewmember?: () => void;
   onAddSession?: () => void;
 }
 
 export function QuickActionsFAB({
-  onAskEasySeas,
+  onBrowseCruises,
+  onImportData,
+  onViewCalendar,
   onAddCrewmember,
   onAddSession,
 }: QuickActionsFABProps) {
@@ -96,11 +100,25 @@ export function QuickActionsFAB({
       onPress: () => handleActionPress(onAddSession),
     },
     {
-      id: 'ask-easy-seas',
-      label: 'Ask Easy Seas',
-      icon: <Bot size={20} color={COLORS.white} />,
+      id: 'browse',
+      label: 'Browse Cruises',
+      icon: <Ship size={20} color={COLORS.white} />,
+      color: COLORS.points,
+      onPress: () => handleActionPress(onBrowseCruises),
+    },
+    {
+      id: 'import',
+      label: 'Import Data',
+      icon: <FileUp size={20} color={COLORS.white} />,
       color: COLORS.gold,
-      onPress: () => handleActionPress(onAskEasySeas),
+      onPress: () => handleActionPress(onImportData),
+    },
+    {
+      id: 'calendar',
+      label: 'View Calendar',
+      icon: <Calendar size={20} color={COLORS.white} />,
+      color: COLORS.money,
+      onPress: () => handleActionPress(onViewCalendar),
     },
   ];
 

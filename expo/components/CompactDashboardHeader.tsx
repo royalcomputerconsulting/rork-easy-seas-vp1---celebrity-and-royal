@@ -3,8 +3,6 @@ import { Modal, ScrollView, View, Text, StyleSheet, TouchableOpacity } from 'rea
 import { LinearGradient } from 'expo-linear-gradient';
 import { Settings, Bell, Ship, Anchor, Tag, CheckCircle2, LogOut, Target, Users, X, ChevronRight } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW, CLEAN_THEME } from '@/constants/theme';
-import { DARK_ROYAL_COLORS } from '@/constants/darkRoyalTheme';
-import type { LoyaltyCardTheme } from '@/constants/loyaltyTheme';
 import {
   getCarnivalPlayersClubTierColor,
   getCarnivalVifpTierColor,
@@ -12,20 +10,24 @@ import {
   getCelebrityCaptainsClubLevelColor,
   getClubRoyaleTierColor,
   getCrownAnchorTierColor,
+  getPlayerCardTheme,
   getSilverseaTierColor,
 } from '@/constants/loyaltyTheme';
 import { CLUB_ROYALE_TIERS, TIER_ORDER, getTierByPoints } from '@/constants/clubRoyaleTiers';
 import { CROWN_ANCHOR_LEVELS, LEVEL_ORDER } from '@/constants/crownAnchor';
-import { CELEBRITY_CAPTAINS_CLUB_LEVELS, CELEBRITY_LEVEL_ORDER, getCelebrityCaptainsClubLevelByPoints } from '@/constants/celebrityCaptainsClub';
-import { CELEBRITY_BLUE_CHIP_TIERS, CELEBRITY_TIER_ORDER, getCelebrityBlueChipTierByLevel } from '@/constants/celebrityBlueChipClub';
+import { CELEBRITY_CAPTAINS_CLUB_LEVELS, CELEBRITY_LEVEL_ORDER } from '@/constants/celebrityCaptainsClub';
+import { CELEBRITY_BLUE_CHIP_TIERS, CELEBRITY_TIER_ORDER } from '@/constants/celebrityBlueChipClub';
 import { SILVERSEA_VENETIAN_TIERS, SILVERSEA_TIER_ORDER, getSilverseaTierByDays, getNextSilverseaTier } from '@/constants/silverseaVenetianSociety';
-import { CARNIVAL_VIFP_TIERS, CARNIVAL_VIFP_TIER_ORDER, CARNIVAL_PLAYERS_CLUB_TIERS, getCarnivalVifpTierByDays } from '@/constants/carnivalVifpClub';
+import { CARNIVAL_VIFP_TIERS, CARNIVAL_VIFP_TIER_ORDER, CARNIVAL_PLAYERS_CLUB_TIERS } from '@/constants/carnivalVifpClub';
 import { useLoyalty } from '@/state/LoyaltyProvider';
 import { useUser } from '@/state/UserProvider';
 import { BrandToggle, BrandType } from '@/components/ui/BrandToggle';
 import { LoyaltyPill } from '@/components/ui/LoyaltyPill';
-import { profileHasRoyalIdentity } from '@/lib/profileIsolation';
-import { useIntelligenceFilters } from '@/state/IntelligenceFiltersProvider';
+import {
+  getCachedLoyaltyCardBrandPreference,
+  loadLoyaltyCardBrandPreference,
+  saveLoyaltyCardBrandPreference,
+} from '@/lib/loyalty/loyaltyCardBrandPreference';
 
 interface CompactDashboardHeaderProps {
   memberName?: string;
@@ -35,37 +37,15 @@ interface CompactDashboardHeaderProps {
   onLogoutPress?: () => void;
   alertCount?: number;
   availableCruises?: number;
+  availableCruiseOptions?: number;
   bookedCruises?: number;
   activeOffers?: number;
-  carnivalOfferMetrics?: {
-    personalizedOffers: number;
-    offersWithSailings: number;
-    eligibleSailings: number;
-  };
   onCruisesPress?: () => void;
   onBookedPress?: () => void;
   onOffersPress?: () => void;
   hideLogo?: boolean;
   crewMemberCount?: number;
 }
-
-/**
- * Fixed "Dark Royal" navy + gold theme for the profile header shared by the
- * Offers, Cruises, and Casino tabs. Previously this derived its palette from
- * the active loyalty tier/brand (getPlayerCardTheme), which made the header
- * look inconsistent with the rest of the Casino section's Dark Royal look.
- * Now it always uses the same navy/gold treatment regardless of brand or tier.
- */
-const DARK_ROYAL_PLAYER_CARD_THEME: LoyaltyCardTheme = {
-  accentColor: DARK_ROYAL_COLORS.gold,
-  gradientColors: [DARK_ROYAL_COLORS.backgroundGradientTop, DARK_ROYAL_COLORS.card, DARK_ROYAL_COLORS.backgroundGradientBottom],
-  borderColor: DARK_ROYAL_COLORS.borderStrong,
-  surfaceColor: DARK_ROYAL_COLORS.cardAlt,
-  surfaceColorMuted: DARK_ROYAL_COLORS.sidebar,
-  topTextColor: DARK_ROYAL_COLORS.textPrimary,
-  secondaryTextColor: DARK_ROYAL_COLORS.textSecondary,
-  progressBarGradient: [DARK_ROYAL_COLORS.gold, DARK_ROYAL_COLORS.goldBright],
-};
 
 export const CompactDashboardHeader = React.memo(function CompactDashboardHeader({
   memberName = 'Player',
@@ -75,9 +55,9 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
   onLogoutPress,
   alertCount = 0,
   availableCruises = 0,
+  availableCruiseOptions,
   bookedCruises = 0,
   activeOffers = 0,
-  carnivalOfferMetrics,
   onCruisesPress,
   onBookedPress,
   onOffersPress,
@@ -86,6 +66,8 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
 }: CompactDashboardHeaderProps) {
   const {
     clubRoyaleTier,
+    clubRoyaleTierValidThrough,
+    clubRoyaleTierIsProtected,
     clubRoyaleCurrentYearPoints,
     clubRoyaleHistoricalPoints,
     clubRoyaleHistoricalTier,
@@ -95,16 +77,16 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
     pinnacleProgress,
     mastersProgress,
     captainsClub,
+    blueChip,
     projectedBookedPoints,
     totalBookedNights,
   } = useLoyalty();
   const { currentUser } = useUser();
-  const { selectedBrand, setSelectedBrand, setSelectedProgram } = useIntelligenceFilters();
-  const isAllBrands = selectedBrand === 'all' || selectedBrand === 'unknown';
-  const selectedHeaderBrand: BrandType = selectedBrand !== 'all' && selectedBrand !== 'unknown'
-    ? selectedBrand
-    : (currentUser?.preferredBrand || 'royal');
-  const [activeBrand, setActiveBrand] = useState<BrandType>(selectedHeaderBrand);
+  const loyaltyPreferenceProfileId = currentUser?.id || '__default__';
+  const preferredBrand = currentUser?.preferredBrand || 'royal';
+  const [activeBrand, setActiveBrand] = useState<BrandType>(() => (
+    getCachedLoyaltyCardBrandPreference(loyaltyPreferenceProfileId) || preferredBrand
+  ));
   const [showNumber, setShowNumber] = useState(false);
   const [showPinnacleBreakdown, setShowPinnacleBreakdown] = useState(false);
 
@@ -113,45 +95,38 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
   const closePinnacleBreakdown = useCallback(() => setShowPinnacleBreakdown(false), []);
 
   useEffect(() => {
-    if (selectedBrand !== 'all' && selectedBrand !== 'unknown') {
-      setActiveBrand(selectedBrand);
-      return;
-    }
-    setActiveBrand(currentUser?.preferredBrand || 'royal');
-  }, [currentUser?.preferredBrand, selectedBrand]);
+    let cancelled = false;
+    const cached = getCachedLoyaltyCardBrandPreference(loyaltyPreferenceProfileId);
+    if (cached) setActiveBrand(cached);
+    else setActiveBrand(preferredBrand);
+    void loadLoyaltyCardBrandPreference(loyaltyPreferenceProfileId, preferredBrand)
+      .then((savedBrand) => {
+        if (!cancelled) setActiveBrand(savedBrand);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [loyaltyPreferenceProfileId, preferredBrand]);
 
   const handleBrandToggle = useCallback((brand: BrandType) => {
     setActiveBrand(brand);
-    setSelectedBrand(brand);
-    setSelectedProgram(
-      brand === 'royal' ? 'clubRoyale'
-        : brand === 'celebrity' ? 'blueChip'
-        : brand === 'carnival' ? 'playersClub'
-        : 'venetianSociety'
-    );
-  }, [setSelectedBrand, setSelectedProgram]);
+    void saveLoyaltyCardBrandPreference(loyaltyPreferenceProfileId, brand).catch((error) => {
+      console.warn('[CompactDashboardHeader] Could not save loyalty-card brand selection:', error);
+    });
+  }, [loyaltyPreferenceProfileId]);
 
-  const handleAllBrands = useCallback(() => {
-    setSelectedBrand('all');
-    setSelectedProgram('all');
-  }, [setSelectedBrand, setSelectedProgram]);
-
-  const celebrityCaptainsClubPoints = currentUser?.celebrityCaptainsClubPoints || 0;
-  const celebrityBlueChipPoints = currentUser?.celebrityBlueChipPoints || 0;
-  const hasRoyalIdentity = profileHasRoyalIdentity(currentUser);
-  const hasRoyalPinnacleReciprocity = hasRoyalIdentity && (crownAnchorLevel === 'Pinnacle' || captainsClub.tier === 'Zenith');
-  const celebrityLevel = hasRoyalPinnacleReciprocity ? 'Zenith' : getCelebrityCaptainsClubLevelByPoints(celebrityCaptainsClubPoints);
-  const celebrityTier = getCelebrityBlueChipTierByLevel(1);
+  const celebrityCaptainsClubPoints = captainsClub.points;
+  const celebrityBlueChipPoints = blueChip.points;
+  const celebrityLevel = captainsClub.tier || 'Preview';
+  const celebrityEarnedLevel = captainsClub.earnedTier;
+  const hasRoyalStatusMatch = captainsClub.isStatusMatched;
+  const celebrityTier = blueChip.tier;
+  const celebrityEarnedTier = blueChip.earnedTier;
   const silverseaTier = currentUser?.silverseaVenetianTier || getSilverseaTierByDays(currentUser?.silverseaVenetianPoints || 0);
   const silverseaPoints = currentUser?.silverseaVenetianPoints || 0;
-  const carnivalVifpPoints = currentUser?.carnivalVifpPoints ?? currentUser?.carnivalCruiseDayPoints ?? 0;
-  const carnivalCruiseDayPoints = currentUser?.carnivalCruiseDayPoints ?? carnivalVifpPoints;
-  const carnivalTotalCruises = currentUser?.carnivalTotalCruises || 0;
+  const carnivalVifpTier = currentUser?.carnivalVifpTier || 'Blue';
+  const carnivalPlayersClubTier = currentUser?.carnivalPlayersClubTier || 'Blue';
   const carnivalPlayersClubPoints = currentUser?.carnivalPlayersClubPoints || 0;
-  const hasCarnivalVifpData = Boolean(currentUser?.carnivalVifpNumber || currentUser?.carnivalVifpTier || carnivalVifpPoints || carnivalCruiseDayPoints || carnivalTotalCruises);
-  const hasCarnivalPlayersData = Boolean(currentUser?.carnivalPlayersClubTier || carnivalPlayersClubPoints);
-  const carnivalVifpTier = currentUser?.carnivalVifpTier || (hasCarnivalVifpData ? getCarnivalVifpTierByDays(carnivalCruiseDayPoints) : 'Not synced');
-  const carnivalPlayersClubTier = currentUser?.carnivalPlayersClubTier || (hasCarnivalPlayersData ? 'Blue' : 'Not synced');
 
   const formatETAFromDate = (date: Date | null): string => {
     if (!date) return 'TBD';
@@ -178,7 +153,13 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
     return `${mm}-${dd}-${yy}`;
   };
 
-  const playerCardTheme = DARK_ROYAL_PLAYER_CARD_THEME;
+  const playerCardTheme = useMemo(() => getPlayerCardTheme({
+    brand: activeBrand,
+    crownAnchorLevel,
+    celebrityLevel,
+    silverseaTier,
+    carnivalVifpTier,
+  }), [activeBrand, carnivalVifpTier, celebrityLevel, crownAnchorLevel, silverseaTier]);
   const progressCardStyle = useMemo(() => ({
     backgroundColor: playerCardTheme.surfaceColor,
     borderColor: playerCardTheme.borderColor,
@@ -201,22 +182,17 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
   }), [playerCardTheme.borderColor, playerCardTheme.surfaceColorMuted]);
 
   const displayName = currentUser?.name || memberName;
-  const rawNumber = isAllBrands
-    ? ''
-    : activeBrand === 'royal'
+  const rawNumber = activeBrand === 'royal' 
     ? (crownAnchorNumber || currentUser?.crownAnchorNumber || '')
     : activeBrand === 'celebrity'
     ? (currentUser?.celebrityCaptainsClubNumber || '')
     : activeBrand === 'silversea'
     ? (currentUser?.silverseaVenetianNumber || '')
     : (currentUser?.carnivalVifpNumber || '');
-  const displayNumber = isAllBrands
-    ? 'Combined portfolio'
-    : rawNumber
+  const displayNumber = rawNumber
     ? (showNumber ? rawNumber : '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022')
     : 'Not set';
-  const displayNumberLabel = isAllBrands ? 'All Brands •'
-    : activeBrand === 'royal' ? 'C&A #'
+  const displayNumberLabel = activeBrand === 'royal' ? 'C&A #'
     : activeBrand === 'celebrity' ? 'Captain\'s Club #'
     : activeBrand === 'silversea' ? 'Venetian Society #'
     : 'VIFP Club #';
@@ -280,61 +256,23 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         </View>
       </View>
 
-      <TouchableOpacity
-        style={[styles.allBrandsButton, isAllBrands && styles.allBrandsButtonActive]}
-        onPress={handleAllBrands}
-        activeOpacity={0.75}
-        accessibilityRole="button"
-        accessibilityState={{ selected: isAllBrands }}
-        testID="dashboard-brand-all"
-      >
-        <Text style={[styles.allBrandsButtonText, isAllBrands && styles.allBrandsButtonTextActive]}>All Brands</Text>
-        <Text style={[styles.allBrandsButtonMeta, isAllBrands && styles.allBrandsButtonMetaActive]}>Combined portfolio totals</Text>
-      </TouchableOpacity>
+      <BrandToggle activeBrand={activeBrand} onToggle={handleBrandToggle} />
 
-      <BrandToggle activeBrand={activeBrand} onToggle={handleBrandToggle} noActiveSelection={isAllBrands} />
-
-      {isAllBrands ? (
-        <>
-          <View style={[styles.allBrandsSummaryCard, progressCardStyle]}>
-            <Text style={[styles.allBrandsSummaryTitle, progressLabelStyle]}>ALL BRANDS</Text>
-            <Text style={[styles.allBrandsSummaryText, progressMetaStyle]}>
-              These totals combine Royal Caribbean, Celebrity, Silversea, and Carnival. Select a cruise line above for loyalty status and brand-only totals.
-            </Text>
-          </View>
-
-          <View style={styles.quickStatsPillRow}>
-            <TouchableOpacity style={[styles.quickStatPill, progressCardStyle]} onPress={onCruisesPress} activeOpacity={0.7}>
-              <Anchor size={14} color={COLORS.points} />
-              <Text style={[styles.quickStatPillValue, progressLabelStyle]}>{availableCruises}</Text>
-              <Text style={[styles.quickStatPillLabel, progressMetaStyle]}>Cruises</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.quickStatPill, progressCardStyle]} onPress={onBookedPress} activeOpacity={0.7}>
-              <Ship size={14} color={COLORS.money} />
-              <Text style={[styles.quickStatPillValue, progressLabelStyle]}>{bookedCruises}</Text>
-              <Text style={[styles.quickStatPillLabel, progressMetaStyle]}>Booked</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.quickStatPill, progressCardStyle]} onPress={onOffersPress} activeOpacity={0.7}>
-              <Tag size={14} color={COLORS.gold} />
-              <Text style={[styles.quickStatPillValue, progressLabelStyle]}>{activeOffers}</Text>
-              <Text style={[styles.quickStatPillLabel, progressMetaStyle]}>Offers</Text>
-            </TouchableOpacity>
-          </View>
-        </>
-      ) : activeBrand === 'royal' ? (
+      {activeBrand === 'royal' ? (
         <>
       {/* === ROYAL CARIBBEAN === */}
-      {hasRoyalIdentity ? (
-        <View style={styles.tierRow}>
-          <LoyaltyPill label={clubRoyaleTier} color={getClubRoyaleTierColor(clubRoyaleTier)} size="small" />
-          <LoyaltyPill label={crownAnchorLevel} color={getCrownAnchorTierColor(crownAnchorLevel)} size="small" />
+      <View style={styles.tierRow}>
+        <LoyaltyPill label={clubRoyaleTier} color={getClubRoyaleTierColor(clubRoyaleTier)} size="small" />
+        <LoyaltyPill label={crownAnchorLevel} color={getCrownAnchorTierColor(crownAnchorLevel)} size="small" />
+      </View>
+      {clubRoyaleTierIsProtected && clubRoyaleTierValidThrough ? (
+        <View style={[styles.retainedStatusRow, { backgroundColor: playerCardTheme.surfaceColor, borderColor: playerCardTheme.borderColor }]}>
+          <CheckCircle2 size={12} color={getClubRoyaleTierColor(clubRoyaleTier)} />
+          <Text style={[styles.retainedStatusText, { color: playerCardTheme.topTextColor }]}>
+            {clubRoyaleTier} status retained through {formatCruiseDate(clubRoyaleTierValidThrough)}
+          </Text>
         </View>
-      ) : (
-        <View style={[styles.progressCard, progressCardStyle]}>
-          <Text style={[styles.progressLabel, progressLabelStyle]}>Royal Caribbean loyalty not synced</Text>
-          <Text style={[styles.progressEta, progressMetaStyle]}>Add a C&A number or run sync for this traveler to calculate Crown & Anchor and Club Royale status.</Text>
-        </View>
-      )}
+      ) : null}
       {crewMemberCount > 0 && (
         <View style={styles.crewCountRow}>
           <Users size={13} color={playerCardTheme.secondaryTextColor} />
@@ -342,7 +280,6 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         </View>
       )}
 
-      {hasRoyalIdentity && (<>
       <View style={styles.progressGrid}>
         {/* BAR 1: Loyalty Progress (Crown & Anchor) - Always show current → next level */}
         {(() => {
@@ -435,6 +372,22 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
                           {pinnacleProgress.pinnacleStatusLabel}
                         </Text>
                       ) : null}
+                    </View>
+                  </View>
+                </View>
+              )}
+              {isPinnacle && (
+                <View style={styles.pinnacleDetailsContainer}>
+                  <View style={[styles.pinnacleDetailRow, styles.pinnacleDetailRowWhite, progressDetailRowStyle]}>
+                    <View style={styles.pinnacleStarBadgeWhite}>
+                      <Text style={styles.pinnaclePText}>P</Text>
+                    </View>
+                    <View style={styles.pinnacleDetailContent}>
+                      <Text style={[styles.pinnacleDetailLabel, progressMetaStyle]}>Pinnacle Reached:</Text>
+                      <Text style={[styles.pinnacleDetailValue, progressLabelStyle]}>
+                        {`Confirmed at 700 C&A points • Current balance ${crownAnchorPoints}`}
+                      </Text>
+                      <Text style={[styles.pinnacleTapHint, progressMetaStyle]}>Royal Caribbean Pinnacle status is active</Text>
                     </View>
                   </View>
                 </View>
@@ -547,10 +500,9 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         <View style={[styles.statDivider, progressDividerStyle]} />
         <View style={styles.statItem}>
           <Text style={[styles.statValue, progressLabelStyle]}>{crownAnchorPoints}</Text>
-          <Text style={[styles.statLabel, progressMetaStyle]}>C&A Points</Text>
+          <Text style={[styles.statLabel, progressMetaStyle]}>C&A Nights</Text>
         </View>
       </View>
-      </>)}
 
       <View style={styles.quickStatsPillRow}>
         <TouchableOpacity 
@@ -559,8 +511,13 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
           activeOpacity={0.7}
         >
           <Anchor size={14} color={COLORS.points} />
-          <Text style={[styles.quickStatPillValue, progressLabelStyle]}>{availableCruises}</Text>
-          <Text style={[styles.quickStatPillLabel, progressMetaStyle]}>Available</Text>
+          <Text style={[styles.quickStatPillValue, progressLabelStyle]}>{(availableCruiseOptions ?? availableCruises).toLocaleString()}</Text>
+          <Text style={[styles.quickStatPillLabel, progressMetaStyle]}>
+            {availableCruiseOptions != null && availableCruiseOptions !== availableCruises ? 'Sailing Options' : 'Cruises'}
+          </Text>
+          {availableCruiseOptions != null && availableCruiseOptions !== availableCruises ? (
+            <Text style={[styles.quickStatPillSubLabel, progressMetaStyle]}>{availableCruises.toLocaleString()} unique departures</Text>
+          ) : null}
         </TouchableOpacity>
 
         <TouchableOpacity 
@@ -594,16 +551,16 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
 
       <View style={styles.progressGrid}>
         {(() => {
-          const currentLevelIndex = CELEBRITY_LEVEL_ORDER.indexOf(celebrityLevel);
+          const currentLevelIndex = CELEBRITY_LEVEL_ORDER.indexOf(celebrityEarnedLevel);
           const nextLevel = currentLevelIndex < CELEBRITY_LEVEL_ORDER.length - 1 ? CELEBRITY_LEVEL_ORDER[currentLevelIndex + 1] : null;
-          const isZenith = celebrityLevel === 'Zenith';
+          const isEarnedZenith = celebrityEarnedLevel === 'Zenith';
           
-          const currentThreshold = CELEBRITY_CAPTAINS_CLUB_LEVELS[celebrityLevel]?.cruisePoints || 0;
+          const currentThreshold = CELEBRITY_CAPTAINS_CLUB_LEVELS[celebrityEarnedLevel]?.cruisePoints || 0;
           const nextThreshold = nextLevel ? CELEBRITY_CAPTAINS_CLUB_LEVELS[nextLevel]?.cruisePoints : 3000;
           const rangeSize = nextThreshold - currentThreshold;
           const progressInRange = celebrityCaptainsClubPoints - currentThreshold;
-          const percentComplete = isZenith ? 100 : Math.min(100, Math.max(0, (progressInRange / rangeSize) * 100));
-          const pointsToNext = isZenith ? 0 : Math.max(0, nextThreshold - celebrityCaptainsClubPoints);
+          const percentComplete = isEarnedZenith ? 100 : Math.min(100, Math.max(0, (progressInRange / rangeSize) * 100));
+          const pointsToNext = isEarnedZenith ? 0 : Math.max(0, nextThreshold - celebrityCaptainsClubPoints);
           
           const _levelColor = CELEBRITY_CAPTAINS_CLUB_LEVELS[celebrityLevel]?.color || '#708090';
           
@@ -611,12 +568,18 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
             <View style={[styles.progressCard, progressCardStyle]}>
               <View style={styles.progressHeader}>
                 <Text style={[styles.progressLabel, progressLabelStyle]}>
-                  {isZenith 
-                    ? (hasRoyalPinnacleReciprocity ? 'Zenith via Royal Caribbean Pinnacle reciprocity' : `Zenith (${celebrityCaptainsClubPoints}/3,000)`)
-                    : `${celebrityLevel} → ${nextLevel} (${celebrityCaptainsClubPoints}/${nextThreshold})`
+                  {hasRoyalStatusMatch
+                    ? `${celebrityLevel} via Royal Caribbean ${crownAnchorLevel} status match`
+                    : isEarnedZenith
+                      ? `Zenith (${celebrityCaptainsClubPoints}/3,000)`
+                      : `${celebrityEarnedLevel} → ${nextLevel} (${celebrityCaptainsClubPoints}/${nextThreshold})`
                   }
                 </Text>
-                {isZenith ? (
+                {hasRoyalStatusMatch ? (
+                  <View style={styles.achievedBadge}>
+                    <Text style={styles.achievedBadgeText}>STATUS MATCH</Text>
+                  </View>
+                ) : isEarnedZenith ? (
                   <View style={styles.achievedBadge}>
                     <Text style={styles.achievedBadgeText}>MAX LEVEL</Text>
                   </View>
@@ -633,9 +596,11 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
                 />
               </View>
               <Text style={[styles.progressEta, progressMetaStyle]}>
-                {isZenith 
-                  ? (hasRoyalPinnacleReciprocity ? 'Royal Caribbean Pinnacle automatically maps to Celebrity Zenith.' : 'Zenith achieved! Maximum Captain\'s Club level')
-                  : `${pointsToNext} pts to ${nextLevel}`
+                {hasRoyalStatusMatch
+                  ? `Effective tier: ${celebrityLevel}. Earned tier: ${celebrityEarnedLevel}${nextLevel ? `; ${pointsToNext} pts to earned ${nextLevel}.` : '.'}`
+                  : isEarnedZenith
+                    ? 'Zenith achieved! Maximum Captain\'s Club level'
+                    : `${pointsToNext} pts to ${nextLevel}`
                 }
               </Text>
             </View>
@@ -643,10 +608,9 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         })()}
 
         {(() => {
-          const currentTierIndex = CELEBRITY_TIER_ORDER.indexOf(celebrityTier);
+          const currentTierIndex = CELEBRITY_TIER_ORDER.indexOf(celebrityEarnedTier);
           const nextTier = currentTierIndex < CELEBRITY_TIER_ORDER.length - 1 ? CELEBRITY_TIER_ORDER[currentTierIndex + 1] : null;
-          const isRuby = celebrityTier === 'Ruby';
-          const percentComplete = isRuby ? 100 : 0;
+          const isRuby = celebrityEarnedTier === 'Ruby';
           
           const _tierColor = CELEBRITY_BLUE_CHIP_TIERS[celebrityTier]?.color || '#F0EAD6';
           
@@ -654,9 +618,11 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
             <View style={[styles.progressCard, progressCardStyle]}>
               <View style={styles.progressHeader}>
                 <Text style={[styles.progressLabel, progressLabelStyle]}>
-                  {isRuby 
+                  {blueChip.isReportedTierRetained
+                    ? `${celebrityTier} retained • Earned ${celebrityEarnedTier}${nextTier ? ` → ${nextTier}` : ''}`
+                    : isRuby 
                     ? `Ruby (${celebrityBlueChipPoints.toLocaleString()} pts)`
-                    : `${celebrityTier} → ${nextTier} (${celebrityBlueChipPoints.toLocaleString()} pts)`
+                    : `${celebrityEarnedTier} → ${nextTier} (${celebrityBlueChipPoints.toLocaleString()}/${CELEBRITY_BLUE_CHIP_TIERS[nextTier!].qualifyingPoints.toLocaleString()})`
                   }
                 </Text>
                 {isRuby ? (
@@ -664,7 +630,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
                     <Text style={styles.achievedBadgeText}>MAX TIER</Text>
                   </View>
                 ) : (
-                  <Text style={[styles.progressPercent, progressLabelStyle]}>{percentComplete.toFixed(1)}%</Text>
+                  <Text style={[styles.progressPercent, progressLabelStyle]}>{blueChip.trackerPercentage.toFixed(1)}%</Text>
                 )}
               </View>
               <View style={[styles.progressBarBg, progressBarTrackStyle]}>
@@ -672,13 +638,15 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
                   colors={playerCardTheme.progressBarGradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
-                  style={[styles.progressBarFill, { width: isRuby ? '100%' : '0%' }]}
+                  style={[styles.progressBarFill, { width: `${Math.min(100, blueChip.trackerPercentage)}%` }]}
                 />
               </View>
               <Text style={[styles.progressEta, progressMetaStyle]}>
-                {isRuby 
+                {blueChip.isReportedTierRetained
+                  ? `${celebrityTier} is the reported tier; ${blueChip.remainingPoints.toLocaleString()} points to earned ${nextTier}.`
+                  : isRuby 
                   ? 'Ruby tier achieved! Maximum Blue Chip tier'
-                  : 'Play in the casino to earn tier progress'
+                  : `${blueChip.remainingPoints.toLocaleString()} points to ${nextTier}`
                 }
               </Text>
             </View>
@@ -698,8 +666,8 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         </View>
         <View style={[styles.statDivider, progressDividerStyle]} />
         <View style={styles.statItem}>
-          <Text style={[styles.statValue, progressLabelStyle]}>{hasRoyalPinnacleReciprocity ? 0 : Math.max(0, 3000 - celebrityCaptainsClubPoints)}</Text>
-          <Text style={[styles.statLabel, progressMetaStyle]}>{hasRoyalPinnacleReciprocity ? 'Via Pinnacle' : 'To Zenith'}</Text>
+          <Text style={[styles.statValue, progressLabelStyle]}>{hasRoyalStatusMatch ? '✓' : Math.max(0, 3000 - celebrityCaptainsClubPoints)}</Text>
+          <Text style={[styles.statLabel, progressMetaStyle]}>{hasRoyalStatusMatch ? `Via ${crownAnchorLevel}` : 'To Zenith'}</Text>
         </View>
       </View>
 
@@ -850,49 +818,19 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         <>
       {/* === CARNIVAL === */}
       <View style={styles.tierRow}>
-        <LoyaltyPill label={hasCarnivalVifpData ? `VIFP ${carnivalVifpTier}` : 'VIFP not synced'} color={getCarnivalVifpTierColor(carnivalVifpTier)} size="small" />
-        <LoyaltyPill label={hasCarnivalPlayersData ? `Players ${carnivalPlayersClubTier}` : 'Players Club not synced'} color={getCarnivalPlayersClubTierColor(carnivalPlayersClubTier)} size="small" />
+        <LoyaltyPill label={`VIFP ${carnivalVifpTier}`} color={getCarnivalVifpTierColor(carnivalVifpTier)} size="small" />
+        <LoyaltyPill label={`Players ${carnivalPlayersClubTier}`} color={getCarnivalPlayersClubTierColor(carnivalPlayersClubTier)} size="small" />
       </View>
-
-      {carnivalOfferMetrics ? (
-        <View style={[styles.statsRow, progressCardStyle]} testID="carnival-offer-metrics">
-          <View style={styles.statItem}>
-            <Text style={[styles.statValue, progressLabelStyle]}>{carnivalOfferMetrics.personalizedOffers}</Text>
-            <Text style={[styles.statLabel, progressMetaStyle]}>Personalized Offers</Text>
-          </View>
-          <View style={[styles.statDivider, progressDividerStyle]} />
-          <View style={styles.statItem}>
-            <Text style={[styles.statValue, progressLabelStyle]}>{carnivalOfferMetrics.offersWithSailings}</Text>
-            <Text style={[styles.statLabel, progressMetaStyle]}>With Sailings</Text>
-          </View>
-          <View style={[styles.statDivider, progressDividerStyle]} />
-          <View style={styles.statItem}>
-            <Text style={[styles.statValue, progressLabelStyle]}>{carnivalOfferMetrics.eligibleSailings}</Text>
-            <Text style={[styles.statLabel, progressMetaStyle]}>Eligible Sailings</Text>
-          </View>
-        </View>
-      ) : null}
 
       <View style={styles.progressGrid}>
         {(() => {
-          if (!hasCarnivalVifpData) {
-            return (
-              <View style={[styles.progressCard, progressCardStyle]}>
-                <Text style={[styles.progressLabel, progressLabelStyle]}>VIFP loyalty not synced</Text>
-                <Text style={[styles.progressEta, progressMetaStyle]}>An Easy Seas administrator can run Sync Carnival Cruises to load the selected user's VIFP number, tier, points, cruise days, and history.</Text>
-              </View>
-            );
-          }
           const currentTierIndex = CARNIVAL_VIFP_TIER_ORDER.indexOf(carnivalVifpTier);
           const nextTier = currentTierIndex < CARNIVAL_VIFP_TIER_ORDER.length - 1 ? CARNIVAL_VIFP_TIER_ORDER[currentTierIndex + 1] : null;
           const isMax = carnivalVifpTier === 'Diamond';
           
           const currentThreshold = CARNIVAL_VIFP_TIERS[carnivalVifpTier]?.cruiseDays || 0;
-          const nextThreshold = nextTier ? CARNIVAL_VIFP_TIERS[nextTier]?.cruiseDays : 200;
-          const rangeSize = Math.max(1, nextThreshold - currentThreshold);
-          const progressInRange = Math.max(0, carnivalCruiseDayPoints - currentThreshold);
-          const percentComplete = isMax ? 100 : Math.min(100, (progressInRange / rangeSize) * 100);
-          const daysToNext = isMax ? 0 : Math.max(0, nextThreshold - carnivalCruiseDayPoints);
+          const nextThreshold = nextTier ? CARNIVAL_VIFP_TIERS[nextTier]?.cruiseDays : 500;
+          const _rangeSize = nextThreshold - currentThreshold;
           
           const _tierColor = CARNIVAL_VIFP_TIERS[carnivalVifpTier]?.color || '#1E90FF';
           
@@ -910,7 +848,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
                     <Text style={styles.achievedBadgeText}>MAX TIER</Text>
                   </View>
                 ) : (
-                  <Text style={[styles.progressPercent, progressLabelStyle]}>{percentComplete.toFixed(1)}%</Text>
+                  <Text style={[styles.progressPercent, progressLabelStyle]}>--</Text>
                 )}
               </View>
               <View style={[styles.progressBarBg, progressBarTrackStyle]}>
@@ -918,13 +856,13 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
                   colors={playerCardTheme.progressBarGradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
-                  style={[styles.progressBarFill, { width: `${percentComplete}%` }]}
+                  style={[styles.progressBarFill, { width: isMax ? '100%' : '0%' }]}
                 />
               </View>
               <Text style={[styles.progressEta, progressMetaStyle]}>
                 {isMax 
                   ? 'VIFP Diamond achieved! Maximum loyalty tier'
-                  : `${carnivalCruiseDayPoints}/${nextThreshold} cruise-day points • ${daysToNext} to ${nextTier}`
+                  : `Cruise to earn VIFP tier progress`
                 }
               </Text>
             </View>
@@ -932,14 +870,6 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         })()}
 
         {(() => {
-          if (!hasCarnivalPlayersData) {
-            return (
-              <View style={[styles.progressCard, progressCardStyle]}>
-                <Text style={[styles.progressLabel, progressLabelStyle]}>Players Club not synced</Text>
-                <Text style={[styles.progressEta, progressMetaStyle]}>Players Club values will appear only when Carnival exposes them for this user.</Text>
-              </View>
-            );
-          }
           const _tierColor = CARNIVAL_PLAYERS_CLUB_TIERS[carnivalPlayersClubTier]?.color || '#1E90FF';
           
           return (
@@ -968,18 +898,18 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
 
       <View style={[styles.statsRow, progressCardStyle]}>
         <View style={styles.statItem}>
-          <Text style={[styles.statValue, progressLabelStyle]}>{carnivalVifpPoints.toLocaleString()}</Text>
-          <Text style={[styles.statLabel, progressMetaStyle]}>VIFP Pts</Text>
-        </View>
-        <View style={[styles.statDivider, progressDividerStyle]} />
-        <View style={styles.statItem}>
-          <Text style={[styles.statValue, progressLabelStyle]}>{carnivalTotalCruises.toLocaleString()}</Text>
-          <Text style={[styles.statLabel, progressMetaStyle]}>Cruises</Text>
-        </View>
-        <View style={[styles.statDivider, progressDividerStyle]} />
-        <View style={styles.statItem}>
           <Text style={[styles.statValue, progressLabelStyle]}>{carnivalPlayersClubPoints.toLocaleString()}</Text>
           <Text style={[styles.statLabel, progressMetaStyle]}>Players Pts</Text>
+        </View>
+        <View style={[styles.statDivider, progressDividerStyle]} />
+        <View style={styles.statItem}>
+          <Text style={[styles.statValue, progressLabelStyle]}>{carnivalVifpTier}</Text>
+          <Text style={[styles.statLabel, progressMetaStyle]}>VIFP Tier</Text>
+        </View>
+        <View style={[styles.statDivider, progressDividerStyle]} />
+        <View style={styles.statItem}>
+          <Text style={[styles.statValue, progressLabelStyle]}>{carnivalPlayersClubTier}</Text>
+          <Text style={[styles.statLabel, progressMetaStyle]}>Players Tier</Text>
         </View>
       </View>
 
@@ -991,7 +921,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         >
           <Anchor size={14} color={COLORS.points} />
           <Text style={[styles.quickStatPillValue, progressLabelStyle]}>{availableCruises}</Text>
-          <Text style={[styles.quickStatPillLabel, progressMetaStyle]}>Available</Text>
+          <Text style={[styles.quickStatPillLabel, progressMetaStyle]}>Cruises</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 
@@ -1011,7 +941,7 @@ export const CompactDashboardHeader = React.memo(function CompactDashboardHeader
         >
           <Tag size={14} color={COLORS.gold} />
           <Text style={[styles.quickStatPillValue, progressLabelStyle]}>{activeOffers}</Text>
-          <Text style={[styles.quickStatPillLabel, progressMetaStyle]}>Active</Text>
+          <Text style={[styles.quickStatPillLabel, progressMetaStyle]}>Offers</Text>
         </TouchableOpacity>
       </View>
         </>
@@ -1181,6 +1111,21 @@ const styles = StyleSheet.create({
     gap: SPACING.xs,
     marginBottom: SPACING.xs,
   },
+  retainedStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    alignSelf: 'flex-start',
+    marginBottom: SPACING.xs,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 5,
+    borderRadius: BORDER_RADIUS.sm,
+    borderWidth: 1,
+  },
+  retainedStatusText: {
+    fontSize: 11,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+  },
   tierBadge: {
     paddingHorizontal: SPACING.sm,
     paddingVertical: 3,
@@ -1279,7 +1224,7 @@ const styles = StyleSheet.create({
     alignItems: 'center' as const,
     marginTop: 2,
     borderWidth: 1.5,
-    borderColor: DARK_ROYAL_COLORS.gold,
+    borderColor: COLORS.navyDeep,
   },
   pinnaclePText: {
     fontSize: 11,
@@ -1315,7 +1260,7 @@ const styles = StyleSheet.create({
     color: COLORS.goldDark,
   },
   pinnacleHighlightWhite: {
-    color: DARK_ROYAL_COLORS.goldText,
+    color: COLORS.navyDeep,
     fontWeight: '700' as const,
   },
   achievedBadge: {
@@ -1333,7 +1278,7 @@ const styles = StyleSheet.create({
   achievedCard: {
     borderColor: CLEAN_THEME.badge.achieved.bg,
     borderWidth: 1.5,
-    backgroundColor: 'rgba(16, 185, 129, 0.14)',
+    backgroundColor: 'rgba(16, 185, 129, 0.05)',
   },
   achievedLabelRow: {
     flexDirection: 'row',
@@ -1561,58 +1506,6 @@ const styles = StyleSheet.create({
     fontWeight: '900' as const,
     letterSpacing: 0.2,
   },
-  allBrandsButton: {
-    marginHorizontal: SPACING.md,
-    marginTop: SPACING.xs,
-    marginBottom: 2,
-    paddingVertical: 7,
-    paddingHorizontal: SPACING.sm,
-    borderRadius: BORDER_RADIUS.md,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.20)',
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    alignItems: 'center',
-  },
-  allBrandsButtonActive: {
-    backgroundColor: COLORS.goldAccent,
-    borderColor: COLORS.goldAccent,
-  },
-  allBrandsButtonText: {
-    fontSize: 11,
-    fontWeight: '900' as const,
-    color: DARK_ROYAL_COLORS.textPrimary,
-    textTransform: 'uppercase' as const,
-    letterSpacing: 0.5,
-  },
-  allBrandsButtonTextActive: {
-    color: COLORS.navyDeep,
-  },
-  allBrandsButtonMeta: {
-    marginTop: 1,
-    fontSize: 9,
-    fontWeight: '600' as const,
-    color: DARK_ROYAL_COLORS.textSecondary,
-  },
-  allBrandsButtonMetaActive: {
-    color: COLORS.navyDeep,
-  },
-  allBrandsSummaryCard: {
-    borderWidth: 1,
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.sm,
-    marginTop: SPACING.xs,
-  },
-  allBrandsSummaryTitle: {
-    fontSize: 13,
-    fontWeight: '900' as const,
-    letterSpacing: 0.7,
-  },
-  allBrandsSummaryText: {
-    marginTop: 3,
-    fontSize: 11,
-    lineHeight: 15,
-    fontWeight: '600' as const,
-  },
   quickStatsPillRow: {
     flexDirection: 'row',
     gap: SPACING.xs,
@@ -1637,6 +1530,13 @@ const styles = StyleSheet.create({
   quickStatPillLabel: {
     fontSize: TYPOGRAPHY.fontSizeXS,
     color: CLEAN_THEME.data.label,
+  },
+  quickStatPillSubLabel: {
+    fontSize: 8,
+    fontWeight: TYPOGRAPHY.fontWeightMedium,
+    color: CLEAN_THEME.data.label,
+    textAlign: 'center',
+    marginTop: 1,
   },
   crewCountRow: {
     flexDirection: 'row',

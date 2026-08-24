@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { quotaSafeGetJsonItem, quotaSafeSetJsonItem } from '@/lib/storage/quotaSafeStorage';
 import createContextHook from '@nkzw/create-context-hook';
 import { getUserScopedKey } from '@/lib/storage/storageKeys';
 import { useAuth } from './AuthProvider';
@@ -76,7 +76,7 @@ interface CasinoBenefitsState extends PersistedShape {
  * Stage 9.4 — persistence layer for the Instant Certificate Wallet (status,
  * apply-to-cruise) and the persistent, actionable Today's Checklist (mark
  * complete/snooze/hide + custom tasks), plus the last certificate-search
- * summary shown in Action Center. AsyncStorage-backed like other Casino
+ * summary shown in Action Center. Local durable storage-backed like other Casino
  * providers so nothing is lost between sessions.
  */
 export const [CasinoBenefitsProvider, useCasinoBenefits] = createContextHook((): CasinoBenefitsState => {
@@ -91,19 +91,18 @@ export const [CasinoBenefitsProvider, useCasinoBenefits] = createContextHook(():
     (async () => {
       try {
         setIsLoading(true);
-        const stored = await AsyncStorage.getItem(storageKey);
+        const parsed = await quotaSafeGetJsonItem<Partial<PersistedShape>>(
+          storageKey,
+          DEFAULT_STATE,
+          (value): value is Partial<PersistedShape> => Boolean(value) && typeof value === 'object' && !Array.isArray(value),
+        );
         if (cancelled) return;
-        if (stored) {
-          const parsed = JSON.parse(stored) as Partial<PersistedShape>;
-          setState({
-            certificateOverrides: parsed.certificateOverrides ?? {},
-            checklistOverrides: parsed.checklistOverrides ?? {},
-            customTasks: parsed.customTasks ?? [],
-            lastCertificateSearch: parsed.lastCertificateSearch ?? null,
-          });
-        } else {
-          setState(DEFAULT_STATE);
-        }
+        setState({
+          certificateOverrides: parsed.certificateOverrides ?? {},
+          checklistOverrides: parsed.checklistOverrides ?? {},
+          customTasks: Array.isArray(parsed.customTasks) ? parsed.customTasks : [],
+          lastCertificateSearch: parsed.lastCertificateSearch ?? null,
+        });
       } catch (error) {
         console.error('[CasinoBenefitsProvider] Failed to load:', error);
       } finally {
@@ -117,7 +116,7 @@ export const [CasinoBenefitsProvider, useCasinoBenefits] = createContextHook(():
 
   const persist = useCallback((next: PersistedShape) => {
     setState(next);
-    AsyncStorage.setItem(storageKey, JSON.stringify(next)).catch((error) =>
+    quotaSafeSetJsonItem(storageKey, next).catch((error) =>
       console.error('[CasinoBenefitsProvider] Failed to persist:', error),
     );
   }, [storageKey]);
@@ -131,7 +130,7 @@ export const [CasinoBenefitsProvider, useCasinoBenefits] = createContextHook(():
           [cruiseId]: { ...prev.certificateOverrides[cruiseId], status, updatedAt: new Date().toISOString() },
         },
       };
-      AsyncStorage.setItem(storageKey, JSON.stringify(next)).catch((error) =>
+      quotaSafeSetJsonItem(storageKey, next).catch((error) =>
         console.error('[CasinoBenefitsProvider] Failed to persist certificate status:', error),
       );
       return next;
@@ -151,7 +150,7 @@ export const [CasinoBenefitsProvider, useCasinoBenefits] = createContextHook(():
           },
         },
       };
-      AsyncStorage.setItem(storageKey, JSON.stringify(next)).catch((error) =>
+      quotaSafeSetJsonItem(storageKey, next).catch((error) =>
         console.error('[CasinoBenefitsProvider] Failed to persist applied certificate:', error),
       );
       return next;
@@ -167,7 +166,7 @@ export const [CasinoBenefitsProvider, useCasinoBenefits] = createContextHook(():
           [cruiseId]: { status: 'removed', updatedAt: new Date().toISOString() },
         },
       };
-      AsyncStorage.setItem(storageKey, JSON.stringify(next)).catch((error) =>
+      quotaSafeSetJsonItem(storageKey, next).catch((error) =>
         console.error('[CasinoBenefitsProvider] Failed to persist removed certificate:', error),
       );
       return next;
@@ -180,7 +179,7 @@ export const [CasinoBenefitsProvider, useCasinoBenefits] = createContextHook(():
         ...prev,
         checklistOverrides: { ...prev.checklistOverrides, [taskId]: { ...prev.checklistOverrides[taskId], done } },
       };
-      AsyncStorage.setItem(storageKey, JSON.stringify(next)).catch((error) =>
+      quotaSafeSetJsonItem(storageKey, next).catch((error) =>
         console.error('[CasinoBenefitsProvider] Failed to persist checklist done:', error),
       );
       return next;
@@ -194,7 +193,7 @@ export const [CasinoBenefitsProvider, useCasinoBenefits] = createContextHook(():
         ...prev,
         checklistOverrides: { ...prev.checklistOverrides, [taskId]: { ...prev.checklistOverrides[taskId], snoozedUntil } },
       };
-      AsyncStorage.setItem(storageKey, JSON.stringify(next)).catch((error) =>
+      quotaSafeSetJsonItem(storageKey, next).catch((error) =>
         console.error('[CasinoBenefitsProvider] Failed to persist snooze:', error),
       );
       return next;
@@ -207,7 +206,7 @@ export const [CasinoBenefitsProvider, useCasinoBenefits] = createContextHook(():
         ...prev,
         checklistOverrides: { ...prev.checklistOverrides, [taskId]: { ...prev.checklistOverrides[taskId], hidden } },
       };
-      AsyncStorage.setItem(storageKey, JSON.stringify(next)).catch((error) =>
+      quotaSafeSetJsonItem(storageKey, next).catch((error) =>
         console.error('[CasinoBenefitsProvider] Failed to persist hide:', error),
       );
       return next;
@@ -223,7 +222,7 @@ export const [CasinoBenefitsProvider, useCasinoBenefits] = createContextHook(():
         createdAt: new Date().toISOString(),
       };
       const next: PersistedShape = { ...prev, customTasks: [...prev.customTasks, newTask] };
-      AsyncStorage.setItem(storageKey, JSON.stringify(next)).catch((error) =>
+      quotaSafeSetJsonItem(storageKey, next).catch((error) =>
         console.error('[CasinoBenefitsProvider] Failed to persist new task:', error),
       );
       return next;
@@ -236,7 +235,7 @@ export const [CasinoBenefitsProvider, useCasinoBenefits] = createContextHook(():
         ...prev,
         customTasks: prev.customTasks.map((t) => (t.id === id ? { ...t, ...updates } : t)),
       };
-      AsyncStorage.setItem(storageKey, JSON.stringify(next)).catch((error) =>
+      quotaSafeSetJsonItem(storageKey, next).catch((error) =>
         console.error('[CasinoBenefitsProvider] Failed to persist task update:', error),
       );
       return next;
@@ -246,7 +245,7 @@ export const [CasinoBenefitsProvider, useCasinoBenefits] = createContextHook(():
   const deleteCustomTask = useCallback((id: string) => {
     setState((prev) => {
       const next: PersistedShape = { ...prev, customTasks: prev.customTasks.filter((t) => t.id !== id) };
-      AsyncStorage.setItem(storageKey, JSON.stringify(next)).catch((error) =>
+      quotaSafeSetJsonItem(storageKey, next).catch((error) =>
         console.error('[CasinoBenefitsProvider] Failed to persist task delete:', error),
       );
       return next;

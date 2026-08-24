@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { quotaSafeGetJsonItem, quotaSafeSetJsonItem } from '@/lib/storage/quotaSafeStorage';
 import createContextHook from '@nkzw/create-context-hook';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MachineConditionLog, MachineLogDecision } from '@/types/models';
@@ -40,7 +40,7 @@ export const [MachineConditionLogProvider, useMachineConditionLogs] = createCont
 
   const persistLogs = useCallback(async (nextLogs: MachineConditionLog[]) => {
     try {
-      await AsyncStorage.setItem(storageKeyRef.current, JSON.stringify(nextLogs));
+      await quotaSafeSetJsonItem(storageKeyRef.current, nextLogs);
       console.log('[MachineConditionLogs] Persisted logs:', nextLogs.length);
     } catch (error) {
       console.error('[MachineConditionLogs] Failed to persist logs:', error);
@@ -51,10 +51,13 @@ export const [MachineConditionLogProvider, useMachineConditionLogs] = createCont
   const loadLogs = useCallback(async () => {
     try {
       setIsLoading(true);
-      const stored = await AsyncStorage.getItem(storageKeyRef.current);
-      const parsedLogs = stored ? JSON.parse(stored) as MachineConditionLog[] : [];
-      setLogs(Array.isArray(parsedLogs) ? parsedLogs : []);
-      console.log('[MachineConditionLogs] Loaded logs:', Array.isArray(parsedLogs) ? parsedLogs.length : 0);
+      const parsedLogs = await quotaSafeGetJsonItem<MachineConditionLog[]>(
+        storageKeyRef.current,
+        [],
+        Array.isArray,
+      );
+      setLogs(parsedLogs);
+      console.log('[MachineConditionLogs] Loaded logs:', parsedLogs.length);
     } catch (error) {
       console.error('[MachineConditionLogs] Failed to load logs:', error);
       setLogs([]);

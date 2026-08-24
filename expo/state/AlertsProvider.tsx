@@ -33,7 +33,7 @@ import { useEntitlement } from './EntitlementProvider';
 import { useAuth } from './AuthProvider';
 import { useLoyalty } from './LoyaltyProvider';
 import { getUserScopedKey } from '@/lib/storage/storageKeys';
-import { quotaSafeGetItem, quotaSafeSetJsonItem } from '@/lib/storage/quotaSafeStorage';
+import { quotaSafeGetJsonItem, quotaSafeSetJsonItem } from '@/lib/storage/quotaSafeStorage';
 
 const BASE_ALERTS_KEY = '@easy_seas_alerts';
 const BASE_RULES_KEY = '@easy_seas_alert_rules';
@@ -137,6 +137,11 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
   const alertsRef = useRef<Alert[]>([]);
   const dismissedIdsRef = useRef<Set<string>>(new Set());
   const dismissedEntitiesRef = useRef<Set<string>>(new Set());
+  const storageReadyRef = useRef(false);
+  const loadedAlertsSnapshotRef = useRef<Alert[] | null>(null);
+  const loadedRulesSnapshotRef = useRef<AlertRule[] | null>(null);
+  const loadedDismissedSnapshotRef = useRef<Set<string> | null>(null);
+  const loadedDismissedEntitiesSnapshotRef = useRef<Set<string> | null>(null);
 
   useEffect(() => { alertsRef.current = alerts; }, [alerts]);
   useEffect(() => { dismissedIdsRef.current = dismissedIds; }, [dismissedIds]);
@@ -152,37 +157,53 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
       };
       skRef.current = scopedKeys;
       const [storedAlerts, storedRules, storedDismissed, storedDismissedEntities] = await Promise.all([
-        quotaSafeGetItem(scopedKeys.ALERTS),
-        quotaSafeGetItem(scopedKeys.RULES),
-        quotaSafeGetItem(scopedKeys.DISMISSED_IDS),
-        quotaSafeGetItem(scopedKeys.DISMISSED_ENTITIES),
+        quotaSafeGetJsonItem<Alert[]>(scopedKeys.ALERTS, [], Array.isArray),
+        quotaSafeGetJsonItem<unknown>(scopedKeys.RULES, DEFAULT_ALERT_RULES),
+        quotaSafeGetJsonItem<string[]>(scopedKeys.DISMISSED_IDS, [], Array.isArray),
+        quotaSafeGetJsonItem<string[]>(scopedKeys.DISMISSED_ENTITIES, [], Array.isArray),
       ]);
 
-      const parsedAlerts = pruneAlertsForStorage(storedAlerts ? JSON.parse(storedAlerts) as Alert[] : []);
+      const parsedAlerts = pruneAlertsForStorage(storedAlerts);
+      loadedAlertsSnapshotRef.current = parsedAlerts;
       setAlerts(parsedAlerts);
       console.log('[AlertsProvider] Loaded scoped alerts:', { email: authenticatedEmail, count: parsedAlerts.length });
 
-      const parsedRules = storedRules ? normalizeAlertRulesFromStorage(JSON.parse(storedRules)) : DEFAULT_ALERT_RULES;
+      const parsedRules = normalizeAlertRulesFromStorage(storedRules);
+      loadedRulesSnapshotRef.current = parsedRules;
       setRules(parsedRules);
       console.log('[AlertsProvider] Loaded scoped rules:', { email: authenticatedEmail, count: parsedRules.length });
 
-      const parsedDismissed = trimStoredStrings(storedDismissed ? JSON.parse(storedDismissed) as string[] : [], MAX_STORED_DISMISSED_IDS);
-      setDismissedIds(new Set(parsedDismissed));
+      const parsedDismissed = trimStoredStrings(storedDismissed, MAX_STORED_DISMISSED_IDS);
+      const parsedDismissedSet = new Set(parsedDismissed);
+      loadedDismissedSnapshotRef.current = parsedDismissedSet;
+      setDismissedIds(parsedDismissedSet);
       console.log('[AlertsProvider] Loaded scoped dismissed IDs:', { email: authenticatedEmail, count: parsedDismissed.length });
 
-      const parsedDismissedEntities = trimStoredStrings(storedDismissedEntities ? JSON.parse(storedDismissedEntities) as string[] : [], MAX_STORED_DISMISSED_ENTITIES);
-      setDismissedEntities(new Set(parsedDismissedEntities));
+      const parsedDismissedEntities = trimStoredStrings(storedDismissedEntities, MAX_STORED_DISMISSED_ENTITIES);
+      const parsedDismissedEntitiesSet = new Set(parsedDismissedEntities);
+      loadedDismissedEntitiesSnapshotRef.current = parsedDismissedEntitiesSet;
+      setDismissedEntities(parsedDismissedEntitiesSet);
       console.log('[AlertsProvider] Loaded scoped dismissed entities:', { email: authenticatedEmail, count: parsedDismissedEntities.length });
     } catch (error) {
       console.error('[AlertsProvider] Error loading scoped stored data:', describeAlertsStorageError(error));
-      setAlerts([]);
+      const emptyAlerts: Alert[] = [];
+      const emptyDismissed = new Set<string>();
+      const emptyDismissedEntities = new Set<string>();
+      loadedAlertsSnapshotRef.current = emptyAlerts;
+      loadedRulesSnapshotRef.current = DEFAULT_ALERT_RULES;
+      loadedDismissedSnapshotRef.current = emptyDismissed;
+      loadedDismissedEntitiesSnapshotRef.current = emptyDismissedEntities;
+      setAlerts(emptyAlerts);
       setRules(DEFAULT_ALERT_RULES);
-      setDismissedIds(new Set());
-      setDismissedEntities(new Set());
+      setDismissedIds(emptyDismissed);
+      setDismissedEntities(emptyDismissedEntities);
+    } finally {
+      storageReadyRef.current = true;
     }
   }, [authenticatedEmail]);
 
   useEffect(() => {
+    storageReadyRef.current = false;
     setAlerts([]);
     setRules(DEFAULT_ALERT_RULES);
     setDismissedIds(new Set());
@@ -222,6 +243,11 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
   }, [loadStoredData]);
 
   useEffect(() => {
+    if (!storageReadyRef.current) return;
+    if (loadedAlertsSnapshotRef.current === alerts) {
+      loadedAlertsSnapshotRef.current = null;
+      return;
+    }
     const saveAlerts = async () => {
       try {
         await quotaSafeSetJsonItem(skRef.current.ALERTS, pruneAlertsForStorage(alerts));
@@ -236,6 +262,11 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
   }, [alerts]);
 
   useEffect(() => {
+    if (!storageReadyRef.current) return;
+    if (loadedRulesSnapshotRef.current === rules) {
+      loadedRulesSnapshotRef.current = null;
+      return;
+    }
     const saveRules = async () => {
       try {
         await quotaSafeSetJsonItem(skRef.current.RULES, serializeAlertRulesForStorage(rules));
@@ -248,6 +279,11 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
   }, [rules]);
 
   useEffect(() => {
+    if (!storageReadyRef.current) return;
+    if (loadedDismissedSnapshotRef.current === dismissedIds) {
+      loadedDismissedSnapshotRef.current = null;
+      return;
+    }
     const saveDismissed = async () => {
       try {
         await quotaSafeSetJsonItem(skRef.current.DISMISSED_IDS, trimStoredStrings(dismissedIds, MAX_STORED_DISMISSED_IDS));
@@ -260,6 +296,11 @@ export const [AlertsProvider, useAlerts] = createContextHook((): AlertsState => 
   }, [dismissedIds]);
 
   useEffect(() => {
+    if (!storageReadyRef.current) return;
+    if (loadedDismissedEntitiesSnapshotRef.current === dismissedEntities) {
+      loadedDismissedEntitiesSnapshotRef.current = null;
+      return;
+    }
     const saveDismissedEntities = async () => {
       try {
         await quotaSafeSetJsonItem(skRef.current.DISMISSED_ENTITIES, trimStoredStrings(dismissedEntities, MAX_STORED_DISMISSED_ENTITIES));

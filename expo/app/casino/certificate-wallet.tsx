@@ -70,7 +70,10 @@ export default function CertificateWalletScreen() {
       .filter((c) => c.instantCertificateWon)
       .map((cruise): WalletCertificate => {
         const pdfMatch = getCertificatePdfMatch({ offerCode: cruise.instantCertificateOfferCode, offerName: cruise.instantCertificateNotes });
-        const certType: CertType = pdfMatch?.certificateType ?? ((cruise.nights ?? 0) >= 6 ? 'D' : 'A');
+        const matchedFamily = pdfMatch?.certificateType;
+        const certType: CertType = matchedFamily === 'A' || matchedFamily === 'C'
+          ? matchedFamily
+          : ((cruise.nights ?? 0) >= 6 ? 'D' : 'A');
         const override = certificateOverrides[cruise.id];
         const earnedOn = cruise.returnDate || cruise.sailDate;
         const earnedDate = earnedOn ? createDateFromString(earnedOn) : null;

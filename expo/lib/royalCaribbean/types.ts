@@ -1,5 +1,3 @@
-import type { CarnivalCodeLedgerEntry, CarnivalSyncManifest } from '@/lib/carnival/carnivalDataRuntime';
-
 export type SyncStatus = 
   | 'not_logged_in'
   | 'logged_in'
@@ -10,10 +8,40 @@ export type SyncStatus =
   | 'awaiting_confirmation'
   | 'syncing'
   | 'complete'
+  | 'complete_with_warnings'
   | 'partial'
+  | 'resumable'
   | 'cancelled'
+  | 'authentication_required'
+  | 'invalid_response'
   | 'login_expired'
   | 'error';
+
+export type CarnivalSyncOutcome = 'complete' | 'complete_with_warnings' | 'partial' | 'invalid_response';
+
+export type CarnivalCollectionKey =
+  | 'offers'
+  | 'offerSailings'
+  | 'bookedCruises'
+  | 'cruiseHolds'
+  | 'completedCruises'
+  | 'vifpIdentity'
+  | 'vifpTier'
+  | 'vifpPoints'
+  | 'cruiseDayPoints'
+  | 'cruiseCount';
+
+export type CarnivalCollectionStatus = 'not_started' | 'captured' | 'empty' | 'unavailable' | 'failed';
+
+export interface CarnivalCollectionEvidence {
+  status: CarnivalCollectionStatus;
+  count: number;
+  source: string;
+  capturedAt: string;
+  reason?: string;
+}
+
+export type CarnivalCollectionEvidenceMap = Record<CarnivalCollectionKey, CarnivalCollectionEvidence>;
 
 export interface LogEntry {
   timestamp: string;
@@ -26,13 +54,6 @@ export interface LoyaltyData {
   crownAndAnchorPoints?: string;
   clubRoyaleTier?: string;
   clubRoyalePoints?: string;
-  carnivalVifpNumber?: string;
-  carnivalVifpTier?: string;
-  carnivalVifpPoints?: string;
-  carnivalCruiseDayPoints?: string;
-  carnivalTotalCruises?: string;
-  carnivalPlayersClubTier?: string;
-  carnivalPlayersClubPoints?: string;
 }
 
 export interface RoyalCaribbeanLoyaltyApiResponse {
@@ -47,34 +68,6 @@ export interface RoyalCaribbeanLoyaltyApiResponse {
       activeCardHolder: boolean;
     };
   };
-}
-
-export type LoyaltyAuthorityField =
-  | 'clubRoyaleId'
-  | 'clubRoyaleTier'
-  | 'clubRoyalePoints'
-  | 'clubRoyaleRelationshipPoints'
-  | 'clubRoyaleEvaluationPeriodStartDate'
-  | 'clubRoyaleEvaluationPeriodEndDate'
-  | 'crownAndAnchorId'
-  | 'crownAndAnchorTier'
-  | 'crownAndAnchorPoints'
-  | 'crownAndAnchorRelationshipPoints'
-  | 'crownAndAnchorNextTier'
-  | 'crownAndAnchorRemainingPoints';
-
-export interface LoyaltyFieldAuthority {
-  source: 'casino_api' | 'crown_anchor_api' | 'generic_api' | 'dom' | 'stored';
-  confidence: 'authoritative' | 'fallback' | 'preserved';
-  capturedAt: string;
-  accountId?: string;
-}
-
-export interface LoyaltyConversionContext {
-  sourceUrl?: string;
-  sourceType?: 'api' | 'dom' | 'stored';
-  capturedAt?: string;
-  accountId?: string;
 }
 
 export interface LoyaltyApiInformation {
@@ -102,16 +95,6 @@ export interface LoyaltyApiInformation {
   clubRoyaleLoyaltyIndividualPoints?: number;
   clubRoyaleLoyaltyRelationshipPoints?: number;
 
-  // Current Club Royale casino endpoint fields. These generic names are only
-  // interpreted when endpoint/source context identifies the casino payload.
-  casinoLoyaltyId?: string;
-  cruiseLoyaltyId?: string;
-  tier?: string;
-  individualPoints?: number | string;
-  relationshipPoints?: number | string;
-  evaluationPeriodStartDateForPoints?: string;
-  evaluationPeriodEndDateForPoints?: string;
-
   crownAndAnchorSocietyLoyaltyTier?: string;
   crownAndAnchorSocietyTier?: string;
   crownAndAnchorTier?: string;
@@ -134,6 +117,7 @@ export interface LoyaltyApiInformation {
 
 export interface ExtendedLoyaltyData extends LoyaltyData {
   accountId?: string;
+  lastSyncTimestamp?: string | null;
 
   captainsClubId?: string;
   captainsClubTier?: string;
@@ -151,9 +135,6 @@ export interface ExtendedLoyaltyData extends LoyaltyData {
   clubRoyaleTierFromApi?: string;
   clubRoyalePointsFromApi?: number;
   clubRoyaleRelationshipPointsFromApi?: number;
-  clubRoyaleId?: string;
-  clubRoyaleEvaluationPeriodStartDate?: string;
-  clubRoyaleEvaluationPeriodEndDate?: string;
 
   crownAndAnchorId?: string;
   crownAndAnchorTier?: string;
@@ -173,12 +154,15 @@ export interface ExtendedLoyaltyData extends LoyaltyData {
   hasCoBrandCard?: boolean;
   coBrandCardStatus?: number;
   coBrandCardErrorMessage?: string;
-
-  loyaltyFieldAuthority?: Partial<Record<LoyaltyAuthorityField, LoyaltyFieldAuthority>>;
 }
 
 export interface OfferRow {
   sourcePage: string;
+  /** Royal's unique offer-instance identifier; offerCode is not unique. */
+  playerOfferId?: string;
+  /** Provider-neutral instance identity used by Carnival and future sources. */
+  offerInstanceId?: string;
+  carnivalOfferId?: string;
   offerName: string;
   offerCode: string;
   offerExpirationDate: string;
@@ -205,13 +189,7 @@ export interface OfferRow {
   bookingLink?: string;
   offerStatus?: string;
   isInProgress?: boolean;
-  catalogVisibleOfferCodes?: string;
-  catalogVisibleOfferCount?: number;
-  catalogZeroRowOfferCodes?: string;
-  catalogRowBearingOfferCodes?: string;
-  catalogIncompleteOfferCodes?: string;
 }
-
 
 export interface DayByDayPort {
   day: number;
@@ -327,7 +305,7 @@ export type WebViewMessage =
   | { type: 'progress'; current: number; total: number; stepName?: string }
   | { type: 'offers_batch'; step: number; data: any[]; isFinal?: boolean }
   | { type: 'cruise_batch'; data: any[] }
-  | { type: 'step_complete'; step: number; data: any[]; totalCount?: number; offerCount?: number }
+  | { type: 'step_complete'; step: number; data?: any[]; totalCount?: number; offerCount?: number }
   | { type: 'offer_progress'; offerIndex: number; totalOffers: number; offerName: string; sailingsCount: number; status: string }
   | { type: 'all_bookings_data'; bookings: any[]; vdsId?: string }
   | { type: 'loyalty_data'; data?: LoyaltyData; loyalty?: LoyaltyApiInformation }
@@ -344,6 +322,57 @@ export interface SyncDataCounts {
   upcomingCruises: number;
   courtesyHolds: number;
   completedCruises?: number;
+  bookedCruises?: number;
+  totalImportedCruises?: number;
+  rawRowsReceived?: number;
+  canonicalRows?: number;
+  retainedVariants?: number;
+  consolidatedDuplicates?: number;
+  rejectedRows?: number;
+  insertedRows?: number;
+  updatedRows?: number;
+  unchangedRows?: number;
+  royalHandoffEvidence?: RoyalSyncHandoffEvidence;
+  carnivalOutcome?: CarnivalSyncOutcome;
+  carnivalCollections?: CarnivalCollectionEvidenceMap;
+  carnivalRateCodes?: Record<string, {
+    code: string;
+    requestedPages: number;
+    acknowledgedPages: number;
+    receivedRows: number;
+    status: 'not_started' | 'captured' | 'incomplete' | 'failed';
+    reason?: string;
+  }>;
+}
+
+/**
+ * Counts preserved at each application handoff so a raw provider row cannot be
+ * mistaken for a duplicate merely because it did not reach canonical storage.
+ */
+export interface RoyalSyncHandoffEvidence {
+  discoveredOfferRows: number;
+  discoveredBookedRows: number;
+  normalizedOfferRows: number;
+  normalizedBookedRows: number;
+  /** Browser-reported rows before the React Native bridge accepts them. */
+  emittedRows: number;
+  /** Rows acknowledged by the application message handler. */
+  acknowledgedRows: number;
+  /** Rows retained in the in-memory accepted payload. */
+  receivedRows: number;
+  malformedOfferRows: number;
+  malformedBookedRows: number;
+  exactOfferDuplicates: number;
+  exactBookedDuplicates: number;
+  canonicalRows: number;
+  rejectedRows: number;
+  quarantinedRows: number;
+  insertedRows: number;
+  updatedRows: number;
+  unchangedRows: number;
+  /** Stable rows found again after storage persistence. */
+  databaseReadbackRows: number;
+  unaccountedRows: number;
 }
 
 export interface RoyalCaribbeanSyncState {
@@ -359,6 +388,5 @@ export interface RoyalCaribbeanSyncState {
   syncCounts: SyncDataCounts | null;
   syncPreview: any | null;
   scrapePricingAndItinerary: boolean;
-  carnivalManifest?: CarnivalSyncManifest | null;
-  carnivalCodeLedger?: CarnivalCodeLedgerEntry[];
+  hasResumableCarnivalCheckpoint?: boolean;
 }

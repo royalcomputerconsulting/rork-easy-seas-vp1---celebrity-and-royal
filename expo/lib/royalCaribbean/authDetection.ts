@@ -1,7 +1,8 @@
-import { CARNIVAL_CAPTURE_RUNTIME_SCRIPT } from '../carnival/carnivalInventoryRuntime';
+import { CARNIVAL_CAPTURE_RUNTIME_SCRIPT } from '@/lib/carnival/carnivalInventoryRuntime';
 
 export const AUTH_DETECTION_SCRIPT = `
 (function() {
+  ${CARNIVAL_CAPTURE_RUNTIME_SCRIPT}
   let lastAuthState = null;
   let checkCount = 0;
   
@@ -12,345 +13,281 @@ export const AUTH_DETECTION_SCRIPT = `
       courtesyHolds: null,
       loyalty: null,
       voyageEnrichment: null,
-      carnivalVifpOffers: null,
-      carnivalSearch: null,
-      carnivalSearchByContext: {},
-      carnivalProfilePayloads: []
+      pastTrips: null,
+      carnivalVifpOffers: null
     };
   }
 
-  ${CARNIVAL_CAPTURE_RUNTIME_SCRIPT}
-
-  function getCarnivalSearchContext() {
-    try {
-      if (window.__easySeasCarnivalSearchContext) return window.__easySeasCarnivalSearchContext;
-      var raw = localStorage.getItem('__easySeasCarnivalSearchContext');
-      if (!raw) return null;
-      var parsed = JSON.parse(raw);
-      window.__easySeasCarnivalSearchContext = parsed;
-      return parsed;
-    } catch (e) { return null; }
+  function looksLikeTripRecord(item) {
+    if (!item || typeof item !== 'object') return false;
+    var providerId = item.bookingId || item.confirmationNumber || item.reservationId || item.reservationNumber;
+    var ship = item.shipName || item.shipCode || (item.ship && (item.ship.name || item.ship.code));
+    var sailDate = item.sailDate || item.departureDate || item.startDate || item.sailingStartDate;
+    return !!(providerId || (ship && sailDate));
   }
 
-  function captureCarnivalSearchPayload(data, requestMeta, contextOverride) {
+  function firstTripArray(data, preferredKeys) {
+    if (!data || typeof data !== 'object') return null;
+    if (Array.isArray(data)) return data.length > 0 && looksLikeTripRecord(data[0]) ? data : null;
+    for (var pk = 0; pk < preferredKeys.length; pk++) {
+      var key = preferredKeys[pk];
+      if (Array.isArray(data[key]) && (data[key].length === 0 || looksLikeTripRecord(data[key][0]))) return data[key];
+    }
+    var containers = [data.payload, data.data, data.result, data.response];
+    for (var ci = 0; ci < containers.length; ci++) {
+      var container = containers[ci];
+      if (!container || typeof container !== 'object') continue;
+      if (Array.isArray(container)) return container.length > 0 && looksLikeTripRecord(container[0]) ? container : null;
+      for (var pk2 = 0; pk2 < preferredKeys.length; pk2++) {
+        var nestedKey = preferredKeys[pk2];
+        if (Array.isArray(container[nestedKey]) && (container[nestedKey].length === 0 || looksLikeTripRecord(container[nestedKey][0]))) return container[nestedKey];
+      }
+    }
+    return null;
+  }
+
+  function looksLikeCarnivalOfferItem(item) {
+    if (!item || typeof item !== 'object') return false;
+    var campaign = item.campaignOffer || item.offer || item.promotion || item;
+    var identity = item.OfferId || item.offerId || item.PlayerOfferId || item.playerOfferId || item.id || campaign.offerId || campaign.id;
+    var code = item.RateCode || item.rateCode || item.offerCode || item.promoCode || campaign.offerCode || campaign.rateCode;
+    var content = item.Title || item.title || item.name || item.CtaUrl || item.ctaUrl || item.bookingUrl || campaign.name;
+    return !!(identity || code || (item.campaignOffer && content));
+  }
+
+  function firstCarnivalOfferArray(data, depth) {
+    if (!data || depth > 5) return null;
+    if (Array.isArray(data)) return data.length > 0 && looksLikeCarnivalOfferItem(data[0]) ? data : null;
+    if (typeof data !== 'object') return null;
+    var keys = ['Items', 'items', 'offers', 'personalizedOffers', 'eligibleOffers', 'memberOffers', 'vifpOffers', 'casinoOffers', 'promotions', 'deals', 'campaigns'];
+    for (var keyIndex = 0; keyIndex < keys.length; keyIndex++) {
+      var rows = data[keys[keyIndex]];
+      if (Array.isArray(rows) && rows.length > 0 && looksLikeCarnivalOfferItem(rows[0])) return rows;
+    }
+    var containers = ['payload', 'data', 'result', 'response', 'content', 'model'];
+    for (var containerIndex = 0; containerIndex < containers.length; containerIndex++) {
+      var nested = firstCarnivalOfferArray(data[containers[containerIndex]], depth + 1);
+      if (nested) return nested;
+    }
+    return null;
+  }
+
+  function captureCarnivalOfferPayload(data, url, sourceLabel) {
     try {
-      var context = contextOverride || getCarnivalSearchContext();
-      if (!context || !context.runId || !context.offerCode || !context.requestId) return;
-      var meta = Object.assign({}, requestMeta || {}, {
-        expectedOfferCode: String(context.offerCode || '').toUpperCase(),
-        expectedPageNumber: Number(context.pageNumber || 1),
-        runId: String(context.runId || ''),
-        requestId: String(context.requestId || ''),
-        contextFingerprint: String(context.contextFingerprint || ''),
-        accountFingerprint: String(context.accountFingerprint || context.contextFingerprint || ''),
-        expectedUrl: String(context.expectedUrl || ''),
-        contextStartedAt: Number(context.startedAt || 0),
-        requestStartedAt: Number((requestMeta && requestMeta.requestStartedAt) || context.requestStartedAt || 0),
-        navigationSequenceId: Number(context.navigationSequenceId || 0),
-        expectedNavigationSequenceId: Number(context.navigationSequenceId || 0)
-      });
-      var analysis = __esAnalyzeCarnivalPayload(data, meta);
-      var isInventory = analysis.kind === 'inventory' || analysis.kind === 'inventory_empty';
-      if (!isInventory || !analysis.offerCodeMatched || !analysis.pageMatched) {
-        if (isInventory || /cruise|sailing|voyage|search/i.test(String(meta.requestUrl || ''))) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'log', runId: meta.runId,
-            message: 'Ignored Carnival ' + analysis.kind + ' payload for ' + meta.expectedOfferCode + ' page ' + meta.expectedPageNumber + ': ' + analysis.reason + ' (endpoint=' + analysis.approvedEndpoint + ', startedAfterContext=' + analysis.requestStartedAfterContext + ', navMatch=' + analysis.navigationSequenceMatched + ', codeProof=' + analysis.offerProofSource + ', pageProof=' + analysis.pageProofSource + ')',
-            logType: 'info'
-          }));
-        }
-        return;
-      }
-      var maxPayloadBytes = 2500000;
-      var maxEnvelopeBytes = 6000000;
-      if (analysis.payloadBytes > maxPayloadBytes) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'log', runId: meta.runId,
-          message: 'Rejected oversized Carnival inventory payload (' + analysis.payloadBytes + ' bytes) for ' + meta.expectedOfferCode + ' page ' + meta.expectedPageNumber,
-          logType: 'warning'
-        }));
-        return;
-      }
-      var envelope = {
-        data: [],
-        url: String(meta.responseUrl || meta.requestUrl || ''),
-        runId: meta.runId,
-        offerCode: meta.expectedOfferCode,
-        pageNumber: meta.expectedPageNumber,
-        requestId: meta.requestId,
-        contextFingerprint: String(meta.contextFingerprint || ''),
-        expectedUrl: String(context.expectedUrl || ''),
-        capturedAt: Date.now(),
-        inventoryValidated: true,
-        requestProof: analysis.offerProofSource !== 'none',
-        pageProof: analysis.pageProofSource !== 'none',
-        offerProofSource: analysis.offerProofSource,
-        pageProofSource: analysis.pageProofSource,
-        contextCorrelated: Boolean(analysis.contextCorrelated),
-        payloads: []
-      };
-      if (!window.capturedPayloads.carnivalSearchByContext) window.capturedPayloads.carnivalSearchByContext = {};
-      var key = envelope.runId + '|' + envelope.offerCode + '|' + envelope.pageNumber + '|' + envelope.requestId;
-      var priorEnvelope = window.capturedPayloads.carnivalSearchByContext[key];
-      var payloads = priorEnvelope && Array.isArray(priorEnvelope.payloads) ? priorEnvelope.payloads.slice() : [];
-      payloads.push({
-        data: data,
-        metadata: {
-          requestMethod: String(meta.method || 'GET').toUpperCase(),
-          requestUrl: String(meta.requestUrl || ''),
-          requestBody: typeof meta.body === 'string' ? meta.body.substring(0, 12000) : meta.body,
-          responseUrl: String(meta.responseUrl || meta.requestUrl || ''),
-          status: Number(meta.status || 0),
-          contentType: String(meta.contentType || ''),
-          offerCode: envelope.offerCode,
-          pageNumber: envelope.pageNumber,
-          requestId: envelope.requestId,
-          contextFingerprint: envelope.contextFingerprint,
-          accountFingerprint: String(meta.accountFingerprint || ''),
-          runId: envelope.runId,
-          contextStartedAt: Number(meta.contextStartedAt || 0),
-          requestStartedAt: Number(meta.requestStartedAt || 0),
-          navigationSequenceId: Number(meta.navigationSequenceId || 0),
-          offerProofSource: String(analysis.offerProofSource || 'none'),
-          pageProofSource: String(analysis.pageProofSource || 'none'),
-          capturedAt: Date.now()
-        },
-        analysis: analysis,
-        capturedAt: Date.now()
-      });
-      if (payloads.length > 8) payloads = payloads.slice(payloads.length - 8);
-      var totalBytes = 0;
-      for (var pi = payloads.length - 1; pi >= 0; pi--) {
-        totalBytes += Number(payloads[pi].analysis && payloads[pi].analysis.payloadBytes || 0);
-        if (totalBytes > maxEnvelopeBytes) payloads.splice(0, pi + 1);
-      }
-      envelope.payloads = payloads;
-      envelope.data = payloads.map(function(item) { return item.data; });
-      envelope.url = String((payloads[payloads.length - 1] && payloads[payloads.length - 1].metadata.responseUrl) || envelope.url);
-      window.capturedPayloads.carnivalSearchByContext[key] = envelope;
-      window.capturedPayloads.carnivalSearch = envelope;
+      var items = firstCarnivalOfferArray(data, 0);
+      if (!items || items.length === 0) return false;
+      var canonical = { Items: items };
+      window.__carnivalVifpOffers = canonical;
+      window.capturedPayloads.carnivalVifpOffers = canonical;
       window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'log', runId: envelope.runId,
-        message: '📦 Captured verified Carnival ' + analysis.kind + ' payload for ' + envelope.offerCode + ' page ' + envelope.pageNumber + ' via ' + (analysis.inventoryPath || 'inventory adapter') + ' (code=' + analysis.offerProofSource + ', page=' + analysis.pageProofSource + ')',
-        logType: 'info'
+        type: 'network_payload', endpoint: 'carnival_vifp_offers', data: canonical, url: url
       }));
-    } catch (e) {}
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'log', message: '📦 ' + sourceLabel + ' captured ' + items.length + ' Carnival offer record(s) from ' + String(url || '').split('?')[0], logType: 'success'
+      }));
+      return true;
+    } catch(e) {
+      return false;
+    }
   }
 
-  function summarizeCarnivalPayloadShape(data) {
+  function captureCarnivalSearchInventory(data, requestUrl, responseUrl, method, body, status, contentType, requestStartedAt) {
     try {
-      var found = null;
-      var visited = 0;
-      function walk(value, depth, path) {
-        if (found || !value || depth > 5 || visited++ > 4000) return;
-        if (Array.isArray(value)) {
-          if (value.length >= 2 && value[0] && typeof value[0] === 'object') {
-            found = { path: path || 'root', length: value.length, keys: Object.keys(value[0]).slice(0, 14) };
-            return;
-          }
-          for (var ai = 0; ai < value.length && ai < 5 && !found; ai++) walk(value[ai], depth + 1, path + '[' + ai + ']');
-          return;
-        }
-        if (typeof value !== 'object') return;
-        var keys = Object.keys(value);
-        for (var ki = 0; ki < keys.length && !found; ki++) walk(value[keys[ki]], depth + 1, path ? path + '.' + keys[ki] : keys[ki]);
-      }
-      walk(data, 0, '');
-      return found;
-    } catch (e) { return null; }
-  }
-
-  function recordCarnivalProfilePayload(data, url, source) {
-    try {
-      if (!data || typeof data !== 'object') return;
-      var absoluteUrl = '';
-      try { absoluteUrl = new URL(String(url || ''), window.location.href).toString(); } catch (e) { absoluteUrl = String(url || ''); }
-      var host = ''; try { host = new URL(absoluteUrl, window.location.href).hostname; } catch (e2) {}
-      if (!/(^|\.)carnival\.com$/i.test(host || String(window.location && window.location.hostname || ''))) return;
-      var urlSignal = /profile|booking|reservation|cruise.?history|past.?cruise|my.?cruise|loyalty|vifp|pastguest|tier/i.test(absoluteUrl);
-      var keySignal = false;
+      if (!data || typeof data !== 'object') return false;
+      var pageUrl = new URL(String(window.location.href || ''), 'https://www.carnival.com');
+      if (!/(^|\.)carnival\.com$/i.test(pageUrl.hostname) || !/cruise-search/i.test(pageUrl.pathname)) return false;
+      var expectedContext = null;
       try {
-        var topKeys = Object.keys(data).join('|');
-        var nestedKeys = data.data && typeof data.data === 'object' ? Object.keys(data.data).join('|') : '';
-        keySignal = /booking|reservation|cruise|voyage|pastguest|vifp|tier|loyalty|profile/i.test(topKeys + '|' + nestedKeys);
-      } catch (e3) {}
-      if (!urlSignal && !keySignal) return;
-      var encoded = ''; try { encoded = JSON.stringify(data); } catch (e4) {}
-      if (!encoded || encoded.length > 2500000) return;
-      window.capturedPayloads = window.capturedPayloads || {};
-      var ledger = Array.isArray(window.capturedPayloads.carnivalProfilePayloads) ? window.capturedPayloads.carnivalProfilePayloads : [];
-      var signature = absoluteUrl + '|' + encoded.length + '|' + encoded.substring(0, 180);
-      for (var li = ledger.length - 1; li >= 0; li--) if (ledger[li] && ledger[li].signature === signature) return;
-      ledger.push({ url: absoluteUrl, source: String(source || 'network'), capturedAt: Date.now(), signature: signature, data: data });
-      if (ledger.length > 30) ledger = ledger.slice(ledger.length - 30);
-      window.capturedPayloads.carnivalProfilePayloads = ledger;
-      var shape = summarizeCarnivalPayloadShape(data);
-      if (shape && shape.length >= 2) {
-        try {
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'log',
-            message: '\ud83d\udd0e Carnival payload shape @ ' + absoluteUrl + ' \u2014 array at "' + shape.path + '" len=' + shape.length + ' keys=[' + shape.keys.join(',') + ']',
-            logType: 'info'
-          }));
-        } catch (e5) {}
+        var expectedContextRaw = window.sessionStorage && window.sessionStorage.getItem('__easySeasCarnivalSearchContext');
+        expectedContext = expectedContextRaw ? JSON.parse(expectedContextRaw) : null;
+      } catch (contextError) { expectedContext = null; }
+      var pageCodes = String(pageUrl.searchParams.get('ratecodes') || pageUrl.searchParams.get('rateCodes') || pageUrl.searchParams.get('rateCode') || '').split(',').map(function(value) { return String(value || '').trim().toUpperCase(); }).filter(Boolean);
+      var requestCodes = __esRequestCodes(String(requestUrl || ''), body);
+      var contextCode = expectedContext && String(expectedContext.offerCode || '').trim().toUpperCase();
+      var expectedCode = contextCode && pageCodes.indexOf(contextCode) >= 0
+        ? contextCode
+        : (pageCodes.length === 1 ? pageCodes[0] : (requestCodes.length === 1 ? requestCodes[0] : ''));
+      if (!expectedCode) return false;
+      var pageNumber = __esRequestNumber(String(requestUrl || ''), body, /^(page|pagenumber|page_number|pageindex|currentpage)$/i);
+      if (pageNumber === null) pageNumber = Number(expectedContext && expectedContext.pageNumber || pageUrl.searchParams.get('pageNumber') || pageUrl.searchParams.get('page') || 1);
+      if (pageNumber === 0) pageNumber = 1;
+      var startedAt = Number(requestStartedAt || Date.now());
+      var metadata = {
+        requestUrl: String(requestUrl || ''),
+        responseUrl: String(responseUrl || requestUrl || ''),
+        method: String(method || 'GET'),
+        body: body,
+        status: Number(status || 0),
+        contentType: String(contentType || ''),
+        expectedOfferCode: expectedCode,
+        expectedPageNumber: Math.max(1, Number(pageNumber || 1)),
+        expectedUrl: String(expectedContext && expectedContext.expectedUrl || pageUrl.toString()),
+        contextStartedAt: Number(expectedContext && expectedContext.startedAt || window.performance && window.performance.timeOrigin || startedAt),
+        requestStartedAt: startedAt,
+        navigationSequenceId: Number(expectedContext && expectedContext.navigationSequenceId || 1),
+        expectedNavigationSequenceId: Number(expectedContext && expectedContext.navigationSequenceId || 1),
+        runId: String(expectedContext && expectedContext.runId || ''),
+        contextFingerprint: String(expectedContext && expectedContext.contextFingerprint || '')
+      };
+      var analysis = __esAnalyzeCarnivalPayload(data, metadata);
+      if (!analysis || (analysis.kind !== 'inventory' && analysis.kind !== 'inventory_empty')) return false;
+      if (!analysis.approvedEndpoint || !analysis.offerCodeMatched || !analysis.pageMatched) return false;
+      if (analysis.offerProofSource === 'none' || analysis.pageProofSource === 'none') return false;
+      window.capturedPayloads.carnivalSearchCandidates = window.capturedPayloads.carnivalSearchCandidates || [];
+      window.capturedPayloads.carnivalSearchCandidates.push({
+        data: data,
+        analysis: analysis,
+        metadata: metadata,
+        capturedAt: Date.now(),
+        pageUrl: pageUrl.toString()
+      });
+      if (window.capturedPayloads.carnivalSearchCandidates.length > 40) {
+        window.capturedPayloads.carnivalSearchCandidates = window.capturedPayloads.carnivalSearchCandidates.slice(-40);
       }
-    } catch (e) {}
-  }
-
-  function postCarnivalNetworkPayload(endpoint, data, url) {
-    try {
-      var encoded = JSON.stringify(data);
-      if (encoded.length > 120000) {
+      window.__easySeasCarnivalInventoryLogged = window.__easySeasCarnivalInventoryLogged || {};
+      var diagnosticKey = expectedCode + '|' + Math.max(1, Number(pageNumber || 1));
+      if (!window.__easySeasCarnivalInventoryLogged[diagnosticKey]) {
+        window.__easySeasCarnivalInventoryLogged[diagnosticKey] = true;
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'log',
-          message: 'Captured large Carnival ' + endpoint + ' payload locally (' + encoded.length + ' bytes); bridge transfer skipped to protect the app',
-          logType: 'info'
+          message: '📦 Verified Carnival inventory for ' + expectedCode + ' page ' + Math.max(1, Number(pageNumber || 1)) + ': ' + Number(analysis.inventoryItems && analysis.inventoryItems.length || 0) + ' sailing row(s) via ' + String(analysis.adapterId || 'inventory adapter'),
+          logType: 'success'
         }));
-        return;
       }
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function captureRoyalTripPayload(data, url, sourceLabel) {
+    try {
+      if (!data || typeof data !== 'object' || typeof url !== 'string') return false;
+      var lowerUrl = url.toLowerCase();
+      var isRoyalFamily = lowerUrl.includes('royalcaribbean.com') || lowerUrl.includes('celebritycruises.com') || lowerUrl.includes('aws-prd.api.rccl.com');
+      if (!isRoyalFamily) return false;
+
+      var forcePastTrips = !!window.__easySeasReadingPastTrips;
+      var pastTrips = firstTripArray(data, ['pastCruises', 'pastTrips', 'past', 'completedCruises', 'completedTrips', 'previousTrips']);
+      var isPastEndpoint = lowerUrl.includes('past') || lowerUrl.includes('previous') || lowerUrl.includes('completed');
+      var isMyTripsEndpoint = lowerUrl.includes('my-trips') || lowerUrl.includes('mytrips') || lowerUrl.includes('/trips') || lowerUrl.includes('/trip');
+      if (pastTrips && (forcePastTrips || isPastEndpoint || isMyTripsEndpoint || pastTrips.length > 0)) {
+        window.capturedPayloads.pastTrips = data;
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'network_payload',
+          endpoint: 'pastTrips',
+          data: data,
+          url: url
+        }));
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: '📦 ' + sourceLabel + ' captured Royal Caribbean Past Trips payload with ' + pastTrips.length + ' cruise(s)',
+          logType: 'success'
+        }));
+        return true;
+      }
+
+      var tripRows = firstTripArray(data, ['trips', 'reservations', 'bookings', 'profileBookings', 'sailingInfo', 'upcomingTrips', 'upcomingCruises']);
+      if (tripRows && isMyTripsEndpoint && (forcePastTrips || !window.capturedPayloads.upcomingCruises)) {
+        var endpoint = (forcePastTrips || isPastEndpoint) ? 'pastTrips' : 'upcomingCruises';
+        window.capturedPayloads[endpoint] = data;
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'network_payload',
+          endpoint: endpoint,
+          data: data,
+          url: url
+        }));
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'log',
+          message: '📦 ' + sourceLabel + ' captured My Trips payload with ' + tripRows.length + ' trip(s)',
+          logType: 'success'
+        }));
+        return true;
+      }
+    } catch(e) {}
+    return false;
+  }
+
+
+  function looksLikeRoyalOfferPayload(data, url) {
+    try {
+      if (!data || typeof data !== 'object') return false;
+      var normalizedUrl = String(url || '').toLowerCase();
+      if (normalizedUrl.includes('carnival.com')) return false;
+      var isRoyalFamilyUrl = normalizedUrl.includes('royalcaribbean.com') || normalizedUrl.includes('celebritycruises.com') || normalizedUrl.includes('api.rccl.com');
+      if (normalizedUrl && !isRoyalFamilyUrl) return false;
+      if (normalizedUrl.includes('/i18n/') || normalizedUrl.includes('/translations/')) return false;
+      var preview = JSON.stringify(data).slice(0, 240000).toLowerCase();
+      var hasOfferShape = preview.includes('offercode') || preview.includes('campaignoffer') || preview.includes('casinooffers') || (preview.includes('sailings') && (preview.includes('reserveby') || preview.includes('expiration')));
+      return normalizedUrl.includes('offer') || normalizedUrl.includes('club-royale') || hasOfferShape;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function captureRoyalOfferCandidate(data, url, sourceLabel) {
+    try {
+      if (!looksLikeRoyalOfferPayload(data, url)) return false;
+      window.capturedPayloads.offerCandidates = window.capturedPayloads.offerCandidates || [];
+      window.capturedPayloads.offerCandidates.push({ data: data, url: String(url || ''), source: sourceLabel, timestamp: new Date().toISOString() });
+      if (window.capturedPayloads.offerCandidates.length > 20) {
+        window.capturedPayloads.offerCandidates = window.capturedPayloads.offerCandidates.slice(-20);
+      }
+      window.capturedPayloads.offers = data;
       window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'network_payload', endpoint: endpoint, data: data, url: url
+        type: 'network_capture_offer_available',
+        url: String(url || ''),
+        source: sourceLabel
       }));
-    } catch (e) {}
-  }
-
-  function isCarnivalProtectedProfileApiUrl(url) {
-    return /\\/profilemanagement\\/api\\/v1\\.0\\/profiles(?:[/?#]|$)/i.test(String(url || ''));
-  }
-
-  function carnivalPayloadShowsAuthFailure(data) {
-    if (!data || typeof data !== 'object') return false;
-    var message = String(data.message || data.error || data.errorMessage || data.description || data.title || '').toLowerCase();
-    var status = Number(data.status || data.statusCode || data.httpStatus || 0);
-    return status === 401 || status === 403 || /unauthori[sz]ed|forbidden|not authenticated|authentication required|session (?:has )?expired|please sign in|log in to continue/i.test(message);
-  }
-
-  function markCarnivalProtectedApiAuthenticated(url) {
-    window.__easySeasCarnivalApiAuthenticatedAt = Date.now();
-    window.__easySeasCarnivalApiAuthenticatedUrl = String(url || '');
-    try {
       window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'auth_status',
-        loggedIn: true,
-        source: 'carnival_protected_profile_api',
-        url: String(url || '')
+        type: 'log',
+        message: '📦 ' + sourceLabel + ' captured a live ' + (String(url || '').toLowerCase().includes('celebritycruises.com') ? 'Blue Chip Club' : 'Club Royale') + ' offer payload from ' + String(url || '').split('?')[0],
+        logType: 'success'
       }));
-    } catch (e) {}
-  }
-
-  function clearCarnivalProtectedApiAuthentication(url, reason) {
-    window.__easySeasCarnivalApiAuthenticatedAt = 0;
-    window.__easySeasCarnivalApiAuthenticatedUrl = '';
-    try {
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'auth_status',
-        loggedIn: false,
-        source: 'carnival_protected_profile_api',
-        reason: String(reason || ''),
-        url: String(url || '')
-      }));
-    } catch (e) {}
-  }
-
-  function normalizeRequestHeaders(headersLike) {
-    var normalized = {};
-    try {
-      if (!headersLike) return normalized;
-      if (typeof Headers !== 'undefined' && headersLike instanceof Headers) {
-        headersLike.forEach(function(value, key) { normalized[String(key).toLowerCase()] = String(value); });
-        return normalized;
-      }
-      if (Array.isArray(headersLike)) {
-        headersLike.forEach(function(pair) {
-          if (Array.isArray(pair) && pair.length >= 2) normalized[String(pair[0]).toLowerCase()] = String(pair[1]);
-        });
-        return normalized;
-      }
-      if (typeof headersLike.forEach === 'function') {
-        headersLike.forEach(function(value, key) { normalized[String(key).toLowerCase()] = String(value); });
-        return normalized;
-      }
-      if (typeof headersLike === 'object') {
-        Object.keys(headersLike).forEach(function(key) {
-          var value = headersLike[key];
-          if (value !== undefined && value !== null) normalized[String(key).toLowerCase()] = String(value);
-        });
-      }
-    } catch (e) {}
-    return normalized;
-  }
-
-  function captureRoyalAuthenticatedHeaders(url, headersLike) {
-    try {
-      var absolute = '';
-      try { absolute = new URL(String(url || ''), window.location.href).toString(); } catch (e) { absolute = String(url || ''); }
-      if (!/aws-prd\\.api\\.rccl\\.com|royalcaribbean\\.com\\/(?:api|myaccount|account)/i.test(absolute)) return;
-      var incoming = normalizeRequestHeaders(headersLike);
-      var allowed = [
-        'authorization', 'account-id', 'appkey', 'x-api-key', 'x-rcl-appkey', 'x-rcl-client-id',
-        'client-id', 'consumer-id', 'brand', 'locale', 'accept-language', 'content-type', 'accept'
-      ];
-      window.__easySeasRoyalRequestHeaders = window.__easySeasRoyalRequestHeaders || {};
-      allowed.forEach(function(key) {
-        if (incoming[key] !== undefined && incoming[key] !== null && String(incoming[key]).trim() !== '') {
-          window.__easySeasRoyalRequestHeaders[key] = String(incoming[key]);
-        }
-      });
-      window.__easySeasRoyalRequestHeadersCapturedAt = Date.now();
-      window.__easySeasRoyalRequestHeadersSourceUrl = absolute;
-    } catch (e) {}
-  }
-
-  function mergeFetchRequestHeaders(input, init) {
-    var merged = {};
-    try {
-      if (input && typeof input === 'object' && input.headers) Object.assign(merged, normalizeRequestHeaders(input.headers));
-      if (init && init.headers) Object.assign(merged, normalizeRequestHeaders(init.headers));
-    } catch (e) {}
-    return merged;
+      return true;
+    } catch (e) {
+      return false;
+    }
   }
 
   function interceptNetworkCalls() {
     if (window.__easySeasNetworkIntercepted) return;
     window.__easySeasNetworkIntercepted = true;
-    window.__easySeasRoyalRequestHeaders = window.__easySeasRoyalRequestHeaders || {};
 
     const originalFetch = window.fetch;
     window.fetch = function(...args) {
-      var requestContext = getCarnivalSearchContext();
-      requestContext = requestContext ? Object.assign({}, requestContext, { requestStartedAt: Date.now() }) : null;
-      var carnivalAuthProbeRequest = !!window.__easySeasCarnivalAuthProbeInFlight;
-      const requestUrlBeforeFetch = (typeof args[0] === 'string') ? args[0] : (args[0] && args[0].url ? args[0].url : '');
-      const requestInitBeforeFetch = args[1] || {};
-      captureRoyalAuthenticatedHeaders(requestUrlBeforeFetch, mergeFetchRequestHeaders(args[0], requestInitBeforeFetch));
+      const requestStartedAt = Date.now();
+      const requestMethod = String((args[1] && args[1].method) || (args[0] && args[0].method) || 'GET');
+      const requestBody = (args[1] && args[1].body) || (args[0] && args[0].body) || null;
       return originalFetch.apply(this, args).then(response => {
         const clonedResponse = response.clone();
-        const url = requestUrlBeforeFetch;
-        const requestInit = requestInitBeforeFetch;
-        const requestMethod = requestInit.method || (args[0] && args[0].method) || 'GET';
-        const requestBody = requestInit.body || '';
-        const carnivalProtectedProfileApi = isCarnivalProtectedProfileApiUrl(url);
-
-        if (carnivalProtectedProfileApi && (response.status === 401 || response.status === 403)) {
-          clearCarnivalProtectedApiAuthentication(response.url || url, 'Protected Carnival profile API rejected the session');
-        }
+        const url = (typeof args[0] === 'string') ? args[0] : (args[0] && args[0].url ? args[0].url : '');
         
         if (typeof url === 'string' && url) {
-          if (url.includes('/api/casino/casino-offers') || url.includes('/casino-offers')) {
+          if ((window.location && window.location.hostname || '').includes('carnival.com') && response.ok) {
+            var carnivalInventoryClone = response.clone();
+            carnivalInventoryClone.json().then(function(data) {
+              var contentType = '';
+              try { contentType = response.headers.get('content-type') || ''; } catch(e) {}
+              captureCarnivalSearchInventory(data, url, response.url || url, requestMethod, requestBody, response.status, contentType, requestStartedAt);
+            }).catch(function() {});
+          }
+          var offerProbeClone = response.clone();
+          if (response.ok) {
+            offerProbeClone.json().then(function(data) {
+              captureRoyalOfferCandidate(data, url, '[Fetch]');
+            }).catch(function() {});
+          }
+
+          var royalTripClone = response.clone();
+          royalTripClone.json().then(function(data) {
+            captureRoyalTripPayload(data, url, '[Fetch]');
+          }).catch(function() {});
+
+          if (url.includes('/api/casino/v2/offers/list') || url.includes('/api/casino/v2/offers/details') || url.includes('/api/casino/casino-offers') || url.includes('/casino-offers')) {
             if (response.ok && response.status === 200) {
               clonedResponse.json().then(data => {
-                window.capturedPayloads.offers = data;
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'network_payload',
-                  endpoint: 'offers',
-                  data: data,
-                  url: url
-                }));
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'log',
-                  message: '📦 Captured Casino Offers API payload with ' + (data?.offers?.length || data?.payload?.casinoOffers?.length || data?.casinoOffers?.length || 0) + ' offers',
-                  logType: 'success'
-                }));
+                captureRoyalOfferCandidate(data, url, '[Fetch endpoint]');
               }).catch(() => {});
             }
           }
@@ -460,15 +397,13 @@ export const AUTH_DETECTION_SCRIPT = `
             if (lowerUrl.includes('/api/profile') || lowerUrl.includes('/profilemanagement') || lowerUrl.includes('/api/booking') || lowerUrl.includes('/api/account') || lowerUrl.includes('/api/cruise') || lowerUrl.includes('/api/reservation') || lowerUrl.includes('/api/trip')) {
               clonedResponse.clone().json().then(function(data) {
                 if (!data) return;
-                if (carnivalProtectedProfileApi && !carnivalPayloadShowsAuthFailure(data)) {
-                  markCarnivalProtectedApiAuthenticated(response.url || url);
-                }
-                if (carnivalProtectedProfileApi && carnivalAuthProbeRequest) return;
                 var bookingArr = data.bookings || data.cruises || data.reservations || data.upcoming || data.trips || data.payload || data.data || null;
                 if (Array.isArray(data) && data.length > 0 && (data[0].bookingId || data[0].confirmationNumber || data[0].shipName)) bookingArr = data;
                 if (Array.isArray(bookingArr) && bookingArr.length > 0 && (bookingArr[0].bookingId || bookingArr[0].confirmationNumber || bookingArr[0].shipName || bookingArr[0].sailDate || bookingArr[0].departureDate)) {
                   window.capturedPayloads.upcomingCruises = data;
-                  postCarnivalNetworkPayload('upcomingCruises', data, url);
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'network_payload', endpoint: 'upcomingCruises', data: data, url: url
+                  }));
                   window.ReactNativeWebView.postMessage(JSON.stringify({
                     type: 'log', message: '📦 Captured Carnival bookings (' + bookingArr.length + ') from ' + url, logType: 'success'
                   }));
@@ -476,7 +411,9 @@ export const AUTH_DETECTION_SCRIPT = `
                 if (data.TierCode || data.PastGuestNumber || data.loyaltyTier || data.vifpNumber || data.loyaltyLevel) {
                   if (!window.capturedPayloads.loyalty) {
                     window.capturedPayloads.loyalty = data;
-                    postCarnivalNetworkPayload('loyalty', data, url);
+                    window.ReactNativeWebView.postMessage(JSON.stringify({
+                      type: 'network_payload', endpoint: 'loyalty', data: data, url: url
+                    }));
                     window.ReactNativeWebView.postMessage(JSON.stringify({
                       type: 'log', message: '📦 Captured Carnival loyalty from profile API', logType: 'success'
                     }));
@@ -489,27 +426,16 @@ export const AUTH_DETECTION_SCRIPT = `
             }
             if (lowerUrl.includes('personaliz') || lowerUrl.includes('vifp') || lowerUrl.includes('cruise-deals') || lowerUrl.includes('tgo') || lowerUrl.includes('member') || lowerUrl.includes('offers') || lowerUrl.includes('casino')) {
               clonedResponse.clone().json().then(function(data) {
-                if (data && data.Items && Array.isArray(data.Items) && data.Items.length > 0 && data.Items[0].OfferId) {
-                  window.capturedPayloads.carnivalVifpOffers = data;
-                  window.__carnivalVifpOffers = data;
-                  postCarnivalNetworkPayload('carnival_vifp_offers', data, url);
-                  window.ReactNativeWebView.postMessage(JSON.stringify({
-                    type: 'log', message: '📦 Captured Carnival VIFP offers (' + data.Items.length + ') from ' + url, logType: 'success'
-                  }));
-                }
-                if (data && data.offers && Array.isArray(data.offers) && data.offers.length > 0) {
-                  postCarnivalNetworkPayload('offers', data, url);
-                  window.ReactNativeWebView.postMessage(JSON.stringify({
-                    type: 'log', message: '📦 Captured Carnival casino offers (' + data.offers.length + ') from ' + url, logType: 'success'
-                  }));
-                }
+                captureCarnivalOfferPayload(data, url, 'Fetch');
               }).catch(function() {});
             }
             if (lowerUrl.includes('/api/profile/loyalty') || lowerUrl.includes('loyaltyinformation') || lowerUrl.includes('/vifp') || lowerUrl.includes('/loyalty') || lowerUrl.includes('/pastguest') || lowerUrl.includes('/tier')) {
               clonedResponse.clone().json().then(function(data) {
                 if (data && !window.capturedPayloads.loyalty) {
                   window.capturedPayloads.loyalty = data;
-                  postCarnivalNetworkPayload('loyalty', data, url);
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'network_payload', endpoint: 'loyalty', data: data, url: url
+                  }));
                   window.ReactNativeWebView.postMessage(JSON.stringify({
                     type: 'log', message: '📦 Captured Carnival loyalty API from ' + url, logType: 'success'
                   }));
@@ -521,30 +447,15 @@ export const AUTH_DETECTION_SCRIPT = `
                 try {
                   var jsonData = JSON.parse(text);
                   if (!jsonData || typeof jsonData !== 'object') return;
-                  recordCarnivalProfilePayload(jsonData, response.url || url, 'fetch');
-                  if (jsonData.Items && Array.isArray(jsonData.Items) && jsonData.Items.length > 0 && jsonData.Items[0].OfferId && !window.__carnivalVifpOffers) {
-                    window.__carnivalVifpOffers = jsonData;
-                    window.capturedPayloads.carnivalVifpOffers = jsonData;
-                    postCarnivalNetworkPayload('carnival_vifp_offers', jsonData, url);
-                    window.ReactNativeWebView.postMessage(JSON.stringify({
-                      type: 'log', message: '📦 Auto-captured Carnival VIFP offers (' + jsonData.Items.length + ')', logType: 'success'
-                    }));
-                  }
-                  captureCarnivalSearchPayload(jsonData, {
-                    method: requestMethod,
-                    requestUrl: url,
-                    body: requestBody,
-                    responseUrl: response.url || url,
-                    status: response.status,
-                    contentType: contentType,
-                    requestStartedAt: requestContext ? Number(requestContext.requestStartedAt || 0) : 0
-                  }, requestContext);
+                  captureCarnivalOfferPayload(jsonData, url, 'Fetch JSON probe');
                   if (!window.capturedPayloads.upcomingCruises) {
                     var autoBookings = jsonData.bookings || jsonData.cruises || jsonData.reservations || jsonData.upcoming || null;
                     if (!autoBookings && Array.isArray(jsonData) && jsonData.length > 0 && (jsonData[0].bookingId || jsonData[0].confirmationNumber || jsonData[0].shipName)) autoBookings = jsonData;
                     if (Array.isArray(autoBookings) && autoBookings.length > 0 && (autoBookings[0].bookingId || autoBookings[0].confirmationNumber || autoBookings[0].shipName)) {
                       window.capturedPayloads.upcomingCruises = jsonData;
-                      postCarnivalNetworkPayload('upcomingCruises', jsonData, url);
+                      window.ReactNativeWebView.postMessage(JSON.stringify({
+                        type: 'network_payload', endpoint: 'upcomingCruises', data: jsonData, url: url
+                      }));
                       window.ReactNativeWebView.postMessage(JSON.stringify({
                         type: 'log', message: '📦 Auto-captured Carnival bookings (' + autoBookings.length + ') from ' + url, logType: 'success'
                       }));
@@ -562,56 +473,35 @@ export const AUTH_DETECTION_SCRIPT = `
 
     const originalXHROpen = XMLHttpRequest.prototype.open;
     const originalXHRSend = XMLHttpRequest.prototype.send;
-    const originalXHRSetRequestHeader = XMLHttpRequest.prototype.setRequestHeader;
     
     XMLHttpRequest.prototype.open = function(method, url, ...rest) {
       this._url = url;
-      this._easySeasMethod = method || 'GET';
-      this._easySeasRequestHeaders = {};
-      var requestContext = getCarnivalSearchContext();
-      this._easySeasCarnivalSearchContext = requestContext ? Object.assign({}, requestContext) : null;
+      this._method = method;
       return originalXHROpen.apply(this, [method, url, ...rest]);
-    };
-
-    XMLHttpRequest.prototype.setRequestHeader = function(name, value) {
-      try {
-        this._easySeasRequestHeaders = this._easySeasRequestHeaders || {};
-        this._easySeasRequestHeaders[String(name || '').toLowerCase()] = String(value ?? '');
-      } catch (e) {}
-      return originalXHRSetRequestHeader.apply(this, arguments);
     };
     
     XMLHttpRequest.prototype.send = function(...args) {
-      captureRoyalAuthenticatedHeaders(this._url || '', this._easySeasRequestHeaders || {});
-      this._easySeasRequestBody = args && args.length ? args[0] : '';
-      this._easySeasRequestStartedAt = Date.now();
-      var currentRequestContext = getCarnivalSearchContext();
-      this._easySeasCarnivalSearchContext = currentRequestContext ? Object.assign({}, currentRequestContext, { requestStartedAt: this._easySeasRequestStartedAt }) : null;
+      this._requestStartedAt = Date.now();
+      this._requestBody = args.length > 0 ? args[0] : null;
       this.addEventListener('load', function() {
         if (this._url) {
-          var carnivalProtectedProfileApi = isCarnivalProtectedProfileApiUrl(this._url);
-          if (carnivalProtectedProfileApi && (this.status === 401 || this.status === 403)) {
-            clearCarnivalProtectedApiAuthentication(this.responseURL || this._url, 'Protected Carnival profile API rejected the session');
-          }
           try {
             const data = JSON.parse(this.responseText);
-            if (carnivalProtectedProfileApi && this.status >= 200 && this.status < 300 && !carnivalPayloadShowsAuthFailure(data)) {
-              markCarnivalProtectedApiAuthenticated(this.responseURL || this._url);
-            }
+            captureCarnivalSearchInventory(
+              data,
+              String(this._url || ''),
+              String(this.responseURL || this._url || ''),
+              String(this._method || 'GET'),
+              this._requestBody,
+              Number(this.status || 0),
+              String(this.getResponseHeader && this.getResponseHeader('content-type') || ''),
+              Number(this._requestStartedAt || Date.now())
+            );
+            captureRoyalTripPayload(data, String(this._url || ''), '[XHR]');
+            captureRoyalOfferCandidate(data, String(this._url || ''), '[XHR]');
             
-            if (this._url.includes('/api/casino/casino-offers') || this._url.includes('/casino-offers') || this._url.includes('/api/casino/v2/offers/merged') || this._url.includes('/api/casino/v2/offers/facets')) {
-              window.capturedPayloads.offers = data;
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'network_payload',
-                endpoint: 'offers',
-                data: data,
-                url: this._url
-              }));
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'log',
-                message: '📦 [XHR] Captured Casino Offers API payload with ' + (data?.offers?.length || data?.payload?.casinoOffers?.length || data?.casinoOffers?.length || 0) + ' offers',
-                logType: 'success'
-              }));
+            if (this._url.includes('/api/casino/v2/offers/list') || this._url.includes('/api/casino/v2/offers/details') || this._url.includes('/api/casino/casino-offers') || this._url.includes('/casino-offers')) {
+              captureRoyalOfferCandidate(data, String(this._url || ''), '[XHR endpoint]');
             }
             
             if (this._url.includes('/profileBookings/enriched') || this._url.includes('/api/account/upcoming-cruises') || this._url.includes('/api/profile/bookings')) {
@@ -694,39 +584,15 @@ export const AUTH_DETECTION_SCRIPT = `
             
             var xhrIsCarnival = (window.location && window.location.hostname || '').includes('carnival.com');
             if (xhrIsCarnival && this.status === 200 && data && typeof data === 'object') {
-              recordCarnivalProfilePayload(data, this.responseURL || this._url, 'xhr');
-              if (data.Items && Array.isArray(data.Items) && data.Items.length > 0 && data.Items[0].OfferId && !window.__carnivalVifpOffers) {
-                window.__carnivalVifpOffers = data;
-                window.capturedPayloads.carnivalVifpOffers = data;
-                postCarnivalNetworkPayload('carnival_vifp_offers', data, this._url);
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'log', message: '📦 [XHR] Captured Carnival VIFP offers (' + data.Items.length + ')', logType: 'success'
-                }));
-              }
-              if (data.offers && Array.isArray(data.offers) && data.offers.length > 0) {
-                postCarnivalNetworkPayload('offers', data, this._url);
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'log', message: '📦 [XHR] Captured Carnival casino offers (' + data.offers.length + ')', logType: 'success'
-                }));
-              }
-              var xhrLowerUrl = String(this._url || '').toLowerCase();
-              var xhrContentType = '';
-              try { xhrContentType = this.getResponseHeader('content-type') || ''; } catch (e) {}
-              captureCarnivalSearchPayload(data, {
-                method: this._easySeasMethod || 'GET',
-                requestUrl: this._url || '',
-                body: this._easySeasRequestBody || '',
-                responseUrl: this.responseURL || this._url || '',
-                status: this.status,
-                contentType: xhrContentType,
-                requestStartedAt: Number(this._easySeasRequestStartedAt || 0)
-              }, this._easySeasCarnivalSearchContext);
+              captureCarnivalOfferPayload(data, this._url, 'XHR');
               if (!window.capturedPayloads.upcomingCruises) {
                 var xhrBookings = data.bookings || data.cruises || data.reservations || data.upcoming || null;
                 if (!xhrBookings && Array.isArray(data) && data.length > 0 && (data[0].bookingId || data[0].confirmationNumber || data[0].shipName)) xhrBookings = data;
                 if (Array.isArray(xhrBookings) && xhrBookings.length > 0 && (xhrBookings[0].bookingId || xhrBookings[0].confirmationNumber || xhrBookings[0].shipName)) {
                   window.capturedPayloads.upcomingCruises = data;
-                  postCarnivalNetworkPayload('upcomingCruises', data, this._url);
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'network_payload', endpoint: 'upcomingCruises', data: data, url: this._url
+                  }));
                   window.ReactNativeWebView.postMessage(JSON.stringify({
                     type: 'log', message: '📦 [XHR] Captured Carnival bookings (' + xhrBookings.length + ')', logType: 'success'
                   }));
@@ -734,7 +600,9 @@ export const AUTH_DETECTION_SCRIPT = `
               }
               if ((data.TierCode || data.PastGuestNumber || data.loyaltyTier) && !window.capturedPayloads.loyalty) {
                 window.capturedPayloads.loyalty = data;
-                postCarnivalNetworkPayload('loyalty', data, this._url);
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                  type: 'network_payload', endpoint: 'loyalty', data: data, url: this._url
+                }));
                 window.ReactNativeWebView.postMessage(JSON.stringify({
                   type: 'carnival_user_data', data: data
                 }));
@@ -871,13 +739,28 @@ export const AUTH_DETECTION_SCRIPT = `
     var loyaltyStatusLink = document.querySelector('a[href*="loyalty-status"], a[href*="loyalty-programs"]');
     var myAccountLink = document.querySelector('a[href*="/account"]');
     var hasUserAvatar = document.querySelector('[data-testid*="avatar"], [class*="avatar"], [class*="user-icon"], [class*="profile-icon"], .user-menu, .account-menu') !== null;
-    var hasSignInForm = document.querySelector('input[type="password"], form[action*="login"], form[action*="sign-in"], #login-form') !== null;
+    var signInInput = document.querySelector('input[type="password"], form[action*="login"] input, form[action*="sign-in"] input, #login-form input');
+    var hasSignInForm = signInInput !== null;
+    var hasVisibleSignInForm = false;
+    try {
+      if (signInInput) {
+        var signInStyle = window.getComputedStyle(signInInput);
+        hasVisibleSignInForm = signInStyle.display !== 'none' && signInStyle.visibility !== 'hidden' && signInInput.getClientRects().length > 0;
+      }
+    } catch (e) {}
     var hasSignInText = pageText.toLowerCase().includes('sign in') && pageText.toLowerCase().includes('password');
     
     var lowerText = pageText.toLowerCase();
     var lowerHTML = pageHTML.toLowerCase();
 
     var isCarnival = url.includes('carnival.com');
+
+    // Never try to work around provider anti-bot or human-verification pages.
+    // We emit only named markers, never page text, cookies, or credentials.
+    var carnivalChallenge = isCarnival && (
+      document.querySelector('iframe[src*="captcha"], iframe[src*="recaptcha"], iframe[src*="hcaptcha"], [data-testid*="captcha"], [class*="captcha"], [id*="captcha"]') !== null ||
+      /verify (?:you are )?human|security challenge|access denied|unusual activity|robot check/i.test(pageText)
+    );
 
     // Carnival-specific login signals
     var carnivalProfileLink = document.querySelector('a[href*="profilemanagement"]');
@@ -886,17 +769,12 @@ export const AUTH_DETECTION_SCRIPT = `
     var carnivalVifpText = lowerHTML.includes('vifp') || lowerText.includes('vifp club') || lowerHTML.includes('players club') || lowerHTML.includes('vifp#');
     var carnivalMemberNum = /vifp\\s*club[\\s\\S]{0,200}\\d{7,}/i.test(pageHTML) || /club#[:\\s]*\\d{7,}/i.test(pageHTML) || /vifp#[\\s]*\\d{4,}/i.test(pageHTML);
     var carnivalManageBookings = document.querySelector('a[href*="manage-booking"], a[href*="managebooking"], a[href*="my-cruises"]') !== null;
-    // Public Carnival pages always include Manage Bookings and VIFP marketing.
-    // Those generic navigation labels must never be treated as proof of authentication.
-    var carnivalSignedInHeader = lowerHTML.includes('sign out') || lowerHTML.includes('signout') || (isCarnival && (lowerHTML.includes('welcome back') || lowerHTML.includes('ahoy,') || lowerHTML.includes('my profile')));
-    var carnivalAccountPageUrl = isCarnival && (url.includes('/account') || url.includes('/profilemanagement'));
+    var carnivalSignedInHeader = lowerHTML.includes('sign out') || lowerHTML.includes('signout') || (isCarnival && (lowerHTML.includes('my profile') || lowerHTML.includes('manage bookings') || lowerHTML.includes('my account') || lowerHTML.includes('hello,') || lowerHTML.includes('my bookings') || lowerHTML.includes('view bookings')));
+    var carnivalAccountPageUrl = isCarnival && (url.includes('/account') || url.includes('/profilemanagement') || url.includes('/cruise-deals'));
     // Carnival uses httpOnly cookies — document.cookie is USUALLY empty even when logged in
     // So we check any cookies OR any localStorage signals
     var carnivalHasCookies = isCarnival && (document.cookie.length > 0);
-    var carnivalHasIdentityCookie = isCarnival && /(?:^|;\s*)(?:user|tgo)=/i.test(document.cookie || '');
     var carnivalNoSignInForm = !hasSignInForm;
-    var carnivalProtectedApiAuthenticatedAt = Number(window.__easySeasCarnivalApiAuthenticatedAt || 0);
-    var carnivalRecentProtectedApi = isCarnival && carnivalProtectedApiAuthenticatedAt > 0 && Date.now() - carnivalProtectedApiAuthenticatedAt < 300000;
     
     // Check for Carnival's user-name element in header (rendered after login)
     var carnivalUserNameEl = document.querySelector('[data-testid*="user"], [class*="user-name"], [class*="username"], [class*="firstName"], [aria-label*="account"], [aria-label*="profile"], nav [class*="logged"], header [class*="logged"]');
@@ -905,10 +783,22 @@ export const AUTH_DETECTION_SCRIPT = `
     // If window.__easySeasForceLoggedIn is set (by manual button), trust it
     var forceLoggedIn = !!(window.__easySeasForceLoggedIn);
 
-    // Carnival profile URLs are useful context, but the URL alone is not authentication.
-    // Public/error shells can render without a password form, so member identity is still required.
+    // Carnival ALWAYS redirects unauthenticated users away from /profilemanagement
+    // So if we are ON that page, the user is definitively logged in
     var carnivalOnProfilePage = isCarnival && (url.includes('/profilemanagement') || url.includes('/profiles/cruises'));
     
+    // Carnival cruise-deals page: if loaded without a sign-in form, user is logged in
+    // (Carnival renders a generic offers page for non-auth, but the DOM will differ)
+    var carnivalOnCruiseDeals = isCarnival && url.includes('/cruise-deals') && carnivalNoSignInForm && document.readyState === 'complete';
+    var carnivalProfileSignals = !!(
+      carnivalProfileLink || carnivalVifpEl || carnivalManageBookings || carnivalHasUserEl ||
+      carnivalWelcomeBack || carnivalVifpText || carnivalMemberNum || carnivalSignedInHeader || carnivalOnProfilePage
+    );
+    var carnivalOfferSignals = !!(
+      carnivalOnCruiseDeals ||
+      document.querySelector('[data-testid*="offer"], [class*="offer-card"], [class*="cruise-card"], a[href*="cruise-deals"]') ||
+      /(?:casino|personalized) offers|cruise deals/i.test(pageText)
+    );
 
     var strongAuthSignals = 
       forceLoggedIn ||
@@ -917,10 +807,11 @@ export const AUTH_DETECTION_SCRIPT = `
       loyaltyStatusLink ||
       hasLogoutButton ||
       hasUserAvatar ||
-      (isCarnival && carnivalHasUserEl && (carnivalWelcomeBack || carnivalSignedInHeader || carnivalHasIdentityCookie)) ||
-      (isCarnival && (carnivalWelcomeBack || carnivalMemberNum || carnivalSignedInHeader)) ||
-      (isCarnival && carnivalProfileLink && carnivalHasIdentityCookie) ||
-      (isCarnival && carnivalAccountPageUrl && carnivalNoSignInForm && carnivalHasIdentityCookie && document.readyState === 'complete');
+      carnivalOnProfilePage ||
+      (isCarnival && carnivalHasUserEl) ||
+      (isCarnival && (carnivalWelcomeBack || carnivalVifpEl || carnivalMemberNum || carnivalProfileLink || carnivalSignedInHeader || carnivalVifpText)) ||
+      (isCarnival && carnivalAccountPageUrl && carnivalNoSignInForm && document.readyState === 'complete') ||
+      (isCarnival && carnivalHasCookies && carnivalAccountPageUrl);
     
     var accountFeatureCount = 
       (accountLinks.length > 0 ? 1 : 0) +
@@ -946,32 +837,14 @@ export const AUTH_DETECTION_SCRIPT = `
       (isCarnival && carnivalWelcomeBack ? 2 : 0) +
       (isCarnival && carnivalMemberNum ? 3 : 0);
     
-    var isOnAccountPage = url.includes('/account/') || url.includes('/account?') || url.includes('loyalty-status') || url.includes('/club-royale') || url.includes('/blue-chip-club') || url.includes('/profilemanagement') || (isCarnival && (url.includes('/loyaltyInformation') || url.endsWith('/account')));
+    var isOnAccountPage = url.includes('/account/') || url.includes('/account?') || url.includes('loyalty-status') || url.includes('/club-royale') || url.includes('/blue-chip-club') || url.includes('/profilemanagement') || (isCarnival && (url.includes('/cruise-deals') || url.includes('/loyaltyInformation') || url.endsWith('/account')));
     var isOnLoginPage = (url.includes('/login') || url.includes('/sign-in') || url.includes('/signin')) && !carnivalOnProfilePage;
     
     var isLoggedIn = false;
     
-    if (isCarnival) {
-      // Carnival public pages contain VIFP, Manage Bookings, My Cruises and other account-like
-      // marketing text. Never authenticate from those generic words or from the absence of a
-      // password form. Require actual member identity, a signed-in header, an identity cookie,
-      // or a real stored auth token on an account/profile page.
-      if (isOnLoginPage && (hasSignInForm || hasSignInText)) {
-        clearCarnivalProtectedApiAuthentication(url, 'Carnival login page is visible');
-        isLoggedIn = false;
-      } else {
-        isLoggedIn = !!(
-          forceLoggedIn ||
-          carnivalRecentProtectedApi ||
-          carnivalWelcomeBack ||
-          carnivalMemberNum ||
-          carnivalSignedInHeader ||
-          (carnivalHasUserEl && carnivalAccountPageUrl) ||
-          (carnivalHasIdentityCookie && carnivalAccountPageUrl) ||
-          (hasToken && carnivalAccountPageUrl)
-        );
-      }
-    } else if (isOnLoginPage && hasSignInForm) {
+    if (carnivalChallenge) {
+      isLoggedIn = false;
+    } else if (hasVisibleSignInForm && !forceLoggedIn && !hasToken && !hasLogoutButton) {
       isLoggedIn = false;
     } else if (strongAuthSignals) {
       isLoggedIn = true;
@@ -984,13 +857,33 @@ export const AUTH_DETECTION_SCRIPT = `
     } else if (hasCookies && contentSignals >= 3) {
       isLoggedIn = true;
     }
+
+    if (isCarnival) {
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'carnival_runtime_probe',
+        url: url,
+        loggedIn: isLoggedIn,
+        challengeDetected: carnivalChallenge,
+        profileSignals: carnivalProfileSignals,
+        offerSignals: carnivalOfferSignals,
+        evidence: [
+          carnivalChallenge ? 'challenge_marker' : '',
+          carnivalProfileSignals ? 'profile_marker' : '',
+          carnivalOfferSignals ? 'offer_marker' : '',
+          hasVisibleSignInForm ? 'visible_sign_in_form' : ''
+        ].filter(Boolean),
+        observedAt: new Date().toISOString()
+      }));
+    }
     
     if (lastAuthState !== isLoggedIn) {
       lastAuthState = isLoggedIn;
       
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'auth_status',
-        loggedIn: isLoggedIn
+        loggedIn: isLoggedIn,
+        evidence: hasToken ? 'session_token' : hasVisibleSignInForm ? 'visible_sign_in_form' : strongAuthSignals ? 'authenticated_page_signal' : 'page_heuristics',
+        url: url
       }));
 
       window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -1062,6 +955,13 @@ export const AUTH_DETECTION_SCRIPT = `
       setTimeout(checkAuthStatus, 500);
       setTimeout(checkAuthStatus, 1500);
       if (!observer) observer = setupMutationObserver();
+    });
+
+    window.addEventListener('popstate', function() {
+      setTimeout(checkAuthStatus, 300);
+    });
+    window.addEventListener('hashchange', function() {
+      setTimeout(checkAuthStatus, 300);
     });
     
     var intervalId = setInterval(checkAuthStatus, 3000);

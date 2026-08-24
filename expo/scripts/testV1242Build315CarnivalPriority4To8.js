@@ -8,9 +8,9 @@ const readJson = (file) => JSON.parse(read(file));
 function assert(condition, message) { if (!condition) throw new Error(message); }
 
 const app = readJson('app.json');
-assert(app.expo.version === '12.4.2', 'Marketing version must remain 12.4.2');
-assert(app.expo.ios.buildNumber === '314', 'Original iOS buildNumber must remain 314');
-assert(app.expo.android.versionCode === 120405, 'Original Android versionCode must remain 120405');
+assert(app.expo.version === '12.4.4', 'Marketing version must remain 12.4.4');
+assert(app.expo.ios.buildNumber === '319', 'Original iOS buildNumber must remain 319');
+assert(app.expo.android.versionCode === 120410, 'Original Android versionCode must remain 120410');
 
 let ts;
 try { ts = require('typescript'); }
@@ -183,7 +183,7 @@ assert(!applyTransaction.validateCarnivalApplyJournal(mutatedJournal).valid, 'Mu
 
 const provider = read('state/RoyalCaribbeanSyncProvider.tsx');
 for (const marker of [
-  'ownerId: providerInstanceIdRef.current',
+  'ownerId: `${providerInstanceIdRef.current}|${currentUser?.id',
   'activeCarnivalRun.settled = true',
   "type: 'carnival_auth_probe'",
   'verifyCarnivalAuthentication',
@@ -219,7 +219,7 @@ assert(overview.includes('carnivalSailingCanonicalKey'), 'Dashboard fallback mus
 
 const extension = read('assets/easy-seas-extension/carnival-sync.js');
 const extensionContent = read('assets/easy-seas-extension/content.js');
-assert(extension.includes("version: '12.4.2-deprecated'") && extension.includes('disabled: true'), 'Divergent Carnival extension must be formally disabled');
+assert(extension.includes("version: '12.4.4-deprecated'") && extension.includes('disabled: true'), 'Divergent Carnival extension must be formally disabled');
 assert(extensionContent.includes('Carnival desktop sync disabled'), 'Extension content flow must stop Carnival execution');
 assert(!extension.includes('DEFAULT_PAGE_SIZE = 8'), 'Deprecated extension must not retain the divergent page-size engine');
 

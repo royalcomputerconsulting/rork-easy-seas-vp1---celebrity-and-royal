@@ -15,12 +15,9 @@ import {
   Wine,
   Ship,
   Wifi,
-  Waves,
-  Repeat,
   Plus,
   X,
   Calculator,
-  Save,
 } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
 import { MARBLE_TEXTURES } from '@/constants/marbleTextures';
@@ -28,7 +25,7 @@ import { formatCurrency } from '@/lib/format';
 
 interface CompItem {
   id: string;
-  category: 'drinks' | 'dining' | 'wifi' | 'voom' | 'spa' | 'gratuities' | 'obc' | 'excursions' | 'tradeIn' | 'other';
+  category: 'drinks' | 'dining' | 'wifi' | 'gratuities' | 'obc' | 'excursions' | 'other';
   name: string;
   value: number;
 }
@@ -36,28 +33,21 @@ interface CompItem {
 interface CompValueCalculatorProps {
   onCompValueChange?: (totalValue: number, items: CompItem[]) => void;
   initialItems?: CompItem[];
-  /** Real cruises to save the tallied comp value onto (Stage 9.4). */
-  saveTargets?: { id: string; label: string }[];
-  onSaveToCruise?: (cruiseId: string, totalValue: number, items: CompItem[]) => void;
 }
 
 const COMP_CATEGORIES = [
   { id: 'drinks', label: 'Drink Package', icon: Wine, color: COLORS.error },
   { id: 'dining', label: 'Specialty Dining', icon: Utensils, color: COLORS.goldDark },
   { id: 'wifi', label: 'WiFi Package', icon: Wifi, color: COLORS.navyDeep },
-  { id: 'voom', label: 'VOOM / Internet', icon: Wifi, color: COLORS.info ?? COLORS.navyDeep },
-  { id: 'spa', label: 'Spa', icon: Waves, color: COLORS.success },
   { id: 'gratuities', label: 'Gratuities', icon: Coffee, color: COLORS.success },
   { id: 'obc', label: 'Onboard Credit', icon: DollarSign, color: COLORS.royalPurple },
   { id: 'excursions', label: 'Shore Excursions', icon: Ship, color: COLORS.warning },
-  { id: 'tradeIn', label: 'Trade-In Value', icon: Repeat, color: COLORS.goldDark },
   { id: 'other', label: 'Other Comps', icon: Plus, color: COLORS.navyDeep },
 ] as const;
 
-export function CompValueCalculator({ onCompValueChange, initialItems = [], saveTargets = [], onSaveToCruise }: CompValueCalculatorProps) {
+export function CompValueCalculator({ onCompValueChange, initialItems = [] }: CompValueCalculatorProps) {
   const [compItems, setCompItems] = useState<CompItem[]>(initialItems);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [showSavePicker, setShowSavePicker] = useState(false);
   const [newItemCategory, setNewItemCategory] = useState<CompItem['category']>('drinks');
   const [newItemName, setNewItemName] = useState('');
   const [newItemValue, setNewItemValue] = useState('');
@@ -94,12 +84,7 @@ export function CompValueCalculator({ onCompValueChange, initialItems = [], save
   };
 
   const getCategoryInfo = (category: CompItem['category']) => {
-    return COMP_CATEGORIES.find(c => c.id === category) || COMP_CATEGORIES[COMP_CATEGORIES.length - 1];
-  };
-
-  const handleSaveToCruise = (cruiseId: string) => {
-    onSaveToCruise?.(cruiseId, totalCompValue, compItems);
-    setShowSavePicker(false);
+    return COMP_CATEGORIES.find(c => c.id === category) || COMP_CATEGORIES[6];
   };
 
   return (
@@ -254,30 +239,6 @@ export function CompValueCalculator({ onCompValueChange, initialItems = [], save
           <Text style={styles.emptySubtext}>
             Add items to calculate total comp value
           </Text>
-        </View>
-      )}
-
-      {compItems.length > 0 && saveTargets.length > 0 && onSaveToCruise && !showSavePicker && (
-        <TouchableOpacity style={styles.saveToCruiseButton} onPress={() => setShowSavePicker(true)} activeOpacity={0.8} testID="comp-calc-save-to-cruise">
-          <Save size={16} color={COLORS.white} />
-          <Text style={styles.saveToCruiseButtonText}>Save to Cruise</Text>
-        </TouchableOpacity>
-      )}
-
-      {showSavePicker && (
-        <View style={styles.addForm}>
-          <Text style={styles.formLabel}>Choose a cruise to save this total onto</Text>
-          <ScrollView style={{ maxHeight: 220 }}>
-            {saveTargets.map((target) => (
-              <TouchableOpacity key={target.id} style={styles.saveTargetRow} onPress={() => handleSaveToCruise(target.id)} activeOpacity={0.7}>
-                <Text style={styles.saveTargetText} numberOfLines={1}>{target.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-          <Text style={styles.emptySubtext}>Values map to FreePlay, OBC, VOOM, dining, spa, and trade-in fields. Anything already recorded on the cruise won't be double-counted — it will be replaced with this total.</Text>
-          <TouchableOpacity style={styles.cancelButton} onPress={() => setShowSavePicker(false)} activeOpacity={0.7}>
-            <Text style={styles.cancelButtonText}>Cancel</Text>
-          </TouchableOpacity>
         </View>
       )}
     </LinearGradient>
@@ -501,30 +462,5 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizeSM,
     color: COLORS.textSecondary,
     marginTop: SPACING.xs,
-  },
-  saveToCruiseButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: SPACING.sm,
-    backgroundColor: COLORS.success,
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.sm,
-    marginTop: SPACING.sm,
-  },
-  saveToCruiseButtonText: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
-    color: COLORS.white,
-  },
-  saveTargetRow: {
-    paddingVertical: SPACING.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.06)',
-  },
-  saveTargetText: {
-    fontSize: TYPOGRAPHY.fontSizeMD,
-    color: COLORS.navyDeep,
-    fontWeight: TYPOGRAPHY.fontWeightMedium,
   },
 });

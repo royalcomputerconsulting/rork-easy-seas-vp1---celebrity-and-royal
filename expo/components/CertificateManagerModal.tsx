@@ -25,6 +25,7 @@ import {
   Sparkles,
 } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
+import type { ParsedCertificateSailing } from '@/lib/certificates/certificatePdfPipeline';
 
 export type CertificateType = 'fpp' | 'nextCruise' | 'obc' | 'freeplay' | 'discount';
 
@@ -35,8 +36,28 @@ export interface Certificate {
   value: number;
   description?: string;
   expiryDate?: string;
+  issueDate?: string;
+  earnedOnCruise?: string;
+  cruiseId?: string;
+  earningMatchConfidence?: 'high' | 'medium' | 'low';
+  earningMatchReason?: string;
   usedOnCruise?: string;
   status: 'available' | 'used' | 'expired';
+  certificateCode?: string;
+  certificateFamily?: string;
+  sourcePdfUrl?: string;
+  sourceDocumentArchiveUri?: string;
+  sourceDocumentHash?: string;
+  sourceDocumentVersion?: string;
+  sourceDocumentSize?: number;
+  parserSource?: 'backend' | 'device' | 'manual' | 'legacy_import';
+  parserStatus?: string;
+  parserVersion?: string;
+  parserWarnings?: string[];
+  sourcePage?: number;
+  sourceGroup?: string;
+  parsedAt?: string;
+  parsedSailings?: ParsedCertificateSailing[];
 }
 
 interface CertificateManagerModalProps {
@@ -69,15 +90,19 @@ export function CertificateManagerModal({
   
   const [newType, setNewType] = useState<CertificateType>('fpp');
   const [newLabel, setNewLabel] = useState('');
+  const [newCode, setNewCode] = useState('');
   const [newValue, setNewValue] = useState('');
   const [newDescription, setNewDescription] = useState('');
+  const [newIssueDate, setNewIssueDate] = useState('');
   const [newExpiry, setNewExpiry] = useState('');
 
   const resetForm = useCallback(() => {
     setNewType('fpp');
     setNewLabel('');
+    setNewCode('');
     setNewValue('');
     setNewDescription('');
+    setNewIssueDate('');
     setNewExpiry('');
     setIsAdding(false);
     setEditingId(null);
@@ -114,7 +139,7 @@ export function CertificateManagerModal({
       return;
     }
 
-    if (newExpiry && !validateDateFormat(newExpiry)) {
+    if ((newIssueDate && !validateDateFormat(newIssueDate)) || (newExpiry && !validateDateFormat(newExpiry))) {
       Alert.alert('Invalid Date Format', 'Please enter date as MM-DD-YYYY (e.g., 12-31-2025)');
       return;
     }
@@ -125,22 +150,26 @@ export function CertificateManagerModal({
     onAddCertificate({
       type: newType,
       label,
+      certificateCode: newCode.trim().toUpperCase() || undefined,
       value: parseFloat(newValue),
       description: newDescription || undefined,
+      issueDate: formatDateToISO(newIssueDate),
       expiryDate: formatDateToISO(newExpiry),
       status: 'available',
     });
 
     resetForm();
     console.log('[CertificateManager] Certificate added:', { type: newType, value: newValue });
-  }, [newType, newLabel, newValue, newDescription, newExpiry, onAddCertificate, resetForm]);
+  }, [newType, newLabel, newCode, newValue, newDescription, newIssueDate, newExpiry, onAddCertificate, resetForm]);
 
   const handleEdit = useCallback((cert: Certificate) => {
     setEditingId(cert.id);
     setNewType(cert.type);
     setNewLabel(cert.label);
+    setNewCode(cert.certificateCode || '');
     setNewValue(cert.value.toString());
     setNewDescription(cert.description || '');
+    setNewIssueDate(cert.issueDate ? formatDateToMMDDYYYY(cert.issueDate) : '');
     setNewExpiry(cert.expiryDate ? formatDateToMMDDYYYY(cert.expiryDate) : '');
   }, []);
 
@@ -150,7 +179,7 @@ export function CertificateManagerModal({
       return;
     }
 
-    if (newExpiry && !validateDateFormat(newExpiry)) {
+    if ((newIssueDate && !validateDateFormat(newIssueDate)) || (newExpiry && !validateDateFormat(newExpiry))) {
       Alert.alert('Invalid Date Format', 'Please enter date as MM-DD-YYYY (e.g., 12-31-2025)');
       return;
     }
@@ -158,14 +187,16 @@ export function CertificateManagerModal({
     onUpdateCertificate(editingId, {
       type: newType,
       label: newLabel || CERTIFICATE_TYPES.find(t => t.type === newType)?.label || 'Certificate',
+      certificateCode: newCode.trim().toUpperCase() || undefined,
       value: parseFloat(newValue),
       description: newDescription || undefined,
+      issueDate: formatDateToISO(newIssueDate),
       expiryDate: formatDateToISO(newExpiry),
     });
 
     resetForm();
     console.log('[CertificateManager] Certificate updated:', editingId);
-  }, [editingId, newType, newLabel, newValue, newDescription, newExpiry, onUpdateCertificate, resetForm]);
+  }, [editingId, newType, newLabel, newCode, newValue, newDescription, newIssueDate, newExpiry, onUpdateCertificate, resetForm]);
 
   const handleDelete = useCallback((id: string) => {
     Alert.alert(
@@ -232,6 +263,7 @@ export function CertificateManagerModal({
             value={newLabel}
             onChangeText={setNewLabel}
           />
+          <TextInput style={styles.input} placeholder="Certificate code (A/C code)" placeholderTextColor="rgba(255,255,255,0.4)" value={newCode} onChangeText={setNewCode} autoCapitalize="characters" />
 
           <TextInput
             style={styles.input}
@@ -248,6 +280,14 @@ export function CertificateManagerModal({
             placeholderTextColor="rgba(255,255,255,0.4)"
             value={newDescription}
             onChangeText={setNewDescription}
+          />
+
+          <TextInput
+            style={styles.input}
+            placeholder="Issued Date (MM-DD-YYYY)"
+            placeholderTextColor="rgba(255,255,255,0.4)"
+            value={newIssueDate}
+            onChangeText={setNewIssueDate}
           />
 
           <TextInput
@@ -309,14 +349,21 @@ export function CertificateManagerModal({
           <Text style={[styles.certLabel, cert.status === 'used' && styles.certLabelUsed]}>
             {cert.label}
           </Text>
+          {cert.certificateCode ? <Text style={styles.certExpiry}>Code: {cert.certificateCode}</Text> : null}
           <View style={styles.certMeta}>
             <Text style={styles.certValue}>${cert.value}</Text>
+            {cert.issueDate ? <Text style={styles.certExpiry}>Issued: {formatDateToMMDDYYYY(cert.issueDate)}</Text> : null}
             {cert.expiryDate ? (
               <Text style={styles.certExpiry}>Exp: {formatDateToMMDDYYYY(cert.expiryDate)}</Text>
             ) : null}
           </View>
           {cert.description ? (
             <Text style={styles.certDescription} numberOfLines={1}>{cert.description}</Text>
+          ) : null}
+          {cert.parserVersion || cert.sourceDocumentVersion ? (
+            <Text style={styles.certDescription} numberOfLines={1}>
+              {cert.parserVersion ? `Parser ${cert.parserVersion}` : 'Stored document'}{cert.sourceDocumentVersion ? ` · ${cert.sourceDocumentVersion.slice(0, 20)}` : ''}
+            </Text>
           ) : null}
         </View>
 
@@ -432,6 +479,7 @@ export function CertificateManagerModal({
                 value={newLabel}
                 onChangeText={setNewLabel}
               />
+              <TextInput style={styles.input} placeholder="Certificate code (A/C code)" placeholderTextColor="rgba(255,255,255,0.4)" value={newCode} onChangeText={setNewCode} autoCapitalize="characters" />
 
               <TextInput
                 style={styles.input}
@@ -448,6 +496,14 @@ export function CertificateManagerModal({
                 placeholderTextColor="rgba(255,255,255,0.4)"
                 value={newDescription}
                 onChangeText={setNewDescription}
+              />
+
+              <TextInput
+                style={styles.input}
+                placeholder="Issued Date (MM-DD-YYYY)"
+                placeholderTextColor="rgba(255,255,255,0.4)"
+                value={newIssueDate}
+                onChangeText={setNewIssueDate}
               />
 
               <TextInput

@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { BookedCruise, CasinoOffer, CalendarEvent } from '@/types/models';
+import { isDateInPast } from './date';
 import { ALL_STORAGE_KEYS } from './storage/storageKeys';
 
 function escapeString(str: string): string {
@@ -186,15 +187,11 @@ export async function saveMockData(): Promise<{
     const offers: CasinoOffer[] = offersData ? JSON.parse(offersData) : [];
     const events: CalendarEvent[] = eventsData ? JSON.parse(eventsData) : [];
 
-    const today = new Date();
     const bookedCruises = allCruises.filter(cruise => {
       if (cruise.status === 'completed' || cruise.completionState === 'completed') {
         return false;
       }
-      if (cruise.returnDate) {
-        const returnDate = new Date(cruise.returnDate);
-        return returnDate >= today;
-      }
+      if (cruise.returnDate) return !isDateInPast(cruise.returnDate);
       return true;
     });
 
@@ -202,10 +199,7 @@ export async function saveMockData(): Promise<{
       if (cruise.status === 'completed' || cruise.completionState === 'completed') {
         return true;
       }
-      if (cruise.returnDate) {
-        const returnDate = new Date(cruise.returnDate);
-        return returnDate < today;
-      }
+      if (cruise.returnDate) return isDateInPast(cruise.returnDate);
       return false;
     });
 

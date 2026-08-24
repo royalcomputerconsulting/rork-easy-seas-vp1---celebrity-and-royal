@@ -8,6 +8,7 @@ import {
   getOfferIdentityKey,
 } from '@/lib/dataIdentity';
 import { applyFoundationFields, buildReconciliationSummary, type FoundationOwnerProfile } from '@/lib/dataFoundation';
+import { isDateInPast } from '@/lib/date';
 
 type SyncSource = NonNullable<Cruise['cruiseSource']>;
 
@@ -35,14 +36,7 @@ function isCompletedBookedCruise(cruise: BookedCruise): boolean {
     return false;
   }
 
-  const returnDate = new Date(cruise.returnDate);
-  if (Number.isNaN(returnDate.getTime())) {
-    return false;
-  }
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return returnDate < today;
+  return isDateInPast(cruise.returnDate);
 }
 
 export function getImportedSource(input: {

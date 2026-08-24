@@ -1,5 +1,6 @@
 import type { BookedCruise, Cruise } from '@/types/models';
 import { createDateFromString, getDaysUntil } from '@/lib/date';
+import { buildCruiseDayPlan } from '@/lib/cruiseDayPipeline';
 
 export type LifecycleState = 'upcoming' | 'in-progress' | 'completed';
 
@@ -38,21 +39,32 @@ export interface LifecycleReport {
   needsAttention: BookedCruise[];
 }
 
+function getLifecycleCalendarRange(cruise: BookedCruise | Cruise): { sailDay: Date; returnDay: Date } | null {
+  const plan = buildCruiseDayPlan({
+    sailDate: cruise.sailDate,
+    returnDate: cruise.returnDate,
+    nights: cruise.nights,
+    itinerary: cruise.itinerary,
+  });
+  if (!plan || plan.integrity === 'conflict' || plan.integrity === 'unknown') return null;
+
+  const sailDay = createDateFromString(plan.sailDate);
+  const returnDay = createDateFromString(plan.returnDate);
+  if (Number.isNaN(sailDay.getTime()) || Number.isNaN(returnDay.getTime())) return null;
+  return { sailDay, returnDay };
+}
+
 export function determineLifecycleState(cruise: BookedCruise | Cruise): LifecycleState {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  
-  const sailDate = createDateFromString(cruise.sailDate);
-  const returnDate = cruise.returnDate 
-    ? createDateFromString(cruise.returnDate) 
-    : new Date(sailDate.getTime() + (cruise.nights || 0) * 24 * 60 * 60 * 1000);
 
   if (cruise.status === 'cancelled') {
     return 'completed';
   }
 
-  const sailDay = new Date(sailDate.getFullYear(), sailDate.getMonth(), sailDate.getDate());
-  const returnDay = new Date(returnDate.getFullYear(), returnDate.getMonth(), returnDate.getDate());
+  const range = getLifecycleCalendarRange(cruise);
+  if (!range) return ('completionState' in cruise && cruise.completionState === 'completed') ? 'completed' : 'upcoming';
+  const { sailDay, returnDay } = range;
 
   if (today >= sailDay && today <= returnDay) {
     return 'in-progress';
@@ -185,11 +197,7 @@ export function updateAllCruiseLifecycles(cruises: BookedCruise[]): {
   updatedCruises: BookedCruise[];
   report: LifecycleReport;
 } {
-  const activeCruises = cruises.filter((cruise: any) => !(cruise.offerCode && !cruise.bookingId && !cruise.reservationNumber));
-  if (activeCruises.length !== cruises.length) {
-    console.log(`[LifecycleManager] Skipping ${cruises.length - activeCruises.length} available offer catalog row(s); lifecycle only runs on booked/completed cruises`);
-  }
-  console.log(`[LifecycleManager] Updating lifecycle for ${activeCruises.length} cruises`);
+  console.log(`[LifecycleManager] Updating lifecycle for ${cruises.length} cruises`);
 
   const updates: LifecycleUpdateResult[] = [];
   const validationResults: BookingValidationResult[] = [];
@@ -200,9 +208,9 @@ export function updateAllCruiseLifecycles(cruises: BookedCruise[]): {
   let upcomingCount = 0;
   let inProgressCount = 0;
   let completedCount = 0;
-  const cancelledCount = activeCruises.filter(c => c.status === 'cancelled').length;
+  const cancelledCount = cruises.filter(c => c.status === 'cancelled').length;
 
-  for (const cruise of activeCruises) {
+  for (const cruise of cruises) {
     const lifecycleResult = updateCruiseLifecycle(cruise);
     updates.push(lifecycleResult);
 
@@ -303,17 +311,11 @@ export function findOverlappingCruises(cruises: BookedCruise[]): BookedCruise[][
       const cruiseA = sortedCruises[i];
       const cruiseB = sortedCruises[j];
 
-      const aStart = createDateFromString(cruiseA.sailDate);
-      const aEnd = cruiseA.returnDate 
-        ? createDateFromString(cruiseA.returnDate)
-        : new Date(aStart.getTime() + (cruiseA.nights || 0) * 24 * 60 * 60 * 1000);
+      const rangeA = getLifecycleCalendarRange(cruiseA);
+      const rangeB = getLifecycleCalendarRange(cruiseB);
+      if (!rangeA || !rangeB) continue;
 
-      const bStart = createDateFromString(cruiseB.sailDate);
-      const bEnd = cruiseB.returnDate
-        ? createDateFromString(cruiseB.returnDate)
-        : new Date(bStart.getTime() + (cruiseB.nights || 0) * 24 * 60 * 60 * 1000);
-
-      if (aStart <= bEnd && bStart <= aEnd) {
+      if (rangeA.sailDay <= rangeB.returnDay && rangeB.sailDay <= rangeA.returnDay) {
         console.log(`[LifecycleManager] Found overlapping cruises: ${cruiseA.id} and ${cruiseB.id}`);
         overlaps.push([cruiseA, cruiseB]);
       }

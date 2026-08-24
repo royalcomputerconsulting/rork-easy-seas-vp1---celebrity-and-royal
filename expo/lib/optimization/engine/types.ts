@@ -21,6 +21,10 @@ export type CertificateRecommendationAction =
   | 'BANK_YOUR_WIN'
   | 'DO_NOT_CHASE'
   | 'PLAY_ONE_MORE_SESSION'
+  | 'CONTINUE_NORMALLY'
+  | 'WAIT_UNTIL_TOMORROW'
+  | 'LOWER_VOLATILITY'
+  | 'SAVE_BANKROLL_FOR_NEXT_CRUISE'
   | 'CONTINUE_UNTIL_TARGET'
   | 'PROFIT_PROTECTED_PUSH'
   | 'EXCELLENT_OPPORTUNITY';
@@ -31,6 +35,9 @@ export interface LiveOptimizationState {
   brand: OptimizationCasinoBrand;
   certificateFamily: CertificateFamily;
   shipName?: string | null;
+  currentMachineId?: string | null;
+  currentMachineFamily?: string | null;
+  currentDayType?: 'sea' | 'port' | 'private-island' | 'embarkation' | 'debarkation' | 'unknown' | null;
   cruiseNights?: number | null;
   currentPoints: number;
   currentResult: number;
@@ -70,16 +77,32 @@ export interface CertificateCandidateEvaluation {
   currentLockedThresholdPoints: number | null;
   pointsRequired: number;
   expectedAdditionalCoinIn: number;
+  personalCoinInPerPoint: number;
+  personalActualLossPerThousandPoints: number;
+  personalRateContext: string;
   expectedAdditionalTimeHours: number | null;
   probabilityOfSuccess: number;
   expectedAdditionalLoss: number;
   downsideLow: number;
   downsideHigh: number;
   incrementalCertificateValue: number;
+  incrementalFutureOfferValue: number;
+  incrementalTierValue: number;
+  incrementalAncillaryValue: number;
+  incrementalTravelCost: number;
+  incrementalCruiseCost: number;
+  expectedUnredeemedValueLoss: number;
+  riskPenalty: number;
+  expectedNetVacationValue: number;
   rawIncrementalExpectedValue: number;
   riskAdjustedIncrementalExpectedValue: number;
   incrementalRoi: number | null;
   probabilityOfExceedingRemainingBankroll: number | null;
+  bankrollSurvivalProbability: number | null;
+  requiredBankrollP50: number;
+  requiredBankrollP75: number;
+  requiredBankrollP90: number;
+  recommendedBankrollBuffer: number;
   projectedEndOfCruisePoints: number;
   availableRiskBudget: number | null;
   profitProtectedRiskBudget: number | null;
@@ -119,6 +142,14 @@ export interface CertificateRecommendationSnapshot {
   expectedAdditionalLoss: number;
   downsideRange: { low: number; high: number } | null;
   incrementalCertificateValue: number;
+  incrementalFutureOfferValue: number;
+  incrementalTierValue: number;
+  incrementalAncillaryValue: number;
+  incrementalTravelCost: number;
+  incrementalCruiseCost: number;
+  expectedUnredeemedValueLoss: number;
+  riskPenalty: number;
+  expectedNetVacationValue: number;
   rawIncrementalExpectedValue: number;
   riskAdjustedIncrementalExpectedValue: number;
   bankrollImpact: {
@@ -127,6 +158,11 @@ export interface CertificateRecommendationSnapshot {
     lockedProfitFloor: number | null;
     profitProtectedRiskBudget: number | null;
     probabilityOfExceedingRemainingBankroll: number | null;
+    bankrollSurvivalProbability: number | null;
+    requiredBankrollP50: number | null;
+    requiredBankrollP75: number | null;
+    requiredBankrollP90: number | null;
+    recommendedBankrollBuffer: number | null;
   };
   confidence: ConfidenceBand;
   topReasons: string[];
@@ -152,6 +188,14 @@ export interface BuildOptimalStoppingRecommendationInput {
   model: OptimizationModelSnapshot;
   thresholds: CertificateThresholdDefinition[];
   valueSnapshots: CertificateValueSnapshot[];
+  valueAdjustmentsByThresholdId?: Record<string, {
+    incrementalFutureOfferValue?: number;
+    incrementalTierValue?: number;
+    incrementalAncillaryValue?: number;
+    incrementalTravelCost?: number;
+    incrementalCruiseCost?: number;
+    expectedUnredeemedValueLoss?: number;
+  }>;
   dismissFatigueSignal?: boolean;
 }
 

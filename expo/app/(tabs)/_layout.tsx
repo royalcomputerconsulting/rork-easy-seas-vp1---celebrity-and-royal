@@ -27,10 +27,16 @@ export default function TabLayout() {
   return (
     <Tabs
       initialRouteName="(overview)"
+      detachInactiveScreens={Platform.OS !== 'web'}
       screenListeners={{
         tabPress: handleTabPress,
       }}
       screenOptions={{
+        // Keep each tab's navigation state, but freeze its React tree while it
+        // is not visible. Large cruise/offer screens otherwise recompute their
+        // full local datasets whenever any shared provider publishes an update.
+        lazy: true,
+        freezeOnBlur: Platform.OS !== 'web',
         tabBarActiveTintColor: COLORS.navyDeep,
         tabBarInactiveTintColor: COLORS.textDarkGrey,
         tabBarShowLabel: true,

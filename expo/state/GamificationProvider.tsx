@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { quotaSafeGetJsonItem, quotaSafeSetJsonItem } from "@/lib/storage/quotaSafeStorage";
 import createContextHook from "@nkzw/create-context-hook";
+import { createDateFromString, toCalendarDateOnly, toLocalCalendarDateOnly } from '@/lib/date';
 
 export type AchievementId = 
   | 'first_session'
@@ -277,13 +278,13 @@ function getWeekStart(date: Date): string {
   const day = d.getDay();
   const diff = d.getDate() - day + (day === 0 ? -6 : 1);
   d.setDate(diff);
-  return d.toISOString().split('T')[0];
+  return toLocalCalendarDateOnly(d) ?? '';
 }
 
 function getWeekEnd(weekStart: string): string {
-  const d = new Date(weekStart);
+  const d = createDateFromString(weekStart);
   d.setDate(d.getDate() + 6);
-  return d.toISOString().split('T')[0];
+  return toLocalCalendarDateOnly(d) ?? '';
 }
 
 function calculateLevel(xp: number): { level: number; nextLevelXP: number } {
@@ -320,7 +321,7 @@ export const [GamificationProvider, useGamification] = createContextHook((): Gam
         weeklyGoals: newGoals,
         stats: newStats,
       };
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      await quotaSafeSetJsonItem(STORAGE_KEY, data);
       console.log('[Gamification] Data persisted');
     } catch (error) {
       console.error('[Gamification] Failed to persist data:', error);
@@ -369,11 +370,13 @@ export const [GamificationProvider, useGamification] = createContextHook((): Gam
   const loadData = useCallback(async () => {
     try {
       setIsLoading(true);
-      const stored = await AsyncStorage.getItem(STORAGE_KEY);
+      const data = await quotaSafeGetJsonItem<Record<string, any>>(
+        STORAGE_KEY,
+        {},
+        (value): value is Record<string, any> => Boolean(value) && typeof value === 'object' && !Array.isArray(value),
+      );
       
-      if (stored) {
-        const data = JSON.parse(stored);
-        
+      if (Object.keys(data).length > 0) {
         if (data.achievements) {
           const mergedAchievements = DEFAULT_ACHIEVEMENTS.map(defaultAch => {
             const savedAch = data.achievements.find((a: Achievement) => a.id === defaultAch.id);
@@ -461,8 +464,8 @@ export const [GamificationProvider, useGamification] = createContextHook((): Gam
   }, [achievements, stats, streak, weeklyGoals, persistData]);
 
   const updateStreakFromSession = useCallback(async (sessionDate: string) => {
-    const today = new Date(sessionDate);
-    const todayStr = today.toISOString().split('T')[0];
+    const today = createDateFromString(sessionDate);
+    const todayStr = toCalendarDateOnly(sessionDate) ?? '';
     const currentWeek = getWeekStart(today);
     
     let newStreak = { ...streak };

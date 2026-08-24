@@ -3,6 +3,7 @@ import type { BookedCruise } from '@/types/models';
 import { getBookedCruiseCasinoPoints } from '@/lib/casinoPointTruth';
 import { calculateCruiseValue } from '@/lib/valueCalculator';
 import { COLORS, SPACING, BORDER_RADIUS } from '@/constants/theme';
+import { displayKnownCount } from '@/lib/cruiseRecordIntegrity';
 
 interface CruiseValueReportProps {
   cruise: BookedCruise;
@@ -34,7 +35,7 @@ export function CruiseValueReport({ cruise }: CruiseValueReportProps) {
         <Text style={styles.sectionTitle}>What You Received</Text>
         
         <View style={styles.row}>
-          <Text style={styles.label}>Cabin Retail Value (×{cruise.guests || 2})</Text>
+          <Text style={styles.label}>Cabin Retail Value (×{displayKnownCount(cruise.guests, 'Guest')})</Text>
           <Text style={styles.value}>${breakdown.cabinValueForTwo.toLocaleString()}</Text>
         </View>
 

@@ -1,14 +1,12 @@
 const appJson = require('./app.json');
 
-const APP_STORE_VERSION = '12.4.2';
-const IOS_BUILD_NUMBER = '314';
-const ANDROID_VERSION_CODE = 120405;
+const APP_STORE_VERSION = '13.0.45';
 const FORCE_VERSION_PLUGIN = './plugins/withForcedIOSVersion';
 
 /**
- * Dynamic Expo config intentionally hard-locks the App Store marketing version.
- * Rork/EAS-supplied config values are spread first, then overwritten here so a
- * stale remote value such as 9.17.1 cannot become CFBundleShortVersionString.
+ * Dynamic Expo config intentionally hard-locks only the App Store marketing
+ * version. Developer-facing iOS/Android build numbers remain sourced from
+ * app.json for local builds and from EAS remote versioning for production.
  */
 module.exports = ({ config = {} } = {}) => {
   const staticExpo = appJson.expo || {};
@@ -25,18 +23,15 @@ module.exports = ({ config = {} } = {}) => {
     ios: {
       ...(config.ios || {}),
       ...(staticExpo.ios || {}),
-      buildNumber: IOS_BUILD_NUMBER,
       infoPlist: {
         ...((config.ios && config.ios.infoPlist) || {}),
         ...((staticExpo.ios && staticExpo.ios.infoPlist) || {}),
         CFBundleShortVersionString: APP_STORE_VERSION,
-        CFBundleVersion: IOS_BUILD_NUMBER,
       },
     },
     android: {
       ...(config.android || {}),
       ...(staticExpo.android || {}),
-      versionCode: ANDROID_VERSION_CODE,
     },
     plugins: hasForcePlugin
       ? staticPlugins

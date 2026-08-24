@@ -10,7 +10,7 @@ import { useRouter } from 'expo-router';
 export default function CruiseValueRoute() {
   const router = useRouter();
   useEffect(() => {
-    router.replace({ pathname: '/(tabs)/analytics', params: { tab: 'value' } } as any);
+    router.replace({ pathname: '/(tabs)/analytics', params: { tab: 'trips' } } as any);
   }, [router]);
   return null;
 }

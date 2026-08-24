@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { quotaSafeGetItem, quotaSafeGetJsonItem, quotaSafeSetItem, quotaSafeSetJsonItem } from '@/lib/storage/quotaSafeStorage';
 import createContextHook from '@nkzw/create-context-hook';
 import { getUserScopedKey } from '@/lib/storage/storageKeys';
 import { useAuth } from './AuthProvider';
+import type { CasinoProgramId } from '@/lib/casino/casinoProgramSeasons';
 
 /** Which slice of casino data a screen should currently display. */
 export type CasinoViewMode = 'combined' | 'actual-only' | 'estimated-only';
@@ -39,14 +40,17 @@ export const DEFAULT_CASINO_SETTINGS: CasinoSettings = {
 
 const BASE_SETTINGS_KEY = 'easyseas_casino_settings';
 const BASE_VIEW_MODE_KEY = 'easyseas_casino_view_mode';
+const BASE_SELECTED_PROGRAM_KEY = 'easyseas_casino_selected_program';
 
 interface CasinoSettingsState {
   settings: CasinoSettings;
   viewMode: CasinoViewMode;
+  selectedProgram: Extract<CasinoProgramId, 'club_royale' | 'blue_chip'>;
   isLoading: boolean;
   updateSettings: (updates: Partial<CasinoSettings>) => Promise<void>;
   resetSettings: () => Promise<void>;
   setViewMode: (mode: CasinoViewMode) => Promise<void>;
+  setSelectedProgram: (program: Extract<CasinoProgramId, 'club_royale' | 'blue_chip'>) => Promise<void>;
 }
 
 /**
@@ -61,32 +65,35 @@ export const [CasinoSettingsProvider, useCasinoSettings] = createContextHook(():
   const { authenticatedEmail } = useAuth();
   const [settings, setSettings] = useState<CasinoSettings>(DEFAULT_CASINO_SETTINGS);
   const [viewMode, setViewModeState] = useState<CasinoViewMode>('combined');
+  const [selectedProgram, setSelectedProgramState] = useState<Extract<CasinoProgramId, 'club_royale' | 'blue_chip'>>('club_royale');
   const [isLoading, setIsLoading] = useState(true);
 
   const settingsKey = useMemo(() => getUserScopedKey(BASE_SETTINGS_KEY, authenticatedEmail), [authenticatedEmail]);
   const viewModeKey = useMemo(() => getUserScopedKey(BASE_VIEW_MODE_KEY, authenticatedEmail), [authenticatedEmail]);
+  const selectedProgramKey = useMemo(() => getUserScopedKey(BASE_SELECTED_PROGRAM_KEY, authenticatedEmail), [authenticatedEmail]);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         setIsLoading(true);
-        const [storedSettings, storedViewMode] = await Promise.all([
-          AsyncStorage.getItem(settingsKey),
-          AsyncStorage.getItem(viewModeKey),
+        const [storedSettings, storedViewMode, storedProgram] = await Promise.all([
+          quotaSafeGetJsonItem<Partial<CasinoSettings>>(
+            settingsKey,
+            {},
+            (value): value is Partial<CasinoSettings> => Boolean(value) && typeof value === 'object' && !Array.isArray(value),
+          ),
+          quotaSafeGetItem(viewModeKey),
+          quotaSafeGetItem(selectedProgramKey),
         ]);
         if (cancelled) return;
-        if (storedSettings) {
-          const parsed = JSON.parse(storedSettings) as Partial<CasinoSettings>;
-          setSettings({ ...DEFAULT_CASINO_SETTINGS, ...parsed });
-        } else {
-          setSettings(DEFAULT_CASINO_SETTINGS);
-        }
+        setSettings({ ...DEFAULT_CASINO_SETTINGS, ...storedSettings });
         if (storedViewMode === 'combined' || storedViewMode === 'actual-only' || storedViewMode === 'estimated-only') {
           setViewModeState(storedViewMode);
         } else {
           setViewModeState('combined');
         }
+        setSelectedProgramState(storedProgram === 'blue_chip' ? 'blue_chip' : 'club_royale');
       } catch (error) {
         console.error('[CasinoSettingsProvider] Failed to load settings:', error);
       } finally {
@@ -96,12 +103,12 @@ export const [CasinoSettingsProvider, useCasinoSettings] = createContextHook(():
     return () => {
       cancelled = true;
     };
-  }, [settingsKey, viewModeKey]);
+  }, [settingsKey, viewModeKey, selectedProgramKey]);
 
   const updateSettings = useCallback(async (updates: Partial<CasinoSettings>) => {
     setSettings((prev) => {
       const next = { ...prev, ...updates };
-      AsyncStorage.setItem(settingsKey, JSON.stringify(next)).catch((error) =>
+      quotaSafeSetJsonItem(settingsKey, next).catch((error) =>
         console.error('[CasinoSettingsProvider] Failed to persist settings:', error),
       );
       return next;
@@ -110,20 +117,27 @@ export const [CasinoSettingsProvider, useCasinoSettings] = createContextHook(():
 
   const resetSettings = useCallback(async () => {
     setSettings(DEFAULT_CASINO_SETTINGS);
-    await AsyncStorage.setItem(settingsKey, JSON.stringify(DEFAULT_CASINO_SETTINGS));
+    await quotaSafeSetJsonItem(settingsKey, DEFAULT_CASINO_SETTINGS);
   }, [settingsKey]);
 
   const setViewMode = useCallback(async (mode: CasinoViewMode) => {
     setViewModeState(mode);
-    await AsyncStorage.setItem(viewModeKey, mode);
+    await quotaSafeSetItem(viewModeKey, mode);
   }, [viewModeKey]);
+
+  const setSelectedProgram = useCallback(async (program: Extract<CasinoProgramId, 'club_royale' | 'blue_chip'>) => {
+    setSelectedProgramState(program);
+    await quotaSafeSetItem(selectedProgramKey, program);
+  }, [selectedProgramKey]);
 
   return useMemo(() => ({
     settings,
     viewMode,
+    selectedProgram,
     isLoading,
     updateSettings,
     resetSettings,
     setViewMode,
-  }), [settings, viewMode, isLoading, updateSettings, resetSettings, setViewMode]);
+    setSelectedProgram,
+  }), [settings, viewMode, selectedProgram, isLoading, updateSettings, resetSettings, setViewMode, setSelectedProgram]);
 });

@@ -1,47 +1,4 @@
-import type { BookedCruise, ItineraryDay } from '@/types/models';
-
-/**
- * Real, confirmed per-day itinerary for Royal Caribbean's "7 Night Cabo
- * Overnight & Ensenada" product sailing round-trip from Los Angeles on
- * Navigator/Quantum-class ships. Confirmed against the live Royal Caribbean
- * app for the 2026-07-17 Navigator of the Seas sailing (screenshot-verified):
- * Cabo San Lucas, Mazatlan, and Puerto Vallarta — NOT Ensenada, despite the
- * marketing product name. Reused for the other sailings of the same named
- * itinerary since cruise lines repeat the exact same day-by-day routing
- * across sailings that share a product itinerary name.
- */
-function buildCaboMazatlanPuertoVallartaItinerary(options: { embarkPort: string; disembarkPort?: string; includeConfirmedTimes?: boolean } = { embarkPort: 'Los Angeles, California' }): ItineraryDay[] {
-  const embarkPort = options.embarkPort;
-  const disembarkPort = options.disembarkPort ?? embarkPort;
-  const includeTimes = options.includeConfirmedTimes ?? false;
-  return [
-    { day: 1, port: embarkPort, isSeaDay: false, notes: 'All aboard.' },
-    { day: 2, port: 'Cruising', isSeaDay: true },
-    {
-      day: 3,
-      port: 'Cabo San Lucas, Mexico',
-      isSeaDay: false,
-      ...(includeTimes ? { arrival: '1:00 PM', departure: '7:15 PM' } : {}),
-    },
-    {
-      day: 4,
-      port: 'Mazatlan, Mexico',
-      isSeaDay: false,
-      ...(includeTimes ? { arrival: '8:30 AM', departure: '3:30 PM' } : {}),
-    },
-    {
-      day: 5,
-      port: 'Puerto Vallarta, Mexico',
-      isSeaDay: false,
-      ...(includeTimes ? { arrival: '8:30 AM', departure: '5:30 PM' } : {}),
-    },
-    { day: 6, port: 'Cruising', isSeaDay: true },
-    { day: 7, port: 'Cruising', isSeaDay: true },
-    { day: 8, port: disembarkPort, isSeaDay: false, notes: 'Disembarkation.' },
-  ];
-}
-
-const CABO_MAZATLAN_PUERTO_VALLARTA_PORTS = ['Los Angeles, California', 'Cabo San Lucas, Mexico', 'Mazatlan, Mexico', 'Puerto Vallarta, Mexico', 'Los Angeles, California'];
+import type { BookedCruise } from '@/types/models';
 
 const DEFAULT_GUEST_NAMES = ['Scott Merlis'];
 
@@ -288,8 +245,7 @@ export const USER_CONFIRMED_BOOKED_CRUISE_MANIFEST: BookedCruise[] = [
     singleOccupancy: true,
     status: 'booked',
     completionState: 'upcoming',
-    itinerary: buildCaboMazatlanPuertoVallartaItinerary(),
-    ports: CABO_MAZATLAN_PUERTO_VALLARTA_PORTS,
+    ports: ['Los Angeles, California', 'Cabo San Lucas, Mexico', 'Cabo San Lucas, Mexico', 'Cabo San Lucas, Mexico', 'Ensenada, Mexico', 'Los Angeles, California'],
     taxes: 0,
     cruiseSource: 'royal',
     brand: 'royal',
@@ -355,6 +311,7 @@ export const USER_CONFIRMED_BOOKED_CRUISE_MANIFEST: BookedCruise[] = [
       itinerary: '7 NIGHT EASTERN CARIBBEAN & PERFECT DAY',
       stateroom: 'V4 10518',
       stateroomDescription: 'Interior Stateroom Obstructed View',
+      crownAndAnchorNumber: '305812247',
       specialServices: 'CR TARGETED OFFER(26TIER3)',
       diningWaitlist: '8:30 PM',
       totalCruiseFare: 5500,
@@ -387,12 +344,7 @@ export const USER_CONFIRMED_BOOKED_CRUISE_MANIFEST: BookedCruise[] = [
     singleOccupancy: true,
     status: 'booked',
     completionState: 'upcoming',
-    // Confirmed against the live Royal Caribbean app itinerary screen: real stops are
-    // Cabo San Lucas, Mazatlan, and Puerto Vallarta — NOT Ensenada (the product/marketing
-    // name is misleading; the actual routing differs). Feeds casino hours, day agenda,
-    // and marine weather everywhere this cruise is displayed.
-    itinerary: buildCaboMazatlanPuertoVallartaItinerary({ embarkPort: 'Los Angeles, California', includeConfirmedTimes: true }),
-    ports: CABO_MAZATLAN_PUERTO_VALLARTA_PORTS,
+    ports: ['Los Angeles, California', 'Cabo San Lucas, Mexico', 'Cabo San Lucas, Mexico', 'Ensenada, Mexico', 'Los Angeles, California'],
     taxes: 0,
     cruiseSource: 'royal',
     brand: 'royal',
@@ -417,19 +369,18 @@ export const USER_CONFIRMED_BOOKED_CRUISE_MANIFEST: BookedCruise[] = [
     singleOccupancy: true,
     status: 'booked',
     completionState: 'upcoming',
-    itinerary: buildCaboMazatlanPuertoVallartaItinerary(),
-    ports: CABO_MAZATLAN_PUERTO_VALLARTA_PORTS,
+    ports: ['Los Angeles, California', 'Cabo San Lucas, Mexico', 'Cabo San Lucas, Mexico', 'Ensenada, Mexico', 'Los Angeles, California'],
     taxes: 0,
     cruiseSource: 'royal',
     brand: 'royal',
     casinoProgram: 'clubRoyale',
   },
   {
-    id: 'booked-celebrity-equinox-2026-08-05',
-    reservationNumber: 'CELEQ-20260805',
+    id: 'booked-celebrity-equinox-2026-08-06',
+    reservationNumber: 'CELEQ-20260806',
     shipName: 'Celebrity Equinox',
-    sailDate: '2026-08-05',
-    returnDate: '2026-08-14',
+    sailDate: '2026-08-06',
+    returnDate: '2026-08-15',
     departurePort: 'Barcelona, Spain',
     destination: 'Mediterranean',
     itineraryName: 'Mediterranean / Ibiza / Eclipse Cruise',
@@ -443,12 +394,26 @@ export const USER_CONFIRMED_BOOKED_CRUISE_MANIFEST: BookedCruise[] = [
     singleOccupancy: true,
     status: 'booked',
     completionState: 'upcoming',
-    ports: ['Barcelona, Spain', 'Ibiza, Spain', 'Mediterranean', 'Barcelona, Spain'],
+    ports: ['Barcelona, Spain', 'Ibiza, Spain', 'Ibiza, Spain', 'Tangier, Morocco', 'Lisbon, Portugal', 'Porto (Leixoes), Portugal', 'A Coruna, Spain', 'Barcelona, Spain'],
+    itinerary: [
+      { day: 1, port: 'Barcelona, Spain', departure: '17:00', isSeaDay: false, source: 'public_document', dataConfidence: 'verified' },
+      { day: 2, port: 'Ibiza, Spain', arrival: '11:00', departure: 'Overnight', isSeaDay: false, notes: 'Overnight in Ibiza', source: 'public_document', dataConfidence: 'verified' },
+      { day: 3, port: 'Ibiza, Spain', departure: '09:00', isSeaDay: false, notes: 'Overnight stay continues until 9:00 AM; relaxing sea day follows departure.', source: 'public_document', dataConfidence: 'verified' },
+      { day: 4, port: 'Tangier, Morocco', arrival: '07:00', departure: '16:00', isSeaDay: false, source: 'public_document', dataConfidence: 'verified' },
+      { day: 5, port: 'Lisbon, Portugal', arrival: '10:30', departure: '21:00', isSeaDay: false, source: 'public_document', dataConfidence: 'verified' },
+      { day: 6, port: 'Porto (Leixoes), Portugal', arrival: '08:30', departure: '18:00', isSeaDay: false, source: 'public_document', dataConfidence: 'verified' },
+      { day: 7, port: 'A Coruna, Spain', arrival: '08:00', departure: '17:00', isSeaDay: false, notes: 'Total eclipse day', source: 'public_document', dataConfidence: 'verified' },
+      { day: 8, port: 'At Sea', isSeaDay: true, source: 'public_document', dataConfidence: 'verified' },
+      { day: 9, port: 'At Sea', isSeaDay: true, source: 'public_document', dataConfidence: 'verified' },
+      { day: 10, port: 'Barcelona, Spain', arrival: '05:00', isSeaDay: false, source: 'public_document', dataConfidence: 'verified' },
+    ],
     taxes: 0,
     cruiseSource: 'celebrity',
     brand: 'celebrity',
     casinoProgram: 'blueChip',
-    itineraryNeedsManualEntry: true,
+    itineraryNeedsManualEntry: false,
+    sourceAuthority: 'public_document',
+    dataConfidence: 'verified',
   },
   {
     id: 'booked-navigator-2026-08-21',
@@ -469,86 +434,63 @@ export const USER_CONFIRMED_BOOKED_CRUISE_MANIFEST: BookedCruise[] = [
     singleOccupancy: true,
     status: 'booked',
     completionState: 'upcoming',
-    itinerary: buildCaboMazatlanPuertoVallartaItinerary(),
-    ports: CABO_MAZATLAN_PUERTO_VALLARTA_PORTS,
+    ports: ['Los Angeles, California', 'Cabo San Lucas, Mexico', 'Cabo San Lucas, Mexico', 'Ensenada, Mexico', 'Los Angeles, California'],
     taxes: 0,
     cruiseSource: 'royal',
     brand: 'royal',
     casinoProgram: 'clubRoyale',
   },
   {
-    id: 'booked-harmony-2026-09-05',
-    reservationNumber: 'HARMONY-20260905',
-    shipName: 'Harmony of the Seas',
-    sailDate: '2026-09-05',
-    returnDate: '2026-09-10',
-    departurePort: 'Port Canaveral, Florida',
-    destination: 'Caribbean',
-    itineraryName: '5 Night Caribbean from Orlando',
-    nights: 5,
-    cabinType: 'Ocean View',
-    cabinNumber: '7516',
-    stateroomNumber: '7516',
-    guestNames: DEFAULT_GUEST_NAMES,
-    guests: 1,
-    singleOccupancy: true,
-    status: 'booked',
-    completionState: 'upcoming',
-    ports: ['Port Canaveral, Florida', 'Caribbean', 'Port Canaveral, Florida'],
-    taxes: 0,
-    cruiseSource: 'royal',
-    brand: 'royal',
-    casinoProgram: 'clubRoyale',
-    itineraryNeedsManualEntry: true,
-    notes: 'User-confirmed replacement for former September 2026 Ovation bookings. Sailing out of Orlando / Port Canaveral.',
-  },
-  {
-    id: 'booked-harmony-2026-09-10',
-    reservationNumber: 'HARMONY-20260910',
-    shipName: 'Harmony of the Seas',
-    sailDate: '2026-09-10',
-    returnDate: '2026-09-15',
-    departurePort: 'Port Canaveral, Florida',
-    destination: 'Caribbean',
-    itineraryName: '5 Night Caribbean from Orlando',
-    nights: 5,
-    cabinType: 'TBD',
-    guestNames: DEFAULT_GUEST_NAMES,
-    guests: 1,
-    singleOccupancy: true,
-    status: 'booked',
-    completionState: 'upcoming',
-    ports: ['Port Canaveral, Florida', 'Caribbean', 'Port Canaveral, Florida'],
-    taxes: 0,
-    cruiseSource: 'royal',
-    brand: 'royal',
-    casinoProgram: 'clubRoyale',
-    itineraryNeedsManualEntry: true,
-    notes: 'User-confirmed replacement for former September 2026 Ovation bookings. Sailing out of Orlando / Port Canaveral.',
-  },
-  {
-    id: 'booked-harmony-2026-09-15',
-    reservationNumber: 'HARMONY-20260915',
-    shipName: 'Harmony of the Seas',
-    sailDate: '2026-09-15',
-    returnDate: '2026-09-19',
-    departurePort: 'Port Canaveral, Florida',
-    destination: 'Caribbean',
-    itineraryName: '4 Night Caribbean from Orlando',
-    nights: 4,
+    id: 'booked-ovation-2026-09-04',
+    reservationNumber: '5709803',
+    shipName: 'Ovation of the Seas',
+    sailDate: '2026-09-04',
+    returnDate: '2026-09-11',
+    departurePort: 'Vancouver, British Columbia',
+    destination: 'Alaska',
+    itineraryName: '7 nt Northbound Alaska & Hubbard Glacier',
+    nights: 7,
     cabinType: 'Interior GTY',
+    retailValue: 2100,
+    totalRetailCost: 2100,
+    originalPrice: 2100,
     guestNames: DEFAULT_GUEST_NAMES,
     guests: 1,
     singleOccupancy: true,
     status: 'booked',
     completionState: 'upcoming',
-    ports: ['Port Canaveral, Florida', 'Caribbean', 'Port Canaveral, Florida'],
+    ports: ['Vancouver, British Columbia', 'Ketchikan (Ward Cove), Alaska', 'Sitka, Alaska', 'Skagway, Alaska', 'Seward, Alaska'],
     taxes: 0,
     cruiseSource: 'royal',
     brand: 'royal',
     casinoProgram: 'clubRoyale',
-    itineraryNeedsManualEntry: true,
-    notes: 'User-confirmed replacement for former September 2026 Ovation bookings. Sailing out of Orlando / Port Canaveral.',
+    checkInDate: '2026-07-21',
+  },
+  {
+    id: 'booked-ovation-2026-09-11',
+    reservationNumber: '3677807',
+    shipName: 'Ovation of the Seas',
+    sailDate: '2026-09-11',
+    returnDate: '2026-09-18',
+    departurePort: 'Seward, Alaska',
+    destination: 'Alaska',
+    itineraryName: '7 nt Southbound Alaska & Hubbard Glacier',
+    nights: 7,
+    cabinType: 'Interior GTY',
+    retailValue: 1478,
+    totalRetailCost: 1478,
+    originalPrice: 1478,
+    guestNames: DEFAULT_GUEST_NAMES,
+    guests: 1,
+    singleOccupancy: true,
+    status: 'booked',
+    completionState: 'upcoming',
+    ports: ['Seward, Alaska', 'Juneau, Alaska', 'Skagway, Alaska', 'Icy Strait Point, Alaska', 'Vancouver, British Columbia'],
+    taxes: 0,
+    cruiseSource: 'royal',
+    brand: 'royal',
+    casinoProgram: 'clubRoyale',
+    checkInDate: '2026-07-28',
   },
   {
     id: 'booked-anthem-2026-09-29',
@@ -706,4 +648,108 @@ export const USER_CONFIRMED_BOOKED_CRUISE_MANIFEST: BookedCruise[] = [
     casinoProgram: 'clubRoyale',
     itineraryNeedsManualEntry: true,
   },
+];
+
+function currentRoyalBooking(
+  booking: Pick<BookedCruise,
+    'bookingId' | 'shipName' | 'sailDate' | 'returnDate' | 'nights' | 'cabinType' | 'guestNames'
+  > & Partial<BookedCruise>,
+): BookedCruise {
+  const bookingId = String(booking.bookingId);
+  return {
+    id: `booked-provider-${bookingId}`,
+    departurePort: '',
+    destination: '',
+    itineraryName: '',
+    guests: booking.guestNames?.length || 1,
+    singleOccupancy: (booking.guestNames?.length || 1) === 1,
+    status: 'booked',
+    completionState: 'upcoming',
+    cruiseSource: 'royal',
+    brand: 'royal',
+    casinoProgram: 'clubRoyale',
+    sourceAuthority: 'user_entered',
+    dataConfidence: 'verified',
+    validationStatus: 'valid',
+    ...booking,
+    bookingId,
+    reservationNumber: bookingId,
+  };
+}
+
+/**
+ * Current Royal manifest confirmed by the user on 2026-08-02. This deliberately
+ * uses one row per reservation, so the two cabins on Harmony's Sep 15 sailing
+ * remain separate records. Provider sync data can enrich these records but may
+ * not replace their confirmed reservation/date/cabin facts with stale cards.
+ */
+export const USER_CONFIRMED_CURRENT_ROYAL_BOOKINGS: BookedCruise[] = [
+  currentRoyalBooking({
+    bookingId: '3810973', shipName: 'Navigator of the Seas', sailDate: '2026-07-24', returnDate: '2026-07-31', nights: 7,
+    departurePort: 'Los Angeles, California', destination: 'Ensenada, Cabo & Mazatlan', itineraryName: '7 Night Ensenada, Cabo & Mazatlan',
+    cabinType: 'Balcony', cabinNumber: '6666', deckNumber: '6', guestNames: DEFAULT_GUEST_NAMES,
+    status: 'completed', completionState: 'completed',
+  }),
+  currentRoyalBooking({
+    bookingId: '3658443', shipName: 'Harmony of the Seas', sailDate: '2026-09-10', returnDate: '2026-09-15', nights: 5,
+    departurePort: 'Port Canaveral, Florida', destination: 'Bahamas & Perfect Day', itineraryName: '5 Night Bahamas & Perfect Day Cruise',
+    cabinType: 'Balcony', cabinNumber: '7146', deckNumber: '7', guestNames: DEFAULT_GUEST_NAMES, checkInDate: '2026-08-01',
+  }),
+  currentRoyalBooking({
+    bookingId: '3677807', shipName: 'Harmony of the Seas', sailDate: '2026-09-15', returnDate: '2026-09-19', nights: 4,
+    departurePort: 'Port Canaveral, Florida', destination: 'Bahamas & Perfect Day', itineraryName: '4 Night Bahamas & Perfect Day Cruise',
+    cabinType: 'Interior GTY', guestNames: DEFAULT_GUEST_NAMES, checkInDate: '2026-08-05',
+  }),
+  currentRoyalBooking({
+    bookingId: '6748172', shipName: 'Harmony of the Seas', sailDate: '2026-09-15', returnDate: '2026-09-19', nights: 4,
+    departurePort: 'Port Canaveral, Florida', destination: 'Bahamas & Perfect Day', itineraryName: '4 Night Bahamas & Perfect Day Cruise',
+    cabinType: 'Interior GTY', guestNames: ['Edward Larson', 'Judy Larson'], checkInDate: '2026-08-05',
+  }),
+  currentRoyalBooking({
+    bookingId: '5709803', shipName: 'Harmony of the Seas', sailDate: '2026-09-19', returnDate: '2026-09-26', nights: 7,
+    departurePort: 'Port Canaveral, Florida', destination: 'Eastern Caribbean & Perfect Day', itineraryName: '7 Night Eastern Caribbean & Perfect Day',
+    cabinType: 'Ocean View', cabinNumber: '10506', deckNumber: '10', guestNames: DEFAULT_GUEST_NAMES, checkInDate: '2026-08-15',
+  }),
+  currentRoyalBooking({
+    bookingId: '5330038', shipName: 'Icon of the Seas', sailDate: '2026-09-26', returnDate: '2026-10-03', nights: 7,
+    departurePort: 'Miami, Florida', destination: 'Western Caribbean & Perfect Day', itineraryName: '7 Night Western Caribbean & Perfect Day',
+    cabinType: 'Interior', guestNames: DEFAULT_GUEST_NAMES,
+    ports: ['Miami, Florida', 'Costa Maya, Mexico', 'Roatan, Honduras', 'Cozumel, Mexico', 'Perfect Day at CocoCay, Bahamas', 'Miami, Florida'],
+  }),
+  currentRoyalBooking({
+    bookingId: '7563285', shipName: 'Anthem of the Seas', sailDate: '2026-09-29', returnDate: '2026-10-11', nights: 12,
+    departurePort: 'Vancouver, British Columbia', destination: 'Hawaii', itineraryName: '12 Night Hawaii Cruise',
+    cabinType: 'Ocean View GTY', guestNames: DEFAULT_GUEST_NAMES, checkInDate: '2026-09-02',
+  }),
+  currentRoyalBooking({
+    bookingId: '4897416', shipName: 'Allure of the Seas', sailDate: '2026-10-17', returnDate: '2026-10-25', nights: 8,
+    departurePort: 'Fort Lauderdale, Florida', destination: 'Southern Caribbean & Perfect Day', itineraryName: '8 Night Southern Caribbean & Perfect Day',
+    cabinType: 'Ocean View', cabinNumber: '8510', deckNumber: '8', guestNames: DEFAULT_GUEST_NAMES, checkInDate: '2026-09-10',
+  }),
+  currentRoyalBooking({
+    bookingId: '681728', shipName: 'Allure of the Seas', sailDate: '2026-10-25', returnDate: '2026-11-01', nights: 7,
+    departurePort: 'Fort Lauderdale, Florida', destination: 'Eastern Caribbean & Perfect Day', itineraryName: '7 Night Eastern Caribbean & Perfect Day',
+    cabinType: 'Ocean View', cabinNumber: '3214', deckNumber: '3', guestNames: DEFAULT_GUEST_NAMES, checkInDate: '2026-09-25',
+  }),
+  currentRoyalBooking({
+    bookingId: '5261208', shipName: 'Oasis of the Seas', sailDate: '2026-11-09', returnDate: '2026-11-13', nights: 4,
+    departurePort: 'Fort Lauderdale, Florida', destination: 'Bahamas & Perfect Day', itineraryName: '4 Night Bahamas & Perfect Day Cruise',
+    cabinType: 'Balcony GTY', guestNames: DEFAULT_GUEST_NAMES, checkInDate: '2026-10-01',
+  }),
+  currentRoyalBooking({
+    bookingId: '4980141', shipName: 'Adventure of the Seas', sailDate: '2026-11-15', returnDate: '2026-11-21', nights: 6,
+    departurePort: 'Fort Lauderdale, Florida', destination: 'Western Caribbean & Perfect Day', itineraryName: '6 Night Western Caribbean & Perfect Day',
+    cabinType: 'Balcony GTY', guestNames: DEFAULT_GUEST_NAMES, checkInDate: '2026-10-29',
+  }),
+  currentRoyalBooking({
+    bookingId: '4778205', shipName: 'Adventure of the Seas', sailDate: '2026-12-13', returnDate: '2026-12-19', nights: 6,
+    departurePort: 'Fort Lauderdale, Florida', destination: 'Western Caribbean', itineraryName: '6 Night Western Caribbean Cruise',
+    cabinType: 'Ocean View', cabinNumber: '1832', deckNumber: '12', guestNames: DEFAULT_GUEST_NAMES,
+  }),
+  currentRoyalBooking({
+    bookingId: '1860399', shipName: 'Legend of the Seas', sailDate: '2026-12-20', returnDate: '2026-12-26', nights: 6,
+    departurePort: 'Fort Lauderdale, Florida', destination: 'Western Caribbean & Perfect Day', itineraryName: '6 Night Western Caribbean & Perfect Day Holiday',
+    cabinType: 'Balcony GTY', guestNames: ['Scott Merlis', 'JP'], status: 'Courtesy Hold', isCourtesyHold: true,
+    notes: 'Deposit payment is required before the courtesy hold expires.',
+  }),
 ];

@@ -19,10 +19,12 @@ import { getUniqueImageForCruise, DEFAULT_CRUISE_IMAGE } from '@/constants/cruis
 import type { Cruise, CasinoOffer } from '@/types/models';
 import type { OfferRatingLabel } from '@/lib/offerIntelligence';
 import { useAppState } from '@/state/AppStateProvider';
-import { getCabinPriceFromEntity, getDoubleOccupancyRoomRetailValue, GUEST_COUNT_DEFAULT } from '@/lib/valueCalculator';
+import { getCabinPriceFromEntity, getDoubleOccupancyRoomRetailValue } from '@/lib/valueCalculator';
 import { getCertificatePdfMatch, openCertificatePdf } from '@/lib/royalCaribbean/certificatePdf';
+import { knownGuestCount, knownNightCount } from '@/lib/cruiseRecordIntegrity';
 
 interface CasinoOfferCardProps {
+  offerId?: string;
   offerCode: string;
   offerName: string;
   expiryDate?: string;
@@ -247,6 +249,7 @@ const summaryStyles = StyleSheet.create({
 });
 
 export const CasinoOfferCard = React.memo(function CasinoOfferCard({
+  offerId,
   offerCode,
   offerName,
   expiryDate,
@@ -288,6 +291,8 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
 
   const offerDetails = useMemo(() => {
     const offer = (localData.offers || []).find(
+      (o: CasinoOffer) => Boolean(offerId && o.id === offerId)
+    ) ?? (localData.offers || []).find(
       (o: CasinoOffer) => o.offerCode === offerCode
     );
     
@@ -320,7 +325,7 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
       totalValue,
       averageValue,
     };
-  }, [localData.offers, offerCode, cruises, tradeInValue]);
+  }, [localData.offers, offerId, offerCode, cruises, tradeInValue]);
   
   const getActualOfferImageUrl = (code: string): string => {
     return `https://image.royalcaribbeanmarketing.com/lib/fe9415737666017570/m/1/${code}.jpg`;
@@ -400,41 +405,47 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
       "Owner's Suite": 600,
     };
     
-    const aggregateSample = cruises.length > 250 ? cruises.slice(0, 250) : cruises;
-    aggregateSample.forEach(cruise => {
+    cruises.forEach(cruise => {
       let cabinPrice = getCabinPriceFromEntity(cruise, roomType) ?? getDoubleOccupancyRoomRetailValue(cruise.price) ?? 0;
       
       // Estimate cabin price if not available
-      if (cabinPrice === 0 && cruise.nights > 0) {
+      const nights = knownNightCount(cruise.nights);
+      const guestCount = knownGuestCount(cruise.guests);
+      if (cabinPrice === 0 && nights) {
         const typeKey = Object.keys(baseRates).find(key => 
           roomType.toLowerCase().includes(key.toLowerCase())
         ) || 'Balcony';
-        cabinPrice = (baseRates[typeKey] || 180) * (cruise.nights || 7);
+        cabinPrice = (baseRates[typeKey] || 180) * nights;
       }
-      
-      const guestCount = cruise.guests || GUEST_COUNT_DEFAULT;
+
       const cabinValueForTwo = cabinPrice;
       
       // Estimate taxes if not provided (~$30/night per guest)
       let taxesFees = cruise.taxes || 0;
-      if (taxesFees === 0 && cruise.nights > 0) {
-        taxesFees = Math.round((cruise.nights || 7) * 30 * guestCount);
+      if (taxesFees === 0 && nights && guestCount) {
+        taxesFees = Math.round(nights * 30 * guestCount);
       }
       
       totalCabinValue += cabinValueForTwo;
       totalTaxesFees += taxesFees;
       totalOfferValue += cruise.offerValue || 0;
     });
-    if (aggregateSample.length > 0 && aggregateSample.length < cruises.length) {
-      const scaleFactor = cruises.length / aggregateSample.length;
-      totalCabinValue = Math.round(totalCabinValue * scaleFactor);
-      totalTaxesFees = Math.round(totalTaxesFees * scaleFactor);
-      totalOfferValue = Math.round(totalOfferValue * scaleFactor);
-    }
     
     const totalFreePlay = firstCruise?.freePlay || freePlay || 0;
     const totalOBC = firstCruise?.freeOBC || obc || 0;
     const aggregateTotalValue = totalCabinValue + totalTaxesFees + totalFreePlay + totalOBC + totalOfferValue;
+    
+    console.log('[CasinoOfferCard] Aggregate value calculated:', {
+      offerCode,
+      roomType,
+      cruiseCount: cruises.length,
+      totalCabinValue,
+      totalTaxesFees,
+      totalFreePlay,
+      totalOBC,
+      totalOfferValue,
+      aggregateTotalValue,
+    });
     
     return {
       totalCabinValue,
@@ -473,26 +484,39 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
       let cabinPrice = getCabinPriceFromEntity(firstCruise, roomType) ?? getDoubleOccupancyRoomRetailValue(firstCruise.price) ?? 0;
       
       // Estimate cabin price if not available
-      if (cabinPrice === 0 && firstCruise.nights > 0) {
+      const nights = knownNightCount(firstCruise.nights);
+      const guestCount = knownGuestCount(firstCruise.guests);
+      if (cabinPrice === 0 && nights) {
         const typeKey = Object.keys(baseRates).find(key => 
           roomType.toLowerCase().includes(key.toLowerCase())
         ) || 'Balcony';
-        cabinPrice = (baseRates[typeKey] || 180) * (firstCruise.nights || 7);
+        cabinPrice = (baseRates[typeKey] || 180) * nights;
       }
-      
-      const guestCount = firstCruise.guests || GUEST_COUNT_DEFAULT;
+
       const cabinValueForTwo = cabinPrice;
       
       // Estimate taxes if not provided (~$30/night per guest)
       let taxes = firstCruise.taxes || 0;
-      if (taxes === 0 && firstCruise.nights > 0) {
-        taxes = Math.round((firstCruise.nights || 7) * 30 * guestCount);
+      if (taxes === 0 && nights && guestCount) {
+        taxes = Math.round(nights * 30 * guestCount);
       }
       
       const freePlayValue = firstCruise.freePlay || freePlay || 0;
       const obcValue = firstCruise.freeOBC || obc || 0;
       
       total = cabinValueForTwo + taxes + freePlayValue + obcValue;
+      
+      console.log('[CasinoOfferCard] Total value calculated:', {
+        offerCode,
+        roomType,
+        cabinPrice,
+        guestCount,
+        cabinValueForTwo,
+        taxes,
+        freePlayValue,
+        obcValue,
+        total,
+      });
     }
     
     return total;
@@ -500,8 +524,7 @@ export const CasinoOfferCard = React.memo(function CasinoOfferCard({
 
   const uniqueDestinations = useMemo(() => {
     const destinations = new Set<string>();
-    const aggregateSample = cruises.length > 250 ? cruises.slice(0, 250) : cruises;
-    aggregateSample.forEach(cruise => {
+    cruises.forEach(cruise => {
       if (cruise.destination) {
         destinations.add(cruise.destination);
       }
