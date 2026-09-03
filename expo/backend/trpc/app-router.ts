@@ -1,0 +1,26 @@
+import { createTRPCRouter } from "./create-context";
+import { exampleRouter } from "./routes/example";
+import { dataRouter } from "./routes/data";
+import { calendarRouter } from "./routes/calendar";
+import { royalCaribbeanSyncRouter } from "./routes/royal-caribbean-sync";
+import { cruiseDealsRouter } from "./routes/cruise-deals";
+import { crewRecognitionRouter } from "./routes/crew-recognition";
+import { dailyLuckRouter } from "./routes/daily-luck";
+import { certificateExplorerRouter } from "./routes/certificate-explorer";
+import { accessRouter } from "./routes/access";
+import { machineLibraryRouter } from "./routes/machine-library";
+
+export const appRouter = createTRPCRouter({
+  example: exampleRouter,
+  data: dataRouter,
+  calendar: calendarRouter,
+  royalCaribbeanSync: royalCaribbeanSyncRouter,
+  cruiseDeals: cruiseDealsRouter,
+  crewRecognition: crewRecognitionRouter,
+  dailyLuck: dailyLuckRouter,
+  certificateExplorer: certificateExplorerRouter,
+  access: accessRouter,
+  machineLibrary: machineLibraryRouter,
+});
+
+export type AppRouter = typeof appRouter;

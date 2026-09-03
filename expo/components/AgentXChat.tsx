@@ -1,0 +1,1908 @@
+import React, { useState, useRef, useCallback, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  ActivityIndicator,
+  Animated,
+  Alert,
+  Keyboard,
+  TextInput,
+} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Audio } from 'expo-av';
+import * as Speech from 'expo-speech';
+import {
+  Bot,
+  User,
+  Sparkles,
+  Ship,
+  TrendingUp,
+  Award,
+  Gift,
+  X,
+  Maximize2,
+  Minimize2,
+  Mic,
+  MicOff,
+  Volume2,
+  VolumeX,
+  StopCircle,
+  Cpu,
+  Workflow,
+  Radio,
+  SlidersHorizontal,
+  Search,
+  CalendarDays,
+  ClipboardCheck,
+} from 'lucide-react-native';
+import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/constants/theme';
+import { IntelligenceFilterStrip } from '@/components/IntelligenceFilterStrip';
+import type { AgentXMode } from '@/types/models';
+import type { ConversationSourceReference } from '@/lib/askAllOffers/types';
+import { useRouter } from 'expo-router';
+import type { AgentConfirmedAction } from '@/lib/agentConfirmedActions';
+import { useExperience } from '@/state/ExperienceProvider';
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
+  isLoading?: boolean;
+  toolName?: string;
+  toolInput?: unknown;
+  contextSummary?: string;
+  supportingDetails?: string;
+  suggestedActions?: { id: string; label: string; prompt: string }[];
+  sourceReferences?: ConversationSourceReference[];
+  pendingAction?: AgentConfirmedAction;
+  actionStatus?: 'pending' | 'confirmed' | 'cancelled' | 'failed';
+}
+
+export interface AgentXQuickAction {
+  id: string;
+  label: string;
+  icon: typeof Ship;
+  prompt: string;
+}
+
+interface AgentXChatProps {
+  messages: ChatMessage[];
+  onSendMessage: (message: string) => void;
+  isLoading?: boolean;
+  isExpanded?: boolean;
+  onToggleExpand?: () => void;
+  onClose?: () => void;
+  showHeader?: boolean;
+  placeholder?: string;
+  mode?: AgentXMode;
+  onModeChange?: (mode: AgentXMode) => void;
+  contextLabel?: string;
+  title?: string;
+  subtitle?: string;
+  welcomeTitle?: string;
+  welcomeSubtitle?: string;
+  disclaimerText?: string;
+  useSafeAreaPadding?: boolean;
+  showDevAssistant?: boolean;
+  showFilterStrip?: boolean;
+  quickActions?: AgentXQuickAction[];
+  defaultTtsEnabled?: boolean;
+  showAgentModes?: boolean;
+  unifiedComposer?: boolean;
+  keyboardAvoidanceEnabled?: boolean;
+  onConfirmAction?: (action: AgentConfirmedAction) => Promise<{ route?: string } | void>;
+  onCancelAction?: (action: AgentConfirmedAction) => void;
+}
+
+const STT_ENDPOINT = 'https://toolkit.rork.com/stt/transcribe/';
+
+const QUICK_ACTIONS: AgentXQuickAction[] = [
+  { id: 'search', label: 'Search Cruises', icon: Ship, prompt: 'Search for available cruises' },
+  { id: 'tier', label: 'Tier Progress', icon: Award, prompt: 'Show my tier progress to Signature' },
+  { id: 'optimize', label: 'Optimize', icon: TrendingUp, prompt: 'Recommend cruises to maximize my points' },
+  { id: 'offers', label: 'Offers', icon: Gift, prompt: 'Show expiring offers' },
+  { id: 'ask-data', label: 'Agent SEA', icon: Search, prompt: 'Agent SEA: what offers, cruises, certificates, casino records, crew notes, weather, and calendar items need attention?' },
+];
+
+const AGENT_MODES: { id: AgentXMode; label: string; icon: typeof Ship }[] = [
+  { id: 'travelAgent', label: 'Travel Agent', icon: Ship },
+  { id: 'casinoHost', label: 'Casino Host', icon: Gift },
+  { id: 'certificateAdvisor', label: 'Certificate Advisor', icon: ClipboardCheck },
+  { id: 'loyaltyStrategist', label: 'Loyalty Strategist', icon: Award },
+  { id: 'apScout', label: 'AP Scout', icon: Radio },
+  { id: 'calendarPlanner', label: 'Calendar Planner', icon: CalendarDays },
+  { id: 'importAuditor', label: 'Import Auditor', icon: Workflow },
+  { id: 'easySeasGuide', label: 'Agent SEA', icon: Sparkles },
+];
+
+const DEV_ASSISTANT_CAPABILITIES = [
+  {
+    id: 'prompt-dev',
+    icon: Cpu,
+    label: 'App Structure',
+    desc: 'Generate initial app scaffolding',
+    prompt: 'I want to build a voice-enabled assistant app. Help me design the initial app structure with conversational AI capabilities. Include the recommended file structure, key components needed (voice input, chat interface, response display), navigation flow, and state management approach. Outline the architecture for both the frontend UI and the backend integration points.',
+  },
+  {
+    id: 'api-integration',
+    icon: Workflow,
+    label: 'API Integration',
+    desc: 'Connect LLMs & voice APIs',
+    prompt: 'Help me integrate external AI APIs into my app for conversational logic. I need guidance on: 1) Connecting to LLMs like GPT-4o or Anthropic Claude for natural language understanding, 2) Setting up voice-to-text and text-to-speech pipelines, 3) Managing API keys securely, 4) Structuring the request/response flow between the app and AI services, and 5) Handling streaming responses for real-time conversational feel.',
+  },
+  {
+    id: 'websocket',
+    icon: Radio,
+    label: 'Real-Time Audio',
+    desc: 'WebSocket streaming setup',
+    prompt: 'I need to set up WebSocket communication for real-time audio streaming between my app and a backend service. Walk me through: 1) Establishing a persistent WebSocket connection for bidirectional audio data, 2) Capturing and encoding audio from the device microphone in real-time, 3) Streaming audio chunks to the server for processing, 4) Receiving and playing back AI-generated audio responses, and 5) Handling connection lifecycle, reconnection logic, and error states gracefully.',
+  },
+  {
+    id: 'refinement',
+    icon: SlidersHorizontal,
+    label: 'Persona & Tone',
+    desc: 'Customize AI behavior',
+    prompt: 'Help me refine my AI assistant\'s persona, features, and conversational tone. I want to: 1) Define a custom system prompt that shapes the AI\'s personality and expertise, 2) Configure response style (formal vs casual, verbose vs concise), 3) Add domain-specific knowledge and constraints, 4) Set up conversation memory and context management, and 5) Create customizable settings so users can adjust the AI\'s behavior. Provide specific examples of system prompts and configuration patterns.',
+  },
+];
+
+async function transcribeAudioNative(uri: string): Promise<string> {
+  console.log('[AgentXChat] Transcribing audio from URI:', uri);
+  const uriParts = uri.split('.');
+  const fileType = uriParts[uriParts.length - 1];
+
+  const audioFile = {
+    uri,
+    name: 'recording.' + fileType,
+    type: 'audio/' + fileType,
+  };
+
+  const formData = new FormData();
+  formData.append('audio', audioFile as unknown as Blob);
+
+  const response = await fetch(STT_ENDPOINT, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error(`STT request failed: ${response.status}`);
+  }
+
+  const data = await response.json();
+  console.log('[AgentXChat] STT result:', data);
+  return data.text || '';
+}
+
+async function transcribeAudioWeb(blob: Blob): Promise<string> {
+  console.log('[AgentXChat] Transcribing audio blob for web');
+  const formData = new FormData();
+  formData.append('audio', blob, 'recording.webm');
+
+  const response = await fetch(STT_ENDPOINT, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error(`STT request failed: ${response.status}`);
+  }
+
+  const data = await response.json();
+  console.log('[AgentXChat] STT result:', data);
+  return data.text || '';
+}
+
+export const AgentXChat = React.memo(function AgentXChat({
+  messages,
+  onSendMessage,
+  isLoading = false,
+  isExpanded = false,
+  onToggleExpand,
+  onClose,
+  showHeader = true,
+  placeholder = 'Ask about cruises, tier progress, offers...',
+  mode = 'travelAgent',
+  onModeChange,
+  contextLabel = 'AgentX',
+  title = 'AI Analysis',
+  subtitle = 'Cruise Intelligence',
+  welcomeTitle = 'AI Analysis',
+  welcomeSubtitle = 'Your intelligent cruise advisor. Ask me anything about cruises, offers, tier progress, or portfolio optimization.',
+  disclaimerText = 'AI Analysis supports both voice and manual chat.',
+  useSafeAreaPadding = true,
+  showDevAssistant = true,
+  showFilterStrip = true,
+  quickActions = QUICK_ACTIONS,
+  defaultTtsEnabled = true,
+  showAgentModes = true,
+  unifiedComposer = false,
+  keyboardAvoidanceEnabled = true,
+  onConfirmAction,
+  onCancelAction,
+}: AgentXChatProps) {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { preferences, minimumControlSize, motionDuration, colors, textScale } = useExperience();
+  const scrollViewRef = useRef<ScrollView>(null);
+  const isNearBottomRef = useRef(true);
+  const shouldFollowNextMessageRef = useRef(false);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  const [isRecording, setIsRecording] = useState<boolean>(false);
+  const [isTranscribing, setIsTranscribing] = useState<boolean>(false);
+  const [ttsEnabled, setTtsEnabled] = useState<boolean>(defaultTtsEnabled);
+  const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
+  const [inputMode, setInputMode] = useState<'voice' | 'manual'>('manual');
+  const [manualInput, setManualInput] = useState<string>('');
+  const manualInputRef = useRef<string>('');
+  const lastManualSubmitRef = useRef<{ content: string; at: number } | null>(null);
+  const [expandedEvidenceIds, setExpandedEvidenceIds] = useState<Set<string>>(() => new Set());
+  const recordingRef = useRef<Audio.Recording | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const lastSpokenMessageRef = useRef<string | null>(null);
+
+  const speakText = useCallback((text: string) => {
+    const cleanText = text
+      .replace(/---/g, '')
+      .replace(/\*\*/g, '')
+      .replace(/\n{2,}/g, '. ')
+      .replace(/[•-]\s/g, '')
+      .replace(/#+\s/g, '')
+      .slice(0, 3000);
+
+    console.log('[AgentXChat] Speaking text, length:', cleanText.length);
+    void Speech.stop();
+    setIsSpeaking(true);
+    Speech.speak(cleanText, {
+      language: 'en-US',
+      rate: 1.0,
+      pitch: 1.0,
+      onDone: () => {
+        console.log('[AgentXChat] TTS finished');
+        setIsSpeaking(false);
+      },
+      onError: (err) => {
+        console.error('[AgentXChat] TTS error:', err);
+        setIsSpeaking(false);
+      },
+      onStopped: () => {
+        setIsSpeaking(false);
+      },
+    });
+  }, []);
+
+  const stopSpeaking = useCallback(() => {
+    void Speech.stop();
+    setIsSpeaking(false);
+  }, []);
+
+  useEffect(() => {
+    const animation = Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: motionDuration(300),
+      useNativeDriver: true,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [fadeAnim, motionDuration]);
+
+  useEffect(() => {
+    const newest = messages[messages.length - 1];
+    const shouldFollow = isNearBottomRef.current || shouldFollowNextMessageRef.current || newest?.role === 'user' || Boolean(newest?.isLoading);
+    shouldFollowNextMessageRef.current = false;
+    if (scrollViewRef.current && messages.length > 0 && shouldFollow) {
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: !preferences.reducedMotion });
+      }, 100);
+    }
+  }, [messages, preferences.reducedMotion]);
+
+  useEffect(() => {
+    const eventName = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const subscription = Keyboard.addListener(eventName, () => {
+      setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: !preferences.reducedMotion }), Platform.OS === 'ios' ? 80 : 20);
+    });
+    return () => subscription.remove();
+  }, [preferences.reducedMotion]);
+
+  useEffect(() => {
+    if (!ttsEnabled) return;
+    const lastMessage = messages[messages.length - 1];
+    if (
+      lastMessage &&
+      lastMessage.role === 'assistant' &&
+      !lastMessage.isLoading &&
+      lastMessage.content &&
+      lastMessage.id !== lastSpokenMessageRef.current
+    ) {
+      lastSpokenMessageRef.current = lastMessage.id;
+      speakText(lastMessage.content);
+    }
+  }, [messages, ttsEnabled, speakText]);
+
+  useEffect(() => {
+    if (isRecording && !preferences.reducedMotion) {
+      const animation = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.25,
+            duration: 600,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 600,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      animation.start();
+      return () => animation.stop();
+    } else {
+      pulseAnim.setValue(1);
+    }
+  }, [isRecording, preferences.reducedMotion, pulseAnim]);
+
+  const toggleTts = useCallback(() => {
+    if (isSpeaking) {
+      stopSpeaking();
+    }
+    setTtsEnabled((prev: boolean) => !prev);
+  }, [isSpeaking, stopSpeaking]);
+
+  const startRecordingNative = useCallback(async () => {
+    try {
+      console.log('[AgentXChat] Requesting audio permissions...');
+      const permission = await Audio.requestPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Permission Required', 'Microphone access is needed for voice input.');
+        return;
+      }
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      const recording = new Audio.Recording();
+      await recording.prepareToRecordAsync({
+        android: {
+          extension: '.m4a',
+          outputFormat: 2,
+          audioEncoder: 3,
+          sampleRate: 44100,
+          numberOfChannels: 1,
+          bitRate: 128000,
+        },
+        ios: {
+          extension: '.wav',
+          outputFormat: 1,
+          audioQuality: 127,
+          sampleRate: 44100,
+          numberOfChannels: 1,
+          bitRate: 128000,
+          linearPCMBitDepth: 16,
+          linearPCMIsBigEndian: false,
+          linearPCMIsFloat: false,
+        },
+        web: {
+          mimeType: 'audio/webm',
+          bitsPerSecond: 128000,
+        },
+      });
+
+      await recording.startAsync();
+      recordingRef.current = recording;
+      setIsRecording(true);
+      console.log('[AgentXChat] Recording started (native)');
+    } catch (err) {
+      console.error('[AgentXChat] Failed to start recording:', err);
+      Alert.alert('Recording Error', 'Could not start voice recording. Please try again.');
+    }
+  }, []);
+
+  const stopRecordingNative = useCallback(async () => {
+    try {
+      const recording = recordingRef.current;
+      if (!recording) return;
+
+      console.log('[AgentXChat] Stopping recording (native)...');
+      setIsRecording(false);
+      await recording.stopAndUnloadAsync();
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+
+      const uri = recording.getURI();
+      recordingRef.current = null;
+
+      if (!uri) {
+        console.error('[AgentXChat] No recording URI');
+        return;
+      }
+
+      setIsTranscribing(true);
+      const text = await transcribeAudioNative(uri);
+      setIsTranscribing(false);
+
+      if (text.trim()) {
+        console.log('[AgentXChat] Transcribed text:', text);
+        onSendMessage(text.trim());
+      } else {
+        Alert.alert('No Speech Detected', 'Could not understand the audio. Please try again.');
+      }
+    } catch (err) {
+      console.error('[AgentXChat] Error stopping recording:', err);
+      setIsRecording(false);
+      setIsTranscribing(false);
+      Alert.alert('Transcription Error', 'Failed to process your voice. Please try again.');
+    }
+  }, [onSendMessage]);
+
+  const startRecordingWeb = useCallback(async () => {
+    try {
+      console.log('[AgentXChat] Starting web recording...');
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event: BlobEvent) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.start();
+      mediaRecorderRef.current = mediaRecorder;
+      setIsRecording(true);
+      console.log('[AgentXChat] Recording started (web)');
+    } catch (err) {
+      console.error('[AgentXChat] Web recording error:', err);
+      Alert.alert('Microphone Error', 'Could not access your microphone. Check browser permissions.');
+    }
+  }, []);
+
+  const stopRecordingWeb = useCallback(async () => {
+    try {
+      const mediaRecorder = mediaRecorderRef.current;
+      if (!mediaRecorder) return;
+
+      console.log('[AgentXChat] Stopping web recording...');
+      setIsRecording(false);
+
+      await new Promise<void>((resolve) => {
+        mediaRecorder.onstop = () => resolve();
+        mediaRecorder.stop();
+      });
+
+      mediaRecorder.stream.getTracks().forEach(track => track.stop());
+      mediaRecorderRef.current = null;
+
+      const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+      audioChunksRef.current = [];
+
+      if (blob.size === 0) {
+        console.error('[AgentXChat] Empty recording blob');
+        return;
+      }
+
+      setIsTranscribing(true);
+      const text = await transcribeAudioWeb(blob);
+      setIsTranscribing(false);
+
+      if (text.trim()) {
+        console.log('[AgentXChat] Transcribed text:', text);
+        onSendMessage(text.trim());
+      } else {
+        Alert.alert('No Speech Detected', 'Could not understand the audio. Please try again.');
+      }
+    } catch (err) {
+      console.error('[AgentXChat] Web stop recording error:', err);
+      setIsRecording(false);
+      setIsTranscribing(false);
+      Alert.alert('Transcription Error', 'Failed to process your voice. Please try again.');
+    }
+  }, [onSendMessage]);
+
+  const handleMicPress = useCallback(async () => {
+    if (isLoading || isTranscribing) return;
+
+    if (isSpeaking) {
+      stopSpeaking();
+    }
+
+    if (isRecording) {
+      if (Platform.OS === 'web') {
+        await stopRecordingWeb();
+      } else {
+        await stopRecordingNative();
+      }
+    } else {
+      if (Platform.OS === 'web') {
+        await startRecordingWeb();
+      } else {
+        await startRecordingNative();
+      }
+    }
+  }, [isLoading, isTranscribing, isRecording, isSpeaking, stopSpeaking, stopRecordingWeb, stopRecordingNative, startRecordingWeb, startRecordingNative]);
+
+  const handleQuickAction = useCallback((prompt: string) => {
+    console.log('[AgentXChat] Quick action:', prompt);
+    if (isSpeaking) stopSpeaking();
+    onSendMessage(prompt);
+  }, [onSendMessage, isSpeaking, stopSpeaking]);
+
+  const handleModeChange = useCallback((inputModeValue: 'voice' | 'manual') => {
+    if (isRecording || isTranscribing || inputMode === inputModeValue) {
+      return;
+    }
+
+    console.log('[AgentXChat] Switching input mode to:', inputModeValue);
+    setInputMode(inputModeValue);
+  }, [inputMode, isRecording, isTranscribing]);
+
+  const handleAgentModeChange = useCallback((nextMode: AgentXMode) => {
+    console.log('[AgentXChat] Switching AgentX mode:', nextMode);
+    onModeChange?.(nextMode);
+  }, [onModeChange]);
+
+  const handleManualSend = useCallback(() => {
+    // Read the native input mirror instead of relying on a React state commit
+    // having completed before the first tap. This eliminates the iOS case in
+    // which a freshly typed message appeared ready but the first Send tap saw
+    // the previous render's empty value.
+    const trimmedInput = manualInputRef.current.trim();
+    if (!trimmedInput || isTranscribing || isRecording) {
+      return;
+    }
+    const now = Date.now();
+    if (lastManualSubmitRef.current?.content === trimmedInput && now - lastManualSubmitRef.current.at < 750) return;
+    lastManualSubmitRef.current = { content: trimmedInput, at: now };
+    shouldFollowNextMessageRef.current = true;
+    isNearBottomRef.current = true;
+
+    console.log('[AgentXChat] Sending manual message:', trimmedInput);
+    if (isSpeaking) {
+      stopSpeaking();
+    }
+
+    manualInputRef.current = '';
+    setManualInput('');
+    if (!unifiedComposer) Keyboard.dismiss();
+    onSendMessage(trimmedInput);
+  }, [isTranscribing, isRecording, isSpeaking, stopSpeaking, onSendMessage, unifiedComposer]);
+
+  const handleConfirmAction = useCallback(async (action: AgentConfirmedAction) => {
+    const result = await onConfirmAction?.(action);
+    if (result?.route) router.push(result.route as never);
+  }, [onConfirmAction, router]);
+
+  const renderMessage = useCallback((message: ChatMessage, _index: number) => {
+    const isUser = message.role === 'user';
+
+    return (
+      <Animated.View
+        key={message.id}
+        style={[
+          styles.messageContainer,
+          isUser ? styles.userMessageContainer : styles.assistantMessageContainer,
+          { opacity: fadeAnim },
+        ]}
+      >
+        <View style={[
+          styles.messageBubble,
+          isUser ? styles.userBubble : styles.assistantBubble,
+          unifiedComposer && isUser && styles.iosUserBubble,
+          unifiedComposer && !isUser && styles.iosAssistantBubble,
+        ]}>
+          {!isUser && !unifiedComposer && (
+            <View style={styles.avatarContainer}>
+              <LinearGradient
+                colors={[COLORS.goldAccent, COLORS.beigeWarm]}
+                style={styles.avatarGradient}
+              >
+                <Bot size={16} color={COLORS.navyDeep} />
+              </LinearGradient>
+            </View>
+          )}
+          
+          <View style={[
+            styles.messageContent,
+            unifiedComposer && styles.iosMessageContent,
+            unifiedComposer && !isUser && styles.iosAssistantMessageContent,
+            isUser && styles.userMessageContent,
+            unifiedComposer && isUser && styles.iosUserMessageContent,
+          ]}>
+            {message.isLoading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="small" color={COLORS.navyDeep} />
+                <Text style={styles.loadingText}>
+                  {message.toolName ? `Agent SEA is checking ${message.toolName}...` : 'Agent SEA is reasoning across your saved data...'}
+                </Text>
+              </View>
+            ) : (
+              <>
+                {!isUser && message.contextSummary ? (
+                  <View style={styles.contextBadge} testID={`agentx-answer-context-${message.id}`}>
+                    <SlidersHorizontal size={12} color="#0F766E" />
+                    <Text style={styles.contextBadgeText} numberOfLines={unifiedComposer ? 2 : undefined}>{message.contextSummary}</Text>
+                  </View>
+                ) : null}
+                <Text style={[styles.messageText, { fontSize: TYPOGRAPHY.fontSizeMD * textScale }, isUser && styles.userMessageText]}>
+                  {message.content}
+                </Text>
+                {!isUser && ((message.sourceReferences && message.sourceReferences.length > 0) || message.supportingDetails) ? (
+                  <View style={styles.sourceReferences} testID={`agentx-source-references-${message.id}`}>
+                    <TouchableOpacity style={styles.evidenceDisclosure} onPress={() => setExpandedEvidenceIds((current) => {
+                      const next = new Set(current);
+                      if (next.has(message.id)) next.delete(message.id); else next.add(message.id);
+                      return next;
+                    })} accessibilityLabel={`${expandedEvidenceIds.has(message.id) ? 'Hide' : 'Show'} evidence for this Agent SEA answer`} accessibilityHint="Sources and calculations used for this answer">
+                      <Text style={styles.sourceReferencesTitle}>{expandedEvidenceIds.has(message.id) ? 'Hide evidence' : message.sourceReferences?.length ? `View evidence (${message.sourceReferences.length})` : 'View supporting details'}</Text>
+                    </TouchableOpacity>
+                    {expandedEvidenceIds.has(message.id) && message.supportingDetails ? <Text style={styles.supportingDetails}>{message.supportingDetails}</Text> : null}
+                    {expandedEvidenceIds.has(message.id) ? (message.sourceReferences ?? []).map((source) => (
+                      <TouchableOpacity
+                        key={source.id}
+                        style={styles.sourceReference}
+                        disabled={!source.route}
+                        onPress={() => source.route && router.push(source.route as never)}
+                        testID={`agentx-source-${source.id}`}
+                      >
+                        <View style={styles.sourceReferenceTop}><Text style={styles.sourceReferenceLabel}>{source.label}</Text><Text style={styles.sourceEvidenceKind}>{source.evidenceKind}</Text></View>
+                        <Text style={styles.sourceReferenceDetail} numberOfLines={3}>{source.detail}</Text>
+                      </TouchableOpacity>
+                    )) : null}
+                  </View>
+                ) : null}
+                {!isUser && message.pendingAction ? (
+                  <View style={styles.confirmAction} testID={`agentx-confirm-action-${message.pendingAction.id}`}>
+                    <Text style={styles.confirmActionTitle}>Confirmation required</Text>
+                    <Text style={styles.confirmActionDescription}>{message.pendingAction.description}</Text>
+                    {message.actionStatus === 'pending' || !message.actionStatus ? (
+                      <View style={styles.confirmActionButtons}>
+                        <TouchableOpacity style={styles.cancelActionButton} onPress={() => onCancelAction?.(message.pendingAction!)} testID={`agentx-cancel-${message.pendingAction.id}`}><Text style={styles.cancelActionText}>Cancel</Text></TouchableOpacity>
+                        <TouchableOpacity style={styles.confirmActionButton} onPress={() => void handleConfirmAction(message.pendingAction!)} testID={`agentx-confirm-${message.pendingAction.id}`}><Text style={styles.confirmActionText}>Confirm: {message.pendingAction.label}</Text></TouchableOpacity>
+                      </View>
+                    ) : <Text style={styles.actionResult}>{message.actionStatus === 'confirmed' ? 'Confirmed and completed.' : message.actionStatus === 'cancelled' ? 'Cancelled—no changes made.' : 'Action could not be completed.'}</Text>}
+                  </View>
+                ) : null}
+                {!isUser && message.suggestedActions && message.suggestedActions.length > 0 ? (
+                  <View style={styles.suggestedActionsRow} testID={`agentx-suggested-actions-${message.id}`}>
+                    {message.suggestedActions.map((action) => (
+                      <TouchableOpacity
+                        key={action.id}
+                        style={styles.suggestedActionChip}
+                        onPress={() => handleQuickAction(action.prompt)}
+                        activeOpacity={0.75}
+                        testID={`agentx-action-${action.id}`}
+                      >
+                        <Sparkles size={12} color="#0F766E" />
+                        <Text style={styles.suggestedActionText}>{action.label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                ) : null}
+              </>
+            )}
+            
+            <View style={styles.messageFooter}>
+              <Text style={[styles.timestamp, isUser && styles.userTimestamp]}>
+                {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </Text>
+              {!isUser && !message.isLoading && message.content && (
+                <TouchableOpacity
+                  onPress={() => speakText(message.content)}
+                  style={styles.speakButton}
+                  activeOpacity={0.7}
+                  testID={`speak-message-${message.id}`}
+                >
+                  <Volume2 size={14} color={isUser ? 'rgba(255,255,255,0.6)' : COLORS.navyDeep} />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+          
+          {isUser && !unifiedComposer && (
+            <View style={styles.userAvatarContainer}>
+              <User size={16} color={COLORS.white} />
+            </View>
+          )}
+        </View>
+      </Animated.View>
+    );
+  }, [expandedEvidenceIds, fadeAnim, handleConfirmAction, handleQuickAction, onCancelAction, router, speakText, textScale, unifiedComposer]);
+
+  const renderWelcome = () => (
+    <View style={styles.welcomeContainer}>
+      <View style={styles.welcomeIconContainer}>
+        <LinearGradient
+          colors={[COLORS.goldAccent, COLORS.beigeWarm]}
+          style={styles.welcomeIconGradient}
+        >
+          <Sparkles size={32} color={COLORS.navyDeep} />
+        </LinearGradient>
+      </View>
+      
+      <Text style={styles.welcomeTitle}>{welcomeTitle}</Text>
+      <Text style={styles.welcomeSubtitle}>
+        {welcomeSubtitle}
+      </Text>
+
+      <View style={styles.voiceHintContainer}>
+        <Mic size={16} color={COLORS.navyDeep} />
+        <Text style={styles.voiceHintText}>{unifiedComposer ? 'Speak or type in one place. Agent SEA keeps the conversation together.' : 'Choose Voice or Manual below — speak naturally or type your request'}</Text>
+      </View>
+
+      {showDevAssistant ? (
+        <View style={styles.devAssistantSection}>
+          <LinearGradient
+            colors={['#0F2439', '#1C2F7A', '#0E7FA7']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.devAssistantCard}
+          >
+            <View style={styles.devAssistantHeader}>
+              <View style={styles.devAssistantIconWrap}>
+                <Cpu size={20} color="#00E5FF" />
+              </View>
+              <View style={styles.devAssistantHeaderText}>
+                <Text style={styles.devAssistantTitle}>AI Dev Assistant</Text>
+                <Text style={styles.devAssistantDesc}>Build voice-enabled AI features</Text>
+              </View>
+            </View>
+
+            <View style={styles.devCapabilitiesGrid}>
+              {DEV_ASSISTANT_CAPABILITIES.map((cap) => (
+                <TouchableOpacity
+                  key={cap.id}
+                  style={styles.devCapabilityItem}
+                  onPress={() => handleQuickAction(cap.prompt)}
+                  activeOpacity={0.7}
+                  testID={`dev-cap-${cap.id}`}
+                >
+                  <View style={styles.devCapabilityIconWrap}>
+                    <cap.icon size={16} color="#00E5FF" />
+                  </View>
+                  <Text style={styles.devCapabilityLabel}>{cap.label}</Text>
+                  <Text style={styles.devCapabilityDesc}>{cap.desc}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </LinearGradient>
+        </View>
+      ) : null}
+      
+      {quickActions.length > 0 ? (
+        <View style={styles.quickActionsContainer}>
+          <Text style={styles.quickActionsLabel}>Quick Actions</Text>
+          <View style={styles.quickActionsGrid}>
+            {quickActions.map((action) => (
+              <TouchableOpacity
+                key={action.id}
+                style={styles.quickActionButton}
+                onPress={() => handleQuickAction(action.prompt)}
+                activeOpacity={0.7}
+              >
+                <View
+                  style={styles.quickActionGradient}
+                >
+                  <action.icon size={18} color={COLORS.white} />
+                  <Text style={styles.quickActionText}>{action.label}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      ) : null}
+    </View>
+  );
+
+  return (
+    <KeyboardAvoidingView
+      style={[styles.container, { backgroundColor: colors.background }, unifiedComposer && styles.unifiedChatContainer, isExpanded && styles.containerExpanded]}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      enabled={keyboardAvoidanceEnabled}
+    >
+      <LinearGradient
+        colors={preferences.theme === 'high-contrast' ? [colors.background, colors.surface, colors.background] : preferences.theme === 'dark' ? [colors.background, colors.surface, '#123D73'] : ['#E0F2FE', '#DBEAFE', '#E0F7FA']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      
+      <View style={{ paddingTop: useSafeAreaPadding ? insets.top : 0 }}>
+      
+      {showHeader && (
+          <View style={styles.header}>
+            <View style={styles.headerLeft}>
+              <View style={styles.headerIconContainer}>
+                <Bot size={20} color={COLORS.white} />
+              </View>
+              <View>
+                <Text style={styles.headerTitle}>{title}</Text>
+                <Text style={styles.headerSubtitle}>{subtitle}</Text>
+              </View>
+            </View>
+            
+            <View style={styles.headerActions}>
+              <TouchableOpacity
+                style={[styles.headerButton, { minWidth: minimumControlSize, minHeight: minimumControlSize }, ttsEnabled && styles.headerButtonActive]}
+                onPress={toggleTts}
+                activeOpacity={0.7}
+                testID="toggle-tts"
+                accessibilityRole="button"
+                accessibilityLabel={ttsEnabled ? 'Turn off spoken Agent SEA answers' : 'Turn on spoken Agent SEA answers'}
+              >
+                {ttsEnabled ? (
+                  <Volume2 size={18} color={ttsEnabled ? COLORS.white : COLORS.navyDeep} />
+                ) : (
+                  <VolumeX size={18} color={COLORS.navyDeep} />
+                )}
+              </TouchableOpacity>
+              {onToggleExpand && (
+                <TouchableOpacity
+                  style={[styles.headerButton, { minWidth: minimumControlSize, minHeight: minimumControlSize }]}
+                  onPress={onToggleExpand}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel={isExpanded ? 'Minimize Agent SEA' : 'Expand Agent SEA'}
+                >
+                  {isExpanded ? (
+                    <Minimize2 size={20} color={COLORS.navyDeep} />
+                  ) : (
+                    <Maximize2 size={20} color={COLORS.navyDeep} />
+                  )}
+                </TouchableOpacity>
+              )}
+              {onClose && (
+                <TouchableOpacity
+                  style={[styles.headerButton, { minWidth: minimumControlSize, minHeight: minimumControlSize }]}
+                  onPress={onClose}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close Agent SEA"
+                >
+                  <X size={20} color={COLORS.navyDeep} />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        )}
+      </View>
+
+      {showAgentModes ? <View style={styles.agentModeStrip} testID="agentx-mode-selector">
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.agentModeScroll}>
+          {AGENT_MODES.map((agentMode) => {
+            const ModeIcon = agentMode.icon;
+            const isActive = mode === agentMode.id;
+            return (
+              <TouchableOpacity
+                key={agentMode.id}
+                style={[styles.agentModeChip, isActive && styles.agentModeChipActive]}
+                onPress={() => handleAgentModeChange(agentMode.id)}
+                activeOpacity={0.75}
+                testID={`agentx-mode-${agentMode.id}`}
+              >
+                <ModeIcon size={13} color={isActive ? COLORS.white : COLORS.navyDeep} />
+                <Text style={[styles.agentModeChipText, isActive && styles.agentModeChipTextActive]}>{agentMode.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View> : null}
+
+      {showFilterStrip ? (
+        <View style={styles.filterStripWrap}>
+          <IntelligenceFilterStrip contextLabel={contextLabel} compact={true} />
+        </View>
+      ) : null}
+
+      {isRecording && (
+        <View style={styles.recordingBanner}>
+          <Animated.View style={[styles.recordingDot, { transform: [{ scale: pulseAnim }] }]} />
+          <Text style={styles.recordingText}>Listening... Tap mic to stop</Text>
+        </View>
+      )}
+
+      {isTranscribing && (
+        <View style={styles.transcribingBanner}>
+          <ActivityIndicator size="small" color={COLORS.white} />
+          <Text style={styles.transcribingText}>Processing your voice...</Text>
+        </View>
+      )}
+
+      {isSpeaking && (
+        <TouchableOpacity style={styles.speakingBanner} onPress={stopSpeaking} activeOpacity={0.7}>
+          <Volume2 size={16} color={COLORS.white} />
+          <Text style={styles.speakingText}>Speaking... Tap to stop</Text>
+        </TouchableOpacity>
+      )}
+      
+      <ScrollView
+        ref={scrollViewRef}
+        style={[styles.messagesContainer, unifiedComposer && styles.unifiedMessagesContainer]}
+        contentContainerStyle={[styles.messagesContent, unifiedComposer && styles.unifiedMessagesContent]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="always"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        onContentSizeChange={() => {
+          if (messages.length > 0 && (isNearBottomRef.current || shouldFollowNextMessageRef.current)) scrollViewRef.current?.scrollToEnd({ animated: false });
+        }}
+        scrollEventThrottle={16}
+        onScroll={({ nativeEvent }) => {
+          const distanceFromBottom = nativeEvent.contentSize.height - (nativeEvent.contentOffset.y + nativeEvent.layoutMeasurement.height);
+          isNearBottomRef.current = distanceFromBottom <= 88;
+        }}
+      >
+        {messages.length === 0 ? renderWelcome() : messages.map(renderMessage)}
+      </ScrollView>
+
+      {showDevAssistant && messages.length > 0 && (
+        <View style={styles.devAssistantInlineBanner}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.devAssistantInlineScroll}>
+            {DEV_ASSISTANT_CAPABILITIES.map((cap) => (
+              <TouchableOpacity
+                key={cap.id}
+                style={styles.devAssistantInlineChip}
+                onPress={() => handleQuickAction(cap.prompt)}
+                activeOpacity={0.7}
+              >
+                <cap.icon size={13} color="#0E7FA7" />
+                <Text style={styles.devAssistantInlineChipText}>{cap.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+      
+      <View style={[styles.inputContainer, unifiedComposer && styles.unifiedInputContainer]}>
+        {unifiedComposer ? (
+          <View style={[styles.inputWrapper, styles.unifiedComposer]} testID="agentx-composer">
+            <TouchableOpacity
+              style={[
+                styles.micButton,
+                { minWidth: minimumControlSize, minHeight: minimumControlSize },
+                isRecording && styles.micButtonRecording,
+                (isLoading || isTranscribing) && styles.micButtonDisabled,
+              ]}
+              onPress={handleMicPress}
+              disabled={isLoading || isTranscribing}
+              activeOpacity={0.7}
+              accessibilityLabel={isRecording ? 'Stop voice input' : 'Start voice input'}
+              testID="agentx-unified-mic"
+            >
+              {isTranscribing ? <ActivityIndicator size="small" color={COLORS.white} /> : isRecording ? <MicOff size={20} color={COLORS.white} /> : <Mic size={20} color={COLORS.white} />}
+            </TouchableOpacity>
+            <TextInput
+              style={[styles.unifiedTextInput, { fontSize: TYPOGRAPHY.fontSizeMD * textScale }]}
+              value={manualInput}
+              onChangeText={(value) => {
+                manualInputRef.current = value;
+                setManualInput(value);
+              }}
+              placeholder={isRecording ? 'Listening… tap the microphone when finished' : placeholder}
+              placeholderTextColor="rgba(30, 58, 95, 0.45)"
+              editable={!isTranscribing && !isRecording}
+              multiline
+              blurOnSubmit={false}
+              onFocus={() => setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: !preferences.reducedMotion }), 80)}
+              textAlignVertical="center"
+              autoCorrect
+              autoCapitalize="sentences"
+              testID="agentx-unified-input"
+            />
+            <TouchableOpacity
+              style={[styles.sendButton, styles.unifiedSendButton, { minHeight: minimumControlSize }, (!manualInput.trim() || isTranscribing || isRecording) && styles.sendButtonDisabled]}
+              onPress={handleManualSend}
+              // Keep Send touchable while the input is visually empty. iOS can
+              // deliver the final TextInput change immediately before the tap;
+              // handleManualSend reads the synchronous ref and safely rejects a
+              // truly empty value. Disabling from render state caused the first
+              // tap to be swallowed on fast keyboard-to-button transitions.
+              disabled={isTranscribing || isRecording}
+              activeOpacity={0.7}
+              hitSlop={8}
+              accessibilityLabel={isLoading ? 'Replace current Agent SEA request' : 'Send message'}
+              testID="agentx-unified-send"
+            >
+              <Text style={styles.sendButtonText}>{isLoading ? 'Replace' : 'Send'}</Text>
+            </TouchableOpacity>
+          </View>
+        ) : <>
+        <View style={styles.modeSelector} testID="agentx-input-mode-toggle">
+          <TouchableOpacity
+            style={[
+              styles.modeButton,
+              inputMode === 'voice' && styles.modeButtonActive,
+              (isRecording || isTranscribing) && styles.modeButtonDisabled,
+            ]}
+            onPress={() => handleModeChange('voice')}
+            disabled={isRecording || isTranscribing}
+            activeOpacity={0.7}
+            testID="agentx-mode-voice"
+          >
+            <Text style={[
+              styles.modeButtonText,
+              inputMode === 'voice' && styles.modeButtonTextActive,
+            ]}>
+              Voice
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.modeButton,
+              inputMode === 'manual' && styles.modeButtonActive,
+              (isRecording || isTranscribing) && styles.modeButtonDisabled,
+            ]}
+            onPress={() => handleModeChange('manual')}
+            disabled={isRecording || isTranscribing}
+            activeOpacity={0.7}
+            testID="agentx-mode-manual"
+          >
+            <Text style={[
+              styles.modeButtonText,
+              inputMode === 'manual' && styles.modeButtonTextActive,
+            ]}>
+              Manual
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {inputMode === 'voice' ? (
+          <View style={styles.inputWrapper} testID="agentx-composer">
+            <View style={styles.voiceOnlyCard}>
+              <Text style={styles.voiceOnlyTitle}>
+                {isRecording ? 'Listening now' : isTranscribing ? 'Processing your voice' : 'Voice mode ready'}
+              </Text>
+              <Text style={styles.voiceOnlySubtitle}>
+                {isRecording
+                  ? 'Speak naturally, then tap the mic again to send.'
+                  : isTranscribing
+                    ? 'Please wait while your message is converted to text.'
+                    : `Tap the mic and say something like: ${placeholder}`}
+              </Text>
+            </View>
+
+            <View style={styles.sendStopRow}>
+              <TouchableOpacity
+                style={[
+                  styles.micButton,
+                  styles.micButtonLarge,
+                  isRecording && styles.micButtonRecording,
+                  (isLoading || isTranscribing) && styles.micButtonDisabled,
+                ]}
+                onPress={handleMicPress}
+                disabled={isLoading || isTranscribing}
+                activeOpacity={0.7}
+                testID="mic-button"
+              >
+                {isTranscribing ? (
+                  <ActivityIndicator size="small" color={COLORS.white} />
+                ) : isRecording ? (
+                  <MicOff size={24} color={COLORS.white} />
+                ) : (
+                  <Mic size={24} color={COLORS.white} />
+                )}
+              </TouchableOpacity>
+
+              {isSpeaking && (
+                <TouchableOpacity
+                  style={styles.stopSpeakingButton}
+                  onPress={stopSpeaking}
+                  activeOpacity={0.7}
+                  testID="agentx-stop-speaking-voice"
+                >
+                  <StopCircle size={20} color={COLORS.white} />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        ) : (
+          <View style={[styles.inputWrapper, styles.manualComposer]} testID="agentx-composer">
+            <TextInput
+              style={styles.manualInput}
+              value={manualInput}
+              onChangeText={(value) => { manualInputRef.current = value; setManualInput(value); }}
+              placeholder={placeholder}
+              placeholderTextColor="rgba(30, 58, 95, 0.45)"
+              editable={!isTranscribing && !isRecording}
+              multiline={true}
+              textAlignVertical="top"
+              autoCorrect={true}
+              autoCapitalize="sentences"
+              testID="agentx-manual-input"
+            />
+
+            <View style={styles.sendStopRow}>
+              <TouchableOpacity
+                style={[
+                  styles.sendButton,
+                  (!manualInput.trim() || isTranscribing || isRecording) && styles.sendButtonDisabled,
+                ]}
+                onPress={handleManualSend}
+                disabled={!manualInput.trim() || isTranscribing || isRecording}
+                activeOpacity={0.7}
+                hitSlop={8}
+                testID="agentx-send-button"
+              >
+                <Text style={styles.sendButtonText}>Send</Text>
+              </TouchableOpacity>
+
+              {isSpeaking && (
+                <TouchableOpacity
+                  style={styles.stopSpeakingButton}
+                  onPress={stopSpeaking}
+                  activeOpacity={0.7}
+                  testID="agentx-stop-speaking-button"
+                >
+                  <StopCircle size={20} color={COLORS.white} />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        )}
+        </>}
+
+        <Text style={styles.disclaimer}>
+          {disclaimerText}
+        </Text>
+      </View>
+    </KeyboardAvoidingView>
+  );
+});
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    overflow: 'hidden',
+  },
+  unifiedChatContainer: {
+    backgroundColor: '#E0F2FE',
+  },
+  containerExpanded: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 31, 63, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  headerIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.navyDeep,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: TYPOGRAPHY.fontSizeXL,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+  },
+  headerSubtitle: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.navyDeep,
+    opacity: 0.7,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: SPACING.xs,
+  },
+  headerButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0, 31, 63, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerButtonActive: {
+    backgroundColor: COLORS.navyDeep,
+  },
+  filterStripWrap: {
+    paddingHorizontal: SPACING.sm,
+    marginBottom: 4,
+  },
+  agentModeStrip: {
+    backgroundColor: 'rgba(255, 255, 255, 0.78)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 31, 63, 0.08)',
+  },
+  agentModeScroll: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    gap: SPACING.xs,
+  },
+  agentModeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderRadius: BORDER_RADIUS.round,
+    backgroundColor: 'rgba(30, 58, 95, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(30, 58, 95, 0.1)',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 6,
+    marginRight: SPACING.xs,
+  },
+  agentModeChipActive: {
+    backgroundColor: COLORS.navyDeep,
+    borderColor: COLORS.navyDeep,
+  },
+  agentModeChipText: {
+    fontSize: 11,
+    fontWeight: '800' as const,
+    color: COLORS.navyDeep,
+  },
+  agentModeChipTextActive: {
+    color: COLORS.white,
+  },
+  messagesContainer: {
+    flex: 1,
+  },
+  unifiedMessagesContainer: {
+    backgroundColor: '#EFF6FF',
+  },
+  messagesContent: {
+    padding: SPACING.md,
+    paddingBottom: SPACING.lg,
+  },
+  unifiedMessagesContent: {
+    flexGrow: 1,
+    paddingHorizontal: SPACING.sm,
+    paddingTop: SPACING.sm,
+    paddingBottom: SPACING.md,
+  },
+  welcomeContainer: {
+    alignItems: 'center',
+    paddingVertical: SPACING.xl,
+    paddingHorizontal: SPACING.md,
+  },
+  welcomeIconContainer: {
+    marginBottom: SPACING.md,
+  },
+  welcomeIconGradient: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  welcomeTitle: {
+    fontSize: TYPOGRAPHY.fontSizeHeader,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+    marginBottom: SPACING.sm,
+  },
+  welcomeSubtitle: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    color: COLORS.navyDeep,
+    opacity: 0.8,
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: SPACING.lg,
+    paddingHorizontal: SPACING.lg,
+  },
+  voiceHintContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    backgroundColor: 'rgba(30, 58, 95, 0.08)',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    borderRadius: BORDER_RADIUS.round,
+    marginBottom: SPACING.xxl,
+  },
+  voiceHintText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.navyDeep,
+    opacity: 0.7,
+  },
+  quickActionsContainer: {
+    width: '100%',
+  },
+  quickActionsLabel: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+    marginBottom: SPACING.md,
+    textAlign: 'center',
+  },
+  devAssistantSection: {
+    width: '100%',
+    marginBottom: SPACING.lg,
+  },
+  devAssistantCard: {
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
+    overflow: 'hidden',
+  },
+  devAssistantHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
+  devAssistantIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0, 229, 255, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 229, 255, 0.25)',
+  },
+  devAssistantHeaderText: {
+    flex: 1,
+  },
+  devAssistantTitle: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: '#FFFFFF',
+  },
+  devAssistantDesc: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: 'rgba(255,255,255,0.7)',
+    marginTop: 1,
+  },
+  devCapabilitiesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+  },
+  devCapabilityItem: {
+    width: '47%',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 229, 255, 0.12)',
+  },
+  devCapabilityIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0, 229, 255, 0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: SPACING.xs,
+  },
+  devCapabilityLabel: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: '#FFFFFF',
+    marginBottom: 2,
+  },
+  devCapabilityDesc: {
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.55)',
+    lineHeight: 13,
+  },
+  devAssistantInlineBanner: {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0, 31, 63, 0.08)',
+    backgroundColor: 'rgba(0, 172, 193, 0.04)',
+  },
+  devAssistantInlineScroll: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    gap: SPACING.xs,
+  },
+  devAssistantInlineChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(0, 172, 193, 0.1)',
+    borderRadius: BORDER_RADIUS.round,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 172, 193, 0.15)',
+    marginRight: SPACING.xs,
+  },
+  devAssistantInlineChipText: {
+    fontSize: 11,
+    fontWeight: '600' as const,
+    color: '#0E7FA7',
+  },
+  quickActionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+    justifyContent: 'center',
+  },
+  quickActionButton: {
+    borderRadius: BORDER_RADIUS.md,
+    overflow: 'hidden',
+  },
+  quickActionGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+    borderRadius: BORDER_RADIUS.round,
+    borderWidth: 1,
+    borderColor: COLORS.navyDeep,
+    backgroundColor: COLORS.navyDeep,
+  },
+  quickActionText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: COLORS.white,
+  },
+  recordingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+    backgroundColor: '#A52B34',
+    paddingVertical: SPACING.sm,
+  },
+  recordingDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: COLORS.white,
+  },
+  recordingText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: COLORS.white,
+  },
+  transcribingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+    backgroundColor: COLORS.navyDeep,
+    paddingVertical: SPACING.sm,
+  },
+  transcribingText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: COLORS.white,
+  },
+  speakingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+    backgroundColor: '#0E7FA7',
+    paddingVertical: SPACING.sm,
+  },
+  speakingText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: COLORS.white,
+  },
+  messageContainer: {
+    width: '100%',
+    marginBottom: SPACING.md,
+  },
+  userMessageContainer: {
+    alignItems: 'flex-end',
+  },
+  assistantMessageContainer: {
+    alignItems: 'flex-start',
+  },
+  messageBubble: {
+    flexDirection: 'row',
+    maxWidth: '92%',
+    gap: SPACING.xs,
+  },
+  userBubble: {
+    flexDirection: 'row-reverse',
+  },
+  assistantBubble: {
+    flexDirection: 'row',
+  },
+  iosAssistantBubble: {
+    width: '88%',
+    maxWidth: '88%',
+    alignSelf: 'flex-start',
+  },
+  iosUserBubble: {
+    maxWidth: '78%',
+    alignSelf: 'flex-end',
+  },
+  avatarContainer: {
+    alignSelf: 'flex-end',
+  },
+  avatarGradient: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  userAvatarContainer: {
+    alignSelf: 'flex-end',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: COLORS.navyDeep,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  messageContent: {
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 31, 63, 0.15)',
+    maxWidth: '100%',
+    flex: 1,
+  },
+  iosMessageContent: {
+    flex: 0,
+    flexShrink: 1,
+    minWidth: 76,
+    maxWidth: '100%',
+    paddingHorizontal: 13,
+    paddingVertical: 9,
+    borderWidth: 0,
+    borderRadius: 18,
+    borderBottomLeftRadius: 5,
+    backgroundColor: '#FFFFFF',
+  },
+  iosAssistantMessageContent: {
+    flex: 1,
+    width: '100%',
+  },
+  iosUserMessageContent: {
+    minWidth: 124,
+    borderBottomLeftRadius: 18,
+    borderBottomRightRadius: 5,
+    backgroundColor: '#2F8EEB',
+  },
+  contextBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(15, 118, 110, 0.08)',
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: 'rgba(15, 118, 110, 0.18)',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 6,
+    marginBottom: SPACING.xs,
+  },
+  contextBadgeText: {
+    flex: 1,
+    fontSize: 10,
+    fontWeight: '800' as const,
+    color: '#0F766E',
+    lineHeight: 14,
+  },
+  sourceReferences: {
+    marginTop: SPACING.sm,
+    gap: 6,
+  },
+  evidenceDisclosure: {
+    alignSelf: 'flex-start',
+    minHeight: 34,
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+    borderRadius: 15,
+    backgroundColor: 'rgba(14,127,167,0.08)',
+  },
+  sourceReferencesTitle: {
+    color: '#0F766E',
+    fontSize: 11,
+    fontWeight: '900' as const,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
+  },
+  supportingDetails: {
+    color: '#334155',
+    fontSize: 12,
+    lineHeight: 18,
+    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: '#F5F5F4',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    padding: SPACING.sm,
+  },
+  sourceReference: {
+    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: '#F5F5F4',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 7,
+  },
+  sourceReferenceTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  sourceReferenceLabel: {
+    flex: 1,
+    color: COLORS.navyDeep,
+    fontSize: 11,
+    fontWeight: '800' as const,
+  },
+  sourceEvidenceKind: {
+    color: '#0F766E',
+    fontSize: 9,
+    fontWeight: '900' as const,
+    textTransform: 'uppercase' as const,
+  },
+  sourceReferenceDetail: {
+    color: '#475569',
+    fontSize: 10,
+    lineHeight: 14,
+    marginTop: 3,
+  },
+  confirmAction: {
+    marginTop: SPACING.sm,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: '#E6B63D',
+    backgroundColor: '#FFFBEB',
+    padding: SPACING.sm,
+  },
+  confirmActionTitle: { color: '#92400E', fontSize: 11, fontWeight: '900' as const, textTransform: 'uppercase' as const },
+  confirmActionDescription: { color: '#78350F', fontSize: 11, lineHeight: 16, marginTop: 4 },
+  confirmActionButtons: { flexDirection: 'row', gap: 7, marginTop: 9 },
+  cancelActionButton: { paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#CBD5E1', backgroundColor: '#FFFFFF' },
+  cancelActionText: { color: '#475569', fontSize: 10, fontWeight: '800' as const },
+  confirmActionButton: { flex: 1, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8, backgroundColor: '#0F766E', alignItems: 'center' },
+  confirmActionText: { color: '#FFFFFF', fontSize: 10, fontWeight: '900' as const },
+  actionResult: { color: '#0F766E', fontSize: 11, fontWeight: '800' as const, marginTop: 7 },
+  suggestedActionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: SPACING.sm,
+  },
+  suggestedActionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(15, 118, 110, 0.08)',
+    borderRadius: BORDER_RADIUS.round,
+    borderWidth: 1,
+    borderColor: 'rgba(15, 118, 110, 0.2)',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 6,
+  },
+  suggestedActionText: {
+    fontSize: 11,
+    fontWeight: '800' as const,
+    color: '#0F766E',
+  },
+  userMessageContent: {
+    backgroundColor: COLORS.navyDeep,
+    borderColor: COLORS.navyDeep,
+  },
+  messageText: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    color: COLORS.navyDeep,
+    lineHeight: 22,
+  },
+  userMessageText: {
+    color: COLORS.white,
+  },
+  messageFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: SPACING.xs,
+  },
+  timestamp: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: COLORS.navyDeep,
+    opacity: 0.5,
+  },
+  userTimestamp: {
+    color: 'rgba(255, 255, 255, 0.6)',
+  },
+  speakButton: {
+    padding: 4,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0, 31, 63, 0.06)',
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  loadingText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.navyDeep,
+    fontStyle: 'italic',
+  },
+  inputContainer: {
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.sm,
+    paddingBottom: SPACING.sm,
+    marginBottom: 80,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0, 31, 63, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+  },
+  unifiedInputContainer: {
+    marginBottom: 0,
+    paddingHorizontal: SPACING.sm,
+    paddingTop: 8,
+    paddingBottom: Platform.OS === 'ios' ? 10 : 8,
+    backgroundColor: '#F3F3F2',
+    borderTopColor: 'rgba(15, 23, 42, 0.12)',
+  },
+  modeSelector: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(0, 31, 63, 0.06)',
+    borderRadius: BORDER_RADIUS.round,
+    padding: 4,
+    marginBottom: SPACING.sm,
+  },
+  modeButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: BORDER_RADIUS.round,
+    paddingVertical: SPACING.sm,
+  },
+  modeButtonActive: {
+    backgroundColor: COLORS.navyDeep,
+  },
+  modeButtonDisabled: {
+    opacity: 0.5,
+  },
+  modeButtonText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightSemiBold,
+    color: COLORS.navyDeep,
+  },
+  modeButtonTextActive: {
+    color: COLORS.white,
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.lg,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 31, 63, 0.15)',
+  },
+  manualComposer: {
+    alignItems: 'flex-end',
+  },
+  voiceOnlyCard: {
+    flex: 1,
+    paddingVertical: 2,
+  },
+  voiceOnlyTitle: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.navyDeep,
+    marginBottom: 2,
+  },
+  voiceOnlySubtitle: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    color: COLORS.navyDeep,
+    opacity: 0.7,
+    lineHeight: 18,
+  },
+  manualInput: {
+    flex: 1,
+    minHeight: 48,
+    maxHeight: 108,
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    color: COLORS.navyDeep,
+    paddingTop: Platform.OS === 'ios' ? 12 : 8,
+    paddingBottom: Platform.OS === 'ios' ? 12 : 8,
+  },
+  unifiedComposer: {
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 24,
+    borderColor: 'rgba(15, 118, 110, 0.22)',
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  unifiedTextInput: {
+    flex: 1,
+    minHeight: 42,
+    maxHeight: 116,
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    lineHeight: 21,
+    color: COLORS.navyDeep,
+    paddingHorizontal: 4,
+    paddingVertical: Platform.OS === 'ios' ? 10 : 7,
+  },
+  unifiedSendButton: {
+    minWidth: 58,
+    height: 40,
+  },
+  sendButton: {
+    minWidth: 74,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.navyDeep,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: SPACING.md,
+  },
+  sendButtonDisabled: {
+    backgroundColor: 'rgba(30, 58, 95, 0.28)',
+  },
+  sendButtonText: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: TYPOGRAPHY.fontWeightBold,
+    color: COLORS.white,
+  },
+  sendStopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  stopSpeakingButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#A52B34',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  micButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#0E7FA7',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: Platform.OS === 'ios' ? 0 : SPACING.xs,
+  },
+  micButtonLarge: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    marginBottom: 0,
+  },
+  micButtonRecording: {
+    backgroundColor: '#A52B34',
+  },
+  micButtonDisabled: {
+    backgroundColor: 'rgba(0, 151, 167, 0.3)',
+  },
+  disclaimer: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    color: COLORS.navyDeep,
+    textAlign: 'center',
+    marginTop: SPACING.sm,
+    opacity: 0.6,
+  },
+});

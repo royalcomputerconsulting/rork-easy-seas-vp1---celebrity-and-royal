@@ -1,0 +1,5 @@
+# Easy Seas Build 439 rollback baseline — recorded 2026-08-30
+# This file is evidence only. The Build 439 workspace and ZIP are not edited by Build 440 work.
+570014a7f1a35cce1ee65d7185cbc791eee8c8e72b8168b5b00728ad35b37bf3  ../EASYSEAS_EXPO_V13.0.73_BUILD439_HEALTH_TRUST_RELEASE.zip
+bf0dddc7f2252555a99749fb9cb2401a0a460caa706cbdea91fa9ab94b439d6c  ../EASYSEAS_EXPO_V13.0.73_BUILD439_HEALTH_TRUST_WORKSPACE/package.json
+62458b087ec82e4dc13e62a2c185e3a72f390e40532232d1d014de66ab36865f  ../EASYSEAS_EXPO_V13.0.73_BUILD439_HEALTH_TRUST_WORKSPACE/app.json
