@@ -1,0 +1,21 @@
+{
+  "sourceUrl": "https://www.carnival.com/profilemanagement/profiles/offers",
+  "personalizedSearchUrl": "https://www.carnival.com/cruise-search?vifp=1234567890&tgo=FBN,20260701,20261231;ZERO,20260701,20261231",
+  "vifp": "1234567890",
+  "tierCode": "02",
+  "resident": "AZ",
+  "locality": "1",
+  "currency": "USD",
+  "rateCodes": [
+    {
+      "code": "FBN",
+      "offerName": "Fun Bonus",
+      "bookingLink": "https://www.carnival.com/cruise-search?ratecodes=FBN&vifp=1234567890"
+    },
+    {
+      "code": "ZERO",
+      "offerName": "Empty Offer",
+      "bookingLink": "https://www.carnival.com/cruise-search?ratecodes=ZERO&vifp=1234567890"
+    }
+  ]
+}

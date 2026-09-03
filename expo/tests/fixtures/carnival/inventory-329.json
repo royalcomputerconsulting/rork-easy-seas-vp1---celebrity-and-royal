@@ -1,0 +1,2735 @@
+{
+  "offerCode": "O7O",
+  "pages": [
+    {
+      "data": {
+        "cruiseSearch": {
+          "sailings": [
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-01-01",
+              "itinerary": "Voyage 0",
+              "departurePort": "Miami",
+              "voyageId": "V000"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-02-02",
+              "itinerary": "Voyage 1",
+              "departurePort": "Miami",
+              "voyageId": "V001"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-03-03",
+              "itinerary": "Voyage 2",
+              "departurePort": "Miami",
+              "voyageId": "V002"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-04-04",
+              "itinerary": "Voyage 3",
+              "departurePort": "Miami",
+              "voyageId": "V003"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-05-05",
+              "itinerary": "Voyage 4",
+              "departurePort": "Miami",
+              "voyageId": "V004"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-06-06",
+              "itinerary": "Voyage 5",
+              "departurePort": "Miami",
+              "voyageId": "V005"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-07-07",
+              "itinerary": "Voyage 6",
+              "departurePort": "Miami",
+              "voyageId": "V006"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-08-08",
+              "itinerary": "Voyage 7",
+              "departurePort": "Miami",
+              "voyageId": "V007"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-09-09",
+              "itinerary": "Voyage 8",
+              "departurePort": "Miami",
+              "voyageId": "V008"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-10-10",
+              "itinerary": "Voyage 9",
+              "departurePort": "Miami",
+              "voyageId": "V009"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-11-11",
+              "itinerary": "Voyage 10",
+              "departurePort": "Miami",
+              "voyageId": "V010"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-12-12",
+              "itinerary": "Voyage 11",
+              "departurePort": "Miami",
+              "voyageId": "V011"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-01-13",
+              "itinerary": "Voyage 12",
+              "departurePort": "Miami",
+              "voyageId": "V012"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-02-14",
+              "itinerary": "Voyage 13",
+              "departurePort": "Miami",
+              "voyageId": "V013"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-03-15",
+              "itinerary": "Voyage 14",
+              "departurePort": "Miami",
+              "voyageId": "V014"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-04-16",
+              "itinerary": "Voyage 15",
+              "departurePort": "Miami",
+              "voyageId": "V015"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-05-17",
+              "itinerary": "Voyage 16",
+              "departurePort": "Miami",
+              "voyageId": "V016"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-06-18",
+              "itinerary": "Voyage 17",
+              "departurePort": "Miami",
+              "voyageId": "V017"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-07-19",
+              "itinerary": "Voyage 18",
+              "departurePort": "Miami",
+              "voyageId": "V018"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-08-20",
+              "itinerary": "Voyage 19",
+              "departurePort": "Miami",
+              "voyageId": "V019"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-09-21",
+              "itinerary": "Voyage 20",
+              "departurePort": "Miami",
+              "voyageId": "V020"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-10-22",
+              "itinerary": "Voyage 21",
+              "departurePort": "Miami",
+              "voyageId": "V021"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-11-23",
+              "itinerary": "Voyage 22",
+              "departurePort": "Miami",
+              "voyageId": "V022"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-12-24",
+              "itinerary": "Voyage 23",
+              "departurePort": "Miami",
+              "voyageId": "V023"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-01-25",
+              "itinerary": "Voyage 24",
+              "departurePort": "Miami",
+              "voyageId": "V024"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-02-26",
+              "itinerary": "Voyage 25",
+              "departurePort": "Miami",
+              "voyageId": "V025"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-03-27",
+              "itinerary": "Voyage 26",
+              "departurePort": "Miami",
+              "voyageId": "V026"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-04-28",
+              "itinerary": "Voyage 27",
+              "departurePort": "Miami",
+              "voyageId": "V027"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-05-01",
+              "itinerary": "Voyage 28",
+              "departurePort": "Miami",
+              "voyageId": "V028"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-06-02",
+              "itinerary": "Voyage 29",
+              "departurePort": "Miami",
+              "voyageId": "V029"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-07-03",
+              "itinerary": "Voyage 30",
+              "departurePort": "Miami",
+              "voyageId": "V030"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-08-04",
+              "itinerary": "Voyage 31",
+              "departurePort": "Miami",
+              "voyageId": "V031"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-09-05",
+              "itinerary": "Voyage 32",
+              "departurePort": "Miami",
+              "voyageId": "V032"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-10-06",
+              "itinerary": "Voyage 33",
+              "departurePort": "Miami",
+              "voyageId": "V033"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-11-07",
+              "itinerary": "Voyage 34",
+              "departurePort": "Miami",
+              "voyageId": "V034"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-12-08",
+              "itinerary": "Voyage 35",
+              "departurePort": "Miami",
+              "voyageId": "V035"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-01-09",
+              "itinerary": "Voyage 36",
+              "departurePort": "Miami",
+              "voyageId": "V036"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-02-10",
+              "itinerary": "Voyage 37",
+              "departurePort": "Miami",
+              "voyageId": "V037"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-03-11",
+              "itinerary": "Voyage 38",
+              "departurePort": "Miami",
+              "voyageId": "V038"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-04-12",
+              "itinerary": "Voyage 39",
+              "departurePort": "Miami",
+              "voyageId": "V039"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-05-13",
+              "itinerary": "Voyage 40",
+              "departurePort": "Miami",
+              "voyageId": "V040"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-06-14",
+              "itinerary": "Voyage 41",
+              "departurePort": "Miami",
+              "voyageId": "V041"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-07-15",
+              "itinerary": "Voyage 42",
+              "departurePort": "Miami",
+              "voyageId": "V042"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-08-16",
+              "itinerary": "Voyage 43",
+              "departurePort": "Miami",
+              "voyageId": "V043"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-09-17",
+              "itinerary": "Voyage 44",
+              "departurePort": "Miami",
+              "voyageId": "V044"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-10-18",
+              "itinerary": "Voyage 45",
+              "departurePort": "Miami",
+              "voyageId": "V045"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-11-19",
+              "itinerary": "Voyage 46",
+              "departurePort": "Miami",
+              "voyageId": "V046"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-12-20",
+              "itinerary": "Voyage 47",
+              "departurePort": "Miami",
+              "voyageId": "V047"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-01-21",
+              "itinerary": "Voyage 48",
+              "departurePort": "Miami",
+              "voyageId": "V048"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-02-22",
+              "itinerary": "Voyage 49",
+              "departurePort": "Miami",
+              "voyageId": "V049"
+            }
+          ],
+          "pagination": {
+            "totalResults": 329,
+            "pageNumber": 1,
+            "pageSize": 50,
+            "hasNextPage": true
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "cruiseSearch": {
+          "sailings": [
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-03-23",
+              "itinerary": "Voyage 50",
+              "departurePort": "Miami",
+              "voyageId": "V050"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-04-24",
+              "itinerary": "Voyage 51",
+              "departurePort": "Miami",
+              "voyageId": "V051"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-05-25",
+              "itinerary": "Voyage 52",
+              "departurePort": "Miami",
+              "voyageId": "V052"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-06-26",
+              "itinerary": "Voyage 53",
+              "departurePort": "Miami",
+              "voyageId": "V053"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-07-27",
+              "itinerary": "Voyage 54",
+              "departurePort": "Miami",
+              "voyageId": "V054"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-08-28",
+              "itinerary": "Voyage 55",
+              "departurePort": "Miami",
+              "voyageId": "V055"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-09-01",
+              "itinerary": "Voyage 56",
+              "departurePort": "Miami",
+              "voyageId": "V056"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-10-02",
+              "itinerary": "Voyage 57",
+              "departurePort": "Miami",
+              "voyageId": "V057"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-11-03",
+              "itinerary": "Voyage 58",
+              "departurePort": "Miami",
+              "voyageId": "V058"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-12-04",
+              "itinerary": "Voyage 59",
+              "departurePort": "Miami",
+              "voyageId": "V059"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-01-05",
+              "itinerary": "Voyage 60",
+              "departurePort": "Miami",
+              "voyageId": "V060"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-02-06",
+              "itinerary": "Voyage 61",
+              "departurePort": "Miami",
+              "voyageId": "V061"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-03-07",
+              "itinerary": "Voyage 62",
+              "departurePort": "Miami",
+              "voyageId": "V062"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-04-08",
+              "itinerary": "Voyage 63",
+              "departurePort": "Miami",
+              "voyageId": "V063"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-05-09",
+              "itinerary": "Voyage 64",
+              "departurePort": "Miami",
+              "voyageId": "V064"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-06-10",
+              "itinerary": "Voyage 65",
+              "departurePort": "Miami",
+              "voyageId": "V065"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-07-11",
+              "itinerary": "Voyage 66",
+              "departurePort": "Miami",
+              "voyageId": "V066"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-08-12",
+              "itinerary": "Voyage 67",
+              "departurePort": "Miami",
+              "voyageId": "V067"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-09-13",
+              "itinerary": "Voyage 68",
+              "departurePort": "Miami",
+              "voyageId": "V068"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-10-14",
+              "itinerary": "Voyage 69",
+              "departurePort": "Miami",
+              "voyageId": "V069"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-11-15",
+              "itinerary": "Voyage 70",
+              "departurePort": "Miami",
+              "voyageId": "V070"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-12-16",
+              "itinerary": "Voyage 71",
+              "departurePort": "Miami",
+              "voyageId": "V071"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-01-17",
+              "itinerary": "Voyage 72",
+              "departurePort": "Miami",
+              "voyageId": "V072"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-02-18",
+              "itinerary": "Voyage 73",
+              "departurePort": "Miami",
+              "voyageId": "V073"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-03-19",
+              "itinerary": "Voyage 74",
+              "departurePort": "Miami",
+              "voyageId": "V074"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-04-20",
+              "itinerary": "Voyage 75",
+              "departurePort": "Miami",
+              "voyageId": "V075"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-05-21",
+              "itinerary": "Voyage 76",
+              "departurePort": "Miami",
+              "voyageId": "V076"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-06-22",
+              "itinerary": "Voyage 77",
+              "departurePort": "Miami",
+              "voyageId": "V077"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-07-23",
+              "itinerary": "Voyage 78",
+              "departurePort": "Miami",
+              "voyageId": "V078"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-08-24",
+              "itinerary": "Voyage 79",
+              "departurePort": "Miami",
+              "voyageId": "V079"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-09-25",
+              "itinerary": "Voyage 80",
+              "departurePort": "Miami",
+              "voyageId": "V080"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-10-26",
+              "itinerary": "Voyage 81",
+              "departurePort": "Miami",
+              "voyageId": "V081"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-11-27",
+              "itinerary": "Voyage 82",
+              "departurePort": "Miami",
+              "voyageId": "V082"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-12-28",
+              "itinerary": "Voyage 83",
+              "departurePort": "Miami",
+              "voyageId": "V083"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-01-01",
+              "itinerary": "Voyage 84",
+              "departurePort": "Miami",
+              "voyageId": "V084"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-02-02",
+              "itinerary": "Voyage 85",
+              "departurePort": "Miami",
+              "voyageId": "V085"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-03-03",
+              "itinerary": "Voyage 86",
+              "departurePort": "Miami",
+              "voyageId": "V086"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-04-04",
+              "itinerary": "Voyage 87",
+              "departurePort": "Miami",
+              "voyageId": "V087"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-05-05",
+              "itinerary": "Voyage 88",
+              "departurePort": "Miami",
+              "voyageId": "V088"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-06-06",
+              "itinerary": "Voyage 89",
+              "departurePort": "Miami",
+              "voyageId": "V089"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-07-07",
+              "itinerary": "Voyage 90",
+              "departurePort": "Miami",
+              "voyageId": "V090"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-08-08",
+              "itinerary": "Voyage 91",
+              "departurePort": "Miami",
+              "voyageId": "V091"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-09-09",
+              "itinerary": "Voyage 92",
+              "departurePort": "Miami",
+              "voyageId": "V092"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-10-10",
+              "itinerary": "Voyage 93",
+              "departurePort": "Miami",
+              "voyageId": "V093"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-11-11",
+              "itinerary": "Voyage 94",
+              "departurePort": "Miami",
+              "voyageId": "V094"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-12-12",
+              "itinerary": "Voyage 95",
+              "departurePort": "Miami",
+              "voyageId": "V095"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-01-13",
+              "itinerary": "Voyage 96",
+              "departurePort": "Miami",
+              "voyageId": "V096"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-02-14",
+              "itinerary": "Voyage 97",
+              "departurePort": "Miami",
+              "voyageId": "V097"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-03-15",
+              "itinerary": "Voyage 98",
+              "departurePort": "Miami",
+              "voyageId": "V098"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-04-16",
+              "itinerary": "Voyage 99",
+              "departurePort": "Miami",
+              "voyageId": "V099"
+            }
+          ],
+          "pagination": {
+            "totalResults": 329,
+            "pageNumber": 2,
+            "pageSize": 50,
+            "hasNextPage": true
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "cruiseSearch": {
+          "sailings": [
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-05-17",
+              "itinerary": "Voyage 100",
+              "departurePort": "Miami",
+              "voyageId": "V100"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-06-18",
+              "itinerary": "Voyage 101",
+              "departurePort": "Miami",
+              "voyageId": "V101"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-07-19",
+              "itinerary": "Voyage 102",
+              "departurePort": "Miami",
+              "voyageId": "V102"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-08-20",
+              "itinerary": "Voyage 103",
+              "departurePort": "Miami",
+              "voyageId": "V103"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-09-21",
+              "itinerary": "Voyage 104",
+              "departurePort": "Miami",
+              "voyageId": "V104"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-10-22",
+              "itinerary": "Voyage 105",
+              "departurePort": "Miami",
+              "voyageId": "V105"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-11-23",
+              "itinerary": "Voyage 106",
+              "departurePort": "Miami",
+              "voyageId": "V106"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-12-24",
+              "itinerary": "Voyage 107",
+              "departurePort": "Miami",
+              "voyageId": "V107"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-01-25",
+              "itinerary": "Voyage 108",
+              "departurePort": "Miami",
+              "voyageId": "V108"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-02-26",
+              "itinerary": "Voyage 109",
+              "departurePort": "Miami",
+              "voyageId": "V109"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-03-27",
+              "itinerary": "Voyage 110",
+              "departurePort": "Miami",
+              "voyageId": "V110"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-04-28",
+              "itinerary": "Voyage 111",
+              "departurePort": "Miami",
+              "voyageId": "V111"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-05-01",
+              "itinerary": "Voyage 112",
+              "departurePort": "Miami",
+              "voyageId": "V112"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-06-02",
+              "itinerary": "Voyage 113",
+              "departurePort": "Miami",
+              "voyageId": "V113"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-07-03",
+              "itinerary": "Voyage 114",
+              "departurePort": "Miami",
+              "voyageId": "V114"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-08-04",
+              "itinerary": "Voyage 115",
+              "departurePort": "Miami",
+              "voyageId": "V115"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-09-05",
+              "itinerary": "Voyage 116",
+              "departurePort": "Miami",
+              "voyageId": "V116"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-10-06",
+              "itinerary": "Voyage 117",
+              "departurePort": "Miami",
+              "voyageId": "V117"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-11-07",
+              "itinerary": "Voyage 118",
+              "departurePort": "Miami",
+              "voyageId": "V118"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-12-08",
+              "itinerary": "Voyage 119",
+              "departurePort": "Miami",
+              "voyageId": "V119"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-01-09",
+              "itinerary": "Voyage 120",
+              "departurePort": "Miami",
+              "voyageId": "V120"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-02-10",
+              "itinerary": "Voyage 121",
+              "departurePort": "Miami",
+              "voyageId": "V121"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-03-11",
+              "itinerary": "Voyage 122",
+              "departurePort": "Miami",
+              "voyageId": "V122"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-04-12",
+              "itinerary": "Voyage 123",
+              "departurePort": "Miami",
+              "voyageId": "V123"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-05-13",
+              "itinerary": "Voyage 124",
+              "departurePort": "Miami",
+              "voyageId": "V124"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-06-14",
+              "itinerary": "Voyage 125",
+              "departurePort": "Miami",
+              "voyageId": "V125"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-07-15",
+              "itinerary": "Voyage 126",
+              "departurePort": "Miami",
+              "voyageId": "V126"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-08-16",
+              "itinerary": "Voyage 127",
+              "departurePort": "Miami",
+              "voyageId": "V127"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-09-17",
+              "itinerary": "Voyage 128",
+              "departurePort": "Miami",
+              "voyageId": "V128"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-10-18",
+              "itinerary": "Voyage 129",
+              "departurePort": "Miami",
+              "voyageId": "V129"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-11-19",
+              "itinerary": "Voyage 130",
+              "departurePort": "Miami",
+              "voyageId": "V130"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-12-20",
+              "itinerary": "Voyage 131",
+              "departurePort": "Miami",
+              "voyageId": "V131"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-01-21",
+              "itinerary": "Voyage 132",
+              "departurePort": "Miami",
+              "voyageId": "V132"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-02-22",
+              "itinerary": "Voyage 133",
+              "departurePort": "Miami",
+              "voyageId": "V133"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-03-23",
+              "itinerary": "Voyage 134",
+              "departurePort": "Miami",
+              "voyageId": "V134"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-04-24",
+              "itinerary": "Voyage 135",
+              "departurePort": "Miami",
+              "voyageId": "V135"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-05-25",
+              "itinerary": "Voyage 136",
+              "departurePort": "Miami",
+              "voyageId": "V136"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-06-26",
+              "itinerary": "Voyage 137",
+              "departurePort": "Miami",
+              "voyageId": "V137"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-07-27",
+              "itinerary": "Voyage 138",
+              "departurePort": "Miami",
+              "voyageId": "V138"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-08-28",
+              "itinerary": "Voyage 139",
+              "departurePort": "Miami",
+              "voyageId": "V139"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-09-01",
+              "itinerary": "Voyage 140",
+              "departurePort": "Miami",
+              "voyageId": "V140"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-10-02",
+              "itinerary": "Voyage 141",
+              "departurePort": "Miami",
+              "voyageId": "V141"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-11-03",
+              "itinerary": "Voyage 142",
+              "departurePort": "Miami",
+              "voyageId": "V142"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-12-04",
+              "itinerary": "Voyage 143",
+              "departurePort": "Miami",
+              "voyageId": "V143"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-01-05",
+              "itinerary": "Voyage 144",
+              "departurePort": "Miami",
+              "voyageId": "V144"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-02-06",
+              "itinerary": "Voyage 145",
+              "departurePort": "Miami",
+              "voyageId": "V145"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-03-07",
+              "itinerary": "Voyage 146",
+              "departurePort": "Miami",
+              "voyageId": "V146"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-04-08",
+              "itinerary": "Voyage 147",
+              "departurePort": "Miami",
+              "voyageId": "V147"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-05-09",
+              "itinerary": "Voyage 148",
+              "departurePort": "Miami",
+              "voyageId": "V148"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-06-10",
+              "itinerary": "Voyage 149",
+              "departurePort": "Miami",
+              "voyageId": "V149"
+            }
+          ],
+          "pagination": {
+            "totalResults": 329,
+            "pageNumber": 3,
+            "pageSize": 50,
+            "hasNextPage": true
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "cruiseSearch": {
+          "sailings": [
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-07-11",
+              "itinerary": "Voyage 150",
+              "departurePort": "Miami",
+              "voyageId": "V150"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-08-12",
+              "itinerary": "Voyage 151",
+              "departurePort": "Miami",
+              "voyageId": "V151"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-09-13",
+              "itinerary": "Voyage 152",
+              "departurePort": "Miami",
+              "voyageId": "V152"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-10-14",
+              "itinerary": "Voyage 153",
+              "departurePort": "Miami",
+              "voyageId": "V153"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-11-15",
+              "itinerary": "Voyage 154",
+              "departurePort": "Miami",
+              "voyageId": "V154"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-12-16",
+              "itinerary": "Voyage 155",
+              "departurePort": "Miami",
+              "voyageId": "V155"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-01-17",
+              "itinerary": "Voyage 156",
+              "departurePort": "Miami",
+              "voyageId": "V156"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-02-18",
+              "itinerary": "Voyage 157",
+              "departurePort": "Miami",
+              "voyageId": "V157"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-03-19",
+              "itinerary": "Voyage 158",
+              "departurePort": "Miami",
+              "voyageId": "V158"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-04-20",
+              "itinerary": "Voyage 159",
+              "departurePort": "Miami",
+              "voyageId": "V159"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-05-21",
+              "itinerary": "Voyage 160",
+              "departurePort": "Miami",
+              "voyageId": "V160"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-06-22",
+              "itinerary": "Voyage 161",
+              "departurePort": "Miami",
+              "voyageId": "V161"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-07-23",
+              "itinerary": "Voyage 162",
+              "departurePort": "Miami",
+              "voyageId": "V162"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-08-24",
+              "itinerary": "Voyage 163",
+              "departurePort": "Miami",
+              "voyageId": "V163"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-09-25",
+              "itinerary": "Voyage 164",
+              "departurePort": "Miami",
+              "voyageId": "V164"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-10-26",
+              "itinerary": "Voyage 165",
+              "departurePort": "Miami",
+              "voyageId": "V165"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-11-27",
+              "itinerary": "Voyage 166",
+              "departurePort": "Miami",
+              "voyageId": "V166"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-12-28",
+              "itinerary": "Voyage 167",
+              "departurePort": "Miami",
+              "voyageId": "V167"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-01-01",
+              "itinerary": "Voyage 168",
+              "departurePort": "Miami",
+              "voyageId": "V168"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-02-02",
+              "itinerary": "Voyage 169",
+              "departurePort": "Miami",
+              "voyageId": "V169"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-03-03",
+              "itinerary": "Voyage 170",
+              "departurePort": "Miami",
+              "voyageId": "V170"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-04-04",
+              "itinerary": "Voyage 171",
+              "departurePort": "Miami",
+              "voyageId": "V171"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-05-05",
+              "itinerary": "Voyage 172",
+              "departurePort": "Miami",
+              "voyageId": "V172"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-06-06",
+              "itinerary": "Voyage 173",
+              "departurePort": "Miami",
+              "voyageId": "V173"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-07-07",
+              "itinerary": "Voyage 174",
+              "departurePort": "Miami",
+              "voyageId": "V174"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-08-08",
+              "itinerary": "Voyage 175",
+              "departurePort": "Miami",
+              "voyageId": "V175"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-09-09",
+              "itinerary": "Voyage 176",
+              "departurePort": "Miami",
+              "voyageId": "V176"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-10-10",
+              "itinerary": "Voyage 177",
+              "departurePort": "Miami",
+              "voyageId": "V177"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-11-11",
+              "itinerary": "Voyage 178",
+              "departurePort": "Miami",
+              "voyageId": "V178"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-12-12",
+              "itinerary": "Voyage 179",
+              "departurePort": "Miami",
+              "voyageId": "V179"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-01-13",
+              "itinerary": "Voyage 180",
+              "departurePort": "Miami",
+              "voyageId": "V180"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-02-14",
+              "itinerary": "Voyage 181",
+              "departurePort": "Miami",
+              "voyageId": "V181"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-03-15",
+              "itinerary": "Voyage 182",
+              "departurePort": "Miami",
+              "voyageId": "V182"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-04-16",
+              "itinerary": "Voyage 183",
+              "departurePort": "Miami",
+              "voyageId": "V183"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-05-17",
+              "itinerary": "Voyage 184",
+              "departurePort": "Miami",
+              "voyageId": "V184"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-06-18",
+              "itinerary": "Voyage 185",
+              "departurePort": "Miami",
+              "voyageId": "V185"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-07-19",
+              "itinerary": "Voyage 186",
+              "departurePort": "Miami",
+              "voyageId": "V186"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-08-20",
+              "itinerary": "Voyage 187",
+              "departurePort": "Miami",
+              "voyageId": "V187"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-09-21",
+              "itinerary": "Voyage 188",
+              "departurePort": "Miami",
+              "voyageId": "V188"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-10-22",
+              "itinerary": "Voyage 189",
+              "departurePort": "Miami",
+              "voyageId": "V189"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-11-23",
+              "itinerary": "Voyage 190",
+              "departurePort": "Miami",
+              "voyageId": "V190"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-12-24",
+              "itinerary": "Voyage 191",
+              "departurePort": "Miami",
+              "voyageId": "V191"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-01-25",
+              "itinerary": "Voyage 192",
+              "departurePort": "Miami",
+              "voyageId": "V192"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-02-26",
+              "itinerary": "Voyage 193",
+              "departurePort": "Miami",
+              "voyageId": "V193"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-03-27",
+              "itinerary": "Voyage 194",
+              "departurePort": "Miami",
+              "voyageId": "V194"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-04-28",
+              "itinerary": "Voyage 195",
+              "departurePort": "Miami",
+              "voyageId": "V195"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-05-01",
+              "itinerary": "Voyage 196",
+              "departurePort": "Miami",
+              "voyageId": "V196"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-06-02",
+              "itinerary": "Voyage 197",
+              "departurePort": "Miami",
+              "voyageId": "V197"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-07-03",
+              "itinerary": "Voyage 198",
+              "departurePort": "Miami",
+              "voyageId": "V198"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-08-04",
+              "itinerary": "Voyage 199",
+              "departurePort": "Miami",
+              "voyageId": "V199"
+            }
+          ],
+          "pagination": {
+            "totalResults": 329,
+            "pageNumber": 4,
+            "pageSize": 50,
+            "hasNextPage": true
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "cruiseSearch": {
+          "sailings": [
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-09-05",
+              "itinerary": "Voyage 200",
+              "departurePort": "Miami",
+              "voyageId": "V200"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-10-06",
+              "itinerary": "Voyage 201",
+              "departurePort": "Miami",
+              "voyageId": "V201"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-11-07",
+              "itinerary": "Voyage 202",
+              "departurePort": "Miami",
+              "voyageId": "V202"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-12-08",
+              "itinerary": "Voyage 203",
+              "departurePort": "Miami",
+              "voyageId": "V203"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-01-09",
+              "itinerary": "Voyage 204",
+              "departurePort": "Miami",
+              "voyageId": "V204"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-02-10",
+              "itinerary": "Voyage 205",
+              "departurePort": "Miami",
+              "voyageId": "V205"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-03-11",
+              "itinerary": "Voyage 206",
+              "departurePort": "Miami",
+              "voyageId": "V206"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-04-12",
+              "itinerary": "Voyage 207",
+              "departurePort": "Miami",
+              "voyageId": "V207"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-05-13",
+              "itinerary": "Voyage 208",
+              "departurePort": "Miami",
+              "voyageId": "V208"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-06-14",
+              "itinerary": "Voyage 209",
+              "departurePort": "Miami",
+              "voyageId": "V209"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-07-15",
+              "itinerary": "Voyage 210",
+              "departurePort": "Miami",
+              "voyageId": "V210"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-08-16",
+              "itinerary": "Voyage 211",
+              "departurePort": "Miami",
+              "voyageId": "V211"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-09-17",
+              "itinerary": "Voyage 212",
+              "departurePort": "Miami",
+              "voyageId": "V212"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-10-18",
+              "itinerary": "Voyage 213",
+              "departurePort": "Miami",
+              "voyageId": "V213"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-11-19",
+              "itinerary": "Voyage 214",
+              "departurePort": "Miami",
+              "voyageId": "V214"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-12-20",
+              "itinerary": "Voyage 215",
+              "departurePort": "Miami",
+              "voyageId": "V215"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-01-21",
+              "itinerary": "Voyage 216",
+              "departurePort": "Miami",
+              "voyageId": "V216"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-02-22",
+              "itinerary": "Voyage 217",
+              "departurePort": "Miami",
+              "voyageId": "V217"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-03-23",
+              "itinerary": "Voyage 218",
+              "departurePort": "Miami",
+              "voyageId": "V218"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-04-24",
+              "itinerary": "Voyage 219",
+              "departurePort": "Miami",
+              "voyageId": "V219"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-05-25",
+              "itinerary": "Voyage 220",
+              "departurePort": "Miami",
+              "voyageId": "V220"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-06-26",
+              "itinerary": "Voyage 221",
+              "departurePort": "Miami",
+              "voyageId": "V221"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-07-27",
+              "itinerary": "Voyage 222",
+              "departurePort": "Miami",
+              "voyageId": "V222"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-08-28",
+              "itinerary": "Voyage 223",
+              "departurePort": "Miami",
+              "voyageId": "V223"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-09-01",
+              "itinerary": "Voyage 224",
+              "departurePort": "Miami",
+              "voyageId": "V224"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-10-02",
+              "itinerary": "Voyage 225",
+              "departurePort": "Miami",
+              "voyageId": "V225"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-11-03",
+              "itinerary": "Voyage 226",
+              "departurePort": "Miami",
+              "voyageId": "V226"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-12-04",
+              "itinerary": "Voyage 227",
+              "departurePort": "Miami",
+              "voyageId": "V227"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-01-05",
+              "itinerary": "Voyage 228",
+              "departurePort": "Miami",
+              "voyageId": "V228"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-02-06",
+              "itinerary": "Voyage 229",
+              "departurePort": "Miami",
+              "voyageId": "V229"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-03-07",
+              "itinerary": "Voyage 230",
+              "departurePort": "Miami",
+              "voyageId": "V230"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-04-08",
+              "itinerary": "Voyage 231",
+              "departurePort": "Miami",
+              "voyageId": "V231"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-05-09",
+              "itinerary": "Voyage 232",
+              "departurePort": "Miami",
+              "voyageId": "V232"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-06-10",
+              "itinerary": "Voyage 233",
+              "departurePort": "Miami",
+              "voyageId": "V233"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-07-11",
+              "itinerary": "Voyage 234",
+              "departurePort": "Miami",
+              "voyageId": "V234"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-08-12",
+              "itinerary": "Voyage 235",
+              "departurePort": "Miami",
+              "voyageId": "V235"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-09-13",
+              "itinerary": "Voyage 236",
+              "departurePort": "Miami",
+              "voyageId": "V236"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-10-14",
+              "itinerary": "Voyage 237",
+              "departurePort": "Miami",
+              "voyageId": "V237"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-11-15",
+              "itinerary": "Voyage 238",
+              "departurePort": "Miami",
+              "voyageId": "V238"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-12-16",
+              "itinerary": "Voyage 239",
+              "departurePort": "Miami",
+              "voyageId": "V239"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-01-17",
+              "itinerary": "Voyage 240",
+              "departurePort": "Miami",
+              "voyageId": "V240"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-02-18",
+              "itinerary": "Voyage 241",
+              "departurePort": "Miami",
+              "voyageId": "V241"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-03-19",
+              "itinerary": "Voyage 242",
+              "departurePort": "Miami",
+              "voyageId": "V242"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-04-20",
+              "itinerary": "Voyage 243",
+              "departurePort": "Miami",
+              "voyageId": "V243"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-05-21",
+              "itinerary": "Voyage 244",
+              "departurePort": "Miami",
+              "voyageId": "V244"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-06-22",
+              "itinerary": "Voyage 245",
+              "departurePort": "Miami",
+              "voyageId": "V245"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-07-23",
+              "itinerary": "Voyage 246",
+              "departurePort": "Miami",
+              "voyageId": "V246"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-08-24",
+              "itinerary": "Voyage 247",
+              "departurePort": "Miami",
+              "voyageId": "V247"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-09-25",
+              "itinerary": "Voyage 248",
+              "departurePort": "Miami",
+              "voyageId": "V248"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-10-26",
+              "itinerary": "Voyage 249",
+              "departurePort": "Miami",
+              "voyageId": "V249"
+            }
+          ],
+          "pagination": {
+            "totalResults": 329,
+            "pageNumber": 5,
+            "pageSize": 50,
+            "hasNextPage": true
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "cruiseSearch": {
+          "sailings": [
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-11-27",
+              "itinerary": "Voyage 250",
+              "departurePort": "Miami",
+              "voyageId": "V250"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-12-28",
+              "itinerary": "Voyage 251",
+              "departurePort": "Miami",
+              "voyageId": "V251"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-01-01",
+              "itinerary": "Voyage 252",
+              "departurePort": "Miami",
+              "voyageId": "V252"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-02-02",
+              "itinerary": "Voyage 253",
+              "departurePort": "Miami",
+              "voyageId": "V253"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-03-03",
+              "itinerary": "Voyage 254",
+              "departurePort": "Miami",
+              "voyageId": "V254"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-04-04",
+              "itinerary": "Voyage 255",
+              "departurePort": "Miami",
+              "voyageId": "V255"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-05-05",
+              "itinerary": "Voyage 256",
+              "departurePort": "Miami",
+              "voyageId": "V256"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-06-06",
+              "itinerary": "Voyage 257",
+              "departurePort": "Miami",
+              "voyageId": "V257"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-07-07",
+              "itinerary": "Voyage 258",
+              "departurePort": "Miami",
+              "voyageId": "V258"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-08-08",
+              "itinerary": "Voyage 259",
+              "departurePort": "Miami",
+              "voyageId": "V259"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-09-09",
+              "itinerary": "Voyage 260",
+              "departurePort": "Miami",
+              "voyageId": "V260"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-10-10",
+              "itinerary": "Voyage 261",
+              "departurePort": "Miami",
+              "voyageId": "V261"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-11-11",
+              "itinerary": "Voyage 262",
+              "departurePort": "Miami",
+              "voyageId": "V262"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-12-12",
+              "itinerary": "Voyage 263",
+              "departurePort": "Miami",
+              "voyageId": "V263"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-01-13",
+              "itinerary": "Voyage 264",
+              "departurePort": "Miami",
+              "voyageId": "V264"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-02-14",
+              "itinerary": "Voyage 265",
+              "departurePort": "Miami",
+              "voyageId": "V265"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-03-15",
+              "itinerary": "Voyage 266",
+              "departurePort": "Miami",
+              "voyageId": "V266"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-04-16",
+              "itinerary": "Voyage 267",
+              "departurePort": "Miami",
+              "voyageId": "V267"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-05-17",
+              "itinerary": "Voyage 268",
+              "departurePort": "Miami",
+              "voyageId": "V268"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-06-18",
+              "itinerary": "Voyage 269",
+              "departurePort": "Miami",
+              "voyageId": "V269"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-07-19",
+              "itinerary": "Voyage 270",
+              "departurePort": "Miami",
+              "voyageId": "V270"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-08-20",
+              "itinerary": "Voyage 271",
+              "departurePort": "Miami",
+              "voyageId": "V271"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-09-21",
+              "itinerary": "Voyage 272",
+              "departurePort": "Miami",
+              "voyageId": "V272"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-10-22",
+              "itinerary": "Voyage 273",
+              "departurePort": "Miami",
+              "voyageId": "V273"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-11-23",
+              "itinerary": "Voyage 274",
+              "departurePort": "Miami",
+              "voyageId": "V274"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-12-24",
+              "itinerary": "Voyage 275",
+              "departurePort": "Miami",
+              "voyageId": "V275"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-01-25",
+              "itinerary": "Voyage 276",
+              "departurePort": "Miami",
+              "voyageId": "V276"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-02-26",
+              "itinerary": "Voyage 277",
+              "departurePort": "Miami",
+              "voyageId": "V277"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-03-27",
+              "itinerary": "Voyage 278",
+              "departurePort": "Miami",
+              "voyageId": "V278"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-04-28",
+              "itinerary": "Voyage 279",
+              "departurePort": "Miami",
+              "voyageId": "V279"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-05-01",
+              "itinerary": "Voyage 280",
+              "departurePort": "Miami",
+              "voyageId": "V280"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-06-02",
+              "itinerary": "Voyage 281",
+              "departurePort": "Miami",
+              "voyageId": "V281"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-07-03",
+              "itinerary": "Voyage 282",
+              "departurePort": "Miami",
+              "voyageId": "V282"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-08-04",
+              "itinerary": "Voyage 283",
+              "departurePort": "Miami",
+              "voyageId": "V283"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-09-05",
+              "itinerary": "Voyage 284",
+              "departurePort": "Miami",
+              "voyageId": "V284"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-10-06",
+              "itinerary": "Voyage 285",
+              "departurePort": "Miami",
+              "voyageId": "V285"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-11-07",
+              "itinerary": "Voyage 286",
+              "departurePort": "Miami",
+              "voyageId": "V286"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-12-08",
+              "itinerary": "Voyage 287",
+              "departurePort": "Miami",
+              "voyageId": "V287"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-01-09",
+              "itinerary": "Voyage 288",
+              "departurePort": "Miami",
+              "voyageId": "V288"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-02-10",
+              "itinerary": "Voyage 289",
+              "departurePort": "Miami",
+              "voyageId": "V289"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-03-11",
+              "itinerary": "Voyage 290",
+              "departurePort": "Miami",
+              "voyageId": "V290"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-04-12",
+              "itinerary": "Voyage 291",
+              "departurePort": "Miami",
+              "voyageId": "V291"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-05-13",
+              "itinerary": "Voyage 292",
+              "departurePort": "Miami",
+              "voyageId": "V292"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-06-14",
+              "itinerary": "Voyage 293",
+              "departurePort": "Miami",
+              "voyageId": "V293"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-07-15",
+              "itinerary": "Voyage 294",
+              "departurePort": "Miami",
+              "voyageId": "V294"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-08-16",
+              "itinerary": "Voyage 295",
+              "departurePort": "Miami",
+              "voyageId": "V295"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-09-17",
+              "itinerary": "Voyage 296",
+              "departurePort": "Miami",
+              "voyageId": "V296"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-10-18",
+              "itinerary": "Voyage 297",
+              "departurePort": "Miami",
+              "voyageId": "V297"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-11-19",
+              "itinerary": "Voyage 298",
+              "departurePort": "Miami",
+              "voyageId": "V298"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-12-20",
+              "itinerary": "Voyage 299",
+              "departurePort": "Miami",
+              "voyageId": "V299"
+            }
+          ],
+          "pagination": {
+            "totalResults": 329,
+            "pageNumber": 6,
+            "pageSize": 50,
+            "hasNextPage": true
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "cruiseSearch": {
+          "sailings": [
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-01-21",
+              "itinerary": "Voyage 300",
+              "departurePort": "Miami",
+              "voyageId": "V300"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-02-22",
+              "itinerary": "Voyage 301",
+              "departurePort": "Miami",
+              "voyageId": "V301"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-03-23",
+              "itinerary": "Voyage 302",
+              "departurePort": "Miami",
+              "voyageId": "V302"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-04-24",
+              "itinerary": "Voyage 303",
+              "departurePort": "Miami",
+              "voyageId": "V303"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-05-25",
+              "itinerary": "Voyage 304",
+              "departurePort": "Miami",
+              "voyageId": "V304"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-06-26",
+              "itinerary": "Voyage 305",
+              "departurePort": "Miami",
+              "voyageId": "V305"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-07-27",
+              "itinerary": "Voyage 306",
+              "departurePort": "Miami",
+              "voyageId": "V306"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-08-28",
+              "itinerary": "Voyage 307",
+              "departurePort": "Miami",
+              "voyageId": "V307"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-09-01",
+              "itinerary": "Voyage 308",
+              "departurePort": "Miami",
+              "voyageId": "V308"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-10-02",
+              "itinerary": "Voyage 309",
+              "departurePort": "Miami",
+              "voyageId": "V309"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-11-03",
+              "itinerary": "Voyage 310",
+              "departurePort": "Miami",
+              "voyageId": "V310"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-12-04",
+              "itinerary": "Voyage 311",
+              "departurePort": "Miami",
+              "voyageId": "V311"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-01-05",
+              "itinerary": "Voyage 312",
+              "departurePort": "Miami",
+              "voyageId": "V312"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-02-06",
+              "itinerary": "Voyage 313",
+              "departurePort": "Miami",
+              "voyageId": "V313"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-03-07",
+              "itinerary": "Voyage 314",
+              "departurePort": "Miami",
+              "voyageId": "V314"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-04-08",
+              "itinerary": "Voyage 315",
+              "departurePort": "Miami",
+              "voyageId": "V315"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-05-09",
+              "itinerary": "Voyage 316",
+              "departurePort": "Miami",
+              "voyageId": "V316"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-06-10",
+              "itinerary": "Voyage 317",
+              "departurePort": "Miami",
+              "voyageId": "V317"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-07-11",
+              "itinerary": "Voyage 318",
+              "departurePort": "Miami",
+              "voyageId": "V318"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-08-12",
+              "itinerary": "Voyage 319",
+              "departurePort": "Miami",
+              "voyageId": "V319"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-09-13",
+              "itinerary": "Voyage 320",
+              "departurePort": "Miami",
+              "voyageId": "V320"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-10-14",
+              "itinerary": "Voyage 321",
+              "departurePort": "Miami",
+              "voyageId": "V321"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-11-15",
+              "itinerary": "Voyage 322",
+              "departurePort": "Miami",
+              "voyageId": "V322"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-12-16",
+              "itinerary": "Voyage 323",
+              "departurePort": "Miami",
+              "voyageId": "V323"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-01-17",
+              "itinerary": "Voyage 324",
+              "departurePort": "Miami",
+              "voyageId": "V324"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-02-18",
+              "itinerary": "Voyage 325",
+              "departurePort": "Miami",
+              "voyageId": "V325"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-03-19",
+              "itinerary": "Voyage 326",
+              "departurePort": "Miami",
+              "voyageId": "V326"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-04-20",
+              "itinerary": "Voyage 327",
+              "departurePort": "Miami",
+              "voyageId": "V327"
+            },
+            {
+              "rateCode": "O7O",
+              "shipName": "Carnival Fixture",
+              "sailDate": "2028-05-21",
+              "itinerary": "Voyage 328",
+              "departurePort": "Miami",
+              "voyageId": "V328"
+            }
+          ],
+          "pagination": {
+            "totalResults": 329,
+            "pageNumber": 7,
+            "pageSize": 50,
+            "hasNextPage": false
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "codes": [
+    { "code": "FBN", "offerName": "Fun Bonus", "status": "success", "rowCount": 2, "totalResults": 2, "pagesVisited": 1, "truncated": false },
+    { "code": "ZERO", "offerName": "Verified Empty", "status": "authoritative_empty", "rowCount": 0, "totalResults": 0, "pagesVisited": 1, "truncated": false },
+    { "code": "WAIT", "offerName": "Needs Resume", "status": "incomplete", "rowCount": 0, "totalResults": 329, "pagesVisited": 2, "truncated": true }
+  ]
+}

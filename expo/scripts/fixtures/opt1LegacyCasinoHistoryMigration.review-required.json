@@ -1,0 +1,65 @@
+{
+  "schemaVersion": "opt1.0.0",
+  "sourceLabel": "migrated_legacy_known_fact",
+  "requiresExplicitReview": true,
+  "acceptedByDefault": false,
+  "ownerProfileId": null,
+  "records": [
+    {
+      "id": "legacy-quantum-2026-04-07",
+      "shipName": "Quantum of the Seas",
+      "sailDate": "2026-04-07",
+      "returnDate": "2026-04-10",
+      "nights": 3,
+      "status": "completed",
+      "brand": "royal",
+      "casinoProgram": "clubRoyale",
+      "pointsEarned": 800,
+      "winningsBroughtHome": 1000,
+      "calculationConfidence": "actual",
+      "migrationReviewStatus": "review-required"
+    },
+    {
+      "id": "legacy-quantum-2026-04-10",
+      "shipName": "Quantum of the Seas",
+      "sailDate": "2026-04-10",
+      "returnDate": "2026-04-15",
+      "nights": 5,
+      "status": "completed",
+      "brand": "royal",
+      "casinoProgram": "clubRoyale",
+      "pointsEarned": 3000,
+      "winningsBroughtHome": 1000,
+      "calculationConfidence": "actual",
+      "migrationReviewStatus": "review-required"
+    },
+    {
+      "id": "legacy-quantum-2026-04-15",
+      "shipName": "Quantum of the Seas",
+      "sailDate": "2026-04-15",
+      "returnDate": "2026-04-21",
+      "nights": 6,
+      "status": "completed",
+      "brand": "royal",
+      "casinoProgram": "clubRoyale",
+      "pointsEarned": 2000,
+      "winningsBroughtHome": 1215,
+      "calculationConfidence": "actual",
+      "migrationReviewStatus": "review-required"
+    },
+    {
+      "id": "legacy-quantum-2026-04-21",
+      "shipName": "Quantum of the Seas",
+      "sailDate": "2026-04-21",
+      "returnDate": "2026-04-24",
+      "nights": 3,
+      "status": "completed",
+      "brand": "royal",
+      "casinoProgram": "clubRoyale",
+      "pointsEarned": 860,
+      "winningsBroughtHome": 3500,
+      "calculationConfidence": "actual",
+      "migrationReviewStatus": "review-required"
+    }
+  ]
+}

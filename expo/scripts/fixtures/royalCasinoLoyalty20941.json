@@ -1,0 +1,12 @@
+{
+  "sourceUrl": "https://www.royalcaribbean.com/api/casino/v1/loyalty-data",
+  "payload": {
+    "casinoLoyaltyId": "CASINO-REDACTED-001",
+    "cruiseLoyaltyId": "CA-REDACTED-001",
+    "tier": "Signature",
+    "individualPoints": 20941,
+    "relationshipPoints": 123,
+    "evaluationPeriodStartDateForPoints": "2026-04-01",
+    "evaluationPeriodEndDateForPoints": "2027-03-31"
+  }
+}

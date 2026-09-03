@@ -1,0 +1,18 @@
+[
+  {
+    "firstName": "Test",
+    "lastName": "Guest",
+    "vifpNumber": "1234567890",
+    "vifpTier": "Gold",
+    "vifpTierSource": "authoritative",
+    "vifpPoints": 47,
+    "hasVifpData": true
+  },
+  {
+    "totalCruises": 9,
+    "cruiseDayPoints": 61,
+    "playersClubTier": "Premier",
+    "playersClubPoints": 4321,
+    "hasPlayersClubData": true
+  }
+]

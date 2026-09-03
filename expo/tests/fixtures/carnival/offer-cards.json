@@ -1,0 +1,14 @@
+{
+  "cards": [
+    {
+      "code": "FBN",
+      "title": "Fun Bonus",
+      "shopNowUrl": "https://www.carnival.com/cruise-search?ratecodes=FBN&vifp=1234567890"
+    },
+    {
+      "code": "ZERO",
+      "title": "Empty Offer",
+      "shopNowUrl": "https://www.carnival.com/cruise-search?ratecodes=ZERO&vifp=1234567890"
+    }
+  ]
+}

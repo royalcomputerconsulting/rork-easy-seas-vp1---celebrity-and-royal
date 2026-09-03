@@ -1,0 +1,67 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import createContextHook from '@nkzw/create-context-hook';
+
+import { useUser } from '@/state/UserProvider';
+import {
+  optimizationBundleRepository,
+  type OptimizationSnapshotBundle,
+} from '@/lib/optimization';
+
+type State = {
+  activeProfileId: string | null;
+  bundle: OptimizationSnapshotBundle | null;
+  isLoading: boolean;
+  refresh: () => Promise<void>;
+  saveBundle: (next: OptimizationSnapshotBundle) => Promise<void>;
+  clearBundle: () => Promise<void>;
+};
+
+export const [PersonalCertificateOptimizerProvider, usePersonalCertificateOptimizer] = createContextHook((): State => {
+  const { currentUserId } = useUser();
+  const [bundle, setBundle] = useState<OptimizationSnapshotBundle | null>(null);
+  const [isLoading, setLoading] = useState(true);
+  const activeProfileId = currentUserId || null;
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    try {
+      setBundle(activeProfileId ? await optimizationBundleRepository.load(activeProfileId) : null);
+    } catch (error) {
+      console.warn('[PersonalCertificateOptimizer] Failed to load optimization bundle:', error);
+      setBundle(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [activeProfileId]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const saveBundle = useCallback(async (next: OptimizationSnapshotBundle) => {
+    if (!activeProfileId) {
+      throw new Error('Select an EasySeas profile before saving an optimization bundle.');
+    }
+    if (next.ownerProfileId !== activeProfileId) {
+      throw new Error('Cannot save optimization bundle for a different active profile.');
+    }
+    await optimizationBundleRepository.save(next);
+    setBundle(next);
+  }, [activeProfileId]);
+
+  const clearBundle = useCallback(async () => {
+    if (activeProfileId) {
+      await optimizationBundleRepository.clear(activeProfileId);
+    }
+    setBundle(null);
+  }, [activeProfileId]);
+
+  return useMemo(() => ({
+    activeProfileId,
+    bundle,
+    isLoading,
+    refresh,
+    saveBundle,
+    clearBundle,
+  }), [activeProfileId, bundle, clearBundle, isLoading, refresh, saveBundle]);
+});

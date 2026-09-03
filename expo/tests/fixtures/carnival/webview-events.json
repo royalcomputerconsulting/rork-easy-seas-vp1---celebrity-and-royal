@@ -1,0 +1,29 @@
+{
+  "events": [
+    {
+      "type": "response",
+      "runId": "run-current",
+      "requestId": "request-current"
+    },
+    {
+      "type": "response",
+      "runId": "run-old",
+      "requestId": "request-current"
+    },
+    {
+      "type": "response",
+      "runId": "run-current",
+      "requestId": "request-old"
+    },
+    {
+      "type": "navigation",
+      "url": "https://www.carnival.com/login",
+      "hasPasswordField": true
+    },
+    {
+      "type": "navigation",
+      "url": "https://www.carnival.com/cruise-search",
+      "hasPasswordField": false
+    }
+  ]
+}

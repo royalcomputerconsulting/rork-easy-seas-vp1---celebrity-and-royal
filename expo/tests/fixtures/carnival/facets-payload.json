@@ -1,0 +1,16 @@
+{
+  "data": {
+    "facets": [
+      {
+        "name": "Ship",
+        "buckets": [
+          {
+            "key": "Celebration",
+            "count": 22
+          }
+        ]
+      }
+    ],
+    "total": 9999
+  }
+}

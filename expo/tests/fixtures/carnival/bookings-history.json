@@ -1,0 +1,28 @@
+{
+  "now": "2026-07-14T12:00:00.000Z",
+  "rows": [
+    {
+      "bookingId": "carnival-1693651200000-0",
+      "shipName": "Carnival Panorama",
+      "sailingStartDate": "Sep 2, 2023",
+      "sailingEndDate": "09/09/2023",
+      "sailingDates": "Sep 2, 2023",
+      "itinerary": "Mexican Riviera",
+      "sourcePage": "Upcoming",
+      "status": "Upcoming",
+      "vifpPoints": 7
+    },
+    {
+      "bookingId": "carnival-history-panorama",
+      "shipName": "Carnival Panorama",
+      "sailingStartDate": "2023-09-02",
+      "sailingEndDate": "2023-09-09",
+      "sailingDates": "2023-09-02",
+      "itinerary": "Mexican Riviera",
+      "sourcePage": "Completed",
+      "status": "Completed",
+      "bookingStatus": "COMPLETED",
+      "vifpPoints": 7
+    }
+  ]
+}

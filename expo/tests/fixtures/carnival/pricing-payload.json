@@ -1,0 +1,14 @@
+{
+  "data": {
+    "pricing": {
+      "rateCode": "FBN",
+      "cabins": [
+        {
+          "category": "Interior",
+          "price": 299
+        }
+      ],
+      "totalResults": 0
+    }
+  }
+}

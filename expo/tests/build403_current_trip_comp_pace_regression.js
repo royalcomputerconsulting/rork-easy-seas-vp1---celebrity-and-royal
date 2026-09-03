@@ -1,0 +1,21 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const Module = require('node:module');
+const ts = require('typescript');
+const root = path.resolve(__dirname, '..');
+const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+const filename = path.join(root, 'lib/casino/currentTripCompPace.ts');
+const output = ts.transpileModule(read('lib/casino/currentTripCompPace.ts'), { compilerOptions:{ module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022 }, fileName:filename }).outputText;
+const original = Module._load; Module._load = (request,parent,isMain) => request.startsWith('@/') ? {} : original(request,parent,isMain);
+let lib; try { const mod = new Module(filename,module); mod.filename=filename; mod.paths=Module._nodeModulePaths(path.dirname(filename)); mod._compile(output,filename); lib=mod.exports; } finally { Module._load=original; }
+const royal = lib.buildCurrentTripCompPace({ id:'r',shipName:'Icon of the Seas',sailDate:'2026-08-20',returnDate:'2026-08-27',nights:7,brand:'royal',pointsEarned:1000 },[],new Date('2026-08-21T12:00:00Z'));
+assert.equal(royal.coinIn.value,5000); assert.equal(royal.coinIn.source,'estimated'); assert.equal(royal.theoreticalLoss.value,400);
+const celebrity = lib.buildCurrentTripCompPace({ id:'c',shipName:'Celebrity Beyond',sailDate:'2026-08-20',returnDate:'2026-08-27',nights:7,brand:'celebrity',pointsEarned:1000 },[],new Date('2026-08-21T12:00:00Z'));
+assert.equal(celebrity.coinIn.value,null); assert.equal(celebrity.theoreticalLoss.value,null);
+const reported = lib.buildCurrentTripCompPace({ id:'p',shipName:'Carnival Celebration',sailDate:'2026-08-20',returnDate:'2026-08-27',brand:'carnival',coinIn:10000,theoreticalLoss:900,sourceAuthority:'provider' },[{id:'s',date:'2026-08-20',cruiseId:'p',startTime:'',endTime:'',durationMinutes:60,createdAt:'',compsReceived:100}],new Date('2026-08-21T12:00:00Z'));
+assert.equal(reported.coinIn.source,'provider_reported'); assert.equal(reported.averageDailyTheoretical.value,900); assert.equal(reported.recordedComps.value,100);
+assert.doesNotMatch(read('lib/analytics/hostView.ts'), /\|\| points \* 5/);
+assert.match(read('app/casino/current-trip-comp-pace.tsx'), /Expected comp planning range/);
+assert.match(read('app\/\(tabs\)\/analytics.tsx'), /casino-current-trip-comp-pace/);
+console.log('PASS build403_current_trip_comp_pace_regression');
