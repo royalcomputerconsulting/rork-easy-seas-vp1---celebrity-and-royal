@@ -1,0 +1,1376 @@
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Stack, useRouter } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  Archive,
+  Bot,
+  Calculator,
+  CalendarDays,
+  CheckCircle2,
+  ChevronDown,
+  Clock,
+  FileText,
+  Gauge,
+  RotateCcw,
+  ShieldCheck,
+  Ship,
+  Ticket,
+  UserRound,
+  X,
+} from 'lucide-react-native';
+import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY, SHADOW } from '@/constants/theme';
+import { getPlayerCardTheme, type SupportedBrand } from '@/constants/loyaltyTheme';
+import { getEffectiveCelebrityCaptainsClubLevel } from '@/constants/celebrityCaptainsClub';
+import { getSilverseaTierByDays } from '@/constants/silverseaVenetianSociety';
+import { useCoreData } from '@/state/CoreDataProvider';
+import { useUser } from '@/state/UserProvider';
+import { useCertificates } from '@/state/CertificatesProvider';
+import { useAgentX } from '@/state/AgentXProvider';
+import { useIntelligenceFilters } from '@/state/IntelligenceFiltersProvider';
+import { useLoyalty } from '@/state/LoyaltyProvider';
+import { useCruiseInventory } from '@/hooks/useCruiseInventory';
+import { IntelligenceFilterStrip } from '@/components/IntelligenceFilterStrip';
+import { filterRecordsByIntelligence, getRecordOwnerLabel } from '@/lib/intelligenceFilters';
+import { getCruiseOfferInstanceKey } from '@/lib/cruiseInventory/cruiseCanonicalIdentity';
+import { buildOfferDetailsParams } from '@/lib/offers/offerInstanceIdentity';
+import {
+  buildCommandCenterBuckets,
+  calculateOfferIntelligenceScore,
+  decodeOffer,
+  getBrandLabel,
+  getOfferDisplayCode,
+  getOfferDisplayName,
+  getOfferExpiryDate,
+  type CommandCenterOffer,
+  type DecodedOffer,
+} from '@/lib/offerIntelligence';
+import { formatCurrency } from '@/lib/format';
+import { getDaysUntil } from '@/lib/date';
+import { buildOfferHistoryReport } from '@/lib/offerHistoryIntelligence';
+import type { CasinoOffer, Cruise, TravelerProfile } from '@/types/models';
+import type { Certificate } from '@/components/CertificateManagerModal';
+
+type CertificateReviewBucketId = 'cert7' | 'cert14' | 'cert30' | 'certExpired' | 'certReview';
+type QueueView = 'all' | 'offers' | 'certificates' | 'history';
+
+interface OfferManagementBucket {
+  id: string;
+  title: string;
+  subtitle: string;
+  offers: CommandCenterOffer[];
+}
+
+const QUEUE_VIEWS: { id: QueueView; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'offers', label: 'Offers' },
+  { id: 'certificates', label: 'Certificates' },
+  { id: 'history', label: 'Offer history' },
+];
+
+type CertificateReviewItem = Certificate & {
+  ownerProfileId?: string;
+  sourceEmail?: string;
+  casinoProgram?: string;
+  offerCode?: string;
+  cabinEntitlement?: string;
+  importStatus?: string;
+  reconciliationStatus?: string;
+};
+
+interface CertificateReviewBucket {
+  id: CertificateReviewBucketId;
+  title: string;
+  subtitle: string;
+  certificates: CertificateReviewItem[];
+}
+
+function buildTravelerProfile(currentUser: ReturnType<typeof useUser>['currentUser']): Partial<TravelerProfile> | null {
+  if (!currentUser) return null;
+  return {
+    id: currentUser.id,
+    displayName: currentUser.displayName || currentUser.name,
+    email: currentUser.email,
+    royalCaribbeanNumber: currentUser.royalCaribbeanNumber || currentUser.crownAnchorNumber,
+    clubRoyaleId: currentUser.clubRoyaleId,
+    celebrityCaptainsClubNumber: currentUser.celebrityCaptainsClubNumber,
+    blueChipId: currentUser.blueChipId,
+    active: currentUser.active,
+    defaultProfile: currentUser.defaultProfile,
+    createdAt: currentUser.createdAt,
+    updatedAt: currentUser.updatedAt,
+  };
+}
+
+function buildCertificateBuckets(certificates: CertificateReviewItem[]): CertificateReviewBucket[] {
+  const buckets: CertificateReviewBucket[] = [
+    { id: 'cert7', title: 'Certificates expiring in 7 days', subtitle: 'Use, verify, or intentionally pass.', certificates: [] },
+    { id: 'cert14', title: 'Certificates expiring in 14 days', subtitle: 'Strong review window for linked sailings.', certificates: [] },
+    { id: 'cert30', title: 'Certificates expiring in 30 days', subtitle: 'Plan before the booking window closes.', certificates: [] },
+    { id: 'certExpired', title: 'Recently expired certificates', subtitle: 'Keep for history or mark expired.', certificates: [] },
+    { id: 'certReview', title: 'Certificate records needing review', subtitle: 'Missing expiration, owner, or import confidence.', certificates: [] },
+  ];
+
+  certificates.forEach((certificate) => {
+    if (certificate.status === 'used') return;
+    const days = certificate.expiryDate ? getDaysUntil(certificate.expiryDate) : null;
+    if (certificate.importStatus === 'reviewNeeded' || certificate.reconciliationStatus === 'reviewNeeded' || days === null) buckets[4].certificates.push(certificate);
+    else if (days < 0 && days >= -30) buckets[3].certificates.push(certificate);
+    else if (days >= 0 && days <= 7) buckets[0].certificates.push(certificate);
+    else if (days <= 14) buckets[1].certificates.push(certificate);
+    else if (days <= 30) buckets[2].certificates.push(certificate);
+  });
+
+  console.log('[CommandCenter] Certificate buckets built:', buckets.map((bucket) => ({ id: bucket.id, count: bucket.certificates.length })));
+  return buckets;
+}
+
+function getCertificateExpiryLabel(certificate: CertificateReviewItem): string {
+  if (!certificate.expiryDate) return 'No expiration recorded';
+  const days = getDaysUntil(certificate.expiryDate);
+  if (days < 0) return `Expired ${Math.abs(days)} day${Math.abs(days) === 1 ? '' : 's'} ago`;
+  return `${days} day${days === 1 ? '' : 's'} remaining`;
+}
+
+function normalizeStatus(value: unknown): string {
+  return typeof value === 'string' ? value.trim().toLowerCase() : '';
+}
+
+function getOfferBrandProgramLabel(offer: CasinoOffer): string {
+  const brandLabel = getBrandLabel(offer.brand ?? offer.offerSource);
+  const program = offer.casinoProgram === 'blueChip' ? 'Blue Chip' : offer.casinoProgram === 'clubRoyale' ? 'Club Royale' : offer.casinoProgram === 'playersClub' ? 'Players Club' : offer.casinoProgram === 'venetianSociety' ? 'Venetian Society' : 'Program not set';
+  return `${brandLabel} • ${program}`;
+}
+
+function getOfferExpirationLabel(item: CommandCenterOffer): string {
+  const expiry = getOfferExpiryDate(item.offer);
+  const days = item.intelligence.daysUntilExpiration;
+  if (!expiry || days === null) return 'Expiration missing';
+  if (days < 0) return `Expired ${Math.abs(days)} day${Math.abs(days) === 1 ? '' : 's'} ago`;
+  return `Expires in ${days} day${days === 1 ? '' : 's'}`;
+}
+
+function getOfferCabinLabel(offer: CasinoOffer): string {
+  return offer.roomType || offer.category || offer.offerType || 'Cabin entitlement not recorded';
+}
+
+function getBestRemainingUse(item: CommandCenterOffer): string {
+  const offer = item.offer;
+  const cabin = getOfferCabinLabel(offer);
+  const nights = offer.nights ? `${offer.nights}-night` : 'eligible';
+  const ship = offer.shipName ? ` on ${offer.shipName}` : '';
+  const savings = item.intelligence.casinoPaysFor.effectiveSavingsPercentage;
+  if (item.intelligence.daysUntilExpiration !== null && item.intelligence.daysUntilExpiration < 0) {
+    return 'History/reference only unless the casino desk restores or reissues it.';
+  }
+  if (item.intelligence.score >= 80) {
+    return `Prioritize this ${nights} ${cabin} opportunity${ship}; the recorded comp math is strong at ${savings}% effective savings.`;
+  }
+  if (item.intelligence.daysUntilExpiration !== null && item.intelligence.daysUntilExpiration <= 7) {
+    return `Make a fast decision: decode terms, compare alternatives, then either book, skip, or archive before the window closes.`;
+  }
+  if (item.intelligence.casinoPaysFor.userOutOfPocket > 0) {
+    return `Compare against lower out-of-pocket sailings before using a high-value certificate or offer code.`;
+  }
+  return `Keep in the active planning queue while you compare dates, cabin entitlement, ship fit, and profile ownership.`;
+}
+
+function getSuggestedOfferAction(item: CommandCenterOffer): string {
+  const status = normalizeStatus(item.offer.status);
+  const archiveStatus = normalizeStatus(item.offer.archiveStatus);
+  const days = item.intelligence.daysUntilExpiration;
+  if (status === 'archived' || archiveStatus === 'archived') return 'Restore only if this offer is available again; otherwise leave archived.';
+  if (status === 'skipped') return 'Restore if plans changed; otherwise keep skipped for history.';
+  if (archiveStatus === 'reviewneeded' || item.offer.reconciliationStatus === 'reviewNeeded') return 'Review owner/date changes, then keep active or archive.';
+  if (days === null) return 'Decode and review missing expiration before relying on it.';
+  if (days < 0) return 'Archive after confirming it cannot be used.';
+  if (days <= 7) return 'Decode, compare, and decide now.';
+  if (item.intelligence.score >= 75) return 'Compare against booked cruises and consider booking.';
+  return 'Keep active only if it fits a specific sailing; otherwise archive or skip.';
+}
+
+function getOfferReviewFlags(item: CommandCenterOffer): string[] {
+  const flags: string[] = [];
+  const offer = item.offer;
+  if (!offer.ownerProfileId && !offer.sourceEmail) flags.push('Owner/profile missing');
+  if (!getOfferExpiryDate(offer)) flags.push('Expiration missing');
+  if (!offer.brand && !offer.offerSource) flags.push('Brand missing');
+  if (!offer.casinoProgram) flags.push('Program missing');
+  if (offer.reconciliationStatus === 'reviewNeeded' || offer.archiveStatus === 'reviewNeeded' || offer.status === 'reviewNeeded') flags.push('Import review needed');
+  if (item.intelligence.casinoPaysFor.missingInputs.length > 0) flags.push(`Missing ${item.intelligence.casinoPaysFor.missingInputs.join(', ')}`);
+  return flags;
+}
+
+function offerIsInactive(offer: CasinoOffer): boolean {
+  const status = normalizeStatus(offer.status);
+  const archiveStatus = normalizeStatus(offer.archiveStatus);
+  return status === 'archived' || status === 'skipped' || status === 'replaced' || archiveStatus === 'archived' || archiveStatus === 'replaced';
+}
+
+function resolveThemeBrand(selectedBrand: string, preferredBrand?: SupportedBrand): SupportedBrand {
+  if (selectedBrand === 'royal' || selectedBrand === 'celebrity' || selectedBrand === 'silversea' || selectedBrand === 'carnival') return selectedBrand;
+  return preferredBrand ?? 'royal';
+}
+
+export default function CommandCenterScreen() {
+  const router = useRouter();
+  const { casinoOffers, bookedCruises, updateCasinoOffer, isLoading: coreDataLoading } = useCoreData();
+  const { users, currentUser } = useUser();
+  const { certificates, updateCertificate } = useCertificates();
+  const { selectedProfileId, selectedBrand, selectedProgram } = useIntelligenceFilters();
+  const { crownAnchorLevel, captainsClub } = useLoyalty();
+  const { isInventoryReady, queryOfferSailings, totalCruises } = useCruiseInventory();
+  const {
+    sendMessage,
+    setMode: setAgentMode,
+    setVisible: setAgentVisible,
+  } = useAgentX();
+
+  useEffect(() => {
+    setAgentVisible(true);
+    return () => setAgentVisible(false);
+  }, [setAgentVisible]);
+  const [decodedOffer, setDecodedOffer] = useState<DecodedOffer | null>(null);
+  const [queueView, setQueueView] = useState<QueueView>('all');
+  const [offerSailingCounts, setOfferSailingCounts] = useState<Record<string, number>>({});
+  const [expandedRecords, setExpandedRecords] = useState<Record<string, boolean>>({});
+  const [bucketLimits, setBucketLimits] = useState<Record<string, number>>({});
+
+  const filterSnapshot = useMemo(() => ({
+    selectedProfileId,
+    selectedBrand,
+    selectedProgram,
+  }), [selectedBrand, selectedProfileId, selectedProgram]);
+
+  const themeBrand = useMemo(() => resolveThemeBrand(selectedBrand, currentUser?.preferredBrand), [currentUser?.preferredBrand, selectedBrand]);
+  const celebrityLevel = useMemo(() => (
+    getEffectiveCelebrityCaptainsClubLevel(
+      currentUser?.celebrityCaptainsClubPoints ?? captainsClub.points ?? 0,
+      crownAnchorLevel || currentUser?.crownAnchorLevel,
+      captainsClub.tier,
+    )
+  ), [captainsClub.points, captainsClub.tier, crownAnchorLevel, currentUser?.celebrityCaptainsClubPoints, currentUser?.crownAnchorLevel]);
+  const silverseaTier = useMemo(() => currentUser?.silverseaVenetianTier || getSilverseaTierByDays(currentUser?.silverseaVenetianPoints ?? 0), [currentUser?.silverseaVenetianPoints, currentUser?.silverseaVenetianTier]);
+  const playerCardTheme = useMemo(() => getPlayerCardTheme({
+    brand: themeBrand,
+    crownAnchorLevel: crownAnchorLevel || currentUser?.crownAnchorLevel,
+    celebrityLevel,
+    silverseaTier,
+    carnivalVifpTier: currentUser?.carnivalVifpTier || 'Blue',
+  }), [celebrityLevel, crownAnchorLevel, currentUser?.carnivalVifpTier, currentUser?.crownAnchorLevel, silverseaTier, themeBrand]);
+  const themed = useMemo(() => ({
+    headerIcon: { backgroundColor: '#EAF4F2', borderColor: '#BCD8D5' },
+    closeButton: { backgroundColor: '#FFFFFF', borderColor: '#D8D8D2' },
+    topText: { color: '#17324D' },
+    secondaryText: { color: '#5F6B73' },
+    accentText: { color: '#167C80' },
+    card: { backgroundColor: '#FFFFFF', borderColor: '#D8D8D2' },
+    mutedCard: { backgroundColor: '#F8F6F1', borderColor: '#E3DED4' },
+    activeChip: { backgroundColor: '#167C80', borderColor: '#167C80' },
+    primaryAction: { backgroundColor: '#17324D' },
+  }), []);
+
+  const toggleRecord = useCallback((recordId: string) => {
+    setExpandedRecords((current) => ({ ...current, [recordId]: !current[recordId] }));
+  }, []);
+
+  const filteredOffers = useMemo(() => filterRecordsByIntelligence(casinoOffers, filterSnapshot, users), [casinoOffers, filterSnapshot, users]);
+  const filteredBookedCruises = useMemo(() => filterRecordsByIntelligence(bookedCruises, filterSnapshot, users), [bookedCruises, filterSnapshot, users]);
+  const filteredCruises = useMemo(() => [], []);
+  const filteredCertificates = useMemo(() => filterRecordsByIntelligence(certificates as CertificateReviewItem[], filterSnapshot, users), [certificates, filterSnapshot, users]);
+  const travelerProfile = useMemo(() => buildTravelerProfile(currentUser), [currentUser]);
+  const offerHistory = useMemo(() => buildOfferHistoryReport(filteredOffers, filteredBookedCruises), [filteredBookedCruises, filteredOffers]);
+  const offerBuckets = useMemo((): OfferManagementBucket[] => buildCommandCenterBuckets(filteredOffers, filteredCruises, certificates, travelerProfile), [certificates, filteredCruises, filteredOffers, travelerProfile]);
+  const inactiveOfferBucket = useMemo((): OfferManagementBucket => {
+    const inactiveOffers = filteredOffers
+      .filter(offerIsInactive)
+      .map((offer) => ({ offer, intelligence: calculateOfferIntelligenceScore(offer, filteredCruises, certificates, travelerProfile) }))
+      .sort((a, b) => b.intelligence.score - a.intelligence.score);
+    console.log('[CommandCenter] Archived/skipped offer bucket built:', inactiveOffers.length);
+    return {
+      id: 'archivedSkipped',
+      title: 'Archived / skipped offer history',
+      subtitle: 'Restore, keep archived, or ask Agent SEA before returning old offers to active planning.',
+      offers: inactiveOffers,
+    };
+  }, [certificates, filteredCruises, filteredOffers, travelerProfile]);
+  const certificateBuckets = useMemo(() => buildCertificateBuckets(filteredCertificates), [filteredCertificates]);
+  const visibleOfferBuckets = useMemo(() => offerBuckets.filter((bucket) => bucket.offers.length > 0), [offerBuckets]);
+  const visibleInactiveOfferBuckets = useMemo(() => inactiveOfferBucket.offers.length > 0 ? [inactiveOfferBucket] : [], [inactiveOfferBucket]);
+  const visibleCertificateBuckets = useMemo(() => certificateBuckets.filter((bucket) => bucket.certificates.length > 0), [certificateBuckets]);
+  const offerCount = useMemo(() => offerBuckets.reduce((sum, bucket) => sum + bucket.offers.length, 0), [offerBuckets]);
+  const inactiveOfferCount = useMemo(() => inactiveOfferBucket.offers.length, [inactiveOfferBucket]);
+  const certificateCount = useMemo(() => certificateBuckets.reduce((sum, bucket) => sum + bucket.certificates.length, 0), [certificateBuckets]);
+  const totalManagementCount = offerCount + certificateCount + inactiveOfferCount;
+  const showOffers = queueView === 'all' || queueView === 'offers';
+  const showCertificates = queueView === 'all' || queueView === 'certificates';
+  const showHistory = queueView === 'all' || queueView === 'history';
+
+  useEffect(() => {
+    if (!isInventoryReady || totalCruises === 0 || offerCount === 0) {
+      setOfferSailingCounts({});
+      return undefined;
+    }
+    let cancelled = false;
+    const offersToCount = offerBuckets.flatMap((bucket) => bucket.offers.map((item) => item.offer));
+    void (async () => {
+      const next: Record<string, number> = {};
+      for (const offer of offersToCount) {
+        const displayCode = getOfferDisplayCode(offer);
+        const strongInstance = String(offer.playerOfferId || offer.offerInstanceId || offer.carnivalOfferId || '').trim();
+        const instanceKey = strongInstance ? getCruiseOfferInstanceKey(offer as unknown as Cruise) ?? undefined : undefined;
+        try {
+          const primaryPage = instanceKey
+            ? await queryOfferSailings({ offerInstanceKey: instanceKey, limit: 1 })
+            : await queryOfferSailings({ offerCode: displayCode, limit: 1 });
+          const codePage = displayCode
+            ? await queryOfferSailings({ offerCode: displayCode, limit: 1 })
+            : { total: 0 };
+          next[offer.id] = Math.max(primaryPage.total, codePage.total);
+        } catch (error) {
+          console.warn('[CommandCenter] Offer sailing count query failed without blocking review queue:', {
+            offerCode: displayCode,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+        if (cancelled) return;
+      }
+      if (!cancelled) setOfferSailingCounts(next);
+    })();
+    return () => { cancelled = true; };
+  }, [isInventoryReady, offerBuckets, offerCount, queryOfferSailings, totalCruises]);
+
+  const handleViewOffer = useCallback((offer: CasinoOffer) => {
+    const expectedCruiseCount = offerSailingCounts[offer.id] ?? 0;
+    router.push({ pathname: '/offer-details' as any, params: buildOfferDetailsParams(offer, { expectedCruiseCount }) });
+  }, [offerSailingCounts, router]);
+
+  const handleDecodeOffer = useCallback((offer: CasinoOffer) => {
+    const expectedCruiseCount = offerSailingCounts[offer.id] ?? 0;
+    router.push({ pathname: '/offer-details' as any, params: buildOfferDetailsParams(offer, { expectedCruiseCount, openDecoded: true }) });
+  }, [offerSailingCounts, router]);
+
+  const handleArchiveOffer = useCallback((offer: CasinoOffer) => {
+    Alert.alert('Archive Offer', 'Hide this offer from active planning but keep it searchable in history?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Archive',
+        style: 'destructive',
+        onPress: () => {
+          updateCasinoOffer(offer.id, { status: 'archived', archiveStatus: 'archived', reconciliationStatus: 'matched' });
+          console.log('[CommandCenter] Archived offer:', { id: offer.id, offerCode: offer.offerCode });
+        },
+      },
+    ]);
+  }, [updateCasinoOffer]);
+
+  const handleKeepActiveOffer = useCallback((offer: CasinoOffer) => {
+    updateCasinoOffer(offer.id, { status: 'active', archiveStatus: 'active', reconciliationStatus: 'matched', updatedAt: new Date().toISOString() });
+    console.log('[CommandCenter] Kept offer active:', { id: offer.id, offerCode: offer.offerCode });
+  }, [updateCasinoOffer]);
+
+  const handleRestoreOffer = useCallback((offer: CasinoOffer) => {
+    updateCasinoOffer(offer.id, { status: 'active', archiveStatus: 'active', reconciliationStatus: 'matched', updatedAt: new Date().toISOString() });
+    console.log('[CommandCenter] Restored offer:', { id: offer.id, offerCode: offer.offerCode });
+  }, [updateCasinoOffer]);
+
+  const handleSkipOffer = useCallback((offer: CasinoOffer) => {
+    updateCasinoOffer(offer.id, { status: 'skipped', archiveStatus: 'active', reconciliationStatus: 'matched', updatedAt: new Date().toISOString() });
+    console.log('[CommandCenter] Marked offer skipped:', { id: offer.id, offerCode: offer.offerCode });
+  }, [updateCasinoOffer]);
+
+  const handleAskAgentX = useCallback((offer: CasinoOffer) => {
+    setAgentMode('casinoHost');
+    router.push('/ask-my-data' as any);
+    void sendMessage(`Command Center review: advise me on offer ${getOfferDisplayCode(offer)}. Explain whether to view, decode, compare, keep active, archive, restore, or skip it using current profile, brand, and program filters.`);
+  }, [router, sendMessage, setAgentMode]);
+
+  const handleCompareOffer = useCallback((offer: CasinoOffer) => {
+    setAgentMode('travelAgent');
+    router.push('/ask-my-data' as any);
+    void sendMessage(`Compare offer ${getOfferDisplayCode(offer)} against my other urgent and active offers. Include Offer Intelligence Score, expiration urgency, owner profile, casino-paid value, and certificate fit.`);
+  }, [router, sendMessage, setAgentMode]);
+
+  const handleCertificateAsk = useCallback((certificate: CertificateReviewItem) => {
+    setAgentMode('certificateAdvisor');
+    router.push('/ask-my-data' as any);
+    void sendMessage(`Certificate Command Center review: explain best use, poor use warnings, and stacking considerations for certificate ${certificate.label || certificate.id}.`);
+  }, [router, sendMessage, setAgentMode]);
+
+  const handleMarkCertificateExpired = useCallback((certificate: CertificateReviewItem) => {
+    updateCertificate(certificate.id, { status: 'expired' });
+    console.log('[CommandCenter] Marked certificate expired:', { id: certificate.id, label: certificate.label });
+  }, [updateCertificate]);
+
+  const handleRestoreCertificate = useCallback((certificate: CertificateReviewItem) => {
+    updateCertificate(certificate.id, { status: 'available' });
+    console.log('[CommandCenter] Restored certificate:', { id: certificate.id, label: certificate.label });
+  }, [updateCertificate]);
+
+  const renderOfferItem = useCallback((item: CommandCenterOffer) => {
+    const offer = item.offer;
+    const ownerLabel = getRecordOwnerLabel(offer, users);
+    const isInactive = offerIsInactive(offer);
+    const reviewFlags = getOfferReviewFlags(item);
+    const recordKey = `offer-${offer.id}`;
+    const expanded = Boolean(expandedRecords[recordKey]);
+    return (
+      <View key={offer.id} style={[styles.itemCard, themed.mutedCard]} testID={`command-center-offer-${offer.id}`}>
+        <View style={styles.itemTopRow}>
+          <View style={[styles.scorePill, themed.card]}>
+            <Gauge size={15} color={playerCardTheme.accentColor} />
+            <Text style={[styles.scoreText, themed.topText]}>{item.intelligence.score}</Text>
+          </View>
+          <View style={styles.itemCopy}>
+            <Text style={[styles.itemTitle, themed.topText]}>{getOfferDisplayName(offer)}</Text>
+            <Text style={[styles.itemMeta, themed.secondaryText]}>{getOfferDisplayCode(offer)} • {ownerLabel} • {item.intelligence.rating}</Text>
+          </View>
+        </View>
+        <View style={styles.valueRow}>
+          <View style={[styles.valuePill, themed.card]}>
+            <Text style={[styles.valueLabel, themed.secondaryText]}>Casino covers</Text>
+            <Text style={[styles.valueText, themed.topText]}>{formatCurrency(item.intelligence.casinoPaysFor.casinoCoveredValue)}</Text>
+          </View>
+          <View style={[styles.valuePill, themed.card]}>
+            <Text style={[styles.valueLabel, themed.secondaryText]}>Out of pocket</Text>
+            <Text style={[styles.valueText, themed.topText]}>{formatCurrency(item.intelligence.casinoPaysFor.userOutOfPocket)}</Text>
+          </View>
+        </View>
+        <TouchableOpacity
+          style={styles.reviewToggle}
+          onPress={() => toggleRecord(recordKey)}
+          accessibilityRole="button"
+          accessibilityState={{ expanded }}
+          testID={`command-center-expand-${offer.id}`}
+        >
+          <Text style={styles.reviewToggleText}>{expanded ? 'Hide decision details' : 'Review decision'}</Text>
+          <ChevronDown size={16} color="#167C80" style={expanded ? styles.chevronExpanded : undefined} />
+        </TouchableOpacity>
+        {expanded ? <>
+          <Text style={[styles.itemExplanation, themed.secondaryText]}>{item.intelligence.explanation}</Text>
+          <View style={styles.detailGrid}>
+          <View style={[styles.detailPill, themed.card]}>
+            <UserRound size={12} color={playerCardTheme.accentColor} />
+            <Text style={[styles.detailText, themed.topText]}>{ownerLabel}</Text>
+          </View>
+          <View style={[styles.detailPill, themed.card]}>
+            <CalendarDays size={12} color={playerCardTheme.accentColor} />
+            <Text style={[styles.detailText, themed.topText]}>{getOfferExpirationLabel(item)}</Text>
+          </View>
+          <View style={[styles.detailPill, themed.card]}>
+            <Ship size={12} color={playerCardTheme.accentColor} />
+            <Text style={[styles.detailText, themed.topText]}>{getOfferBrandProgramLabel(offer)}</Text>
+          </View>
+          <View style={[styles.detailPill, themed.card]}>
+            <Ticket size={12} color={playerCardTheme.accentColor} />
+            <Text style={[styles.detailText, themed.topText]}>{getOfferCabinLabel(offer)}</Text>
+          </View>
+          </View>
+          <View style={[styles.strategyBox, themed.card]}>
+          <Text style={[styles.strategyLabel, themed.accentText]}>Best remaining use</Text>
+          <Text style={[styles.strategyText, themed.secondaryText]}>{getBestRemainingUse(item)}</Text>
+          <Text style={[styles.strategyLabel, themed.accentText]}>Suggested action</Text>
+          <Text style={[styles.strategyText, themed.secondaryText]}>{getSuggestedOfferAction(item)}</Text>
+          </View>
+          {reviewFlags.length > 0 ? (
+          <View style={styles.flagWrap}>
+            {reviewFlags.map((flag) => (
+              <View key={`${offer.id}-${flag}`} style={styles.flagPill}>
+                <Text style={styles.flagText}>{flag}</Text>
+              </View>
+            ))}
+          </View>
+          ) : null}
+          <View style={styles.actionGrid}>
+          <TouchableOpacity style={[styles.primaryAction, themed.primaryAction]} onPress={() => handleViewOffer(offer)} testID={`command-center-view-${offer.id}`}>
+            <Text style={styles.primaryActionText}>View</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.primaryAction, themed.primaryAction]} onPress={() => handleDecodeOffer(offer)} testID={`command-center-decode-${offer.id}`}>
+            <Text style={styles.primaryActionText}>Decode</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.secondaryAction, themed.card]} onPress={() => handleCompareOffer(offer)} testID={`command-center-compare-${offer.id}`}>
+            <Calculator size={13} color={playerCardTheme.accentColor} />
+            <Text style={[styles.secondaryActionText, themed.topText]}>Compare</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.secondaryAction, themed.card]} onPress={() => handleAskAgentX(offer)} testID={`command-center-ask-${offer.id}`}>
+            <Bot size={13} color={playerCardTheme.accentColor} />
+            <Text style={[styles.secondaryActionText, themed.topText]}>Agent SEA</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.secondaryAction, themed.card]} onPress={() => handleKeepActiveOffer(offer)} testID={`command-center-keep-${offer.id}`}>
+            <ShieldCheck size={13} color={playerCardTheme.accentColor} />
+            <Text style={[styles.secondaryActionText, themed.topText]}>Keep Active</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.secondaryAction, themed.card]} onPress={() => (isInactive ? handleRestoreOffer(offer) : handleArchiveOffer(offer))} testID={`command-center-archive-restore-${offer.id}`}>
+            {isInactive ? <RotateCcw size={13} color={playerCardTheme.accentColor} /> : <Archive size={13} color={playerCardTheme.accentColor} />}
+            <Text style={[styles.secondaryActionText, themed.topText]}>{isInactive ? 'Restore' : 'Archive'}</Text>
+          </TouchableOpacity>
+          {!isInactive ? (
+            <TouchableOpacity style={[styles.secondaryAction, themed.card]} onPress={() => handleSkipOffer(offer)} testID={`command-center-skip-${offer.id}`}>
+              <CheckCircle2 size={13} color={playerCardTheme.accentColor} />
+              <Text style={[styles.secondaryActionText, themed.topText]}>Mark Skipped</Text>
+            </TouchableOpacity>
+          ) : null}
+          </View>
+        </> : null}
+      </View>
+    );
+  }, [expandedRecords, handleArchiveOffer, handleAskAgentX, handleCompareOffer, handleDecodeOffer, handleKeepActiveOffer, handleRestoreOffer, handleSkipOffer, handleViewOffer, playerCardTheme.accentColor, themed, toggleRecord, users]);
+
+  const renderOfferBucket = useCallback((bucket: OfferManagementBucket) => {
+    const visibleLimit = bucketLimits[bucket.id] ?? 6;
+    const visibleOffers = bucket.offers.slice(0, visibleLimit);
+    return (
+    <View key={bucket.id} style={styles.bucketCard} testID={`command-center-bucket-${bucket.id}`}>
+      <View style={styles.bucketHeader}>
+        <View style={styles.bucketCopy}>
+          <Text style={[styles.bucketTitle, themed.topText]}>{bucket.title}</Text>
+          <Text style={[styles.bucketSubtitle, themed.secondaryText]}>{bucket.subtitle}</Text>
+        </View>
+        <Text style={[styles.bucketCount, themed.mutedCard, themed.accentText]}>{bucket.offers.length}</Text>
+      </View>
+      {visibleOffers.map(renderOfferItem)}
+      {visibleOffers.length < bucket.offers.length ? (
+        <TouchableOpacity
+          style={styles.loadMoreButton}
+          onPress={() => setBucketLimits((current) => ({ ...current, [bucket.id]: visibleLimit + 6 }))}
+          accessibilityRole="button"
+          testID={`command-center-more-${bucket.id}`}
+        >
+          <Text style={styles.loadMoreText}>Show next {Math.min(6, bucket.offers.length - visibleOffers.length)}</Text>
+          <Text style={styles.loadMoreCount}>{visibleOffers.length} of {bucket.offers.length}</Text>
+        </TouchableOpacity>
+      ) : null}
+    </View>
+    );
+  }, [bucketLimits, renderOfferItem, themed]);
+
+  const renderCertificateItem = useCallback((certificate: CertificateReviewItem) => {
+    const recordKey = `certificate-${certificate.id}`;
+    const expanded = Boolean(expandedRecords[recordKey]);
+    return (
+    <View key={certificate.id} style={[styles.certificateCard, themed.mutedCard]} testID={`command-center-certificate-${certificate.id}`}>
+      <View style={styles.itemTopRow}>
+        <View style={[styles.certificateIconWrap, themed.card]}>
+          <Ticket size={17} color={playerCardTheme.accentColor} />
+        </View>
+        <View style={styles.itemCopy}>
+          <Text style={[styles.itemTitle, themed.topText]}>{certificate.label || 'Certificate'}</Text>
+          <Text style={[styles.itemMeta, themed.secondaryText]}>{certificate.type} • {getCertificateExpiryLabel(certificate)} • {formatCurrency(certificate.value)}</Text>
+        </View>
+      </View>
+      <TouchableOpacity
+        style={styles.reviewToggle}
+        onPress={() => toggleRecord(recordKey)}
+        accessibilityRole="button"
+        accessibilityState={{ expanded }}
+        testID={`command-center-cert-expand-${certificate.id}`}
+      >
+        <Text style={styles.reviewToggleText}>{expanded ? 'Hide certificate details' : 'Review certificate'}</Text>
+        <ChevronDown size={16} color="#167C80" style={expanded ? styles.chevronExpanded : undefined} />
+      </TouchableOpacity>
+      {expanded ? <>
+        <Text style={[styles.itemExplanation, themed.secondaryText]}>{certificate.description || 'Review certificate owner, expiration, cabin entitlement, and stackability before applying it to a sailing.'}</Text>
+        <View style={styles.detailGrid}>
+        <View style={[styles.detailPill, themed.card]}>
+          <UserRound size={12} color={playerCardTheme.accentColor} />
+          <Text style={[styles.detailText, themed.topText]}>{getRecordOwnerLabel(certificate, users)}</Text>
+        </View>
+        <View style={[styles.detailPill, themed.card]}>
+          <CalendarDays size={12} color={playerCardTheme.accentColor} />
+          <Text style={[styles.detailText, themed.topText]}>{getCertificateExpiryLabel(certificate)}</Text>
+        </View>
+        <View style={[styles.detailPill, themed.card]}>
+          <Ship size={12} color={playerCardTheme.accentColor} />
+          <Text style={[styles.detailText, themed.topText]}>{certificate.casinoProgram || 'Program not set'}</Text>
+        </View>
+        <View style={[styles.detailPill, themed.card]}>
+          <Ticket size={12} color={playerCardTheme.accentColor} />
+          <Text style={[styles.detailText, themed.topText]}>{certificate.cabinEntitlement || certificate.offerCode || 'No cabin/offer link'}</Text>
+        </View>
+        </View>
+        <View style={[styles.strategyBox, themed.card]}>
+        <Text style={[styles.strategyLabel, themed.accentText]}>Best remaining use</Text>
+        <Text style={[styles.strategyText, themed.secondaryText]}>Use only when the certificate improves cabin entitlement, upgrade cost, OBC, FreePlay, or out-of-pocket math.</Text>
+        <Text style={[styles.strategyLabel, themed.accentText]}>Suggested action</Text>
+        <Text style={[styles.strategyText, themed.secondaryText]}>{certificate.expiryDate && getDaysUntil(certificate.expiryDate) < 0 ? 'Keep for history or mark expired.' : 'Ask Agent SEA or verify stackability before applying it to a sailing.'}</Text>
+        </View>
+        <View style={styles.actionGrid}>
+        <TouchableOpacity style={[styles.secondaryAction, themed.card]} onPress={() => handleCertificateAsk(certificate)} testID={`command-center-cert-ask-${certificate.id}`}>
+          <Bot size={13} color={playerCardTheme.accentColor} />
+          <Text style={[styles.secondaryActionText, themed.topText]}>Agent SEA</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.secondaryAction, themed.card]} onPress={() => handleRestoreCertificate(certificate)} testID={`command-center-cert-restore-${certificate.id}`}>
+          <RotateCcw size={13} color={playerCardTheme.accentColor} />
+          <Text style={[styles.secondaryActionText, themed.topText]}>Restore</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.secondaryAction, themed.card]} onPress={() => handleMarkCertificateExpired(certificate)} testID={`command-center-cert-expire-${certificate.id}`}>
+          <Archive size={13} color={playerCardTheme.accentColor} />
+          <Text style={[styles.secondaryActionText, themed.topText]}>Mark Expired</Text>
+        </TouchableOpacity>
+        </View>
+      </> : null}
+    </View>
+    );
+  }, [expandedRecords, handleCertificateAsk, handleMarkCertificateExpired, handleRestoreCertificate, playerCardTheme.accentColor, themed, toggleRecord, users]);
+
+  const renderCertificateBucket = useCallback((bucket: CertificateReviewBucket) => {
+    const bucketKey = `certificate-${bucket.id}`;
+    const visibleLimit = bucketLimits[bucketKey] ?? 6;
+    const visibleCertificates = bucket.certificates.slice(0, visibleLimit);
+    return (
+    <View key={bucket.id} style={styles.bucketCard} testID={`command-center-certificate-bucket-${bucket.id}`}>
+      <View style={styles.bucketHeader}>
+        <View style={styles.bucketCopy}>
+          <Text style={[styles.bucketTitle, themed.topText]}>{bucket.title}</Text>
+          <Text style={[styles.bucketSubtitle, themed.secondaryText]}>{bucket.subtitle}</Text>
+        </View>
+        <Text style={[styles.bucketCount, themed.mutedCard, themed.accentText]}>{bucket.certificates.length}</Text>
+      </View>
+      {visibleCertificates.map(renderCertificateItem)}
+      {visibleCertificates.length < bucket.certificates.length ? (
+        <TouchableOpacity
+          style={styles.loadMoreButton}
+          onPress={() => setBucketLimits((current) => ({ ...current, [bucketKey]: visibleLimit + 6 }))}
+          accessibilityRole="button"
+          testID={`command-center-cert-more-${bucket.id}`}
+        >
+          <Text style={styles.loadMoreText}>Show next {Math.min(6, bucket.certificates.length - visibleCertificates.length)}</Text>
+          <Text style={styles.loadMoreCount}>{visibleCertificates.length} of {bucket.certificates.length}</Text>
+        </TouchableOpacity>
+      ) : null}
+    </View>
+    );
+  }, [bucketLimits, renderCertificateItem, themed]);
+
+  return (
+    <View style={styles.container}>
+      <Stack.Screen options={{ headerShown: false }} />
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <View style={styles.header}>
+          <View style={[styles.headerIcon, themed.headerIcon]}>
+            <Clock size={22} color={playerCardTheme.accentColor} />
+          </View>
+          <View style={styles.headerCopy}>
+            <Text style={[styles.headerTitle, themed.topText]}>Expiration Command Center</Text>
+            <Text style={[styles.headerSubtitle, themed.secondaryText]}>Dedicated offer, certificate, and archive management</Text>
+          </View>
+          <TouchableOpacity style={[styles.closeButton, themed.closeButton]} onPress={() => router.back()} testID="close-command-center">
+            <X size={20} color={playerCardTheme.topTextColor} />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          <View style={styles.heroCard}>
+            <Text style={[styles.heroKicker, themed.accentText]}>Decision cockpit</Text>
+            <Text style={[styles.heroTitle, themed.topText]}>{coreDataLoading ? 'Restoring saved offer decisions…' : `${totalManagementCount} records are ready for timing decisions.`}</Text>
+            <Text style={[styles.heroBody, themed.secondaryText]}>Grouped urgency queues show owner profile, brand/program, expiration, best use, suggested action, archive history, and Agent SEA controls without deleting uncertain data.</Text>
+            <View style={styles.heroStatsRow}>
+              <View style={[styles.heroStat, themed.card]}>
+                <Text style={[styles.heroStatValue, themed.topText]}>{coreDataLoading ? '…' : visibleOfferBuckets.length}</Text>
+                <Text style={[styles.heroStatLabel, themed.secondaryText]}>Offer groups</Text>
+              </View>
+              <View style={[styles.heroStat, themed.card]}>
+                <Text style={[styles.heroStatValue, themed.topText]}>{coreDataLoading ? '…' : visibleCertificateBuckets.length}</Text>
+                <Text style={[styles.heroStatLabel, themed.secondaryText]}>Cert groups</Text>
+              </View>
+              <View style={[styles.heroStat, themed.card]}>
+                <Text style={[styles.heroStatValue, themed.topText]}>{coreDataLoading ? '…' : inactiveOfferCount}</Text>
+                <Text style={[styles.heroStatLabel, themed.secondaryText]}>Archived/skipped</Text>
+              </View>
+            </View>
+          </View>
+
+          {coreDataLoading ? (
+            <View style={[styles.emptyCard, themed.card]} testID="command-center-hydration-loading">
+              <ActivityIndicator color={playerCardTheme.accentColor} />
+              <Text style={[styles.emptyTitle, themed.topText]}>Reading the committed offer catalog</Text>
+              <Text style={[styles.emptyBody, themed.secondaryText]}>Counts and decision queues appear after local readback completes.</Text>
+            </View>
+          ) : null}
+
+          <IntelligenceFilterStrip contextLabel="Command Center" compact={true} />
+
+          <View style={styles.queueSwitcher} testID="command-center-queue-switcher">
+            {QUEUE_VIEWS.map((view) => {
+              const active = queueView === view.id;
+              return (
+                <TouchableOpacity
+                  key={view.id}
+                  style={[styles.queueChip, themed.card, active && themed.activeChip]}
+                  onPress={() => setQueueView(view.id)}
+                  activeOpacity={0.75}
+                  testID={`command-center-view-${view.id}`}
+                >
+                  <Text style={[styles.queueChipText, active ? styles.queueChipTextActive : themed.topText]}>{view.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {!coreDataLoading && totalManagementCount === 0 ? (
+            <View style={[styles.emptyCard, themed.card]} testID="command-center-empty">
+              <CheckCircle2 size={36} color={playerCardTheme.accentColor} />
+              <Text style={[styles.emptyTitle, themed.topText]}>Nothing urgent right now</Text>
+              <Text style={[styles.emptyBody, themed.secondaryText]}>No expiring offers, recently expired items, or review-needed certificate records match the current filters.</Text>
+            </View>
+          ) : null}
+
+          {showOffers && visibleOfferBuckets.length > 0 ? (
+            <View style={styles.sectionBlock}>
+              <Text style={[styles.sectionLabel, themed.accentText]}>Offer queue</Text>
+              {visibleOfferBuckets.map(renderOfferBucket)}
+            </View>
+          ) : null}
+
+          {showCertificates && visibleCertificateBuckets.length > 0 ? (
+            <View style={styles.sectionBlock}>
+              <Text style={[styles.sectionLabel, themed.accentText]}>Certificate queue</Text>
+              {visibleCertificateBuckets.map(renderCertificateBucket)}
+            </View>
+          ) : null}
+
+          {showHistory && visibleInactiveOfferBuckets.length > 0 ? (
+            <View style={styles.sectionBlock}>
+              <Text style={[styles.sectionLabel, themed.accentText]}>Archive / skipped history</Text>
+              {visibleInactiveOfferBuckets.map(renderOfferBucket)}
+            </View>
+          ) : null}
+
+          {showHistory ? (
+            <View style={[styles.historyInsightCard, themed.card]} testID="offer-history-intelligence">
+              <View style={styles.bucketHeader}>
+                <View style={styles.bucketCopy}>
+                  <Text style={[styles.bucketTitle, themed.topText]}>Offer-history intelligence</Text>
+                  <Text style={[styles.bucketSubtitle, themed.secondaryText]}>Every provider offer instance is counted separately. Shared marketing codes are never merged.</Text>
+                </View>
+                <Archive size={22} color={playerCardTheme.accentColor} />
+              </View>
+              <View style={styles.historyMetricGrid}>
+                <View style={[styles.historyMetric, themed.mutedCard]}>
+                  <Text style={[styles.historyMetricValue, themed.topText]}>{offerHistory.totalInstances}</Text>
+                  <Text style={[styles.historyMetricLabel, themed.secondaryText]}>Offer instances</Text>
+                </View>
+                <View style={[styles.historyMetric, themed.mutedCard]}>
+                  <Text style={[styles.historyMetricValue, themed.topText]}>{offerHistory.uniqueMarketingCodes}</Text>
+                  <Text style={[styles.historyMetricLabel, themed.secondaryText]}>Marketing codes</Text>
+                </View>
+                <View style={[styles.historyMetric, themed.mutedCard]}>
+                  <Text style={[styles.historyMetricValue, themed.topText]}>{offerHistory.redeemed}</Text>
+                  <Text style={[styles.historyMetricLabel, themed.secondaryText]}>Booked / used</Text>
+                </View>
+                <View style={[styles.historyMetric, themed.mutedCard]}>
+                  <Text style={[styles.historyMetricValue, themed.topText]}>{offerHistory.expired}</Text>
+                  <Text style={[styles.historyMetricLabel, themed.secondaryText]}>Expired</Text>
+                </View>
+              </View>
+              <View style={styles.historyValueRow}>
+                <Text style={[styles.historyValueLabel, themed.secondaryText]}>Recorded offered value</Text>
+                <Text style={[styles.historyValueAmount, themed.topText]}>{formatCurrency(offerHistory.offeredValue)}</Text>
+              </View>
+              <View style={styles.historyValueRow}>
+                <Text style={[styles.historyValueLabel, themed.secondaryText]}>Verified value captured</Text>
+                <Text style={[styles.historyValueAmount, themed.topText]}>{formatCurrency(offerHistory.capturedValue)}</Text>
+              </View>
+              <Text style={[styles.historyCaution, themed.secondaryText]}>
+                {offerHistory.captureRate === null ? 'Capture rate needs recorded offer values.' : `${offerHistory.captureRate}% value capture from explicitly linked or unambiguous bookings.`}
+              </Text>
+              {offerHistory.byBrand.map((brand) => (
+                <View key={brand.key} style={styles.historyDimensionRow} testID={`offer-history-brand-${brand.key}`}>
+                  <Text style={[styles.historyDimensionName, themed.topText]}>{brand.label}</Text>
+                  <Text style={[styles.historyDimensionMeta, themed.secondaryText]}>{brand.instances} instances • {brand.redeemed} booked/used • {formatCurrency(brand.capturedValue)} captured</Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+        </ScrollView>
+      </SafeAreaView>
+
+      <Modal visible={decodedOffer !== null} transparent={true} animationType="fade" onRequestClose={() => setDecodedOffer(null)}>
+        <View style={styles.decodeOverlay}>
+          <View style={styles.decodeCard} testID="command-center-decoded-offer-modal">
+            <View style={styles.decodeHeader}>
+              <View style={styles.decodeTitleRow}>
+                <FileText size={20} color={COLORS.navyDeep} />
+                <Text style={styles.decodeTitle}>{decodedOffer?.title ?? 'Decoded Offer'}</Text>
+              </View>
+              <TouchableOpacity style={styles.decodeClose} onPress={() => setDecodedOffer(null)} testID="command-center-decode-close">
+                <Text style={styles.decodeCloseText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView contentContainerStyle={styles.decodeScrollContent}>
+              {decodedOffer?.bullets.map((bullet, index) => (
+                <View key={`${bullet}-${index}`} style={styles.decodeBulletRow}>
+                  <Calculator size={15} color="#0F766E" />
+                  <Text style={styles.decodeBulletText}>{bullet}</Text>
+                </View>
+              ))}
+              <Text style={styles.decodeDisclaimer}>{decodedOffer?.disclaimer}</Text>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F6F2EA',
+  },
+  safeArea: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
+    backgroundColor: 'rgba(250,248,243,0.96)',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E3DED4',
+  },
+  headerIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(253, 230, 138, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(253, 230, 138, 0.24)',
+  },
+  headerCopy: {
+    flex: 1,
+  },
+  headerTitle: {
+    color: '#17324D',
+    fontFamily: TYPOGRAPHY.fontFamilyEditorialSemibold,
+    fontSize: 22,
+    fontWeight: '600' as const,
+  },
+  headerSubtitle: {
+    color: '#65727A',
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    marginTop: 2,
+  },
+  closeButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderWidth: 1,
+  },
+  content: {
+    padding: SPACING.md,
+    paddingBottom: SPACING.xxxl,
+  },
+  heroCard: {
+    overflow: 'hidden',
+    borderRadius: BORDER_RADIUS.xl,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: '#D8D8D2',
+    backgroundColor: '#FFFFFF',
+    marginBottom: SPACING.sm,
+    ...SHADOW.sm,
+  },
+  heroKicker: {
+    color: '#167C80',
+    fontSize: 11,
+    fontWeight: '900' as const,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase' as const,
+    marginBottom: 4,
+  },
+  heroTitle: {
+    color: '#17324D',
+    fontFamily: TYPOGRAPHY.fontFamilyEditorialSemibold,
+    fontSize: 20,
+    lineHeight: 25,
+    fontWeight: '600' as const,
+  },
+  heroBody: {
+    color: '#5F6B73',
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    lineHeight: 17,
+    marginTop: 5,
+  },
+  heroStatsRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    marginTop: SPACING.sm,
+  },
+  heroStat: {
+    flex: 1,
+    backgroundColor: '#F2F7F6',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+    borderWidth: 1,
+    borderColor: '#D7E6E3',
+  },
+  heroStatValue: {
+    color: '#17324D',
+    fontSize: 19,
+    fontWeight: '900' as const,
+  },
+  heroStatLabel: {
+    color: '#65727A',
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    marginTop: 2,
+  },
+  queueSwitcher: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.xs,
+    marginBottom: SPACING.sm,
+  },
+  queueChip: {
+    borderRadius: BORDER_RADIUS.round,
+    minHeight: 44,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 10,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D8D8D2',
+  },
+  queueChipActive: {
+    backgroundColor: '#FDE68A',
+    borderColor: '#FDE68A',
+  },
+  queueChipText: {
+    color: '#17324D',
+    fontSize: 12,
+    fontWeight: '900' as const,
+  },
+  queueChipTextActive: {
+    color: COLORS.white,
+  },
+  sectionBlock: {
+    gap: SPACING.sm,
+    marginTop: SPACING.md,
+  },
+  sectionLabel: {
+    color: '#167C80',
+    fontSize: 12,
+    fontWeight: '900' as const,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 1.2,
+  },
+  historyInsightCard: {
+    borderRadius: BORDER_RADIUS.xl,
+    borderWidth: 1,
+    padding: SPACING.md,
+    marginTop: SPACING.md,
+    gap: SPACING.sm,
+  },
+  historyMetricGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+    marginTop: SPACING.sm,
+  },
+  historyMetric: {
+    width: '47%',
+    borderRadius: BORDER_RADIUS.lg,
+    borderWidth: 1,
+    padding: SPACING.sm,
+  },
+  historyMetricValue: {
+    fontSize: 19,
+    fontWeight: '900' as const,
+  },
+  historyMetricLabel: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    marginTop: 2,
+  },
+  historyValueRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: SPACING.md,
+    paddingTop: SPACING.xs,
+  },
+  historyValueLabel: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.fontSizeSM,
+  },
+  historyValueAmount: {
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: '900' as const,
+  },
+  historyCaution: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    lineHeight: 17,
+  },
+  historyDimensionRow: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(148, 163, 184, 0.28)',
+    paddingTop: SPACING.sm,
+  },
+  historyDimensionName: {
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: '800' as const,
+  },
+  historyDimensionMeta: {
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    marginTop: 2,
+  },
+  bucketCard: {
+    backgroundColor: 'transparent',
+    borderRadius: 0,
+    paddingVertical: SPACING.xs,
+    borderWidth: 0,
+    gap: SPACING.sm,
+  },
+  bucketHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: SPACING.md,
+  },
+  bucketCopy: {
+    flex: 1,
+  },
+  bucketTitle: {
+    color: '#17324D',
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: '900' as const,
+  },
+  bucketSubtitle: {
+    color: '#65727A',
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    marginTop: 3,
+  },
+  bucketCount: {
+    minWidth: 34,
+    textAlign: 'center',
+    color: '#167C80',
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: '900' as const,
+    backgroundColor: '#EAF4F2',
+    borderRadius: BORDER_RADIUS.round,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 6,
+  },
+  itemCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: '#D8D8D2',
+    ...SHADOW.sm,
+  },
+  certificateCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: '#D8D8D2',
+    ...SHADOW.sm,
+  },
+  itemTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING.sm,
+  },
+  scorePill: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EAF4F2',
+  },
+  scoreText: {
+    color: '#17324D',
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: '900' as const,
+    marginTop: 1,
+  },
+  certificateIconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F7F0DD',
+  },
+  itemCopy: {
+    flex: 1,
+  },
+  itemTitle: {
+    color: '#17324D',
+    fontSize: TYPOGRAPHY.fontSizeMD,
+    fontWeight: '900' as const,
+  },
+  itemMeta: {
+    color: '#65727A',
+    fontSize: TYPOGRAPHY.fontSizeXS,
+    marginTop: 3,
+  },
+  itemExplanation: {
+    color: '#5F6B73',
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    lineHeight: 19,
+    marginTop: SPACING.sm,
+  },
+  detailGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.xs,
+    marginTop: SPACING.sm,
+  },
+  detailPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    maxWidth: '100%',
+    backgroundColor: '#F2F7F6',
+    borderRadius: BORDER_RADIUS.round,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: '#D7E6E3',
+  },
+  detailText: {
+    color: '#17324D',
+    fontSize: 11,
+    fontWeight: '800' as const,
+  },
+  strategyBox: {
+    backgroundColor: '#FBFAF7',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+    borderWidth: 1,
+    borderColor: '#E3DED4',
+    marginTop: SPACING.sm,
+    gap: 4,
+  },
+  strategyLabel: {
+    color: '#167C80',
+    fontSize: 10,
+    fontWeight: '900' as const,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.7,
+  },
+  strategyText: {
+    color: '#5F6B73',
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  flagWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.xs,
+    marginTop: SPACING.sm,
+  },
+  flagPill: {
+    backgroundColor: 'rgba(251, 113, 133, 0.14)',
+    borderRadius: BORDER_RADIUS.round,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(251, 113, 133, 0.28)',
+  },
+  flagText: {
+    color: '#9F1239',
+    fontSize: 10,
+    fontWeight: '800' as const,
+  },
+  valueRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    marginTop: SPACING.sm,
+  },
+  valuePill: {
+    flex: 1,
+    backgroundColor: '#F8F6F1',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+  },
+  valueLabel: {
+    color: '#65727A',
+    fontSize: 10,
+    fontWeight: '800' as const,
+    textTransform: 'uppercase' as const,
+  },
+  valueText: {
+    color: '#17324D',
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    fontWeight: '900' as const,
+    marginTop: 2,
+  },
+  reviewToggle: {
+    minHeight: 44,
+    marginTop: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#D8D8D2',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  reviewToggleText: {
+    color: '#167C80',
+    fontSize: 12,
+    fontWeight: '800' as const,
+  },
+  chevronExpanded: {
+    transform: [{ rotate: '180deg' }],
+  },
+  actionGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.xs,
+    marginTop: SPACING.md,
+  },
+  primaryAction: {
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.sm,
+    paddingHorizontal: SPACING.md,
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingVertical: 9,
+  },
+  primaryActionText: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: '900' as const,
+  },
+  secondaryAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    minHeight: 44,
+    backgroundColor: '#FFFFFF',
+    borderRadius: BORDER_RADIUS.sm,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 8,
+  },
+  secondaryActionText: {
+    color: '#17324D',
+    fontSize: 11,
+    fontWeight: '800' as const,
+  },
+  loadMoreButton: {
+    minHeight: 44,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: '#BCD8D5',
+    backgroundColor: '#EAF4F2',
+    paddingHorizontal: SPACING.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  loadMoreText: {
+    color: '#167C80',
+    fontSize: 12,
+    fontWeight: '900' as const,
+  },
+  loadMoreCount: {
+    color: '#65727A',
+    fontSize: 11,
+    fontWeight: '700' as const,
+  },
+  emptyCard: {
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: BORDER_RADIUS.xl,
+    padding: SPACING.xl,
+    borderWidth: 1,
+    borderColor: '#D8D8D2',
+    marginTop: SPACING.lg,
+  },
+  emptyTitle: {
+    color: '#17324D',
+    fontSize: TYPOGRAPHY.fontSizeLG,
+    fontWeight: '900' as const,
+    marginTop: SPACING.md,
+  },
+  emptyBody: {
+    color: '#65727A',
+    fontSize: TYPOGRAPHY.fontSizeSM,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginTop: SPACING.sm,
+  },
+  decodeOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(2, 6, 23, 0.72)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: SPACING.lg,
+  },
+  decodeCard: {
+    width: '100%',
+    maxWidth: 520,
+    maxHeight: '82%',
+    borderRadius: BORDER_RADIUS.xl,
+    backgroundColor: COLORS.white,
+    overflow: 'hidden',
+    ...SHADOW.lg,
+  },
+  decodeHeader: {
+    padding: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: '#D5D5D0',
+  },
+  decodeTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    paddingRight: 82,
+  },
+  decodeTitle: {
+    flex: 1,
+    color: COLORS.navyDeep,
+    fontSize: 17,
+    fontWeight: '900' as const,
+  },
+  decodeClose: {
+    position: 'absolute',
+    top: SPACING.md,
+    right: SPACING.md,
+    backgroundColor: COLORS.navyDeep,
+    borderRadius: BORDER_RADIUS.round,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 7,
+  },
+  decodeCloseText: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: '800' as const,
+  },
+  decodeScrollContent: {
+    padding: SPACING.md,
+    gap: SPACING.sm,
+  },
+  decodeBulletRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING.sm,
+    backgroundColor: '#F5F5F4',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+    borderWidth: 1,
+    borderColor: '#D5D5D0',
+  },
+  decodeBulletText: {
+    flex: 1,
+    color: '#1E293B',
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  decodeDisclaimer: {
+    color: '#64748B',
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: SPACING.sm,
+  },
+});
