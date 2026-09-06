@@ -1,1 +1,0 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';import{createOptimizationBundleRepository}from'./storage';export const optimizationBundleRepository=createOptimizationBundleRepository(AsyncStorage);

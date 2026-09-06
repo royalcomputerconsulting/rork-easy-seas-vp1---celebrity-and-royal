@@ -1,9 +1,0 @@
-{
-  "fixture": "offers-current-2026-08-27.csv",
-  "normalizedSha256": "6d603352a6666e65f7fbd5d02d0ea7c4718921769f0cdf32b06a25053061b2e1",
-  "sourceOriginalSha256": "f826f137c86a89aabb8c3ec0309a03d32d9ed464e803f602567be1301ebe4bf0",
-  "expectedOfferSailingRows": 391,
-  "expectedOfferCount": 5,
-  "offerCodes": ["26PAS603", "26VAR503", "26WST203", "26OCT104", "26BAF305"],
-  "note": "Preserved from the locally available offers.csv supplied on 2026-08-31. The previously referenced offers (15).csv was not present and is not used by this gate."
-}

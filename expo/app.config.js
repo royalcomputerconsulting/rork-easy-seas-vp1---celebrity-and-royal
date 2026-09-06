@@ -1,6 +1,6 @@
 const appJson = require('./app.json');
 
-const APP_STORE_VERSION = '13.0.74';
+const APP_STORE_VERSION = '13.0.75';
 const FORCE_VERSION_PLUGIN = './plugins/withForcedIOSVersion';
 
 /**

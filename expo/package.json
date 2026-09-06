@@ -1,7 +1,7 @@
 {
   "name": "expo-app",
-  "main": "expo-router/entry",
-  "version": "13.0.74",
+  "main": "./index.js",
+  "version": "13.0.75",
   "scripts": {
     "start": "bunx rork start -p g131hcw7cxhvg2godfob0",
     "start-web": "bunx rork start -p g131hcw7cxhvg2godfob0 --web",
@@ -12,7 +12,9 @@
     "verify:native-release": "node scripts/verifyNativeReleaseEvidence.js",
     "verify:source-release": "node scripts/verifyAppStoreVersion.js && node scripts/transpileTypeScriptSyntax.js && node scripts/runMaintainedReleaseTests.js",
     "verify:testflight-evidence": "node scripts/verifyTestFlightReleaseEvidence.js",
-    "verify:release-candidate": "npm run verify:source-release && npm run verify:testflight-evidence"
+    "verify:release-candidate": "npm run verify:source-release && npm run verify:testflight-evidence",
+    "android": "expo run:android",
+    "ios": "expo run:ios"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
@@ -31,6 +33,7 @@
     "expo": "~54.0.37",
     "expo-av": "~16.0.8",
     "expo-blur": "~15.0.8",
+    "expo-calendar": "~15.0.8",
     "expo-constants": "~18.0.14",
     "expo-document-picker": "~14.0.8",
     "expo-file-system": "~19.0.24",
@@ -64,6 +67,7 @@
     "react-native": "0.81.5",
     "react-native-gesture-handler": "~2.28.0",
     "react-native-purchases": "10.6.0",
+    "react-native-qrcode-svg": "^6.3.22",
     "react-native-safe-area-context": "~5.6.0",
     "react-native-screens": "~4.16.0",
     "react-native-svg": "15.12.1",

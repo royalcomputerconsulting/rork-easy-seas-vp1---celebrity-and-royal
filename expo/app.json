@@ -2,7 +2,7 @@
   "expo": {
     "name": "Easy Seas",
     "slug": "easy-seas",
-    "version": "13.0.74",
+    "version": "13.0.75",
     "platforms": [
       "ios",
       "android",
@@ -22,7 +22,7 @@
       "supportsTablet": false,
       "bundleIdentifier": "app.rork.easy-seas-vp1-celebrity-and-royal",
       "usesIcloudStorage": true,
-      "buildNumber": "445",
+      "buildNumber": "456",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -88,7 +88,14 @@
           "defaultChannel": "voyage-reminders"
         }
       ],
-      "./plugins/withForcedIOSVersion"
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Easy Seas uses only the Apple calendars you choose to show your daily schedule beside your voyage agenda."
+        }
+      ],
+      "./plugins/withForcedIOSVersion",
+      "./plugins/withXcode27DeploymentTarget"
     ],
     "experiments": {
       "typedRoutes": true

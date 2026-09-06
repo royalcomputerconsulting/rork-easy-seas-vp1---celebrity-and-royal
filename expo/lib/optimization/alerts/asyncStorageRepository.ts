@@ -1,1 +1,0 @@
-import AsyncStorage from'@react-native-async-storage/async-storage';import{createPersonalOptimizationAlertRepository}from'./storage';export const personalOptimizationAlertRepository=createPersonalOptimizationAlertRepository(AsyncStorage);
